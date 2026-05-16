@@ -39,6 +39,12 @@ pnpm install
 | `pnpm format`       | Format with Prettier            |
 | `pnpm format:check` | Check formatting with Prettier  |
 
+## Monitoring
+
+- Errors: Sentry at srtdio.sentry.io.
+- Frontend: project=frontend, init from `src/lib/sentry.ts`.
+- Backend: project=backend, integration in PR 6.
+
 ## Deploy
 
 - One-time: run `scripts/cloudflare-init.sh` (creates the Pages project), then `scripts/cloudflare-dns-setup.sh` (creates the `v2.srtd.io` CNAME).
