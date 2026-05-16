@@ -47,7 +47,8 @@ pnpm install
 
 ## Deploy
 
-- One-time: run `scripts/cloudflare-init.sh` (creates the Pages project), then `scripts/cloudflare-dns-setup.sh` (creates the `v2.srtd.io` CNAME).
+- On first push to main, CI auto-creates the Cloudflare Pages project.
+- One-time: run `scripts/cloudflare-dns-setup.sh` (creates the `v2.srtd.io` CNAME).
 - One-time: manually attach `v2.srtd.io` as a custom domain in the Pages dashboard (see `docs/cloudflare-conventions.md`).
 - Ongoing: pushes to `main` auto-deploy via `.github/workflows/deploy.yml`.
 - v2 staging URL: https://v2.srtd.io
