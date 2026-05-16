@@ -45,6 +45,12 @@ pnpm install
 - Frontend: project=frontend, init from `src/lib/sentry.ts`.
 - Backend: project=backend, integration in PR 6.
 
+## Observability
+
+- Every user action generates a uuid_v7 trace_id (`src/lib/trace.ts`).
+- It propagates FE -> Supabase -> DB RPC -> Worker -> Sentry tag.
+- ESLint enforces `_trace_id` on `.rpc()` calls; use `callRpc()` from `src/lib/rpc.ts`.
+
 ## Deploy
 
 - On first push to main, CI auto-creates the Cloudflare Pages project.

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import * as Sentry from '@sentry/react';
 import App from '@/App';
 import { initSentry } from '@/lib/sentry';
+import { TraceProvider } from '@/lib/trace-context';
 import '@/index.css';
 
 initSentry();
@@ -23,7 +24,9 @@ function ErrorFallback() {
 createRoot(rootElement).render(
   <StrictMode>
     <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
-      <App />
+      <TraceProvider>
+        <App />
+      </TraceProvider>
     </Sentry.ErrorBoundary>
   </StrictMode>,
 );

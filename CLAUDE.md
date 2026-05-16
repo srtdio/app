@@ -12,6 +12,7 @@ Sorted v2: a social media operations platform for agencies.
 - `post.stage` (workflow position) and `publish_status` (platform state) are separate fields; never conflate them.
 - Auth: JWT expires in 15 minutes; long-lived sessions tracked in `session_devices`.
 - `trace_id` is always passed as an explicit RPC parameter, never inferred.
+- Every Supabase `.rpc()` call MUST pass `_trace_id` via the `callRpc()` helper. ESLint enforces. Never `SET LOCAL`.
 - Comments are stored in Postgres; Chat runs on Agora.
 - Inbox is a permanent surface; it is never cleared or archived away.
 - Published posts are frozen; edits create new versions, not mutations.
@@ -34,6 +35,7 @@ Sorted v2: a social media operations platform for agencies.
 - Never put SUPABASE_SECRET_KEY or DB connection strings in frontend code or committed .env files. Server secrets live in GitHub Actions Secrets and Cloudflare Pages env only.
 - All deploys go through CI to Cloudflare Pages on push to main. Never deploy locally except for emergency rollback via `wrangler pages deploy`.
 - Errors flow to Sentry srtdio org: frontend project for React errors, backend project for Cloudflare Workers. Source maps uploaded in CI only.
+- New API endpoints, RPC functions, and Workers must accept and propagate trace_id. Read it from the `X-Trace-Id` header on inbound, attach it to all outbound calls.
 
 ## File structure
 
