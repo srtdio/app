@@ -7,11 +7,11 @@ Social media operations platform for agencies.
 - Vite 5 + React 18 + TypeScript 5 (strict)
 - Tailwind CSS 3 (PostCSS, autoprefixer)
 - ESLint 9 (flat config) + Prettier 3
-- Node 20 LTS, pnpm
+- Node 22 LTS, pnpm
 
 ## Prerequisites
 
-- Node 20 (`.nvmrc`)
+- Node 22 (`.nvmrc`)
 - pnpm
 
 ## Setup
