@@ -3,6 +3,9 @@ import { z } from 'zod';
 const envSchema = z.object({
   VITE_SUPABASE_URL: z.string().url(),
   VITE_SUPABASE_PUBLISHABLE_KEY: z.string().min(20),
+  VITE_SENTRY_DSN_FRONTEND: z.string().url().optional(),
+  VITE_SENTRY_ENVIRONMENT: z.enum(['development', 'production']).default('development'),
+  VITE_SENTRY_RELEASE: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -11,8 +11,12 @@ Shubham adds these manually in repo Settings > Secrets and variables > Actions.
 | `CLOUDFLARE_API_TOKEN`          | server-only | Required by `deploy.yml`. Also used by the one-off scripts.      |
 | `CLOUDFLARE_ACCOUNT_ID`         | server-only | Required by `deploy.yml`.                                        |
 | `CLOUDFLARE_ZONE_ID`            | server-only | Required by `scripts/cloudflare-dns-setup.sh`.                   |
+| `SENTRY_AUTH_TOKEN`             | server-only | In use by PR 4. Source map upload in `deploy.yml`.               |
+| `SENTRY_DSN_FRONTEND`           | public      | In use by PR 4. Sentry frontend project DSN.                     |
+| `SENTRY_DSN_BACKEND`            | public      | In use by PR 4. Sentry backend project DSN, wired up in PR 6.    |
 
 The Supabase public pair is consumed by PR 2 CI and the deploy build. The
 three `CLOUDFLARE_*` secrets are required by PR 3's `deploy.yml` and the
 one-off Cloudflare setup scripts. The two server-only Supabase entries are
-placeholders used in later PRs.
+placeholders used in later PRs. The three `SENTRY_*` secrets are used by PR 4's
+`deploy.yml` build step for source map upload and frontend error reporting.
