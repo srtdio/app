@@ -31,6 +31,7 @@ Sorted v2: a social media operations platform for agencies.
 - Never push to `main` directly.
 - Light and dark mode parity is required on every UI PR.
 - No em-dashes in user-facing strings.
+- Never put SUPABASE_SECRET_KEY or DB connection strings in frontend code or committed .env files. Server secrets live in GitHub Actions Secrets and Cloudflare Pages env only.
 
 ## File structure
 

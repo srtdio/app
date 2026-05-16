@@ -20,6 +20,13 @@ Social media operations platform for agencies.
 pnpm install
 ```
 
+### Local setup
+
+- Copy `.env.example` to `.env.local`.
+- Fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` from the Supabase project.
+- Run `pnpm install`.
+- Run `pnpm dev`.
+
 ## Commands
 
 | Command             | Description                     |
