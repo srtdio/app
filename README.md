@@ -38,3 +38,12 @@ pnpm install
 | `pnpm lint`         | Run ESLint                      |
 | `pnpm format`       | Format with Prettier            |
 | `pnpm format:check` | Check formatting with Prettier  |
+
+## Deploy
+
+- One-time: run `scripts/cloudflare-init.sh` (creates the Pages project), then `scripts/cloudflare-dns-setup.sh` (creates the `v2.srtd.io` CNAME).
+- One-time: manually attach `v2.srtd.io` as a custom domain in the Pages dashboard (see `docs/cloudflare-conventions.md`).
+- Ongoing: pushes to `main` auto-deploy via `.github/workflows/deploy.yml`.
+- v2 staging URL: https://v2.srtd.io
+- Scripts need `CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_ZONE_ID` for DNS) set locally.
+- The `srtd.io` apex still serves v1 and is untouched until cutover.
