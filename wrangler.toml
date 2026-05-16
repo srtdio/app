@@ -1,0 +1,17 @@
+name = "srtdio-app"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+# No Workers scripts in this PR. Workers ship in later PRs (6, 47, 55, ...).
+
+# Bindings placeholder. R2 buckets are per-workspace and created at runtime
+# (see docs/cloudflare-conventions.md). KV namespaces TBD.
+#
+# [[r2_buckets]]
+# binding = "ASSETS"
+# bucket_name = "assets-{workspace_id}"
+#
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "<kv-namespace-id>"
