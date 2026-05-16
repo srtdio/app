@@ -39,3 +39,11 @@ export function captureException(err: unknown, context?: Record<string, unknown>
 export function setUser(user: { id: string; email: string }): void {
   Sentry.setUser(user);
 }
+
+/**
+ * Tag every captured event with the active trace_id so Sentry errors are
+ * searchable by trace_id. Called from TraceProvider whenever it changes.
+ */
+export function setSentryTraceId(traceId: string): void {
+  Sentry.setTag('trace_id', traceId);
+}

@@ -33,10 +33,36 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'error',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
-      // TODO: enable in PR 5 - custom rule to forbid SELECT * in SQL queries
+      // Every Supabase .rpc() call must pass _trace_id (PRD section 24, Schema
+      // section 1). Prefer callRpc() from src/lib/rpc.ts, which adds it.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.property.name='rpc'] > ObjectExpression:not(:has(Property[key.name='_trace_id']))",
+          message:
+            'Supabase .rpc() calls must include _trace_id parameter. Use callRpc() from src/lib/rpc.ts instead.',
+        },
+      ],
+      // Force all requests through fetchWithTrace() so they carry X-Trace-Id.
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'fetch',
+          message: 'Use fetchWithTrace() from src/lib/fetch.ts so requests carry X-Trace-Id.',
+        },
+      ],
+      // TODO: enable in a later PR - custom rule to forbid SELECT * in SQL queries
       // 'sorted/no-select-star': 'error',
       // TODO: tighten in later PRs - enforce src/lib boundaries via zones
       // 'import/no-restricted-paths': ['error', { zones: [/* src/lib boundary */] }],
+    },
+  },
+  {
+    // fetchWithTrace() is the single sanctioned wrapper around native fetch.
+    files: ['src/lib/fetch.ts'],
+    rules: {
+      'no-restricted-globals': 'off',
     },
   },
   {
