@@ -9,6 +9,17 @@ Living document. Updated as PRs land.
 
 -----
 
+# 0. Project identifiers and DANGER
+
+| Env | Project ID | Status | Touch from v2 PRs? |
+| --- | --- | --- | --- |
+| v2 | movnexawfhsyuluspxoc | Build target | YES |
+| v1 | ozptjplxbyswclolbxyn | LIVE PRODUCTION | NO. Only the cutover PR ("Cutover: interceptor on v1, ETL cutover mode run, checksum validator, rollback rehearsal"), only on cutover day. |
+
+Both projects are Mumbai. Region is NOT a disambiguator. Project ID is the only safe identifier. Every Claude Code prompt that touches Supabase MUST pass project_id="movnexawfhsyuluspxoc" explicitly.
+
+-----
+
 ## How to read this document
 
 - Every PR has a full descriptive title. No numbers, no abbreviations.
@@ -749,7 +760,7 @@ v1 write interceptor (read-only). ETL cutover mode run. Checksum validator (row 
 - Every prompt ends verbatim: `Return your entire response in ONE code block, most token-efficient form, no prose outside it.` and `After pushing, reply with the exact GitHub PR URL in this format: https://github.com/srtdio/app/pull/[PR-number]`.
 - Audit prompts are read-only. No branches, PRs, version bumps, or CLAUDE.md edits.
 - Audit before any fix prompt.
-- Schema changes: state SQL in chat, get approval, execute via Supabase MCP, verify via information_schema, then PR prompt notes ‘Schema already applied. Do NOT execute.’
+- Schema changes: state SQL in chat, get approval, execute via Supabase MCP with project_id="movnexawfhsyuluspxoc" passed explicitly, verify via information_schema, then PR prompt notes ‘Schema already applied. Do NOT execute.’ Any prompt that says "Supabase" or "Mumbai" without the v2 project ID must be rejected. v1 project ID ozptjplxbyswclolbxyn appears only in the cutover prompt and the ETL script.
 - Auto-merge disabled. Shubham merges manually.
 - Critical-surface PRs (auth, RLS, billing, ETL, publish queue, canonical share token, comments, stage state machine, PCS, post lifecycle, cutover) require E2E tests in scope.
 - Internal team (Hinglish Agency) is the beta cohort throughout build. No external beta program at v2.0.

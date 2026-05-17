@@ -6,6 +6,23 @@ Decisions only. No rationale.
 
 -----
 
+# 0. Project identifiers and DANGER
+
+| Env | Project ID | Region | Status | Touch from v2 build? |
+| --- | --- | --- | --- | --- |
+| v2 | movnexawfhsyuluspxoc | Mumbai (ap-south-1) | Build target | YES |
+| v1 | ozptjplxbyswclolbxyn | Mumbai (ap-south-1) | LIVE PRODUCTION | NO. Only via ETL cutover script, on cutover day. |
+
+CRITICAL: Both projects are in Mumbai. The region is NOT a disambiguator. The project ID is the only safe identifier.
+
+Rules:
+- Every Supabase MCP call from a v2 prompt MUST pass project_id="movnexawfhsyuluspxoc" explicitly.
+- The string "Mumbai" alone, or "the Supabase project" alone, is never sufficient. Reject any prompt that uses them without the project ID.
+- Any operation targeting ozptjplxbyswclolbxyn must say "v1" explicitly in the same prompt and state the reason.
+- No v2 build prompt may target v1. Period.
+
+-----
+
 ## 1. Goals and scope
 
 |Item                  |Decision                                                               |
@@ -16,7 +33,7 @@ Decisions only. No rationale.
 |v1 tenant cutover     |Separate track. Decoupled from public signup date.                     |
 |New tenants pre-launch|Free.                                                                  |
 |Launch platform       |LinkedIn only. Other platforms: OAuth + schema only.                   |
-|Repo                  |Greenfield. New org srtdio. Supabase Pro Mumbai (movnexawfhsyuluspxoc).|
+|Repo                  |Greenfield. New org srtdio. v2 Supabase project: movnexawfhsyuluspxoc (Pro, Mumbai). See §0.|
 |Domain                |srtd.io. Cockpit at platform.srtd.io.                                  |
 |Total PRs             |67 across 4 batches.                                                   |
 
@@ -449,7 +466,7 @@ No AI features in v2.0. No tables. No workers. No UI surfaces. No tabs. No inlin
 
 ## 22. Data model
 
-Schema is fully executed on Supabase project movnexawfhsyuluspxoc (Mumbai, Postgres 17). 40 tables live. See `docs/schema.md` for the live schema dump, and `supabase/migrations/*.sql` for implementation truth.
+Schema is fully executed on the v2 Supabase project movnexawfhsyuluspxoc (Postgres 17). 41 base tables live (38 plain + 3 partitioned parents, with 9 monthly partition children). v1 (ozptjplxbyswclolbxyn) is untouched. See §0. See `docs/schema.md` for the live schema dump, and `supabase/migrations/*.sql` for implementation truth.
 
 ### Core tables
 
@@ -600,6 +617,6 @@ Not covered in v2.0 PRD. Defer to lawyer review pre-launch.
 - One PR per Claude Code prompt.
 - Audit prompts: report-only, no branches/PRs.
 - Always audit before any fix prompt (connectors, not memory).
-- Schema changes: SQL in chat, approval, execute via Supabase MCP, verify via information_schema, PR notes ‘Schema already applied. Do NOT execute.’
+- Schema changes: SQL in chat, approval, execute via Supabase MCP with project_id="movnexawfhsyuluspxoc" passed explicitly, verify via information_schema, PR notes ‘Schema already applied. Do NOT execute.’ Never target v1 (ozptjplxbyswclolbxyn) from a v2 schema change.
 - Auto-merge disabled. Shubham merges manually.
 - Every prompt ends with: ‘Return your entire response in ONE code block, most token-efficient form, no prose outside it.’ and ‘After pushing, reply with the exact GitHub PR URL.’
