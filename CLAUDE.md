@@ -36,6 +36,7 @@ Sorted v2: a social media operations platform for agencies.
 - All deploys go through CI to Cloudflare Pages on push to main. Never deploy locally except for emergency rollback via `wrangler pages deploy`.
 - Errors flow to Sentry srtdio org: frontend project for React errors, backend project for Cloudflare Workers. Source maps uploaded in CI only.
 - New API endpoints, RPC functions, and Workers must accept and propagate trace_id. Read it from the `X-Trace-Id` header on inbound, attach it to all outbound calls.
+- Use logger from `src/lib/logger.ts`. No `console.*` in `src/**` outside logger files.
 
 ## File structure
 

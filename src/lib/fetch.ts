@@ -1,4 +1,5 @@
 import { TRACE_ID_HEADER, generateTraceId, getCurrentTraceId } from '@/lib/trace';
+import { logger } from '@/lib/logger';
 
 /**
  * fetch() wrapper that attaches the X-Trace-Id header on every request.
@@ -20,8 +21,8 @@ export async function fetchWithTrace(
   const method = init?.method ?? 'GET';
   if (import.meta.env.DEV) {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    // Production correlation uses Sentry breadcrumbs; dev gets a console line.
-    console.warn(`[trace ${trace}] ${method} ${url}`);
+    // Production correlation uses Sentry breadcrumbs; dev gets a log line.
+    logger.debug(`${method} ${url}`, { trace_id: trace });
   }
 
   return fetch(input, { ...init, headers });

@@ -8,6 +8,7 @@
 // into audit_log writes.
 
 import { v7 as uuidv7 } from 'uuid';
+import { logger } from '@/server/logger';
 
 export const TRACE_ID_HEADER = 'X-Trace-Id';
 
@@ -19,16 +20,10 @@ export function extractTraceId(request: Request): string {
 }
 
 /**
- * Logger stub that prefixes every line with the trace_id. PR 6 replaces this
- * with real structured logging.
+ * Bind the structured backend logger to a trace_id for the lifetime of a
+ * request. Returns the shared logger from src/server/logger.ts.
  */
 export function withTraceLogger(traceId: string) {
-  return {
-    info(message: string, context?: Record<string, unknown>): void {
-      console.warn(`[trace ${traceId}] ${message}`, context ?? '');
-    },
-    error(message: string, context?: Record<string, unknown>): void {
-      console.error(`[trace ${traceId}] ${message}`, context ?? '');
-    },
-  };
+  logger.setTraceId(traceId);
+  return logger;
 }

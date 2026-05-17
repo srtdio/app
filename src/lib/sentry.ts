@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react';
 import { env } from '@/lib/env';
+import { logger } from '@/lib/logger';
 
 /**
  * Initialize the Sentry browser SDK.
@@ -31,7 +32,7 @@ export function initSentry(): void {
 
 export function captureException(err: unknown, context?: Record<string, unknown>): void {
   if (import.meta.env.DEV) {
-    console.error('[sentry] captureException', err, context);
+    logger.debug('[sentry] captureException', { error: String(err), ...context });
   }
   Sentry.captureException(err, context ? { extra: context } : undefined);
 }
