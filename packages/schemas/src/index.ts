@@ -8,3 +8,4 @@ export * from './supabase.generated';
 export * from './zod/workspaces';
 export * from './zod/workspace_members';
 export * from './zod/workspace_role_permissions';
+export * from './zod/workspace_settings';

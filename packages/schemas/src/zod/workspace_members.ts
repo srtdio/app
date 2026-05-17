@@ -1,6 +1,16 @@
-// TODO: Define WorkspaceMemberSchema once the `workspace_members` table exists
-// in the Supabase `public` schema. Mirror the table row shape with
-// z.object({...}), snake_case field names matching the database, then export
-// the inferred type: `export type WorkspaceMember = z.infer<typeof WorkspaceMemberSchema>`.
+import { z } from 'zod';
 
-export {};
+export const WorkspaceMemberSchema = z.object({
+  id: z.string().uuid(),
+  workspace_id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  role: z.enum(['owner', 'admin', 'agency', 'client']),
+  active: z.boolean(),
+  invited_by: z.string().uuid().nullable(),
+  invited_at: z.string(),
+  accepted_at: z.string().nullable(),
+  removed_at: z.string().nullable(),
+  rejoined_at: z.string().nullable(),
+});
+
+export type WorkspaceMember = z.infer<typeof WorkspaceMemberSchema>;

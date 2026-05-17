@@ -1,7 +1,11 @@
-// TODO: Define WorkspaceRolePermissionSchema once the
-// `workspace_role_permissions` table exists in the Supabase `public` schema.
-// Mirror the table row shape with z.object({...}), snake_case field names
-// matching the database, then export the inferred type:
-// `export type WorkspaceRolePermission = z.infer<typeof WorkspaceRolePermissionSchema>`.
+import { z } from 'zod';
 
-export {};
+export const WorkspaceRolePermissionSchema = z.object({
+  workspace_id: z.string().uuid(),
+  role: z.enum(['owner', 'admin', 'agency', 'client']),
+  capability: z.string(),
+  allowed: z.boolean(),
+  updated_at: z.string(),
+});
+
+export type WorkspaceRolePermission = z.infer<typeof WorkspaceRolePermissionSchema>;
