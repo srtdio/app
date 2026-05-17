@@ -16,13 +16,183 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      workspace_members: {
+        Row: {
+          accepted_at: string | null
+          active: boolean
+          id: string
+          invited_at: string
+          invited_by: string | null
+          rejoined_at: string | null
+          removed_at: string | null
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          active?: boolean
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          rejoined_at?: string | null
+          removed_at?: string | null
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          active?: boolean
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          rejoined_at?: string | null
+          removed_at?: string | null
+          role?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_role_permissions: {
+        Row: {
+          allowed: boolean
+          capability: string
+          role: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          allowed?: boolean
+          capability: string
+          role: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          allowed?: boolean
+          capability?: string
+          role?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_role_permissions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_settings: {
+        Row: {
+          payload: Json
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          payload?: Json
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          payload?: Json
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          activated_at: string | null
+          created_at: string
+          deleted_at: string | null
+          digest_default_time: string
+          id: string
+          name: string
+          owner_user_id: string
+          plan_tier: string
+          row_version: number
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_state: string
+          subscription_state_expires_at: string | null
+          target_distributions: Json | null
+          timezone: string
+          trial_ends_at: string | null
+          updated_at: string
+          week_start_day: number
+        }
+        Insert: {
+          activated_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          digest_default_time?: string
+          id?: string
+          name: string
+          owner_user_id: string
+          plan_tier?: string
+          row_version?: number
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_state?: string
+          subscription_state_expires_at?: string | null
+          target_distributions?: Json | null
+          timezone: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          week_start_day?: number
+        }
+        Update: {
+          activated_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          digest_default_time?: string
+          id?: string
+          name?: string
+          owner_user_id?: string
+          plan_tier?: string
+          row_version?: number
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_state?: string
+          subscription_state_expires_at?: string | null
+          target_distributions?: Json | null
+          timezone?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          week_start_day?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      uuidv7: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
