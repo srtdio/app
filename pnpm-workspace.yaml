@@ -1,0 +1,6 @@
+packages:
+  - 'packages/*'
+
+# The Supabase CLI ships a postinstall step that fetches its platform binary.
+onlyBuiltDependencies:
+  - supabase

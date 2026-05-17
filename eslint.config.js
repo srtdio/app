@@ -6,7 +6,13 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'packages/schemas/dist/**',
+      // Supabase types are generated; the drift gate owns their shape.
+      'packages/schemas/src/supabase.generated.ts',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

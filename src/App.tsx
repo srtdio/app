@@ -1,5 +1,10 @@
+import type { Json } from '@srtdio/schemas';
 import { useNewTrace, useTraceId } from '@/lib/trace-context';
 import { logger } from '@/lib/logger';
+
+// Compile-time proof that the @srtdio/schemas workspace package resolves for
+// the frontend build. Type-only; erased at build time, no runtime effect.
+export type SchemaJson = Json;
 
 export default function App() {
   const traceId = useTraceId();

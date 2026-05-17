@@ -28,6 +28,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@srtdio/schemas': fileURLToPath(new URL('./packages/schemas/src', import.meta.url)),
     },
   },
   build: {
