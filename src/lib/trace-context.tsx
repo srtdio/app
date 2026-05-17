@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import { generateTraceId, getCurrentTraceId, setCurrentTraceId } from '@/lib/trace';
 import { setSentryTraceId } from '@/lib/sentry';
+import { logger } from '@/lib/logger';
 
 /**
  * A trace_id scopes one top-level user action (page load, click, form submit).
@@ -17,11 +18,16 @@ const TraceContext = createContext<TraceContextValue | null>(null);
 export function TraceProvider({ children }: { children: ReactNode }) {
   const [traceId, setTraceId] = useState<string>(getCurrentTraceId);
 
-  // Keep the module-level holder and Sentry tag in sync with the active id so
-  // the Supabase fetch wrapper and captured errors carry the same trace_id.
+  // Keep the module-level holder, Sentry tag and logger in sync with the
+  // active id so the Supabase fetch wrapper, captured errors and structured
+  // log lines all carry the same trace_id.
   useEffect(() => {
     setCurrentTraceId(traceId);
     setSentryTraceId(traceId);
+    logger.setTraceId(traceId);
+    return () => {
+      logger.clearTraceId();
+    };
   }, [traceId]);
 
   const newTrace = useCallback(() => {

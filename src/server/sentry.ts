@@ -5,10 +5,12 @@
 // wiring real error reporting is deferred to PR 6, when the first Worker ships.
 // Until then these exports give callers a stable surface that just logs.
 
+import { logger } from '@/server/logger';
+
 export function initSentryBackend(): void {
   // No-op until PR 6 installs @sentry/cloudflare and configures the first Worker.
 }
 
 export function captureException(err: unknown, context?: Record<string, unknown>): void {
-  console.error('[sentry-backend stub]', err, context);
+  logger.error('[sentry-backend stub] captureException', { error: String(err), ...context });
 }

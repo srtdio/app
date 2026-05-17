@@ -5,6 +5,13 @@ pages_build_output_dir = "dist"
 
 # No Workers scripts in this PR. Workers ship in later PRs (6, 47, 55, ...).
 
+# Structured logging. Workers/Pages Functions emit single-line JSON to stdout;
+# Cloudflare Logpush ships it to the R2 bucket srtdio-logs. The Logpush job and
+# bucket are created manually - see docs/cloudflare-logpush-setup.md.
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
 # Bindings placeholder. R2 buckets are per-workspace and created at runtime
 # (see docs/cloudflare-conventions.md). KV namespaces TBD.
 #

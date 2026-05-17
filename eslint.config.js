@@ -32,7 +32,6 @@ export default tseslint.config(
       ...react.configs['jsx-runtime'].rules,
       ...reactHooks.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'error',
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
       // Every Supabase .rpc() call must pass _trace_id (PRD section 24, Schema
       // section 1). Prefer callRpc() from src/lib/rpc.ts, which adds it.
       'no-restricted-syntax': [
@@ -63,6 +62,23 @@ export default tseslint.config(
     files: ['src/lib/fetch.ts'],
     rules: {
       'no-restricted-globals': 'off',
+    },
+  },
+  {
+    // All structured logging goes through logger from src/lib/logger.ts.
+    // No console.* anywhere in first-party src/** code.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/**/*.test.{ts,tsx}', 'src/**/__tests__/**'],
+    rules: {
+      'no-console': 'error',
+    },
+  },
+  {
+    // The logger files are the single sanctioned console sink. Only warn/error
+    // are permitted; the real level is carried in the JSON `level` field.
+    files: ['src/lib/logger.ts', 'src/server/logger.ts'],
+    rules: {
+      'no-console': ['error', { allow: ['warn', 'error'] }],
     },
   },
   {

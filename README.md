@@ -36,6 +36,7 @@ pnpm install
 | `pnpm preview`      | Preview the production build    |
 | `pnpm typecheck`    | Run `tsc --noEmit`              |
 | `pnpm lint`         | Run ESLint                      |
+| `pnpm test`         | Run unit tests (vitest)         |
 | `pnpm format`       | Format with Prettier            |
 | `pnpm format:check` | Check formatting with Prettier  |
 
@@ -50,6 +51,16 @@ pnpm install
 - Every user action generates a uuid_v7 trace_id (`src/lib/trace.ts`).
 - It propagates FE -> Supabase -> DB RPC -> Worker -> Sentry tag.
 - ESLint enforces `_trace_id` on `.rpc()` calls; use `callRpc()` from `src/lib/rpc.ts`.
+
+## Logging
+
+- Use `logger` from `src/lib/logger.ts` (frontend) or `src/server/logger.ts` (backend).
+- Every line is single-line JSON with `ts`, `level`, `msg`, `trace_id`, `env`, `service`, `context`.
+- Secret-looking context keys are redacted; oversized context is truncated.
+- `console.*` is banned in `src/**` outside the logger files (ESLint enforces).
+- Logs ship to Cloudflare Logpush with an R2 sink. The R2 bucket `srtdio-logs`
+  must be created manually before logs flow; run `scripts/cloudflare-logpush-init.sh`.
+- Full setup: `docs/cloudflare-logpush-setup.md`.
 
 ## Deploy
 
