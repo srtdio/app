@@ -45,6 +45,12 @@ Sorted v2: a social media operations platform for agencies.
 - `src/components/` UI components.
 - `src/server/` edge functions (added in later PRs).
 
+## Canonical living docs
+
+- Canonical docs live in `docs/`: `pr-list.md` (PR list, referenced by full title only, no numbers, no slugs), `prd.md` (PRD, decisions only), `schema.md` (live DB snapshot from Supabase project movnexawfhsyuluspxoc). Read these before planning any work; they outrank memory and prior chat context.
+- When a PR merges, update `docs/pr-list.md` status board in the SAME PR: change the PR’s status to `merged` and add the GitHub PR URL. This is mandatory, not optional.
+- Schema changes: after executing SQL via Supabase MCP and verifying via `information_schema`, regenerate `docs/schema.md` in the same migration PR so the snapshot stays current. The PR prompt will say `Schema already applied. Do NOT execute.`
+
 ## How to handoff
 
 After pushing, reply with the exact PR URL: `https://github.com/srtdio/app/pull/[N]`.
