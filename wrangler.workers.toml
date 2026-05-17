@@ -1,0 +1,7 @@
+# Workers config. Used by future Worker deploys in batch B4. Pages deploys use wrangler.toml.
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1.0
