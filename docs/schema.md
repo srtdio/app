@@ -503,6 +503,8 @@ Snapshot per pre-publish edit. **Immutable (no deleted_at).**
 
 Core entity. `stage` = workflow. `publish_status` = auxiliary. CHECK enforces legal pairs.
 
+`stage` values: `draft`, `review`, `scheduled`, `published`, `parked`, `rejected` (6 stages). `needs_input` has been removed as a stage; agency-to-client input asks are now a separate Input Request concept owned by the Requests section, pending separate design.
+
 |Column                   |Type       |Nullable|Default   |
 |-------------------------|-----------|--------|----------|
 |id                       |uuid       |NOT NULL|`uuidv7()`|
@@ -789,9 +791,9 @@ Tenant root. Owner FK is ON DELETE RESTRICT.
 **`posts_stage_publish_status_check` (the matrix):**
 
 ```
-draft, awaiting_approval, needs_input, parked, rejected → publish_status = 'draft'
-scheduled                                              → publish_status IN ('scheduled','publishing','publish_failed','publish_failed_final')
-published                                              → publish_status = 'published'
+draft, review, parked, rejected → publish_status = 'draft'
+scheduled                       → publish_status IN ('scheduled','publishing','publish_failed','publish_failed_final')
+published                       → publish_status = 'published'
 ```
 
 **`posts_scheduled_needs_target_date`:** stage=‘scheduled’ requires target_date NOT NULL.
@@ -831,7 +833,7 @@ published                                              → publish_status = 'pub
 
 **Enum CHECKs (text columns with value lists):**
 
-- `posts.stage` ∈ {draft, awaiting_approval, needs_input, scheduled, published, parked, rejected}
+- `posts.stage` ∈ {draft, review, scheduled, published, parked, rejected}
 - `posts.publish_status` ∈ {draft, scheduled, publishing, published, publish_failed, publish_failed_final}
 - `posts.origin` ∈ {manual, plan, brief}
 - `posts.platform`, `plan_cells.platform`, `platform_accounts.platform` ∈ {linkedin, x, instagram, facebook, threads}
