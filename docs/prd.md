@@ -35,7 +35,7 @@ Rules:
 |Launch platform       |LinkedIn only. Other platforms: OAuth + schema only.                   |
 |Repo                  |Greenfield. New org srtdio. v2 Supabase project: movnexawfhsyuluspxoc (Pro, Mumbai). See §0.|
 |Domain                |srtd.io. Cockpit at platform.srtd.io.                                  |
-|Total PRs             |67 across 4 batches.                                                   |
+|Total PRs             |68 across 4 batches.                                                   |
 
 ## 2. Operating principles
 
@@ -69,14 +69,14 @@ Rules:
 |Owner |Workspace creator. Billing, deletion, transfer. Cannot self-delete until ownership transferred.|
 |Admin |Full workspace power except billing and deletion.                                              |
 |Agency|All sections except admin settings.                                                            |
-|Client|Pipeline (everything except Draft), Briefs (own only), Assets, Insights (curated).             |
+|Client|Pipeline (everything except Draft), Requests (own only), Assets, Insights (curated).           |
 
 ### Visibility
 
 |Surface |Client sees                                      |
 |--------|-------------------------------------------------|
 |Pipeline|All stages except Draft                          |
-|Briefs  |Own briefs only                                  |
+|Requests|Own briefs; input requests addressed to them     |
 |Assets  |Yes                                              |
 |Insights|Curated subset (no click-through, no comparisons)|
 |Plan    |TBD (section parked)                             |
@@ -171,7 +171,7 @@ All *_by columns across schema reference public.users(id) with ON DELETE SET NUL
 |Element         |Decision                                                                                                       |
 |----------------|---------------------------------------------------------------------------------------------------------------|
 |Topbar          |Workspace switcher, search trigger, Inbox icon (badge), profile menu (avatar + designation)                    |
-|Drawer (left)   |Sections: Pipeline, Plan, Briefs, Assets, Insights. Bottom: workspace switcher, Recently deleted (N), Settings.|
+|Drawer (left)   |Sections: Pipeline, Plan, Requests, Assets, Insights. Bottom: workspace switcher, Recently deleted (N), Settings.|
 |Recently deleted|Bottom of drawer. Tap to expand. Restore button + countdown per workspace.                                     |
 |Mobile          |Web-only at v2.0. Native deferred.                                                                             |
 
@@ -205,6 +205,7 @@ Permanent in-app event feed. Source of truth for what happened. Only permanent s
 - Chat messages in DM, group, plan-period channels
 - Post stage changes
 - Brief created (agency), brief closed
+- Input request opened (agency asked client), input request fulfilled (client responded), input request closed (agency closed it)
 - Asset uploaded, asset version added
 - Approvals requested, approvals given/rejected
 - @-mentions
@@ -237,7 +238,7 @@ Six stages, locked: draft, review, scheduled, published, parked, rejected. UI la
 |parked   |Parked   |Held by agency. Not published.               |
 |rejected |Rejected |Client rejected. Closed.                     |
 
-needs_input is no longer a stage. Agency-to-client input asks are handled by Input Requests under the Requests section (see §10, pending design).
+When a post needs raw material from client, agency creates an Input Request linked to the post (see §10 Requests). Post stays in its current stage. The post card shows an open-input-request chip ("input req · waiting on [client]") while one is open. There is no stage for agency-to-client input asks.
 
 ### Stage transition map (locked)
 
@@ -250,7 +251,7 @@ needs_input is no longer a stage. Agency-to-client input asks are handled by Inp
 |parked   |review (revive only)                                                                                                         |
 |rejected |review (revive only)                                                                                                         |
 
-Notes: Unscheduling resets publish_status to draft and cancels the schedule_job. Parked/rejected revive directly to review, must re-enter the approval chain. No direct stage jumps to scheduled, only via approval transition. needs_input is gone, replaced by Input Request (a separate primitive, see §10).
+Notes: Unscheduling resets publish_status to draft and cancels the schedule_job. Parked/rejected revive directly to review, must re-enter the approval chain. No direct stage jumps to scheduled, only via approval transition. Input Requests are a separate primitive (see §10 Requests), never a stage.
 
 ### Stage x publish_status matrix (CHECK constraint enforced)
 
@@ -274,7 +275,22 @@ TO BE FINALIZED. Design session required before Plan PRs build. Plan PRs blocked
 - Period approval modes meaning?
 - Client visibility?
 
-## 10. Briefs
+## 10. Requests
+
+Requests are the asks between agency and client. Two request types share one section: the Brief (client to agency) and the Input Request (agency to client). Both are immutable after creation, both close, both are searchable, both surface in Inbox, and both accept comments and asset attachments.
+
+### Request types
+
+|Type         |Direction    |Created by|Required fields           |Optional fields                                                                   |Edit after creation|Closes when                      |Post link                                    |
+|-------------|-------------|----------|--------------------------|-----------------------------------------------------------------------------------|-------------------|----------------------------------|----------------------------------------------|
+|Brief        |client→agency|client    |title, objective          |format_requested, brand_requirements, target_date, reference_links, initial comment|No one             |agency or client closes           |Optional. A post may link via posts.brief_id. |
+|Input request|agency→client|agency    |title, ask, linked_post_id|target_date, reference_links                                                       |No one             |agency closes when client provides|Required, via input_requests.linked_post_id.  |
+
+### Unified list UI
+
+One list, no direction tabs. Filter pills: All · Briefs · Inputs · Closed. Each row carries a type chip: "brief · from client" or "input · we asked". Rows are grouped by urgency: Needs response → Open → Closed. Both types are searchable.
+
+### Brief (client to agency)
 
 |Item                |Decision                                                                      |
 |--------------------|------------------------------------------------------------------------------|
@@ -290,9 +306,29 @@ TO BE FINALIZED. Design session required before Plan PRs build. Plan PRs blocked
 |Linked posts display|Read-only derived count on brief detail panel                                 |
 |Email thread root   |Brief if any post links to it; else post                                      |
 
-### Input Requests (pending design)
+### Input request (agency to client)
 
-An Input Request is a parallel primitive to the Brief, pending design. Two request directions share the same primitive (title, ask, optional references, comments, open/closed): client-to-agency is the existing Brief; agency-to-client is the new Input Request. An Input Request is attached to a post but stands as its own row. It replaces the removed needs_input stage. Schema impact (a new input_requests table or an extension of briefs) is NOT in scope yet; a future PR adds it. Confirm the table design with Shubham before building.
+|Item                |Decision                                                                                                        |
+|--------------------|-----------------------------------------------------------------------------------------------------------------|
+|States              |Open (default), Closed                                                                                          |
+|Closed behaviour    |Hidden from default view, still readable, still accepts comments                                                |
+|Created by          |Agency only                                                                                                     |
+|Required fields     |Title, ask, linked post                                                                                         |
+|Optional fields     |Target date, references                                                                                         |
+|Agency can          |Comment, close (when client provides the material)                                                              |
+|Client can          |Comment, attach assets                                                                                          |
+|Edit after creation |No one                                                                                                          |
+|Post linkage        |Required. Every input request links to exactly one post via input_requests.linked_post_id.                      |
+|Stage effect        |Post stays in its current stage. The post card shows an "input req · waiting on [client]" chip while one is open.|
+
+### Creation flows
+
+- Brief: client only, unchanged. The client opens the create-brief sheet from the Requests topbar.
+- Input request: agency only. The "+ New" button in the Requests topbar opens a sheet; the agency picks Brief or Input. A client sees Brief only. An input request must link to a post. An input request is also creatable from inside PCS via the "Request input" action (see §11), which pre-fills the linked post.
+
+### Inbox surfacing
+
+Both request types surface in Inbox per the standard scope rules (see §7). Input request events are input_request_opened, input_request_fulfilled, and input_request_closed.
 
 ## 11. PCS (Post Control System)
 
@@ -307,6 +343,7 @@ An Input Request is a parallel primitive to the Brief, pending design. Two reque
 |Edit after publish              |Disabled in Sorted. Replaced with ‘Edit on LinkedIn’ deep-link.                                             |
 |Approve button                  |PCS only. Not on Pipeline cards. Client must be logged in.                                                  |
 |Take down published post        |Not possible from Sorted. Agency deletes on LinkedIn manually, then creates a new Sorted post if needed.    |
+|Request input                   |PCS action button (agency only). Opens the create-input-request sheet pre-filled with the linked post. See §10 Requests.|
 
 ### Share URL behaviour
 
@@ -394,6 +431,8 @@ No AI features in v2.0. No tables. No workers. No UI surfaces. No tabs. No inlin
 |Subject (brief-rooted)    |[Workspace] {brief.title}                                                |
 |Subject (post-rooted)     |[Workspace] {post.title}                                                 |
 |All emails for a work unit|Share one Message-ID chain. Gmail/Outlook collapse into one conversation.|
+
+Input request notifications follow the same bundling and threading as brief events. `email_threads.root_type` stays {brief, post}; input requests do not root threads. Input request notifications attach to the linked post's thread.
 
 ## 18. Workspace settings
 
@@ -493,7 +532,8 @@ Schema is fully executed on the v2 Supabase project movnexawfhsyuluspxoc (Postgr
 |post_versions        |Snapshot per edit. Pre-publish only. IMMUTABLE; no deleted_at.                                                                  |
 |post_annotations     |Caption span / image pin. Bound to post_version_id. IMMUTABLE; no deleted_at.                                                   |
 |comments             |Entity-anchored. workspace_id RLS. Soft-delete.                                                                                 |
-|briefs               |Open/Closed states. No edits after creation.                                                                                    |
+|briefs               |Client→agency requests. Open/Closed states. No edits after creation.                                                            |
+|input_requests (NEW) |Agency→client requests. Linked to a post (required). Schema spec in docs/schema.md. Implementation pending a separate PR.        |
 |assets               |Pointer row. current_version_id FK.                                                                                             |
 |asset_versions       |id, asset_id, version_number, r2_key, file_hash, uploaded_at, uploaded_by                                                       |
 |asset_attachments    |Binds entity to a specific asset_version_id. Immutable. FK NO ACTION.                                                           |

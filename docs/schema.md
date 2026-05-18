@@ -121,7 +121,7 @@ Partitioned by month on `created_at`. 90-day retention. Indexed on `trace_id`.
 
 ### `briefs`
 
-Client-only creation. Open or Closed. Immutable content after insert.
+Created by clients only (client→agency request). The agency→client equivalent is `input_requests` (parallel table, see below). Open or Closed. Immutable content after insert.
 
 |Column            |Type       |Nullable|Default   |
 |------------------|-----------|--------|----------|
@@ -142,6 +142,8 @@ Client-only creation. Open or Closed. Immutable content after insert.
 |created_at        |timestamptz|NOT NULL|`now()`   |
 |updated_at        |timestamptz|NOT NULL|`now()`   |
 |deleted_at        |timestamptz|NULL    |          |
+
+Brief and input_request are parallel request primitives. Both immutable after creation. Both close. Both accept comments and asset attachments. They differ in direction, in who creates them, and in post-link requirement: `input_requests` require a linked post; briefs optionally link via `posts.brief_id`.
 
 ### `chat_channels`
 
@@ -333,6 +335,64 @@ Permanent in-app event feed. Partitioned monthly. Soft-deletable.
 |created_at   |timestamptz|NOT NULL|`now()`   |
 |deleted_at   |timestamptz|NULL    |          |
 
+### `input_requests`
+
+> **STATUS: Documented, NOT yet implemented.** Implementation tracked under the input_requests migration PR. Not present in the live DB; the live base-table count stays 40 until that PR ships.
+
+Agency→client request for raw material (photos, quotes, event details, brand assets) linked to a specific post. Immutable after insert. Closes when the agency marks it fulfilled. Pending implementation.
+
+|Column         |Type       |Nullable|Default   |
+|---------------|-----------|--------|----------|
+|id             |uuid       |NOT NULL|`uuidv7()`|
+|workspace_id   |uuid       |NOT NULL|          |
+|linked_post_id |uuid       |NOT NULL|          |
+|title          |text       |NOT NULL|          |
+|ask            |text       |NOT NULL|          |
+|target_date    |date       |NULL    |          |
+|reference_links|jsonb      |NULL    |          |
+|status         |text       |NOT NULL|`'open'`  |
+|closed_at      |timestamptz|NULL    |          |
+|closed_by      |uuid       |NULL    |          |
+|created_by     |uuid       |NOT NULL|          |
+|created_via    |text       |NOT NULL|`'app'`   |
+|row_version    |bigint     |NOT NULL|`1`       |
+|created_at     |timestamptz|NOT NULL|`now()`   |
+|updated_at     |timestamptz|NOT NULL|`now()`   |
+|deleted_at     |timestamptz|NULL    |          |
+
+**Foreign keys (with ON DELETE policy):**
+
+- `workspace_id` → `workspaces(id)` ON DELETE CASCADE
+- `linked_post_id` → `posts(id)` ON DELETE CASCADE
+- `created_by` → `public.users(id)` ON DELETE SET NULL
+- `closed_by` → `public.users(id)` ON DELETE SET NULL
+
+**CHECK constraints:**
+
+- `input_requests_status_check`: status IN (`open`, `closed`)
+- `input_requests_closed_consistency`: (status=`open` AND closed_at IS NULL AND closed_by IS NULL) OR (status=`closed` AND closed_at IS NOT NULL AND closed_by IS NOT NULL)
+- `input_requests_title_check`: char_length(title) BETWEEN 1 AND 200
+- `input_requests_ask_check`: char_length(ask) BETWEEN 1 AND 5000
+- `input_requests_created_via_check`: created_via IN (`app`, `pcs_action`)
+
+**Indexes (partial, soft-delete-aware, same pattern as `briefs`):**
+
+- `input_requests_workspace_status_idx`: (workspace_id, status, created_at DESC) WHERE deleted_at IS NULL
+- `input_requests_linked_post_idx`: (linked_post_id) WHERE deleted_at IS NULL
+- `input_requests_created_by_idx`: (workspace_id, created_by, created_at DESC) WHERE deleted_at IS NULL
+- `input_requests_target_date_idx`: (workspace_id, target_date) WHERE deleted_at IS NULL AND target_date IS NOT NULL
+- `input_requests_title_fts_idx`: GIN to_tsvector(`english`, title || ` ` || ask) WHERE deleted_at IS NULL
+
+**RLS:**
+
+- `input_requests_select_member`: SELECT, EXISTS `workspace_members` for the current user, deleted_at IS NULL.
+- No INSERT/UPDATE/DELETE policies. All writes via SECURITY DEFINER procs (`input_request_create`, `input_request_close`).
+
+**Triggers:**
+
+- `input_requests_row_version_check`: BEFORE UPDATE, calls `enforce_row_version_increment()`.
+- `input_requests_updated_at`: BEFORE UPDATE, sets `updated_at = now()`.
+
 ### `intent_ledger`
 
 Cockpit two-phase intent tracking. 60-min expiry.
@@ -503,7 +563,9 @@ Snapshot per pre-publish edit. **Immutable (no deleted_at).**
 
 Core entity. `stage` = workflow. `publish_status` = auxiliary. CHECK enforces legal pairs.
 
-`stage` values: `draft`, `review`, `scheduled`, `published`, `parked`, `rejected` (6 stages). `needs_input` has been removed as a stage; agency-to-client input asks are now a separate Input Request concept owned by the Requests section, pending separate design.
+`stage` values: `draft`, `review`, `scheduled`, `published`, `parked`, `rejected` (6 stages). Agency-to-client input asks are a separate Input Request primitive owned by the Requests section, never a stage; see the `input_requests` table.
+
+Posts may have multiple input_requests linked via `input_requests.linked_post_id`. Open input requests display as a chip on the post card. UX choice (not schema-enforced): scheduling is blocked while an input request is open.
 
 |Column                   |Type       |Nullable|Default   |
 |-------------------------|-----------|--------|----------|
@@ -848,12 +910,12 @@ published                       → publish_status = 'published'
 - `plan_periods.approval_mode` ∈ {per_cell, period_bulk}
 - `plan_cells.state` ∈ {draft, proposed, approved, rejected}
 - `share_tokens.capability` = `'view_card'` (only)
-- `comments.entity_type` ∈ {post, brief, plan_cell}
-- `asset_attachments.entity_type` ∈ {post, comment, chat_message, brief}
-- `inbox_entries.event_type` ∈ {comment, mention, stage_change, approval_request, approval_decision, decision_marked, publish_success, publish_failed, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system}
+- `comments.entity_type` ∈ {post, brief, plan_cell, input_request} (the `input_request` value is pending alongside input_requests table creation)
+- `asset_attachments.entity_type` ∈ {post, comment, chat_message, brief, input_request} (the `input_request` value is pending alongside input_requests table creation)
+- `inbox_entries.event_type` ∈ {comment, mention, stage_change, approval_request, approval_decision, decision_marked, publish_success, publish_failed, brief_created, brief_closed, input_request_opened, input_request_fulfilled, input_request_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system} (the three `input_request_*` values are pending alongside input_requests table creation)
 - `inbox_entries.scope` ∈ {everything, posts, briefs, plans, people, groups, clients}
 - `inbox_entries.tier` ∈ {urgent, active, ambient}
-- `inbox_entries.entity_type` ∈ {post, brief, plan_cell, plan_period, chat_channel, workspace}
+- `inbox_entries.entity_type` ∈ {post, brief, plan_cell, plan_period, chat_channel, workspace, input_request} (the `input_request` value is pending alongside input_requests table creation)
 - `chat_channels.channel_type` ∈ {dm, group, plan_period}
 - `webhook_events.source` ∈ {stripe, resend, linkedin}
 - `cockpit_procedure_allowlist.risk_tier` ∈ {tap, medium, nuclear}
@@ -1097,6 +1159,13 @@ Cron must rotate partitions: create future month, drop past-90-days month. Cron 
 1. **Workspace soft-delete = 7 days; asset soft-delete = 30 days.** Hard-delete crons not yet built.
 1. **Realtime subscription discipline: default deny, explicit allowlist.** Per Supabase Realtime config (not in SQL).
 1. **One workspace = one end-client = one platform.** Tier price multiplies if a workspace adds platforms.
+1. **Brief and input_request are parallel request primitives.** Both immutable after creation. Briefs are client-initiated. Input requests are agency-initiated and require a linked post (`linked_post_id` NOT NULL, FK to `posts` ON DELETE CASCADE).
+
+-----
+
+## Open items
+
+- **input_requests table:** spec documented above (see §Tables / `input_requests`), not yet created in the live DB. Implementation work is tracked in the input_requests migration PR. It will require: (a) CREATE TABLE input_requests with all constraints and indexes, (b) the RLS policy, (c) two SECURITY DEFINER procs (`input_request_create`, `input_request_close`), (d) ALTER three enum CHECKs on `comments` / `asset_attachments` / `inbox_entries` `entity_type` to add `input_request`, (e) ALTER `inbox_entries.event_type` CHECK to add three new event types. The base-table count is 40 today and rises to 41 after input_requests is implemented.
 
 -----
 
