@@ -60,8 +60,9 @@ Both projects are Mumbai. Region is NOT a disambiguator. Project ID is the only 
 |planned|Stage state machine + E2E tests on every transition                                                                 |—        |
 |planned|Pipeline: vertical kanban desktop, accordion mobile, urgency colors                                                 |—        |
 |planned|Filters + saved views + bulk actions (agency only, cap 10)                                                          |—        |
-|planned|Briefs entity: client-only creation, Open/Closed states, comment/withdraw, no edits                                 |—        |
-|planned|Email-forwarding intake: workspace inbound address, MIME parse, asset link                                          |—        |
+|planned|Requests entity: briefs + input_requests, unified list UI, type chips, urgency grouping                             |—        |
+|planned|input_requests table: schema + RLS + SECURITY DEFINER procs + enum CHECK extensions                                 |—        |
+|planned|Brief intake: client-initiated email forwarding, inbound address, MIME parse, asset link                            |—        |
 |blocked|Plan: calendar grid, cell detail panel, drag reschedule                                                             |—        |
 |blocked|Plan states + period approval modes                                                                                 |—        |
 |blocked|Plan Approved spawns Draft post with Origin=Plan                                                                    |—        |
@@ -103,7 +104,7 @@ Both projects are Mumbai. Region is NOT a disambiguator. Project ID is the only 
 |planned|Workspace settings UI: name, timezone, billing, members, LinkedIn connection, 7-day soft-delete, ownership transfer |—        |
 |planned|Cutover: interceptor on v1, ETL cutover mode run, checksum validator, rollback rehearsal                            |—        |
 
-Total: 67 PRs. 23 parallel-safe. 44 sequenced. 4 blocked on Plan design.
+Total: 68 PRs. 24 parallel-safe. 44 sequenced. 4 blocked on Plan design.
 
 -----
 
@@ -232,7 +233,7 @@ GitHub PR: —
 Depends on: Commit applied schema as migration files; RLS CI test suite
 Parallel: no
 
-All sensitive write paths through SECURITY DEFINER functions. Procs included: stage_transition, approval_act, member_invite, member_accept, post_version_create, annotation_create, share_token_create, share_token_revoke, publish_enqueue, schedule_cancel. INSERT/UPDATE/DELETE revoked from authenticated role on all sensitive tables. Each proc validates capability via has_capability(), validates workspace tenancy, writes audit_log row.
+All sensitive write paths through SECURITY DEFINER functions. Procs included: stage_transition, approval_act, member_invite, member_accept, post_version_create, annotation_create, share_token_create, share_token_revoke, publish_enqueue, schedule_cancel, brief_create, brief_close. INSERT/UPDATE/DELETE revoked from authenticated role on all sensitive tables. Each proc validates capability via has_capability(), validates workspace tenancy, writes audit_log row. Note: input_request_create and input_request_close are added later by the input_requests table PR, extending this same pattern.
 
 ### Workspace creation flow + member invite + role assignment + onboarding checklist card
 
@@ -368,23 +369,32 @@ Pipeline filters: owner, channel, content_type, target_date range, has_blocking_
 
 ## B3 Briefs/Inbox/Chat/Assets
 
-### Briefs entity: client-only creation, Open/Closed states, comment/withdraw, no edits
+### Requests entity: briefs + input_requests, unified list UI, type chips, urgency grouping
 
 Status: `planned`
 GitHub PR: —
-Depends on: Comments primitive
+Depends on: Comments primitive; input_requests table: schema + RLS + SECURITY DEFINER procs + enum CHECK extensions
 Parallel: no
 
-Briefs table. Client-only creation. Open (default) or Closed (soft). Required: title, objective. Optional: format_requested, brand_requirements, target_date, references, initial comment. No edits after creation. Client can comment and close (withdraw). Agency can comment and close. Derived linked-posts count on brief detail panel.
+The Requests section unifies two request primitives. Brief: client→agency, unchanged from prior spec. Client-only creation, Open (default) or Closed (soft), required title + objective, optional format_requested / brand_requirements / target_date / references / initial comment, no edits after creation, client and agency can comment, client or agency can close. Input Request: agency→client, new. Agency-only creation, requires a linked post, required title + ask + linked_post_id, optional target_date / references, no edits after creation, agency closes when the client provides the material. Unified list UI: one list (no direction tabs), filter pills (All · Briefs · Inputs · Closed), a type chip per card ("brief · from client" / "input · we asked"), grouped by urgency (Needs response → Open → Closed). Both types are searchable, both surface in Inbox, both accept comments and asset attachments, both immutable after creation. Brief creation flow unchanged. New creation flows for Input Request: the "+ New" button in the Requests topbar (agency picks Brief or Input; client gets Brief only) and the "Request input" action in PCS. Depends on the input_requests table PR.
 
-### Email-forwarding intake: workspace inbound address, MIME parse, asset link
+### input_requests table: schema + RLS + SECURITY DEFINER procs + enum CHECK extensions
 
 Status: `planned`
 GitHub PR: —
-Depends on: Briefs entity
+Depends on: Commit applied schema as migration files; SECURITY DEFINER procs consolidated
+Parallel: yes
+
+CREATE TABLE input_requests per the docs/schema.md spec (all columns, foreign keys, CHECK constraints, indexes, triggers). Add RLS policy input_requests_select_member (SELECT, workspace member, deleted_at IS NULL). Add SECURITY DEFINER procs input_request_create and input_request_close, extending the proc-consolidation pattern from SECURITY DEFINER procs consolidated. Extend the enum CHECKs on comments.entity_type, asset_attachments.entity_type, and inbox_entries.entity_type to include 'input_request'. Extend the inbox_entries.event_type CHECK to include input_request_opened, input_request_fulfilled, input_request_closed. Schema-change PR: SQL stated in chat, approved, executed via Supabase MCP with project_id="movnexawfhsyuluspxoc" passed explicitly, verified via information_schema; docs/schema.md regenerated in the same PR.
+
+### Brief intake: client-initiated email forwarding, inbound address, MIME parse, asset link
+
+Status: `planned`
+GitHub PR: —
+Depends on: Requests entity: briefs + input_requests, unified list UI, type chips, urgency grouping
 Parallel: no
 
-Per-workspace inbound email address. MIME parser extracts subject -> brief.title, body -> brief.objective, attachments -> assets linked to the brief.
+Per-workspace inbound email address. MIME parser extracts subject -> brief.title, body -> brief.objective, attachments -> assets linked to the brief. Brief intake only (client-initiated). Input requests are app-only; they have no email intake path.
 
 ### Plan: calendar grid, cell detail panel, drag reschedule
 
@@ -434,7 +444,7 @@ GitHub PR: —
 Depends on: Inbox
 Parallel: no
 
-Flat scopes for the dropdown: Everything (default), Posts, Briefs. Each shows inbox_entries filtered by scope column.
+Flat scopes for the dropdown: Everything (default), Posts, Briefs. Each shows inbox_entries filtered by scope column. The Briefs scope returns both brief and input_request entries.
 
 ### Inbox drill scopes: Plans, People, Groups, Clients
 
@@ -530,7 +540,7 @@ Recently-deleted drawer item. 30-day recovery for assets. 7-day recovery for wor
 
 Status: `planned`
 GitHub PR: —
-Depends on: Discussion component shell; Post creation API + Create sheet; Briefs entity; Assets upload pipeline
+Depends on: Discussion component shell; Post creation API + Create sheet; Requests entity: briefs + input_requests, unified list UI, type chips, urgency grouping; Assets upload pipeline
 Parallel: yes
 
 GIN indexes with to_tsvector(‘english’, …) on: comments.body, posts.title + caption, briefs.title + objective, assets.filename. Already partial WHERE deleted_at IS NULL. Confirms indexes match live DB.
