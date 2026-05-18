@@ -344,7 +344,7 @@ GitHub PR: —
 Depends on: PCS skeleton
 Parallel: no
 
-Stage transitions via SECURITY DEFINER proc stage_transition. Transition map: draft <-> awaiting_approval <-> needs_input, parked/rejected revive to awaiting_approval only, scheduled unschedulable to awaiting/draft/parked/rejected, published TERMINAL. publish_status auto-resets to draft on unschedule. schedule_job auto-cancels on unschedule. CHECK constraint already in DB. E2E test for every legal transition AND every illegal transition (must error). Critical-surface PR.
+Stage transitions via SECURITY DEFINER proc stage_transition. Transition map: draft -> review/parked; review -> scheduled (on approval)/parked/rejected/draft (revise); scheduled unschedulable to review/draft/parked/rejected; parked/rejected revive to review only; published TERMINAL. publish_status auto-resets to draft on unschedule. schedule_job auto-cancels on unschedule. CHECK constraint already in DB. E2E test for every legal transition AND every illegal transition (must error); expect parked/rejected revive to review. Critical-surface PR.
 
 ### Pipeline: vertical kanban desktop, accordion mobile, urgency colors
 
@@ -353,7 +353,7 @@ GitHub PR: —
 Depends on: Stage state machine
 Parallel: no
 
-Pipeline surface: vertical kanban on desktop, accordion on mobile. Stage columns: Draft (agency-only), Awaiting Approval, Needs Input, Scheduled, Published, Parked, Rejected. Owner colors, urgency colors based on target_date proximity. Client visibility: all stages except Draft.
+Pipeline surface: vertical kanban on desktop, accordion on mobile. Stage columns: Draft (agency-only), Review, Scheduled, Published, Parked, Rejected (6 stages). Owner colors, urgency colors based on target_date proximity. Client visibility: all stages except Draft.
 
 ### Filters + saved views + bulk actions (agency only, cap 10)
 

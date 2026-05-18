@@ -226,41 +226,42 @@ Permanent in-app event feed. Source of truth for what happened. Only permanent s
 
 ### Stages
 
-|Stage            |Definition                                   |
-|-----------------|---------------------------------------------|
-|Draft            |Agency private. Client cannot see.           |
-|Awaiting Approval|Client review required                       |
-|Needs Input      |Client feedback returned to agency           |
-|Scheduled        |Approved, queued for publish at target_date  |
-|Published        |Live on platform. Frozen in Sorted. Terminal.|
-|Parked           |Held by agency. Not published.               |
-|Rejected         |Client rejected. Closed.                     |
+Six stages, locked: draft, review, scheduled, published, parked, rejected. UI label is one word per stage: Draft, Review, Scheduled, Published, Parked, Rejected.
+
+|Stage    |UI label |Definition                                   |
+|---------|---------|---------------------------------------------|
+|draft    |Draft    |Agency private. Client cannot see.           |
+|review   |Review   |Client review required.                      |
+|scheduled|Scheduled|Approved, queued for publish at target_date. |
+|published|Published|Live on platform. Frozen in Sorted. Terminal.|
+|parked   |Parked   |Held by agency. Not published.               |
+|rejected |Rejected |Client rejected. Closed.                     |
+
+needs_input is no longer a stage. Agency-to-client input asks are handled by Input Requests under the Requests section (see §10, pending design).
 
 ### Stage transition map (locked)
 
-|From             |Can move to                                                                                                                             |
-|-----------------|----------------------------------------------------------------------------------------------------------------------------------------|
-|draft            |awaiting_approval, parked                                                                                                               |
-|awaiting_approval|needs_input, scheduled (approval), parked, rejected                                                                                     |
-|needs_input      |awaiting_approval, parked                                                                                                               |
-|scheduled        |awaiting_approval, draft, parked, rejected (manual unschedule). published / publishing / publish_failed / publish_failed_final (worker).|
-|published        |Terminal. No transitions in Sorted. To take down: agency deletes on LinkedIn manually, then creates a new Sorted post.                  |
-|parked           |awaiting_approval (revive only)                                                                                                         |
-|rejected         |awaiting_approval (revive only)                                                                                                         |
+|From     |Can move to                                                                                                                  |
+|---------|-----------------------------------------------------------------------------------------------------------------------------|
+|draft    |review, parked                                                                                                               |
+|review   |scheduled (on approval), parked, rejected, draft (revise)                                                                    |
+|scheduled|review, draft, parked, rejected (manual unschedule). published / publishing / publish_failed / publish_failed_final (worker).|
+|published|Terminal. No transitions in Sorted. To take down: agency deletes on LinkedIn manually, then creates a new Sorted post.       |
+|parked   |review (revive only)                                                                                                         |
+|rejected |review (revive only)                                                                                                         |
 
-Notes: Unscheduling resets publish_status to draft and cancels the schedule_job. Parked/rejected revive directly to awaiting_approval, must re-enter approval chain. No direct stage jumps to scheduled, only via approval transition.
+Notes: Unscheduling resets publish_status to draft and cancels the schedule_job. Parked/rejected revive directly to review, must re-enter the approval chain. No direct stage jumps to scheduled, only via approval transition. needs_input is gone, replaced by Input Request (a separate primitive, see §10).
 
 ### Stage x publish_status matrix (CHECK constraint enforced)
 
-|Stage            |Allowed publish_status values                              |
-|-----------------|-----------------------------------------------------------|
-|draft            |draft                                                      |
-|awaiting_approval|draft                                                      |
-|needs_input      |draft                                                      |
-|scheduled        |scheduled, publishing, publish_failed, publish_failed_final|
-|published        |published                                                  |
-|parked           |draft                                                      |
-|rejected         |draft                                                      |
+|Stage    |Allowed publish_status values                              |
+|---------|-----------------------------------------------------------|
+|draft    |draft                                                      |
+|review   |draft                                                      |
+|scheduled|scheduled, publishing, publish_failed, publish_failed_final|
+|published|published                                                  |
+|parked   |draft                                                      |
+|rejected |draft                                                      |
 
 ## 9. Plan
 
@@ -288,6 +289,10 @@ TO BE FINALIZED. Design session required before Plan PRs build. Plan PRs blocked
 |Post linkage        |Optional. Agency picks Origin: Brief in Create sheet.                         |
 |Linked posts display|Read-only derived count on brief detail panel                                 |
 |Email thread root   |Brief if any post links to it; else post                                      |
+
+### Input Requests (pending design)
+
+An Input Request is a parallel primitive to the Brief, pending design. Two request directions share the same primitive (title, ask, optional references, comments, open/closed): client-to-agency is the existing Brief; agency-to-client is the new Input Request. An Input Request is attached to a post but stands as its own row. It replaces the removed needs_input stage. Schema impact (a new input_requests table or an extension of briefs) is NOT in scope yet; a future PR adds it. Confirm the table design with Shubham before building.
 
 ## 11. PCS (Post Control System)
 
