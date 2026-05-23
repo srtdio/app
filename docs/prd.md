@@ -1,189 +1,203 @@
-# Sorted v2 PRD
+# Sorted v2 PRD (MVP)
 
 Decisions only. No rationale.
 
-**Last revised:** 17 May 2026
+Sorted v2 is a social-media approval tool. Client writes a brief; agency drafts a post; the post moves through review to approved, rejected, or parked. No publishing, no scheduling, no plan, no insights in the MVP.
 
------
+## Index
 
-# 0. Project identifiers and DANGER
+0. Project identifiers and DANGER
+1. Goals and scope
+2. Operating principles
+3. Users, roles, visibility
+4. Pricing and trial
+5. Onboarding
+6. Layout and shell
+7. Inbox
+8. Pipeline
+9. Briefs
+10. PCS (Post Control System)
+11. Create sheet
+12. Assets
+13. Notifications (ephemeral)
+14. Workspace settings
+15. Cockpit
+16. Search
+17. Devices
+18. Data model
+19. Migration and cutover
+20. Observability
+21. Security
+22. Chat and Comments
+23. Compliance
+24. Build phases and tests
+
+## 0. Project identifiers and DANGER
 
 | Env | Project ID | Region | Status | Touch from v2 build? |
 | --- | --- | --- | --- | --- |
 | v2 | movnexawfhsyuluspxoc | Mumbai (ap-south-1) | Build target | YES |
 | v1 | ozptjplxbyswclolbxyn | Mumbai (ap-south-1) | LIVE PRODUCTION | NO. Only via ETL cutover script, on cutover day. |
 
-CRITICAL: Both projects are in Mumbai. The region is NOT a disambiguator. The project ID is the only safe identifier.
+Both projects are in Mumbai. Region is NOT a disambiguator. The project ID is the only safe identifier.
 
-Rules:
-- Every Supabase MCP call from a v2 prompt MUST pass project_id="movnexawfhsyuluspxoc" explicitly.
-- The string "Mumbai" alone, or "the Supabase project" alone, is never sufficient. Reject any prompt that uses them without the project ID.
-- Any operation targeting ozptjplxbyswclolbxyn must say "v1" explicitly in the same prompt and state the reason.
-- No v2 build prompt may target v1. Period.
-
------
+Every Supabase MCP call from a v2 prompt MUST pass `project_id="movnexawfhsyuluspxoc"` explicitly.
+"Mumbai" alone, or "the Supabase project" alone, is never sufficient. Reject any prompt that uses them without the project ID.
+Any operation targeting ozptjplxbyswclolbxyn must say "v1" explicitly in the same prompt and state the reason.
+No v2 build prompt may target v1.
 
 ## 1. Goals and scope
 
-|Item                  |Decision                                                               |
-|----------------------|-----------------------------------------------------------------------|
-|Launch date           |July 2026 (web)                                                        |
-|Native mobile         |Deferred. No fixed date. Reassess month 3 post-launch.                 |
-|Public signup         |Live at launch. Paid.                                                  |
-|v1 tenant cutover     |Separate track. Decoupled from public signup date.                     |
-|New tenants pre-launch|Free.                                                                  |
-|Launch platform       |LinkedIn only. Other platforms: OAuth + schema only.                   |
-|Repo                  |Greenfield. New org srtdio. v2 Supabase project: movnexawfhsyuluspxoc (Pro, Mumbai). See §0.|
-|Domain                |srtd.io. Cockpit at platform.srtd.io.                                  |
-|Total PRs             |68 across 4 batches.                                                   |
+| Item | Decision |
+| --- | --- |
+| Product | Social-media post approval tool. Brief in, post drafted, reviewed, approved. |
+| Launch | 2026 (web) |
+| Native mobile | Deferred. Reassess month 3 post-launch. |
+| Public signup | Live at launch. Paid. |
+| v1 tenant cutover | Separate track. Decoupled from public signup. |
+| New tenants prelaunch | Free. |
+| Repo | Greenfield. Org srtdio. v2 project movnexawfhsyuluspxoc (Pro, Mumbai). See section 0. |
+| Domain | srtd.io. Cockpit at platform.srtd.io. |
 
 ## 2. Operating principles
 
 - One workspace = one end-client = one platform. Locked invariant.
-- TypeScript strict. No .js or .jsx or .mjs or .cjs. Ever.
+- TypeScript strict. No .js, .jsx, .mjs, .cjs. Ever.
 - Multi-tenant from day 1. Postgres RLS is the security boundary.
-- post.stage = workflow state. publish_status = auxiliary. Never conflated. CHECK constraint enforces legal pairs.
+- post.stage is the single workflow state: draft, review, approved, parked, rejected.
 - JWT 15 min + session_devices fingerprint RLS on every auth request.
 - Trace ID is an explicit RPC parameter. Not SET LOCAL.
 - Discussion has two primitives: Comments (Postgres) and Chat (Agora).
 - Inbox is the only permanent in-app event surface.
-- Published posts are frozen in Sorted. Edit on LinkedIn. No rollback from Published.
 - No section toggles. Every section ships for every workspace.
 - Assets are versioned. Attachments bind to asset_version_id.
-- Brief is a read-only information document. No spawning.
-- Approval is per-post, deliberate. Inside Sorted only. No bulk approve. No magic-link approval.
+- Brief is a read-only information document. No edits after creation.
+- Approval is per-post, deliberate. Inside Sorted only. No bulk approve.
 - Touch targets 44x44 minimum everywhere.
 - Email is out-of-app catch-up. Bundled, 9am-9pm workspace TZ.
-- No AI features in v2.0. No tables, no workers, no UI.
+- No AI features. No publishing, scheduling, plan, or insights in MVP.
 - All sensitive writes go through SECURITY DEFINER procs. INSERT/UPDATE/DELETE revoked from authenticated role on sensitive tables.
 - post_versions and post_annotations are immutable edit history. Never soft-deletable.
-- Users are not hard-deleted from auth.users except for GDPR. public.users.deleted_at signals account-level removal. workspace_members.active=false signals workspace-level removal. Either condition surfaces as ‘(ex-member)’ badge in UI.
+- Users not hard-deleted from auth.users except for GDPR. public.users.deleted_at signals account removal; workspace_members.active=false signals workspace removal. Either surfaces as '(ex-member)' badge.
 - Workspace owner cannot delete their own account until ownership is transferred or the workspace is deleted.
 
 ## 3. Users, roles, visibility
 
 ### Roles
 
-|Role  |Definition                                                                                     |
-|------|-----------------------------------------------------------------------------------------------|
-|Owner |Workspace creator. Billing, deletion, transfer. Cannot self-delete until ownership transferred.|
-|Admin |Full workspace power except billing and deletion.                                              |
-|Agency|All sections except admin settings.                                                            |
-|Client|Pipeline (everything except Draft), Requests (own only), Assets, Insights (curated).           |
+| Role | Definition |
+| --- | --- |
+| Owner | Workspace creator. Billing, deletion, transfer. Cannot self-delete until ownership transferred. |
+| Admin | Full workspace power except billing and deletion. |
+| Agency | All sections except admin settings. |
+| Client | Pipeline (except Draft), Briefs (own only), Assets. |
 
 ### Visibility
 
-|Surface |Client sees                                      |
-|--------|-------------------------------------------------|
-|Pipeline|All stages except Draft                          |
-|Requests|Own briefs; input requests addressed to them     |
-|Assets  |Yes                                              |
-|Insights|Curated subset (no click-through, no comparisons)|
-|Plan    |TBD (section parked)                             |
-|Inbox   |Events involving them                            |
+| Surface | Client sees |
+| --- | --- |
+| Pipeline | All stages except Draft |
+| Briefs | Own briefs only |
+| Assets | Yes |
+| Inbox | Events involving them |
 
 ### Capability storage
 
-Capabilities live in workspace_role_permissions keyed by (workspace_id, role, capability). v2.0 has no granular UI; defaults per role. Granular UI is post-launch without schema rewrite.
+Capabilities live in workspace_role_permissions keyed by (workspace_id, role, capability). No granular UI in MVP; defaults per role. Granular UI is post-launch without schema rewrite.
 
 ### User profile (public.users)
 
-Every authenticated user has a public.users row, auto-created via trigger on auth.users insert.
+Auto-created via trigger on auth.users insert.
 
-|Field       |Decision                                                                                              |
-|------------|------------------------------------------------------------------------------------------------------|
-|display_name|Required. 1-80 chars. Editable from profile settings.                                                 |
-|designation |Optional. 0-80 chars. e.g. ‘Senior Strategist’, ‘Founder’.                                            |
-|avatar_url  |Optional. Stored in R2 bucket user-avatars (shared, public read, auth write via worker).              |
-|deleted_at  |Account-level soft-delete. Set when admin removes user OR self-delete. Triggers ‘(ex-member)’ display.|
+| Field | Decision |
+| --- | --- |
+| display_name | Required. 1-80 chars. Editable from profile settings. |
+| designation | Optional. 1-80 chars. |
+| avatar_url | Optional. R2 bucket user-avatars (public read, auth write via worker). |
+| deleted_at | Account-level soft-delete. Triggers '(ex-member)' display. |
 
-All *_by columns across schema reference public.users(id) with ON DELETE SET NULL, except workspaces.owner_user_id (RESTRICT). When a user is removed (via deleted_at OR workspace_members.active=false), UI shows their name with ‘(ex-member)’ badge.
+All *_by columns reference public.users(id) ON DELETE SET NULL, except workspaces.owner_user_id (RESTRICT) and asset_attachments (NO ACTION).
 
 ## 4. Pricing and trial
 
 ### Tiers (per workspace, per month, INR)
 
-|Tier      |Price |Platforms                |Members  |
-|----------|------|-------------------------|---------|
-|Solo      |499   |1 (add more at same rate)|1        |
-|Studio    |749   |1 (add more at same rate)|4        |
-|Agency    |999   |1 (add more at same rate)|8        |
-|Enterprise|Custom|Unlimited                |Unlimited|
+| Tier | Price | Members |
+| --- | --- | --- |
+| Solo | 499 | 1 |
+| Studio | 749 | 4 |
+| Agency | 999 | 8 |
+| Enterprise | Custom | Unlimited |
 
 ### Pricing rules
 
-- Each tier ships with 1 platform.
-- Each additional platform = same tier price added. Agency + Instagram = 999 + 999 = 1998.
-- Subscription is per workspace. No caps on workspaces per account.
-- v2.0 launches with LinkedIn live. Other platforms purchasable; publishing ships post-launch.
+Subscription is per workspace. No caps on workspaces per account.
 
 ### Trial
 
-|Item                      |Decision                                                                               |
-|--------------------------|---------------------------------------------------------------------------------------|
-|Duration                  |14 days, account-wide                                                                  |
-|Card upfront              |No                                                                                     |
-|Nudge cadence             |Day 7, 10, 12, 13, 14 (email + in-app)                                                 |
-|Workspaces during trial   |Multiple allowed, created from workspace switcher                                      |
-|Conversion                |Per-workspace activation. Owner picks which workspace each paid subscription activates.|
-|Non-activated at trial end|Read-only indefinitely. Data retained until owner deletes or upgrades.                 |
+| Item | Decision |
+| --- | --- |
+| Duration | 14 days, account-wide |
+| Card upfront | No |
+| Nudge cadence | Day 7, 10, 12, 13, 14 (email + in-app) |
+| Workspaces during trial | Multiple allowed, from workspace switcher |
+| Conversion | Per-workspace activation. Owner picks which workspace each paid subscription activates. |
+| Non-activated at trial end | Read-only indefinitely. Data retained until owner deletes or upgrades. |
 
 ### Billing failure ladder (active paid workspaces)
 
-|State                |Behaviour                 |
-|---------------------|--------------------------|
-|active               |Normal                    |
-|grace (3 days)       |Publishing paused. Banner.|
-|soft_pause (10 days) |Publishing off. Read-only.|
-|full_pause (30 days) |Billing settings only.    |
-|soft_delete (60 days)|Recoverable via support.  |
-|hard_delete          |Gone.                     |
+| State | Behaviour |
+| --- | --- |
+| active | Normal |
+| grace (3 days) | Banner. |
+| soft_pause (10 days) | Read-only. |
+| full_pause (30 days) | Billing settings only. |
+| soft_delete (60 days) | Recoverable via support. |
+| hard_delete | Gone. |
 
 ## 5. Onboarding
 
-|Item                 |Decision                                                                                                                                       |
-|---------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
-|Signup form          |Single scroll. Required: name (-> public.users.display_name), email (magic-link), password, workspace name, workspace timezone (auto-detected).|
-|Workspaces at signup |Exactly one                                                                                                                                    |
-|Additional workspaces|Created from workspace switcher in drawer                                                                                                       |
-|First-run state      |Empty Pipeline, empty Plan, empty Inbox, empty Assets                                                                                           |
-|Profile completion   |Designation and avatar are optional and added later via profile settings.                                                                      |
+| Item | Decision |
+| --- | --- |
+| Signup form | Single scroll. Required: name (-> display_name), email (magic-link), password, workspace name, workspace timezone (auto-detected). |
+| Workspaces at signup | Exactly one |
+| Additional workspaces | From workspace switcher in drawer |
+| First-run state | Empty Pipeline, empty Inbox, empty Assets |
+| Profile completion | Designation and avatar optional, added later. |
 
 ### Empty-state checklist (Dashboard card)
 
-|#|Item                   |Action                      |
-|-|-----------------------|----------------------------|
-|1|Create your first post |Opens Create sheet          |
-|2|Invite a teammate      |Opens Invite modal          |
-|3|Connect LinkedIn       |OAuth flow                  |
-|4|Create your first brief|Opens Brief create sheet    |
-|5|Schedule a publish     |Opens Scheduled stage in PCS|
+| # | Item | Action |
+| --- | --- | --- |
+| 1 | Create your first post | Opens Create sheet |
+| 2 | Invite a teammate | Opens Invite modal |
+| 3 | Create your first brief | Opens Brief create sheet |
 
 - Owners only. First 30 days.
 - Items auto-check on workspace events. No manual.
-- Hides on >= 4 of 5 checked OR manual dismiss. Never re-appears after dismiss.
+- Hides on all checked OR manual dismiss. Never re-appears after dismiss.
 - Per-item Skip link for non-applicable steps.
 
 ## 6. Layout and shell
 
 ### Shell
 
-|Element         |Decision                                                                                                       |
-|----------------|---------------------------------------------------------------------------------------------------------------|
-|Topbar          |Workspace switcher, search trigger, Inbox icon (badge), profile menu (avatar + designation)                    |
-|Drawer (left)   |Sections: Pipeline, Plan, Requests, Assets, Insights. Bottom: workspace switcher, Recently deleted (N), Settings.|
-|Recently deleted|Bottom of drawer. Tap to expand. Restore button + countdown per workspace.                                     |
-|Mobile          |Web-only at v2.0. Native deferred.                                                                             |
+| Element | Decision |
+| --- | --- |
+| Topbar | Workspace switcher, search trigger, Inbox icon (badge), profile menu (avatar + designation) |
+| Drawer (left) | Sections: Pipeline, Briefs, Assets. Bottom: workspace switcher, Recently deleted (N), Settings. |
+| Recently deleted | Bottom of drawer. Tap to expand. Restore button + countdown. |
+| Mobile | Web-only at MVP. Native deferred. |
 
 ### Iconography
 
-|Item         |Decision                                                                 |
-|-------------|-------------------------------------------------------------------------|
-|Icon style   |Minimal SVG strokes, 1.6px, round caps and joins, currentColor, fill none|
-|Icon button  |44x44 frame with 20x20 SVG                                               |
-|Touch targets|44x44 minimum everywhere. No exceptions.                                 |
-|Hover        |No hover-only interactions                                               |
-|Long-press   |Right-click equivalent                                                   |
+| Item | Decision |
+| --- | --- |
+| Icon style | Minimal SVG strokes, 1.6px, round caps and joins, currentColor, fill none |
+| Icon button | 44x44 frame with 20x20 SVG |
+| Touch targets | 44x44 minimum everywhere. No exceptions. |
+| Hover | No hover-only interactions |
+| Long-press | Right-click equivalent |
 
 ## 7. Inbox
 
@@ -191,447 +205,326 @@ Permanent in-app event feed. Source of truth for what happened. Only permanent s
 
 ### Structure
 
-|Element                       |Decision                                                 |
-|------------------------------|---------------------------------------------------------|
-|State chips                   |All, Unread, Snoozed                                     |
-|Scopes                        |Everything, Posts, Briefs, Plans, People, Groups, Clients|
-|Snooze                        |Yes. Options: 1h, 4h, tomorrow 9am, next week            |
-|Inline approve                |No. Click navigates to PCS.                              |
-|Inline reply (comments + chat)|Yes. Lands on entity.                                    |
+| Element | Decision |
+| --- | --- |
+| State chips | All, Unread, Snoozed |
+| Scopes | Everything, Posts, Briefs, People, Groups, Clients |
+| Snooze | 1h, 4h, tomorrow 9am, next week |
+| Inline approve | No. Click navigates to PCS. |
+| Inline reply (comments + chat) | Yes. Lands on entity. |
 
 ### Events that land in Inbox
 
-- Comments on posts, briefs, plan cells
-- Chat messages in DM, group, plan-period channels
+- Comments on posts and briefs
+- Chat messages in DM and group channels
 - Post stage changes
-- Brief created (agency), brief closed
-- Input request opened (agency asked client), input request fulfilled (client responded), input request closed (agency closed it)
+- Brief created, brief closed
 - Asset uploaded, asset version added
-- Approvals requested, approvals given/rejected
 - @-mentions
 - Decision Records flagged
-- System events (asset removed, publish failed)
+- System events (asset removed)
 
 ## 8. Pipeline
 
-|Item                 |Decision                                                                                         |
-|---------------------|-------------------------------------------------------------------------------------------------|
-|Desktop layout       |Vertical kanban by stage                                                                         |
-|Mobile layout        |Accordion by stage                                                                               |
-|Visual cues          |Owner colors, urgency colors                                                                     |
-|Filters              |Owner, channel, content_type, target_date range, has_blocking_comment, has_brief, has_brand_input|
-|Saved views          |Per workspace, per user                                                                          |
-|Bulk actions (agency)|Move stage, assign owner, add tag, archive. Cap 10 per action.                                   |
-|Bulk actions (client)|None                                                                                             |
-|Client visibility    |All stages except Draft                                                                          |
+| Item | Decision |
+| --- | --- |
+| Desktop layout | Vertical kanban by stage |
+| Mobile layout | Accordion by stage |
+| Visual cues | Owner colors, urgency colors |
+| Filters | Owner, channel, content_type, target_date range, has_blocking_comment, has_brief |
+| Saved views | Per workspace, per user |
+| Bulk actions (agency) | Move stage, assign owner, add tag, archive. Cap 10 per action. |
+| Bulk actions (client) | None |
+| Client visibility | All stages except Draft |
 
 ### Stages
 
-Six stages, locked: draft, review, scheduled, published, parked, rejected. UI label is one word per stage: Draft, Review, Scheduled, Published, Parked, Rejected.
+| Stage | Definition |
+| --- | --- |
+| Draft | Agency private. Client cannot see. |
+| Review | Client review required. Client approves, rejects, or comments. |
+| Approved | Client approved. Terminal in MVP. |
+| Parked | Held by agency. |
+| Rejected | Client rejected. |
 
-|Stage    |UI label |Definition                                   |
-|---------|---------|---------------------------------------------|
-|draft    |Draft    |Agency private. Client cannot see.           |
-|review   |Review   |Client review required.                      |
-|scheduled|Scheduled|Approved, queued for publish at target_date. |
-|published|Published|Live on platform. Frozen in Sorted. Terminal.|
-|parked   |Parked   |Held by agency. Not published.               |
-|rejected |Rejected |Client rejected. Closed.                     |
+### Stage transition map
 
-When a post needs raw material from client, agency creates an Input Request linked to the post (see §10 Requests). Post stays in its current stage. The post card shows an open-input-request chip ("input req · waiting on [client]") while one is open. There is no stage for agency-to-client input asks.
+| From | Can move to |
+| --- | --- |
+| draft | review, parked |
+| review | approved, rejected, parked (client comments leave the post in review) |
+| approved | parked |
+| parked | review (revive) |
+| rejected | review (revive) |
 
-### Stage transition map (locked)
+Notes: When a client wants changes instead of approving, they comment and the post stays in review. Parked/rejected revive to review. Approved is terminal in MVP; there is no publishing step.
 
-|From     |Can move to                                                                                                                  |
-|---------|-----------------------------------------------------------------------------------------------------------------------------|
-|draft    |review, parked                                                                                                               |
-|review   |scheduled (on approval), parked, rejected, draft (revise)                                                                    |
-|scheduled|review, draft, parked, rejected (manual unschedule). published / publishing / publish_failed / publish_failed_final (worker).|
-|published|Terminal. No transitions in Sorted. To take down: agency deletes on LinkedIn manually, then creates a new Sorted post.       |
-|parked   |review (revive only)                                                                                                         |
-|rejected |review (revive only)                                                                                                         |
+target_date is a nullable indicative field on posts. It carries no scheduling behaviour in MVP.
 
-Notes: Unscheduling resets publish_status to draft and cancels the schedule_job. Parked/rejected revive directly to review, must re-enter the approval chain. No direct stage jumps to scheduled, only via approval transition. Input Requests are a separate primitive (see §10 Requests), never a stage.
+## 9. Briefs
 
-### Stage x publish_status matrix (CHECK constraint enforced)
+Client writes the brief; it lands in the Briefs section and can be linked to a post.
 
-|Stage    |Allowed publish_status values                              |
-|---------|-----------------------------------------------------------|
-|draft    |draft                                                      |
-|review   |draft                                                      |
-|scheduled|scheduled, publishing, publish_failed, publish_failed_final|
-|published|published                                                  |
-|parked   |draft                                                      |
-|rejected |draft                                                      |
+| Item | Decision |
+| --- | --- |
+| States | Open (default), Closed (soft) |
+| Closed behaviour | Hidden from default view, still readable, still accepts comments |
+| Created by | Client only |
+| Required fields | Title, objective |
+| Optional fields | Format requested, brand requirements, target date, references, initial comment |
+| Client can | Comment, close (withdraw) |
+| Agency can | Comment, close |
+| Edit after creation | No one |
+| Post linkage | Optional. Agency picks Origin: Brief in Create sheet. |
+| Linked posts display | Read-only derived count on brief detail panel |
+| Email thread root | Brief if any post links to it; else post |
 
-## 9. Plan
+## 10. PCS (Post Control System)
 
-TO BE FINALIZED. Design session required before Plan PRs build. Plan PRs blocked until decided.
+| Element | Decision |
+| --- | --- |
+| Layout | Header, caption editor, asset gallery, metadata sidebar, three-tab comments |
+| Versioning | Auto-version on every edit. post_versions immutable; never deleted. |
+| Annotations | Caption span + image pin. Immutable, version-locked. |
+| Annotations on outdated versions | Display greyed out / 'copy changed' indicator. Never hidden from DB. |
+| Decision Records | Boolean flag on comment. Filterable view. |
+| Rollback | Pre-approval edit history via versions; versions are immutable. |
+| Approve button | PCS only. Not on Pipeline cards. Client must be logged in. |
 
-### Open questions
+## 11. Create sheet
 
-- Does Plan auto-spawn posts, or follow Brief model (information + manual creation)?
-- Approval states or acknowledgement only?
-- Period approval modes meaning?
-- Client visibility?
+| Item | Decision |
+| --- | --- |
+| Modes | Single mode. No quick mode. |
+| Required fields | Title, caption, channel |
+| Optional fields | Asset gallery, content_type, target_date, owner, Origin (Brief link) |
+| Field visibility | All visible. No accordion. |
+| Commit action | Save as Draft |
+| Origin options | None, Brief |
 
-## 10. Requests
+## 12. Assets
 
-Requests are the asks between agency and client. Two request types share one section: the Brief (client to agency) and the Input Request (agency to client). Both are immutable after creation, both close, both are searchable, both surface in Inbox, and both accept comments and asset attachments.
+| Item | Decision |
+| --- | --- |
+| Storage | R2 bucket per workspace: assets-{workspace_id}. Separate user-avatars bucket. |
+| Versions | asset_versions table. Editing creates new version row + bumps assets.current_version_id. |
+| Attachments | asset_attachments.asset_version_id binds to a specific version. Immutable. FK NO ACTION: live attachments block asset hard-delete. |
+| Delete attempt UX | Toast: 'Asset in use. Remove from posts/briefs first.' Where the list exists, modal: 'Used in N posts and M briefs. Delete anyway?' with usages. |
+| Version banner | Newer version available. [Use new] / [Keep current]. |
+| Assets surface | Shows current version. Kebab > Version history. |
+| Soft-delete | 30 days. Then hard-delete. |
+| Post-hard-delete display | Asset removed placeholder. |
+| GDPR takedown | Targets asset chain. Cascades to all versions. |
+| Upload pipeline | Worker > MIME allowlist > EXIF strip > SVG sanitize > virus scan > R2 |
 
-### Request types
+## 13. Notifications (ephemeral)
 
-|Type         |Direction    |Created by|Required fields           |Optional fields                                                                   |Edit after creation|Closes when                      |Post link                                    |
-|-------------|-------------|----------|--------------------------|-----------------------------------------------------------------------------------|-------------------|----------------------------------|----------------------------------------------|
-|Brief        |client→agency|client    |title, objective          |format_requested, brand_requirements, target_date, reference_links, initial comment|No one             |agency or client closes           |Optional. A post may link via posts.brief_id. |
-|Input request|agency→client|agency    |title, ask, linked_post_id|target_date, reference_links                                                       |No one             |agency closes when client provides|Required, via input_requests.linked_post_id.  |
+'Notifications' refers only to ephemeral surfaces. Permanent surface is Inbox (section 7).
 
-### Unified list UI
-
-One list, no direction tabs. Filter pills: All · Briefs · Inputs · Closed. Each row carries a type chip: "brief · from client" or "input · we asked". Rows are grouped by urgency: Needs response → Open → Closed. Both types are searchable.
-
-### Brief (client to agency)
-
-|Item                |Decision                                                                      |
-|--------------------|------------------------------------------------------------------------------|
-|States              |Open (default), Closed (soft)                                                 |
-|Closed behaviour    |Hidden from default view, still readable, still accepts comments              |
-|Created by          |Client only                                                                   |
-|Required fields     |Title, objective                                                              |
-|Optional fields     |Format requested, brand requirements, target date, references, initial comment|
-|Client can          |Comment, close (withdraw)                                                     |
-|Agency can          |Comment, close                                                                |
-|Edit after creation |No one                                                                        |
-|Post linkage        |Optional. Agency picks Origin: Brief in Create sheet.                         |
-|Linked posts display|Read-only derived count on brief detail panel                                 |
-|Email thread root   |Brief if any post links to it; else post                                      |
-
-### Input request (agency to client)
-
-|Item                |Decision                                                                                                        |
-|--------------------|-----------------------------------------------------------------------------------------------------------------|
-|States              |Open (default), Closed                                                                                          |
-|Closed behaviour    |Hidden from default view, still readable, still accepts comments                                                |
-|Created by          |Agency only                                                                                                     |
-|Required fields     |Title, ask, linked post                                                                                         |
-|Optional fields     |Target date, references                                                                                         |
-|Agency can          |Comment, close (when client provides the material)                                                              |
-|Client can          |Comment, attach assets                                                                                          |
-|Edit after creation |No one                                                                                                          |
-|Post linkage        |Required. Every input request links to exactly one post via input_requests.linked_post_id.                      |
-|Stage effect        |Post stays in its current stage. The post card shows an "input req · waiting on [client]" chip while one is open.|
-
-### Creation flows
-
-- Brief: client only, unchanged. The client opens the create-brief sheet from the Requests topbar.
-- Input request: agency only. The "+ New" button in the Requests topbar opens a sheet; the agency picks Brief or Input. A client sees Brief only. An input request must link to a post. An input request is also creatable from inside PCS via the "Request input" action (see §11), which pre-fills the linked post.
-
-### Inbox surfacing
-
-Both request types surface in Inbox per the standard scope rules (see §7). Input request events are input_request_opened, input_request_fulfilled, and input_request_closed.
-
-## 11. PCS (Post Control System)
-
-|Element                         |Decision                                                                                                    |
-|--------------------------------|------------------------------------------------------------------------------------------------------------|
-|Layout                          |Header, caption editor, asset gallery, metadata sidebar, three-tab comments                                 |
-|Versioning                      |Auto-version on every edit. Pre-publish only. post_versions immutable; never deleted.                       |
-|Annotations                     |Caption span + image pin. Immutable, version-locked. Pre-existing annotations stay on their version forever.|
-|Annotations on outdated versions|Display greyed out / with ‘copy changed’ indicator. Never hidden from DB.                                   |
-|Decision Records                |Boolean flag on comment. Filterable view.                                                                   |
-|Rollback                        |Pre-publish only. Stops at Published.                                                                       |
-|Edit after publish              |Disabled in Sorted. Replaced with ‘Edit on LinkedIn’ deep-link.                                             |
-|Approve button                  |PCS only. Not on Pipeline cards. Client must be logged in.                                                  |
-|Take down published post        |Not possible from Sorted. Agency deletes on LinkedIn manually, then creates a new Sorted post if needed.    |
-|Request input                   |PCS action button (agency only). Opens the create-input-request sheet pre-filled with the linked post. See §10 Requests.|
-
-### Share URL behaviour
-
-|Token type           |Behaviour                                                                                                                                                                                                                                                      |
-|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|Canonical share token|Auto-created per post at post creation (in SECURITY DEFINER fn). Public read-only view at /s/{token}. Renders latest version, current stage, all live comments. No expiry. Revocable from Cockpit. Agency shares it as needed. Chat NEVER shown on public view.|
-|Post-publish OG card |Pulled from LinkedIn lastModifiedAt. Nightly cron refreshes Sorted snapshot if drift detected. P3 alert on drift.                                                                                                                                              |
-
-## 12. Create sheet
-
-|Item            |Decision                                                                            |
-|----------------|------------------------------------------------------------------------------------|
-|Modes           |Single mode. No quick mode.                                                         |
-|Required fields |Title, caption, channel                                                             |
-|Optional fields |Asset gallery, content_pillar, content_type, target_date, owner, Origin (Brief link)|
-|Field visibility|All visible. No accordion.                                                          |
-|Commit action   |Save as Draft                                                                       |
-|Origin options  |None, Brief, (Plan when §9 lands)                                                   |
-
-## 13. Assets
-
-|Item                    |Decision                                                                                                                                             |
-|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-|Storage                 |R2 bucket per workspace: assets-{workspace_id}. Separate user-avatars bucket for profile pics.                                                       |
-|Versions                |asset_versions table. Editing creates new version row + bumps assets.current_version_id.                                                             |
-|Attachments             |asset_attachments.asset_version_id binds to specific version. Immutable. FK NO ACTION: live attachments block asset hard-delete.                     |
-|Delete-attempt UX       |Toast: ‘Asset in use. Remove from posts/briefs first.’ For surfaces with the list, modal: ‘Used in N posts and M briefs. Delete anyway?’ with usages.|
-|Pre-publish banner      |Newer version available. [Use new] / [Keep current].                                                                                                 |
-|Post-publish banner     |None. Frozen.                                                                                                                                        |
-|Assets surface          |Shows current version. Kebab > Version history.                                                                                                      |
-|Soft-delete             |30 days. Then hard-delete.                                                                                                                           |
-|Post-hard-delete display|Asset removed placeholder.                                                                                                                           |
-|OG hero resolution      |asset_attachments.asset_version_id for the post version being shared.                                                                                |
-|GDPR takedown           |Targets asset chain. Cascades to all versions.                                                                                                       |
-|Upload pipeline         |Worker > MIME allowlist > EXIF strip > SVG sanitize > virus scan > R2                                                                                |
-
-## 14. AI
-
-No AI features in v2.0. No tables. No workers. No UI surfaces. No tabs. No inline triggers. No brief parsing. No cost cap. Schema does not carry ai_usage, ai_memory, tool_invocations, or workspace_brand_guides.
-
-## 15. Insights
-
-|Item         |Decision                                                                                               |
-|-------------|-------------------------------------------------------------------------------------------------------|
-|Source       |LinkedIn API. Stored in post_insights.                                                                 |
-|Cadence      |Hourly 24h > Daily 7d > Weekly 30d > Daily through day 90 > stop                                       |
-|After 90 days|On-demand ‘Refresh from LinkedIn’ button only. Workspace dashboard aggregates cached, never fetches.   |
-|Fetch failure|Show last cached values + ‘Last updated [time ago]’. Never zeros or errors.                            |
-|Never-fetched|Show ‘Insights pending. Check back in an hour.’                                                        |
-|Agency view  |Full metrics. Impressions, reactions, comments, shares, click-through, comparison-to-workspace-average.|
-|Client view  |Curated subset. Impressions, reactions, comments, shares. No click-through. No comparisons.            |
-|Surfaces     |Per-post panel in PCS. Workspace dashboard (last 30 days). Per-client view (agency mode).              |
-
-## 16. Publishing
-
-|Item                 |Decision                                                                   |
-|---------------------|---------------------------------------------------------------------------|
-|Live platform at v2.0|LinkedIn only                                                              |
-|Other platforms      |OAuth + schema + post.platform field. Publishing workers ship post-launch. |
-|Queue                |schedule_jobs. Idempotent enqueue. Cloudflare Cron every minute.           |
-|Worker               |Publish Queue Worker. LinkedIn API. Retry 3x with backoff. Circuit breaker.|
-|Token storage        |Envelope-encrypted in DB. Refresh worker.                                  |
-|Publish failure UX   |PCS banner. Inbox entry. Retry from Cockpit (action #1).                   |
-|Post-publish edits   |Happen on LinkedIn natively. Sorted does NOT call PARTIAL_UPDATE at v2.0.  |
-|Post-publish rollback|Not supported. Published is terminal in Sorted.                            |
-
-## 17. Notifications (ephemeral)
-
-‘Notifications’ refers only to ephemeral surfaces. Permanent surface is Inbox (see §7).
-
-|Surface                 |Decision                                                                                                                                                                        |
-|------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|Toast (in-app)          |Slide-in banner. Both desktop and mobile. Disappears in seconds. Not stored. Fires on same triggers as Inbox while user is active.                                              |
-|Push (Sorted-fired)     |FCM + APNs + Web Push. Urgent-only events. Gated 9am-9pm workspace timezone. Per-user opt-in toggle.                                                                            |
-|Push (Agora-fired, chat)|Native Agora MENTION_ONLY mode. Respects user DND. Not time-gated.                                                                                                              |
-|Email                   |Out-of-app catch-up. Bundled every 15 min. Sent only between 9am-9pm workspace TZ. Outside hours: queued, sent next 9am. Sent only if user inactive in app > 5 min at fire time.|
-|Empty digest window     |No email sent.                                                                                                                                                                  |
+| Surface | Decision |
+| --- | --- |
+| Toast (in-app) | Slide-in banner, desktop and mobile. Disappears in seconds. Not stored. Fires on same triggers as Inbox while user active. |
+| Push (Sorted-fired) | FCM + APNs + Web Push. Urgent-only events. Gated 9am-9pm workspace TZ. Per-user opt-in. |
+| Push (Agora-fired, chat) | Native Agora MENTION_ONLY. Respects user DND. Not time-gated. |
+| Email | Out-of-app catch-up. Bundled every 15 min. Sent 9am-9pm workspace TZ. Outside hours queued to next 9am. Sent only if user inactive > 5 min at fire time. |
+| Empty digest window | No email sent. |
 
 ### Email threading
 
-|Item                      |Decision                                                                 |
-|--------------------------|-------------------------------------------------------------------------|
-|Thread root               |Brief if post originated from brief; else post                           |
-|Message-ID format         |`<brief-{id}@srtd.io>` or `<post-{id}@srtd.io>`                          |
-|Subject (brief-rooted)    |[Workspace] {brief.title}                                                |
-|Subject (post-rooted)     |[Workspace] {post.title}                                                 |
-|All emails for a work unit|Share one Message-ID chain. Gmail/Outlook collapse into one conversation.|
+| Item | Decision |
+| --- | --- |
+| Thread root | Brief if post originated from brief; else post |
+| Message-ID format | brief-{id}@srtd.io or post-{id}@srtd.io |
+| Subject (brief-rooted) | [Workspace] {brief.title} |
+| Subject (post-rooted) | [Workspace] {post.title} |
+| All emails for a work unit | Share one Message-ID chain. |
 
-Input request notifications follow the same bundling and threading as brief events. `email_threads.root_type` stays {brief, post}; input requests do not root threads. Input request notifications attach to the linked post's thread.
+## 14. Workspace settings
 
-## 18. Workspace settings
+| Section | Decision |
+| --- | --- |
+| Workspace name | Editable by Admin/Owner |
+| Timezone | Editable by Admin/Owner |
+| Default email digest time | Workspace default, user can override |
+| Member roles | Add, remove, change role |
+| Billing | Tier, payment method, invoices |
+| Workspace deletion | 7-day soft-delete. Recoverable via 'Recently deleted'. After 7 days: hard delete. |
+| Transfer ownership | Immediate. Existing member only. Password confirm. Old owner downgrades to Admin. New owner gets persistent 'Update billing info' banner. Old owner's card continues billing until replaced. 30-day grace before billing-failure ladder. |
+| Owner self-delete | Blocked at DB level (workspaces.owner_user_id FK ON DELETE RESTRICT). Owner must transfer ownership or delete the workspace first. |
+| User profile settings | Edit display_name, designation, avatar (upload to user-avatars R2 bucket). |
 
-|Section                           |Decision                                                                                                                                                                                                                                |
-|----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|Workspace name                    |Editable by Admin/Owner                                                                                                                                                                                                                 |
-|Timezone                          |Editable by Admin/Owner                                                                                                                                                                                                                 |
-|Default email digest time         |Workspace default, user can override                                                                                                                                                                                                    |
-|Brand fields (logo, primary color)|REMOVED                                                                                                                                                                                                                                 |
-|Section toggles                   |REMOVED. No Plan toggle, no others.                                                                                                                                                                                                     |
-|LinkedIn connection               |Connect, disconnect, re-auth                                                                                                                                                                                                            |
-|Member roles                      |Add, remove, change role                                                                                                                                                                                                                |
-|Billing                           |Tier, payment method, invoices, additional platforms                                                                                                                                                                                    |
-|Workspace deletion                |7-day soft-delete. Recoverable via ‘Recently deleted’ in drawer. After 7 days: hard delete.                                                                                                                                             |
-|Transfer ownership                |Immediate. Existing member only. Password confirm. Old owner downgrades to Admin. New owner gets persistent ‘Update billing info’ banner. Old owner’s card continues billing until replaced. 30-day grace before billing-failure ladder.|
-|Owner self-delete                 |Blocked at DB level (workspaces.owner_user_id FK is ON DELETE RESTRICT). Owner must transfer ownership or delete the workspace before deleting their own account.                                                                       |
-|User profile settings             |Edit display_name (1-80 chars), designation (optional), avatar (upload to user-avatars R2 bucket).                                                                                                                                      |
+## 15. Cockpit
 
-## 19. Cockpit
-
-|Item          |Decision                                      |
-|--------------|----------------------------------------------|
-|Surface       |platform.srtd.io                              |
-|Auth          |Passkey only                                  |
-|Operator      |Sorted founder. Single non-technical operator.|
-|Primary device|iPhone                                        |
-|Build scope   |Full. 6 PRs. Ships at launch.                 |
+| Item | Decision |
+| --- | --- |
+| Surface | platform.srtd.io |
+| Auth | Passkey only |
+| Operator | Sorted founder. Single non-technical operator. |
+| Primary device | iPhone |
 
 ### Cockpit actions
 
-|# |Action                      |Confirmation          |
-|--|----------------------------|----------------------|
-|1 |Retry failed publish        |Tap, no confirm       |
-|2 |Replay webhook              |Tap, no confirm       |
-|3 |Restart background job      |Tap, no confirm       |
-|4 |Force OAuth disconnect      |Tap, no confirm       |
-|5 |Trigger re-auth email       |Tap, no confirm       |
-|6 |Revoke all sessions for user|Modal confirm         |
-|7 |Billing override            |Modal confirm + reason|
-|8 |Extend trial                |Modal: days + reason  |
-|9 |Open ticket                 |Modal                 |
-|10|Global kill switch          |Type ‘KILL’ + reason  |
-|11|Revoke canonical share token|Tap, no confirm       |
+| # | Action | Confirmation |
+| --- | --- | --- |
+| 1 | Replay webhook | Tap, no confirm |
+| 2 | Restart background job | Tap, no confirm |
+| 3 | Revoke all sessions for user | Modal confirm |
+| 4 | Billing override | Modal confirm + reason |
+| 5 | Extend trial | Modal: days + reason |
+| 6 | Open ticket | Modal |
+| 7 | Global kill switch | Type 'KILL' + reason |
 
 ### Impersonation
 
-|Item          |Decision                                                          |
-|--------------|------------------------------------------------------------------|
-|Scope         |Capability-scoped (read-only or read-write per session)           |
-|Duration      |30-min hard cap                                                   |
-|Audit         |Every action written to audit_log with impersonator + impersonated|
-|Emergency exit|Static HTML page if Sorted is down                                |
-|Banner        |Persistent during impersonation, in target user’s session view    |
+| Item | Decision |
+| --- | --- |
+| Scope | Capability-scoped (read-only or read-write per session) |
+| Duration | 30-min hard cap |
+| Audit | Every action written to audit_log with impersonator + impersonated |
+| Emergency exit | Static HTML page if Sorted is down |
+| Banner | Persistent during impersonation, in target user's session view |
 
-## 20. Search
+## 16. Search
 
-|Item                 |Decision                                                                                        |
-|---------------------|------------------------------------------------------------------------------------------------|
-|Trigger              |cmd+K palette. Scoped router.                                                                   |
-|Comments and entities|Postgres FTS. tsvector indexes.                                                                 |
-|Chat                 |Agora SDK. searchMsgFromDB (local) + asyncFetchHistoryMessages (server). Not on Postgres mirror.|
-|Scope chips          |All, Posts, Briefs, Plans, Comments, Chat, Assets, People                                       |
-|Result ranking       |Recency + relevance                                                                             |
+| Item | Decision |
+| --- | --- |
+| Trigger | cmd+K palette. Scoped router. |
+| Comments and entities | Postgres FTS. tsvector indexes. |
+| Chat | Agora SDK. searchMsgFromDB (local) + asyncFetchHistoryMessages (server). Not on Postgres mirror. |
+| Scope chips | All, Posts, Briefs, Comments, Chat, Assets, People |
+| Result ranking | Recency + relevance |
 
-## 21. Devices
+## 17. Devices
 
-|Item         |Decision                                                         |
-|-------------|-----------------------------------------------------------------|
-|v2.0 platform|Web only                                                         |
-|Native mobile|Deferred indefinitely                                            |
-|Touch targets|44x44 minimum everywhere                                         |
-|Hover        |No hover-only interactions                                       |
-|Long-press   |Right-click equivalent                                           |
-|Reassessment |Month 3 post-launch based on mobile-web traffic and demand signal|
+| Item | Decision |
+| --- | --- |
+| MVP platform | Web only |
+| Native mobile | Deferred |
+| Touch targets | 44x44 minimum everywhere |
+| Hover | No hover-only interactions |
+| Long-press | Right-click equivalent |
+| Reassessment | Month 3 post-launch |
 
-## 22. Data model
+## 18. Data model
 
-Schema is fully executed on the v2 Supabase project movnexawfhsyuluspxoc (Postgres 17). 41 base tables live (38 plain + 3 partitioned parents, with 9 monthly partition children). v1 (ozptjplxbyswclolbxyn) is untouched. See §0. See `docs/schema.md` for the live schema dump, and `supabase/migrations/*.sql` for implementation truth.
+Schema is fully executed on v2 project movnexawfhsyuluspxoc (Postgres 17). v1 (ozptjplxbyswclolbxyn) is untouched. See section 0. See supabase/migrations/*.sql for implementation truth and schema.md for the full reference.
 
 ### Core tables
 
-|Table                     |Purpose                                                                                                              |
-|--------------------------|---------------------------------------------------------------------------------------------------------------------|
-|workspaces                |Tenant root. owner_user_id FK to public.users, ON DELETE RESTRICT.                                                   |
-|workspace_members         |User + role per workspace. active flag for workspace-scoped soft-delete.                                             |
-|workspace_role_permissions|Capability matrix (workspace_id, role, capability)                                                                   |
-|workspace_settings        |Name, timezone, defaults                                                                                             |
-|public.users              |User profile. id FK to auth.users. display_name (req), designation (opt), avatar_url (opt), deleted_at (soft-delete).|
-|session_devices           |Fingerprint per session                                                                                              |
-|audit_log                 |Indexed on trace_id. 90-day retention.                                                                               |
+| Table | Purpose |
+| --- | --- |
+| workspaces | Tenant root. owner_user_id FK to public.users, ON DELETE RESTRICT. |
+| workspace_members | User + role per workspace. active flag for workspace-scoped soft-delete. |
+| workspace_role_permissions | Capability matrix (workspace_id, role, capability) |
+| workspace_settings | Name, timezone, defaults |
+| public.users | Profile. id FK to auth.users. display_name, designation, avatar_url, deleted_at. |
+| session_devices | Fingerprint per session |
+| audit_log | Indexed on trace_id. Partitioned monthly. |
 
 ### Content tables
 
-|Table                |Purpose                                                                                                                         |
-|---------------------|--------------------------------------------------------------------------------------------------------------------------------|
-|posts                |stage, publish_status, content_pillar, target_date, channel, owner, brief_id. CHECK enforces legal stage x publish_status pairs.|
-|post_versions        |Snapshot per edit. Pre-publish only. IMMUTABLE; no deleted_at.                                                                  |
-|post_annotations     |Caption span / image pin. Bound to post_version_id. IMMUTABLE; no deleted_at.                                                   |
-|comments             |Entity-anchored. workspace_id RLS. Soft-delete.                                                                                 |
-|briefs               |Client→agency requests. Open/Closed states. No edits after creation.                                                            |
-|input_requests (NEW) |Agency→client requests. Linked to a post (required). Schema spec in docs/schema.md. Implementation pending a separate PR.        |
-|assets               |Pointer row. current_version_id FK.                                                                                             |
-|asset_versions       |id, asset_id, version_number, r2_key, file_hash, uploaded_at, uploaded_by                                                       |
-|asset_attachments    |Binds entity to a specific asset_version_id. Immutable. FK NO ACTION.                                                           |
-|schedule_jobs        |Idempotent publish queue                                                                                                        |
-|approvals            |Per-post + version_id + capability. No magic-link cruft. Approvals happen inside Sorted only.                                   |
-|share_tokens         |Canonical only (one per post). capability=‘view_card’. No expiry. Revocable.                                                    |
-|post_insights        |LinkedIn metrics, cursor per post                                                                                               |
-|inbox_entries        |Permanent Inbox feed (partitioned by month)                                                                                     |
-|chat_channels        |Local Agora channel registry + last_synced_at                                                                                   |
-|chat_messages        |Mirror only. Batch every 6h. Never on read path.                                                                                |
-|groups, group_members|Sorted source of truth. Agora ACL mirrors.                                                                                      |
-|email_threads        |Root_id, root_type, message_id, subject, workspace_id                                                                           |
-|notifications        |Per-event delivery row. email_sent_at for dedupe.                                                                               |
+| Table | Purpose |
+| --- | --- |
+| posts | stage, target_date, channel, owner, brief_id. Stage CHECK: draft/review/approved/parked/rejected. |
+| post_versions | Snapshot per edit. Immutable; no deleted_at. |
+| post_annotations | Caption span / image pin. Bound to post_version_id. Immutable; no deleted_at. |
+| comments | Entity-anchored. workspace_id RLS. Soft-delete. |
+| comment_reactions | Emoji per (comment, user). |
+| briefs | Open/Closed. No edits after creation. |
+| assets | Pointer row. current_version_id FK. |
+| asset_versions | id, asset_id, version_number, r2_key, sha256, uploaded_at, uploaded_by. |
+| asset_attachments | Binds entity to a specific asset_version_id. Immutable. FK NO ACTION. |
+| inbox_entries | Permanent Inbox feed. Partitioned monthly. |
+| chat_channels | Local Agora channel registry + last_synced_at. |
+| chat_messages | Agora mirror only. Partitioned monthly. Never on read path. |
+| groups, group_members | Sorted source of truth. Agora ACL mirrors. |
+| email_threads | root_id, root_type, message_id, subject, workspace_id. |
+| delivery_attempts | Per-event email/push delivery row. email_sent_at for dedupe. |
+| webhook_events, webhook_processing_attempts | Inbound webhook capture (incl. Agora chat entry) and retry log. |
+| feature_flags | Killswitch / rollout / experiment / tier-gated flags. |
+| platform_operators, cockpit_access_log, cockpit_procedure_allowlist, intent_ledger, pending_flows | Cockpit operations. |
 
-### Tables not in schema
+### Not in schema
 
-- ai_usage, ai_memory, tool_invocations, workspace_brand_guides (AI fully out)
-- magic-link approval columns removed from share_tokens and approvals
-- deleted_at removed from post_versions and post_annotations (immutable)
+- No publishing, scheduling, plan, or insights tables (schedule_jobs, plan_periods, plan_cells, approvals, share_tokens, post_insights, platform_accounts all removed).
+- No AI tables (ai_usage, ai_memory, tool_invocations, workspace_brand_guides).
+- post_versions and post_annotations carry no deleted_at (immutable).
 
-## 23. Migration and cutover
+## 19. Migration and cutover
 
-|Item                 |Decision                                                                                                                         |
-|---------------------|---------------------------------------------------------------------------------------------------------------------------------|
-|Approach             |Single ETL script. Two modes.                                                                                                    |
-|Dev-seed mode        |PII scrubbed (emails hashed, names replaced). Used throughout B1-B3 to seed dev from v1.                                         |
-|Cutover mode         |Real data. Run on cutover day against latest v1 state.                                                                           |
-|Users                |Not migrated. Clients sign up fresh post-cutover via invite flow. Legacy *_by columns set NULL, displayed as ex-member.          |
-|Content carried over |Workspaces, posts, briefs, assets, comments, schedule. Owner is set to the agency operator at ETL time; transferred post-cutover.|
-|Dev data treatment   |Disposable fixtures. Wipe and re-seed freely.                                                                                    |
-|v1 freeze            |v1 frozen for writes during cutover run only                                                                                     |
-|Chat history         |v1 has no Agora. v2 chat starts empty. Documented gap, accepted.                                                                 |
-|Schema drift handling|Re-run ETL after schema changes; no incremental migration burden.                                                                |
-|Post-cutover         |Agency invites each client manually via invite flow. Client signs up fresh, lands in pre-populated workspace.                    |
+| Item | Decision |
+| --- | --- |
+| Approach | Single ETL script. Two modes. |
+| Dev-seed mode | PII scrubbed (emails hashed, names replaced). Seeds dev from v1. |
+| Cutover mode | Real data. Run on cutover day against latest v1 state. |
+| Users | Not migrated. Clients sign up fresh post-cutover via invite flow. Legacy *_by columns set NULL, shown as ex-member. |
+| Content carried over | Workspaces, posts, briefs, assets, comments. Owner set to agency operator at ETL time; transferred post-cutover. |
+| Dev data treatment | Disposable fixtures. Wipe and re-seed freely. |
+| v1 freeze | v1 frozen for writes during cutover run only. |
+| Chat history | v1 has no Agora. v2 chat starts empty. Accepted gap. |
+| Schema drift handling | Re-run ETL after schema changes; no incremental migration burden. |
+| Post-cutover | Agency invites each client manually. Client signs up fresh, lands in pre-populated workspace. |
 
-## 24. Observability
+## 20. Observability
 
-|Item          |Decision                                                                                                                                                 |
-|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-|Tracing       |uuid_v7 trace_id propagated FE > API > DB > queue > worker > external API                                                                                |
-|DB propagation|Explicit RPC parameter. Not SET LOCAL (pgBouncer unsafe).                                                                                                |
-|Enforcement   |ESLint rule on .rpc() calls                                                                                                                              |
-|Cardinality   |Same trace_id flows downstream through all spawned jobs                                                                                                  |
-|Errors        |Sentry frontend + backend. Source maps.                                                                                                                  |
-|Logs          |Structured JSON to Cloudflare Logpush. R2 sink.                                                                                                          |
-|Audit         |audit_log indexed on trace_id. 90-day retention.                                                                                                         |
-|Alerts        |Webhook signature failures, queue health, RLS CI, capability audit CI, mirror cron failures (3 consecutive), Agora reconciliation drift (>5% P3, >20% P2)|
+| Item | Decision |
+| --- | --- |
+| Tracing | uuid_v7 trace_id propagated FE > API > DB > queue > worker > external API |
+| DB propagation | Explicit RPC parameter. Not SET LOCAL (pgBouncer unsafe). |
+| Enforcement | ESLint rule on .rpc() calls |
+| Cardinality | Same trace_id flows downstream through all spawned jobs |
+| Errors | Sentry frontend + backend. Source maps. |
+| Logs | Structured JSON to Cloudflare Logpush. R2 sink. |
+| Audit | audit_log indexed on trace_id. |
+| Alerts | Webhook signature failures, RLS CI, capability audit CI, mirror cron failures (3 consecutive), Agora reconciliation drift (>5% P3, >20% P2) |
 
-## 25. Security
+## 21. Security
 
-|Item              |Decision                                                                                                            |
-|------------------|--------------------------------------------------------------------------------------------------------------------|
-|JWT               |15-min, refresh token                                                                                               |
-|Device fingerprint|session_devices table. RLS gate on every auth request.                                                              |
-|RLS               |Security boundary. Every tenant-scoped table. CI tests cross-tenant isolation.                                      |
-|Capability checks |SECURITY DEFINER helpers + workspace_role_permissions                                                               |
-|Sensitive writes  |All routed through SECURITY DEFINER procs. INSERT/UPDATE/DELETE revoked from authenticated role on sensitive tables.|
-|LinkedIn tokens   |Envelope-encrypted in DB                                                                                            |
-|Asset uploads     |MIME allowlist, EXIF strip, SVG sanitize, virus scan                                                                |
-|Idempotency       |Idempotency-Key middleware on all mutating endpoints                                                                |
+| Item | Decision |
+| --- | --- |
+| JWT | 15-min, refresh token |
+| Device fingerprint | session_devices table. RLS gate on every auth request. |
+| RLS | Security boundary. Every tenant-scoped table. CI tests cross-tenant isolation. |
+| Capability checks | SECURITY DEFINER helpers + workspace_role_permissions |
+| Sensitive writes | Routed through SECURITY DEFINER procs. INSERT/UPDATE/DELETE revoked from authenticated role on sensitive tables. |
+| Asset uploads | MIME allowlist, EXIF strip, SVG sanitize, virus scan |
+| Idempotency | Idempotency-Key middleware on all mutating endpoints |
 
-## 26. Chat and Comments
+## 22. Chat and Comments
 
-Two primitives, separate backends. Users don’t know which is which.
+Two primitives, separate backends. Users don't know which is which.
 
 ### Split
 
-|Aspect                 |Comments                           |Chat                                  |
-|-----------------------|-----------------------------------|--------------------------------------|
-|Surfaces               |PCS, Brief, Plan cell              |DM, Group, Plan period                |
-|Backend                |Postgres                           |Agora                                 |
-|Real-time              |Supabase Realtime                  |Agora SDK                             |
-|Mirror                 |None                               |chat_messages (batch, compliance only)|
-|Anchors to post version|Yes                                |No                                    |
-|Decision Records       |Yes                                |No                                    |
-|@-mentions             |inbox_entries + email              |Agora native push (MENTION_ONLY)      |
-|Attachments            |Sorted asset pipeline              |Sorted asset pipeline (asset_id ref)  |
-|Search                 |Postgres FTS                       |Agora SDK                             |
-|Public share visibility|Yes (shown on canonical share link)|Never. Chat is workspace-internal.    |
-|Downtime UX            |May lag, refresh                   |Chat unavailable. Rest unaffected.    |
+| Aspect | Comments | Chat |
+| --- | --- | --- |
+| Surfaces | PCS, Brief | DM, Group |
+| Backend | Postgres | Agora |
+| Real-time | Supabase Realtime | Agora SDK |
+| Mirror | None | chat_messages (batch, compliance only) |
+| Anchors to post version | Yes | No |
+| Decision Records | Yes | No |
+| @-mentions | inbox_entries + email | Agora native push (MENTION_ONLY) |
+| Attachments | Sorted asset pipeline | Sorted asset pipeline (asset_id ref) |
+| Search | Postgres FTS | Agora SDK |
+| Downtime UX | May lag, refresh | Chat unavailable. Rest unaffected. |
 
 ### Chat specifics
 
-|Item               |Decision                                                                                |
-|-------------------|----------------------------------------------------------------------------------------|
-|Source of truth    |Agora. Sorted does not own messages, live feed, search, push.                           |
-|Channel IDs        |dm__W__min(A,B)__max(A,B); group__W__G; plan__W__P                                      |
-|Auth               |Sorted mints 15-min Agora tokens, JWT-aligned. Per-channel ACL at creation.             |
-|Group membership   |Sorted is source of truth. Agora ACL mirrors via REST.                                  |
-|Mirror cron        |Cloudflare Cron every 6h. Pulls Agora REST history. Per-channel cursor.                 |
-|Mirror use         |90-day retention, GDPR export, email digest aggregation, audit only. Never on read path.|
-|Reconciliation cron|Daily 04:00 UTC. >5% drift P3. >20% drift P2.                                           |
+| Item | Decision |
+| --- | --- |
+| Source of truth | Agora. Sorted does not own messages, live feed, search, push. |
+| Channel IDs | dm__W__min(A,B)__max(A,B); group__W__G |
+| Auth | Sorted mints 15-min Agora tokens, JWT-aligned. Per-channel ACL at creation. |
+| Group membership | Sorted is source of truth. Agora ACL mirrors via REST. |
+| Mirror | Webhook writes a DB entry per message into chat_messages. 90-day retention, GDPR export, email digest aggregation, audit only. Never on read path. |
+| Reconciliation cron | Daily 04:00 UTC. >5% drift P3. >20% drift P2. |
 
-## 27. Compliance
+## 23. Compliance
 
-Not covered in v2.0 PRD. Defer to lawyer review pre-launch.
+Not covered in MVP PRD. Defer to lawyer review pre-launch.
 
-## 28. Build phases and tests
+## 24. Build phases and tests
 
 ### Phasing
 
@@ -639,22 +532,13 @@ Not covered in v2.0 PRD. Defer to lawyer review pre-launch.
 - Phase 2: ETL single-shot, dev-seed + cutover modes, against complete schema.
 - Phase 3: All frontend, against working backend.
 
-### Batches
-
-|Batch|Scope                                                                                           |
-|-----|------------------------------------------------------------------------------------------------|
-|B1   |Foundation: repo, infra, observability, auth, RLS tests, SECURITY DEFINER procs, workspaces, ETL|
-|B2   |Core entities, Comments, PCS, Pipeline, stage state machine                                     |
-|B3   |Briefs, Inbox, Chat (Agora), Assets. Plan blocked.                                              |
-|B4   |Publishing, Canonical share, Notifications, Insights, Search, Billing, Cockpit, Cutover         |
-
 ### Test strategy
 
 - Internal team (Hinglish Agency) is the beta cohort throughout build.
-- E2E tests required on critical surfaces: comments, state changes (every transition in the locked matrix), PCS, post creation, post lifecycle, canonical share token.
-- Heavy automated coverage on: auth, RLS, billing, ETL, publish queue, share token RLS, stage transitions.
+- E2E tests required on critical surfaces: comments, stage transitions (every transition in the map), PCS, post creation, post lifecycle.
+- Heavy automated coverage on: auth, RLS, billing, ETL, stage transitions.
 - No formal TDD per PR. Test density scaled to risk.
-- Observability per §24 as production safety net.
+- Observability per section 20 as production safety net.
 - Audit prompts before merge verify tests exist for critical-surface PRs.
 
 ### Workflow rules
@@ -662,6 +546,6 @@ Not covered in v2.0 PRD. Defer to lawyer review pre-launch.
 - One PR per Claude Code prompt.
 - Audit prompts: report-only, no branches/PRs.
 - Always audit before any fix prompt (connectors, not memory).
-- Schema changes: SQL in chat, approval, execute via Supabase MCP with project_id="movnexawfhsyuluspxoc" passed explicitly, verify via information_schema, PR notes ‘Schema already applied. Do NOT execute.’ Never target v1 (ozptjplxbyswclolbxyn) from a v2 schema change.
+- Schema changes: SQL in chat, approval, execute via Supabase MCP with project_id="movnexawfhsyuluspxoc" passed explicitly, verify via information_schema, PR notes 'Schema already applied. Do NOT execute.' Never target v1 (ozptjplxbyswclolbxyn) from a v2 schema change.
 - Auto-merge disabled. Shubham merges manually.
-- Every prompt ends with: ‘Return your entire response in ONE code block, most token-efficient form, no prose outside it.’ and ‘After pushing, reply with the exact GitHub PR URL.’
+- Every prompt ends with: 'Return your entire response in ONE code block, most token-efficient form, no prose outside it.' and 'After pushing, reply with the exact GitHub PR URL.'

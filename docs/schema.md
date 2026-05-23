@@ -1,1178 +1,349 @@
-# Sorted v2 Schema Dump
-
-**Project:** `movnexawfhsyuluspxoc` (Supabase Pro, Mumbai, Postgres 17)
-**Generated:** 17 May 2026
-**Scope:** Live state of the `public` schema. Authoritative.
-
-This document is the single source of truth for column names, types, constraints, indexes, RLS policies, triggers, and functions. When PRD or code says one thing and this document says another, **this document wins** until the next regeneration.
-
-To regenerate: run the same `information_schema` and `pg_catalog` queries used to build this dump.
-
------
-
-## Table of contents
-
-1. [Tables (40)](#tables)
-1. [Constraints](#constraints)
-1. [Indexes](#indexes)
-1. [Row-Level Security (RLS) policies](#rls-policies)
-1. [Triggers](#triggers)
-1. [Functions](#functions)
-1. [Partitioned tables](#partitioned-tables)
-1. [Locked invariants](#locked-invariants)
-
------
-
-## Tables
-
-40 base tables in `public`. Monthly partitions (`audit_log_2026_05`, etc.) inherit from their parent; columns identical.
-
-### `approvals`
-
-Per-post approval ledger. One row per request. Status tracks the lifecycle.
-
-|Column          |Type       |Nullable|Default    |
-|----------------|-----------|--------|-----------|
-|id              |uuid       |NOT NULL|`uuidv7()` |
-|post_id         |uuid       |NOT NULL|           |
-|post_version_id |uuid       |NOT NULL|           |
-|workspace_id    |uuid       |NOT NULL|           |
-|requested_at    |timestamptz|NOT NULL|`now()`    |
-|requested_by    |uuid       |NOT NULL|           |
-|status          |text       |NOT NULL|`'pending'`|
-|acted_by        |uuid       |NULL    |           |
-|acted_at        |timestamptz|NULL    |           |
-|rejection_reason|text       |NULL    |           |
-|revoked_at      |timestamptz|NULL    |           |
-
-### `asset_attachments`
-
-Binds an entity (post, comment, chat_message, brief) to a specific `asset_version_id`. Immutable after insert.
-
-|Column          |Type       |Nullable|Default   |
-|----------------|-----------|--------|----------|
-|id              |uuid       |NOT NULL|`uuidv7()`|
-|asset_id        |uuid       |NOT NULL|          |
-|asset_version_id|uuid       |NOT NULL|          |
-|entity_type     |text       |NOT NULL|          |
-|entity_id       |text       |NOT NULL|          |
-|workspace_id    |uuid       |NOT NULL|          |
-|position        |integer    |NOT NULL|`0`       |
-|attached_by     |uuid       |NOT NULL|          |
-|attached_at     |timestamptz|NOT NULL|`now()`   |
-|deleted_at      |timestamptz|NULL    |          |
-
-### `asset_versions`
-
-Immutable version chain. Each upload edit creates a new row.
-
-|Column        |Type       |Nullable|Default   |
-|--------------|-----------|--------|----------|
-|id            |uuid       |NOT NULL|`uuidv7()`|
-|asset_id      |uuid       |NOT NULL|          |
-|workspace_id  |uuid       |NOT NULL|          |
-|version_number|integer    |NOT NULL|          |
-|r2_key        |text       |NOT NULL|          |
-|mime_type     |text       |NOT NULL|          |
-|sha256        |text       |NOT NULL|          |
-|size_bytes    |bigint     |NOT NULL|          |
-|width         |integer    |NULL    |          |
-|height        |integer    |NULL    |          |
-|duration_ms   |integer    |NULL    |          |
-|uploaded_by   |uuid       |NOT NULL|          |
-|uploaded_at   |timestamptz|NOT NULL|`now()`   |
-
-### `assets`
-
-Pointer row. Points to current_version_id. Soft-deletable.
-
-|Column            |Type       |Nullable|Default   |
-|------------------|-----------|--------|----------|
-|id                |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id      |uuid       |NOT NULL|          |
-|filename          |text       |NOT NULL|          |
-|current_version_id|uuid       |NULL    |          |
-|folder_path       |text       |NOT NULL|`'/'`     |
-|tags              |text[]     |NOT NULL|`'{}'`    |
-|uploaded_by       |uuid       |NOT NULL|          |
-|uploaded_at       |timestamptz|NOT NULL|`now()`   |
-|deleted_at        |timestamptz|NULL    |          |
-
-### `audit_log`
-
-Partitioned by month on `created_at`. 90-day retention. Indexed on `trace_id`.
-
-|Column                  |Type       |Nullable|Default   |
-|------------------------|-----------|--------|----------|
-|id                      |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id            |uuid       |NULL    |          |
-|actor_user_id           |uuid       |NULL    |          |
-|on_behalf_of            |uuid       |NULL    |          |
-|impersonation_session_id|uuid       |NULL    |          |
-|action                  |text       |NOT NULL|          |
-|entity_type             |text       |NULL    |          |
-|entity_id               |text       |NULL    |          |
-|payload                 |jsonb      |NULL    |          |
-|outcome                 |text       |NOT NULL|          |
-|error_code              |text       |NULL    |          |
-|trace_id                |uuid       |NOT NULL|          |
-|ip_subnet               |inet       |NULL    |          |
-|created_at              |timestamptz|NOT NULL|`now()`   |
-
-### `briefs`
-
-Created by clients only (client→agency request). The agency→client equivalent is `input_requests` (parallel table, see below). Open or Closed. Immutable content after insert.
-
-|Column            |Type       |Nullable|Default   |
-|------------------|-----------|--------|----------|
-|id                |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id      |uuid       |NOT NULL|          |
-|title             |text       |NOT NULL|          |
-|objective         |text       |NOT NULL|          |
-|format_requested  |text       |NULL    |          |
-|brand_requirements|text       |NULL    |          |
-|target_date       |date       |NULL    |          |
-|reference_links   |jsonb      |NULL    |          |
-|status            |text       |NOT NULL|`'open'`  |
-|closed_at         |timestamptz|NULL    |          |
-|closed_by         |uuid       |NULL    |          |
-|created_by        |uuid       |NOT NULL|          |
-|created_via       |text       |NOT NULL|`'app'`   |
-|row_version       |bigint     |NOT NULL|`1`       |
-|created_at        |timestamptz|NOT NULL|`now()`   |
-|updated_at        |timestamptz|NOT NULL|`now()`   |
-|deleted_at        |timestamptz|NULL    |          |
-
-Brief and input_request are parallel request primitives. Both immutable after creation. Both close. Both accept comments and asset attachments. They differ in direction, in who creates them, and in post-link requirement: `input_requests` require a linked post; briefs optionally link via `posts.brief_id`.
-
-### `chat_channels`
-
-Local registry of Agora channels. Source of truth for channel-id convention, ACL, and sync cursor.
-
-|Column        |Type       |Nullable     |Default|
-|--------------|-----------|-------------|-------|
-|channel_id    |text       |NOT NULL (PK)|       |
-|workspace_id  |uuid       |NOT NULL     |       |
-|channel_type  |text       |NOT NULL     |       |
-|entity_id     |uuid       |NULL         |       |
-|dm_user_a     |uuid       |NULL         |       |
-|dm_user_b     |uuid       |NULL         |       |
-|last_synced_at|timestamptz|NULL         |       |
-|created_at    |timestamptz|NOT NULL     |`now()`|
-
-### `chat_messages`
-
-Mirror of Agora messages. Partitioned monthly. Never on read path. Compliance + email digest only.
-
-|Column              |Type       |Nullable|Default|
-|--------------------|-----------|--------|-------|
-|id                  |text       |NOT NULL|       |
-|channel_id          |text       |NOT NULL|       |
-|workspace_id        |uuid       |NOT NULL|       |
-|sender_user_id      |uuid       |NULL    |       |
-|body                |text       |NULL    |       |
-|mentions            |jsonb      |NULL    |       |
-|attachment_asset_ids|uuid[]     |NULL    |       |
-|agora_event_id      |text       |NOT NULL|       |
-|created_at          |timestamptz|NOT NULL|       |
-|edited_at           |timestamptz|NULL    |       |
-|deleted_at          |timestamptz|NULL    |       |
-
-### `cockpit_access_log`
-
-Every cockpit route hit. Operator-only visibility.
-
-|Column          |Type       |Nullable|Default   |
-|----------------|-----------|--------|----------|
-|id              |uuid       |NOT NULL|`uuidv7()`|
-|operator_user_id|uuid       |NOT NULL|          |
-|route           |text       |NOT NULL|          |
-|workspace_id    |uuid       |NULL    |          |
-|session_id      |uuid       |NOT NULL|          |
-|accessed_at     |timestamptz|NOT NULL|`now()`   |
-|trace_id        |uuid       |NOT NULL|          |
-
-### `cockpit_procedure_allowlist`
-
-Whitelist of SECURITY DEFINER procs the operator can invoke. Tiered by risk.
-
-|Column        |Type       |Nullable     |Default|
-|--------------|-----------|-------------|-------|
-|procedure_name|text       |NOT NULL (PK)|       |
-|description   |text       |NOT NULL     |       |
-|risk_tier     |text       |NOT NULL     |       |
-|added_at      |timestamptz|NOT NULL     |`now()`|
-|added_by      |uuid       |NOT NULL     |       |
-
-### `comment_reactions`
-
-Emoji reactions on comments. PK is composite.
-
-|Column      |Type       |Nullable|Default|
-|------------|-----------|--------|-------|
-|comment_id  |uuid       |NOT NULL|       |
-|user_id     |uuid       |NOT NULL|       |
-|emoji       |text       |NOT NULL|       |
-|workspace_id|uuid       |NOT NULL|       |
-|created_at  |timestamptz|NOT NULL|`now()`|
-
-### `comments`
-
-Postgres-backed discussion. Entity-anchored (post, brief, plan_cell). Realtime-replayable.
-
-|Column              |Type       |Nullable|Default   |
-|--------------------|-----------|--------|----------|
-|id                  |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id        |uuid       |NOT NULL|          |
-|entity_type         |text       |NOT NULL|          |
-|entity_id           |uuid       |NOT NULL|          |
-|parent_comment_id   |uuid       |NULL    |          |
-|author_user_id      |uuid       |NOT NULL|          |
-|body                |text       |NOT NULL|          |
-|mentions            |jsonb      |NULL    |          |
-|attachment_asset_ids|uuid[]     |NULL    |          |
-|is_decision         |boolean    |NOT NULL|`false`   |
-|edited_at           |timestamptz|NULL    |          |
-|created_at          |timestamptz|NOT NULL|`now()`   |
-|deleted_at          |timestamptz|NULL    |          |
-
-### `delivery_attempts`
-
-Every send (email, push). For provider dedupe via `provider_message_id`.
-
-|Column             |Type       |Nullable|Default   |
-|-------------------|-----------|--------|----------|
-|id                 |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id       |uuid       |NULL    |          |
-|user_id            |uuid       |NULL    |          |
-|channel            |text       |NOT NULL|          |
-|template_key       |text       |NOT NULL|          |
-|provider           |text       |NOT NULL|          |
-|provider_message_id|text       |NULL    |          |
-|status             |text       |NOT NULL|`'queued'`|
-|error              |text       |NULL    |          |
-|sent_at            |timestamptz|NULL    |          |
-|delivered_at       |timestamptz|NULL    |          |
-|bounced_at         |timestamptz|NULL    |          |
-|created_at         |timestamptz|NOT NULL|`now()`   |
-|email_thread_id    |uuid       |NULL    |          |
-
-### `email_threads`
-
-RFC-822 Message-ID anchor per work unit. One per `(workspace_id, root_type, root_id)`.
-
-|Column      |Type       |Nullable|Default   |
-|------------|-----------|--------|----------|
-|id          |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id|uuid       |NOT NULL|          |
-|root_type   |text       |NOT NULL|          |
-|root_id     |uuid       |NOT NULL|          |
-|message_id  |text       |NOT NULL|          |
-|subject     |text       |NOT NULL|          |
-|created_at  |timestamptz|NOT NULL|`now()`   |
-|last_sent_at|timestamptz|NULL    |          |
-
-### `feature_flags`
-
-Global (workspace_id NULL) or per-workspace. Categories: killswitch, rollout, experiment, tier_gated.
-
-|Column            |Type       |Nullable|Default   |
-|------------------|-----------|--------|----------|
-|id                |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id      |uuid       |NULL    |          |
-|flag_name         |text       |NOT NULL|          |
-|category          |text       |NOT NULL|          |
-|enabled           |boolean    |NOT NULL|`false`   |
-|rollout_percentage|smallint   |NOT NULL|`0`       |
-|tier_min          |text       |NULL    |          |
-|reason            |text       |NULL    |          |
-|updated_by        |uuid       |NULL    |          |
-|updated_at        |timestamptz|NOT NULL|`now()`   |
-
-### `group_members`
-
-Sorted is source of truth. Agora ACL mirrors via REST.
-
-|Column      |Type       |Nullable|Default|
-|------------|-----------|--------|-------|
-|group_id    |uuid       |NOT NULL|       |
-|user_id     |uuid       |NOT NULL|       |
-|workspace_id|uuid       |NOT NULL|       |
-|joined_at   |timestamptz|NOT NULL|`now()`|
-
-### `groups`
-
-Named groups for chat addressability (`#group-name`).
-
-|Column      |Type       |Nullable|Default   |
-|------------|-----------|--------|----------|
-|id          |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id|uuid       |NOT NULL|          |
-|name        |text       |NOT NULL|          |
-|created_by  |uuid       |NOT NULL|          |
-|created_at  |timestamptz|NOT NULL|`now()`   |
-|deleted_at  |timestamptz|NULL    |          |
-
-### `inbox_entries`
-
-Permanent in-app event feed. Partitioned monthly. Soft-deletable.
-
-|Column       |Type       |Nullable|Default   |
-|-------------|-----------|--------|----------|
-|id           |uuid       |NOT NULL|`uuidv7()`|
-|user_id      |uuid       |NOT NULL|          |
-|workspace_id |uuid       |NOT NULL|          |
-|event_type   |text       |NOT NULL|          |
-|entity_type  |text       |NULL    |          |
-|entity_id    |text       |NULL    |          |
-|scope        |text       |NOT NULL|          |
-|scope_key    |text       |NULL    |          |
-|tier         |text       |NOT NULL|`'active'`|
-|payload      |jsonb      |NOT NULL|`'{}'`    |
-|read_at      |timestamptz|NULL    |          |
-|snoozed_until|timestamptz|NULL    |          |
-|email_sent_at|timestamptz|NULL    |          |
-|created_at   |timestamptz|NOT NULL|`now()`   |
-|deleted_at   |timestamptz|NULL    |          |
-
-### `input_requests`
-
-> **STATUS: Documented, NOT yet implemented.** Implementation tracked under the input_requests migration PR. Not present in the live DB; the live base-table count stays 40 until that PR ships.
-
-Agency→client request for raw material (photos, quotes, event details, brand assets) linked to a specific post. Immutable after insert. Closes when the agency marks it fulfilled. Pending implementation.
-
-|Column         |Type       |Nullable|Default   |
-|---------------|-----------|--------|----------|
-|id             |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id   |uuid       |NOT NULL|          |
-|linked_post_id |uuid       |NOT NULL|          |
-|title          |text       |NOT NULL|          |
-|ask            |text       |NOT NULL|          |
-|target_date    |date       |NULL    |          |
-|reference_links|jsonb      |NULL    |          |
-|status         |text       |NOT NULL|`'open'`  |
-|closed_at      |timestamptz|NULL    |          |
-|closed_by      |uuid       |NULL    |          |
-|created_by     |uuid       |NOT NULL|          |
-|created_via    |text       |NOT NULL|`'app'`   |
-|row_version    |bigint     |NOT NULL|`1`       |
-|created_at     |timestamptz|NOT NULL|`now()`   |
-|updated_at     |timestamptz|NOT NULL|`now()`   |
-|deleted_at     |timestamptz|NULL    |          |
-
-**Foreign keys (with ON DELETE policy):**
-
-- `workspace_id` → `workspaces(id)` ON DELETE CASCADE
-- `linked_post_id` → `posts(id)` ON DELETE CASCADE
-- `created_by` → `public.users(id)` ON DELETE SET NULL
-- `closed_by` → `public.users(id)` ON DELETE SET NULL
-
-**CHECK constraints:**
-
-- `input_requests_status_check`: status IN (`open`, `closed`)
-- `input_requests_closed_consistency`: (status=`open` AND closed_at IS NULL AND closed_by IS NULL) OR (status=`closed` AND closed_at IS NOT NULL AND closed_by IS NOT NULL)
-- `input_requests_title_check`: char_length(title) BETWEEN 1 AND 200
-- `input_requests_ask_check`: char_length(ask) BETWEEN 1 AND 5000
-- `input_requests_created_via_check`: created_via IN (`app`, `pcs_action`)
-
-**Indexes (partial, soft-delete-aware, same pattern as `briefs`):**
-
-- `input_requests_workspace_status_idx`: (workspace_id, status, created_at DESC) WHERE deleted_at IS NULL
-- `input_requests_linked_post_idx`: (linked_post_id) WHERE deleted_at IS NULL
-- `input_requests_created_by_idx`: (workspace_id, created_by, created_at DESC) WHERE deleted_at IS NULL
-- `input_requests_target_date_idx`: (workspace_id, target_date) WHERE deleted_at IS NULL AND target_date IS NOT NULL
-- `input_requests_title_fts_idx`: GIN to_tsvector(`english`, title || ` ` || ask) WHERE deleted_at IS NULL
-
-**RLS:**
-
-- `input_requests_select_member`: SELECT, EXISTS `workspace_members` for the current user, deleted_at IS NULL.
-- No INSERT/UPDATE/DELETE policies. All writes via SECURITY DEFINER procs (`input_request_create`, `input_request_close`).
-
-**Triggers:**
-
-- `input_requests_row_version_check`: BEFORE UPDATE, calls `enforce_row_version_increment()`.
-- `input_requests_updated_at`: BEFORE UPDATE, sets `updated_at = now()`.
-
-### `intent_ledger`
-
-Cockpit two-phase intent tracking. 60-min expiry.
-
-|Column          |Type       |Nullable|Default         |
-|----------------|-----------|--------|----------------|
-|id              |uuid       |NOT NULL|`uuidv7()`      |
-|operator_user_id|uuid       |NOT NULL|                |
-|action          |text       |NOT NULL|                |
-|target_type     |text       |NULL    |                |
-|target_id       |text       |NULL    |                |
-|payload         |jsonb      |NOT NULL|                |
-|status          |text       |NOT NULL|`'pending'`     |
-|reason_category |text       |NULL    |                |
-|reason_text     |text       |NULL    |                |
-|ticket_id       |text       |NULL    |                |
-|created_at      |timestamptz|NOT NULL|`now()`         |
-|committed_at    |timestamptz|NULL    |                |
-|expires_at      |timestamptz|NOT NULL|`now() + 1 hour`|
-|trace_id        |uuid       |NOT NULL|                |
-
-### `pending_flows`
-
-Cockpit pending flows for out-of-band external systems. 60-min expiry.
-
-|Column          |Type       |Nullable|Default         |
-|----------------|-----------|--------|----------------|
-|id              |uuid       |NOT NULL|`uuidv7()`      |
-|operator_user_id|uuid       |NOT NULL|                |
-|flow_type       |text       |NOT NULL|                |
-|external_system |text       |NOT NULL|                |
-|external_ref    |text       |NULL    |                |
-|payload         |jsonb      |NOT NULL|                |
-|status          |text       |NOT NULL|`'open'`        |
-|created_at      |timestamptz|NOT NULL|`now()`         |
-|resolved_at     |timestamptz|NULL    |                |
-|expires_at      |timestamptz|NOT NULL|`now() + 1 hour`|
-
-### `plan_cells`
-
-Plan section TBD. Schema present but UI parked.
-
-|Column         |Type       |Nullable|Default   |
-|---------------|-----------|--------|----------|
-|id             |uuid       |NOT NULL|`uuidv7()`|
-|plan_period_id |uuid       |NOT NULL|          |
-|workspace_id   |uuid       |NOT NULL|          |
-|slot_date      |date       |NOT NULL|          |
-|platform       |text       |NOT NULL|          |
-|title          |text       |NOT NULL|          |
-|bucket_id      |uuid       |NULL    |          |
-|description    |text       |NULL    |          |
-|state          |text       |NOT NULL|`'draft'` |
-|spawned_post_id|uuid       |NULL    |          |
-|row_version    |bigint     |NOT NULL|`1`       |
-|created_by     |uuid       |NOT NULL|          |
-|created_at     |timestamptz|NOT NULL|`now()`   |
-|updated_at     |timestamptz|NOT NULL|`now()`   |
-|deleted_at     |timestamptz|NULL    |          |
-
-### `plan_periods`
-
-Weekly or monthly plan periods.
-
-|Column       |Type       |Nullable|Default     |
-|-------------|-----------|--------|------------|
-|id           |uuid       |NOT NULL|`uuidv7()`  |
-|workspace_id |uuid       |NOT NULL|            |
-|granularity  |text       |NOT NULL|            |
-|period_start |date       |NOT NULL|            |
-|period_end   |date       |NOT NULL|            |
-|approval_mode|text       |NOT NULL|`'per_cell'`|
-|created_by   |uuid       |NOT NULL|            |
-|created_at   |timestamptz|NOT NULL|`now()`     |
-|deleted_at   |timestamptz|NULL    |            |
-
-### `platform_accounts`
-
-OAuth-connected platform accounts. Envelope-encrypted tokens (DEK + KEK).
-
-|Column                 |Type       |Nullable|Default   |
-|-----------------------|-----------|--------|----------|
-|id                     |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id           |uuid       |NOT NULL|          |
-|platform               |text       |NOT NULL|          |
-|account_type           |text       |NOT NULL|          |
-|platform_account_id    |text       |NOT NULL|          |
-|display_name           |text       |NOT NULL|          |
-|encrypted_access_token |bytea      |NULL    |          |
-|encrypted_refresh_token|bytea      |NULL    |          |
-|encrypted_dek          |bytea      |NULL    |          |
-|kek_id                 |text       |NULL    |          |
-|scopes                 |text[]     |NOT NULL|`'{}'`    |
-|expires_at             |timestamptz|NULL    |          |
-|connected_by           |uuid       |NOT NULL|          |
-|connected_at           |timestamptz|NOT NULL|`now()`   |
-|last_refresh_at        |timestamptz|NULL    |          |
-|last_error             |text       |NULL    |          |
-|disconnected_at        |timestamptz|NULL    |          |
-|disconnect_grace_until |timestamptz|NULL    |          |
-|deleted_at             |timestamptz|NULL    |          |
-
-### `platform_operators`
-
-Sorted founders / staff with cockpit access.
-
-|Column               |Type       |Nullable     |Default|
-|---------------------|-----------|-------------|-------|
-|user_id              |uuid       |NOT NULL (PK)|       |
-|granted_at           |timestamptz|NOT NULL     |`now()`|
-|granted_by           |uuid       |NULL         |       |
-|revoked_at           |timestamptz|NULL         |       |
-|passkey_credential_id|text       |NULL         |       |
-
-### `post_annotations`
-
-Caption span or image pin. Bound to a specific post_version. **Immutable (no deleted_at).**
-
-|Column             |Type       |Nullable|Default   |
-|-------------------|-----------|--------|----------|
-|id                 |uuid       |NOT NULL|`uuidv7()`|
-|post_id            |uuid       |NOT NULL|          |
-|workspace_id       |uuid       |NOT NULL|          |
-|post_version_id    |uuid       |NOT NULL|          |
-|kind               |text       |NOT NULL|          |
-|caption_start      |integer    |NULL    |          |
-|caption_end        |integer    |NULL    |          |
-|asset_attachment_id|uuid       |NULL    |          |
-|image_x            |real       |NULL    |          |
-|image_y            |real       |NULL    |          |
-|comment_id         |uuid       |NOT NULL|          |
-|created_at         |timestamptz|NOT NULL|`now()`   |
-
-### `post_insights`
-
-LinkedIn metrics per post. Cursor-based polling.
-
-|Column         |Type       |Nullable|Default    |
-|---------------|-----------|--------|-----------|
-|id             |uuid       |NOT NULL|`uuidv7()` |
-|post_id        |uuid       |NOT NULL|           |
-|workspace_id   |uuid       |NOT NULL|           |
-|fetched_at     |timestamptz|NOT NULL|`now()`    |
-|likes          |integer    |NOT NULL|`0`        |
-|comments_count |integer    |NOT NULL|`0`        |
-|shares         |integer    |NOT NULL|`0`        |
-|impressions    |integer    |NOT NULL|`0`        |
-|clicks         |integer    |NOT NULL|`0`        |
-|engagement_rate|real       |NULL    |           |
-|raw_response   |jsonb      |NULL    |           |
-|fetch_outcome  |text       |NOT NULL|`'success'`|
-
-### `post_versions`
-
-Snapshot per pre-publish edit. **Immutable (no deleted_at).**
-
-|Column        |Type       |Nullable|Default   |
-|--------------|-----------|--------|----------|
-|id            |uuid       |NOT NULL|`uuidv7()`|
-|post_id       |uuid       |NOT NULL|          |
-|workspace_id  |uuid       |NOT NULL|          |
-|version_number|integer    |NOT NULL|          |
-|snapshot      |jsonb      |NOT NULL|          |
-|created_by    |uuid       |NOT NULL|          |
-|created_at    |timestamptz|NOT NULL|`now()`   |
-
-### `posts`
-
-Core entity. `stage` = workflow. `publish_status` = auxiliary. CHECK enforces legal pairs.
-
-`stage` values: `draft`, `review`, `scheduled`, `published`, `parked`, `rejected` (6 stages). Agency-to-client input asks are a separate Input Request primitive owned by the Requests section, never a stage; see the `input_requests` table.
-
-Posts may have multiple input_requests linked via `input_requests.linked_post_id`. Open input requests display as a chip on the post card. UX choice (not schema-enforced): scheduling is blocked while an input request is open.
-
-|Column                   |Type       |Nullable|Default   |
-|-------------------------|-----------|--------|----------|
-|id                       |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id             |uuid       |NOT NULL|          |
-|title                    |text       |NOT NULL|          |
-|caption                  |text       |NULL    |          |
-|bucket_id                |uuid       |NOT NULL|          |
-|owner_user_id            |uuid       |NOT NULL|          |
-|platform                 |text       |NOT NULL|          |
-|platform_account_id      |uuid       |NULL    |          |
-|format                   |text       |NOT NULL|          |
-|stage                    |text       |NOT NULL|`'draft'` |
-|publish_status           |text       |NOT NULL|`'draft'` |
-|published_at             |timestamptz|NULL    |          |
-|platform_post_id         |text       |NULL    |          |
-|platform_last_modified_at|timestamptz|NULL    |          |
-|publish_error_message    |text       |NULL    |          |
-|publish_attempt_count    |integer    |NOT NULL|`0`       |
-|target_date              |timestamptz|NULL    |          |
-|scheduled_at             |timestamptz|NULL    |          |
-|origin                   |text       |NOT NULL|`'manual'`|
-|brief_id                 |uuid       |NULL    |          |
-|plan_cell_id             |uuid       |NULL    |          |
-|row_version              |bigint     |NOT NULL|`1`       |
-|created_by               |uuid       |NOT NULL|          |
-|created_at               |timestamptz|NOT NULL|`now()`   |
-|updated_at               |timestamptz|NOT NULL|`now()`   |
-|deleted_at               |timestamptz|NULL    |          |
-
-### `schedule_job_logs`
-
-Every Publish Queue Worker attempt. Full audit trail.
-
-|Column          |Type       |Nullable|Default   |
-|----------------|-----------|--------|----------|
-|id              |uuid       |NOT NULL|`uuidv7()`|
-|post_id         |uuid       |NOT NULL|          |
-|workspace_id    |uuid       |NOT NULL|          |
-|attempt_number  |integer    |NOT NULL|          |
-|started_at      |timestamptz|NOT NULL|`now()`   |
-|finished_at     |timestamptz|NULL    |          |
-|outcome         |text       |NULL    |          |
-|http_status     |integer    |NULL    |          |
-|response_excerpt|text       |NULL    |          |
-|error_code      |text       |NULL    |          |
-|trace_id        |uuid       |NOT NULL|          |
-
-### `schedule_jobs`
-
-Publish queue. One row per post (PK is post_id). Idempotent enqueue.
-
-|Column          |Type       |Nullable     |Default    |
-|----------------|-----------|-------------|-----------|
-|post_id         |uuid       |NOT NULL (PK)|           |
-|workspace_id    |uuid       |NOT NULL     |           |
-|scheduled_at    |timestamptz|NOT NULL     |           |
-|revision        |bigint     |NOT NULL     |`1`        |
-|status          |text       |NOT NULL     |`'pending'`|
-|attempts        |integer    |NOT NULL     |`0`        |
-|last_attempt_at |timestamptz|NULL         |           |
-|last_error      |text       |NULL         |           |
-|platform_post_id|text       |NULL         |           |
-|completed_at    |timestamptz|NULL         |           |
-|idempotency_key |text       |NULL         |           |
-|created_at      |timestamptz|NOT NULL     |`now()`    |
-|updated_at      |timestamptz|NOT NULL     |`now()`    |
-
-### `session_devices`
-
-Device fingerprint per session. RLS gate on every auth request.
-
-|Column          |Type       |Nullable|Default   |
-|----------------|-----------|--------|----------|
-|id              |uuid       |NOT NULL|`uuidv7()`|
-|user_id         |uuid       |NOT NULL|          |
-|fingerprint_hash|text       |NOT NULL|          |
-|user_agent      |text       |NULL    |          |
-|ip_subnet       |inet       |NULL    |          |
-|last_seen_at    |timestamptz|NOT NULL|`now()`   |
-|created_at      |timestamptz|NOT NULL|`now()`   |
-|revoked_at      |timestamptz|NULL    |          |
-
-### `share_tokens`
-
-Canonical share token. One per post. Capability fixed to `view_card`. No expiry. Revocable.
-
-|Column      |Type       |Nullable|Default      |
-|------------|-----------|--------|-------------|
-|id          |uuid       |NOT NULL|`uuidv7()`   |
-|post_id     |uuid       |NOT NULL|             |
-|workspace_id|uuid       |NOT NULL|             |
-|token_hash  |text       |NOT NULL|             |
-|capability  |text       |NOT NULL|`'view_card'`|
-|issued_at   |timestamptz|NOT NULL|`now()`      |
-|revoked_at  |timestamptz|NULL    |             |
-
-### `users`
-
-User profile (separate from `auth.users`). Auto-created by trigger on auth.users insert.
-
-|Column      |Type       |Nullable     |Default|
-|------------|-----------|-------------|-------|
-|id          |uuid       |NOT NULL (PK)|       |
-|display_name|text       |NOT NULL     |       |
-|designation |text       |NULL         |       |
-|avatar_url  |text       |NULL         |       |
-|deleted_at  |timestamptz|NULL         |       |
-|created_at  |timestamptz|NOT NULL     |`now()`|
-|updated_at  |timestamptz|NOT NULL     |`now()`|
-
-### `webhook_events`
-
-Inbound webhooks (Stripe, Resend, LinkedIn). Idempotency on `(source, source_event_id)`.
-
-|Column            |Type       |Nullable|Default   |
-|------------------|-----------|--------|----------|
-|id                |uuid       |NOT NULL|`uuidv7()`|
-|source            |text       |NOT NULL|          |
-|source_event_id   |text       |NOT NULL|          |
-|event_type        |text       |NOT NULL|          |
-|workspace_id      |uuid       |NULL    |          |
-|signature_verified|boolean    |NOT NULL|          |
-|raw_payload       |jsonb      |NOT NULL|          |
-|received_at       |timestamptz|NOT NULL|`now()`   |
-
-### `webhook_processing_attempts`
-
-Per-attempt log for webhook handlers.
-
-|Column          |Type       |Nullable|Default   |
-|----------------|-----------|--------|----------|
-|id              |uuid       |NOT NULL|`uuidv7()`|
-|webhook_event_id|uuid       |NOT NULL|          |
-|attempt_number  |integer    |NOT NULL|          |
-|started_at      |timestamptz|NOT NULL|`now()`   |
-|finished_at     |timestamptz|NULL    |          |
-|outcome         |text       |NULL    |          |
-|error           |text       |NULL    |          |
-|trace_id        |uuid       |NOT NULL|          |
-
-### `workspace_buckets`
-
-Content buckets/pillars per workspace. Archivable (no hard-delete).
-
-|Column      |Type       |Nullable|Default   |
-|------------|-----------|--------|----------|
-|id          |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id|uuid       |NOT NULL|          |
-|name        |text       |NOT NULL|          |
-|color_hex   |text       |NOT NULL|          |
-|position    |integer    |NOT NULL|`0`       |
-|archived    |boolean    |NOT NULL|`false`   |
-|created_at  |timestamptz|NOT NULL|`now()`   |
-
-### `workspace_members`
-
-User + role per workspace. `active=false` = workspace-scoped soft-delete.
-
-|Column      |Type       |Nullable|Default   |
-|------------|-----------|--------|----------|
-|id          |uuid       |NOT NULL|`uuidv7()`|
-|workspace_id|uuid       |NOT NULL|          |
-|user_id     |uuid       |NOT NULL|          |
-|role        |text       |NOT NULL|          |
-|active      |boolean    |NOT NULL|`true`    |
-|invited_by  |uuid       |NULL    |          |
-|invited_at  |timestamptz|NOT NULL|`now()`   |
-|accepted_at |timestamptz|NULL    |          |
-|removed_at  |timestamptz|NULL    |          |
-|rejoined_at |timestamptz|NULL    |          |
-
-### `workspace_onboarding`
-
-Dashboard checklist state. One row per workspace. Owners only.
-
-|Column               |Type       |Nullable     |Default|
-|---------------------|-----------|-------------|-------|
-|workspace_id         |uuid       |NOT NULL (PK)|       |
-|first_post_at        |timestamptz|NULL         |       |
-|first_invite_at      |timestamptz|NULL         |       |
-|linkedin_connected_at|timestamptz|NULL         |       |
-|first_brief_at       |timestamptz|NULL         |       |
-|first_schedule_at    |timestamptz|NULL         |       |
-|dismissed_at         |timestamptz|NULL         |       |
-|auto_hidden_at       |timestamptz|NULL         |       |
-
-### `workspace_role_permissions`
-
-Capability matrix. PK is `(workspace_id, role, capability)`.
-
-|Column      |Type       |Nullable|Default|
-|------------|-----------|--------|-------|
-|workspace_id|uuid       |NOT NULL|       |
-|role        |text       |NOT NULL|       |
-|capability  |text       |NOT NULL|       |
-|allowed     |boolean    |NOT NULL|`true` |
-|updated_at  |timestamptz|NOT NULL|`now()`|
-
-### `workspace_settings`
-
-JSONB payload of preferences. PK is `workspace_id`.
-
-|Column      |Type       |Nullable     |Default|
-|------------|-----------|-------------|-------|
-|workspace_id|uuid       |NOT NULL (PK)|       |
-|payload     |jsonb      |NOT NULL     |`'{}'` |
-|updated_at  |timestamptz|NOT NULL     |`now()`|
-|updated_by  |uuid       |NULL         |       |
-
-### `workspaces`
-
-Tenant root. Owner FK is ON DELETE RESTRICT.
-
-|Column                       |Type       |Nullable|Default     |
-|-----------------------------|-----------|--------|------------|
-|id                           |uuid       |NOT NULL|`uuidv7()`  |
-|name                         |text       |NOT NULL|            |
-|owner_user_id                |uuid       |NOT NULL|            |
-|plan_tier                    |text       |NOT NULL|`'solo'`    |
-|timezone                     |text       |NOT NULL|            |
-|week_start_day               |smallint   |NOT NULL|`1`         |
-|stripe_customer_id           |text       |NULL    |            |
-|stripe_subscription_id       |text       |NULL    |            |
-|subscription_state           |text       |NOT NULL|`'trial'`   |
-|subscription_state_expires_at|timestamptz|NULL    |            |
-|trial_ends_at                |timestamptz|NULL    |            |
-|activated_at                 |timestamptz|NULL    |            |
-|digest_default_time          |time       |NOT NULL|`'09:00:00'`|
-|target_distributions         |jsonb      |NULL    |            |
-|row_version                  |bigint     |NOT NULL|`1`         |
-|created_at                   |timestamptz|NOT NULL|`now()`     |
-|updated_at                   |timestamptz|NOT NULL|`now()`     |
-|deleted_at                   |timestamptz|NULL    |            |
-
------
-
-## Constraints
-
-### Foreign keys (with ON DELETE policy)
-
-**Reference `public.users(id)` (SET NULL, except where noted):**
-
-- approvals: acted_by, requested_by
-- asset_attachments: attached_by
-- asset_versions: uploaded_by
-- assets: uploaded_by
-- briefs: created_by, closed_by
-- cockpit_procedure_allowlist: added_by
-- delivery_attempts: user_id
-- feature_flags: updated_by
-- groups: created_by
-- plan_cells: created_by
-- plan_periods: created_by
-- platform_accounts: connected_by
-- platform_operators: granted_by
-- post_versions: created_by
-- posts: created_by, owner_user_id
-- workspace_members: invited_by
-- workspace_settings: updated_by
-- **workspaces: owner_user_id → ON DELETE RESTRICT** (owner cannot self-delete until transferred)
-
-**Reference `auth.users(id)` (CASCADE):**
-
-- chat_channels: dm_user_a, dm_user_b (NO ACTION, not CASCADE)
-- chat_messages: sender_user_id (NO ACTION)
-- comment_reactions: user_id
-- comments: author_user_id (NO ACTION)
-- cockpit_access_log: operator_user_id
-- group_members: user_id
-- inbox_entries: user_id
-- intent_ledger: operator_user_id
-- pending_flows: operator_user_id
-- platform_operators: user_id
-- session_devices: user_id
-- audit_log: actor_user_id, on_behalf_of (NO ACTION)
-- users: id (CASCADE - profile dies with auth.users)
-
-**Workspace cascades (workspace_id → workspaces.id, ON DELETE CASCADE):**
-
-- All tenant-scoped tables except `cockpit_access_log` (SET NULL), `delivery_attempts` (SET NULL), `feature_flags` (CASCADE), `webhook_events` (SET NULL).
-
-### Key CHECK constraints
-
-**`posts_stage_publish_status_check` (the matrix):**
-
-```
-draft, review, parked, rejected → publish_status = 'draft'
-scheduled                       → publish_status IN ('scheduled','publishing','publish_failed','publish_failed_final')
-published                       → publish_status = 'published'
-```
-
-**`posts_scheduled_needs_target_date`:** stage=‘scheduled’ requires target_date NOT NULL.
-
-**`post_annotations_caption_fields`:** Strict mutual exclusivity.
-
-- `kind='caption_span'`: caption_start/end NOT NULL, caption_start < caption_end, image_x/y/asset_attachment_id all NULL.
-- `kind='image_pin'`: image_x/y NOT NULL, asset_attachment_id NOT NULL, caption_start/end NULL.
-
-**`approvals_acted_consistency`:** status in (pending, superseded, revoked) ↔ acted_at/by NULL; status in (approved, rejected) ↔ acted_at/by NOT NULL.
-
-**`approvals_revoked_consistency`:** status=‘revoked’ ↔ revoked_at NOT NULL.
-
-**`approvals_rejection_reason`:** status=‘rejected’ → rejection_reason NOT NULL.
-
-**`briefs_closed_consistency`:** status=‘open’ ↔ closed_at/by NULL; status=‘closed’ ↔ NOT NULL.
-
-**`audit_log_payload_no_secrets`:** Regex-blocks bearer tokens, AWS keys, Stripe live keys, JWTs in payload.
-
-**`audit_log_payload_size`:** payload ≤ 64KB.
-
-**`webhook_events_payload_size`:** raw_payload ≤ 1MB.
-
-**`chat_channels_shape`:** dm requires `dm_user_a < dm_user_b` and no entity_id; group and plan_period require entity_id.
-
-**Regex constraints:**
-
-- `session_devices.fingerprint_hash`: `^[a-f0-9]{64}$` (sha-256 hex)
-- `share_tokens.token_hash`: `^[a-f0-9]{64}$`
-- `asset_versions.sha256`: `^[a-f0-9]{64}$`
-- `chat_channels.channel_id`: `^(dm|group|plan)__[a-f0-9-]{36}__.+$`
-- `email_threads.message_id`: `^<(brief|post)-[a-f0-9-]{36}@srtd\.io>$`
-- `feature_flags.flag_name`: `^[a-z][a-z0-9_]{0,99}$`
-- `groups.name`: `^[A-Za-z0-9 -]{1,40}$`
-- `workspace_buckets.color_hex`: `^#[0-9A-Fa-f]{6}$`
-- `users.avatar_url`: `^https?://`
-
-**Enum CHECKs (text columns with value lists):**
-
-- `posts.stage` ∈ {draft, review, scheduled, published, parked, rejected}
-- `posts.publish_status` ∈ {draft, scheduled, publishing, published, publish_failed, publish_failed_final}
-- `posts.origin` ∈ {manual, plan, brief}
-- `posts.platform`, `plan_cells.platform`, `platform_accounts.platform` ∈ {linkedin, x, instagram, facebook, threads}
-- `posts.format`, `briefs.format_requested` ∈ {text, single_image, carousel, video, link}
-- `workspaces.plan_tier` ∈ {solo, studio, agency, enterprise}
-- `workspaces.subscription_state` ∈ {trial, active, read_only, grace, soft_pause, full_pause, soft_delete}
-- `workspace_members.role`, `workspace_role_permissions.role` ∈ {owner, admin, agency, client}
-- `approvals.status` ∈ {pending, approved, rejected, revoked, superseded}
-- `briefs.status` ∈ {open, closed}
-- `briefs.created_via` ∈ {app, email_forward}
-- `plan_periods.granularity` ∈ {week, month}
-- `plan_periods.approval_mode` ∈ {per_cell, period_bulk}
-- `plan_cells.state` ∈ {draft, proposed, approved, rejected}
-- `share_tokens.capability` = `'view_card'` (only)
-- `comments.entity_type` ∈ {post, brief, plan_cell, input_request} (the `input_request` value is pending alongside input_requests table creation)
-- `asset_attachments.entity_type` ∈ {post, comment, chat_message, brief, input_request} (the `input_request` value is pending alongside input_requests table creation)
-- `inbox_entries.event_type` ∈ {comment, mention, stage_change, approval_request, approval_decision, decision_marked, publish_success, publish_failed, brief_created, brief_closed, input_request_opened, input_request_fulfilled, input_request_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system} (the three `input_request_*` values are pending alongside input_requests table creation)
-- `inbox_entries.scope` ∈ {everything, posts, briefs, plans, people, groups, clients}
-- `inbox_entries.tier` ∈ {urgent, active, ambient}
-- `inbox_entries.entity_type` ∈ {post, brief, plan_cell, plan_period, chat_channel, workspace, input_request} (the `input_request` value is pending alongside input_requests table creation)
-- `chat_channels.channel_type` ∈ {dm, group, plan_period}
-- `webhook_events.source` ∈ {stripe, resend, linkedin}
-- `cockpit_procedure_allowlist.risk_tier` ∈ {tap, medium, nuclear}
-- `delivery_attempts.channel` ∈ {email, push}
-- `delivery_attempts.provider` ∈ {resend, fcm, apns, web_push}
-- `delivery_attempts.status` ∈ {queued, sent, delivered, bounced, complained, failed}
-- `feature_flags.category` ∈ {killswitch, rollout, experiment, tier_gated}
-- `feature_flags.rollout_percentage` ∈ {0, 10, 25, 50, 100}
-- `intent_ledger.status` ∈ {pending, committed, failed, expired}
-- `pending_flows.status` ∈ {open, resolved, discarded, expired}
-- `pending_flows.flow_type` ∈ {billing_override, sentry_inspect, cf_purge, gh_diff}
-- `pending_flows.external_system` ∈ {stripe, sentry, cloudflare, github, resend}
-- `audit_log.outcome` ∈ {success, failure}
-- `post_insights.fetch_outcome` ∈ {success, failed, partial}
-
-### Unique constraints
-
-- `approvals_one_pending_per_post`: unique on (post_id) WHERE status=‘pending’
-- `share_tokens_canonical_one_per_post`: unique on (post_id) WHERE revoked_at IS NULL
-- `share_tokens.token_hash`: UNIQUE
-- `asset_versions`: UNIQUE (asset_id, version_number); UNIQUE (r2_key)
-- `post_versions`: UNIQUE (post_id, version_number)
-- `email_threads.message_id`: UNIQUE; `email_threads_root_unique` on (workspace_id, root_type, root_id)
-- `workspace_members_active_uq`: UNIQUE (workspace_id, user_id) WHERE active=true
-- `feature_flags_unique`: UNIQUE (COALESCE(workspace_id::text, ‘GLOBAL’), flag_name)
-- `webhook_events_source_unique`: UNIQUE (source, source_event_id)
-- `platform_accounts_unique`: UNIQUE (workspace_id, platform, platform_account_id) WHERE deleted_at IS NULL
-- `plan_periods_window_unique`: UNIQUE (workspace_id, granularity, period_start) WHERE deleted_at IS NULL
-- `workspace_buckets_name_unique`: UNIQUE (workspace_id, lower(name)) WHERE archived=false
-- `groups_name_unique`: UNIQUE (workspace_id, lower(name)) WHERE deleted_at IS NULL
-- `chat_messages_agora_event_unique`: UNIQUE (agora_event_id, created_at)
-- `schedule_jobs.idempotency_key`: UNIQUE
-
------
-
-## Indexes
-
-### Full-text search (GIN)
-
-- `assets_filename_fts_idx`: GIN to_tsvector(‘english’, filename) WHERE deleted_at IS NULL
-- `briefs_title_fts_idx`: GIN to_tsvector(‘english’, title || ’ ’ || objective) WHERE deleted_at IS NULL
-- `comments_body_fts_idx`: GIN to_tsvector(‘english’, body) WHERE deleted_at IS NULL
-- `assets_tags_idx`: GIN (tags) WHERE deleted_at IS NULL
-
-### Partial indexes (soft-delete-aware)
-
-Every table with `deleted_at` has partial indexes WHERE deleted_at IS NULL. Pattern: workspace + sort dimension.
-
-Key examples:
-
-- `posts_workspace_stage_idx`: (workspace_id, stage, created_at DESC) WHERE deleted_at IS NULL
-- `posts_workspace_target_date_idx`: (workspace_id, target_date) WHERE deleted_at IS NULL AND target_date IS NOT NULL
-- `posts_publish_status_idx`: (workspace_id, publish_status) WHERE deleted_at IS NULL
-- `posts_brief_idx`: (brief_id) WHERE brief_id IS NOT NULL AND deleted_at IS NULL
-- `posts_plan_cell_idx`: (plan_cell_id) WHERE plan_cell_id IS NOT NULL AND deleted_at IS NULL
-- `posts_platform_account_idx`: (platform_account_id) WHERE platform_account_id IS NOT NULL AND deleted_at IS NULL
-- `briefs_workspace_status_idx`: (workspace_id, status, created_at DESC) WHERE deleted_at IS NULL
-- `briefs_created_by_idx`: (workspace_id, created_by, created_at DESC) WHERE deleted_at IS NULL
-- `comments_entity_idx`: (workspace_id, entity_type, entity_id, created_at DESC) WHERE deleted_at IS NULL
-- `comments_decision_idx`: (workspace_id, entity_type, entity_id) WHERE is_decision=true AND deleted_at IS NULL
-- `comments_author_idx`: (workspace_id, author_user_id, created_at DESC) WHERE deleted_at IS NULL
-- `comments_parent_idx`: (parent_comment_id) WHERE parent_comment_id IS NOT NULL AND deleted_at IS NULL
-
-### FK indexes
-
-- `approvals_post_version_idx`
-- `asset_attachments_asset_idx`, `asset_attachments_asset_version_idx`, `asset_attachments_entity_idx`, `asset_attachments_workspace_idx` (all WHERE deleted_at IS NULL)
-- `asset_versions_asset_idx`: (asset_id, version_number DESC)
-- `post_annotations_post_version_idx`, `post_annotations_comment_idx`
-- `post_versions_post_idx`: (post_id, version_number DESC)
-
-### Worker / queue
-
-- `schedule_jobs_due_idx`: (status, scheduled_at) WHERE status=‘pending’
-- `schedule_jobs_running_idx`: (last_attempt_at) WHERE status=‘running’
-- `chat_channels_sync_cursor_idx`: (last_synced_at NULLS FIRST)
-- `intent_ledger_pending_expiry_idx`: (expires_at) WHERE status=‘pending’
-- `pending_flows_open_expiry_idx`: (expires_at) WHERE status=‘open’
-
-### Inbox (partitioned)
-
-- `inbox_entries_unread_idx`: (user_id, read_at, created_at DESC) WHERE deleted_at IS NULL
-- `inbox_entries_user_scope_idx`: (user_id, scope, created_at DESC) WHERE deleted_at IS NULL
-- `inbox_entries_snoozed_idx`: (user_id, snoozed_until) WHERE snoozed_until IS NOT NULL AND deleted_at IS NULL
-- `inbox_entries_email_dedupe_idx`: (user_id, email_sent_at) WHERE email_sent_at IS NULL AND deleted_at IS NULL
-
-### Trace ID
-
-Indexed on `trace_id` in: `audit_log`, `cockpit_access_log`, `intent_ledger`, `schedule_job_logs`, `webhook_processing_attempts`.
-
------
-
-## RLS policies
-
-All policies are PERMISSIVE for `authenticated` role. Pattern: `EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id = {table}.workspace_id AND wm.user_id = auth.uid() AND wm.active = true)`.
-
-|Table                      |Policy                                     |Cmd   |Predicate summary                                         |
-|---------------------------|-------------------------------------------|------|----------------------------------------------------------|
-|approvals                  |approvals_select_member                    |SELECT|workspace member                                          |
-|asset_attachments          |asset_attachments_select_member            |SELECT|deleted_at IS NULL + workspace member                     |
-|asset_versions             |asset_versions_select_member               |SELECT|workspace member                                          |
-|assets                     |assets_select_member                       |SELECT|deleted_at IS NULL + workspace member                     |
-|audit_log                  |audit_log_select_member                    |SELECT|workspace_id NOT NULL + workspace member                  |
-|briefs                     |briefs_select_agency                       |SELECT|role IN (owner, admin, agency)                            |
-|briefs                     |briefs_select_client_own                   |SELECT|role=‘client’ AND created_by=auth.uid()                   |
-|chat_channels              |chat_channels_select_member                |SELECT|workspace member                                          |
-|chat_messages              |chat_messages_select_member                |SELECT|deleted_at IS NULL + workspace member                     |
-|cockpit_access_log         |cockpit_access_log_select_operator         |SELECT|platform_operators row with revoked_at IS NULL            |
-|cockpit_procedure_allowlist|cockpit_procedure_allowlist_select_operator|SELECT|platform_operators row with revoked_at IS NULL            |
-|comment_reactions          |comment_reactions_select_member            |SELECT|workspace member                                          |
-|comment_reactions          |comment_reactions_insert_self              |INSERT|user_id=auth.uid() + workspace member                     |
-|comment_reactions          |comment_reactions_delete_self              |DELETE|user_id=auth.uid()                                        |
-|comments                   |comments_select_member                     |SELECT|workspace member                                          |
-|delivery_attempts          |delivery_attempts_select_member            |SELECT|workspace_id NOT NULL + workspace member                  |
-|delivery_attempts          |delivery_attempts_select_operator          |SELECT|operator                                                  |
-|email_threads              |email_threads_select_member                |SELECT|workspace member                                          |
-|feature_flags              |feature_flags_select_member                |SELECT|workspace_id NULL OR workspace member                     |
-|feature_flags              |feature_flags_select_operator              |SELECT|operator                                                  |
-|group_members              |group_members_select_member                |SELECT|workspace member                                          |
-|groups                     |groups_select_member                       |SELECT|deleted_at IS NULL + workspace member                     |
-|inbox_entries              |inbox_entries_select_own                   |SELECT|user_id=auth.uid() + deleted_at IS NULL + workspace member|
-|intent_ledger              |intent_ledger_select_operator              |SELECT|operator                                                  |
-|pending_flows              |pending_flows_select_operator              |SELECT|operator                                                  |
-|plan_cells                 |plan_cells_select_member                   |SELECT|deleted_at IS NULL + workspace member                     |
-|plan_periods               |plan_periods_select_member                 |SELECT|deleted_at IS NULL + workspace member                     |
-|platform_accounts          |platform_accounts_select_member            |SELECT|deleted_at IS NULL + workspace member                     |
-|platform_operators         |platform_operators_select_self             |SELECT|user_id=auth.uid()                                        |
-|post_annotations           |post_annotations_select_member             |SELECT|workspace member                                          |
-|post_insights              |post_insights_select_member                |SELECT|workspace member                                          |
-|post_versions              |post_versions_select_member                |SELECT|workspace member                                          |
-|posts                      |posts_select_member                        |SELECT|deleted_at IS NULL + workspace member                     |
-|schedule_job_logs          |schedule_job_logs_select_member            |SELECT|workspace member                                          |
-|schedule_jobs              |schedule_jobs_select_member                |SELECT|workspace member                                          |
-|session_devices            |session_devices_select_own                 |SELECT|user_id=auth.uid()                                        |
-|session_devices            |session_devices_update_own                 |UPDATE|user_id=auth.uid()                                        |
-|share_tokens               |share_tokens_select_member                 |SELECT|workspace member                                          |
-|users                      |users_select_shared_workspace              |SELECT|id=auth.uid() OR users share an active workspace          |
-|users                      |users_update_self                          |UPDATE|id=auth.uid()                                             |
-|webhook_events             |webhook_events_select_operator             |SELECT|operator                                                  |
-|webhook_processing_attempts|webhook_processing_attempts_select_operator|SELECT|operator                                                  |
-|workspace_buckets          |workspace_buckets_select_member            |SELECT|workspace member                                          |
-|workspace_members          |workspace_members_select_member            |SELECT|workspace member                                          |
-|workspace_onboarding       |workspace_onboarding_select_owner          |SELECT|role=‘owner’ workspace member                             |
-|workspace_role_permissions |workspace_role_permissions_select_member   |SELECT|workspace member                                          |
-|workspace_settings         |workspace_settings_select_member           |SELECT|workspace member                                          |
-|workspaces                 |workspaces_select_member                   |SELECT|deleted_at IS NULL + workspace member                     |
-
-**No INSERT/UPDATE/DELETE policies on sensitive tables.** Writes go through SECURITY DEFINER procs only (Bounded Writer Ownership doctrine). Exceptions: `comment_reactions` (self-insert/delete) and `session_devices`/`users` (self-update).
-
------
-
-## Triggers
-
-|Trigger                      |Table         |Timing|Event |Function                        |
-|-----------------------------|--------------|------|------|--------------------------------|
-|users_create_profile_trg     |**auth.users**|AFTER |INSERT|users_create_profile_on_signup()|
-|users_updated_at_trg         |users         |BEFORE|UPDATE|users_set_updated_at()          |
-|workspaces_seed_role_defaults|workspaces    |AFTER |INSERT|seed_workspace_role_defaults()  |
-|workspaces_seed_onboarding   |workspaces    |AFTER |INSERT|seed_workspace_onboarding()     |
-|workspaces_row_version_check |workspaces    |BEFORE|UPDATE|workspaces_enforce_row_version()|
-|workspaces_row_version_occ   |workspaces    |BEFORE|UPDATE|enforce_row_version_increment() |
-|posts_row_version_check      |posts         |BEFORE|UPDATE|posts_enforce_row_version()     |
-|briefs_row_version_check     |briefs        |BEFORE|UPDATE|briefs_enforce_row_version()    |
-|plan_cells_row_version_check |plan_cells    |BEFORE|UPDATE|plan_cells_enforce_row_version()|
-
-Plus event trigger `rls_auto_enable` (DDL-level): auto-enables RLS on any newly-created `public` table.
-
------
-
-## Functions
-
-### `uuidv7()` → uuid
-
-Generates UUIDv7 (time-ordered). Used as default for all PK columns.
-
-### `workspace_id()` → uuid (SECURITY DEFINER, STABLE)
-
-Returns the workspace_id claim from the current JWT.
-
-### `has_capability(p_capability text)` → boolean (SECURITY DEFINER, STABLE)
-
-Looks up `workspace_role_permissions` for the current user in `public.workspace_id()`. Returns false if no row.
-
-### `audit_log_write(p_action, p_outcome, p_trace_id, p_workspace_id, p_entity_type, p_entity_id, p_payload, p_error_code, p_on_behalf_of, p_impersonation_session_id, p_ip_subnet)` → uuid (SECURITY DEFINER)
-
-Inserts an audit_log row with `auth.uid()` as actor.
-
-### `users_create_profile_on_signup()` → trigger (SECURITY DEFINER)
-
-On auth.users INSERT, creates `public.users` row. Display name from raw_user_meta_data.full_name, then .name, falling back to email prefix.
-
-### `users_set_updated_at()` → trigger
-
-Sets `updated_at = now()` on update.
-
-### `seed_workspace_role_defaults()` → trigger (SECURITY DEFINER)
-
-On workspaces INSERT, seeds 47 rows into `workspace_role_permissions` covering owner (17 caps), admin (14), agency (12), client (8). See function body for the full default matrix.
-
-### `seed_workspace_onboarding()` → trigger (SECURITY DEFINER)
-
-On workspaces INSERT, creates one row in `workspace_onboarding`.
-
-### `enforce_row_version_increment()` → trigger
-
-Generic OCC check. Errors with serialization_failure if `new.row_version <> old.row_version + 1`.
-
-### `workspaces_enforce_row_version()` / `posts_enforce_row_version()` / `briefs_enforce_row_version()` / `plan_cells_enforce_row_version()` → trigger
-
-Per-table OCC check that also bumps `updated_at = now()`. Errors with SQLSTATE 40001 if increment is not exactly 1.
-
-### `rls_auto_enable()` → event_trigger (SECURITY DEFINER)
-
-Listens for CREATE TABLE in the `public` schema and runs `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`. Safety net: no public table can be created without RLS.
-
------
-
-## Partitioned tables
-
-Three tables partitioned by `created_at` (monthly):
-
-- `audit_log` → `audit_log_2026_05`, `audit_log_2026_06`, `audit_log_2026_07`
-- `chat_messages` → `chat_messages_2026_05`, …
-- `inbox_entries` → `inbox_entries_2026_05`, …
-
-PK on parent: `(id, created_at)` to support partition pruning.
-
-Cron must rotate partitions: create future month, drop past-90-days month. Cron not yet built (see handoff §4f).
-
------
-
-## Locked invariants
-
-1. **Trace ID is an explicit RPC parameter.** Not `SET LOCAL` (pgBouncer unsafe). ESLint rule on `.rpc()` calls enforces this.
-1. **All sensitive writes through SECURITY DEFINER procs.** `INSERT/UPDATE/DELETE` revoked from `authenticated` on sensitive tables. Read paths via RLS only.
-1. **post.stage and publish_status never conflated.** Matrix CHECK enforces.
-1. **post_versions and post_annotations are immutable.** No `deleted_at`. Edit history is permanent.
-1. **Magic-link approval removed.** share_tokens are canonical-only (one per post), capability=view_card, no expiry.
-1. **OCC via row_version.** posts, briefs, plan_cells, workspaces enforce `+1` increment on every update.
-1. **workspaces.owner_user_id → ON DELETE RESTRICT.** Owners cannot self-delete until transfer.
-1. **Workspace soft-delete = 7 days; asset soft-delete = 30 days.** Hard-delete crons not yet built.
-1. **Realtime subscription discipline: default deny, explicit allowlist.** Per Supabase Realtime config (not in SQL).
-1. **One workspace = one end-client = one platform.** Tier price multiplies if a workspace adds platforms.
-1. **Brief and input_request are parallel request primitives.** Both immutable after creation. Briefs are client-initiated. Input requests are agency-initiated and require a linked post (`linked_post_id` NOT NULL, FK to `posts` ON DELETE CASCADE).
-
------
-
-## Open items
-
-- **input_requests table:** spec documented above (see §Tables / `input_requests`), not yet created in the live DB. Implementation work is tracked in the input_requests migration PR. It will require: (a) CREATE TABLE input_requests with all constraints and indexes, (b) the RLS policy, (c) two SECURITY DEFINER procs (`input_request_create`, `input_request_close`), (d) ALTER three enum CHECKs on `comments` / `asset_attachments` / `inbox_entries` `entity_type` to add `input_request`, (e) ALTER `inbox_entries.event_type` CHECK to add three new event types. The base-table count is 40 today and rises to 41 after input_requests is implemented.
-
------
-
-## How to use this dump
-
-- **Looking up a column?** Section 1 (Tables).
-- **Wondering if a value is allowed?** Section 2 (Constraints), enum CHECKs.
-- **Designing a query?** Section 3 (Indexes); use the partial indexes by adding `WHERE deleted_at IS NULL` etc.
-- **Designing access?** Section 4 (RLS) + Section 6 (functions).
-- **Designing a write path?** Look for an existing SECURITY DEFINER proc. None yet for the feature procs (stage_transition, approval_act, etc.); these are PR 11.
+# Sorted v2 Schema (MVP)
+
+Generated from live database movnexawfhsyuluspxoc (srtdio-v2) after the MVP stripdown.
+This file is the human-readable design reference. The migrations folder is implementation truth.
+
+Sorted v2 MVP is a social-media approval tool: client writes a brief, agency drafts a post, post moves through review to approved, rejected, or parked. No publishing, no scheduling, no plan. Chat is Agora (DB mirror only). Email is out-of-app catch-up.
+
+All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` unless noted. Timestamps are `timestamptz`. `*_by` FK columns are SET NULL on delete except `workspaces.owner_user_id` (RESTRICT) and `asset_attachments` (NO ACTION).
+
+## Index
+
+1. Identity and access: users, workspaces, workspace_members, workspace_role_permissions, workspace_settings, workspace_onboarding, session_devices, platform_operators
+2. Content: workspace_buckets, posts, post_versions, post_annotations
+3. Discussion: comments, comment_reactions
+4. Briefs: briefs
+5. Assets: assets, asset_versions, asset_attachments
+6. People grouping: groups, group_members
+7. Chat (Agora mirror): chat_channels, chat_messages
+8. Inbox and delivery: inbox_entries, email_threads, delivery_attempts, webhook_events, webhook_processing_attempts
+9. Platform ops (Cockpit): audit_log, feature_flags, cockpit_access_log, cockpit_procedure_allowlist, intent_ledger, pending_flows
+10. Enumerations reference
+11. Partitioning reference
+12. Known leftover traces
+
+## 1. Identity and access
+
+### users
+
+App-level profile. id mirrors auth.users.id (FK).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK, FK auth.users.id |
+| display_name | text | 1 to 80 chars |
+| designation | text | nullable, 1 to 80 |
+| avatar_url | text | nullable, ^https?:// |
+| deleted_at | timestamptz | nullable, account-level soft-delete |
+| created_at / updated_at | timestamptz | default now() |
+
+### workspaces
+
+One workspace = one end-client = one platform.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| name | text | 1 to 80 |
+| owner_user_id | uuid | FK users.id, RESTRICT |
+| plan_tier | text | solo / studio / agency / enterprise, default solo |
+| timezone | text | |
+| week_start_day | smallint | 0 to 6, default 1 |
+| stripe_customer_id / stripe_subscription_id | text | nullable |
+| subscription_state | text | trial / active / read_only / grace / soft_pause / full_pause / soft_delete, default trial |
+| subscription_state_expires_at / trial_ends_at / activated_at | timestamptz | nullable |
+| digest_default_time | time | default 09:00 |
+| target_distributions | jsonb | nullable |
+| row_version | bigint | default 1 |
+| created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
+
+### workspace_members
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| workspace_id | uuid | FK workspaces.id |
+| user_id | uuid | FK auth.users.id |
+| role | text | owner / admin / agency / client |
+| active | boolean | default true |
+| invited_by | uuid | nullable, FK users.id |
+| invited_at | timestamptz | default now() |
+| accepted_at / removed_at / rejoined_at | timestamptz | nullable |
+
+Unique: one active membership per (workspace_id, user_id).
+
+### workspace_role_permissions
+
+PK (workspace_id, role, capability). Fields: allowed default true, updated_at. role in owner/admin/agency/client.
+
+### workspace_settings
+
+PK workspace_id. Fields: payload jsonb default {}, updated_at, updated_by nullable FK users.id.
+
+### workspace_onboarding
+
+Milestone timestamps, all nullable: first_post_at, first_invite_at, linkedin_connected_at, first_brief_at, first_schedule_at, dismissed_at, auto_hidden_at. PK workspace_id. (See leftover note in section 12 re: linkedin/schedule columns.)
+
+### session_devices
+
+JWT 15 min plus device fingerprint RLS. PK id. Fields: user_id FK auth.users.id, fingerprint_hash ^[a-f0-9]{64}$, user_agent nullable, ip_subnet inet nullable, last_seen_at, created_at, revoked_at nullable.
+
+### platform_operators
+
+Cockpit staff. PK user_id (FK auth.users.id). Fields: granted_at, granted_by nullable FK, revoked_at nullable, passkey_credential_id nullable.
+
+## 2. Content
+
+### workspace_buckets
+
+PK id. Fields: workspace_id FK, name, color_hex ^#[0-9A-Fa-f]{6}$, position default 0, archived default false, target_month int 0 to 100 default 0, created_at. Unique (workspace_id, lower(name)) where not archived.
+
+### posts
+
+The approval unit. stage is the only workflow state. No publish_status.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| workspace_id | uuid | FK workspaces.id |
+| title | text | 1 to 200 |
+| caption | text | nullable |
+| bucket_id | uuid | FK workspace_buckets.id |
+| owner_user_id | uuid | FK users.id, SET NULL |
+| platform | text | linkedin / x / instagram / facebook / threads |
+| format | text | text / single_image / carousel / video / link |
+| stage | text | draft / review / approved / parked / rejected, default draft |
+| target_date | timestamptz | nullable, indicative only, no engine in MVP |
+| origin | text | manual / brief, default manual |
+| brief_id | uuid | nullable, FK briefs.id, SET NULL |
+| row_version | bigint | default 1 |
+| created_by | uuid | FK users.id, SET NULL |
+| created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
+
+Stage CHECK: draft, review, approved, parked, rejected. No publish/schedule/platform columns. Indexes: (workspace_id, stage, created_at desc), (workspace_id, target_date) where target_date not null, brief_id partial, owner partial. All where deleted_at null.
+
+### post_versions
+
+Immutable edit history. No deleted_at. PK id. Fields: post_id FK, workspace_id FK, version_number, snapshot jsonb, created_by FK users.id SET NULL, created_at. Unique (post_id, version_number).
+
+### post_annotations
+
+Immutable. No deleted_at. PK id.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| post_id | uuid | FK posts.id |
+| workspace_id | uuid | FK workspaces.id |
+| post_version_id | uuid | FK post_versions.id |
+| kind | text | caption_span / image_pin |
+| caption_start / caption_end | int | nullable |
+| asset_attachment_id | uuid | nullable, FK asset_attachments.id |
+| image_x / image_y | real | nullable, 0 to 1 |
+| comment_id | uuid | FK comments.id |
+| created_at | timestamptz | default now() |
+
+## 3. Discussion
+
+Two primitives: Comments (Postgres, here) and Chat (Agora, section 7).
+
+### comments
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| workspace_id | uuid | FK workspaces.id |
+| entity_type | text | post / brief / plan_cell (see section 12: plan_cell is a dead value) |
+| entity_id | uuid | |
+| parent_comment_id | uuid | nullable, FK comments.id |
+| author_user_id | uuid | FK auth.users.id |
+| body | text | 1 to 10000 |
+| mentions | jsonb | nullable |
+| attachment_asset_ids | uuid[] | nullable |
+| is_decision | boolean | default false |
+| edited_at / deleted_at | timestamptz | nullable |
+| created_at | timestamptz | default now() |
+
+Indexes: FTS on body, entity, parent, author, decision partial. All where deleted_at null.
+
+### comment_reactions
+
+PK (comment_id, user_id, emoji). Fields: workspace_id FK, emoji 1 to 32, created_at.
+
+## 4. Briefs
+
+Client writes the brief; it lands in the Briefs section and can be linked to a post (origin=brief). Read-only after creation. Open or Closed.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| workspace_id | uuid | FK workspaces.id |
+| title | text | 1 to 200 |
+| objective | text | 1 to 5000 |
+| format_requested | text | nullable: text / single_image / carousel / video / link |
+| brand_requirements | text | nullable |
+| target_date | date | nullable, indicative only |
+| reference_links | jsonb | nullable |
+| status | text | open / closed, default open |
+| closed_at / closed_by | | nullable, closed_by FK users.id |
+| created_by | uuid | FK users.id |
+| created_via | text | app / email_forward, default app |
+| row_version | bigint | default 1 |
+| created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
+
+Indexes: (workspace_id, status, created_at desc), target_date partial, created_by, FTS on title+objective.
+
+## 5. Assets
+
+Versioned. Attachments bind to a specific asset_version_id.
+
+### assets
+
+PK id. Fields: workspace_id FK, filename 1 to 500, current_version_id nullable FK asset_versions.id, folder_path default '/', tags text[] default {}, uploaded_by FK users.id, uploaded_at, deleted_at nullable. Indexes: FTS filename, gin tags, (workspace_id, folder_path), (workspace_id, uploaded_at desc). All where deleted_at null.
+
+### asset_versions
+
+PK id. Fields: asset_id FK, workspace_id FK, version_number, r2_key unique, mime_type, sha256 ^[a-f0-9]{64}$, size_bytes > 0, width/height/duration_ms nullable > 0, uploaded_by FK, uploaded_at. Unique (asset_id, version_number).
+
+### asset_attachments
+
+NO ACTION on delete: live attachments block asset hard-delete.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| asset_id | uuid | FK assets.id |
+| asset_version_id | uuid | FK asset_versions.id |
+| entity_type | text | post / comment / chat_message / brief |
+| entity_id | text | 1 to 200 |
+| workspace_id | uuid | FK workspaces.id |
+| position | int | default 0 |
+| attached_by | uuid | FK users.id |
+| attached_at | timestamptz | default now() |
+| deleted_at | timestamptz | nullable |
+
+## 6. People grouping
+
+### groups
+
+PK id. Fields: workspace_id FK, name ^[A-Za-z0-9 -]{1,40}$, created_by FK, created_at, deleted_at nullable. Unique (workspace_id, lower(name)) where not deleted.
+
+### group_members
+
+PK (group_id, user_id). Fields: workspace_id FK, joined_at. user_id FK auth.users.id.
+
+## 7. Chat (Agora mirror)
+
+Agora owns chat. These tables are a compliance/mirror only, fed by webhook. chat_messages is partitioned monthly.
+
+### chat_channels
+
+PK channel_id (text, ^(dm|group|plan)__[a-f0-9-]{36}__.+$). Fields: workspace_id FK, channel_type (dm / group / plan_period), entity_id uuid nullable, dm_user_a / dm_user_b nullable FK auth.users.id, last_synced_at nullable, created_at.
+
+### chat_messages (partitioned by created_at, monthly)
+
+PK (id, created_at). Fields: id text, channel_id FK, workspace_id FK, sender_user_id nullable FK auth.users.id, body nullable, mentions jsonb nullable, attachment_asset_ids uuid[] nullable, agora_event_id, created_at, edited_at / deleted_at nullable. Unique (agora_event_id, created_at). Partitions: 2026_05, 2026_06, 2026_07.
+
+## 8. Inbox and delivery
+
+Inbox is the only permanent in-app event surface. Email is out-of-app catch-up, bundled 9am to 9pm workspace TZ.
+
+### inbox_entries (partitioned by created_at, monthly)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK part |
+| user_id | uuid | FK auth.users.id |
+| workspace_id | uuid | FK workspaces.id |
+| event_type | text | see enums (publish/approval/plan values removed) |
+| entity_type | text | nullable: post / brief / plan_cell / plan_period / chat_channel / workspace (see section 12) |
+| entity_id | text | nullable, 1 to 200 |
+| scope | text | everything / posts / briefs / people / groups / clients |
+| scope_key | text | nullable |
+| tier | text | urgent / active / ambient, default active |
+| payload | jsonb | default {} |
+| read_at / snoozed_until / email_sent_at / deleted_at | timestamptz | nullable |
+| created_at | timestamptz | PK part, default now() |
+
+PK (id, created_at). Partitions: 2026_05, 2026_06, 2026_07.
+
+### email_threads
+
+PK id. Fields: workspace_id FK, root_type (brief / post), root_id, message_id ^<(brief|post)-...@srtd.io>$, subject 1 to 998, created_at, last_sent_at nullable. Unique message_id; (workspace_id, root_type, root_id).
+
+### delivery_attempts
+
+PK id. Fields: workspace_id nullable FK, user_id nullable FK, channel (email / push), template_key 1 to 100, provider (resend / fcm / apns / web_push), provider_message_id nullable, status (queued / sent / delivered / bounced / complained / failed, default queued), error/sent_at/delivered_at/bounced_at nullable, created_at, email_thread_id nullable FK.
+
+### webhook_events
+
+Feeds the Agora chat mirror and other sources. PK id. Fields: source (stripe / resend / linkedin), source_event_id 1 to 200, event_type 1 to 100, workspace_id nullable FK, signature_verified boolean, raw_payload jsonb up to 1MB, received_at. Unique (source, source_event_id). (See section 12: source enum has no agora value yet.)
+
+### webhook_processing_attempts
+
+PK id. Fields: webhook_event_id FK, attempt_number > 0, started_at, finished_at nullable, outcome (success / failure / skipped) nullable, error nullable, trace_id.
+
+## 9. Platform ops (Cockpit)
+
+### audit_log (partitioned by created_at, monthly)
+
+PK (id, created_at). Fields: workspace_id nullable, actor_user_id nullable FK auth.users.id, on_behalf_of nullable FK, impersonation_session_id nullable, action, entity_type / entity_id nullable, payload jsonb up to 64KB (partitions also reject bearer tokens, AWS keys, sk_live, JWTs), outcome (success / failure), error_code nullable, trace_id, ip_subnet nullable, created_at. Partitions: 2026_05, 2026_06, 2026_07.
+
+### feature_flags
+
+PK id. Fields: workspace_id nullable FK, flag_name ^[a-z][a-z0-9_]{0,99}$, category (killswitch / rollout / experiment / tier_gated), enabled default false, rollout_percentage in {0,10,25,50,100}, tier_min nullable, reason nullable, updated_by nullable FK, updated_at. Unique on (COALESCE(workspace_id,'GLOBAL'), flag_name).
+
+### cockpit_access_log
+
+PK id. Fields: operator_user_id FK auth.users.id, route 1 to 500, workspace_id nullable FK, session_id, accessed_at, trace_id.
+
+### cockpit_procedure_allowlist
+
+PK procedure_name. Fields: description 1 to 1000, risk_tier (tap / medium / nuclear), added_at, added_by FK users.id.
+
+### intent_ledger
+
+PK id. Fields: operator_user_id FK, action 1 to 100, target_type nullable (workspace / user / flag / deploy / share_token), target_id nullable, payload jsonb, status (pending / committed / failed / expired, default pending), reason_category nullable, reason_text nullable (>= 10), ticket_id nullable, created_at, committed_at nullable, expires_at default now()+1h, trace_id. (See section 12: target_type still lists share_token, now dead.)
+
+### pending_flows
+
+PK id. Fields: operator_user_id FK, flow_type (billing_override / sentry_inspect / cf_purge / gh_diff), external_system (stripe / sentry / cloudflare / github / resend), external_ref nullable, payload jsonb, status (open / resolved / discarded / expired, default open), created_at, resolved_at nullable, expires_at default now()+1h.
+
+## 10. Enumerations reference
+
+- post.stage: draft, review, approved, parked, rejected
+- post.origin: manual, brief
+- post.platform / asset platform values: linkedin, x, instagram, facebook, threads
+- post.format: text, single_image, carousel, video, link
+- workspace_members.role: owner, admin, agency, client
+- workspace.plan_tier: solo, studio, agency, enterprise
+- workspace.subscription_state: trial, active, read_only, grace, soft_pause, full_pause, soft_delete
+- brief.status: open, closed
+- approval (table removed): n/a, approval is now a post.stage value
+- inbox_entries.event_type: comment, mention, stage_change, decision_marked, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system
+- inbox_entries.scope: everything, posts, briefs, people, groups, clients
+- inbox_entries.tier: urgent, active, ambient
+- chat_channels.channel_type: dm, group, plan_period
+- audit_log.outcome: success, failure
+
+## 11. Partitioning reference
+
+Three tables are range-partitioned by created_at, monthly:
+
+- audit_log -> audit_log_2026_05, _2026_06, _2026_07
+- chat_messages -> chat_messages_2026_05, _2026_06, _2026_07
+- inbox_entries -> inbox_entries_2026_05, _2026_06, _2026_07
+
+Each carries (id, created_at) composite PK. New monthly partitions must be created ahead of time.
+
+## 12. Known leftover traces
+
+These are dead references from the pre-MVP schema. Harmless (they only widen a CHECK or name a now-missing concept), but listed so they can be cleaned in a later migration if desired:
+
+- comments.entity_type and inbox_entries.entity_type still allow plan_cell / plan_period. Plan is removed, so these values will never be written.
+- chat_channels.channel_type and channel_id regex still allow plan / plan_period channels. No plan periods exist to create them.
+- intent_ledger.target_type still lists share_token. share_tokens table is dropped.
+- webhook_events.source lists stripe / resend / linkedin but not agora. To store the Agora chat webhook entry you wanted, this enum likely needs an agora value added.
+- workspace_onboarding still has linkedin_connected_at and first_schedule_at columns from the publishing era.
+
+Counts: 33 base tables + 3 partitioned parents + 9 partition children = 45 relations in public. All RLS enabled.
