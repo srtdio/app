@@ -27,7 +27,7 @@ The v1 project ID appears only in the ETL script and the cutover PR.
 
 | # | Title | Depends on |
 | --- | --- | --- |
-| 1 | Regenerate baseline migration from the stripped live DB: all 33 base tables + 3 partitioned parents + 9 partitions, RLS, triggers, indexes, public.users + auto-create trigger, all *_by FK rules. Replaces the old baseline + rename_stages migrations. Schema already applied. Do NOT execute. | none |
+| 1 | Regenerate baseline migration from the stripped live DB: all 30 base tables + 3 partitioned parents + 9 partitions, RLS, triggers, indexes, public.users + auto-create trigger, all *_by FK rules. Replaces the old baseline + rename_stages migrations. Schema already applied. Do NOT execute. | none |
 | 2 | Regenerate supabase.generated.ts and Zod schemas from the stripped live DB. Drop all dead-table types. Drift gate green. | 1 |
 | 3 | Leftover-trace cleanup migration: drop dead CHECK values (comments/inbox plan_cell + plan_period; chat_channels plan; intent_ledger share_token), drop workspace_onboarding.linkedin_connected_at + first_schedule_at, add webhook_events.source value agora. SQL stated in chat and approved first. | 1 |
 | 4 | RLS CI test suite: cross-tenant isolation tests for every tenant-scoped table | 1 |
