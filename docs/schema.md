@@ -346,4 +346,4 @@ These are dead references from the pre-MVP schema. Harmless (they only widen a C
 - webhook_events.source lists stripe / resend / linkedin but not agora. To store the Agora chat webhook entry you wanted, this enum likely needs an agora value added.
 - workspace_onboarding still has linkedin_connected_at and first_schedule_at columns from the publishing era.
 
-Counts: 33 base tables + 3 partitioned parents + 9 partition children = 45 relations in public. All RLS enabled.
+Counts: 30 base tables + 3 partitioned parents + 9 partition children = 42 relations in public. All RLS enabled.
