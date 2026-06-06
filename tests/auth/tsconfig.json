@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "../../tests/auth/**/*.ts",
+    "../../packages/test-utils/**/*.ts",
+    "../../src/server/auth/**/*.ts"
+  ]
+}

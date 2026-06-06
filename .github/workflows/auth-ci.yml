@@ -1,0 +1,35 @@
+name: Auth E2E
+
+# Spins up a local Supabase stack (keeping the mail container) and runs the
+# auth server end-to-end suite: signup, login, magic-link verify, password
+# reset, refresh, sign-out, and access-token rejection.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check the auth test workspace
+        run: pnpm exec tsc -p tests/auth/tsconfig.json --noEmit
+
+      - name: Run auth E2E suite
+        run: pnpm exec vitest run --config tests/auth/vitest.config.ts
+
+      - name: Stop local Supabase
+        if: always()
+        run: pnpm exec supabase stop --no-backup || true
