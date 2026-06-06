@@ -9,7 +9,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/flags/**/*.test.ts'],
-    globalSetup: ['../rls/setup.ts'],
+    // Resolved relative to the project root (repo root), like tests/rls's config.
+    globalSetup: ['./tests/rls/setup.ts'],
     env: { RLS_SUITE: '1' },
     hookTimeout: 180_000,
     testTimeout: 120_000,
