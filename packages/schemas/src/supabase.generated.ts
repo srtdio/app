@@ -2151,6 +2151,10 @@ export type Database = {
         Returns: string
       }
       has_capability: { Args: { p_capability: string }; Returns: boolean }
+      is_active_workspace_member: {
+        Args: { p_workspace_id: string }
+        Returns: boolean
+      }
       uuidv7: { Args: never; Returns: string }
       workspace_id: { Args: never; Returns: string }
     }
