@@ -16,84 +16,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      approvals: {
-        Row: {
-          acted_at: string | null
-          acted_by: string | null
-          id: string
-          post_id: string
-          post_version_id: string
-          rejection_reason: string | null
-          requested_at: string
-          requested_by: string
-          revoked_at: string | null
-          status: string
-          workspace_id: string
-        }
-        Insert: {
-          acted_at?: string | null
-          acted_by?: string | null
-          id?: string
-          post_id: string
-          post_version_id: string
-          rejection_reason?: string | null
-          requested_at?: string
-          requested_by: string
-          revoked_at?: string | null
-          status?: string
-          workspace_id: string
-        }
-        Update: {
-          acted_at?: string | null
-          acted_by?: string | null
-          id?: string
-          post_id?: string
-          post_version_id?: string
-          rejection_reason?: string | null
-          requested_at?: string
-          requested_by?: string
-          revoked_at?: string | null
-          status?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "approvals_acted_by_fkey"
-            columns: ["acted_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "approvals_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "approvals_post_version_id_fkey"
-            columns: ["post_version_id"]
-            isOneToOne: false
-            referencedRelation: "post_versions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "approvals_requested_by_fkey"
-            columns: ["requested_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "approvals_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       asset_attachments: {
         Row: {
           asset_id: string
@@ -1532,228 +1454,6 @@ export type Database = {
         }
         Relationships: []
       }
-      plan_cells: {
-        Row: {
-          bucket_id: string | null
-          created_at: string
-          created_by: string
-          deleted_at: string | null
-          description: string | null
-          id: string
-          plan_period_id: string
-          platform: string
-          row_version: number
-          slot_date: string
-          spawned_post_id: string | null
-          state: string
-          title: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          bucket_id?: string | null
-          created_at?: string
-          created_by: string
-          deleted_at?: string | null
-          description?: string | null
-          id?: string
-          plan_period_id: string
-          platform: string
-          row_version?: number
-          slot_date: string
-          spawned_post_id?: string | null
-          state?: string
-          title: string
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          bucket_id?: string | null
-          created_at?: string
-          created_by?: string
-          deleted_at?: string | null
-          description?: string | null
-          id?: string
-          plan_period_id?: string
-          platform?: string
-          row_version?: number
-          slot_date?: string
-          spawned_post_id?: string | null
-          state?: string
-          title?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "plan_cells_bucket_id_fkey"
-            columns: ["bucket_id"]
-            isOneToOne: false
-            referencedRelation: "workspace_buckets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "plan_cells_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "plan_cells_plan_period_id_fkey"
-            columns: ["plan_period_id"]
-            isOneToOne: false
-            referencedRelation: "plan_periods"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "plan_cells_spawned_post_id_fkey"
-            columns: ["spawned_post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "plan_cells_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      plan_periods: {
-        Row: {
-          approval_mode: string
-          created_at: string
-          created_by: string
-          deleted_at: string | null
-          granularity: string
-          id: string
-          period_end: string
-          period_start: string
-          workspace_id: string
-        }
-        Insert: {
-          approval_mode?: string
-          created_at?: string
-          created_by: string
-          deleted_at?: string | null
-          granularity: string
-          id?: string
-          period_end: string
-          period_start: string
-          workspace_id: string
-        }
-        Update: {
-          approval_mode?: string
-          created_at?: string
-          created_by?: string
-          deleted_at?: string | null
-          granularity?: string
-          id?: string
-          period_end?: string
-          period_start?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "plan_periods_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "plan_periods_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      platform_accounts: {
-        Row: {
-          account_type: string
-          connected_at: string
-          connected_by: string
-          deleted_at: string | null
-          disconnect_grace_until: string | null
-          disconnected_at: string | null
-          display_name: string
-          encrypted_access_token: string | null
-          encrypted_dek: string | null
-          encrypted_refresh_token: string | null
-          expires_at: string | null
-          id: string
-          kek_id: string | null
-          last_error: string | null
-          last_refresh_at: string | null
-          platform: string
-          platform_account_id: string
-          scopes: string[]
-          workspace_id: string
-        }
-        Insert: {
-          account_type: string
-          connected_at?: string
-          connected_by: string
-          deleted_at?: string | null
-          disconnect_grace_until?: string | null
-          disconnected_at?: string | null
-          display_name: string
-          encrypted_access_token?: string | null
-          encrypted_dek?: string | null
-          encrypted_refresh_token?: string | null
-          expires_at?: string | null
-          id?: string
-          kek_id?: string | null
-          last_error?: string | null
-          last_refresh_at?: string | null
-          platform: string
-          platform_account_id: string
-          scopes?: string[]
-          workspace_id: string
-        }
-        Update: {
-          account_type?: string
-          connected_at?: string
-          connected_by?: string
-          deleted_at?: string | null
-          disconnect_grace_until?: string | null
-          disconnected_at?: string | null
-          display_name?: string
-          encrypted_access_token?: string | null
-          encrypted_dek?: string | null
-          encrypted_refresh_token?: string | null
-          expires_at?: string | null
-          id?: string
-          kek_id?: string | null
-          last_error?: string | null
-          last_refresh_at?: string | null
-          platform?: string
-          platform_account_id?: string
-          scopes?: string[]
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "platform_accounts_connected_by_fkey"
-            columns: ["connected_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "platform_accounts_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       platform_operators: {
         Row: {
           granted_at: string
@@ -1867,66 +1567,6 @@ export type Database = {
           },
         ]
       }
-      post_insights: {
-        Row: {
-          clicks: number
-          comments_count: number
-          engagement_rate: number | null
-          fetch_outcome: string
-          fetched_at: string
-          id: string
-          impressions: number
-          likes: number
-          post_id: string
-          raw_response: Json | null
-          shares: number
-          workspace_id: string
-        }
-        Insert: {
-          clicks?: number
-          comments_count?: number
-          engagement_rate?: number | null
-          fetch_outcome?: string
-          fetched_at?: string
-          id?: string
-          impressions?: number
-          likes?: number
-          post_id: string
-          raw_response?: Json | null
-          shares?: number
-          workspace_id: string
-        }
-        Update: {
-          clicks?: number
-          comments_count?: number
-          engagement_rate?: number | null
-          fetch_outcome?: string
-          fetched_at?: string
-          id?: string
-          impressions?: number
-          likes?: number
-          post_id?: string
-          raw_response?: Json | null
-          shares?: number
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "post_insights_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "post_insights_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       post_versions: {
         Row: {
           created_at: string
@@ -1991,17 +1631,8 @@ export type Database = {
           id: string
           origin: string
           owner_user_id: string
-          plan_cell_id: string | null
           platform: string
-          platform_account_id: string | null
-          platform_last_modified_at: string | null
-          platform_post_id: string | null
-          publish_attempt_count: number
-          publish_error_message: string | null
-          publish_status: string
-          published_at: string | null
           row_version: number
-          scheduled_at: string | null
           stage: string
           target_date: string | null
           title: string
@@ -2019,17 +1650,8 @@ export type Database = {
           id?: string
           origin?: string
           owner_user_id: string
-          plan_cell_id?: string | null
           platform: string
-          platform_account_id?: string | null
-          platform_last_modified_at?: string | null
-          platform_post_id?: string | null
-          publish_attempt_count?: number
-          publish_error_message?: string | null
-          publish_status?: string
-          published_at?: string | null
           row_version?: number
-          scheduled_at?: string | null
           stage?: string
           target_date?: string | null
           title: string
@@ -2047,17 +1669,8 @@ export type Database = {
           id?: string
           origin?: string
           owner_user_id?: string
-          plan_cell_id?: string | null
           platform?: string
-          platform_account_id?: string | null
-          platform_last_modified_at?: string | null
-          platform_post_id?: string | null
-          publish_attempt_count?: number
-          publish_error_message?: string | null
-          publish_status?: string
-          published_at?: string | null
           row_version?: number
-          scheduled_at?: string | null
           stage?: string
           target_date?: string | null
           title?: string
@@ -2094,141 +1707,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "posts_plan_cell_id_fkey"
-            columns: ["plan_cell_id"]
-            isOneToOne: false
-            referencedRelation: "plan_cells"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "posts_platform_account_id_fkey"
-            columns: ["platform_account_id"]
-            isOneToOne: false
-            referencedRelation: "platform_accounts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "posts_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      schedule_job_logs: {
-        Row: {
-          attempt_number: number
-          error_code: string | null
-          finished_at: string | null
-          http_status: number | null
-          id: string
-          outcome: string | null
-          post_id: string
-          response_excerpt: string | null
-          started_at: string
-          trace_id: string
-          workspace_id: string
-        }
-        Insert: {
-          attempt_number: number
-          error_code?: string | null
-          finished_at?: string | null
-          http_status?: number | null
-          id?: string
-          outcome?: string | null
-          post_id: string
-          response_excerpt?: string | null
-          started_at?: string
-          trace_id: string
-          workspace_id: string
-        }
-        Update: {
-          attempt_number?: number
-          error_code?: string | null
-          finished_at?: string | null
-          http_status?: number | null
-          id?: string
-          outcome?: string | null
-          post_id?: string
-          response_excerpt?: string | null
-          started_at?: string
-          trace_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "schedule_job_logs_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "schedule_job_logs_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      schedule_jobs: {
-        Row: {
-          attempts: number
-          completed_at: string | null
-          created_at: string
-          idempotency_key: string | null
-          last_attempt_at: string | null
-          last_error: string | null
-          platform_post_id: string | null
-          post_id: string
-          revision: number
-          scheduled_at: string
-          status: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          attempts?: number
-          completed_at?: string | null
-          created_at?: string
-          idempotency_key?: string | null
-          last_attempt_at?: string | null
-          last_error?: string | null
-          platform_post_id?: string | null
-          post_id: string
-          revision?: number
-          scheduled_at: string
-          status?: string
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          attempts?: number
-          completed_at?: string | null
-          created_at?: string
-          idempotency_key?: string | null
-          last_attempt_at?: string | null
-          last_error?: string | null
-          platform_post_id?: string | null
-          post_id?: string
-          revision?: number
-          scheduled_at?: string
-          status?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "schedule_jobs_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: true
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "schedule_jobs_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2268,51 +1747,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      share_tokens: {
-        Row: {
-          capability: string
-          id: string
-          issued_at: string
-          post_id: string
-          revoked_at: string | null
-          token_hash: string
-          workspace_id: string
-        }
-        Insert: {
-          capability?: string
-          id?: string
-          issued_at?: string
-          post_id: string
-          revoked_at?: string | null
-          token_hash: string
-          workspace_id: string
-        }
-        Update: {
-          capability?: string
-          id?: string
-          issued_at?: string
-          post_id?: string
-          revoked_at?: string | null
-          token_hash?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "share_tokens_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "share_tokens_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       users: {
         Row: {
@@ -2434,6 +1868,7 @@ export type Database = {
           id: string
           name: string
           position: number
+          target_month: number
           workspace_id: string
         }
         Insert: {
@@ -2443,6 +1878,7 @@ export type Database = {
           id?: string
           name: string
           position?: number
+          target_month?: number
           workspace_id: string
         }
         Update: {
@@ -2452,6 +1888,7 @@ export type Database = {
           id?: string
           name?: string
           position?: number
+          target_month?: number
           workspace_id?: string
         }
         Relationships: [
