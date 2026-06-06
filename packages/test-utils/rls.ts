@@ -13,6 +13,7 @@
 //     attacker reads return no victim rows, and attacker writes affect 0 rows.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -77,7 +78,7 @@ export interface GenericFilter extends PromiseLike<GenericResult> {
 
 export interface GenericTable {
   select(columns?: string, opts?: { count?: 'exact'; head?: boolean }): GenericFilter;
-  insert(values: Record<string, unknown>): GenericFilter;
+  insert(values: Record<string, unknown>, opts?: { count?: 'exact' }): GenericFilter;
   update(values: Record<string, unknown>, opts?: { count?: 'exact' }): GenericFilter;
   delete(opts?: { count?: 'exact' }): GenericFilter;
 }
@@ -157,6 +158,70 @@ export async function deleteRowCount(
 ): Promise<number> {
   const res = await applyMatch(client.from(table).delete({ count: 'exact' }), match);
   return res.count ?? 0;
+}
+
+/**
+ * Same-tenant positive-read control. Unlike {@link visibleRowCount} this does
+ * NOT swallow errors: a failing read (e.g. a self-referential / recursive SELECT
+ * policy) THROWS with the table name and underlying message, so a 0 elsewhere is
+ * proven to be a real RLS deny rather than a query error. Never coerces to 0.
+ */
+export async function ownReadCount(
+  client: GenericClient,
+  table: string,
+  match: MatchSpec,
+): Promise<number> {
+  const res = await applyMatch(
+    client.from(table).select('*', { count: 'exact', head: true }),
+    match,
+  );
+  if (res.error) {
+    throw new Error(`${table}: own-read failed (read path broken): ${res.error.message}`);
+  }
+  return res.count ?? 0;
+}
+
+/** Outcome of an authenticated INSERT attempt (no returning clause). */
+export interface InsertOutcome {
+  /** True when Postgrest reported no error. */
+  ok: boolean;
+  /** Rows the server reports as inserted (0 when RLS WITH CHECK denies). */
+  count: number;
+  /** Error message when the insert was rejected, else null. */
+  error: string | null;
+}
+
+/** Attempt an INSERT as the given client and report the outcome without reading back. */
+export async function authInsert(
+  client: GenericClient,
+  table: string,
+  values: Record<string, unknown>,
+): Promise<InsertOutcome> {
+  const res = await client.from(table).insert(values, { count: 'exact' });
+  return { ok: res.error === null, count: res.count ?? 0, error: res.error?.message ?? null };
+}
+
+/**
+ * Runtime discovery: tenant tables that BOTH grant INSERT to the `authenticated`
+ * role AND carry a row-security policy with a WITH CHECK expression. Catalog
+ * queries only (information_schema.role_table_grants + pg_policies.with_check),
+ * snake_case SQL, read via psql against the local container.
+ */
+export function discoverAuthenticatedInsertTables(dbUrl: string): string[] {
+  const sql =
+    'select g.table_name ' +
+    'from information_schema.role_table_grants g ' +
+    "where g.grantee = 'authenticated' and g.privilege_type = 'INSERT' " +
+    "and g.table_schema = 'public' " +
+    'and exists (select 1 from pg_policies p ' +
+    "where p.schemaname = 'public' and p.tablename = g.table_name " +
+    "and p.cmd in ('INSERT', 'ALL') and p.with_check is not null) " +
+    'order by g.table_name;';
+  const out = execFileSync('psql', [dbUrl, '-At', '-c', sql], { encoding: 'utf8' });
+  return out
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
 // ---------------------------------------------------------------------------
