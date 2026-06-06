@@ -9,13 +9,12 @@ Sorted v2: a social media operations platform for agencies.
 - One workspace = one client = one platform.
 - TypeScript strict mode everywhere; no loosening of compiler flags.
 - Multi-tenant isolation is enforced by Postgres RLS.
-- `post.stage` (workflow position) and `publish_status` (platform state) are separate fields; never conflate them.
+- `post.stage` is the single workflow state: draft, review, approved, parked, rejected. There is no `publish_status` field in MVP.
 - Auth: JWT expires in 15 minutes; long-lived sessions tracked in `session_devices`.
 - `trace_id` is always passed as an explicit RPC parameter, never inferred.
 - Every Supabase `.rpc()` call MUST pass `_trace_id` via the `callRpc()` helper. ESLint enforces. Never `SET LOCAL`.
 - Comments are stored in Postgres; Chat runs on Agora.
 - Inbox is a permanent surface; it is never cleared or archived away.
-- Published posts are frozen; edits create new versions, not mutations.
 - Assets are versioned; old versions are retained.
 - Briefs are read-only once created.
 - Approval is per-post; there is no bulk approve.
@@ -48,7 +47,6 @@ Sorted v2: a social media operations platform for agencies.
 ## Canonical living docs
 
 - Canonical docs live in `docs/`: `pr-list.md` (PR list, referenced by full title only, no numbers, no slugs), `prd.md` (PRD, decisions only), `schema.md` (live DB snapshot from Supabase project movnexawfhsyuluspxoc). Read these before planning any work; they outrank memory and prior chat context.
-- When a PR merges, update `docs/pr-list.md` status board in the SAME PR: change the PR’s status to `merged` and add the GitHub PR URL. This is mandatory, not optional.
 - Schema changes: after executing SQL via Supabase MCP and verifying via `information_schema`, regenerate `docs/schema.md` in the same migration PR so the snapshot stays current. The PR prompt will say `Schema already applied. Do NOT execute.`
 
 ## How to handoff

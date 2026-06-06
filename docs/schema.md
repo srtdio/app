@@ -82,7 +82,7 @@ PK workspace_id. Fields: payload jsonb default {}, updated_at, updated_by nullab
 
 ### workspace_onboarding
 
-Milestone timestamps, all nullable: first_post_at, first_invite_at, linkedin_connected_at, first_brief_at, first_schedule_at, dismissed_at, auto_hidden_at. PK workspace_id. (See leftover note in section 12 re: linkedin/schedule columns.)
+Milestone timestamps, all nullable: first_post_at, first_invite_at, first_brief_at, dismissed_at, auto_hidden_at. PK workspace_id.
 
 ### session_devices
 
@@ -344,6 +344,5 @@ These are dead references from the pre-MVP schema. Harmless (they only widen a C
 - chat_channels.channel_type and channel_id regex still allow plan / plan_period channels. No plan periods exist to create them.
 - intent_ledger.target_type still lists share_token. share_tokens table is dropped.
 - webhook_events.source lists stripe / resend / linkedin but not agora. To store the Agora chat webhook entry you wanted, this enum likely needs an agora value added.
-- workspace_onboarding still has linkedin_connected_at and first_schedule_at columns from the publishing era.
 
 Counts: 30 base tables + 3 partitioned parents + 9 partition children = 42 relations in public. All RLS enabled.
