@@ -1962,8 +1962,6 @@ export type Database = {
           first_brief_at: string | null
           first_invite_at: string | null
           first_post_at: string | null
-          first_schedule_at: string | null
-          linkedin_connected_at: string | null
           workspace_id: string
         }
         Insert: {
@@ -1972,8 +1970,6 @@ export type Database = {
           first_brief_at?: string | null
           first_invite_at?: string | null
           first_post_at?: string | null
-          first_schedule_at?: string | null
-          linkedin_connected_at?: string | null
           workspace_id: string
         }
         Update: {
@@ -1982,8 +1978,6 @@ export type Database = {
           first_brief_at?: string | null
           first_invite_at?: string | null
           first_post_at?: string | null
-          first_schedule_at?: string | null
-          linkedin_connected_at?: string | null
           workspace_id?: string
         }
         Relationships: [
