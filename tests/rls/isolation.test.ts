@@ -23,6 +23,7 @@ import {
   loadRlsEnv,
   ownReadCount,
   randomSuffix,
+  seedOperator,
   seedScaffold,
   seedUser,
   seedWorkspace,
@@ -86,8 +87,10 @@ describe.runIf(RLS_SUITE)('cross-tenant RLS isolation', () => {
   let workspaceA: SeededWorkspace;
   let workspaceB: SeededWorkspace;
   let ctxA: Ctx;
+  let operatorUser: SeededUser;
   let attacker: GenericClient;
   let ownerClient: GenericClient;
+  let operatorClient: GenericClient;
 
   beforeAll(async () => {
     const env = loadRlsEnv();
@@ -100,14 +103,22 @@ describe.runIf(RLS_SUITE)('cross-tenant RLS isolation', () => {
     workspaceB = await seedWorkspace(admin, userB, `B ${userB.email}`);
     ctxA = await seedScaffold(admin, workspaceA);
 
+    // Platform-operator principal for tables whose only SELECT policy is
+    // operator-scoped (no membership read path), so their positive-read control
+    // can prove the read path works without weakening the policy. The operator
+    // belongs to no workspace; its access derives solely from platform_operators.
+    operatorUser = await seedUser(env, admin);
+    await seedOperator(adminGeneric, operatorUser);
+
     // User B is the cross-tenant attacker; user A is the legitimate owner used
     // for same-tenant positive controls.
     attacker = asGeneric(clientFor(userB.id));
     ownerClient = asGeneric(clientFor(userA.id));
+    operatorClient = asGeneric(clientFor(operatorUser.id));
   });
 
   afterAll(async () => {
-    await cleanupWorkspaces(admin, [workspaceA, workspaceB], [userA, userB]);
+    await cleanupWorkspaces(admin, [workspaceA, workspaceB], [userA, userB, operatorUser]);
   });
 
   it.each(tenantTables)('isolates $table across workspaces', async (probe) => {
@@ -130,17 +141,21 @@ describe.runIf(RLS_SUITE)('cross-tenant RLS isolation', () => {
     // The row is untouched by B's write attempts (ground truth via service role).
     expect(await countWhere(adminGeneric, probe.table, match)).toBeGreaterThanOrEqual(1);
 
-    // Same-tenant positive-read control: user A (authenticated, NOT service_role)
-    // must be able to read its OWN workspace-A rows. ownReadCount THROWS on a
-    // query error and never coerces to 0, so this fails loudly if the read path
-    // is broken (e.g. the self-referential workspace_members SELECT policy). A
-    // failure here means user B's 0 above is not yet a proven RLS deny and points
-    // at a real SELECT-policy bug to fix in a separate PR.
+    // Positive-read control: a principal that SHOULD see the row must actually
+    // read it, so user B's 0 above is a proven RLS deny rather than a swallowed
+    // query error. ownReadCount THROWS on a query error and never coerces to 0,
+    // so this fails loudly if the read path is broken (e.g. the self-referential
+    // workspace_members SELECT policy). Membership-gated tables use the workspace
+    // owner (user A); platform-operator tables, which have no member read path by
+    // design, use an operator principal.
+    const usesOperator = probe.positiveReader === 'operator';
+    const reader = usesOperator ? operatorClient : ownerClient;
+    const principal = usesOperator ? 'an operator' : 'user A';
     const seeded = await countWhere(adminGeneric, probe.table, match);
-    const ownVisible = await ownReadCount(ownerClient, probe.table, match);
+    const ownVisible = await ownReadCount(reader, probe.table, match);
     expect(
       ownVisible,
-      `${probe.table}: user A could not read its own workspace-A rows ` +
+      `${probe.table}: ${principal} could not read the seeded workspace-A rows ` +
         `(read ${ownVisible}, seeded ${seeded}); cross-tenant 0 is unproven until this passes`,
     ).toBeGreaterThanOrEqual(seeded);
   });

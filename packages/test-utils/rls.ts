@@ -315,6 +315,11 @@ export async function seedWorkspace(
   return { id, name, ownerId: owner.id };
 }
 
+/** Grant a seeded user active platform-operator status (service-role insert). */
+export async function seedOperator(admin: GenericClient, user: SeededUser): Promise<void> {
+  await insertRow(admin, 'platform_operators', { user_id: user.id });
+}
+
 // ---------------------------------------------------------------------------
 // Per-workspace scaffold of parent rows that the leaf tables reference
 // ---------------------------------------------------------------------------
@@ -444,6 +449,13 @@ export interface TenantTableProbe {
   table: string;
   /** Seed the workspace-scoped row(s) via the service role and return their identity. */
   seed(admin: GenericClient, ctx: Ctx): Promise<SeededTarget> | SeededTarget;
+  /**
+   * Principal that legitimately reads the seeded row for the positive-read
+   * control. 'member' (default) is the workspace owner; 'operator' is a platform
+   * operator, for tables whose only SELECT policy is operator-scoped and which
+   * therefore have no membership read path by design.
+   */
+  positiveReader?: 'member' | 'operator';
 }
 
 /**
@@ -671,6 +683,7 @@ export const tenantTables: readonly TenantTableProbe[] = [
   },
   {
     table: 'intent_ledger',
+    positiveReader: 'operator',
     seed: async (a, c) => {
       const row = await insertRow(a, 'intent_ledger', {
         operator_user_id: c.userId,
@@ -683,6 +696,7 @@ export const tenantTables: readonly TenantTableProbe[] = [
   },
   {
     table: 'pending_flows',
+    positiveReader: 'operator',
     seed: async (a, c) => {
       const row = await insertRow(a, 'pending_flows', {
         operator_user_id: c.userId,
@@ -695,10 +709,12 @@ export const tenantTables: readonly TenantTableProbe[] = [
   },
   {
     table: 'webhook_events',
+    positiveReader: 'operator',
     seed: (_a, c) => ({ match: [['id', c.webhookEventId]], patch: { event_type: 'mutated' } }),
   },
   {
     table: 'webhook_processing_attempts',
+    positiveReader: 'operator',
     seed: async (a, c) => {
       const row = await insertRow(a, 'webhook_processing_attempts', {
         webhook_event_id: c.webhookEventId,
@@ -710,6 +726,7 @@ export const tenantTables: readonly TenantTableProbe[] = [
   },
   {
     table: 'cockpit_access_log',
+    positiveReader: 'operator',
     seed: async (a, c) => {
       const row = await insertRow(a, 'cockpit_access_log', {
         operator_user_id: c.userId,
