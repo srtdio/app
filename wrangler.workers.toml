@@ -5,3 +5,8 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 head_sampling_rate = 1.0
+
+# Idempotency-key cleanup. Daily 03:00 UTC: deletes idempotency_keys rows whose
+# expires_at has passed. Handler: src/server/cron/idempotency-cleanup.ts.
+[triggers]
+crons = ["0 3 * * *"]
