@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const WebhookEventSchema = z.object({
   id: z.string().uuid(),
-  source: z.enum(['stripe', 'resend', 'linkedin']),
+  source: z.enum(['stripe', 'resend', 'linkedin', 'agora']),
   source_event_id: z.string(),
   event_type: z.string(),
   workspace_id: z.string().uuid().nullable(),

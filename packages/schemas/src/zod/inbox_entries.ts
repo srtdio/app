@@ -18,7 +18,7 @@ export const InboxEntrySchema = z.object({
     'billing_failure',
     'system',
   ]),
-  entity_type: z.string().nullable(),
+  entity_type: z.enum(['post', 'brief', 'chat_channel', 'workspace']).nullable(),
   entity_id: z.string().nullable(),
   scope: z.enum(['everything', 'posts', 'briefs', 'people', 'groups', 'clients']),
   scope_key: z.string().nullable(),

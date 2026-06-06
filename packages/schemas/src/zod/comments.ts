@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const CommentSchema = z.object({
   id: z.string().uuid(),
   workspace_id: z.string().uuid(),
-  entity_type: z.string(),
+  entity_type: z.enum(['post', 'brief']),
   entity_id: z.string().uuid(),
   parent_comment_id: z.string().uuid().nullable(),
   author_user_id: z.string().uuid(),
