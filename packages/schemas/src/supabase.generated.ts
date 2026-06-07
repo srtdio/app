@@ -1140,6 +1140,56 @@ export type Database = {
           },
         ]
       }
+      idempotency_keys: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          key: string
+          request_hash: string
+          response_body: Json | null
+          response_status: number | null
+          status: string
+          trace_id: string
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          key: string
+          request_hash: string
+          response_body?: Json | null
+          response_status?: number | null
+          status?: string
+          trace_id: string
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          key?: string
+          request_hash?: string
+          response_body?: Json | null
+          response_status?: number | null
+          status?: string
+          trace_id?: string
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idempotency_keys_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inbox_entries: {
         Row: {
           created_at: string

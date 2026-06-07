@@ -13,7 +13,8 @@
 // invocation without taking a row-level lock. See the PR description.
 //
 // Storage is server-side only via the Supabase service role key. The backing
-// table `idempotency_keys` is proposed for approval in the PR; this module
+// table `idempotency_keys` now exists, applied via migration
+// supabase/migrations/20260607065302_idempotency_keys.sql; this module
 // depends only on the IdempotencyStore interface, so tests run without a DB.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
