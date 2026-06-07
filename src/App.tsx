@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/components/shell/AppLayout';
 import { PipelinePage } from '@/components/pages/PipelinePage';
+import { PostDetailPage } from '@/components/pages/PostDetailPage';
 import { BriefsPage } from '@/components/pages/BriefsPage';
 import { ChatPage } from '@/components/pages/ChatPage';
 import { ActivityPage } from '@/components/pages/ActivityPage';
@@ -37,6 +38,7 @@ export default function App() {
             <Route element={<WorkspaceLayout />}>
               <Route path="/" element={<Navigate to="/pipeline" replace />} />
               <Route path="/pipeline" element={<PipelinePage />} />
+              <Route path="/posts/:postId" element={<PostDetailPage />} />
               <Route path="/briefs" element={<BriefsPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/activity" element={<ActivityPage />} />
