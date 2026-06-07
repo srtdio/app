@@ -36,6 +36,9 @@ importers:
       '@sentry/vite-plugin':
         specifier: ^2
         version: 2.23.1
+      '@srtdio/inbox':
+        specifier: workspace:*
+        version: link:packages/inbox
       '@srtdio/schemas':
         specifier: workspace:*
         version: link:packages/schemas
@@ -128,6 +131,19 @@ importers:
       '@srtdio/rpc':
         specifier: workspace:*
         version: link:../rpc
+      '@srtdio/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+    devDependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.105.4
+        version: 2.105.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/inbox:
+    dependencies:
       '@srtdio/schemas':
         specifier: workspace:*
         version: link:../schemas

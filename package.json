@@ -30,6 +30,7 @@
     "@cloudflare/workers-types": "^4.20260516.1",
     "@eslint/js": "^9.17.0",
     "@sentry/vite-plugin": "^2",
+    "@srtdio/inbox": "workspace:*",
     "@srtdio/schemas": "workspace:*",
     "@types/node": "^22",
     "@types/react": "^18.3.18",

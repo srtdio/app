@@ -1,0 +1,20 @@
+name = "srtdio-inbox-writer"
+main = "src/index.ts"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+# Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
+# srtdio-logs (see docs/cloudflare-logpush-setup.md).
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# Idempotency store for the fan-out: dedupe keys live 7 days. The namespace id
+# is filled in per environment (wrangler kv namespace create inbox_writer_dedupe)
+# and supplied via CI/secret config; never commit a real id here.
+[[kv_namespaces]]
+binding = "INBOX_DEDUPE"
+id = "REPLACE_WITH_inbox_writer_dedupe_NAMESPACE_ID"
+
+# SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SUPABASE_JWT_SECRET are supplied as
+# Worker secrets (wrangler secret put / CI), never committed.

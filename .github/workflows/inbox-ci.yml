@@ -1,0 +1,36 @@
+name: Inbox Writer
+
+# Spins up a local Supabase stack, applies supabase/migrations/ (so
+# inbox_entry_create / audit_log_write exist), and runs the inbox-writer suite:
+# mention/recipient units, per-event-type integration, idempotency replay, and
+# the grant check. Mirrors rls-ci.yml; independent of the other suites.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  inbox:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check the inbox package, worker and test workspace
+        run: pnpm exec tsc -p tests/inbox/tsconfig.json --noEmit
+
+      - name: Run inbox-writer suite
+        run: pnpm exec vitest run --config tests/inbox/vitest.config.ts
+
+      - name: Stop local Supabase
+        if: always()
+        run: pnpm exec supabase stop --no-backup || true

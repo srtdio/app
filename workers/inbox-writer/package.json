@@ -1,0 +1,24 @@
+{
+  "name": "@srtdio/inbox-writer",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@srtdio/inbox": "workspace:*",
+    "@srtdio/schemas": "workspace:*"
+  },
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.105.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260516.1",
+    "@supabase/supabase-js": "^2.105.4",
+    "typescript": "5.9.3",
+    "wrangler": "^3.114.17"
+  }
+}
