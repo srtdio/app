@@ -36,6 +36,9 @@ importers:
       '@sentry/vite-plugin':
         specifier: ^2
         version: 2.23.1
+      '@srtdio/inbox':
+        specifier: workspace:*
+        version: link:packages/inbox
       '@srtdio/schemas':
         specifier: workspace:*
         version: link:packages/schemas
