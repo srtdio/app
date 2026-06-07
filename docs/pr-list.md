@@ -69,7 +69,7 @@ Every frontend PR ships with an explicit light AND dark mode parity check. 44x44
 
 | # | Title | Depends on |
 | --- | --- | --- |
-| 30 | App shell: topbar (workspace switcher, search trigger, inbox icon + badge, profile menu), left drawer (Pipeline / Briefs / Assets, switcher, Recently deleted, Settings) | 2, 6 |
+| 30 | App shell: BrowserRouter (Pipeline / Briefs / Chat / Activity / Assets / Settings / Recently deleted, "/" and unknown redirect to Pipeline), desktop Sidebar + mobile BottomTabs primary nav (Pipeline / Briefs / Chat / Activity), Topbar (workspace label, search trigger, Create menu, avatar menu), cmd/ctrl+K CommandPalette, AvatarMenu (switch workspace / Settings / Recently deleted / Profile / Appearance / Sign out via generic custom events), empty-first pages. Assets reached from Pipeline and Briefs heads, not primary nav. Built on the PR A UI primitives. | 2, 6 |
 | 31 | Onboarding: single-scroll signup (name, email magic-link, password, workspace name, timezone), exactly one workspace at signup, empty-state checklist card (owners only, first 30 days, auto-check on events, dismissable) | 30, 8 |
 | 32 | Discussion component shell: shared Composer, MessageRow, mention picker | 30 |
 | 33 | Comments UI: Realtime thread, reactions, 5-min edit, soft-delete, Decision Records filterable view | 32, 13 |
