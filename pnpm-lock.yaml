@@ -133,6 +133,22 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  packages/workspace:
+    dependencies:
+      '@srtdio/rpc':
+        specifier: workspace:*
+        version: link:../rpc
+      '@srtdio/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+    devDependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.105.4
+        version: 2.105.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
 packages:
 
   '@alloc/quick-lru@5.2.0':

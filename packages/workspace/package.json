@@ -1,0 +1,22 @@
+{
+  "name": "@srtdio/workspace",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@srtdio/rpc": "workspace:*",
+    "@srtdio/schemas": "workspace:*"
+  },
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.105.4"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "typescript": "5.9.3"
+  }
+}

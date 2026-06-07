@@ -1,0 +1,37 @@
+name: Workspace Invites
+
+# Spins up a local Supabase stack, applies supabase/migrations/ (including the
+# member_invite / member_accept procs and the tenant email tables), and runs the
+# workspace + invite suite: pure unit specs plus the DB-backed invite->accept
+# roundtrip, accept idempotency, and cross-tenant isolation. Independent of
+# rls-ci.yml and rpc-ci.yml.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check the workspace package and test workspace
+        run: pnpm exec tsc -p tests/workspace/tsconfig.json --noEmit
+
+      - name: Run workspace invite suite
+        run: pnpm exec vitest run --config tests/workspace/vitest.config.ts
+
+      - name: Stop local Supabase
+        if: always()
+        run: pnpm exec supabase stop --no-backup || true
