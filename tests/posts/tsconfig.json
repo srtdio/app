@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "../../tests/posts/**/*.ts",
+    "../../packages/posts/**/*.ts",
+    "../../packages/rpc/**/*.ts"
+  ]
+}

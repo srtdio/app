@@ -5,7 +5,7 @@ export const PostSchema = z.object({
   workspace_id: z.string().uuid(),
   title: z.string(),
   caption: z.string().nullable(),
-  bucket_id: z.string().uuid(),
+  bucket_id: z.string().uuid().nullable(),
   owner_user_id: z.string().uuid(),
   platform: z.enum(['linkedin', 'x', 'instagram', 'facebook', 'threads']),
   format: z.enum(['text', 'single_image', 'carousel', 'video', 'link']),

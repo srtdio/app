@@ -37,8 +37,7 @@ The v1 project ID appears only in the ETL script and the cutover PR.
 | 8 | Workspace creation + member invite + role assignment (owner/admin/agency/client) + workspace_role_permissions defaults + public.users profile editing (display_name, designation, avatar upload to user-avatars bucket) | 6, 5 |
 | 9 | Idempotency-Key middleware on all mutating endpoints | none |
 | 10 | Audit log write helper, indexed on trace_id (table already exists) | none |
-| 11 | Stage state machine + E2E on every transition in the locked map: draft to review/parked, review to approved/rejected/parked, parked and rejected revive to review, approved terminal. Matrix CHECK already in DB. | 5 |
-| 12 | Post create + version + annotate APIs via SECURITY DEFINER. post_versions and post_annotations immutable, no deleted_at. | 5 |
+| 11 | Posts domain: stage state machine (draft to review/parked, review to approved/rejected/parked, approved to parked/rejected, parked and rejected revive to review, approved not terminal; matrix CHECK already in DB) + post create, version, annotate APIs via SECURITY DEFINER. post_versions and post_annotations immutable, no deleted_at. + E2E on every transition. | 5 |
 | 13 | Comments primitive backend: entity-anchored, reactions, edit window, soft-delete, decision flag, Supabase Realtime channel + E2E | 5 |
 | 14 | Briefs backend: client-only create, open/closed, comment + close, no edits after creation, derived linked-post count + E2E | 5 |
 | 15 | Assets backend: upload pipeline (MIME allowlist, EXIF strip, SVG sanitize, virus scan), R2 per-workspace bucket, asset_versions chain, asset_attachments bind to asset_version_id (NO ACTION) | none |
@@ -72,7 +71,7 @@ Every frontend PR ships with an explicit light AND dark mode parity check. 44x44
 | 31 | Onboarding: single-scroll signup (name, email magic-link, password, workspace name, timezone), exactly one workspace at signup, empty-state checklist card (owners only, first 30 days, auto-check on events, dismissable) | 30, 8 |
 | 32 | Discussion component shell: shared Composer, MessageRow, mention picker | 30 |
 | 33 | Comments UI: Realtime thread, reactions, 5-min edit, soft-delete, Decision Records filterable view | 32, 13 |
-| 34 | Create sheet: single mode, all fields visible, required title/caption/channel, optional asset gallery/format/target_date/owner/Origin (None or Brief), Save as Draft | 30, 12 |
+| 34 | Create sheet: single mode, all fields visible, required title/caption/channel, optional asset gallery/format/target_date/owner/Origin (None or Brief), Save as Draft | 30, 11 |
 | 35 | PCS: header, caption editor, asset gallery, metadata sidebar, three-tab comments, auto-version on edit, annotations (caption span + image pin, version-locked, prior-version greyed as copy changed), Approve button (PCS only, client must be logged in) | 34, 33, 11 |
 | 36 | Pipeline: vertical kanban desktop, accordion mobile, owner + urgency colors, client visibility = all stages except Draft, filters, saved views, bulk actions (agency only, cap 10) | 35 |
 | 37 | Briefs UI: client-only create, open/closed, comment + withdraw, read-only after creation, derived linked-post count, email-forward intake address | 32, 14 |
