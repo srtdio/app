@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@srtdio/inbox": ["packages/inbox/src"],
+      "@srtdio/schemas": ["packages/schemas/src"],
+      "@srtdio/schemas/*": ["packages/schemas/src/*"]
+    }
+  },
+  "include": [
+    "../../tests/inbox/**/*.ts",
+    "../../packages/inbox/src/**/*.ts",
+    "../../workers/inbox-writer/src/**/*.ts",
+    "../../packages/test-utils/**/*.ts"
+  ]
+}
