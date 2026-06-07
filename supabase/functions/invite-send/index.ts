@@ -2,14 +2,20 @@
 //
 // Authenticated entry point for inviting a member. The fingerprint middleware
 // (PR 7, @srtdio/auth) verifies the bearer access token and binds the device
-// fingerprint before any work runs; inviteMember (PR 8, @srtdio/workspace) wraps
-// member_invite and records the Resend send. trace_id is read from the inbound
-// X-Trace-Id header and threaded to the RPC as an explicit parameter.
+// fingerprint before any work runs. member_invite requires the invitee to exist
+// in auth.users (it never creates them), so this function resolves that first:
 //
-// Secrets (RESEND_API_KEY, SUPABASE_SERVICE_ROLE_KEY) come from the function's
-// environment, never the client.
+//   1. Lower-case the email and probe auth.users via auth.admin.generateLink.
+//   2. New invitee  -> type=invite link is minted (and the auth.users row with
+//      it); embed that action_link in the email.
+//   3. Existing user -> reuse a workspace deep-link instead of a magic link.
+//   4. inviteMember (PR 8, @srtdio/workspace) then runs member_invite, sends the
+//      branded Resend email, and records the send in delivery_attempts.
+//
+// trace_id is read from X-Trace-Id and threaded to the RPC. Secrets come from the
+// function environment, never the client.
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { fingerprintMiddleware } from '@srtdio/auth';
 import { createResendSender, inviteMember, type MemberRole } from '@srtdio/workspace';
 
@@ -20,6 +26,24 @@ function requireEnv(name: string): string {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`missing required env ${name}`);
   return value;
+}
+
+// Resolve the link to embed in the invite email and guarantee the invitee has an
+// auth.users row before member_invite runs. generateLink type=invite both mints
+// the user (if absent) and returns the action link; an already-registered email
+// surfaces as an error, in which case we fall back to a workspace deep-link.
+async function resolveInviteLink(
+  service: SupabaseClient,
+  email: string,
+  appBaseUrl: string,
+  workspaceId: string,
+): Promise<string> {
+  const { data, error } = await service.auth.admin.generateLink({ type: 'invite', email });
+  if (!error && data?.properties?.action_link) {
+    return data.properties.action_link;
+  }
+  // Existing user (or invite already issued): deep-link into the workspace.
+  return `${appBaseUrl}/w/${workspaceId}`;
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -40,7 +64,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch {
     return Response.json({ error: 'invalid_payload', trace_id: traceId }, { status: 400 });
   }
-  const { workspaceId, email, role } = body;
+  const { workspaceId, role } = body;
+  const email = body.email?.trim().toLowerCase();
   if (!workspaceId || !email || !role || !ROLES.includes(role as MemberRole)) {
     return Response.json({ error: 'invalid_payload', trace_id: traceId }, { status: 400 });
   }
@@ -52,18 +77,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
     ...noPersist,
     global: { headers: { Authorization: `Bearer ${guard.accessToken}` } },
   });
-  // Service-role client: records the send on the tenant email tables.
+  // Service-role client: mints the invite link and records the send.
   const service = createClient(url, requireEnv('SUPABASE_SERVICE_ROLE_KEY'), noPersist);
+
+  const inviteLink = await resolveInviteLink(
+    service,
+    email,
+    requireEnv('APP_BASE_URL'),
+    workspaceId,
+  );
 
   const result = await inviteMember(
     {
       auth,
       service,
       sender: createResendSender({ apiKey: requireEnv('RESEND_API_KEY') }),
-      appBaseUrl: requireEnv('APP_BASE_URL'),
       fromAddress: requireEnv('INVITE_FROM_ADDRESS'),
     },
-    { workspaceId, email, role: role as MemberRole, traceId },
+    { workspaceId, email, role: role as MemberRole, traceId, inviteLink },
   );
 
   if (!result.ok) {

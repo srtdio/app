@@ -1,10 +1,18 @@
 // inviteMember / acceptInvite: the two write paths of the workspace package.
 //
 // inviteMember wraps public.member_invite (run as the authenticated caller, so
-// auth.uid() is the actor), then records the Resend send across email_threads +
-// delivery_attempts. The recording uses the service-role client because the
-// authenticated role has no write grant on those tenant tables; the proc itself
-// is the only authenticated write.
+// auth.uid() is the actor), sends the branded invite via Resend, and records the
+// send in delivery_attempts (email_thread_id null). It does NOT write
+// email_threads: that table's live CHECK constraints accept only brief/post
+// roots and <(brief|post)-...> Message-IDs, so an invite cannot be threaded
+// without a schema change, which is out of scope for this wave. The recording
+// uses the service-role client because the authenticated role has no write grant
+// on delivery_attempts; the proc itself is the only authenticated write.
+//
+// The caller (the invite-send edge function) resolves inviteLink first: a
+// type=invite action link from auth.admin.generateLink for a brand-new invitee,
+// or a workspace deep-link when the user already exists in auth.users. That
+// keeps the auth-admin step at the edge and member_invite able to find the row.
 //
 // acceptInvite wraps public.member_accept and is idempotent on the invite token
 // (the member id that member_invite returns): re-accepting the same token after
@@ -24,6 +32,8 @@ export interface InviteMemberInput {
   email: string;
   role: MemberRole;
   traceId: string;
+  /** Resolved link embedded in the email: invite action link or deep-link. */
+  inviteLink: string;
 }
 
 export interface InviteMemberDeps {
@@ -33,8 +43,6 @@ export interface InviteMemberDeps {
   service: Client;
   /** Transport that hands the message to Resend. */
   sender: EmailSender;
-  /** Base URL the invitee follows to accept, e.g. https://app.srtd.io. */
-  appBaseUrl: string;
   /** Verified Resend sender identity. */
   fromAddress: string;
   /** Injectable clock; defaults to the wall clock. */
@@ -46,7 +54,6 @@ export type InviteSendStatus = 'sent' | 'queued' | 'failed';
 export interface InviteMemberResult {
   /** workspace_members.id of the pending invite, also the accept token. */
   memberId: string;
-  emailThreadId: string;
   deliveryAttemptId: string;
   status: InviteSendStatus;
   /** ISO instant the message went out (sent) or is queued for (queued). */
@@ -82,25 +89,6 @@ export async function inviteMember(
   const messageId = inviteMessageId(memberId);
   const subject = inviteSubject(workspace.data.name);
 
-  // email_threads is the durable conversation root, keyed by the deterministic
-  // Message-ID so a later resend threads onto it.
-  const thread = await deps.service
-    .from('email_threads')
-    .insert({
-      workspace_id: input.workspaceId,
-      root_type: 'workspace_member',
-      root_id: memberId,
-      message_id: messageId,
-      subject,
-      last_sent_at: schedule.sendNow ? now.toISOString() : null,
-    })
-    .select('id')
-    .single();
-  if (thread.error || !thread.data) {
-    return fail('unknown', `email_threads insert failed: ${thread.error?.message ?? 'no row'}`);
-  }
-  const emailThreadId = thread.data.id;
-
   let status: InviteSendStatus = schedule.sendNow ? 'sent' : 'queued';
   let providerMessageId: string | null = null;
   let sendError: string | null = null;
@@ -109,7 +97,7 @@ export async function inviteMember(
     const body = inviteEmailBody({
       workspaceName: workspace.data.name,
       role: input.role,
-      acceptUrl: `${deps.appBaseUrl}/invites/${memberId}/accept`,
+      acceptUrl: input.inviteLink,
     });
     try {
       const delivered = await deps.sender.send({
@@ -127,6 +115,7 @@ export async function inviteMember(
     }
   }
 
+  // email_thread_id is null: invites are not threaded (see the file header).
   const attempt = await deps.service
     .from('delivery_attempts')
     .insert({
@@ -138,7 +127,7 @@ export async function inviteMember(
       status,
       sent_at: status === 'sent' ? now.toISOString() : null,
       error: sendError,
-      email_thread_id: emailThreadId,
+      email_thread_id: null,
     })
     .select('id')
     .single();
@@ -151,7 +140,6 @@ export async function inviteMember(
 
   return ok({
     memberId,
-    emailThreadId,
     deliveryAttemptId: attempt.data.id,
     status,
     scheduledFor: schedule.scheduledFor,

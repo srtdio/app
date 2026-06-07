@@ -59,11 +59,16 @@ describe.runIf(WORKSPACE_SUITE)('workspace cross-tenant isolation', () => {
         auth: clientFor(ownerA.id),
         service: admin,
         sender: noopSender,
-        appBaseUrl: 'https://app.srtd.io',
         fromAddress: 'invites@srtd.io',
         now: IN_WINDOW,
       },
-      { workspaceId: wsA.id, email: inviteeA.email, role: 'client', traceId: generateTraceId() },
+      {
+        workspaceId: wsA.id,
+        email: inviteeA.email,
+        role: 'client',
+        traceId: generateTraceId(),
+        inviteLink: 'https://app.srtd.io/w/a',
+      },
     );
     if (!invited.ok) throw new Error(`setup invite failed: ${invited.error.code}`);
     inviteId = invited.data.memberId;

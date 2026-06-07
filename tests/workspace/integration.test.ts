@@ -57,11 +57,12 @@ describe.runIf(WORKSPACE_SUITE)('workspace invite roundtrip', () => {
       auth: clientFor(owner.id),
       service: admin,
       sender,
-      appBaseUrl: 'https://app.srtd.io',
       fromAddress: 'invites@srtd.io',
       now,
     };
   }
+
+  const INVITE_LINK = 'https://app.srtd.io/w/x';
 
   beforeAll(async () => {
     const env = loadRlsEnv();
@@ -85,29 +86,21 @@ describe.runIf(WORKSPACE_SUITE)('workspace invite roundtrip', () => {
       email: invitee.email,
       role: 'client',
       traceId: generateTraceId(),
+      inviteLink: INVITE_LINK,
     });
     if (!invited.ok) throw new Error(`invite failed: ${invited.error.code}`);
     expect(invited.data.status).toBe('sent');
     expect(invited.data.providerMessageId).toBe('resend_sent_1');
 
-    // The send went out exactly once, addressed to the invitee.
+    // The send went out exactly once, addressed to the invitee, with the invite
+    // Message-ID and the resolved link in the body.
     expect(sender.calls).toHaveLength(1);
     expect(sender.calls[0]?.to).toBe(invitee.email);
+    expect(sender.calls[0]?.subject).toBe(`[${ws.name}] You have been invited.`);
     expect(sender.calls[0]?.messageId).toBe(`<invite-${invited.data.memberId}@srtd.io>`);
+    expect(sender.calls[0]?.text).toContain(INVITE_LINK);
 
-    // email_threads recorded the conversation root.
-    const thread = await admin
-      .from('email_threads')
-      .select('*')
-      .eq('id', invited.data.emailThreadId)
-      .single();
-    expect(thread.data?.root_type).toBe('workspace_member');
-    expect(thread.data?.root_id).toBe(invited.data.memberId);
-    expect(thread.data?.message_id).toBe(`<invite-${invited.data.memberId}@srtd.io>`);
-    expect(thread.data?.subject).toBe(`[${ws.name}] You have been invited.`);
-    expect(thread.data?.last_sent_at).not.toBeNull();
-
-    // delivery_attempts recorded the send.
+    // delivery_attempts recorded the send; invites are not threaded.
     const attempt = await admin
       .from('delivery_attempts')
       .select('*')
@@ -117,7 +110,7 @@ describe.runIf(WORKSPACE_SUITE)('workspace invite roundtrip', () => {
     expect(attempt.data?.provider).toBe('resend');
     expect(attempt.data?.template_key).toBe('member_invite');
     expect(attempt.data?.provider_message_id).toBe('resend_sent_1');
-    expect(attempt.data?.email_thread_id).toBe(invited.data.emailThreadId);
+    expect(attempt.data?.email_thread_id).toBeNull();
 
     // The invitee accepts; the membership flips active.
     const accepted = await acceptInvite(
@@ -146,6 +139,7 @@ describe.runIf(WORKSPACE_SUITE)('workspace invite roundtrip', () => {
       email: invitee.email,
       role: 'client',
       traceId: generateTraceId(),
+      inviteLink: INVITE_LINK,
     });
     if (!invited.ok) throw new Error(`invite failed: ${invited.error.code}`);
 
@@ -178,6 +172,7 @@ describe.runIf(WORKSPACE_SUITE)('workspace invite roundtrip', () => {
       email: invitee.email,
       role: 'client',
       traceId: generateTraceId(),
+      inviteLink: INVITE_LINK,
     });
     if (!invited.ok) throw new Error(`invite failed: ${invited.error.code}`);
 
