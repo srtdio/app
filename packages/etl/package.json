@@ -1,0 +1,19 @@
+{
+  "name": "@srtdio/etl",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "etl": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "pg": "^8.13.1",
+    "uuid": "^11.1.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "5.9.3"
+  }
+}

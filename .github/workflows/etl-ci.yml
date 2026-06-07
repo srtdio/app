@@ -1,0 +1,37 @@
+name: ETL
+
+# Type-checks the @srtdio/etl package and test workspace, runs the ETL boundary
+# suite (transform mappings + config safety guards), then runs the offline
+# --dry-run self-check. All steps are pure: no database is ever reached and no
+# live migration is run. Mirrors posts-ci.yml / rls-ci.yml structure.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  etl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check the etl package and test workspace
+        run: pnpm exec tsc -p tests/etl/tsconfig.json --noEmit
+
+      - name: Run etl suite
+        run: pnpm exec vitest run --config tests/etl/vitest.config.ts
+
+      # Offline transform self-check. No SOURCE/TARGET env is set, so the run
+      # never connects to a database and never executes a migration.
+      - name: Dry-run transform self-check (no database)
+        run: pnpm --filter @srtdio/etl run etl -- --dry-run
