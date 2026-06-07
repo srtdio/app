@@ -1,0 +1,210 @@
+// Pure v1 -> v2 field mapping. No I/O, no database, no env: every function here
+// is a total mapping from a v1 value to a v2-shaped value, which is why the whole
+// transform layer is unit-tested without a connection. The loader (load.ts) calls
+// these; the source layer (source.ts) only reads. Text is truncated to the v2
+// CHECK limits here so an over-length v1 row can never abort a load mid-way.
+
+export type PostStage = 'draft' | 'review' | 'approved' | 'parked' | 'rejected';
+export type PostFormat = 'text' | 'single_image' | 'carousel' | 'video' | 'link';
+export type BriefFormat = 'text' | 'single_image' | 'carousel' | 'video' | 'link';
+export type BriefStatus = 'open' | 'closed';
+export type PostOrigin = 'manual' | 'brief';
+
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+// v2 CHECK limits (schema.md). Strings are truncated to these before insert.
+export const TITLE_MAX = 200;
+export const OBJECTIVE_MAX = 5000;
+export const COMMENT_BODY_MAX = 10000;
+export const DISPLAY_NAME_MAX = 80;
+export const WORKSPACE_NAME_MAX = 80;
+
+// In dev-seed mode the preserved v1 person name is replaced with this constant.
+export const NAME_REDACTION = 'Member';
+
+function isBlank(value: string | null | undefined): boolean {
+  return value === null || value === undefined || value.trim() === '';
+}
+
+// Truncate by code unit to a hard CHECK limit. Values at the limit are kept.
+export function truncate(value: string, max: number): string {
+  return value.length > max ? value.slice(0, max) : value;
+}
+
+// --- PII scrub (dev-seed only) -------------------------------------------------
+
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+// A phone-like run: an optional +, a leading digit, then >= 6 digits/separators,
+// then a trailing digit. Over-redaction is acceptable for disposable dev data.
+const PHONE_RE = /\+?\d[\d\s().-]{6,}\d/g;
+
+// Redact email-like and phone-like substrings. Emails first so the phone pass
+// never re-touches the digit-free replacement token.
+export function redactPii(text: string): string {
+  return text.replace(EMAIL_RE, '[redacted-email]').replace(PHONE_RE, '[redacted-phone]');
+}
+
+function scrubMaybe(text: string, scrub: boolean): string {
+  return scrub ? redactPii(text) : text;
+}
+
+// --- Brief mappings ------------------------------------------------------------
+
+// content_type: CREATIVE/PHOTO -> single_image, VIDEO -> video, TEXT -> text,
+// null or anything else -> null.
+export function mapBriefFormatRequested(contentType: string | null): BriefFormat | null {
+  switch ((contentType ?? '').trim().toUpperCase()) {
+    case 'CREATIVE':
+    case 'PHOTO':
+      return 'single_image';
+    case 'VIDEO':
+      return 'video';
+    case 'TEXT':
+      return 'text';
+    default:
+      return null;
+  }
+}
+
+// status: closed -> closed, pending/assigned (or anything else) -> open.
+export function mapBriefStatus(status: string | null): BriefStatus {
+  return (status ?? '').trim().toLowerCase() === 'closed' ? 'closed' : 'open';
+}
+
+// objective is NOT NULL (1..5000): use description, falling back to title when
+// description is blank, and a safe placeholder when both are blank.
+export function briefObjective(
+  description: string | null,
+  title: string | null,
+  scrub: boolean,
+): string {
+  const base = !isBlank(description)
+    ? (description as string)
+    : !isBlank(title)
+      ? (title as string)
+      : 'Untitled brief';
+  return truncate(scrubMaybe(base, scrub), OBJECTIVE_MAX);
+}
+
+// title is NOT NULL (1..200): blank v1 titles get a safe placeholder.
+export function briefTitle(title: string | null): string {
+  return truncate(isBlank(title) ? 'Untitled brief' : (title as string).trim(), TITLE_MAX);
+}
+
+// reference_links jsonb preserves the v1 drive_link and the images array.
+export function buildReferenceLinks(
+  driveLink: string | null,
+  images: readonly string[] | null,
+): Json {
+  return { drive_link: driveLink ?? null, images: images ? [...images] : [] };
+}
+
+// --- Post mappings -------------------------------------------------------------
+
+// format: Photo/Creative -> single_image, Carousel -> carousel, Text -> text,
+// Video -> video, null or anything else -> text.
+export function mapPostFormat(format: string | null): PostFormat {
+  switch ((format ?? '').trim().toLowerCase()) {
+    case 'photo':
+    case 'creative':
+      return 'single_image';
+    case 'carousel':
+      return 'carousel';
+    case 'video':
+      return 'video';
+    case 'text':
+      return 'text';
+    default:
+      return 'text';
+  }
+}
+
+// stage: is_draft true wins -> draft. Otherwise published/scheduled/ready ->
+// approved, awaiting_approval/awaiting_brand_input -> review, rejected ->
+// rejected, parked -> parked, anything else -> draft.
+export function mapPostStage(stage: string | null, isDraft: boolean): PostStage {
+  if (isDraft) return 'draft';
+  switch ((stage ?? '').trim().toLowerCase()) {
+    case 'published':
+    case 'scheduled':
+    case 'ready':
+      return 'approved';
+    case 'awaiting_approval':
+    case 'awaiting_brand_input':
+      return 'review';
+    case 'rejected':
+      return 'rejected';
+    case 'parked':
+      return 'parked';
+    default:
+      return 'draft';
+  }
+}
+
+// title is NOT NULL (1..200): blank v1 titles get a safe placeholder.
+export function postTitle(title: string | null): string {
+  return truncate(isBlank(title) ? 'Untitled post' : (title as string).trim(), TITLE_MAX);
+}
+
+// caption is nullable and uncapped in v2; only scrubbed in dev-seed.
+export function postCaption(caption: string | null, scrub: boolean): string | null {
+  if (caption === null || caption === undefined) return null;
+  return scrubMaybe(caption, scrub);
+}
+
+// origin is 'brief' with the mapped v2 brief id when the v1 post linked to a
+// migrated request, else 'manual' with no brief.
+export function postOrigin(mappedBriefId: string | null): {
+  origin: PostOrigin;
+  briefId: string | null;
+} {
+  return mappedBriefId !== null
+    ? { origin: 'brief', briefId: mappedBriefId }
+    : { origin: 'manual', briefId: null };
+}
+
+// --- Snapshot builder ----------------------------------------------------------
+
+// The fields v2 has no column for, preserved per post_version for provenance.
+export interface SnapshotInput {
+  content: string | null;
+  caption: string | null;
+  images: readonly string[] | null;
+  canvaLink: string | null;
+  driveLink: string | null;
+  linkedinLink: string | null;
+  contentPillar: string | null;
+  location: string | null;
+  editedBy: string | null;
+}
+
+// Build the post_versions.snapshot jsonb. In dev-seed the free text (content,
+// caption) is PII-scrubbed and the edited_by person name is replaced with
+// 'Member'; a null name stays null (nothing to redact). Image URLs and links are
+// preserved verbatim (R2 copy is a later, cutover-only PR).
+export function buildSnapshot(input: SnapshotInput, scrub: boolean): Json {
+  return {
+    content: input.content === null ? null : scrubMaybe(input.content, scrub),
+    caption: input.caption === null ? null : scrubMaybe(input.caption, scrub),
+    images: input.images ? [...input.images] : [],
+    canva_link: input.canvaLink ?? null,
+    drive_link: input.driveLink ?? null,
+    linkedin_link: input.linkedinLink ?? null,
+    content_pillar: input.contentPillar ?? null,
+    location: input.location ?? null,
+    edited_by: scrub ? (input.editedBy === null ? null : NAME_REDACTION) : (input.editedBy ?? null),
+  };
+}
+
+// --- Comment mapping -----------------------------------------------------------
+
+// body is 1..10000. Callers skip blank-message comments entirely; this only
+// scrubs and truncates a non-blank body.
+export function commentBody(message: string, scrub: boolean): string {
+  return truncate(scrubMaybe(message, scrub), COMMENT_BODY_MAX);
+}
+
+// True when a v1 comment must be skipped (blank message).
+export function isBlankComment(message: string | null | undefined): boolean {
+  return isBlank(message);
+}
