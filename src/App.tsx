@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/shell/AppLayout';
 import { PipelinePage } from '@/components/pages/PipelinePage';
 import { PostDetailPage } from '@/components/pages/PostDetailPage';
 import { BriefsPage } from '@/components/pages/BriefsPage';
+import { BriefDetailPage } from '@/components/pages/BriefDetailPage';
 import { ChatPage } from '@/components/pages/ChatPage';
 import { ActivityPage } from '@/components/pages/ActivityPage';
 import { AssetsPage } from '@/components/pages/AssetsPage';
@@ -40,6 +41,7 @@ export default function App() {
               <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/posts/:postId" element={<PostDetailPage />} />
               <Route path="/briefs" element={<BriefsPage />} />
+              <Route path="/briefs/:briefId" element={<BriefDetailPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/activity" element={<ActivityPage />} />
               <Route path="/assets" element={<AssetsPage />} />
