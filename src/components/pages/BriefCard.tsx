@@ -29,6 +29,8 @@ interface BriefCardProps {
   closeError: string | null;
   /** Confirmed request to close this open brief. */
   onConfirmClose: () => void;
+  /** Open this brief's detail view; the whole card is the tap target. */
+  onOpen: () => void;
 }
 
 /**
@@ -42,13 +44,23 @@ export function BriefCard({
   closing,
   closeError,
   onConfirmClose,
+  onOpen,
 }: BriefCardProps) {
   const [confirming, setConfirming] = useState(false);
   const closed = isBriefClosed(brief);
 
   return (
     <div
-      className={`rounded-xl border border-border bg-panel p-4 flex flex-col gap-2.5 ${
+      role="link"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      className={`text-left cursor-pointer rounded-xl border border-border bg-panel p-4 flex flex-col gap-2.5 min-h-[44px] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
         closed ? 'opacity-70' : ''
       }`}
     >
@@ -83,7 +95,12 @@ export function BriefCard({
       ) : null}
 
       {!closed ? (
-        <div className="flex items-center gap-2 pt-0.5">
+        <div
+          className="flex items-center gap-2 pt-0.5"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          role="presentation"
+        >
           {confirming ? (
             <>
               <span className="text-xs text-fg-3 mr-auto">Close this brief?</span>

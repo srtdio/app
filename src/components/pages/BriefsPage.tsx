@@ -156,6 +156,7 @@ export function BriefsPage() {
               closing={closingId === brief.id}
               closeError={closeError?.id === brief.id ? closeError.message : null}
               onConfirmClose={() => void handleClose(brief.id)}
+              onOpen={() => navigate(`/briefs/${brief.id}`)}
             />
           ))}
         </div>
