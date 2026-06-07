@@ -68,6 +68,14 @@ export function stageTransition(
   return callProc(client, 'stage_transition', args);
 }
 
+export type PostCreateArgs = ProcArgs<'post_create'>;
+export function postCreate(
+  client: Client,
+  args: PostCreateArgs,
+): Promise<Result<ProcReturns<'post_create'>>> {
+  return callProc(client, 'post_create', args);
+}
+
 export type PostVersionCreateArgs = ProcArgs<'post_version_create'>;
 export function postVersionCreate(
   client: Client,

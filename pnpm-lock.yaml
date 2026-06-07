@@ -39,6 +39,9 @@ importers:
       '@srtdio/inbox':
         specifier: workspace:*
         version: link:packages/inbox
+      '@srtdio/posts':
+        specifier: workspace:*
+        version: link:packages/posts
       '@srtdio/schemas':
         specifier: workspace:*
         version: link:packages/schemas
@@ -147,6 +150,28 @@ importers:
       '@srtdio/schemas':
         specifier: workspace:*
         version: link:../schemas
+    devDependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.105.4
+        version: 2.105.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/posts:
+    dependencies:
+      '@srtdio/rpc':
+        specifier: workspace:*
+        version: link:../rpc
+      '@srtdio/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      uuid:
+        specifier: ^11.1.1
+        version: 11.1.1
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
     devDependencies:
       '@supabase/supabase-js':
         specifier: ^2.105.4

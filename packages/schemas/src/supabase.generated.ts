@@ -1622,7 +1622,7 @@ export type Database = {
       posts: {
         Row: {
           brief_id: string | null
-          bucket_id: string
+          bucket_id: string | null
           caption: string | null
           created_at: string
           created_by: string
@@ -1641,7 +1641,7 @@ export type Database = {
         }
         Insert: {
           brief_id?: string | null
-          bucket_id: string
+          bucket_id?: string | null
           caption?: string | null
           created_at?: string
           created_by: string
@@ -1660,7 +1660,7 @@ export type Database = {
         }
         Update: {
           brief_id?: string | null
-          bucket_id?: string
+          bucket_id?: string | null
           caption?: string | null
           created_at?: string
           created_by?: string
@@ -2218,6 +2218,10 @@ export type Database = {
           p_trace_id: string
           p_workspace_id: string
         }
+        Returns: string
+      }
+      post_create: {
+        Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
         Returns: string
       }
       post_version_create: {

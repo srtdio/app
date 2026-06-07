@@ -1,0 +1,32 @@
+name: Posts
+
+# Type-checks the @srtdio/posts package and test workspace, then runs the posts
+# boundary suite: stage machine, Zod validation, and proc-error mapping. These
+# specs need no database (the @srtdio/rpc transport is faked), so the job stays
+# fast and self-contained. Mirrors rls-ci.yml / comments-ci.yml structure.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  posts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check the posts package and test workspace
+        run: pnpm exec tsc -p tests/posts/tsconfig.json --noEmit
+
+      - name: Run posts suite
+        run: pnpm exec vitest run --config tests/posts/vitest.config.ts
