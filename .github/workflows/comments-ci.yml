@@ -1,0 +1,36 @@
+name: Comments
+
+# Spins up a local Supabase stack, applies supabase/migrations/ (so
+# comment_create and the comments FTS index are present), and runs the comments
+# create + read + search suite as the authenticated role. Independent of
+# schema-drift.yml, rls-ci.yml and rpc-ci.yml.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  comments:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check the comments package and test workspace
+        run: pnpm exec tsc -p tests/comments/tsconfig.json --noEmit
+
+      - name: Run comments suite
+        run: pnpm exec vitest run --config tests/comments/vitest.config.ts
+
+      - name: Stop local Supabase
+        if: always()
+        run: pnpm exec supabase stop --no-backup || true
