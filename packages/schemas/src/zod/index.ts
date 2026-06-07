@@ -15,6 +15,7 @@ export * from './email_threads';
 export * from './feature_flags';
 export * from './group_members';
 export * from './groups';
+export * from './idempotency_keys';
 export * from './inbox_entries';
 export * from './intent_ledger';
 export * from './pending_flows';

@@ -38,6 +38,7 @@ The v1 project ID appears only in the ETL script and the cutover PR.
 | 9 | Idempotency-Key middleware on all mutating endpoints | none |
 | 10 | Audit log write helper, indexed on trace_id (table already exists) | none |
 | 11 | Posts domain: stage state machine (draft to review/parked, review to approved/rejected/parked, approved to parked/rejected, parked and rejected revive to review, approved not terminal; matrix CHECK already in DB) + post create, version, annotate APIs via SECURITY DEFINER. post_versions and post_annotations immutable, no deleted_at. + E2E on every transition. | 5 |
+| 12 | idempotency_keys table: service-role-only infra table (RLS enabled, no policies; service_role bypasses RLS and is the sole writer), unique scope index (key, workspace_id, user_id) NULLS NOT DISTINCT, expires_at index + regenerate supabase.generated.ts and Zod schemas, drift gate green. Schema already applied. Do NOT execute. | 1 |
 | 13 | Comments primitive backend: entity-anchored, reactions, edit window, soft-delete, decision flag, Supabase Realtime channel + E2E | 5 |
 | 14 | Briefs backend: client-only create, open/closed, comment + close, no edits after creation, derived linked-post count + E2E | 5 |
 | 15 | Assets backend: upload pipeline (MIME allowlist, EXIF strip, SVG sanitize, virus scan), R2 per-workspace bucket, asset_versions chain, asset_attachments bind to asset_version_id (NO ACTION) | none |
