@@ -166,6 +166,7 @@ export function CreatePostSheet({ open, workspaceId, onClose, onCreated }: Creat
                 key={value}
                 label={humanize(value)}
                 selected={platform === value}
+                size="tap"
                 onClick={() => setPlatform(value)}
               />
             ))}
@@ -182,6 +183,7 @@ export function CreatePostSheet({ open, workspaceId, onClose, onCreated }: Creat
                 key={value}
                 label={humanize(value)}
                 selected={format === value}
+                size="tap"
                 onClick={() => setFormat(value)}
               />
             ))}

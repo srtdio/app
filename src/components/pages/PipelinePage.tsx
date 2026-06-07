@@ -140,9 +140,9 @@ export function PipelinePage() {
       </div>
 
       <div className="px-4 md:px-6 mt-3 flex flex-wrap gap-2">
-        <Chip label="+ Owner" variant="add" />
-        <Chip label="+ Bucket" variant="add" />
-        <Chip label="+ Date" variant="add" />
+        <Chip label="+ Owner" variant="add" size="tap" />
+        <Chip label="+ Bucket" variant="add" size="tap" />
+        <Chip label="+ Date" variant="add" size="tap" />
       </div>
 
       {showCard ? (
