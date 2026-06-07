@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { Comments } from '@/components/comments/Comments';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
+import { useWorkspace } from '@/lib/workspace-context';
 import { getPost, STAGE_TRANSITIONS } from '@srtdio/posts';
 import type { DomainError, PostDetail, Stage } from '@srtdio/posts';
 import { stageTransition } from '@srtdio/rpc';
@@ -91,6 +93,7 @@ export function PostDetailPage() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const newTrace = useNewTrace();
+  const { workspaceId } = useWorkspace();
 
   const [detail, setDetail] = useState<PostDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -237,9 +240,13 @@ export function PostDetailPage() {
             <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
               Comments
             </div>
-            <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
-              Comments coming soon
-            </div>
+            {workspaceId !== null && postId !== undefined ? (
+              <Comments workspaceId={workspaceId} entityType="post" entityId={postId} />
+            ) : (
+              <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
+                Select a workspace to view comments.
+              </div>
+            )}
           </section>
         </div>
 
