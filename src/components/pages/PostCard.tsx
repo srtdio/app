@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Chip } from '@/components/ui/Chip';
 import type { Post } from '@srtdio/posts';
 
@@ -10,11 +11,21 @@ function formatTargetDate(value: string): string {
 
 /**
  * A pipeline board card: title, a chip for platform, a chip for format, and the
- * target date when present. No owner name in this PR.
+ * target date when present. No owner name in this PR. The whole card navigates
+ * to the post detail (PCS) view; stage changes happen only there, never on the
+ * board. Navigation is a full-bleed overlay button so the display Chips (which
+ * are themselves buttons) are never nested inside another button.
  */
 export function PostCard({ post }: { post: Post }) {
+  const navigate = useNavigate();
   return (
-    <div className="rounded-lg border border-border bg-panel p-3 flex flex-col gap-2">
+    <div className="relative rounded-lg border border-border bg-panel p-3 flex flex-col gap-2 transition-colors hover:bg-panel-2">
+      <button
+        type="button"
+        aria-label={`Open post ${post.title}`}
+        onClick={() => navigate(`/posts/${post.id}`)}
+        className="absolute inset-0 rounded-lg"
+      />
       <div className="text-sm font-medium leading-snug line-clamp-2">{post.title}</div>
       <div className="flex flex-wrap gap-1.5">
         <Chip label={post.platform} />
