@@ -59,7 +59,7 @@ jobs:
       - name: Run ETL migration
         env:
           SOURCE_DATABASE_URL: ${{ secrets.SOURCE_DATABASE_URL }}
-          TARGET_DATABASE_URL: ${{ secrets.TARGET_DATABASE_URL }}
+          TARGET_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
           EXPECTED_TARGET_REF: movnexawfhsyuluspxoc
           OPERATOR_USER_ID: 7b54b9a8-5ac4-4600-8012-7f21320cea8f
           OPERATOR_EMAIL: ${{ inputs.operator_email }}
