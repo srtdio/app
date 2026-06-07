@@ -131,3 +131,11 @@ export function commentCreate(
 ): Promise<Result<ProcReturns<'comment_create'>>> {
   return callProc(client, 'comment_create', args);
 }
+
+export type WorkspaceCreateArgs = ProcArgs<'workspace_create'>;
+export function workspaceCreate(
+  client: Client,
+  args: WorkspaceCreateArgs,
+): Promise<Result<ProcReturns<'workspace_create'>>> {
+  return callProc(client, 'workspace_create', args);
+}
