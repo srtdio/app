@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { Client } from '@srtdio/rpc';
-import { workspaceCreate } from '@srtdio/rpc';
-import type { Json } from '@srtdio/schemas';
+import type { Session } from '@supabase/supabase-js';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { supabase } from '@/lib/supabase';
-import { useNewTrace } from '@/lib/trace-context';
 
 /** Runtime-detected IANA timezone; shown prefilled and editable. */
 function detectTimezone(): string {
@@ -19,9 +16,63 @@ function detectTimezone(): string {
   }
 }
 
+/**
+ * The minimal slice of the Supabase auth client performSignUp needs, so tests
+ * can mock it without constructing a full client.
+ */
+export interface SignUpAuthClient {
+  auth: {
+    signUp(credentials: {
+      email: string;
+      password: string;
+      options?: { data?: Record<string, unknown> };
+    }): Promise<{ data: { session: Session | null }; error: { message: string } | null }>;
+  };
+}
+
+export interface SignUpInput {
+  email: string;
+  password: string;
+  displayName: string;
+  workspaceName: string;
+  timezone: string;
+}
+
+export type SignUpResult =
+  | { status: 'error'; message: string }
+  | { status: 'authenticated' }
+  | { status: 'confirm-email' };
+
+/**
+ * Sign the user up, stashing the workspace details as user_metadata. Workspace
+ * creation is intentionally NOT performed here: with email confirmation ON,
+ * signUp returns no session, so an RPC fired now would run unauthenticated and
+ * silently create nothing. Creation is deferred to the first authenticated load
+ * (WorkspaceProvider bootstrap), giving one creation path that works whether
+ * confirmation is ON (session null -> confirm-email) or OFF (session present).
+ */
+export async function performSignUp(
+  client: SignUpAuthClient,
+  input: SignUpInput,
+): Promise<SignUpResult> {
+  const { data, error } = await client.auth.signUp({
+    email: input.email,
+    password: input.password,
+    options: {
+      data: {
+        display_name: input.displayName,
+        workspace_name: input.workspaceName,
+        timezone: input.timezone,
+      },
+    },
+  });
+  if (error) return { status: 'error', message: error.message };
+  if (data.session === null) return { status: 'confirm-email' };
+  return { status: 'authenticated' };
+}
+
 export function SignUpPage() {
   const navigate = useNavigate();
-  const newTrace = useNewTrace();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,37 +80,62 @@ export function SignUpPage() {
   const [timezone, setTimezone] = useState(detectTimezone);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [awaitingConfirm, setAwaitingConfirm] = useState(false);
 
   async function handleSignUp(): Promise<void> {
     setError(null);
     setSubmitting(true);
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const result = await performSignUp(supabase as unknown as SignUpAuthClient, {
       email,
       password,
-      options: { data: { display_name: name } },
+      displayName: name,
+      workspaceName,
+      timezone,
     });
-    if (signUpError) {
-      setError(signUpError.message);
+
+    if (result.status === 'error') {
+      setError(result.message);
       setSubmitting(false);
       return;
     }
-
-    // Fresh uuid_v7 trace id from the same utility the TraceProvider uses; the
-    // workspaceCreate wrapper forwards it unchanged as p_trace_id. Actor is
-    // auth.uid() server-side, never passed from the client.
-    const payload: Json = { name: workspaceName, timezone };
-    const result = await workspaceCreate(supabase as unknown as Client, {
-      p_payload: payload,
-      p_trace_id: newTrace(),
-    });
-    if (!result.ok) {
-      setError(result.error.message);
+    if (result.status === 'confirm-email') {
+      setAwaitingConfirm(true);
       setSubmitting(false);
       return;
     }
-
     navigate('/pipeline', { replace: true });
+  }
+
+  if (awaitingConfirm) {
+    return (
+      <AuthShell
+        title="Check your email"
+        subtitle="One more step to finish setting up."
+        footer={
+          <Link
+            to="/signin"
+            className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline"
+          >
+            Back to sign in
+          </Link>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-fg-2">
+            Check your email to confirm your account. We sent a confirmation link to{' '}
+            <span className="font-medium text-fg">{email}</span>. Once confirmed, sign in and your
+            workspace will be ready.
+          </p>
+          <Link
+            to="/signin"
+            className="inline-flex min-h-[44px] min-w-[44px] w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+          >
+            Go to sign in
+          </Link>
+        </div>
+      </AuthShell>
+    );
   }
 
   return (
