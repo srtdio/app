@@ -94,6 +94,19 @@ importers:
         specifier: ^3.114.17
         version: 3.114.17(@cloudflare/workers-types@4.20260516.1)
 
+  packages/auth:
+    dependencies:
+      '@srtdio/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+    devDependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.105.4
+        version: 2.105.4
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   packages/comments:
     dependencies:
       '@srtdio/rpc':

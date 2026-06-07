@@ -7,6 +7,7 @@
   },
   "include": [
     "../../tests/auth/**/*.ts",
+    "../../packages/auth/**/*.ts",
     "../../packages/test-utils/**/*.ts",
     "../../src/server/auth/**/*.ts"
   ]
