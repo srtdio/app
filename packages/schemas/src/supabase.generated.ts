@@ -2287,6 +2287,10 @@ export type Database = {
         Returns: string
       }
       uuidv7: { Args: never; Returns: string }
+      workspace_create: {
+        Args: { p_payload: Json; p_trace_id: string }
+        Returns: string
+      }
       workspace_id: { Args: never; Returns: string }
     }
     Enums: {
