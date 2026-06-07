@@ -39,7 +39,11 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
           dispatchSorted('sorted:switch-workspace');
         }}
       />
-      <MenuItem icon={<IconSettings size={18} />} label="Settings" onClick={() => go('/settings')} />
+      <MenuItem
+        icon={<IconSettings size={18} />}
+        label="Settings"
+        onClick={() => go('/settings')}
+      />
       <MenuItem
         icon={<IconTrash size={18} />}
         label="Recently deleted"

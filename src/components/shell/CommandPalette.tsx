@@ -118,7 +118,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             placeholder="Search or jump to"
             className="flex-1 h-12 bg-transparent outline-none text-sm placeholder:text-fg-3"
           />
-          <kbd className="text-[11px] text-fg-3 border border-border rounded px-1.5 py-0.5">Esc</kbd>
+          <kbd className="text-[11px] text-fg-3 border border-border rounded px-1.5 py-0.5">
+            Esc
+          </kbd>
         </div>
         <div className="max-h-[50vh] overflow-y-auto py-2">
           {filtered.length === 0 ? (

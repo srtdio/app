@@ -31,7 +31,9 @@ export function Sidebar({ workspaceName }: SidebarProps) {
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-sm font-medium transition-colors',
-                isActive ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:bg-panel-2 hover:text-fg',
+                isActive
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-fg-2 hover:bg-panel-2 hover:text-fg',
               )
             }
           >
