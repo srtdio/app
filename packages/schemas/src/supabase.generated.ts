@@ -2134,6 +2134,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      annotation_create: {
+        Args: {
+          p_asset_attachment_id: string
+          p_caption_end: number
+          p_caption_start: number
+          p_comment_id: string
+          p_image_x: number
+          p_image_y: number
+          p_kind: string
+          p_post_id: string
+          p_post_version_id: string
+          p_trace_id: string
+        }
+        Returns: string
+      }
       audit_log_write: {
         Args: {
           p_action: string
@@ -2150,10 +2165,72 @@ export type Database = {
         }
         Returns: string
       }
+      brief_close: {
+        Args: { p_brief_id: string; p_trace_id: string }
+        Returns: undefined
+      }
+      brief_create: {
+        Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
+        Returns: string
+      }
+      comment_create: {
+        Args: {
+          p_attachment_asset_ids: string[]
+          p_body: string
+          p_entity_id: string
+          p_entity_type: string
+          p_is_decision: boolean
+          p_mentions: Json
+          p_parent_comment_id: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       has_capability: { Args: { p_capability: string }; Returns: boolean }
+      inbox_entry_create: {
+        Args: {
+          p_entity_id: string
+          p_entity_type: string
+          p_event_type: string
+          p_payload: Json
+          p_scope: string
+          p_scope_key: string
+          p_tier: string
+          p_trace_id: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       is_active_workspace_member: {
         Args: { p_workspace_id: string }
         Returns: boolean
+      }
+      member_accept: {
+        Args: { p_invite_id: string; p_trace_id: string }
+        Returns: string
+      }
+      member_invite: {
+        Args: {
+          p_email: string
+          p_role: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      post_version_create: {
+        Args: { p_post_id: string; p_snapshot: Json; p_trace_id: string }
+        Returns: string
+      }
+      proc_capability: {
+        Args: { p_capability: string; p_workspace_id: string }
+        Returns: boolean
+      }
+      stage_transition: {
+        Args: { p_post_id: string; p_to_stage: string; p_trace_id: string }
+        Returns: string
       }
       uuidv7: { Args: never; Returns: string }
       workspace_id: { Args: never; Returns: string }
