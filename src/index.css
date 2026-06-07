@@ -1,9 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-html,
-body,
-#root {
-  height: 100%;
+:root {
+  --bg: #f7f8f9;
+  --panel: #ffffff;
+  --panel-2: #f2f3f5;
+  --panel-3: #ecedf0;
+  --border: #e6e8eb;
+  --border-strong: #d7dade;
+  --fg: #1b1c20;
+  --fg-2: #62666d;
+  --fg-3: #8b9096;
+  --accent: #5e6ad2;
+  --accent-hover: #4f5ac0;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(94, 106, 210, 0.1);
+  --accent-line: rgba(94, 106, 210, 0.3);
+  --good: #3e7d54;
+  --warn: #b8772b;
+  --bad: #c2392b;
+}
+.dark {
+  --bg: #0c0d10;
+  --panel: #141519;
+  --panel-2: #1a1c21;
+  --panel-3: #212329;
+  --border: #23262c;
+  --border-strong: #2f333b;
+  --fg: #f4f5f6;
+  --fg-2: #9aa0a8;
+  --fg-3: #6b7178;
+  --accent: #6f79e3;
+  --accent-hover: #838bec;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(111, 121, 227, 0.16);
+  --accent-line: rgba(111, 121, 227, 0.34);
+  --good: #5fb07d;
+  --warn: #d59a4a;
+  --bad: #e0685a;
+}
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family:
+      'Inter',
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.006em;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
 }
