@@ -36,6 +36,7 @@ import {
   memberInvite,
   postVersionCreate,
   stageTransition,
+  workspaceCreate,
   type Client,
   type DomainError,
   type Result,
@@ -85,6 +86,9 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
 
   // Users created by invite tests, tracked so teardown can delete them.
   const invitees: SeededUser[] = [];
+
+  // Workspaces created by workspace_create, tracked so teardown can delete them.
+  const createdWorkspaces: SeededWorkspace[] = [];
 
   async function addMember(workspaceId: string, user: SeededUser, role: string): Promise<void> {
     await insertRow(asGeneric(admin), 'workspace_members', {
@@ -163,7 +167,7 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
   afterAll(async () => {
     await cleanupWorkspaces(
       admin,
-      [wsA, wsB],
+      [wsA, wsB, ...createdWorkspaces],
       [owner, agencyUser, clientUser, ownerB, ...invitees],
     );
   });
@@ -240,6 +244,17 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
         }),
       );
       expect(typeof id).toBe('string');
+    });
+
+    it('workspace_create: a user creates a workspace', async () => {
+      const id = expectOk(
+        await workspaceCreate(ownerClient, {
+          p_payload: { name: 'Fresh workspace', timezone: 'UTC' },
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(typeof id).toBe('string');
+      createdWorkspaces.push({ id, name: 'Fresh workspace', ownerId: owner.id });
     });
 
     it('brief_close: owner closes an open brief', async () => {
@@ -412,6 +427,19 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
         p_trace_id: generateTraceId(),
       });
       expect(expectError(result).code).toBe('forbidden_role');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // workspace_create payload guard: a malformed payload is rejected
+  // -------------------------------------------------------------------------
+  describe('workspace_create guards', () => {
+    it('rejects a payload missing required keys (invalid_payload)', async () => {
+      const result = await workspaceCreate(ownerClient, {
+        p_payload: { name: 'Missing timezone' },
+        p_trace_id: generateTraceId(),
+      });
+      expect(expectError(result).code).toBe('invalid_payload');
     });
   });
 });
