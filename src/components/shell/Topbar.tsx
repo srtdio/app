@@ -7,7 +7,7 @@ import { MenuItem } from '@/components/shell/MenuItem';
 import { dispatchSorted } from '@/lib/events';
 
 interface TopbarProps {
-  workspaceName: string;
+  workspaceName: string | null;
   onOpenPalette: () => void;
   onOpenAvatar: () => void;
 }
@@ -17,7 +17,11 @@ export function Topbar({ workspaceName, onOpenPalette, onOpenAvatar }: TopbarPro
 
   return (
     <header className="sticky top-0 z-30 flex items-center gap-2 h-14 px-3 md:px-4 border-b border-border bg-panel">
-      <span className="md:hidden font-semibold text-sm truncate">{workspaceName}</span>
+      {workspaceName === null ? (
+        <span className="md:hidden h-4 w-24 rounded bg-panel-3 animate-pulse" aria-hidden />
+      ) : (
+        <span className="md:hidden font-semibold text-sm truncate">{workspaceName}</span>
+      )}
 
       <button
         type="button"

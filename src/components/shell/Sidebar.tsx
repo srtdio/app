@@ -6,7 +6,7 @@ import { dispatchSorted } from '@/lib/events';
 import { cn } from '@/lib/cn';
 
 interface SidebarProps {
-  workspaceName: string;
+  workspaceName: string | null;
 }
 
 export function Sidebar({ workspaceName }: SidebarProps) {
@@ -18,8 +18,16 @@ export function Sidebar({ workspaceName }: SidebarProps) {
           onClick={() => dispatchSorted('sorted:switch-workspace')}
           className="flex w-full items-center gap-2.5 min-h-[44px] px-2 rounded-lg hover:bg-panel-2 transition-colors text-left"
         >
-          <Avatar name={workspaceName} size="lg" />
-          <span className="flex-1 font-semibold text-sm truncate">{workspaceName}</span>
+          {workspaceName !== null ? (
+            <Avatar name={workspaceName} size="lg" />
+          ) : (
+            <Avatar size="lg" />
+          )}
+          {workspaceName === null ? (
+            <span className="flex-1 h-4 rounded bg-panel-3 animate-pulse" aria-hidden />
+          ) : (
+            <span className="flex-1 font-semibold text-sm truncate">{workspaceName}</span>
+          )}
           <IconChevronDown size={16} className="text-fg-3 shrink-0" />
         </button>
       </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -7,18 +7,26 @@ import { PageHead } from '@/components/shell/PageHead';
 import { Tabs } from '@/components/shell/Tabs';
 import type { TabItem } from '@/components/shell/Tabs';
 import { IconAssets, IconCheck, IconSort, IconX } from '@/components/ui/icons';
+import { PostCard } from '@/components/pages/PostCard';
+import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { dispatchSorted } from '@/lib/events';
+import { supabase } from '@/lib/supabase';
+import { useWorkspace } from '@/lib/workspace-context';
+import { listPosts, STAGE_TRANSITIONS } from '@srtdio/posts';
+import type { Post, Stage } from '@srtdio/posts';
+
+// The board columns are the workflow stages, in transition-map order. Stage
+// values come from the @srtdio/posts type, never hardcoded literals in JSX.
+const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
+
+function stageLabel(stage: Stage): string {
+  return stage.charAt(0).toUpperCase() + stage.slice(1);
+}
 
 const STAGE_TABS: TabItem[] = [
   { key: 'all', label: 'All' },
-  { key: 'draft', label: 'Draft' },
-  { key: 'review', label: 'Review' },
-  { key: 'approved', label: 'Approved' },
-  { key: 'parked', label: 'Parked' },
-  { key: 'rejected', label: 'Rejected' },
+  ...STAGES.map((stage) => ({ key: stage, label: stageLabel(stage) })),
 ];
-
-const COLUMNS = ['Draft', 'Review', 'Approved', 'Parked', 'Rejected'];
 
 interface OnboardingStep {
   key: string;
@@ -29,9 +37,56 @@ interface OnboardingStep {
 
 export function PipelinePage() {
   const navigate = useNavigate();
+  const { workspaceId } = useWorkspace();
   const [stage, setStage] = useState('all');
   const [cardDismissed, setCardDismissed] = useState(false);
   const [skipped, setSkipped] = useState<Record<string, boolean>>({});
+
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [postsError, setPostsError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  // One fetch for the whole board (no N+1): listPosts once, grouped in memory.
+  const loadPosts = useCallback(async () => {
+    if (workspaceId === null) return;
+    setPostsLoading(true);
+    setPostsError(null);
+    const result = await listPosts(supabase, { workspaceId, limit: 100 });
+    setPostsLoading(false);
+    if (!result.ok) {
+      setPostsError(result.error.message);
+      return;
+    }
+    setPosts(result.data);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    void loadPosts();
+  }, [loadPosts]);
+
+  // The Create (+) button and command palette dispatch this event; the sheet
+  // lives here so the board can re-fetch on success.
+  useEffect(() => {
+    function openCreate(): void {
+      setCreateOpen(true);
+    }
+    window.addEventListener('sorted:create-post', openCreate);
+    return () => {
+      window.removeEventListener('sorted:create-post', openCreate);
+    };
+  }, []);
+
+  const grouped = useMemo(() => {
+    const map = Object.fromEntries(STAGES.map((s) => [s, [] as Post[]])) as Record<Stage, Post[]>;
+    for (const post of posts) {
+      const column = map[post.stage as Stage];
+      if (column !== undefined) column.push(post);
+    }
+    return map;
+  }, [posts]);
+
+  const visibleStages = stage === 'all' ? STAGES : STAGES.filter((s) => s === stage);
 
   const steps: OnboardingStep[] = [
     {
@@ -57,6 +112,8 @@ export function PipelinePage() {
   const visibleSteps = steps.filter((step) => skipped[step.key] !== true);
   const showCard = !cardDismissed && visibleSteps.length > 0;
 
+  const boardLoading = workspaceId === null || (postsLoading && posts.length === 0);
+
   return (
     <>
       <PageHead
@@ -74,16 +131,18 @@ export function PipelinePage() {
         }
       />
 
-      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">0 posts</div>
+      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">
+        {posts.length} {posts.length === 1 ? 'post' : 'posts'}
+      </div>
 
       <div className="px-4 md:px-6 mt-2">
         <Tabs items={STAGE_TABS} active={stage} onChange={setStage} />
       </div>
 
       <div className="px-4 md:px-6 mt-3 flex flex-wrap gap-2">
-        <Chip label="+ Owner" variant="add" />
-        <Chip label="+ Bucket" variant="add" />
-        <Chip label="+ Date" variant="add" />
+        <Chip label="+ Owner" variant="add" size="tap" />
+        <Chip label="+ Bucket" variant="add" size="tap" />
+        <Chip label="+ Date" variant="add" size="tap" />
       </div>
 
       {showCard ? (
@@ -124,22 +183,55 @@ export function PipelinePage() {
         </div>
       ) : null}
 
-      <div className="px-4 md:px-6 py-4 flex gap-3 overflow-x-auto">
-        {COLUMNS.map((column) => (
-          <div
-            key={column}
-            className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2"
-          >
-            <div className="flex items-center gap-2 px-3 h-11 border-b border-border">
-              <span className="text-sm font-medium">{column}</span>
-              <span className="ml-auto text-xs text-fg-3 tabular-nums">0</span>
-            </div>
-            <div className="flex items-center justify-center min-h-[160px] px-3 py-6 text-sm text-fg-3">
-              No posts
-            </div>
+      {postsError !== null ? (
+        <div className="px-4 md:px-6 mt-4">
+          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
+            Could not load posts. {postsError}
           </div>
-        ))}
-      </div>
+        </div>
+      ) : boardLoading ? (
+        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading posts</div>
+      ) : (
+        <div className="px-4 md:px-6 py-4 flex gap-3 overflow-x-auto">
+          {visibleStages.map((columnStage) => {
+            const columnPosts = grouped[columnStage];
+            return (
+              <div
+                key={columnStage}
+                className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2"
+              >
+                <div className="flex items-center gap-2 px-3 h-11 border-b border-border">
+                  <span className="text-sm font-medium">{stageLabel(columnStage)}</span>
+                  <span className="ml-auto text-xs text-fg-3 tabular-nums">
+                    {columnPosts.length}
+                  </span>
+                </div>
+                {columnPosts.length === 0 ? (
+                  <div className="flex items-center justify-center min-h-[160px] px-3 py-6 text-sm text-fg-3">
+                    No posts
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 p-2">
+                    {columnPosts.map((post) => (
+                      <PostCard key={post.id} post={post} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <CreatePostSheet
+        open={createOpen}
+        workspaceId={workspaceId}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {
+          setCreateOpen(false);
+          void loadPosts();
+        }}
+      />
     </>
   );
 }

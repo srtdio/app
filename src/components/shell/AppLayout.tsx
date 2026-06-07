@@ -5,12 +5,12 @@ import { BottomTabs } from '@/components/shell/BottomTabs';
 import { Topbar } from '@/components/shell/Topbar';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { IconPipeline } from '@/components/ui/icons';
+import { useWorkspace } from '@/lib/workspace-context';
 
-interface AppLayoutProps {
-  workspaceName: string;
-}
-
-export function AppLayout({ workspaceName }: AppLayoutProps) {
+export function AppLayout() {
+  const { workspaceName, workspaces, loading } = useWorkspace();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
 
@@ -26,6 +26,20 @@ export function AppLayout({ workspaceName }: AppLayoutProps) {
       window.removeEventListener('keydown', onKeyDown);
     };
   }, []);
+
+  // An authed user with zero workspaces is a benign state, not a crash: show a
+  // calm full-page empty state instead of an empty board.
+  if (!loading && workspaces.length === 0) {
+    return (
+      <div className="grid h-full w-full place-items-center bg-bg px-6">
+        <EmptyState
+          icon={<IconPipeline />}
+          title="No workspace yet"
+          description="You are not a member of any workspace. An invite will bring you into one."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">

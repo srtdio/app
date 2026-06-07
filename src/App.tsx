@@ -11,10 +11,18 @@ import { SignInPage } from '@/components/auth/SignInPage';
 import { SignUpPage } from '@/components/auth/SignUpPage';
 import { RequireAuth, RequireGuest } from '@/components/auth/RouteGuards';
 import { SessionProvider } from '@/lib/session-context';
+import { WorkspaceProvider } from '@/lib/workspace-context';
 
-// Placeholder until the active workspace comes from auth/session in a later PR.
-// Passed as a prop so no surface hardcodes a workspace name.
-const WORKSPACE_NAME = 'Workspace';
+// The active workspace resolves only for signed-in users, so WorkspaceProvider
+// is mounted inside RequireAuth (never around the auth routes), wrapping the
+// shell. AppLayout reads the active workspace name from useWorkspace().
+function WorkspaceLayout() {
+  return (
+    <WorkspaceProvider>
+      <AppLayout />
+    </WorkspaceProvider>
+  );
+}
 
 export default function App() {
   return (
@@ -26,7 +34,7 @@ export default function App() {
             <Route path="/signup" element={<SignUpPage />} />
           </Route>
           <Route element={<RequireAuth />}>
-            <Route element={<AppLayout workspaceName={WORKSPACE_NAME} />}>
+            <Route element={<WorkspaceLayout />}>
               <Route path="/" element={<Navigate to="/pipeline" replace />} />
               <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/briefs" element={<BriefsPage />} />
