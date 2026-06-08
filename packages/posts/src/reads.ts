@@ -15,7 +15,7 @@ export type PostAnnotation = Database['public']['Tables']['post_annotations']['R
 /** Default page size for {@link listPosts}. */
 export const POSTS_PAGE_SIZE = 50;
 /** Hard cap on {@link listPosts} page size, regardless of the requested limit. */
-export const POSTS_PAGE_SIZE_MAX = 100;
+export const POSTS_PAGE_SIZE_MAX = 500;
 
 export interface ListPostsInput {
   /** Workspace to scope to. RLS confines reads to the caller's workspaces; the

@@ -52,7 +52,7 @@ export function PipelinePage() {
     if (workspaceId === null) return;
     setPostsLoading(true);
     setPostsError(null);
-    const result = await listPosts(supabase, { workspaceId, limit: 100 });
+    const result = await listPosts(supabase, { workspaceId, limit: 500 });
     setPostsLoading(false);
     if (!result.ok) {
       setPostsError(result.error.message);
