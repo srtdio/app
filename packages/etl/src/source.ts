@@ -36,17 +36,14 @@ export type V1Post = {
   updated_at: Date | string;
 };
 
-// v1 public.post_versions, keyed by the owning v1 post id (= v2 post id).
+// v1 public.post_versions, keyed by the owning v1 post id (= v2 post id). v1
+// stores ONLY the edited caption plus edit metadata; it has no separate content,
+// images, canva_link, drive_link, linkedin_link, content_pillar, or location
+// column (confirmed against v1 information_schema). The version body IS the
+// caption, so that is the only text field carried over.
 export type V1PostVersion = {
   post_id: string;
-  content: string | null;
   caption: string | null;
-  images: string[] | null;
-  canva_link: string | null;
-  drive_link: string | null;
-  linkedin_link: string | null;
-  content_pillar: string | null;
-  location: string | null;
   edited_by: string | null;
   edited_at: Date | string | null;
 };
@@ -152,8 +149,7 @@ export class SourceDb {
   async fetchVersionsForPosts(postIds: readonly string[]): Promise<V1PostVersion[]> {
     if (postIds.length === 0) return [];
     return this.read<V1PostVersion>(
-      `SELECT pv.post_id::text AS post_id, pv.content, pv.caption, pv.images, pv.canva_link,
-              pv.drive_link, pv.linkedin_link, pv.content_pillar, pv.location, pv.edited_by, pv.edited_at
+      `SELECT pv.post_id::text AS post_id, pv.caption, pv.edited_by, pv.edited_at
          FROM public.post_versions pv
         WHERE pv.post_id = ANY($1::uuid[])
         ORDER BY pv.post_id, pv.edited_at ASC NULLS FIRST`,

@@ -333,14 +333,17 @@ export async function loadPostVersions(
               post.id,
               i + 1,
               {
-                content: v.content,
+                // v1 has no separate version body: the caption IS the body, so
+                // both snapshot fields derive from it. The other provenance keys
+                // have no v1 column and are preserved as null/empty.
+                content: v.caption,
                 caption: v.caption,
-                images: v.images,
-                canvaLink: v.canva_link,
-                driveLink: v.drive_link,
-                linkedinLink: v.linkedin_link,
-                contentPillar: v.content_pillar,
-                location: v.location,
+                images: null,
+                canvaLink: null,
+                driveLink: null,
+                linkedinLink: null,
+                contentPillar: null,
+                location: null,
                 editedBy: v.edited_by,
               },
               scrub,
