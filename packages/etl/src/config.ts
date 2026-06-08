@@ -122,7 +122,20 @@ export function describeConnection(url: string): ConnectionTarget {
 
 // True when SOURCE and TARGET point at the same physical database. Writing to
 // v1 is never allowed, so an accidental same-url config must abort.
+//
+// When both URLs carry a Supabase project ref, the ref is the only reliable
+// discriminator: two distinct projects in one region share host/port/database
+// behind the session pooler (aws-1-<region>.pooler.supabase.com:5432/postgres),
+// so a host/port/database tuple match there is a false positive. Compare refs
+// instead. When either ref is unreadable (non-Supabase or direct URL the parser
+// cannot read), fall back to the host/port/database tuple so the guard is never
+// weakened.
 export function sameDatabase(sourceUrl: string, targetUrl: string): boolean {
+  const refA = extractProjectRef(sourceUrl);
+  const refB = extractProjectRef(targetUrl);
+  if (refA !== null && refB !== null) {
+    return refA === refB;
+  }
   const a = describeConnection(sourceUrl);
   const b = describeConnection(targetUrl);
   return a.host === b.host && a.port === b.port && a.database === b.database;
