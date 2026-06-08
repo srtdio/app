@@ -54,6 +54,7 @@ The v1 project ID appears only in the ETL script and the cutover PR.
 | 25 | Stripe billing backend: per-workspace tiers, 14-day trial, nudge cadence (day 7/10/12/13/14), lifecycle states (trial/active/grace/soft_pause/full_pause/soft_delete), reconciliation cron | 8 |
 | 26 | Trash backend: soft-delete + restore for assets (30 days) and workspaces (7 days), cleanup cron | 15 |
 | 27 | Alerts and monitoring: webhook signature failures, RLS CI, capability audit CI, mirror cron failures, Agora reconciliation drift | 4, 10 |
+| - | Repo hygiene: stop tracking .env.production (public repo). git rm --cached only, file stays on disk; drop the !.env.production negation in .gitignore so the .env.* rule covers it and no production env file can be committed (a real secret could land there later). Tracking-only, no schema. | none |
 
 ## 3. Phase 2: ETL
 
