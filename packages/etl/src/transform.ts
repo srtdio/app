@@ -71,6 +71,31 @@ export function mapBriefStatus(status: string | null): BriefStatus {
   return (status ?? '').trim().toLowerCase() === 'closed' ? 'closed' : 'open';
 }
 
+// The two close-tracking columns, kept self-consistent with the v2
+// briefs_closed_consistency CHECK: a closed brief has BOTH closed_at and
+// closed_by non-null; an open brief has BOTH null. Returning them together makes
+// it impossible to set one without the other.
+export interface BriefCloseFields {
+  closed_at: Date | string | null;
+  closed_by: string | null;
+}
+
+// Derive closed_at/closed_by for a brief row. v1 records no close timestamp, so
+// for a migrated closed brief closed_at is a best-effort fallback: the request's
+// target_date when present, else a stable non-null timestamp the loader already
+// has for the row (fallbackClosedAt, e.g. load time). closed_by is the operator,
+// matching how legacy created_by attribution is handled (the only valid migrated
+// user at seed/cutover time). Open briefs get both columns explicitly null.
+export function briefCloseFields(
+  status: BriefStatus,
+  targetDate: Date | string | null,
+  operatorUserId: string,
+  fallbackClosedAt: Date | string,
+): BriefCloseFields {
+  if (status !== 'closed') return { closed_at: null, closed_by: null };
+  return { closed_at: targetDate ?? fallbackClosedAt, closed_by: operatorUserId };
+}
+
 // objective is NOT NULL (1..5000): use description, falling back to title when
 // description is blank, and a safe placeholder when both are blank.
 export function briefObjective(

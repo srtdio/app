@@ -10,6 +10,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type { EtlConfig } from './config';
 import { BATCH_SIZE, type SourceDb, type V1Post, type V1PostVersion } from './source';
 import {
+  briefCloseFields,
   briefObjective,
   briefTitle,
   buildReferenceLinks,
@@ -148,14 +149,22 @@ export async function loadBriefs(
     const rows: Row[] = batch.map((r) => {
       const id = uuidv7();
       map.set(r.id, id);
+      // Compute status once and derive the close columns from it so every brief
+      // row satisfies the briefs_closed_consistency CHECK. v1 has no close
+      // timestamp; new Date() is the documented best-effort fallback when the
+      // request carries no target_date.
+      const status = mapBriefStatus(r.status);
+      const close = briefCloseFields(status, r.target_date, config.operatorUserId, new Date());
       return {
         id,
         workspace_id: workspaceId,
         title: briefTitle(r.title),
         objective: briefObjective(r.description, r.title, scrub),
         format_requested: mapBriefFormatRequested(r.content_type),
-        status: mapBriefStatus(r.status),
+        status,
         target_date: r.target_date,
+        closed_at: close.closed_at,
+        closed_by: close.closed_by,
         reference_links: JSON.stringify(buildReferenceLinks(r.drive_link, r.images)),
         created_by: config.operatorUserId,
         created_via: 'app',
@@ -173,6 +182,8 @@ export async function loadBriefs(
         'format_requested',
         'status',
         'target_date',
+        'closed_at',
+        'closed_by',
         'reference_links',
         'created_by',
         'created_via',
