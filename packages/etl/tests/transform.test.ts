@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { briefCloseFields, mapBriefStatus } from '../src/transform.ts';
+import { briefCloseFields, buildSnapshot, mapBriefStatus } from '../src/transform.ts';
 
 // Regression tests for the briefs close columns. The bug: load.ts set
 // briefs.status from mapBriefStatus but never set closed_at/closed_by, so a
@@ -60,4 +60,51 @@ describe('briefCloseFields', () => {
       expect(satisfiesConstraint(status, close.closed_at, close.closed_by)).toBe(true);
     },
   );
+});
+
+// Regression for the post_versions snapshot. The bug: the version snapshot read
+// content/images/links/pillar/location from v1 post_versions columns that do not
+// exist (FATAL: column pv.content does not exist). v1 stores only the edited
+// caption plus edit metadata, so the body MUST come from the caption and the
+// other provenance keys MUST be null/empty, not read from a phantom column. This
+// mirrors how load.ts now shapes a version row from a V1PostVersion.
+describe('buildSnapshot from a v1 post_version', () => {
+  // A v1 post_versions row has exactly: caption + edited_by + edited_at.
+  const v1Version = { caption: 'Launch is live', edited_by: 'Jane Doe', edited_at: new Date() };
+  // Exactly the shape load.ts builds for the SnapshotInput now.
+  const inputFromV1 = {
+    content: v1Version.caption,
+    caption: v1Version.caption,
+    images: null,
+    canvaLink: null,
+    driveLink: null,
+    linkedinLink: null,
+    contentPillar: null,
+    location: null,
+    editedBy: v1Version.edited_by,
+  } as const;
+
+  it('sources the body/content from the v1 caption', () => {
+    const snap = buildSnapshot(inputFromV1, false) as Record<string, unknown>;
+    expect(snap.content).toBe('Launch is live');
+    expect(snap.caption).toBe('Launch is live');
+  });
+
+  it('leaves every phantom v1 field null/empty rather than reading a missing column', () => {
+    const snap = buildSnapshot(inputFromV1, false) as Record<string, unknown>;
+    expect(snap.images).toEqual([]);
+    expect(snap.canva_link).toBeNull();
+    expect(snap.drive_link).toBeNull();
+    expect(snap.linkedin_link).toBeNull();
+    expect(snap.content_pillar).toBeNull();
+    expect(snap.location).toBeNull();
+  });
+
+  it('preserves edited_by, and scrubs it in dev-seed', () => {
+    expect((buildSnapshot(inputFromV1, false) as Record<string, unknown>).edited_by).toBe(
+      'Jane Doe',
+    );
+    // dev-seed replaces the preserved person name with the redaction constant.
+    expect((buildSnapshot(inputFromV1, true) as Record<string, unknown>).edited_by).toBe('Member');
+  });
 });
