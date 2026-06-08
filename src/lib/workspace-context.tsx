@@ -90,6 +90,7 @@ interface WorkspaceContextValue {
   loading: boolean;
   error: string | null;
   setActiveWorkspaceId: (id: string) => void;
+  refreshWorkspaces: () => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -148,6 +149,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setActiveId(id);
   }, []);
 
+  // Re-run the same list bootstrap on demand (e.g. after a workspace is created
+  // elsewhere), reusing the active-id default behavior: keep the current
+  // selection if it still exists, otherwise fall back to the first row.
+  const refreshWorkspaces = useCallback(async () => {
+    if (!session) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await bootstrapWorkspaces(supabase, session, bootstrapGuard, newTrace);
+      if (res.error !== null) {
+        setError(res.error);
+        setWorkspaces([]);
+        setActiveId(null);
+      } else {
+        setWorkspaces(res.workspaces);
+        setActiveId((prev) =>
+          prev !== null && res.workspaces.some((w) => w.id === prev)
+            ? prev
+            : (res.workspaces[0]?.id ?? null),
+        );
+      }
+    } catch (err: unknown) {
+      logger.error('workspace refresh failed', { error: String(err) });
+      setError(String(err));
+      setWorkspaces([]);
+      setActiveId(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [session, newTrace]);
+
   const activeWorkspace = useMemo(
     () => workspaces.find((w) => w.id === activeId) ?? null,
     [workspaces, activeId],
@@ -161,8 +193,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       setActiveWorkspaceId,
+      refreshWorkspaces,
     }),
-    [activeWorkspace, workspaces, loading, error, setActiveWorkspaceId],
+    [activeWorkspace, workspaces, loading, error, setActiveWorkspaceId, refreshWorkspaces],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

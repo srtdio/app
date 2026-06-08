@@ -5,6 +5,7 @@ import { BottomTabs } from '@/components/shell/BottomTabs';
 import { Topbar } from '@/components/shell/Topbar';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
+import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -57,6 +58,7 @@ export function AppLayout() {
       <BottomTabs />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+      <WorkspaceSwitcher />
     </div>
   );
 }
