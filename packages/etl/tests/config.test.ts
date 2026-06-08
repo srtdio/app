@@ -60,14 +60,12 @@ describe('sameDatabase', () => {
 
 describe('assertSafe same-database guard', () => {
   it('does not throw for two different same-region pooler projects', () => {
-    expect(() =>
-      assertSafe(configFor(poolerUrl(REF_A), poolerUrl(REF_B), REF_B)),
-    ).not.toThrow();
+    expect(() => assertSafe(configFor(poolerUrl(REF_A), poolerUrl(REF_B), REF_B))).not.toThrow();
   });
 
   it('throws when source and target pooler URLs share a ref', () => {
-    expect(() =>
-      assertSafe(configFor(poolerUrl(REF_A), poolerUrl(REF_A), REF_A)),
-    ).toThrow(/same database/i);
+    expect(() => assertSafe(configFor(poolerUrl(REF_A), poolerUrl(REF_A), REF_A))).toThrow(
+      /same database/i,
+    );
   });
 });
