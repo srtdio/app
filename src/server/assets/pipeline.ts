@@ -20,7 +20,7 @@ import { sanitizeSvgBytes } from './svg';
 import { computeSha256 } from './sha256';
 import type { VirusScanner } from './virus-scan';
 import { assetBucketName, buildR2Key, type StorageClient } from './storage';
-import type { AssetRepository } from './repository';
+import { isFileVersionRef, type AssetRepository, type FileVersionKind } from './repository';
 import {
   err,
   ok,
@@ -36,6 +36,25 @@ export interface PipelineDeps {
   storage: StorageClient;
   repository: AssetRepository;
   scanner: VirusScanner;
+}
+
+/**
+ * Map a normalized, already-allowlisted MIME type to its stored-file kind.
+ * Allowlist (mime.ts): image/* -> 'image', video/* -> 'video',
+ * application/pdf -> 'pdf'. Anything else is impossible past the allowlist and
+ * is a programming error, so it throws rather than guessing a kind.
+ */
+function fileKindForMime(mimeType: string): FileVersionKind {
+  if (mimeType.startsWith('image/')) {
+    return 'image';
+  }
+  if (mimeType.startsWith('video/')) {
+    return 'video';
+  }
+  if (mimeType === 'application/pdf') {
+    return 'pdf';
+  }
+  throw new Error(`no file kind mapping for allowed mime type ${mimeType}`);
 }
 
 /** Apply the format-specific sanitization step to the raw bytes. */
@@ -120,6 +139,11 @@ export async function runUploadPipeline(
   if (existingAssetId !== null) {
     const same = await repository.findVersionByShaForAsset(existingAssetId, sha256);
     if (same) {
+      if (!isFileVersionRef(same)) {
+        throw new Error(
+          `asset_version ${same.id} matched a file upload by sha256 but is not a stored file`,
+        );
+      }
       return ok(
         summaryFrom({
           assetId: existingAssetId,
@@ -160,6 +184,7 @@ export async function runUploadPipeline(
       assetId: existingAssetId,
       workspaceId: input.workspaceId,
       versionNumber,
+      kind: fileKindForMime(mimeType),
       r2Key,
       mimeType,
       sha256,
@@ -194,6 +219,11 @@ export async function runUploadPipeline(
   // --- New-upload path: dedup by content, else create asset + version 1. ---
   const dedup = await repository.findVersionBySha(input.workspaceId, sha256);
   if (dedup) {
+    if (!isFileVersionRef(dedup)) {
+      throw new Error(
+        `asset_version ${dedup.id} matched a file upload by sha256 but is not a stored file`,
+      );
+    }
     return ok(
       summaryFrom({
         assetId: dedup.assetId,
@@ -240,6 +270,7 @@ export async function runUploadPipeline(
     assetId,
     workspaceId: input.workspaceId,
     versionNumber,
+    kind: fileKindForMime(mimeType),
     r2Key,
     mimeType,
     sha256,
@@ -287,6 +318,9 @@ export async function getAssetSummary(
   const current = await repository.getVersionById(input.workspaceId, asset.current_version_id);
   if (!current) {
     return err({ code: 'not_found', message: 'Asset version not found.' });
+  }
+  if (!isFileVersionRef(current)) {
+    throw new Error(`asset_version ${current.id} is the current version but is not a stored file`);
   }
   return ok({
     assetId: asset.id,

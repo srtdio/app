@@ -11,15 +11,61 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@srtdio/schemas';
 import type { AssetRow, AssetVersionRow } from './types';
 
-/** A version with the columns the pipeline reasons about. */
-export interface VersionRef {
+/** The asset_versions.kind values that are backed by stored bytes (not links). */
+export type FileVersionKind =
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'pdf'
+  | 'document'
+  | 'spreadsheet'
+  | 'presentation';
+
+const FILE_VERSION_KINDS: readonly FileVersionKind[] = [
+  'image',
+  'video',
+  'audio',
+  'pdf',
+  'document',
+  'spreadsheet',
+  'presentation',
+];
+
+function isFileVersionKind(kind: string): kind is FileVersionKind {
+  return (FILE_VERSION_KINDS as readonly string[]).includes(kind);
+}
+
+/** A stored-file version: bytes live in R2, so the byte columns are all set. */
+export interface FileVersionRef {
   id: string;
   assetId: string;
   versionNumber: number;
+  kind: FileVersionKind;
   sha256: string;
   r2Key: string;
   mimeType: string;
   sizeBytes: number;
+  externalUrl: null;
+}
+
+/** A link version: no bytes, only an external URL. */
+export interface LinkVersionRef {
+  id: string;
+  assetId: string;
+  versionNumber: number;
+  kind: 'link';
+  externalUrl: string;
+}
+
+/**
+ * A version with the columns the pipeline reasons about, discriminated on
+ * `kind` so the byte fields are reachable only on the file variant.
+ */
+export type VersionRef = FileVersionRef | LinkVersionRef;
+
+/** Narrow a {@link VersionRef} to its stored-file variant. */
+export function isFileVersionRef(ref: VersionRef): ref is FileVersionRef {
+  return ref.kind !== 'link';
 }
 
 export interface NewAsset {
@@ -36,6 +82,7 @@ export interface NewVersion {
   assetId: string;
   workspaceId: string;
   versionNumber: number;
+  kind: FileVersionKind;
   r2Key: string;
   mimeType: string;
   sha256: string;
@@ -70,18 +117,44 @@ export interface AssetRepository {
 }
 
 function toVersionRef(row: AssetVersionRow): VersionRef {
+  if (row.kind === 'link') {
+    if (row.external_url === null) {
+      throw new Error(`asset_version ${row.id} is kind=link but external_url is null`);
+    }
+    return {
+      id: row.id,
+      assetId: row.asset_id,
+      versionNumber: row.version_number,
+      kind: 'link',
+      externalUrl: row.external_url,
+    };
+  }
+  if (!isFileVersionKind(row.kind)) {
+    throw new Error(`asset_version ${row.id} has unrecognized kind ${row.kind}`);
+  }
+  if (
+    row.sha256 === null ||
+    row.r2_key === null ||
+    row.mime_type === null ||
+    row.size_bytes === null
+  ) {
+    throw new Error(`asset_version ${row.id} (kind=${row.kind}) is missing a file byte column`);
+  }
   return {
     id: row.id,
     assetId: row.asset_id,
     versionNumber: row.version_number,
+    kind: row.kind,
     sha256: row.sha256,
     r2Key: row.r2_key,
     mimeType: row.mime_type,
     sizeBytes: row.size_bytes,
+    externalUrl: null,
   };
 }
 
-const VERSION_COLS = 'id,asset_id,version_number,sha256,r2_key,mime_type,size_bytes';
+const VERSION_COLS =
+  'id,asset_id,version_number,kind,external_url,sha256,r2_key,mime_type,size_bytes';
 
 export interface SupabaseAssetEnv {
   SUPABASE_URL: string;
@@ -190,6 +263,8 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
         asset_id: version.assetId,
         workspace_id: version.workspaceId,
         version_number: version.versionNumber,
+        kind: version.kind,
+        external_url: null,
         r2_key: version.r2Key,
         mime_type: version.mimeType,
         sha256: version.sha256,
@@ -302,6 +377,8 @@ export class InMemoryAssetRepository implements AssetRepository {
       asset_id: version.assetId,
       workspace_id: version.workspaceId,
       version_number: version.versionNumber,
+      kind: version.kind,
+      external_url: null,
       r2_key: version.r2Key,
       mime_type: version.mimeType,
       sha256: version.sha256,

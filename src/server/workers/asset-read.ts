@@ -40,7 +40,12 @@ export interface AssetReadEnv {
   SUPABASE_JWT_SECRET: string;
 }
 
-export type ReadErrorCode = 'bad_request' | 'unauthorized' | 'forbidden' | 'not_found';
+export type ReadErrorCode =
+  | 'bad_request'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'not_a_stored_file';
 
 export interface ReadError {
   code: ReadErrorCode;
@@ -52,12 +57,18 @@ const STATUS_BY_CODE: Record<ReadErrorCode, number> = {
   unauthorized: 401,
   forbidden: 403,
   not_found: 404,
+  not_a_stored_file: 400,
 };
 
-/** Where an asset version's bytes live: the bucket key and its owning workspace. */
+/**
+ * Where an asset version's bytes live: its owning workspace, its kind, and the
+ * bucket key. A link version (or any version without stored bytes) has a null
+ * r2_key and cannot be signed.
+ */
 export interface AssetVersionLocator {
   workspaceId: string;
-  r2Key: string;
+  kind: string;
+  r2Key: string | null;
 }
 
 /**
@@ -88,9 +99,11 @@ export interface SignedUrlResult {
 
 /**
  * Authorize the caller for the asset version, then mint the signed URL. The
- * order is fixed: not-found before forbidden, and the membership gate always
- * runs before anything is signed. Crashes loudly if a located version is
- * missing its workspace - that is a data-integrity fault, not a 404.
+ * order is fixed: not-found before forbidden, the membership gate always runs
+ * before anything is signed, and the stored-file check runs only after the
+ * caller is proven a member. Crashes loudly if a located version is missing its
+ * workspace - that is a data-integrity fault, not a 404. A link version (or any
+ * version with a null r2_key) has no bytes to sign and is a domain error.
  */
 export async function authorizeAndSign(
   deps: AuthorizeDeps,
@@ -100,8 +113,8 @@ export async function authorizeAndSign(
   if (!version) {
     return err({ code: 'not_found', message: 'Asset version not found.' });
   }
-  if (!version.workspaceId || !version.r2Key) {
-    throw new Error(`asset_version ${input.assetVersionId} is missing workspace_id or r2_key`);
+  if (!version.workspaceId) {
+    throw new Error(`asset_version ${input.assetVersionId} is missing workspace_id`);
   }
 
   const member = await deps.store.isActiveMember({
@@ -110,6 +123,10 @@ export async function authorizeAndSign(
   });
   if (!member) {
     return err({ code: 'forbidden', message: 'Not a member of this workspace.' });
+  }
+
+  if (version.kind === 'link' || version.r2Key === null) {
+    return err({ code: 'not_a_stored_file', message: 'Asset version has no stored file to sign.' });
   }
 
   const url = await deps.signer.presignGetUrl({
@@ -195,13 +212,13 @@ export function createSupabaseAssetReadStore(env: {
     async findVersion(assetVersionId) {
       const { data, error } = await client
         .from('asset_versions')
-        .select('workspace_id,r2_key')
+        .select('workspace_id,kind,r2_key')
         .eq('id', assetVersionId)
         .maybeSingle();
       if (error) {
         throw error;
       }
-      return data ? { workspaceId: data.workspace_id, r2Key: data.r2_key } : null;
+      return data ? { workspaceId: data.workspace_id, kind: data.kind, r2Key: data.r2_key } : null;
     },
 
     async isActiveMember({ userId, workspaceId }) {

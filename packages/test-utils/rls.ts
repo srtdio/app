@@ -384,6 +384,7 @@ export async function seedScaffold(
     asset_id: asset.id,
     workspace_id: workspaceId,
     version_number: 1,
+    kind: 'image',
     r2_key: `key/${crypto.randomUUID()}`,
     mime_type: 'image/png',
     sha256: randomSha256(),

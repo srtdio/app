@@ -49,7 +49,7 @@ class RecordingSigner implements PresignedUrlSigner {
   }
 }
 
-const located: AssetVersionLocator = { workspaceId: WORKSPACE, r2Key: R2_KEY };
+const located: AssetVersionLocator = { workspaceId: WORKSPACE, kind: 'image', r2Key: R2_KEY };
 const memberOfWorkspace = new Set<string>([`${USER}:${WORKSPACE}`]);
 
 function bearerRequest(
@@ -141,6 +141,22 @@ describe('authorizeAndSign', () => {
       expect(result.error.code).toBe('forbidden');
     }
     // The cross-tenant gate must run before anything is signed.
+    expect(signer.calls).toHaveLength(0);
+  });
+
+  it('returns not_a_stored_file for a link version and never signs', async () => {
+    const signer = new RecordingSigner();
+    const link: AssetVersionLocator = { workspaceId: WORKSPACE, kind: 'link', r2Key: null };
+    const store = new FakeStore(link, memberOfWorkspace);
+    const result = await authorizeAndSign(
+      { store, signer },
+      { userId: USER, assetVersionId: VERSION_ID },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('not_a_stored_file');
+    }
+    // The signer is reached only by a stored file with a non-null r2_key.
     expect(signer.calls).toHaveLength(0);
   });
 
