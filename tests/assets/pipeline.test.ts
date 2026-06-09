@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   InMemoryAssetRepository,
-  InMemoryStorageClient,
   MAX_FILE_SIZE_BYTES,
   NoOpScanner,
-  assetBucketName,
   getAssetSummary,
   hasExifSegment,
   runUploadPipeline,
@@ -14,6 +12,7 @@ import {
   type VirusScanner,
   type VirusScanResult,
 } from '@/server/assets';
+import { InMemoryStorageClient, assetBucketName } from '@srtdio/storage';
 import { GPS_SENTINEL, makeJpeg, svgBytes } from './fixtures';
 
 const WORKSPACE_A = '11111111-1111-7111-8111-111111111111';

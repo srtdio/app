@@ -6,8 +6,11 @@
 // implementation talks to the S3-compatible API with SigV4 signing, using the
 // R2 access-key credentials from env - no service binding, because buckets are
 // created at runtime.
-
-import { fetchWithTrace } from '@/lib/fetch';
+//
+// This package is runtime-neutral: it imports nothing app-specific. The traced
+// fetch is supplied by the caller via the constructor so trace propagation is
+// preserved without depending on the app's Vite-bound fetch wrapper. The app
+// passes its fetchWithTrace; the Node ETL passes its own traced fetch.
 
 export interface PutObjectInput {
   bucket: string;
@@ -22,6 +25,17 @@ export interface StorageClient {
   ensureBucket(bucket: string, traceId: string): Promise<void>;
   putObject(input: PutObjectInput): Promise<void>;
 }
+
+/**
+ * A fetch that attaches the X-Trace-Id header. Matches the signature of the
+ * app's fetchWithTrace so callers can pass it directly; the package defines the
+ * type locally to avoid importing anything app-specific.
+ */
+export type TracedFetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  traceId?: string,
+) => Promise<Response>;
 
 const ASSET_BUCKET_PREFIX = 'assets-';
 export const AVATAR_BUCKET = 'user-avatars';
@@ -101,7 +115,10 @@ function amzDate(now: Date): { full: string; short: string } {
 export class R2StorageClient implements StorageClient {
   private readonly host: string;
 
-  constructor(private readonly env: R2StorageEnv) {
+  constructor(
+    private readonly env: R2StorageEnv,
+    private readonly tracedFetch: TracedFetch,
+  ) {
     this.host = `${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
   }
 
@@ -237,7 +254,7 @@ export class R2StorageClient implements StorageClient {
       'content-type': req.contentType,
     });
 
-    return fetchWithTrace(
+    return this.tracedFetch(
       `https://${this.host}${req.path}`,
       { method: req.method, headers, body: req.body as BodyInit },
       req.traceId,

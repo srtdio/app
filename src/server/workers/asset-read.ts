@@ -20,7 +20,8 @@
 import { jwtVerify } from 'jose';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@srtdio/schemas';
-import { assetBucketName, R2StorageClient } from '@/server/assets/storage';
+import { assetBucketName, R2StorageClient } from '@srtdio/storage';
+import { fetchWithTrace } from '@/lib/fetch';
 import { err, ok, type Result } from '@/server/assets/types';
 import { extractTraceId } from '@/server/trace';
 import { logger } from '@/server/logger';
@@ -252,11 +253,14 @@ async function handlePost(request: Request, env: AssetReadEnv, traceId: string):
   const result = await authorizeAndSign(
     {
       store: createSupabaseAssetReadStore(env),
-      signer: new R2StorageClient({
-        CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
-        CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
-        CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-      }),
+      signer: new R2StorageClient(
+        {
+          CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
+          CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+        },
+        fetchWithTrace,
+      ),
     },
     { userId: caller.value, assetVersionId: parsed.value },
   );
