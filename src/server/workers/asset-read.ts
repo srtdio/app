@@ -40,7 +40,12 @@ export interface AssetReadEnv {
   SUPABASE_JWT_SECRET: string;
 }
 
-export type ReadErrorCode = 'bad_request' | 'unauthorized' | 'forbidden' | 'not_found';
+export type ReadErrorCode =
+  | 'bad_request'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'not_a_stored_file';
 
 export interface ReadError {
   code: ReadErrorCode;
@@ -52,12 +57,21 @@ const STATUS_BY_CODE: Record<ReadErrorCode, number> = {
   unauthorized: 401,
   forbidden: 403,
   not_found: 404,
+  // A link version exists and the caller may read it, but this endpoint signs
+  // stored files only; the request targets the wrong surface.
+  not_a_stored_file: 400,
 };
 
-/** Where an asset version's bytes live: the bucket key and its owning workspace. */
+/**
+ * An asset version as the signer path sees it: its owning workspace, its kind,
+ * and the R2 key when it has stored bytes. A link version has no r2Key (it is
+ * served from its external_url elsewhere), so r2Key is nullable here and the
+ * signer must check kind before trusting it.
+ */
 export interface AssetVersionLocator {
   workspaceId: string;
-  r2Key: string;
+  kind: string;
+  r2Key: string | null;
 }
 
 /**
@@ -100,8 +114,8 @@ export async function authorizeAndSign(
   if (!version) {
     return err({ code: 'not_found', message: 'Asset version not found.' });
   }
-  if (!version.workspaceId || !version.r2Key) {
-    throw new Error(`asset_version ${input.assetVersionId} is missing workspace_id or r2_key`);
+  if (!version.workspaceId) {
+    throw new Error(`asset_version ${input.assetVersionId} is missing workspace_id`);
   }
 
   const member = await deps.store.isActiveMember({
@@ -110,6 +124,20 @@ export async function authorizeAndSign(
   });
   if (!member) {
     return err({ code: 'forbidden', message: 'Not a member of this workspace.' });
+  }
+
+  // A link version has no stored object. It is served from its external_url
+  // elsewhere and must never be signed - reject loudly rather than fall back.
+  if (version.kind === 'link') {
+    return err({
+      code: 'not_a_stored_file',
+      message: 'This asset version is a link and has no stored file to sign.',
+    });
+  }
+  // A file-kind version with no r2_key violates the storage invariant: a
+  // data-integrity fault, not the clean link case. Crash early.
+  if (version.r2Key === null) {
+    throw new Error(`asset_version ${input.assetVersionId} (kind '${version.kind}') has no r2_key`);
   }
 
   const url = await deps.signer.presignGetUrl({
@@ -195,13 +223,13 @@ export function createSupabaseAssetReadStore(env: {
     async findVersion(assetVersionId) {
       const { data, error } = await client
         .from('asset_versions')
-        .select('workspace_id,r2_key')
+        .select('workspace_id,kind,r2_key')
         .eq('id', assetVersionId)
         .maybeSingle();
       if (error) {
         throw error;
       }
-      return data ? { workspaceId: data.workspace_id, r2Key: data.r2_key } : null;
+      return data ? { workspaceId: data.workspace_id, kind: data.kind, r2Key: data.r2_key } : null;
     },
 
     async isActiveMember({ userId, workspaceId }) {
