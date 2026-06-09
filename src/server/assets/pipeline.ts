@@ -14,12 +14,19 @@
 // Expected failures are returned as Result errors; only system faults throw.
 
 import { v7 as uuidv7 } from 'uuid';
-import { isAllowedMime, isJpegMime, isSvgMime, normalizeMime } from './mime';
 import { stripJpegMetadata } from './exif';
 import { sanitizeSvgBytes } from './svg';
-import { computeSha256 } from './sha256';
 import type { VirusScanner } from './virus-scan';
-import { assetBucketName, buildR2Key, type StorageClient } from './storage';
+import {
+  assetBucketName,
+  buildR2Key,
+  computeSha256,
+  isAllowedMime,
+  isJpegMime,
+  isSvgMime,
+  normalizeMime,
+  type StorageClient,
+} from '@srtdio/storage';
 import { isFileVersionRef, type AssetRepository, type FileVersionKind } from './repository';
 import {
   err,

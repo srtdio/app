@@ -14,14 +14,14 @@ import {
   createSupabaseAssetRepository,
   getAssetSummary,
   runUploadPipeline,
-  R2StorageClient,
   selectScanner,
   type AssetRepository,
-  type StorageClient,
   type UploadErrorCode,
 } from '@/server/assets';
+import { R2StorageClient, type StorageClient } from '@srtdio/storage';
 import { extractTraceId } from '@/server/trace';
 import { TRACE_ID_HEADER } from '@/lib/trace';
+import { fetchWithTrace } from '@/lib/fetch';
 
 export interface AssetUploadEnv {
   CLOUDFLARE_ACCOUNT_ID: string;
@@ -48,11 +48,14 @@ function json(status: number, body: unknown, traceId: string): Response {
 }
 
 function buildStorage(env: AssetUploadEnv): StorageClient {
-  return new R2StorageClient({
-    CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
-    CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
-    CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-  });
+  return new R2StorageClient(
+    {
+      CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
+      CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+    },
+    fetchWithTrace,
+  );
 }
 
 function buildRepository(env: AssetUploadEnv): AssetRepository {
