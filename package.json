@@ -39,6 +39,7 @@
     "@srtdio/posts": "workspace:*",
     "@srtdio/rpc": "workspace:*",
     "@srtdio/schemas": "workspace:*",
+    "@srtdio/storage": "workspace:*",
     "@srtdio/workspace": "workspace:*",
     "@types/node": "^22",
     "@types/react": "^18.3.18",
