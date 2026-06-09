@@ -55,6 +55,8 @@ The v1 project ID appears only in the ETL script and the cutover PR.
 | 26 | Trash backend: soft-delete + restore for assets (30 days) and workspaces (7 days), cleanup cron | 15 |
 | 27 | Alerts and monitoring: webhook signature failures, RLS CI, capability audit CI, mirror cron failures, Agora reconciliation drift | 4, 10 |
 | - | Repo hygiene: stop tracking .env.production (public repo). git rm --cached only, file stays on disk; drop the !.env.production negation in .gitignore so the .env.* rule covers it and no production env file can be committed (a real secret could land there later). Tracking-only, no schema. | none |
+| - | Scaffold @srtdio/storage package (scaffold) | none |
+| - | Move R2 client, buildR2Key, assetBucketName, sha256, mime into @srtdio/storage and repoint app worker imports (scaffold) | 15 |
 
 ## 3. Phase 2: ETL
 

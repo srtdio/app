@@ -63,6 +63,9 @@ importers:
       '@srtdio/schemas':
         specifier: workspace:*
         version: link:packages/schemas
+      '@srtdio/storage':
+        specifier: workspace:*
+        version: link:packages/storage
       '@srtdio/workspace':
         specifier: workspace:*
         version: link:packages/workspace
@@ -241,6 +244,12 @@ importers:
       zod:
         specifier: 3.25.76
         version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/storage:
     devDependencies:
       typescript:
         specifier: 5.9.3
