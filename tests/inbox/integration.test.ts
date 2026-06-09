@@ -237,6 +237,7 @@ describe.runIf(INBOX_SUITE)('inbox-writer processEvent (integration)', () => {
         asset_id: asset.id,
         workspace_id: ws.workspaceId,
         version_number: n,
+        kind: 'image',
         r2_key: `k/${n}/${crypto.randomUUID()}`,
         mime_type: 'image/png',
         sha256: 'a'.repeat(64),
