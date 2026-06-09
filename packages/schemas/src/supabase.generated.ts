@@ -84,16 +84,78 @@ export type Database = {
           },
         ]
       }
-      asset_versions: {
+      asset_renditions: {
         Row: {
-          asset_id: string
+          asset_version_id: string
+          created_at: string
           duration_ms: number | null
           height: number | null
           id: string
           mime_type: string
           r2_key: string
+          role: string
           sha256: string
           size_bytes: number
+          width: number | null
+          workspace_id: string
+        }
+        Insert: {
+          asset_version_id: string
+          created_at?: string
+          duration_ms?: number | null
+          height?: number | null
+          id?: string
+          mime_type: string
+          r2_key: string
+          role: string
+          sha256: string
+          size_bytes: number
+          width?: number | null
+          workspace_id: string
+        }
+        Update: {
+          asset_version_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          height?: number | null
+          id?: string
+          mime_type?: string
+          r2_key?: string
+          role?: string
+          sha256?: string
+          size_bytes?: number
+          width?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_renditions_asset_version_id_fkey"
+            columns: ["asset_version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_renditions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_versions: {
+        Row: {
+          asset_id: string
+          duration_ms: number | null
+          external_url: string | null
+          height: number | null
+          id: string
+          kind: string
+          mime_type: string | null
+          r2_key: string | null
+          sha256: string | null
+          size_bytes: number | null
           uploaded_at: string
           uploaded_by: string
           version_number: number
@@ -103,12 +165,14 @@ export type Database = {
         Insert: {
           asset_id: string
           duration_ms?: number | null
+          external_url?: string | null
           height?: number | null
           id?: string
-          mime_type: string
-          r2_key: string
-          sha256: string
-          size_bytes: number
+          kind: string
+          mime_type?: string | null
+          r2_key?: string | null
+          sha256?: string | null
+          size_bytes?: number | null
           uploaded_at?: string
           uploaded_by: string
           version_number: number
@@ -118,12 +182,14 @@ export type Database = {
         Update: {
           asset_id?: string
           duration_ms?: number | null
+          external_url?: string | null
           height?: number | null
           id?: string
-          mime_type?: string
-          r2_key?: string
-          sha256?: string
-          size_bytes?: number
+          kind?: string
+          mime_type?: string | null
+          r2_key?: string | null
+          sha256?: string | null
+          size_bytes?: number | null
           uploaded_at?: string
           uploaded_by?: string
           version_number?: number
