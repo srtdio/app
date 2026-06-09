@@ -1,0 +1,19 @@
+name = "srtdio-asset-read"
+main = "../../src/server/workers/asset-read.ts"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+# Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
+# srtdio-logs (see docs/cloudflare-logpush-setup.md).
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# All values are supplied as Worker secrets (wrangler secret put / CI), never
+# committed. Only binding names live here:
+#   CLOUDFLARE_ACCOUNT_ID           - R2 S3 endpoint host
+#   CLOUDFLARE_R2_ACCESS_KEY_ID     - R2 SigV4 access key
+#   CLOUDFLARE_R2_SECRET_ACCESS_KEY - R2 SigV4 secret
+#   SUPABASE_URL                    - project URL for the service-role lookups
+#   SUPABASE_SECRET_KEY             - service role: asset_version + membership reads
+#   SUPABASE_JWT_SECRET             - HS256 verify of the caller's access token

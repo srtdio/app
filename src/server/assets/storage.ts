@@ -139,6 +139,63 @@ export class R2StorageClient implements StorageClient {
     }
   }
 
+  /**
+   * Mint a query-string SigV4 presigned GET URL the browser can fetch directly.
+   * No request is sent here - this only signs - so the caller never proxies the
+   * object bytes. Reuses the same SigV4 primitives as the PUT path; the payload
+   * is unsigned (standard for presigned URLs). Valid for `expiresInSeconds`.
+   */
+  async presignGetUrl(input: {
+    bucket: string;
+    key: string;
+    expiresInSeconds: number;
+  }): Promise<string> {
+    const now = new Date();
+    const { full, short } = amzDate(now);
+    const canonicalUri = `/${encodeSegment(input.bucket)}/${input.key
+      .split('/')
+      .map(encodeSegment)
+      .join('/')}`;
+    const scope = `${short}/${REGION}/${SERVICE}/aws4_request`;
+    const credential = `${this.env.CLOUDFLARE_R2_ACCESS_KEY_ID}/${scope}`;
+
+    // Query params must be sorted by key; values RFC 3986-encoded (encodeSegment
+    // also percent-encodes the '/' in Credential, as SigV4 requires).
+    const query: Array<[string, string]> = [
+      ['X-Amz-Algorithm', ALGORITHM],
+      ['X-Amz-Credential', credential],
+      ['X-Amz-Date', full],
+      ['X-Amz-Expires', String(input.expiresInSeconds)],
+      ['X-Amz-SignedHeaders', 'host'],
+    ];
+    const canonicalQuery = query
+      .map(([k, v]) => `${encodeSegment(k)}=${encodeSegment(v)}`)
+      .join('&');
+
+    const canonicalRequest = [
+      'GET',
+      canonicalUri,
+      canonicalQuery,
+      `host:${this.host}\n`,
+      'host',
+      'UNSIGNED-PAYLOAD',
+    ].join('\n');
+
+    const stringToSign = [ALGORITHM, full, scope, await sha256Hex(canonicalRequest)].join('\n');
+    const kSigning = await this.deriveSigningKey(short);
+    const signature = toHex((await hmac(kSigning, stringToSign)).buffer as ArrayBuffer);
+
+    return `https://${this.host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+  }
+
+  /** Derive the SigV4 date-scoped signing key. Shared by the PUT and presign paths. */
+  private async deriveSigningKey(short: string): Promise<Uint8Array> {
+    const kDate = await hmac(enc.encode(`AWS4${this.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY}`), short);
+    const kRegion = await hmac(kDate, REGION);
+    const kService = await hmac(kRegion, SERVICE);
+    return hmac(kService, 'aws4_request');
+  }
+
   private async signedFetch(req: {
     method: string;
     path: string;
@@ -166,10 +223,7 @@ export class R2StorageClient implements StorageClient {
     const scope = `${short}/${REGION}/${SERVICE}/aws4_request`;
     const stringToSign = [ALGORITHM, full, scope, await sha256Hex(canonicalRequest)].join('\n');
 
-    const kDate = await hmac(enc.encode(`AWS4${this.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY}`), short);
-    const kRegion = await hmac(kDate, REGION);
-    const kService = await hmac(kRegion, SERVICE);
-    const kSigning = await hmac(kService, 'aws4_request');
+    const kSigning = await this.deriveSigningKey(short);
     const signature = toHex((await hmac(kSigning, stringToSign)).buffer as ArrayBuffer);
 
     const authorization =
