@@ -140,7 +140,9 @@ export async function runUploadPipeline(
     const same = await repository.findVersionByShaForAsset(existingAssetId, sha256);
     if (same) {
       if (!isFileVersionRef(same)) {
-        throw new Error(`asset_version ${same.id} matched a file upload by sha256 but is not a stored file`);
+        throw new Error(
+          `asset_version ${same.id} matched a file upload by sha256 but is not a stored file`,
+        );
       }
       return ok(
         summaryFrom({
@@ -218,7 +220,9 @@ export async function runUploadPipeline(
   const dedup = await repository.findVersionBySha(input.workspaceId, sha256);
   if (dedup) {
     if (!isFileVersionRef(dedup)) {
-      throw new Error(`asset_version ${dedup.id} matched a file upload by sha256 but is not a stored file`);
+      throw new Error(
+        `asset_version ${dedup.id} matched a file upload by sha256 but is not a stored file`,
+      );
     }
     return ok(
       summaryFrom({

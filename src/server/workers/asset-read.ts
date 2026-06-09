@@ -218,9 +218,7 @@ export function createSupabaseAssetReadStore(env: {
       if (error) {
         throw error;
       }
-      return data
-        ? { workspaceId: data.workspace_id, kind: data.kind, r2Key: data.r2_key }
-        : null;
+      return data ? { workspaceId: data.workspace_id, kind: data.kind, r2Key: data.r2_key } : null;
     },
 
     async isActiveMember({ userId, workspaceId }) {
