@@ -14,13 +14,13 @@
 // Expected failures are returned as Result errors; only system faults throw.
 
 import { v7 as uuidv7 } from 'uuid';
-import { isAllowedMime, isJpegMime, isSvgMime, normalizeMime } from './mime';
+import { isAllowedMime, isImageMime, isJpegMime, isSvgMime, normalizeMime } from './mime';
 import { stripJpegMetadata } from './exif';
 import { sanitizeSvgBytes } from './svg';
 import { computeSha256 } from './sha256';
 import type { VirusScanner } from './virus-scan';
 import { assetBucketName, buildR2Key, type StorageClient } from './storage';
-import type { AssetRepository } from './repository';
+import type { AssetRepository, FileVersionKind } from './repository';
 import {
   err,
   ok,
@@ -36,6 +36,26 @@ export interface PipelineDeps {
   storage: StorageClient;
   repository: AssetRepository;
   scanner: VirusScanner;
+}
+
+/**
+ * Map a validated upload MIME to its stored-file kind. The MIME allowlist
+ * (isAllowedMime) admits only images, mp4/quicktime video and PDF today, so
+ * those are the only kinds produced here. An unmapped MIME reaching this point
+ * means the allowlist and this map drifted apart - throw rather than guess.
+ */
+function fileKindForMime(mimeType: string): FileVersionKind {
+  const mime = normalizeMime(mimeType);
+  if (isImageMime(mime)) {
+    return 'image';
+  }
+  if (mime.startsWith('video/')) {
+    return 'video';
+  }
+  if (mime === 'application/pdf') {
+    return 'pdf';
+  }
+  throw new Error(`no stored-file kind mapping for MIME '${mimeType}'`);
 }
 
 /** Apply the format-specific sanitization step to the raw bytes. */
@@ -75,6 +95,9 @@ export async function runUploadPipeline(
   if (!isAllowedMime(input.contentType)) {
     return err({ code: 'unsupported_mime', message: `MIME type not allowed: ${mimeType}` });
   }
+  // The pipeline stores files only; derive the stored-file kind from the now
+  // validated MIME so insertVersion records it (never a 'link').
+  const kind = fileKindForMime(mimeType);
 
   // 2. Size cap (checked on the raw upload).
   if (input.bytes.byteLength === 0) {
@@ -160,6 +183,7 @@ export async function runUploadPipeline(
       assetId: existingAssetId,
       workspaceId: input.workspaceId,
       versionNumber,
+      kind,
       r2Key,
       mimeType,
       sha256,
@@ -240,6 +264,7 @@ export async function runUploadPipeline(
     assetId,
     workspaceId: input.workspaceId,
     versionNumber,
+    kind,
     r2Key,
     mimeType,
     sha256,
@@ -287,6 +312,15 @@ export async function getAssetSummary(
   const current = await repository.getVersionById(input.workspaceId, asset.current_version_id);
   if (!current) {
     return err({ code: 'not_found', message: 'Asset version not found.' });
+  }
+  // This pipeline only ever stores files, so an asset's current version must be
+  // a file ref. A link here means the row was written outside this path - a
+  // data-integrity fault, not an expected failure: crash rather than fabricate
+  // byte fields that a link ref does not carry.
+  if (current.kind === 'link') {
+    throw new Error(
+      `asset_version ${current.id} (asset ${asset.id}) is a link; the upload pipeline stores files only`,
+    );
   }
   return ok({
     assetId: asset.id,
