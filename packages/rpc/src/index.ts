@@ -124,6 +124,14 @@ export function briefClose(
   return callProc(client, 'brief_close', args);
 }
 
+export type AssetDeleteArgs = ProcArgs<'asset_delete'>;
+export function assetDelete(
+  client: Client,
+  args: AssetDeleteArgs,
+): Promise<Result<ProcReturns<'asset_delete'>>> {
+  return callProc(client, 'asset_delete', args);
+}
+
 export type CommentCreateArgs = ProcArgs<'comment_create'>;
 export function commentCreate(
   client: Client,

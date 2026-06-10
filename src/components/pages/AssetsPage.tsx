@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { PageHead } from '@/components/shell/PageHead';
@@ -9,6 +10,7 @@ import {
   IconChevronRight,
   IconDownload,
   IconSearch,
+  IconTrash,
   IconUpload,
   IconX,
 } from '@/components/ui/icons';
@@ -18,17 +20,21 @@ import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
+import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSort } from '@/lib/use-sort';
 import { PresignCache } from '@/lib/asset-presign';
+import { assetDelete } from '@srtdio/rpc';
 import {
   ASSET_SORT_DEFAULT,
   ASSET_SORT_OPTIONS,
   breadcrumbSegments,
   buildKindCounts,
+  deleteAssetsBatch,
   filterAssets,
   KIND_LABELS,
   listAssets,
+  removeAssetsById,
   sortAssets,
   subfolders,
   visibleKinds,
@@ -39,9 +45,13 @@ import {
 
 const ROOT_FOLDER = '/';
 const SKELETON_COUNT = 12;
+// Cap on simultaneous asset_delete calls in a bulk delete, mirroring the
+// presign concurrency ceiling so a large multi-select stays bounded.
+const DELETE_CONCURRENCY = 6;
 
 export function AssetsPage() {
   const { workspaceId, workspaces } = useWorkspace();
+  const newTrace = useNewTrace();
   const bucket = useMemo(
     () => workspaces.find((w) => w.id === workspaceId)?.asset_bucket ?? null,
     [workspaces, workspaceId],
@@ -58,6 +68,9 @@ export function AssetsPage() {
   const [openItem, setOpenItem] = useState<AssetListItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // One presign cache for the whole page: bounds concurrency and caches URLs so
   // a screen of image cards never fires a burst of presigns. Rebuilt only if the
@@ -97,6 +110,8 @@ export function AssetsPage() {
     setSelected(new Set());
     setOpenItem(null);
     setUploadOpen(false);
+    setConfirmBulk(false);
+    setActionError(null);
   }, [workspaceId]);
 
   const counts = useMemo(() => buildKindCounts(items), [items]);
@@ -132,6 +147,55 @@ export function AssetsPage() {
   }, []);
 
   const clearSelection = useCallback(() => setSelected(new Set()), []);
+
+  // Single delete (from the drawer): remove the row optimistically, call the
+  // proc, and roll the row back on failure. Resolves true so the drawer knows to
+  // close. Delete is offered to every member, matching asset_delete's policy
+  // (is_active_workspace_member); there is no UI role gate.
+  const deleteOne = useCallback(
+    async (item: AssetListItem): Promise<boolean> => {
+      setActionError(null);
+      const snapshot = items;
+      setItems((prev) => removeAssetsById(prev, [item.id]));
+      const result = await assetDelete(supabase, { p_asset_id: item.id, p_trace_id: newTrace() });
+      if (!result.ok) {
+        setItems(snapshot);
+        setActionError('Could not delete that asset. Please try again.');
+        return false;
+      }
+      setSelected((prev) => {
+        if (!prev.has(item.id)) return prev;
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+      return true;
+    },
+    [items, newTrace],
+  );
+
+  // Bulk delete (from the selection bar): fan out asset_delete with bounded
+  // concurrency, remove only the ids that succeeded, clear selection, and
+  // surface a count of any failures (their rows stay in the list).
+  const deleteSelected = useCallback(async (): Promise<void> => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setDeleting(true);
+    setActionError(null);
+    const outcome = await deleteAssetsBatch(ids, DELETE_CONCURRENCY, (id) =>
+      assetDelete(supabase, { p_asset_id: id, p_trace_id: newTrace() }),
+    );
+    if (outcome.succeeded.length > 0) {
+      setItems((prev) => removeAssetsById(prev, outcome.succeeded));
+    }
+    setDeleting(false);
+    setConfirmBulk(false);
+    setSelected(new Set());
+    if (outcome.failed.length > 0) {
+      const n = outcome.failed.length;
+      setActionError(`Could not delete ${n} ${n === 1 ? 'asset' : 'assets'}. Please try again.`);
+    }
+  }, [selected, newTrace]);
 
   const downloadSelected = useCallback(async () => {
     const chosen = items.filter((item) => selected.has(item.id));
@@ -298,6 +362,10 @@ export function AssetsPage() {
                 <IconDownload size={16} />
                 Download
               </Button>
+              <Button variant="danger" size="sm" onClick={() => setConfirmBulk(true)}>
+                <IconTrash size={16} />
+                Delete
+              </Button>
               <Button variant="ghost" size="sm" onClick={clearSelection}>
                 <IconX size={16} />
                 Clear
@@ -307,6 +375,30 @@ export function AssetsPage() {
         </div>
       ) : null}
 
+      {actionError !== null ? (
+        <div className="fixed inset-x-0 bottom-[112px] z-30 px-3 md:bottom-[56px]">
+          <div
+            role="alert"
+            className="mx-auto max-w-xl rounded-xl border border-bad bg-panel px-4 py-2.5 text-sm text-bad shadow-lg"
+          >
+            {actionError}
+          </div>
+        </div>
+      ) : null}
+
+      {confirmBulk ? (
+        <ConfirmDialog
+          title="Delete assets?"
+          message={`Delete ${selected.size} ${selected.size === 1 ? 'asset' : 'assets'}? They will be removed from the library.`}
+          confirmLabel="Delete"
+          busyLabel="Deleting"
+          destructive
+          busy={deleting}
+          onConfirm={() => void deleteSelected()}
+          onCancel={() => setConfirmBulk(false)}
+        />
+      ) : null}
+
       {openItem !== null ? (
         <AssetDrawer
           item={openItem}
@@ -314,6 +406,7 @@ export function AssetsPage() {
           presignEnabled={presignEnabled}
           cache={cache}
           onClose={() => setOpenItem(null)}
+          onDelete={deleteOne}
         />
       ) : null}
 

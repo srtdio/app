@@ -4,6 +4,7 @@ import {
   breadcrumbSegments,
   buildKindCounts,
   countAttachments,
+  deleteAssetsBatch,
   deriveKind,
   displayLabel,
   fileExtension,
@@ -14,6 +15,7 @@ import {
   linkDomain,
   listAssets,
   mimeBadge,
+  removeAssetsById,
   shapeAssets,
   sortAssets,
   subfolders,
@@ -356,3 +358,70 @@ function base(id: string): AssetListItem {
     attachmentCount: 0,
   };
 }
+
+describe('removeAssetsById (optimistic remove + rollback)', () => {
+  it('removes only the listed ids, preserving order of the rest', () => {
+    const items = [base('a'), base('b'), base('c')];
+    expect(removeAssetsById(items, ['b']).map((i) => i.id)).toEqual(['a', 'c']);
+    expect(removeAssetsById(items, new Set(['a', 'c'])).map((i) => i.id)).toEqual(['b']);
+  });
+
+  it('is a no-op for unknown ids and returns a new array', () => {
+    const items = [base('a'), base('b')];
+    const out = removeAssetsById(items, ['zzz']);
+    expect(out.map((i) => i.id)).toEqual(['a', 'b']);
+    expect(out).not.toBe(items);
+  });
+
+  it('round-trips a single optimistic delete: remove then restore the snapshot', () => {
+    const snapshot = [base('a'), base('b'), base('c')];
+    const optimistic = removeAssetsById(snapshot, ['b']);
+    expect(optimistic.map((i) => i.id)).toEqual(['a', 'c']);
+    // On failure the caller restores the untouched snapshot reference.
+    expect(snapshot.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('deleteAssetsBatch (bounded concurrency)', () => {
+  it('partitions successes from failures and never aborts the batch', async () => {
+    const run = (id: string) =>
+      Promise.resolve(
+        id === 'b'
+          ? ({
+              ok: false,
+              error: { code: 'workspace_member_only', message: 'workspace_member_only' },
+            } as const)
+          : ({ ok: true, data: undefined } as const),
+      );
+    const outcome = await deleteAssetsBatch(['a', 'b', 'c'], 6, run);
+    expect(outcome.succeeded.sort()).toEqual(['a', 'c']);
+    expect(outcome.failed).toEqual([{ id: 'b', message: 'workspace_member_only' }]);
+  });
+
+  it('captures a thrown/rejected run as a failure rather than throwing', async () => {
+    const run = (id: string) =>
+      id === 'x'
+        ? Promise.reject(new Error('boom'))
+        : Promise.resolve({ ok: true, data: undefined } as const);
+    const outcome = await deleteAssetsBatch(['x', 'y'], 6, run);
+    expect(outcome.succeeded).toEqual(['y']);
+    expect(outcome.failed).toEqual([{ id: 'x', message: 'boom' }]);
+  });
+
+  it('never exceeds the concurrency limit while still processing every id', async () => {
+    let active = 0;
+    let peak = 0;
+    const run = async (): Promise<{ ok: true; data: undefined }> => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await Promise.resolve();
+      active -= 1;
+      return { ok: true, data: undefined };
+    };
+    const ids = Array.from({ length: 20 }, (_, i) => `id-${i}`);
+    const outcome = await deleteAssetsBatch(ids, 3, run);
+    expect(outcome.succeeded).toHaveLength(20);
+    expect(outcome.failed).toHaveLength(0);
+    expect(peak).toBeLessThanOrEqual(3);
+  });
+});

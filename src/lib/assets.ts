@@ -176,6 +176,59 @@ export function displayLabel(item: Pick<AssetListItem, 'displayName' | 'filename
   return name !== null && name.trim() !== '' ? name : item.filename;
 }
 
+/**
+ * Return a new list with every asset whose id is in `ids` removed. Pure, so the
+ * optimistic delete + rollback in AssetsPage is unit-tested without React: the
+ * caller snapshots the current list, removes optimistically, and restores the
+ * snapshot on failure.
+ */
+export function removeAssetsById(
+  items: AssetListItem[],
+  ids: ReadonlySet<string> | readonly string[],
+): AssetListItem[] {
+  const set = ids instanceof Set ? ids : new Set(ids);
+  return items.filter((item) => !set.has(item.id));
+}
+
+/** Outcome of a bulk delete: the ids that succeeded and the ones that failed. */
+export interface BatchDeleteOutcome {
+  succeeded: string[];
+  failed: { id: string; message: string }[];
+}
+
+/**
+ * Delete many assets with a bounded number of in-flight requests, mirroring the
+ * concurrency cap PresignCache applies to presigns so a large multi-select never
+ * fires one request per id at once. `run` is injected (the assetDelete wrapper
+ * in the app, a fake in tests) and returns the @srtdio Result shape; a rejected
+ * id is partitioned into `failed`, never aborting the rest of the batch. Order
+ * of `succeeded` is not significant; the caller removes them as a set.
+ */
+export async function deleteAssetsBatch(
+  ids: readonly string[],
+  limit: number,
+  run: (id: string) => Promise<Result<unknown>>,
+): Promise<BatchDeleteOutcome> {
+  const outcome: BatchDeleteOutcome = { succeeded: [], failed: [] };
+  const queue = [...ids];
+  const width = Math.max(1, Math.min(limit, queue.length));
+
+  async function worker(): Promise<void> {
+    for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+      try {
+        const result = await run(id);
+        if (result.ok) outcome.succeeded.push(id);
+        else outcome.failed.push({ id, message: result.error.message });
+      } catch (error) {
+        outcome.failed.push({ id, message: error instanceof Error ? error.message : 'unknown' });
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: width }, () => worker()));
+  return outcome;
+}
+
 /** Per-kind counts plus the `all` total, built generically from the items. */
 export function buildKindCounts(items: AssetListItem[]): Record<KindFilter, number> {
   const counts: Record<KindFilter, number> = { all: items.length, image: 0, link: 0, file: 0 };
