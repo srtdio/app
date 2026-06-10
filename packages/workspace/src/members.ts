@@ -26,6 +26,24 @@ export async function listMembers(
   return ok(res.data);
 }
 
+/**
+ * Count active members of a workspace (those occupying a seat). Uses a
+ * head-only count so no rows cross the wire; RLS scopes the table to the
+ * caller's memberships, and the workspace_id filter pins it to one tenant.
+ */
+export async function countActiveMembers(
+  client: Client,
+  workspaceId: string,
+): Promise<Result<number>> {
+  const res = await client
+    .from('workspace_members')
+    .select('id', { count: 'exact', head: true })
+    .eq('workspace_id', workspaceId)
+    .eq('active', true);
+  if (res.error) return fail('unknown', `countActiveMembers failed: ${res.error.message}`);
+  return ok(res.count ?? 0);
+}
+
 export async function listWorkspaces(client: Client): Promise<Result<WorkspaceRow[]>> {
   const res = await client.from('workspaces').select('*').order('created_at', { ascending: true });
   if (res.error) return fail('unknown', `listWorkspaces failed: ${res.error.message}`);

@@ -15,7 +15,16 @@ export type {
   MemberRole,
 } from './invite';
 
-export { listMembers, listWorkspaces, switchWorkspace } from './members';
+export { countActiveMembers, listMembers, listWorkspaces, switchWorkspace } from './members';
+
+export {
+  computeSeatUsage,
+  isPlanTier,
+  PLAN_SEAT_LIMITS,
+  PLAN_TIERS,
+  seatLimitForPlan,
+} from './seats';
+export type { PlanTier, SeatUsage } from './seats';
 
 export {
   createResendSender,
