@@ -17,7 +17,6 @@ import type { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
 import {
-  assetBucketName,
   buildR2Key,
   computeSha256,
   isAllowedMime,
@@ -272,7 +271,7 @@ async function processFile(
   const ref: VersionRef = { assetId: uuidv7(), versionId: uuidv7() };
   const filename = truncate(filenameFromUrl(item.url), FILENAME_MAX);
   const key = buildR2Key({
-    workspaceId: ctx.workspaceId,
+    kind: mimeToKind(mime),
     assetId: ref.assetId,
     versionNumber: 1,
     filename,
@@ -484,12 +483,12 @@ export async function loadAssets(
   source: SourceDb,
   config: EtlConfig,
   workspaceId: string,
+  bucket: string,
   briefsMap: ReadonlyMap<string, string>,
   commentsMap: ReadonlyMap<string, string>,
 ): Promise<AssetLoadSummary> {
   const traceId = uuidv7();
   const storage = new R2StorageClient(readR2Env(), tracedFetch);
-  const bucket = assetBucketName(workspaceId);
   await storage.ensureBucket(bucket, traceId);
 
   const ctx: PlanContext = {

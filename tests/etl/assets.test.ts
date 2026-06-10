@@ -178,7 +178,8 @@ describe('buildAssetPlan row shaping', () => {
     const linkV = plan.versionRows.find((v) => v.kind === 'link');
 
     // non-link: bytes present, external_url null (kind_shape compliance).
-    expect(fileV?.r2_key).toBeTypeOf('string');
+    // Key layout groups by kind with a version-prefixed filename, no ws prefix.
+    expect(fileV?.r2_key).toBe(`images/${fileV?.asset_id}/v1-a.jpg`);
     expect(fileV?.mime_type).toBe('image/jpeg');
     expect(fileV?.sha256).toBeTypeOf('string');
     expect(fileV?.size_bytes).toBe(8);

@@ -20,7 +20,7 @@
 import { jwtVerify } from 'jose';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@srtdio/schemas';
-import { assetBucketName, R2StorageClient } from '@srtdio/storage';
+import { R2StorageClient } from '@srtdio/storage';
 import { fetchWithTrace } from '@/lib/fetch';
 import { err, ok, type Result } from '@/server/assets/types';
 import { extractTraceId } from '@/server/trace';
@@ -62,12 +62,13 @@ const STATUS_BY_CODE: Record<ReadErrorCode, number> = {
 };
 
 /**
- * Where an asset version's bytes live: its owning workspace, its kind, and the
- * bucket key. A link version (or any version without stored bytes) has a null
- * r2_key and cannot be signed.
+ * Where an asset version's bytes live: its owning workspace, that workspace's
+ * permanent R2 bucket name, its kind, and the object key. A link version (or any
+ * version without stored bytes) has a null r2_key and cannot be signed.
  */
 export interface AssetVersionLocator {
   workspaceId: string;
+  bucket: string | null;
   kind: string;
   r2Key: string | null;
 }
@@ -129,9 +130,12 @@ export async function authorizeAndSign(
   if (version.kind === 'link' || version.r2Key === null) {
     return err({ code: 'not_a_stored_file', message: 'Asset version has no stored file to sign.' });
   }
+  if (version.bucket === null) {
+    throw new Error(`workspace ${version.workspaceId} is missing asset_bucket`);
+  }
 
   const url = await deps.signer.presignGetUrl({
-    bucket: assetBucketName(version.workspaceId),
+    bucket: version.bucket,
     key: version.r2Key,
     expiresInSeconds: URL_TTL_SECONDS,
   });
@@ -213,13 +217,24 @@ export function createSupabaseAssetReadStore(env: {
     async findVersion(assetVersionId) {
       const { data, error } = await client
         .from('asset_versions')
-        .select('workspace_id,kind,r2_key')
+        .select('workspace_id,kind,r2_key,workspaces(asset_bucket)')
         .eq('id', assetVersionId)
         .maybeSingle();
       if (error) {
         throw error;
       }
-      return data ? { workspaceId: data.workspace_id, kind: data.kind, r2Key: data.r2_key } : null;
+      if (!data) {
+        return null;
+      }
+      // The embedded workspace carries the bucket; supabase-js types it as an
+      // object (to-one) here via the workspace_id FK.
+      const workspace = data.workspaces as { asset_bucket: string | null } | null;
+      return {
+        workspaceId: data.workspace_id,
+        bucket: workspace?.asset_bucket ?? null,
+        kind: data.kind,
+        r2Key: data.r2_key,
+      };
     },
 
     async isActiveMember({ userId, workspaceId }) {

@@ -16,7 +16,9 @@ const USER = '33333333-3333-7333-8333-333333333333';
 const OTHER_USER = '44444444-4444-7444-8444-444444444444';
 const WORKSPACE = '11111111-1111-7111-8111-111111111111';
 const VERSION_ID = '55555555-5555-7555-8555-555555555555';
-const R2_KEY = `${WORKSPACE}/aaaa/1/photo.jpg`;
+// Stored, permanent bucket name (workspaces.asset_bucket) and new key layout.
+const BUCKET = 'assets-acme';
+const R2_KEY = 'images/aaaa/v1-photo.jpg';
 
 async function mintToken(sub: string, expSecondsFromNow = 3600): Promise<string> {
   const nowSec = Math.floor(Date.now() / 1000);
@@ -49,7 +51,12 @@ class RecordingSigner implements PresignedUrlSigner {
   }
 }
 
-const located: AssetVersionLocator = { workspaceId: WORKSPACE, kind: 'image', r2Key: R2_KEY };
+const located: AssetVersionLocator = {
+  workspaceId: WORKSPACE,
+  bucket: BUCKET,
+  kind: 'image',
+  r2Key: R2_KEY,
+};
 const memberOfWorkspace = new Set<string>([`${USER}:${WORKSPACE}`]);
 
 function bearerRequest(
@@ -123,10 +130,8 @@ describe('authorizeAndSign', () => {
       expect(result.value.url).toContain('https://signed.example/');
       expect(Date.parse(result.value.expires_at)).toBeGreaterThan(Date.now());
     }
-    // Bucket + key are resolved from the workspace and stored r2_key, 15 min TTL.
-    expect(signer.calls).toEqual([
-      { bucket: `assets-${WORKSPACE}`, key: R2_KEY, expiresInSeconds: 900 },
-    ]);
+    // Bucket comes from the stored asset_bucket, key from the stored r2_key, 15 min TTL.
+    expect(signer.calls).toEqual([{ bucket: BUCKET, key: R2_KEY, expiresInSeconds: 900 }]);
   });
 
   it('denies a caller who is not a member of the workspace with 403', async () => {
@@ -146,7 +151,12 @@ describe('authorizeAndSign', () => {
 
   it('returns not_a_stored_file for a link version and never signs', async () => {
     const signer = new RecordingSigner();
-    const link: AssetVersionLocator = { workspaceId: WORKSPACE, kind: 'link', r2Key: null };
+    const link: AssetVersionLocator = {
+      workspaceId: WORKSPACE,
+      bucket: BUCKET,
+      kind: 'link',
+      r2Key: null,
+    };
     const store = new FakeStore(link, memberOfWorkspace);
     const result = await authorizeAndSign(
       { store, signer },

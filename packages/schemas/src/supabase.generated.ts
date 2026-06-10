@@ -2177,6 +2177,7 @@ export type Database = {
       workspaces: {
         Row: {
           activated_at: string | null
+          asset_bucket: string | null
           created_at: string
           deleted_at: string | null
           digest_default_time: string
@@ -2197,6 +2198,7 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          asset_bucket?: string | null
           created_at?: string
           deleted_at?: string | null
           digest_default_time?: string
@@ -2217,6 +2219,7 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          asset_bucket?: string | null
           created_at?: string
           deleted_at?: string | null
           digest_default_time?: string
@@ -2348,6 +2351,7 @@ export type Database = {
         Args: { p_capability: string; p_workspace_id: string }
         Returns: boolean
       }
+      slugify_workspace: { Args: { p: string }; Returns: string }
       stage_transition: {
         Args: { p_post_id: string; p_to_stage: string; p_trace_id: string }
         Returns: string

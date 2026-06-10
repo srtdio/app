@@ -74,7 +74,7 @@ async function migrate(config: EtlConfig): Promise<void> {
       await client.query('BEGIN');
       log(`Mode ${config.cli.mode}: ensuring operator and workspace.`);
       await ensureOperator(client, config);
-      const workspaceId = await ensureWorkspace(client, config);
+      const { id: workspaceId, assetBucket } = await ensureWorkspace(client, config);
       if (config.cli.mode === 'dev-seed') {
         log(`Dev-seed: wiping existing content for workspace ${workspaceId}.`);
         await wipeWorkspaceContent(client, workspaceId);
@@ -92,7 +92,15 @@ async function migrate(config: EtlConfig): Promise<void> {
         workspaceId,
       );
       log(`comments: ${commentsCount}`);
-      const assets = await loadAssets(client, source, config, workspaceId, briefs.map, commentsMap);
+      const assets = await loadAssets(
+        client,
+        source,
+        config,
+        workspaceId,
+        assetBucket,
+        briefs.map,
+        commentsMap,
+      );
       log(
         `assets: files=${assets.filesMigrated} links=${assets.linksMigrated} ` +
           `deduped=${assets.deduped} skipped=${assets.skipped} failed=${assets.failed}`,
