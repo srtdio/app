@@ -1,0 +1,10 @@
+ALTER TABLE public.workspaces ADD COLUMN IF NOT EXISTS asset_bucket text;
+CREATE OR REPLACE FUNCTION public.slugify_workspace(p text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT trim(both '-' FROM regexp_replace(lower(p), '[^a-z0-9]+', '-', 'g')) $$;
+CREATE OR REPLACE FUNCTION public.set_workspace_asset_bucket() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE base text; cand text; BEGIN IF new.asset_bucket IS NOT NULL THEN RETURN new; END IF; base := left('assets-' || coalesce(nullif(public.slugify_workspace(new.name), ''), 'ws'), 56); cand := base; IF EXISTS (SELECT 1 FROM public.workspaces WHERE asset_bucket = cand AND deleted_at IS NULL) THEN cand := base || '-' || right(replace(new.id::text,'-',''), 4); IF EXISTS (SELECT 1 FROM public.workspaces WHERE asset_bucket = cand AND deleted_at IS NULL) THEN cand := base || '-' || right(replace(new.id::text,'-',''), 6); END IF; END IF; new.asset_bucket := cand; RETURN new; END $$;
+DROP TRIGGER IF EXISTS workspaces_set_asset_bucket ON public.workspaces;
+CREATE TRIGGER workspaces_set_asset_bucket BEFORE INSERT ON public.workspaces FOR EACH ROW EXECUTE FUNCTION public.set_workspace_asset_bucket();
+CREATE OR REPLACE FUNCTION public.workspaces_asset_bucket_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF old.asset_bucket IS NOT NULL AND new.asset_bucket IS DISTINCT FROM old.asset_bucket THEN RAISE EXCEPTION 'asset_bucket is permanent and cannot be changed'; END IF; RETURN new; END $$;
+DROP TRIGGER IF EXISTS workspaces_asset_bucket_immutable ON public.workspaces;
+CREATE TRIGGER workspaces_asset_bucket_immutable BEFORE UPDATE ON public.workspaces FOR EACH ROW EXECUTE FUNCTION public.workspaces_asset_bucket_immutable();
+CREATE UNIQUE INDEX IF NOT EXISTS workspaces_asset_bucket_active_uk ON public.workspaces (asset_bucket) WHERE deleted_at IS NULL;
+UPDATE public.workspaces SET asset_bucket = 'assets-' || public.slugify_workspace(name), row_version = row_version + 1 WHERE asset_bucket IS NULL AND deleted_at IS NULL;

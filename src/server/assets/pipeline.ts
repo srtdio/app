@@ -18,7 +18,6 @@ import { stripJpegMetadata } from './exif';
 import { sanitizeSvgBytes } from './svg';
 import type { VirusScanner } from './virus-scan';
 import {
-  assetBucketName,
   buildR2Key,
   computeSha256,
   isAllowedMime,
@@ -140,7 +139,9 @@ export async function runUploadPipeline(
   // 6. Content hash of the sanitized bytes.
   const sha256 = await computeSha256(sanitized);
   const sizeBytes = sanitized.byteLength;
-  const bucket = assetBucketName(input.workspaceId);
+  const kind = fileKindForMime(mimeType);
+  // The bucket is the workspace's stored, permanent name, never derived here.
+  const bucket = await repository.getAssetBucket(input.workspaceId);
 
   // --- Existing-asset path: add a version or return the matching one. ---
   if (existingAssetId !== null) {
@@ -171,7 +172,7 @@ export async function runUploadPipeline(
     const versionNumber = previousMax + 1;
     const versionId = uuidv7();
     const r2Key = buildR2Key({
-      workspaceId: input.workspaceId,
+      kind,
       assetId: existingAssetId,
       versionNumber,
       filename: input.filename,
@@ -191,7 +192,7 @@ export async function runUploadPipeline(
       assetId: existingAssetId,
       workspaceId: input.workspaceId,
       versionNumber,
-      kind: fileKindForMime(mimeType),
+      kind,
       r2Key,
       mimeType,
       sha256,
@@ -251,7 +252,7 @@ export async function runUploadPipeline(
   const versionId = uuidv7();
   const versionNumber = 1;
   const r2Key = buildR2Key({
-    workspaceId: input.workspaceId,
+    kind,
     assetId,
     versionNumber,
     filename: input.filename,
@@ -277,7 +278,7 @@ export async function runUploadPipeline(
     assetId,
     workspaceId: input.workspaceId,
     versionNumber,
-    kind: fileKindForMime(mimeType),
+    kind,
     r2Key,
     mimeType,
     sha256,

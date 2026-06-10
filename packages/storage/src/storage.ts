@@ -1,7 +1,10 @@
 // Object storage boundary for R2.
 //
-// One bucket per workspace (assets-{workspace_id}), created lazily on first
-// upload. The pipeline depends only on the StorageClient interface, so tests
+// One bucket per workspace, created lazily on first upload. The bucket name is a
+// readable, permanent value stored on workspaces.asset_bucket (set by a DB
+// trigger and immutable thereafter); callers resolve it from that column and
+// pass it in - it is never computed from the workspace id here. The pipeline
+// depends only on the StorageClient interface, so tests
 // inject an in-memory implementation and never touch the network. The R2
 // implementation talks to the S3-compatible API with SigV4 signing, using the
 // R2 access-key credentials from env - no service binding, because buckets are
@@ -37,27 +40,38 @@ export type TracedFetch = (
   traceId?: string,
 ) => Promise<Response>;
 
-const ASSET_BUCKET_PREFIX = 'assets-';
 export const AVATAR_BUCKET = 'user-avatars';
 
-/** Per-workspace asset bucket name. */
-export function assetBucketName(workspaceId: string): string {
-  return `${ASSET_BUCKET_PREFIX}${workspaceId}`;
+/**
+ * Folder segment for an asset kind. The bucket is already per-workspace, so the
+ * key groups by kind rather than repeating the workspace id. Pluralized for the
+ * common media kinds; every other file-bearing kind (audio, pdf, spreadsheet,
+ * presentation, ...) falls back to its own kind string. Link kinds never reach
+ * this path - they carry no bytes and have no R2 key.
+ */
+const KIND_FOLDER: Readonly<Record<string, string>> = {
+  image: 'images',
+  video: 'videos',
+  document: 'docs',
+};
+
+function kindFolder(kind: string): string {
+  return KIND_FOLDER[kind] ?? kind;
 }
 
 /**
- * Object key layout: workspace_id/asset_id/version_number/filename. The filename
- * is sanitized to a safe key segment; the leading path is opaque and unique per
- * version, so collisions cannot cross assets or workspaces.
+ * Object key layout within a workspace bucket: {kindFolder}/{asset_id}/v{n}-{filename}.
+ * The filename is sanitized to a safe key segment; the asset id plus version
+ * prefix make every key unique per version, so collisions cannot cross assets.
  */
 export function buildR2Key(input: {
-  workspaceId: string;
+  kind: string;
   assetId: string;
   versionNumber: number;
   filename: string;
 }): string {
   const safeName = input.filename.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '') || 'file';
-  return `${input.workspaceId}/${input.assetId}/${input.versionNumber}/${safeName}`;
+  return `${kindFolder(input.kind)}/${input.assetId}/v${input.versionNumber}-${safeName}`;
 }
 
 // ---------------------------------------------------------------------------

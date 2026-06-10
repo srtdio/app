@@ -12,7 +12,7 @@ import {
   type VirusScanner,
   type VirusScanResult,
 } from '@/server/assets';
-import { InMemoryStorageClient, assetBucketName } from '@srtdio/storage';
+import { InMemoryStorageClient } from '@srtdio/storage';
 import { GPS_SENTINEL, makeJpeg, svgBytes } from './fixtures';
 
 const WORKSPACE_A = '11111111-1111-7111-8111-111111111111';
@@ -73,8 +73,9 @@ describe('runUploadPipeline', () => {
     const asset = d.repository.assets.get(first.value.assetId);
     expect(asset?.current_version_id).toBe(first.value.versionId);
 
-    expect(first.value.r2Key).toBe(`${WORKSPACE_A}/${first.value.assetId}/1/photo.jpg`);
-    expect(d.storage.get(assetBucketName(WORKSPACE_A), first.value.r2Key)).toBeDefined();
+    // New layout: grouped by kind, no workspace prefix, version-prefixed name.
+    expect(first.value.r2Key).toBe(`images/${first.value.assetId}/v1-photo.jpg`);
+    expect(d.storage.get(d.repository.assetBucket, first.value.r2Key)).toBeDefined();
   });
 
   it('re-upload of identical content reuses the asset and adds no version', async () => {
@@ -144,7 +145,7 @@ describe('runUploadPipeline', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
 
-    const stored = d.storage.get(assetBucketName(WORKSPACE_A), res.value.r2Key);
+    const stored = d.storage.get(d.repository.assetBucket, res.value.r2Key);
     const text = new TextDecoder().decode(stored?.body ?? new Uint8Array());
     expect(text).not.toMatch(/<script/i);
     expect(text).not.toMatch(/onload=/i);
@@ -160,7 +161,7 @@ describe('runUploadPipeline', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
 
-    const stored = d.storage.get(assetBucketName(WORKSPACE_A), res.value.r2Key);
+    const stored = d.storage.get(d.repository.assetBucket, res.value.r2Key);
     const body = stored?.body ?? new Uint8Array();
     expect(hasExifSegment(body)).toBe(false);
     expect(new TextDecoder().decode(body)).not.toContain(GPS_SENTINEL);

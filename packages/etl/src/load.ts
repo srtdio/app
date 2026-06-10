@@ -82,31 +82,47 @@ export async function ensureOperator(client: PoolClient, config: EtlConfig): Pro
   );
 }
 
+// The located-or-created target workspace: its id and its permanent R2 bucket
+// name. The bucket is set by the workspaces_set_asset_bucket trigger on insert
+// and read back (never computed here) so reseeds reuse the same bucket.
+export interface EnsuredWorkspace {
+  id: string;
+  assetBucket: string;
+}
+
 // Step 2: find-or-create the workspace owned by the operator. Insert fires the
-// existing seed triggers (role permissions, onboarding); reuse on reseed keeps a
-// stable workspace_id for the dev-seed wipe. Then ensure the owner membership.
-export async function ensureWorkspace(client: PoolClient, config: EtlConfig): Promise<string> {
+// existing seed triggers (role permissions, onboarding, asset_bucket); reuse on
+// reseed keeps a stable workspace_id for the dev-seed wipe. Then ensure the owner
+// membership. Returns the id plus the stored asset_bucket.
+export async function ensureWorkspace(
+  client: PoolClient,
+  config: EtlConfig,
+): Promise<EnsuredWorkspace> {
   const name = truncate(config.workspaceName, WORKSPACE_NAME_MAX);
-  const existing = await client.query<{ id: string }>(
-    `SELECT id FROM public.workspaces
+  const existing = await client.query<{ id: string; asset_bucket: string | null }>(
+    `SELECT id, asset_bucket FROM public.workspaces
       WHERE name = $1 AND owner_user_id = $2 AND deleted_at IS NULL
       ORDER BY created_at LIMIT 1`,
     [name, config.operatorUserId],
   );
   const found = existing.rows[0];
-  const workspaceId =
+  const workspace =
     found !== undefined
-      ? found.id
+      ? found
       : (
-          await client.query<{ id: string }>(
+          await client.query<{ id: string; asset_bucket: string | null }>(
             `INSERT INTO public.workspaces (name, owner_user_id, timezone)
-             VALUES ($1, $2, $3) RETURNING id`,
+             VALUES ($1, $2, $3) RETURNING id, asset_bucket`,
             [name, config.operatorUserId, config.workspaceTimezone],
           )
-        ).rows[0]?.id;
-  if (workspaceId === undefined) {
+        ).rows[0];
+  if (workspace === undefined) {
     throw new Error('Failed to create or locate the target workspace.');
   }
+  if (workspace.asset_bucket === null) {
+    throw new Error(`Workspace ${workspace.id} has no asset_bucket.`);
+  }
+  const workspaceId = workspace.id;
 
   const member = await client.query(
     `SELECT 1 FROM public.workspace_members
@@ -120,7 +136,7 @@ export async function ensureWorkspace(client: PoolClient, config: EtlConfig): Pr
       [workspaceId, config.operatorUserId],
     );
   }
-  return workspaceId;
+  return { id: workspaceId, assetBucket: workspace.asset_bucket };
 }
 
 // Step 3: dev-seed only. Clear migrated content for this workspace so reseeds are

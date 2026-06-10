@@ -102,6 +102,8 @@ export interface AuditEntry {
 }
 
 export interface AssetRepository {
+  /** The workspace's permanent, stored R2 bucket name (workspaces.asset_bucket). */
+  getAssetBucket(workspaceId: string): Promise<string>;
   getAsset(workspaceId: string, assetId: string): Promise<AssetRow | null>;
   /** A version by id, scoped to a workspace (cross-tenant reads return null). */
   getVersionById(workspaceId: string, versionId: string): Promise<VersionRef | null>;
@@ -173,6 +175,21 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
   );
 
   return {
+    async getAssetBucket(workspaceId) {
+      const { data, error } = await client
+        .from('workspaces')
+        .select('asset_bucket')
+        .eq('id', workspaceId)
+        .maybeSingle();
+      if (error) {
+        throw error;
+      }
+      if (!data || data.asset_bucket === null) {
+        throw new Error(`workspace ${workspaceId} has no asset_bucket`);
+      }
+      return data.asset_bucket;
+    },
+
     async getAsset(workspaceId, assetId) {
       const { data, error } = await client
         .from('assets')
@@ -322,6 +339,12 @@ export class InMemoryAssetRepository implements AssetRepository {
   readonly assets = new Map<string, AssetRow>();
   readonly versions: AssetVersionRow[] = [];
   readonly audits: AuditRecord[] = [];
+  /** Stand-in for the stored workspaces.asset_bucket; fixed for tests. */
+  assetBucket = 'assets-test-ws';
+
+  getAssetBucket(_workspaceId: string): Promise<string> {
+    return Promise.resolve(this.assetBucket);
+  }
 
   getAsset(workspaceId: string, assetId: string): Promise<AssetRow | null> {
     const asset = this.assets.get(assetId);

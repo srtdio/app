@@ -2177,6 +2177,7 @@ export type Database = {
       workspaces: {
         Row: {
           activated_at: string | null
+          asset_bucket: string | null
           created_at: string
           deleted_at: string | null
           digest_default_time: string
@@ -2197,6 +2198,7 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          asset_bucket?: string | null
           created_at?: string
           deleted_at?: string | null
           digest_default_time?: string
@@ -2217,6 +2219,7 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          asset_bucket?: string | null
           created_at?: string
           deleted_at?: string | null
           digest_default_time?: string
