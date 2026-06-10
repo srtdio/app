@@ -56,6 +56,30 @@ function parseEnv(envOutput: string): RlsEnv {
 // Whether this process started the stack (and so must stop it on teardown).
 let startedHere = false;
 
+// `supabase start` has an intra-start Docker race: if the db container fails its
+// first health check the CLI recreates it, but the old docker-proxy holding the
+// published port may not have released it yet, so the rebind collides with
+// "port 54322 already in use". Re-running clears it. This wraps the single start
+// with one self-healing retry: stop (best effort), pause, then start once more.
+function startWithRetry(): void {
+  try {
+    supabase(['start', '-x', EXCLUDE]);
+    return;
+  } catch {
+    // Attempt 1 failed; tear down whatever came up so the port is released.
+    try {
+      supabase(['stop', '--no-backup']);
+    } catch {
+      // Best effort: nothing to stop, or already gone.
+    }
+    // Synchronous ~3s pause to let docker-proxy release the published port,
+    // matching this file's blocking execFileSync style.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
+    // Attempt 2: if this throws, it propagates to the caller.
+    supabase(['start', '-x', EXCLUDE]);
+  }
+}
+
 export async function setup(): Promise<void> {
   // `supabase start` needs a config; create one on the fly if absent. The
   // generated config is local-only dev infra and is intentionally not committed.
@@ -68,7 +92,7 @@ export async function setup(): Promise<void> {
   }
 
   if (!isRunning()) {
-    supabase(['start', '-x', EXCLUDE]);
+    startWithRetry();
     startedHere = true;
   }
 
