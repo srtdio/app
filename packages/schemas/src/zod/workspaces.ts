@@ -23,6 +23,7 @@ export const WorkspaceSchema = z.object({
   activated_at: z.string().nullable(),
   digest_default_time: z.string(),
   target_distributions: z.unknown(),
+  asset_bucket: z.string().nullable(),
   row_version: z.number().int(),
   created_at: z.string(),
   updated_at: z.string(),

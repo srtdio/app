@@ -54,6 +54,7 @@ One workspace = one end-client = one platform.
 | subscription_state_expires_at / trial_ends_at / activated_at | timestamptz | nullable |
 | digest_default_time | time | default 09:00 |
 | target_distributions | jsonb | nullable |
+| asset_bucket | text | permanent R2 bucket name, set on insert by trigger, immutable thereafter. Unique among active (deleted_at null) workspaces. |
 | row_version | bigint | default 1 |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
 

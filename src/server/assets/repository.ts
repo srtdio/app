@@ -339,11 +339,13 @@ export class InMemoryAssetRepository implements AssetRepository {
   readonly assets = new Map<string, AssetRow>();
   readonly versions: AssetVersionRow[] = [];
   readonly audits: AuditRecord[] = [];
-  /** Stand-in for the stored workspaces.asset_bucket; fixed for tests. */
+  /** Stand-in for the stored workspaces.asset_bucket. Per-workspace overrides
+   * fall back to {@link assetBucket}, the default used by most tests. */
   assetBucket = 'assets-test-ws';
+  readonly assetBuckets = new Map<string, string>();
 
-  getAssetBucket(_workspaceId: string): Promise<string> {
-    return Promise.resolve(this.assetBucket);
+  getAssetBucket(workspaceId: string): Promise<string> {
+    return Promise.resolve(this.assetBuckets.get(workspaceId) ?? this.assetBucket);
   }
 
   getAsset(workspaceId: string, assetId: string): Promise<AssetRow | null> {
