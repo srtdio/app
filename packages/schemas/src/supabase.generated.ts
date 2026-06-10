@@ -2351,6 +2351,7 @@ export type Database = {
         Args: { p_capability: string; p_workspace_id: string }
         Returns: boolean
       }
+      slugify_workspace: { Args: { p: string }; Returns: string }
       stage_transition: {
         Args: { p_post_id: string; p_to_stage: string; p_trace_id: string }
         Returns: string
