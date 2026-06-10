@@ -16,10 +16,20 @@ export function generateTraceId(): string {
 // Module-level holder for the active trace_id. React owns the source of truth
 // via TraceProvider, but non-React modules (the Supabase fetch wrapper) need a
 // way to read the current trace_id synchronously. TraceProvider keeps this in
-// sync; getCurrentTraceId() never returns empty because it is seeded on load.
-let currentTraceId = generateTraceId();
+// sync; getCurrentTraceId() never returns empty because it is lazily seeded on
+// first access.
+//
+// Seeding is lazy (not at module scope) because Cloudflare Workers disallow
+// random generation in global scope: workers/asset-read imports TRACE_ID_HEADER
+// from this module, which evaluates it at Worker startup. Calling
+// generateTraceId() at module scope (uuid v7 crypto randomness) made
+// `wrangler deploy` fail validation with error 10021.
+let currentTraceId: string | null = null;
 
 export function getCurrentTraceId(): string {
+  if (currentTraceId === null) {
+    currentTraceId = generateTraceId();
+  }
   return currentTraceId;
 }
 
