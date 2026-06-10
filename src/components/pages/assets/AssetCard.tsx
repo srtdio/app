@@ -4,8 +4,10 @@ import { IconCheck, IconFile, IconLink } from '@/components/ui/icons';
 import { useInView } from '@/lib/use-in-view';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
+  displayLabel,
   fileExtension,
   humanizeSize,
+  imageTileState,
   linkDomain,
   mimeBadge,
   type AssetListItem,
@@ -28,7 +30,12 @@ function useThumbnail(
   item: AssetListItem,
   cache: PresignCache,
   enabled: boolean,
-): { ref: React.RefObject<HTMLDivElement>; url: string | null; failed: boolean } {
+): {
+  ref: React.RefObject<HTMLDivElement>;
+  url: string | null;
+  failed: boolean;
+  onError: () => void;
+} {
   const { ref, inView } = useInView<HTMLDivElement>();
   const versionId = item.currentVersionId;
   const active = enabled && item.kind === 'image' && versionId !== null;
@@ -63,11 +70,31 @@ function useThumbnail(
     };
   }, [active, versionId, inView, cache]);
 
-  return { ref, url, failed };
+  // A presigned URL that 403s or is an unsupported image still must not render a
+  // blank tile: fall back to the glyph on the <img>'s error event.
+  return { ref, url, failed, onError: () => setFailed(true) };
 }
 
-const TILE =
-  'relative aspect-square w-full overflow-hidden bg-panel-2 flex items-center justify-center';
+const TILE = 'relative aspect-[4/3] w-full overflow-hidden flex items-center justify-center';
+
+/** The glyph-and-label fallback shown when there is no usable image preview. */
+function Fallback({ item }: { item: AssetListItem }) {
+  if (item.kind === 'link') {
+    return (
+      <div className="flex flex-col items-center gap-1 px-3 text-center text-fg-2">
+        <IconLink size={22} />
+        <span className="max-w-full truncate text-xs">{linkDomain(item.externalUrl)}</span>
+      </div>
+    );
+  }
+  const ext = fileExtension(item.filename);
+  return (
+    <div className="flex flex-col items-center gap-1 text-fg-2">
+      <IconFile size={24} />
+      {ext !== '' ? <span className="text-[11px] font-medium tabular-nums">{ext}</span> : null}
+    </div>
+  );
+}
 
 export function AssetCard({
   item,
@@ -78,13 +105,23 @@ export function AssetCard({
   onOpen,
   onToggleSelect,
 }: AssetCardProps) {
-  const { ref, url, failed } = useThumbnail(item, cache, presignEnabled);
+  const { ref, url, failed, onError } = useThumbnail(item, cache, presignEnabled);
+  const name = displayLabel(item);
+  const state =
+    item.kind === 'image'
+      ? imageTileState({
+          enabled: presignEnabled,
+          hasVersion: item.currentVersionId !== null,
+          url,
+          failed,
+        })
+      : 'fallback';
 
   return (
     <div
       ref={ref}
       className={cn(
-        'group relative rounded-xl border bg-panel overflow-hidden transition-colors',
+        'group relative overflow-hidden rounded-xl border bg-panel transition-colors',
         selected
           ? 'border-accent ring-1 ring-accent-line'
           : 'border-border hover:border-border-strong',
@@ -92,58 +129,47 @@ export function AssetCard({
     >
       <button
         type="button"
-        aria-label={`Open ${item.filename}`}
+        aria-label={`Open ${name}`}
         onClick={onOpen}
         className="absolute inset-0 z-0 rounded-xl"
       />
 
       <button
         type="button"
-        aria-label={selected ? `Deselect ${item.filename}` : `Select ${item.filename}`}
+        aria-label={selected ? `Deselect ${name}` : `Select ${name}`}
         aria-pressed={selected}
         onClick={onToggleSelect}
         className={cn(
           'absolute left-2 top-2 z-20 flex h-6 w-6 items-center justify-center rounded-md border transition-opacity',
           selected
-            ? 'bg-accent text-accent-fg border-accent opacity-100'
-            : 'bg-panel/90 border-border-strong text-transparent opacity-0 group-hover:opacity-100 focus:opacity-100',
+            ? 'border-accent bg-accent text-accent-fg opacity-100'
+            : 'border-border-strong bg-panel/90 text-transparent opacity-0 focus:opacity-100 group-hover:opacity-100',
           selecting && 'opacity-100',
         )}
       >
         <IconCheck size={14} />
       </button>
 
-      <div className={TILE}>
-        {item.kind === 'image' ? (
-          url !== null ? (
-            <img
-              src={url}
-              alt={item.filename}
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="text-fg-3 text-xs">{failed ? 'Preview unavailable' : ''}</div>
-          )
-        ) : item.kind === 'link' ? (
-          <div className="flex flex-col items-center gap-1 px-3 text-center text-fg-2">
-            <IconLink size={22} />
-            <span className="text-xs truncate max-w-full">{linkDomain(item.externalUrl)}</span>
-          </div>
+      <div className={cn(TILE, state === 'image' ? 'bg-panel-2' : 'bg-panel-3')}>
+        {state === 'shimmer' ? (
+          <div className="h-full w-full animate-pulse bg-panel-2" />
+        ) : state === 'image' && url !== null ? (
+          <img
+            src={url}
+            alt={name}
+            loading="lazy"
+            onError={onError}
+            className="h-full w-full object-cover"
+          />
         ) : (
-          <div className="flex flex-col items-center gap-1 text-fg-2">
-            <IconFile size={24} />
-            {fileExtension(item.filename) !== '' ? (
-              <span className="text-[11px] font-medium tabular-nums">
-                {fileExtension(item.filename)}
-              </span>
-            ) : null}
-          </div>
+          <Fallback item={item} />
         )}
       </div>
 
-      <div className="relative z-0 flex items-center gap-2 px-2.5 py-2 border-t border-border pointer-events-none">
-        <span className="flex-1 truncate text-xs font-medium">{item.filename}</span>
+      <div className="pointer-events-none relative z-0 flex items-center gap-2 border-t border-border px-2.5 py-2">
+        <span className="flex-1 truncate text-xs font-medium" title={name}>
+          {name}
+        </span>
         {item.kind === 'image' ? (
           <span className="shrink-0 rounded bg-panel-2 px-1.5 py-0.5 text-[10px] font-medium text-fg-3">
             {mimeBadge(item.mimeType)}
@@ -151,7 +177,7 @@ export function AssetCard({
         ) : null}
       </div>
 
-      <div className="relative z-0 px-2.5 pb-2 text-[11px] text-fg-3 tabular-nums pointer-events-none">
+      <div className="pointer-events-none relative z-0 px-2.5 pb-2 text-[11px] tabular-nums text-fg-3">
         {item.kind === 'link' ? linkDomain(item.externalUrl) : humanizeSize(item.sizeBytes)}
       </div>
     </div>

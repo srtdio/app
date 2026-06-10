@@ -12,7 +12,7 @@ interface AssetGridProps {
   onToggleSelect: (id: string) => void;
 }
 
-/** Responsive asset grid: two columns on mobile, ~186px auto-fill on desktop. */
+/** Responsive asset grid: two columns on mobile, ~158px auto-fill on desktop. */
 export function AssetGrid({
   items,
   selected,
@@ -23,7 +23,7 @@ export function AssetGrid({
   onToggleSelect,
 }: AssetGridProps) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(186px,1fr))]">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
       {items.map((item) => (
         <AssetCard
           key={item.id}
