@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconCopy, IconDownload, IconFile, IconLink, IconX } from '@/components/ui/icons';
+import { IconCopy, IconDownload, IconFile, IconLink, IconTrash, IconX } from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   displayLabel,
@@ -18,6 +19,11 @@ interface AssetDrawerProps {
   presignEnabled: boolean;
   cache: PresignCache;
   onClose: () => void;
+  /**
+   * Soft-delete this asset. The parent owns the list, so it removes the row
+   * optimistically and rolls back on failure; it resolves true on success.
+   */
+  onDelete: (item: AssetListItem) => Promise<boolean>;
 }
 
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -41,10 +47,19 @@ async function resolveUrl(item: AssetListItem, cache: PresignCache): Promise<str
   return (await cache.resolve(item.currentVersionId)).url;
 }
 
-export function AssetDrawer({ item, bucket, presignEnabled, cache, onClose }: AssetDrawerProps) {
+export function AssetDrawer({
+  item,
+  bucket,
+  presignEnabled,
+  cache,
+  onClose,
+  onDelete,
+}: AssetDrawerProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Eagerly presign the open asset's preview (one drawer, no fan-out concern).
   useEffect(() => {
@@ -91,6 +106,21 @@ export function AssetDrawer({ item, bucket, presignEnabled, cache, onClose }: As
       setMessage('Link copied.');
     });
   };
+
+  async function handleConfirmDelete(): Promise<void> {
+    setDeleting(true);
+    setMessage(null);
+    const ok = await onDelete(item);
+    if (ok) {
+      // Parent has removed the row; the drawer closes onto the updated list.
+      onClose();
+      return;
+    }
+    // Parent rolled the row back; keep the drawer open and report it.
+    setDeleting(false);
+    setConfirming(false);
+    setMessage('Could not delete this asset. Please try again.');
+  }
 
   return (
     <div className="fixed inset-0 z-40">
@@ -166,8 +196,30 @@ export function AssetDrawer({ item, bucket, presignEnabled, cache, onClose }: As
               Copy URL
             </Button>
           </div>
+          <Button
+            variant="danger"
+            className="w-full"
+            onClick={() => setConfirming(true)}
+            disabled={busy || deleting}
+          >
+            <IconTrash size={16} />
+            Delete
+          </Button>
         </div>
       </div>
+
+      {confirming ? (
+        <ConfirmDialog
+          title="Delete this asset?"
+          message="Delete this asset? It will be removed from the library."
+          confirmLabel="Delete"
+          busyLabel="Deleting"
+          destructive
+          busy={deleting}
+          onConfirm={() => void handleConfirmDelete()}
+          onCancel={() => setConfirming(false)}
+        />
+      ) : null}
     </div>
   );
 }
