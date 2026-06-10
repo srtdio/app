@@ -200,7 +200,7 @@ Versioned. Attachments bind to a specific asset_version_id.
 
 ### assets
 
-PK id. Fields: workspace_id FK, filename 1 to 500, current_version_id nullable FK asset_versions.id, folder_path default '/', tags text[] default {}, uploaded_by FK users.id, uploaded_at, deleted_at nullable. Indexes: FTS filename, gin tags, (workspace_id, folder_path), (workspace_id, uploaded_at desc). All where deleted_at null.
+PK id. Fields: workspace_id FK, filename 1 to 500, display_name text nullable (human label, backfilled from post title), current_version_id nullable FK asset_versions.id, folder_path default '/', tags text[] default {}, uploaded_by FK users.id, uploaded_at, deleted_at nullable. Indexes: FTS filename, gin tags, (workspace_id, folder_path), (workspace_id, uploaded_at desc). All where deleted_at null.
 
 ### asset_versions
 

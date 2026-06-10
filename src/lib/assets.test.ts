@@ -5,15 +5,19 @@ import {
   buildKindCounts,
   countAttachments,
   deriveKind,
+  displayLabel,
   fileExtension,
   filterAssets,
   formatDimensions,
   humanizeSize,
+  imageTileState,
   linkDomain,
   listAssets,
   mimeBadge,
   shapeAssets,
+  sortAssets,
   subfolders,
+  visibleKinds,
   type AssetListItem,
 } from '@/lib/assets';
 
@@ -58,6 +62,7 @@ function assetRow(id: string, kind: string, over: Record<string, unknown> = {}) 
   return {
     id,
     filename: `${id}.file`,
+    display_name: null,
     folder_path: '/',
     tags: [],
     uploaded_at: '2026-06-01T00:00:00Z',
@@ -137,6 +142,103 @@ describe('shapeAssets', () => {
   });
 });
 
+describe('displayLabel', () => {
+  it('prefers display_name when present, else falls back to filename', () => {
+    expect(displayLabel({ displayName: 'Spring Launch', filename: 'IMG_2931.jpg' })).toBe(
+      'Spring Launch',
+    );
+    expect(displayLabel({ displayName: null, filename: 'IMG_2931.jpg' })).toBe('IMG_2931.jpg');
+    // A blank/whitespace display name is treated as absent.
+    expect(displayLabel({ displayName: '   ', filename: 'IMG_2931.jpg' })).toBe('IMG_2931.jpg');
+  });
+});
+
+describe('visibleKinds', () => {
+  it('lists kinds with assets in chip order and hides zero-count kinds', () => {
+    expect(visibleKinds({ all: 3, image: 2, link: 0, file: 1 })).toEqual(['image', 'file']);
+    expect(visibleKinds({ all: 0, image: 0, link: 0, file: 0 })).toEqual([]);
+  });
+});
+
+describe('sortAssets', () => {
+  const items: AssetListItem[] = [
+    {
+      ...base('a'),
+      kind: 'link',
+      displayName: null,
+      filename: 'zeta',
+      sizeBytes: 10,
+      uploadedAt: '2026-01-03T00:00:00Z',
+    },
+    {
+      ...base('b'),
+      kind: 'image',
+      displayName: 'Alpha',
+      filename: 'b.png',
+      sizeBytes: 500,
+      uploadedAt: '2026-01-01T00:00:00Z',
+    },
+    {
+      ...base('c'),
+      kind: 'file',
+      displayName: null,
+      filename: 'middle.pdf',
+      sizeBytes: 100,
+      uploadedAt: '2026-01-02T00:00:00Z',
+    },
+  ];
+
+  it('recent = uploaded_at desc', () => {
+    expect(sortAssets(items, 'recent').map((i) => i.id)).toEqual(['a', 'c', 'b']);
+  });
+
+  it('name = display label, caseless', () => {
+    // Alpha (b), middle.pdf (c), zeta (a)
+    expect(sortAssets(items, 'name').map((i) => i.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('size = size_bytes desc', () => {
+    expect(sortAssets(items, 'size').map((i) => i.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('type = kind (chip order) then name', () => {
+    // image (b), link (a), file (c)
+    expect(sortAssets(items, 'type').map((i) => i.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('does not mutate the input', () => {
+    const order = items.map((i) => i.id);
+    sortAssets(items, 'name');
+    expect(items.map((i) => i.id)).toEqual(order);
+  });
+});
+
+describe('imageTileState', () => {
+  it('falls back on a presign-or-load error', () => {
+    expect(
+      imageTileState({ enabled: true, hasVersion: true, url: 'https://x/y', failed: true }),
+    ).toBe('fallback');
+  });
+
+  it('falls back when presigning is disabled or there is no stored version', () => {
+    expect(imageTileState({ enabled: false, hasVersion: true, url: null, failed: false })).toBe(
+      'fallback',
+    );
+    expect(imageTileState({ enabled: true, hasVersion: false, url: null, failed: false })).toBe(
+      'fallback',
+    );
+  });
+
+  it('shows the image once a URL resolves, and a shimmer while presigning', () => {
+    expect(
+      imageTileState({ enabled: true, hasVersion: true, url: 'https://x/y', failed: false }),
+    ).toBe('image');
+    expect(imageTileState({ enabled: true, hasVersion: true, url: null, failed: false })).toBe(
+      'shimmer',
+    );
+  });
+});
+
 describe('kind filtering and counts', () => {
   const items: AssetListItem[] = [
     { ...base('1'), kind: 'image', filename: 'logo.png' },
@@ -157,6 +259,16 @@ describe('kind filtering and counts', () => {
   it('filters by filename search case-insensitively, ignoring kind=all', () => {
     expect(filterAssets(items, 'all', 'HERO').map((i) => i.id)).toEqual(['2']);
     expect(filterAssets(items, 'image', 'pdf')).toEqual([]);
+  });
+
+  it('matches the display name when present, not just the filename', () => {
+    const named: AssetListItem[] = [
+      { ...base('1'), filename: 'IMG_0001.jpg', displayName: 'Summer Campaign' },
+      { ...base('2'), filename: 'summer.png', displayName: null },
+    ];
+    // "campaign" matches the display name of 1; "IMG" matches the raw filename fallback of 2 only if it has no display name.
+    expect(filterAssets(named, 'all', 'campaign').map((i) => i.id)).toEqual(['1']);
+    expect(filterAssets(named, 'all', 'img_0001').map((i) => i.id)).toEqual([]);
   });
 });
 
@@ -226,6 +338,7 @@ function base(id: string): AssetListItem {
   return {
     id,
     filename: `${id}.png`,
+    displayName: null,
     folderPath: '/',
     tags: [],
     uploadedAt: '2026-06-01T00:00:00Z',

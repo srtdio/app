@@ -2,30 +2,38 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SortMenu } from '@/components/ui/SortMenu';
 import { PageHead } from '@/components/shell/PageHead';
 import {
   IconAssets,
   IconChevronRight,
   IconDownload,
   IconSearch,
+  IconUpload,
   IconX,
 } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
 import { AssetDrawer } from '@/components/pages/assets/AssetDrawer';
+import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useSort } from '@/lib/use-sort';
 import { PresignCache } from '@/lib/asset-presign';
 import {
+  ASSET_SORT_DEFAULT,
+  ASSET_SORT_OPTIONS,
   breadcrumbSegments,
   buildKindCounts,
   filterAssets,
   KIND_LABELS,
-  KIND_ORDER,
   listAssets,
+  sortAssets,
   subfolders,
+  visibleKinds,
   type AssetListItem,
+  type AssetSort,
   type KindFilter,
 } from '@/lib/assets';
 
@@ -48,6 +56,8 @@ export function AssetsPage() {
   const [folder, setFolder] = useState(ROOT_FOLDER);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openItem, setOpenItem] = useState<AssetListItem | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
 
   // One presign cache for the whole page: bounds concurrency and caches URLs so
   // a screen of image cards never fires a burst of presigns. Rebuilt only if the
@@ -86,15 +96,24 @@ export function AssetsPage() {
     setFolder(ROOT_FOLDER);
     setSelected(new Set());
     setOpenItem(null);
+    setUploadOpen(false);
   }, [workspaceId]);
 
   const counts = useMemo(() => buildKindCounts(items), [items]);
+  const kinds = useMemo(() => visibleKinds(counts), [counts]);
   const searching = search.trim() !== '';
+
+  // If the active kind chip drops to zero (workspace switch, deletion), fall back
+  // to All so the grid never silently shows nothing for a hidden chip.
+  useEffect(() => {
+    if (kind !== 'all' && counts[kind] === 0) setKind('all');
+  }, [kind, counts]);
 
   const visible = useMemo(() => {
     const byKind = filterAssets(items, kind, search);
-    return searching ? byKind : byKind.filter((item) => item.folderPath === folder);
-  }, [items, kind, search, folder, searching]);
+    const scoped = searching ? byKind : byKind.filter((item) => item.folderPath === folder);
+    return sortAssets(scoped, sort);
+  }, [items, kind, search, folder, searching, sort]);
 
   const folders = useMemo(
     () => (searching ? [] : subfolders(items, folder)),
@@ -137,47 +156,34 @@ export function AssetsPage() {
     <>
       <PageHead title="Assets" />
 
-      <div className="px-4 md:px-6 pt-3 flex items-center gap-1 text-sm text-fg-3 flex-wrap">
-        <button
-          type="button"
-          onClick={() => setFolder(ROOT_FOLDER)}
-          className="font-mono hover:text-fg transition-colors"
-        >
-          /
-        </button>
-        {segments.map((segment) => (
-          <span key={segment.path} className="flex items-center gap-1">
-            <IconChevronRight size={14} className="text-fg-3" />
-            <button
-              type="button"
-              onClick={() => setFolder(segment.path)}
-              className="hover:text-fg transition-colors"
-            >
-              {segment.name}
-            </button>
-          </span>
-        ))}
-      </div>
-
-      <div className="px-4 md:px-6 mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="flex flex-wrap gap-2">
-          <Chip
-            label={`All ${counts.all}`}
-            selected={kind === 'all'}
-            size="tap"
-            onClick={() => setKind('all')}
-          />
-          {KIND_ORDER.map((k) => (
-            <Chip
-              key={k}
-              label={`${KIND_LABELS[k]} ${counts[k]}`}
-              selected={kind === k}
-              size="tap"
-              onClick={() => setKind(k)}
-            />
+      {/* Breadcrumb only inside a folder; the root needs no lone "/" crumb. */}
+      {!searching && segments.length > 0 ? (
+        <div className="px-4 md:px-6 pt-3 flex items-center gap-1 text-sm text-fg-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setFolder(ROOT_FOLDER)}
+            className="hover:text-fg transition-colors"
+          >
+            Assets
+          </button>
+          {segments.map((segment) => (
+            <span key={segment.path} className="flex items-center gap-1">
+              <IconChevronRight size={14} className="text-fg-3" />
+              <button
+                type="button"
+                onClick={() => setFolder(segment.path)}
+                className="hover:text-fg transition-colors"
+              >
+                {segment.name}
+              </button>
+            </span>
           ))}
         </div>
-        <div className="relative lg:ml-auto lg:w-64">
+      ) : null}
+
+      {/* One-line toolbar at every breakpoint: search grows, sort + upload stay. */}
+      <div className="px-4 md:px-6 mt-3 flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
             <IconSearch size={16} />
           </span>
@@ -186,9 +192,38 @@ export function AssetsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search files"
-            className="h-11 w-full rounded-md border border-border bg-panel pl-9 pr-3 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
+            className="h-11 w-full rounded-md border border-border bg-panel pl-9 pr-3 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none md:h-9"
           />
         </div>
+        <SortMenu options={ASSET_SORT_OPTIONS} value={sort} onChange={setSort} />
+        <Button
+          variant="primary"
+          size="lg"
+          className="h-11 shrink-0 md:h-9"
+          onClick={() => setUploadOpen(true)}
+        >
+          <IconUpload size={16} />
+          <span className="hidden sm:inline">Upload</span>
+        </Button>
+      </div>
+
+      {/* Kind chips on a single horizontally-scrollable row; zero-count kinds hidden. */}
+      <div className="px-4 md:px-6 mt-3 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <Chip
+          label={`All ${counts.all}`}
+          selected={kind === 'all'}
+          size="tap"
+          onClick={() => setKind('all')}
+        />
+        {kinds.map((k) => (
+          <Chip
+            key={k}
+            label={`${KIND_LABELS[k]} ${counts[k]}`}
+            selected={kind === k}
+            size="tap"
+            onClick={() => setKind(k)}
+          />
+        ))}
       </div>
 
       {!searching && folders.length > 0 ? (
@@ -215,13 +250,13 @@ export function AssetsPage() {
           </div>
         </div>
       ) : listLoading ? (
-        <div className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(186px,1fr))]">
+        <div className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
           {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
             <div
               key={i}
               className="rounded-xl border border-border bg-panel overflow-hidden animate-pulse"
             >
-              <div className="aspect-square w-full bg-panel-2" />
+              <div className="aspect-[4/3] w-full bg-panel-2" />
               <div className="h-9 border-t border-border" />
             </div>
           ))}
@@ -231,6 +266,12 @@ export function AssetsPage() {
           icon={<IconAssets size={24} />}
           title="No assets yet"
           description="Files and links used in posts and briefs will show up here."
+          action={
+            <Button variant="primary" onClick={() => setUploadOpen(true)}>
+              <IconUpload size={16} />
+              Upload
+            </Button>
+          }
         />
       ) : visible.length === 0 ? (
         <div className="px-4 md:px-6 py-10 text-sm text-fg-3">No matching assets.</div>
@@ -275,6 +316,8 @@ export function AssetsPage() {
           onClose={() => setOpenItem(null)}
         />
       ) : null}
+
+      <AssetUploadSheet open={uploadOpen} onClose={() => setUploadOpen(false)} />
     </>
   );
 }

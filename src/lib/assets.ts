@@ -40,6 +40,8 @@ export function deriveKind(rawKind: string | null): AssetKind {
 export interface AssetListItem {
   id: string;
   filename: string;
+  /** Human-friendly name (backfilled from the post title); may be null. */
+  displayName: string | null;
   folderPath: string;
   tags: string[];
   uploadedAt: string;
@@ -75,6 +77,7 @@ interface RawVersion {
 interface RawAssetRow {
   id: string;
   filename: string;
+  display_name: string | null;
   folder_path: string;
   tags: string[];
   uploaded_at: string;
@@ -86,7 +89,7 @@ interface RawAssetRow {
 // between the same pair of tables, so the embed MUST be disambiguated by the
 // exact constraint name or PostgREST 300s on the ambiguous relationship.
 const ASSET_SELECT =
-  'id, filename, folder_path, tags, uploaded_at, current_version_id, ' +
+  'id, filename, display_name, folder_path, tags, uploaded_at, current_version_id, ' +
   'current_version:asset_versions!assets_current_version_id_fkey(' +
   'id, kind, mime_type, size_bytes, width, height, duration_ms, external_url, r2_key, version_number)';
 
@@ -105,6 +108,7 @@ export function shapeAssets(
     return {
       id: row.id,
       filename: row.filename,
+      displayName: row.display_name ?? null,
       folderPath: row.folder_path,
       tags: row.tags,
       uploadedAt: row.uploaded_at,
@@ -166,6 +170,12 @@ export async function listAssets(
   return { ok: true, data: shapeAssets(rows, counts) };
 }
 
+/** The name shown on the card and matched by search/sort: display_name ?? filename. */
+export function displayLabel(item: Pick<AssetListItem, 'displayName' | 'filename'>): string {
+  const name = item.displayName;
+  return name !== null && name.trim() !== '' ? name : item.filename;
+}
+
 /** Per-kind counts plus the `all` total, built generically from the items. */
 export function buildKindCounts(items: AssetListItem[]): Record<KindFilter, number> {
   const counts: Record<KindFilter, number> = { all: items.length, image: 0, link: 0, file: 0 };
@@ -173,10 +183,16 @@ export function buildKindCounts(items: AssetListItem[]): Record<KindFilter, numb
   return counts;
 }
 
+/** Kinds that have at least one asset, in chip order. Zero-count kinds are hidden. */
+export function visibleKinds(counts: Record<KindFilter, number>): AssetKind[] {
+  return KIND_ORDER.filter((kind) => counts[kind] > 0);
+}
+
 /**
- * Apply the kind chip and the client-side filename search. Search ignores the
- * folder so a query reaches the whole library; folder scoping is applied by the
- * caller only when the search box is empty.
+ * Apply the kind chip and the client-side name search. Search matches the
+ * display label (display_name ?? filename) and ignores the folder so a query
+ * reaches the whole library; folder scoping is applied by the caller only when
+ * the search box is empty.
  */
 export function filterAssets(
   items: AssetListItem[],
@@ -186,9 +202,68 @@ export function filterAssets(
   const query = search.trim().toLowerCase();
   return items.filter((item) => {
     if (kind !== 'all' && item.kind !== kind) return false;
-    if (query !== '' && !item.filename.toLowerCase().includes(query)) return false;
+    if (query !== '' && !displayLabel(item).toLowerCase().includes(query)) return false;
     return true;
   });
+}
+
+/** The library sort orders, in menu order. */
+export type AssetSort = 'recent' | 'name' | 'size' | 'type';
+
+export const ASSET_SORT_DEFAULT: AssetSort = 'recent';
+
+export const ASSET_SORT_OPTIONS: { value: AssetSort; label: string }[] = [
+  { value: 'recent', label: 'Recent' },
+  { value: 'name', label: 'Name' },
+  { value: 'size', label: 'Size' },
+  { value: 'type', label: 'Type' },
+];
+
+function compareName(a: AssetListItem, b: AssetListItem): number {
+  return displayLabel(a).localeCompare(displayLabel(b), undefined, { sensitivity: 'base' });
+}
+
+/**
+ * Order the list by the chosen sort. Recent = uploaded_at desc; Name = label
+ * caseless; Size = size_bytes desc; Type = kind (chip order) then name. Pure and
+ * non-mutating; the whole library is in memory (listAssets is unpaginated), so a
+ * client sort is correct here.
+ */
+export function sortAssets(items: AssetListItem[], sort: AssetSort): AssetListItem[] {
+  const copy = [...items];
+  switch (sort) {
+    case 'name':
+      return copy.sort(compareName);
+    case 'size':
+      return copy.sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0));
+    case 'type':
+      return copy.sort((a, b) => {
+        const byKind = KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind);
+        return byKind !== 0 ? byKind : compareName(a, b);
+      });
+    case 'recent':
+    default:
+      return copy.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+  }
+}
+
+/** What an image card's tile should render: a loading shimmer, the image, or a fallback. */
+export type ImageTileState = 'shimmer' | 'image' | 'fallback';
+
+/**
+ * Decide the image tile state from the presign lifecycle. A presign-or-load
+ * error, a disabled endpoint, or a missing stored version all fall back to the
+ * glyph; a resolved URL shows the image; otherwise we are still presigning.
+ */
+export function imageTileState(args: {
+  enabled: boolean;
+  hasVersion: boolean;
+  url: string | null;
+  failed: boolean;
+}): ImageTileState {
+  if (args.failed || !args.enabled || !args.hasVersion) return 'fallback';
+  if (args.url !== null) return 'image';
+  return 'shimmer';
 }
 
 /** Immediate child folder names of `folder` derived from every asset path. */

@@ -3,7 +3,13 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconCopy, IconDownload, IconFile, IconLink, IconX } from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
-import { formatDimensions, humanizeSize, linkDomain, type AssetListItem } from '@/lib/assets';
+import {
+  displayLabel,
+  formatDimensions,
+  humanizeSize,
+  linkDomain,
+  type AssetListItem,
+} from '@/lib/assets';
 
 interface AssetDrawerProps {
   item: AssetListItem;
@@ -58,6 +64,7 @@ export function AssetDrawer({ item, bucket, presignEnabled, cache, onClose }: As
   }, [item, presignEnabled, cache]);
 
   const canAct = item.kind === 'link' ? item.externalUrl !== null : presignEnabled;
+  const name = displayLabel(item);
 
   async function withUrl(apply: (url: string) => void | Promise<void>): Promise<void> {
     setBusy(true);
@@ -95,11 +102,11 @@ export function AssetDrawer({ item, bucket, presignEnabled, cache, onClose }: As
       />
       <div
         role="dialog"
-        aria-label={`Details for ${item.filename}`}
+        aria-label={`Details for ${name}`}
         className="absolute flex flex-col bg-panel inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl border-t border-border md:inset-y-0 md:left-auto md:right-0 md:w-[380px] md:max-h-none md:rounded-none md:border-l md:border-t-0"
       >
         <div className="flex items-center gap-2 h-14 px-4 border-b border-border shrink-0">
-          <h2 className="flex-1 truncate text-sm font-semibold">{item.filename}</h2>
+          <h2 className="flex-1 truncate text-sm font-semibold">{name}</h2>
           <IconButton label="Close" onClick={onClose}>
             <IconX size={18} />
           </IconButton>
@@ -108,7 +115,7 @@ export function AssetDrawer({ item, bucket, presignEnabled, cache, onClose }: As
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
           <div className="aspect-video w-full overflow-hidden rounded-xl border border-border bg-panel-2 flex items-center justify-center">
             {item.kind === 'image' && preview !== null ? (
-              <img src={preview} alt={item.filename} className="h-full w-full object-contain" />
+              <img src={preview} alt={name} className="h-full w-full object-contain" />
             ) : item.kind === 'link' ? (
               <div className="flex flex-col items-center gap-1 text-fg-2">
                 <IconLink size={26} />
@@ -119,11 +126,12 @@ export function AssetDrawer({ item, bucket, presignEnabled, cache, onClose }: As
             )}
           </div>
 
-          <Field label="Filename" value={item.filename} />
+          <Field label="Name" value={name} />
           {item.kind === 'link' ? (
             <Field label="URL" value={item.externalUrl ?? '-'} mono />
           ) : (
             <>
+              <Field label="File" value={item.filename} mono />
               <Field label="Type" value={item.mimeType ?? '-'} />
               <Field label="Size" value={humanizeSize(item.sizeBytes)} />
               <Field label="Dimensions" value={formatDimensions(item.width, item.height)} />

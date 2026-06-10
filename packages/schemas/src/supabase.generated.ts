@@ -224,6 +224,7 @@ export type Database = {
         Row: {
           current_version_id: string | null
           deleted_at: string | null
+          display_name: string | null
           filename: string
           folder_path: string
           id: string
@@ -235,6 +236,7 @@ export type Database = {
         Insert: {
           current_version_id?: string | null
           deleted_at?: string | null
+          display_name?: string | null
           filename: string
           folder_path?: string
           id?: string
@@ -246,6 +248,7 @@ export type Database = {
         Update: {
           current_version_id?: string | null
           deleted_at?: string | null
+          display_name?: string | null
           filename?: string
           folder_path?: string
           id?: string

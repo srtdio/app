@@ -386,6 +386,7 @@ export class InMemoryAssetRepository implements AssetRepository {
       id: asset.id,
       workspace_id: asset.workspaceId,
       filename: asset.filename,
+      display_name: null,
       current_version_id: null,
       folder_path: asset.folderPath ?? '/',
       tags: asset.tags ?? [],
