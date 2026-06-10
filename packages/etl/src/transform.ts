@@ -233,3 +233,181 @@ export function commentBody(message: string, scrub: boolean): string {
 export function isBlankComment(message: string | null | undefined): boolean {
   return isBlank(message);
 }
+
+// --- Asset media helpers -------------------------------------------------------
+//
+// Pure, I/O-free helpers for the asset migration step (assets.ts): URL shape
+// checks, the comment-attachment shape parser, MIME sniffing, and the mime->kind
+// map. Kept here with the rest of the transform layer so they are unit-tested
+// without a database, a network, or the R2 client.
+
+// asset_versions.kind enum (schema.md section 5). Files map to image/video/pdf;
+// external links use 'link'.
+export type AssetKind =
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'pdf'
+  | 'document'
+  | 'spreadsheet'
+  | 'presentation'
+  | 'link';
+
+// True for a clean http(s) URL. Free-text / garbage rows are rejected so a link
+// asset never carries a non-URL external_url (the schema CHECK requires
+// ^https?://) and a file fetch is never attempted against junk.
+export function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
+// Strip scheme + host, keep the path. v1 stores the same logical object under two
+// hosts (images.srtd.io and pub-<hash>.r2.dev) that point at one bucket, so the
+// path is the pre-fetch dedup key; sha256 remains the authoritative post-fetch
+// identity. Unparseable input falls back to itself so it still keys consistently.
+export function normalizeMediaPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
+// Last path segment of a URL, used as the asset filename. Defaults to 'file' for
+// a hostless / trailing-slash / unparseable URL so filename is never empty.
+export function filenameFromUrl(url: string): string {
+  try {
+    const segment = new URL(url).pathname
+      .split('/')
+      .filter((s) => s.length > 0)
+      .pop();
+    return segment !== undefined && segment.length > 0 ? decodeURIComponent(segment) : 'file';
+  } catch {
+    return 'file';
+  }
+}
+
+// A human label for a link asset's filename: the host, or 'drive-link' when the
+// host is unreadable.
+export function linkLabel(url: string): string {
+  try {
+    const host = new URL(url).host;
+    return host.length > 0 ? host : 'drive-link';
+  } catch {
+    return 'drive-link';
+  }
+}
+
+function collectHttpUrls(values: readonly unknown[]): string[] {
+  return values.filter((v): v is string => typeof v === 'string' && isHttpUrl(v));
+}
+
+// Parse a v1 media value into a list of http(s) URLs. Handles every shape v1
+// produced for both posts/requests.images (a bare URL array) and
+// post_comments.attachments (4 shapes):
+//   (A) a JSON array of url strings,
+//   (B) a JSON object { type, urls: null | string[] },
+//   (C) a double-encoded string whose inner parse is (A),
+//   (D) a double-encoded string whose inner parse is (B).
+// A string value is JSON-parsed once before interpreting; arrays use their
+// entries, objects use .urls (may be null -> empty). Non-URL/empty entries are
+// dropped. Returns an empty array for anything it cannot interpret.
+export function parseMediaUrls(value: unknown): string[] {
+  let v = value;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(v)) return collectHttpUrls(v);
+  if (v !== null && typeof v === 'object') {
+    const urls = (v as { urls?: unknown }).urls;
+    return Array.isArray(urls) ? collectHttpUrls(urls) : [];
+  }
+  return [];
+}
+
+function extensionMime(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  switch (dot === -1 ? '' : filename.slice(dot + 1).toLowerCase()) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'gif':
+      return 'image/gif';
+    case 'svg':
+      return 'image/svg+xml';
+    case 'mp4':
+      return 'video/mp4';
+    case 'mov':
+      return 'video/quicktime';
+    case 'pdf':
+      return 'application/pdf';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+// Detect the content type from magic bytes (jpeg/png/gif/webp/pdf/mp4/quicktime),
+// falling back to the filename extension. Returns 'application/octet-stream' when
+// nothing matches, so the caller's isAllowedMime gate rejects an unknown type.
+export function sniffMime(bytes: Uint8Array, filename: string): string {
+  const b = (i: number): number => bytes[i] ?? -1;
+  if (bytes.length >= 3 && b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) return 'image/jpeg';
+  if (bytes.length >= 8 && b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47) {
+    return 'image/png';
+  }
+  if (bytes.length >= 6 && b(0) === 0x47 && b(1) === 0x49 && b(2) === 0x46 && b(3) === 0x38) {
+    return 'image/gif';
+  }
+  if (
+    bytes.length >= 12 &&
+    b(0) === 0x52 &&
+    b(1) === 0x49 &&
+    b(2) === 0x46 &&
+    b(3) === 0x46 &&
+    b(8) === 0x57 &&
+    b(9) === 0x45 &&
+    b(10) === 0x42 &&
+    b(11) === 0x50
+  ) {
+    return 'image/webp';
+  }
+  if (bytes.length >= 5 && b(0) === 0x25 && b(1) === 0x50 && b(2) === 0x44 && b(3) === 0x46) {
+    return 'application/pdf';
+  }
+  if (bytes.length >= 12 && b(4) === 0x66 && b(5) === 0x74 && b(6) === 0x79 && b(7) === 0x70) {
+    // ISO base-media 'ftyp' box: the major brand at bytes 8..11 separates
+    // QuickTime ('qt  ') from the mp4 family (isom/mp42/...).
+    const brand = String.fromCharCode(b(8), b(9), b(10), b(11));
+    return brand.startsWith('qt') ? 'video/quicktime' : 'video/mp4';
+  }
+  return extensionMime(filename);
+}
+
+const MIME_KIND: Readonly<Record<string, AssetKind>> = {
+  'image/jpeg': 'image',
+  'image/png': 'image',
+  'image/webp': 'image',
+  'image/gif': 'image',
+  'image/svg+xml': 'image',
+  'video/mp4': 'video',
+  'video/quicktime': 'video',
+  'application/pdf': 'pdf',
+};
+
+// Map an allowlisted MIME type to its asset kind. The caller gates on
+// isAllowedMime first, so every reachable input is mapped; an unmapped type is a
+// contract violation and throws rather than inventing a kind.
+export function mimeToKind(mime: string): AssetKind {
+  const kind = MIME_KIND[mime];
+  if (kind === undefined) {
+    throw new Error(`No asset kind mapping for MIME type '${mime}'.`);
+  }
+  return kind;
+}
