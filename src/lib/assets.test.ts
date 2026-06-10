@@ -387,7 +387,10 @@ describe('deleteAssetsBatch (bounded concurrency)', () => {
     const run = (id: string) =>
       Promise.resolve(
         id === 'b'
-          ? ({ ok: false, error: { code: 'workspace_member_only', message: 'workspace_member_only' } } as const)
+          ? ({
+              ok: false,
+              error: { code: 'workspace_member_only', message: 'workspace_member_only' },
+            } as const)
           : ({ ok: true, data: undefined } as const),
       );
     const outcome = await deleteAssetsBatch(['a', 'b', 'c'], 6, run);
@@ -397,7 +400,9 @@ describe('deleteAssetsBatch (bounded concurrency)', () => {
 
   it('captures a thrown/rejected run as a failure rather than throwing', async () => {
     const run = (id: string) =>
-      id === 'x' ? Promise.reject(new Error('boom')) : Promise.resolve({ ok: true, data: undefined } as const);
+      id === 'x'
+        ? Promise.reject(new Error('boom'))
+        : Promise.resolve({ ok: true, data: undefined } as const);
     const outcome = await deleteAssetsBatch(['x', 'y'], 6, run);
     expect(outcome.succeeded).toEqual(['y']);
     expect(outcome.failed).toEqual([{ id: 'x', message: 'boom' }]);

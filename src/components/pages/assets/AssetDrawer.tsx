@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconCopy, IconDownload, IconFile, IconLink, IconTrash, IconX } from '@/components/ui/icons';
+import {
+  IconCopy,
+  IconDownload,
+  IconFile,
+  IconLink,
+  IconTrash,
+  IconX,
+} from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   displayLabel,

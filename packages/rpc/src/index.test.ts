@@ -27,7 +27,10 @@ describe('assetDelete', () => {
   it('maps the invalid_payload exception to a domain error', async () => {
     const { client } = makeClient({ data: null, error: { message: 'invalid_payload' } });
     const result = await assetDelete(client, args);
-    expect(result).toEqual({ ok: false, error: { code: 'invalid_payload', message: 'invalid_payload' } });
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'invalid_payload', message: 'invalid_payload' },
+    });
   });
 
   it('maps the workspace_member_only exception to a domain error', async () => {
