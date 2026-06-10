@@ -1,0 +1,263 @@
+// The asset read + shaping layer for the workspace-global Assets library.
+//
+// Reads are plain RLS-scoped SELECTs through the supabase client (policies
+// assets_select_member / asset_versions_select_member / asset_attachments_select_member),
+// mirroring @srtdio/briefs: no proc, no service role, tenant isolation is
+// Postgres' job. listAssets does two round-trips (assets + their current version
+// embedded, then a single attachments read for the per-asset live count) so
+// there is no N+1. All shaping below is pure and unit-tested; kinds, labels and
+// counts are derived from the fetched rows, never hardcoded.
+
+import type { Client, Result } from '@srtdio/rpc';
+
+/** The three buckets the library groups assets into for display and filtering. */
+export type AssetKind = 'image' | 'link' | 'file';
+
+/** Kinds in chip order, paired with their display label. Counts come from data. */
+export const KIND_LABELS: Record<AssetKind, string> = {
+  image: 'Images',
+  link: 'Links',
+  file: 'Docs',
+};
+
+export const KIND_ORDER: AssetKind[] = ['image', 'link', 'file'];
+
+/** A filter selection: a concrete kind, or `all` for no kind restriction. */
+export type KindFilter = AssetKind | 'all';
+
+/**
+ * Derive the display kind from a version's raw `kind` string. Anything that is
+ * not an image or a link is treated as a generic file/doc, so a new server-side
+ * kind never breaks the UI; it just falls into Docs.
+ */
+export function deriveKind(rawKind: string | null): AssetKind {
+  if (rawKind === 'image') return 'image';
+  if (rawKind === 'link') return 'link';
+  return 'file';
+}
+
+/** One asset, flattened with the fields of its current version for the grid. */
+export interface AssetListItem {
+  id: string;
+  filename: string;
+  folderPath: string;
+  tags: string[];
+  uploadedAt: string;
+  currentVersionId: string | null;
+  rawKind: string | null;
+  kind: AssetKind;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  externalUrl: string | null;
+  r2Key: string | null;
+  versionNumber: number | null;
+  attachmentCount: number;
+}
+
+/** Shape of the embedded current-version row (subset selected below). */
+interface RawVersion {
+  id: string;
+  kind: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  external_url: string | null;
+  r2_key: string | null;
+  version_number: number;
+}
+
+/** Shape of one asset row with its embedded current version. */
+interface RawAssetRow {
+  id: string;
+  filename: string;
+  folder_path: string;
+  tags: string[];
+  uploaded_at: string;
+  current_version_id: string | null;
+  current_version: RawVersion | null;
+}
+
+// assets.current_version_id and asset_versions.asset_id are two distinct FKs
+// between the same pair of tables, so the embed MUST be disambiguated by the
+// exact constraint name or PostgREST 300s on the ambiguous relationship.
+const ASSET_SELECT =
+  'id, filename, folder_path, tags, uploaded_at, current_version_id, ' +
+  'current_version:asset_versions!assets_current_version_id_fkey(' +
+  'id, kind, mime_type, size_bytes, width, height, duration_ms, external_url, r2_key, version_number)';
+
+/**
+ * Flatten raw asset rows + a per-asset attachment-count map into the display
+ * shape. Pure: tests drive this directly with fixture rows. An asset whose
+ * current_version is missing (mid-upload, or hidden by RLS) still renders, as a
+ * file with null version fields.
+ */
+export function shapeAssets(
+  rows: RawAssetRow[],
+  attachmentCounts: ReadonlyMap<string, number>,
+): AssetListItem[] {
+  return rows.map((row) => {
+    const v = row.current_version;
+    return {
+      id: row.id,
+      filename: row.filename,
+      folderPath: row.folder_path,
+      tags: row.tags,
+      uploadedAt: row.uploaded_at,
+      currentVersionId: row.current_version_id,
+      rawKind: v?.kind ?? null,
+      kind: deriveKind(v?.kind ?? null),
+      mimeType: v?.mime_type ?? null,
+      sizeBytes: v?.size_bytes ?? null,
+      width: v?.width ?? null,
+      height: v?.height ?? null,
+      durationMs: v?.duration_ms ?? null,
+      externalUrl: v?.external_url ?? null,
+      r2Key: v?.r2_key ?? null,
+      versionNumber: v?.version_number ?? null,
+      attachmentCount: attachmentCounts.get(row.id) ?? 0,
+    };
+  });
+}
+
+/** Count live (non-deleted) attachments per asset id from the flat read. */
+export function countAttachments(rows: { asset_id: string }[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.asset_id, (counts.get(row.asset_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * List the active assets of one workspace, newest first, each flattened with its
+ * current version and live attachment count. A transport/PostgREST failure
+ * surfaces as { ok: false } rather than a throw, matching the @srtdio wrappers.
+ */
+export async function listAssets(
+  client: Client,
+  workspaceId: string,
+): Promise<Result<AssetListItem[]>> {
+  const assetsResult = await client
+    .from('assets')
+    .select(ASSET_SELECT)
+    .eq('workspace_id', workspaceId)
+    .is('deleted_at', null)
+    .order('uploaded_at', { ascending: false });
+  if (assetsResult.error) {
+    return { ok: false, error: { code: 'unknown', message: assetsResult.error.message } };
+  }
+
+  const attachmentsResult = await client
+    .from('asset_attachments')
+    .select('asset_id')
+    .eq('workspace_id', workspaceId)
+    .is('deleted_at', null);
+  if (attachmentsResult.error) {
+    return { ok: false, error: { code: 'unknown', message: attachmentsResult.error.message } };
+  }
+
+  const rows = (assetsResult.data ?? []) as unknown as RawAssetRow[];
+  const counts = countAttachments((attachmentsResult.data ?? []) as { asset_id: string }[]);
+  return { ok: true, data: shapeAssets(rows, counts) };
+}
+
+/** Per-kind counts plus the `all` total, built generically from the items. */
+export function buildKindCounts(items: AssetListItem[]): Record<KindFilter, number> {
+  const counts: Record<KindFilter, number> = { all: items.length, image: 0, link: 0, file: 0 };
+  for (const item of items) counts[item.kind] += 1;
+  return counts;
+}
+
+/**
+ * Apply the kind chip and the client-side filename search. Search ignores the
+ * folder so a query reaches the whole library; folder scoping is applied by the
+ * caller only when the search box is empty.
+ */
+export function filterAssets(
+  items: AssetListItem[],
+  kind: KindFilter,
+  search: string,
+): AssetListItem[] {
+  const query = search.trim().toLowerCase();
+  return items.filter((item) => {
+    if (kind !== 'all' && item.kind !== kind) return false;
+    if (query !== '' && !item.filename.toLowerCase().includes(query)) return false;
+    return true;
+  });
+}
+
+/** Immediate child folder names of `folder` derived from every asset path. */
+export function subfolders(items: AssetListItem[], folder: string): string[] {
+  const prefix = folder.endsWith('/') ? folder : `${folder}/`;
+  const names = new Set<string>();
+  for (const item of items) {
+    const path = item.folderPath;
+    if (!path.startsWith(prefix) || path === prefix) continue;
+    const rest = path.slice(prefix.length);
+    const name = rest.split('/')[0];
+    if (name !== undefined && name !== '') names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+/** Split a folder path into breadcrumb segments with their cumulative paths. */
+export function breadcrumbSegments(folder: string): { name: string; path: string }[] {
+  const parts = folder.split('/').filter((p) => p !== '');
+  const segments: { name: string; path: string }[] = [];
+  let acc = '';
+  for (const part of parts) {
+    acc = `${acc}/${part}`;
+    segments.push({ name: part, path: `${acc}/` });
+  }
+  return segments;
+}
+
+const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+/** Humanize a byte count, or an em-dash-free placeholder when unknown. */
+export function humanizeSize(bytes: number | null): string {
+  if (bytes === null || bytes <= 0) return '-';
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < SIZE_UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const rounded = value >= 10 || unit === 0 ? Math.round(value) : Math.round(value * 10) / 10;
+  return `${rounded} ${SIZE_UNITS[unit]}`;
+}
+
+/** Uppercase file extension from a filename, or empty when there is none. */
+export function fileExtension(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  if (dot <= 0 || dot === filename.length - 1) return '';
+  return filename.slice(dot + 1).toUpperCase();
+}
+
+/** A short MIME badge: the subtype (image/png -> PNG), uppercased. */
+export function mimeBadge(mime: string | null): string {
+  if (mime === null || mime === '') return 'FILE';
+  const subtype = mime.split('/')[1] ?? mime;
+  return (subtype.split('+')[0] ?? subtype).toUpperCase();
+}
+
+/** The host of an external link, falling back to the raw value when unparsable. */
+export function linkDomain(url: string | null): string {
+  if (url === null || url === '') return '';
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+/** `W x H` pixel dimensions, or a placeholder when either side is unknown. */
+export function formatDimensions(width: number | null, height: number | null): string {
+  if (width === null || height === null) return '-';
+  return `${width} x ${height}`;
+}

@@ -3,6 +3,10 @@ import { z } from 'zod';
 const envSchema = z.object({
   VITE_SUPABASE_URL: z.string().url(),
   VITE_SUPABASE_PUBLISHABLE_KEY: z.string().min(20),
+  // Asset-read Worker base URL: mints short-lived presigned GET URLs for asset
+  // versions. Optional - when unset, asset thumbnails and downloads degrade
+  // gracefully (the library still lists and filters).
+  VITE_ASSET_READ_URL: z.string().url().optional(),
   VITE_SENTRY_DSN_FRONTEND: z.string().url().optional(),
   VITE_SENTRY_ENVIRONMENT: z.enum(['development', 'production']).default('development'),
   VITE_SENTRY_RELEASE: z.string().optional(),

@@ -202,3 +202,56 @@ export function IconSwitch(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconFolder(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 6h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z" />
+    </Svg>
+  );
+}
+
+export function IconFile(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M7 3h7l4 4v14H7z" />
+      <path d="M14 3v4h4" />
+    </Svg>
+  );
+}
+
+export function IconLink(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5" />
+      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" />
+    </Svg>
+  );
+}
+
+export function IconDownload(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 5v11" />
+      <path d="M8 12l4 4 4-4" />
+      <path d="M5 19h14" />
+    </Svg>
+  );
+}
+
+export function IconCopy(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x={9} y={9} width={11} height={11} rx={2} />
+      <path d="M5 15V5a1 1 0 0 1 1-1h9" />
+    </Svg>
+  );
+}
+
+export function IconChevronRight(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9 6l6 6-6 6" />
+    </Svg>
+  );
+}

@@ -2,10 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { IconButton } from '@/components/ui/IconButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHead } from '@/components/shell/PageHead';
-import { IconAssets, IconBriefs, IconPlus } from '@/components/ui/icons';
+import { IconBriefs, IconPlus } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
 import type { BriefStatus } from '@/components/pages/BriefCard';
 import { CreateBriefSheet } from '@/components/pages/CreateBriefSheet';
@@ -107,15 +106,10 @@ export function BriefsPage() {
       <PageHead
         title="Briefs"
         actions={
-          <>
-            <IconButton label="Assets" onClick={() => navigate('/assets')}>
-              <IconAssets />
-            </IconButton>
-            <Button variant="primary" onClick={() => dispatchSorted('sorted:create-brief')}>
-              <IconPlus size={16} />
-              New brief
-            </Button>
-          </>
+          <Button variant="primary" onClick={() => dispatchSorted('sorted:create-brief')}>
+            <IconPlus size={16} />
+            New brief
+          </Button>
         }
       />
 

@@ -1,36 +1,280 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHead } from '@/components/shell/PageHead';
-import { IconAssets, IconUpload } from '@/components/ui/icons';
+import {
+  IconAssets,
+  IconChevronRight,
+  IconDownload,
+  IconSearch,
+  IconX,
+} from '@/components/ui/icons';
+import { AssetGrid } from '@/components/pages/assets/AssetGrid';
+import { AssetDrawer } from '@/components/pages/assets/AssetDrawer';
+import { supabase } from '@/lib/supabase';
+import { fetchWithTrace } from '@/lib/fetch';
+import { env } from '@/lib/env';
+import { useWorkspace } from '@/lib/workspace-context';
+import { PresignCache } from '@/lib/asset-presign';
+import {
+  breadcrumbSegments,
+  buildKindCounts,
+  filterAssets,
+  KIND_LABELS,
+  KIND_ORDER,
+  listAssets,
+  subfolders,
+  type AssetListItem,
+  type KindFilter,
+} from '@/lib/assets';
+
+const ROOT_FOLDER = '/';
+const SKELETON_COUNT = 12;
 
 export function AssetsPage() {
+  const { workspaceId, workspaces } = useWorkspace();
+  const bucket = useMemo(
+    () => workspaces.find((w) => w.id === workspaceId)?.asset_bucket ?? null,
+    [workspaces, workspaceId],
+  );
+
+  const [items, setItems] = useState<AssetListItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [kind, setKind] = useState<KindFilter>('all');
+  const [search, setSearch] = useState('');
+  const [folder, setFolder] = useState(ROOT_FOLDER);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openItem, setOpenItem] = useState<AssetListItem | null>(null);
+
+  // One presign cache for the whole page: bounds concurrency and caches URLs so
+  // a screen of image cards never fires a burst of presigns. Rebuilt only if the
+  // endpoint changes (effectively never within a session).
+  const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
+  const cache = useMemo(
+    () =>
+      new PresignCache({
+        endpoint: env.VITE_ASSET_READ_URL ?? null,
+        getAccessToken: async () =>
+          (await supabase.auth.getSession()).data.session?.access_token ?? null,
+        fetcher: (input, init) => fetchWithTrace(input, init),
+      }),
+    [],
+  );
+
+  const loadAssets = useCallback(async () => {
+    if (workspaceId === null) return;
+    setLoading(true);
+    setError(null);
+    const result = await listAssets(supabase, workspaceId);
+    setLoading(false);
+    if (!result.ok) {
+      setError(result.error.message);
+      return;
+    }
+    setItems(result.data);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    void loadAssets();
+  }, [loadAssets]);
+
+  // Reset folder + selection when the active workspace changes.
+  useEffect(() => {
+    setFolder(ROOT_FOLDER);
+    setSelected(new Set());
+    setOpenItem(null);
+  }, [workspaceId]);
+
+  const counts = useMemo(() => buildKindCounts(items), [items]);
+  const searching = search.trim() !== '';
+
+  const visible = useMemo(() => {
+    const byKind = filterAssets(items, kind, search);
+    return searching ? byKind : byKind.filter((item) => item.folderPath === folder);
+  }, [items, kind, search, folder, searching]);
+
+  const folders = useMemo(
+    () => (searching ? [] : subfolders(items, folder)),
+    [items, folder, searching],
+  );
+
+  const segments = useMemo(() => breadcrumbSegments(folder), [folder]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
+  const downloadSelected = useCallback(async () => {
+    const chosen = items.filter((item) => selected.has(item.id));
+    for (const item of chosen) {
+      try {
+        const url =
+          item.kind === 'link'
+            ? item.externalUrl
+            : item.currentVersionId !== null
+              ? (await cache.resolve(item.currentVersionId)).url
+              : null;
+        if (url !== null) window.open(url, '_blank', 'noopener,noreferrer');
+      } catch {
+        // A single failed presign should not abort the rest of the batch.
+      }
+    }
+  }, [items, selected, cache]);
+
+  const listLoading = workspaceId === null || (loading && items.length === 0);
+
   return (
     <>
-      <PageHead
-        title="Assets"
-        actions={
-          <Button variant="primary">
-            <IconUpload size={16} />
-            Upload
-          </Button>
-        }
-      />
+      <PageHead title="Assets" />
 
-      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">
-        <span className="font-mono">/</span>
+      <div className="px-4 md:px-6 pt-3 flex items-center gap-1 text-sm text-fg-3 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setFolder(ROOT_FOLDER)}
+          className="font-mono hover:text-fg transition-colors"
+        >
+          /
+        </button>
+        {segments.map((segment) => (
+          <span key={segment.path} className="flex items-center gap-1">
+            <IconChevronRight size={14} className="text-fg-3" />
+            <button
+              type="button"
+              onClick={() => setFolder(segment.path)}
+              className="hover:text-fg transition-colors"
+            >
+              {segment.name}
+            </button>
+          </span>
+        ))}
       </div>
 
-      <EmptyState
-        icon={<IconAssets size={24} />}
-        title="No assets yet"
-        description="Upload images and files to use them in posts."
-        action={
-          <Button variant="primary">
-            <IconUpload size={16} />
-            Upload
-          </Button>
-        }
-      />
+      <div className="px-4 md:px-6 mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="flex flex-wrap gap-2">
+          <Chip
+            label={`All ${counts.all}`}
+            selected={kind === 'all'}
+            size="tap"
+            onClick={() => setKind('all')}
+          />
+          {KIND_ORDER.map((k) => (
+            <Chip
+              key={k}
+              label={`${KIND_LABELS[k]} ${counts[k]}`}
+              selected={kind === k}
+              size="tap"
+              onClick={() => setKind(k)}
+            />
+          ))}
+        </div>
+        <div className="relative lg:ml-auto lg:w-64">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
+            <IconSearch size={16} />
+          </span>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search files"
+            className="h-11 w-full rounded-md border border-border bg-panel pl-9 pr-3 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
+          />
+        </div>
+      </div>
+
+      {!searching && folders.length > 0 ? (
+        <div className="px-4 md:px-6 mt-3 flex flex-wrap gap-2">
+          {folders.map((name) => (
+            <Chip
+              key={name}
+              label={name}
+              variant="add"
+              size="tap"
+              onClick={() => setFolder(`${folder.endsWith('/') ? folder : `${folder}/`}${name}/`)}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {error !== null ? (
+        <div className="px-4 md:px-6 mt-4">
+          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
+            Could not load assets. {error}
+          </div>
+          <div className="mt-3">
+            <Button onClick={() => void loadAssets()}>Retry</Button>
+          </div>
+        </div>
+      ) : listLoading ? (
+        <div className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(186px,1fr))]">
+          {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-border bg-panel overflow-hidden animate-pulse"
+            >
+              <div className="aspect-square w-full bg-panel-2" />
+              <div className="h-9 border-t border-border" />
+            </div>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<IconAssets size={24} />}
+          title="No assets yet"
+          description="Files and links used in posts and briefs will show up here."
+        />
+      ) : visible.length === 0 ? (
+        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">No matching assets.</div>
+      ) : (
+        <div className="px-4 md:px-6 py-4">
+          <AssetGrid
+            items={visible}
+            selected={selected}
+            selecting={selected.size > 0}
+            presignEnabled={presignEnabled}
+            cache={cache}
+            onOpen={setOpenItem}
+            onToggleSelect={toggleSelect}
+          />
+        </div>
+      )}
+
+      {selected.size > 0 ? (
+        <div className="fixed inset-x-0 bottom-[56px] z-30 md:bottom-0">
+          <div className="mx-auto m-3 flex max-w-xl items-center gap-3 rounded-xl border border-border bg-panel px-4 py-2.5 shadow-lg">
+            <span className="text-sm font-medium">{selected.size} selected</span>
+            <span className="ml-auto flex items-center gap-2">
+              <Button variant="primary" size="sm" onClick={() => void downloadSelected()}>
+                <IconDownload size={16} />
+                Download
+              </Button>
+              <Button variant="ghost" size="sm" onClick={clearSelection}>
+                <IconX size={16} />
+                Clear
+              </Button>
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {openItem !== null ? (
+        <AssetDrawer
+          item={openItem}
+          bucket={bucket}
+          presignEnabled={presignEnabled}
+          cache={cache}
+          onClose={() => setOpenItem(null)}
+        />
+      ) : null}
     </>
   );
 }

@@ -1,5 +1,11 @@
 import type { ComponentType } from 'react';
-import { IconActivity, IconBriefs, IconChat, IconPipeline } from '@/components/ui/icons';
+import {
+  IconActivity,
+  IconAssets,
+  IconBriefs,
+  IconChat,
+  IconPipeline,
+} from '@/components/ui/icons';
 
 export interface NavItem {
   to: string;
@@ -8,13 +14,14 @@ export interface NavItem {
 }
 
 /**
- * The primary nav. Same four surfaces in the desktop Sidebar and the mobile
- * BottomTabs. Assets is intentionally NOT here; it is reached from the Pipeline
- * and Briefs page heads.
+ * The primary nav. This single list is the source for both the desktop Sidebar
+ * and the mobile BottomTabs, so every surface stays in sync. Assets is a
+ * workspace-global library and lives here alongside the other surfaces.
  */
 export const PRIMARY_NAV: NavItem[] = [
   { to: '/pipeline', label: 'Pipeline', Icon: IconPipeline },
   { to: '/briefs', label: 'Briefs', Icon: IconBriefs },
+  { to: '/assets', label: 'Assets', Icon: IconAssets },
   { to: '/chat', label: 'Chat', Icon: IconChat },
   { to: '/activity', label: 'Activity', Icon: IconActivity },
 ];

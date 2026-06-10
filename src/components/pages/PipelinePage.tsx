@@ -6,7 +6,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PageHead } from '@/components/shell/PageHead';
 import { Tabs } from '@/components/shell/Tabs';
 import type { TabItem } from '@/components/shell/Tabs';
-import { IconAssets, IconCheck, IconSort, IconX } from '@/components/ui/icons';
+import { IconCheck, IconSort, IconX } from '@/components/ui/icons';
 import { PostCard } from '@/components/pages/PostCard';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { dispatchSorted } from '@/lib/events';
@@ -119,15 +119,10 @@ export function PipelinePage() {
       <PageHead
         title="Pipeline"
         actions={
-          <>
-            <IconButton label="Assets" onClick={() => navigate('/assets')}>
-              <IconAssets />
-            </IconButton>
-            <Button>
-              <IconSort size={16} />
-              Sort
-            </Button>
-          </>
+          <Button>
+            <IconSort size={16} />
+            Sort
+          </Button>
         }
       />
 
