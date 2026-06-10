@@ -66,4 +66,7 @@ jobs:
           OPERATOR_DISPLAY_NAME: ${{ inputs.operator_display_name }}
           TARGET_WORKSPACE_NAME: ${{ inputs.workspace_name }}
           TARGET_WORKSPACE_TIMEZONE: Asia/Kolkata
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
         run: pnpm --filter @srtdio/etl etl --mode="${{ inputs.mode }}" ${{ inputs.dry_run && '--dry-run' || '' }} ${{ (inputs.mode == 'cutover' && inputs.confirm_cutover) && '--confirm-cutover' || '' }}

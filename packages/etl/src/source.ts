@@ -65,6 +65,14 @@ export type V1Comment = {
   reply_to: string | null;
 };
 
+// Media-only reads for the asset step. images/attachments are jsonb whose runtime
+// shape varies (array, object, or double-encoded string), so they are typed
+// `unknown` and normalised by the transform parser. canva_link and linkedin_link
+// are deliberately NOT selected: they are dropped from the v2 migration.
+export type V1PostMedia = { id: string; images: unknown; drive_link: string | null };
+export type V1RequestMedia = { id: string; images: unknown; drive_link: string | null };
+export type V1CommentMedia = { id: string; attachments: unknown };
+
 export class SourceDb {
   private readonly pool: Pool;
 
@@ -179,6 +187,45 @@ export class SourceDb {
          FROM public.post_comments c
          JOIN public.posts p ON c.post_id = p.post_id
         WHERE c.message IS NOT NULL AND btrim(c.message) <> ''
+        ORDER BY c.created_at ASC, c.id
+        LIMIT $1 OFFSET $2`,
+      [limit, offset],
+    );
+  }
+
+  // Media reads for the asset step. Separate from fetchPostsBatch /
+  // fetchCommentsBatch so the existing post/comment load paths are untouched;
+  // these select only the jsonb media columns (plus the join key) and are paged
+  // like every other read.
+  async fetchPostMediaBatch(offset: number, limit: number): Promise<V1PostMedia[]> {
+    return this.read<V1PostMedia>(
+      `SELECT id::text AS id, images, drive_link
+         FROM public.posts
+        ORDER BY id
+        LIMIT $1 OFFSET $2`,
+      [limit, offset],
+    );
+  }
+
+  async fetchRequestMediaBatch(offset: number, limit: number): Promise<V1RequestMedia[]> {
+    return this.read<V1RequestMedia>(
+      `SELECT id::text AS id, images, drive_link
+         FROM public.requests
+        ORDER BY id
+        LIMIT $1 OFFSET $2`,
+      [limit, offset],
+    );
+  }
+
+  // Comment attachments joined to the owning post, in the same order/filter
+  // family as the comment load so the ids line up with the comment id map. Rows
+  // with no attachments are excluded server-side.
+  async fetchCommentAttachmentsBatch(offset: number, limit: number): Promise<V1CommentMedia[]> {
+    return this.read<V1CommentMedia>(
+      `SELECT c.id::text AS id, c.attachments
+         FROM public.post_comments c
+         JOIN public.posts p ON c.post_id = p.post_id
+        WHERE c.attachments IS NOT NULL
         ORDER BY c.created_at ASC, c.id
         LIMIT $1 OFFSET $2`,
       [limit, offset],

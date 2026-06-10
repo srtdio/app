@@ -31,22 +31,22 @@ import {
 
 // Max rows per INSERT statement. 500 rows * ~15 cols is well under the 65535
 // bind-parameter ceiling and keeps each round trip bounded.
-const INSERT_CHUNK = 500;
+export const INSERT_CHUNK = 500;
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
 function isDevSeed(config: EtlConfig): boolean {
   return config.cli.mode === 'dev-seed';
 }
 
-function chunk<T>(items: readonly T[], size: number): T[][] {
+export function chunk<T>(items: readonly T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
 }
 
 // Parameterised multi-row INSERT. jsonb columns must already be JSON strings.
-async function insertRows(
+export async function insertRows(
   client: PoolClient,
   table: string,
   columns: readonly string[],
@@ -124,8 +124,13 @@ export async function ensureWorkspace(client: PoolClient, config: EtlConfig): Pr
 }
 
 // Step 3: dev-seed only. Clear migrated content for this workspace so reseeds are
-// clean. FK-safe order: comments, post_versions, posts, briefs. Never in cutover.
+// clean. FK-safe order: asset_attachments (NO ACTION, so must go before the
+// assets they reference), then assets (asset_versions.asset_id is ON DELETE
+// CASCADE per the baseline migration, so deleting assets cascades versions),
+// then comments, post_versions, posts, briefs. Never in cutover.
 export async function wipeWorkspaceContent(client: PoolClient, workspaceId: string): Promise<void> {
+  await client.query('DELETE FROM public.asset_attachments WHERE workspace_id = $1', [workspaceId]);
+  await client.query('DELETE FROM public.assets WHERE workspace_id = $1', [workspaceId]);
   await client.query('DELETE FROM public.comments WHERE workspace_id = $1', [workspaceId]);
   await client.query('DELETE FROM public.post_versions WHERE workspace_id = $1', [workspaceId]);
   await client.query('DELETE FROM public.posts WHERE workspace_id = $1', [workspaceId]);
@@ -368,7 +373,7 @@ export async function loadComments(
   source: SourceDb,
   config: EtlConfig,
   workspaceId: string,
-): Promise<number> {
+): Promise<{ map: Map<string, string>; count: number }> {
   const scrub = isDevSeed(config);
 
   // Pass 1: assign a v2 id to every migratable comment.
@@ -442,5 +447,7 @@ export async function loadComments(
       params,
     );
   }
-  return count;
+  // The id map (v1 post_comments.id -> v2 comments.id) is returned alongside the
+  // count so the asset step can attach comment media to the migrated comment.
+  return { map: idMap, count };
 }

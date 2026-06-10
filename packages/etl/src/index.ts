@@ -12,6 +12,7 @@
 
 import { Pool } from 'pg';
 
+import { loadAssets } from './assets';
 import { assertSafe, loadConfig, parseCli, type EtlConfig } from './config';
 import {
   ensureOperator,
@@ -84,8 +85,18 @@ async function migrate(config: EtlConfig): Promise<void> {
       log(`posts: ${posts}`);
       const versions = await loadPostVersions(client, source, config, workspaceId);
       log(`post_versions: ${versions}`);
-      const comments = await loadComments(client, source, config, workspaceId);
-      log(`comments: ${comments}`);
+      const { map: commentsMap, count: commentsCount } = await loadComments(
+        client,
+        source,
+        config,
+        workspaceId,
+      );
+      log(`comments: ${commentsCount}`);
+      const assets = await loadAssets(client, source, config, workspaceId, briefs.map, commentsMap);
+      log(
+        `assets: files=${assets.filesMigrated} links=${assets.linksMigrated} ` +
+          `deduped=${assets.deduped} skipped=${assets.skipped} failed=${assets.failed}`,
+      );
       await client.query('COMMIT');
       log('COMMIT. Migration complete.');
     } catch (err) {
