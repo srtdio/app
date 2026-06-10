@@ -2271,6 +2271,10 @@ export type Database = {
         }
         Returns: string
       }
+      asset_delete: {
+        Args: { p_asset_id: string; p_trace_id: string }
+        Returns: undefined
+      }
       audit_log_write: {
         Args: {
           p_action: string
