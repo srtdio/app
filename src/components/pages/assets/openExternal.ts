@@ -2,9 +2,9 @@
 //
 // Two distinct behaviours:
 //   - openLinkInNewTab: external links open in a *new* tab, leaving Sorted in
-//     place. Severs the opener reference so the new tab cannot reach back into
-//     this window, and falls back to an anchor click when a synchronous
-//     window.open is blocked by the popup blocker.
+//     place. Uses a temporary anchor with rel="noopener noreferrer" so the new
+//     tab cannot reach back into this window. Avoids window.open entirely,
+//     which on mobile can surface a transient blank tab and disorient the user.
 //   - downloadFile: a stored file is saved in place. The presigned URL it
 //     resolves carries Content-Disposition: attachment, so a plain same-window
 //     anchor click downloads without navigating. No new tab, no window.open.
@@ -25,16 +25,11 @@ function clickAnchor(url: string, newTab: boolean): void {
 
 /**
  * Open `url` in a new browser tab without ever navigating the current one.
- * Tries a synchronous window.open (so it counts as a user gesture), nulls the
- * opener on success, and falls back to a temporary anchor when the popup is
- * blocked.
+ * Always uses a temporary anchor click (target="_blank",
+ * rel="noopener noreferrer") rather than window.open, which on mobile can
+ * surface a transient blank tab and disorient the user.
  */
 export function openLinkInNewTab(url: string): void {
-  const opened = window.open(url, '_blank');
-  if (opened !== null) {
-    opened.opener = null;
-    return;
-  }
   clickAnchor(url, true);
 }
 
