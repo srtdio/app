@@ -394,7 +394,8 @@ export default {
     } catch (error) {
       const errName = error instanceof Error ? error.name : 'UnknownError';
       const errMsg = error instanceof Error ? error.message : String(error);
-      const errStack = error instanceof Error && error.stack ? error.stack.split('\n')[1]?.trim() ?? '' : '';
+      const errStack =
+        error instanceof Error && error.stack ? (error.stack.split('\n')[1]?.trim() ?? '') : '';
       logger.error(`asset read failed: ${errName}: ${errMsg} ${errStack}`.trim());
       return json(
         500,
