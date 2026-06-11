@@ -4,6 +4,7 @@ import { IconInfo } from '@/components/pages/assets/viewerIcons';
 import type { PresignCache } from '@/lib/asset-presign';
 import { displayLabel, linkDomain, type AssetListItem } from '@/lib/assets';
 import { resolveAssetUrl } from '@/components/pages/assets/media';
+import { downloadFile, openLinkInNewTab } from '@/components/pages/assets/openExternal';
 
 const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
 
@@ -11,6 +12,8 @@ interface AssetActionSheetProps {
   item: AssetListItem;
   presignEnabled: boolean;
   cache: PresignCache;
+  /** Mint an attachment-disposition URL so a download saves in place, never navigating. */
+  requestDownloadUrl: (item: AssetListItem) => Promise<string>;
   onClose: () => void;
   /** Open the lightbox for this asset with its Info sheet shown (non-links only). */
   onInfo: (item: AssetListItem) => void;
@@ -50,6 +53,7 @@ export function AssetActionSheet({
   item,
   presignEnabled,
   cache,
+  requestDownloadUrl,
   onClose,
   onInfo,
   onToast,
@@ -74,11 +78,22 @@ export function AssetActionSheet({
   }
 
   const handlePrimary = (): void => {
-    void withUrl((url) => {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      if (!isLink) onToast('Download started');
+    // Link: open a new tab synchronously (keeps the user gesture) and close.
+    if (isLink) {
+      if (item.externalUrl !== null) openLinkInNewTab(item.externalUrl);
       onClose();
-    });
+      return;
+    }
+    // File: save in place via a content-disposition: attachment URL. On success
+    // toast and close; on failure surface SIGN_FAIL and leave the sheet open.
+    setBusy(true);
+    void downloadFile(() => requestDownloadUrl(item))
+      .then(() => {
+        onToast('Download started');
+        onClose();
+      })
+      .catch(() => onToast(SIGN_FAIL))
+      .finally(() => setBusy(false));
   };
 
   const handleCopy = (): void => {
