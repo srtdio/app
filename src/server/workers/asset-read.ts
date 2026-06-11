@@ -86,12 +86,6 @@ export interface AssetVersionLocator {
   bucket: string | null;
   kind: string;
   r2Key: string | null;
-  /** Version mime type; drives the download filename's extension. Optional. */
-  mimeType?: string | null;
-  /** Original upload filename from the parent asset. Optional. */
-  filename?: string | null;
-  /** Human label from the parent asset (backfilled from post title). Optional. */
-  displayName?: string | null;
 }
 
 /**
@@ -107,69 +101,7 @@ export interface AssetReadStore {
 
 /** Mints a presigned GET URL for an object. Implemented by R2StorageClient. */
 export interface PresignedUrlSigner {
-  presignGetUrl(input: {
-    bucket: string;
-    key: string;
-    expiresInSeconds: number;
-    /** When set, the URL forces a Content-Disposition: attachment download. */
-    downloadFilename?: string;
-  }): Promise<string>;
-}
-
-/** Requested disposition for the signed URL. Defaults to inline. */
-export type Disposition = 'inline' | 'attachment';
-
-/** Common mime types mapped to the extension a saved file should carry. */
-const EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/gif': 'gif',
-  'image/webp': 'webp',
-  'image/svg+xml': 'svg',
-  'image/avif': 'avif',
-  'video/mp4': 'mp4',
-  'video/quicktime': 'mov',
-  'video/webm': 'webm',
-  'application/pdf': 'pdf',
-  'application/msword': 'doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-  'application/vnd.ms-excel': 'xls',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-  'application/vnd.ms-powerpoint': 'ppt',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
-  'text/csv': 'csv',
-  'text/plain': 'txt',
-  'application/json': 'json',
-  'application/zip': 'zip',
-};
-
-/** Last path segment of an R2 key, stripped of the version prefix where present. */
-function keyBasename(key: string): string {
-  const segment = key.split('/').pop() ?? key;
-  return segment.replace(/^v\d+-/, '');
-}
-
-/** The extension on a filename (lowercased), or '' when it has none. */
-function extensionOf(name: string): string {
-  const dot = name.lastIndexOf('.');
-  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
-}
-
-/**
- * Build the filename the browser should save under: the asset's display name (or
- * original filename, or key basename), carrying the correct extension for its
- * mime type. The mime-derived extension wins; otherwise the existing extension
- * is kept.
- */
-export function buildDownloadFilename(version: AssetVersionLocator): string {
-  const fallback =
-    version.r2Key !== null && version.r2Key !== '' ? keyBasename(version.r2Key) : 'download';
-  const base = (version.displayName ?? '').trim() || (version.filename ?? '').trim() || fallback;
-  const mimeExt = version.mimeType ? EXTENSION_BY_MIME[version.mimeType.toLowerCase()] : undefined;
-  const ext = mimeExt ?? (extensionOf(base) || extensionOf(fallback));
-  if (ext === '') return base;
-  const stem = base.lastIndexOf('.') > 0 ? base.slice(0, base.lastIndexOf('.')) : base;
-  return `${stem}.${ext}`;
+  presignGetUrl(input: { bucket: string; key: string; expiresInSeconds: number }): Promise<string>;
 }
 
 export interface AuthorizeDeps {
@@ -192,7 +124,7 @@ export interface SignedUrlResult {
  */
 export async function authorizeAndSign(
   deps: AuthorizeDeps,
-  input: { userId: string; assetVersionId: string; disposition?: Disposition },
+  input: { userId: string; assetVersionId: string },
 ): Promise<Result<SignedUrlResult, ReadError>> {
   const version = await deps.store.findVersion(input.assetVersionId);
   if (!version) {
@@ -221,11 +153,6 @@ export async function authorizeAndSign(
     bucket: version.bucket,
     key: version.r2Key,
     expiresInSeconds: URL_TTL_SECONDS,
-    // Inline (default) leaves the signing path byte-identical; attachment adds
-    // the response-content-disposition override so the browser saves the file.
-    ...(input.disposition === 'attachment'
-      ? { downloadFilename: buildDownloadFilename(version) }
-      : {}),
   });
   const expires_at = new Date(Date.now() + URL_TTL_SECONDS * 1000).toISOString();
   return ok({ url, expires_at });
@@ -335,38 +262,22 @@ function fail(error: ReadError, traceId: string, acao: string | null): Response 
   return json(STATUS_BY_CODE[error.code], { error }, traceId, acao);
 }
 
-/** The parsed read request: the required version id plus the chosen disposition. */
-export interface ReadRequest {
-  assetVersionId: string;
-  disposition: Disposition;
-}
-
-/**
- * Pull the required `asset_version_id` and the optional `disposition` from the
- * JSON body. disposition defaults to 'inline'; any value other than 'inline' or
- * 'attachment' is a bad_request, matching the existing strict body parsing.
- */
-async function readRequestBody(request: Request): Promise<Result<ReadRequest, ReadError>> {
+/** Pull the required `asset_version_id` from the JSON body. */
+async function readAssetVersionId(request: Request): Promise<Result<string, ReadError>> {
   let body: unknown;
   try {
     body = await request.json();
   } catch {
     return err({ code: 'bad_request', message: 'Body must be JSON.' });
   }
-  const obj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null;
-  const id = obj?.asset_version_id;
+  const id =
+    typeof body === 'object' && body !== null
+      ? (body as Record<string, unknown>).asset_version_id
+      : undefined;
   if (typeof id !== 'string' || id === '') {
     return err({ code: 'bad_request', message: 'asset_version_id is required.' });
   }
-  const rawDisposition = obj?.disposition;
-  let disposition: Disposition = 'inline';
-  if (rawDisposition !== undefined) {
-    if (rawDisposition !== 'inline' && rawDisposition !== 'attachment') {
-      return err({ code: 'bad_request', message: 'disposition must be inline or attachment.' });
-    }
-    disposition = rawDisposition;
-  }
-  return ok({ assetVersionId: id, disposition });
+  return ok(id);
 }
 
 /**
@@ -389,9 +300,7 @@ export function createSupabaseAssetReadStore(env: {
     async findVersion(assetVersionId) {
       const { data, error } = await client
         .from('asset_versions')
-        .select(
-          'workspace_id,kind,r2_key,mime_type,workspaces(asset_bucket),assets(filename,display_name)',
-        )
+        .select('workspace_id,kind,r2_key,workspaces(asset_bucket)')
         .eq('id', assetVersionId)
         .maybeSingle();
       if (error) {
@@ -400,18 +309,14 @@ export function createSupabaseAssetReadStore(env: {
       if (!data) {
         return null;
       }
-      // The embedded workspace carries the bucket and the embedded asset carries
-      // the human name; supabase-js types both as to-one objects via their FKs.
+      // The embedded workspace carries the bucket; supabase-js types it as an
+      // object (to-one) here via the workspace_id FK.
       const workspace = data.workspaces as { asset_bucket: string | null } | null;
-      const asset = data.assets as { filename: string | null; display_name: string | null } | null;
       return {
         workspaceId: data.workspace_id,
         bucket: workspace?.asset_bucket ?? null,
         kind: data.kind,
         r2Key: data.r2_key,
-        mimeType: data.mime_type,
-        filename: asset?.filename ?? null,
-        displayName: asset?.display_name ?? null,
       };
     },
 
@@ -443,7 +348,7 @@ async function handlePost(
     return fail(caller.error, traceId, acao);
   }
 
-  const parsed = await readRequestBody(request);
+  const parsed = await readAssetVersionId(request);
   if (!parsed.ok) {
     return fail(parsed.error, traceId, acao);
   }
@@ -460,16 +365,12 @@ async function handlePost(
         tracedFetch,
       ),
     },
-    {
-      userId: caller.value,
-      assetVersionId: parsed.value.assetVersionId,
-      disposition: parsed.value.disposition,
-    },
+    { userId: caller.value, assetVersionId: parsed.value },
   );
   if (!result.ok) {
     if (result.error.code === 'forbidden') {
       logger.warn('asset read denied: caller not a workspace member', {
-        asset_version_id: parsed.value.assetVersionId,
+        asset_version_id: parsed.value,
       });
     }
     return fail(result.error, traceId, acao);
