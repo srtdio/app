@@ -207,3 +207,80 @@ describe('worker.fetch', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('worker.fetch CORS', () => {
+  const ALLOWED_ORIGIN = 'https://srtdio-app.pages.dev';
+  const OTHER_ALLOWED_ORIGIN = 'https://srtd.io';
+  const DISALLOWED_ORIGIN = 'https://evil.example';
+
+  // No ALLOWED_ORIGINS set: the code falls back to the known site origins.
+  const env: AssetReadEnv = {
+    CLOUDFLARE_ACCOUNT_ID: 'acct',
+    CLOUDFLARE_R2_ACCESS_KEY_ID: 'akid',
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'secret',
+    SUPABASE_URL: 'https://test.supabase.co',
+    SUPABASE_SECRET_KEY: 'service-role-key',
+    SUPABASE_JWT_SECRET: JWT_SECRET,
+  };
+
+  function preflight(origin: string | null): Request {
+    const headers = new Headers({
+      'access-control-request-method': 'POST',
+      'access-control-request-headers': 'authorization, content-type',
+    });
+    if (origin !== null) {
+      headers.set('Origin', origin);
+    }
+    return new Request('https://worker.test/', { method: 'OPTIONS', headers });
+  }
+
+  function postWith(token: string | null, origin: string | null, body?: unknown): Request {
+    const req = bearerRequest(token, body);
+    if (origin !== null) {
+      req.headers.set('Origin', origin);
+    }
+    return req;
+  }
+
+  it('answers an OPTIONS preflight from an allowed origin with 204 and CORS headers', async () => {
+    const res = await worker.fetch(preflight(ALLOWED_ORIGIN), env);
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(ALLOWED_ORIGIN);
+    expect(res.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS');
+    expect(res.headers.get('Access-Control-Allow-Headers')).toBe('authorization, content-type');
+    expect(res.headers.get('Access-Control-Max-Age')).toBe('86400');
+    expect(res.headers.get('Vary')).toBe('Origin');
+  });
+
+  it('never reflects a wildcard or a disallowed origin on preflight', async () => {
+    const res = await worker.fetch(preflight(DISALLOWED_ORIGIN), env);
+    expect(res.status).toBe(204);
+    const acao = res.headers.get('Access-Control-Allow-Origin');
+    expect(acao).not.toBe('*');
+    expect(acao).not.toBe(DISALLOWED_ORIGIN);
+    // Falls back to the primary site origin so the browser simply blocks.
+    expect(acao).toBe(ALLOWED_ORIGIN);
+  });
+
+  it('carries ACAO on a successful POST response for an allowed origin', async () => {
+    const token = await mintToken(USER);
+    const res = await worker.fetch(postWith(token, OTHER_ALLOWED_ORIGIN, { bad: true }), env);
+    // 400 (bad body) still exercises the fail() path with CORS applied.
+    expect(res.status).toBe(400);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(OTHER_ALLOWED_ORIGIN);
+    expect(res.headers.get('Vary')).toBe('Origin');
+  });
+
+  it('carries ACAO on an error POST response for an allowed origin', async () => {
+    const res = await worker.fetch(postWith(null, ALLOWED_ORIGIN), env);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(ALLOWED_ORIGIN);
+    expect(res.headers.get('Vary')).toBe('Origin');
+  });
+
+  it('omits ACAO on a POST response for a disallowed origin', async () => {
+    const res = await worker.fetch(postWith(null, DISALLOWED_ORIGIN), env);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+});

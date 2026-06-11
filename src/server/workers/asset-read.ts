@@ -39,7 +39,22 @@ export interface AssetReadEnv {
   SUPABASE_SECRET_KEY: string;
   /** Project JWT secret: local HS256 verification, no GoTrue round-trip. */
   SUPABASE_JWT_SECRET: string;
+  /**
+   * Comma-separated list of browser origins allowed to call this Worker
+   * cross-origin. Operator sets it as a Worker var/secret; when unset the code
+   * falls back to {@link DEFAULT_ALLOWED_ORIGINS}.
+   */
+  ALLOWED_ORIGINS?: string;
 }
+
+/**
+ * Known site origins (Cloudflare Pages + production domain) used when
+ * ALLOWED_ORIGINS is unset. The first entry is treated as the primary origin.
+ */
+const DEFAULT_ALLOWED_ORIGINS = ['https://srtdio-app.pages.dev', 'https://srtd.io'] as const;
+
+/** Preflight cache lifetime: 24 hours. */
+const CORS_MAX_AGE_SECONDS = 86_400;
 
 export type ReadErrorCode =
   | 'bad_request'
@@ -169,14 +184,63 @@ export async function verifyCaller(
   }
 }
 
-function json(status: number, body: unknown, traceId: string): Response {
+/** The configured allowlist, falling back to the known site origins. */
+function allowedOrigins(env: AssetReadEnv): readonly string[] {
+  const list = (env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin !== '');
+  return list.length > 0 ? list : DEFAULT_ALLOWED_ORIGINS;
+}
+
+/**
+ * The Access-Control-Allow-Origin value to echo back, or null when the request
+ * carries no Origin or an origin outside the allowlist. Never `*`: requests
+ * carry Authorization, so the origin is reflected only when explicitly allowed.
+ */
+function resolveAllowedOrigin(request: Request, env: AssetReadEnv): string | null {
+  const origin = request.headers.get('Origin');
+  if (origin === null) {
+    return null;
+  }
+  return allowedOrigins(env).includes(origin) ? origin : null;
+}
+
+/** Attach the reflected origin (and Vary) when one is allowed. */
+function applyCors(headers: Headers, acao: string | null): void {
+  if (acao !== null) {
+    headers.set('Access-Control-Allow-Origin', acao);
+    headers.set('Vary', 'Origin');
+  }
+}
+
+/**
+ * Answer a CORS preflight. The browser only accepts the actual request when the
+ * echoed origin matches, so an allowed origin is reflected and a disallowed one
+ * falls back to the primary site origin.
+ */
+function preflightResponse(request: Request, env: AssetReadEnv): Response {
+  const acao =
+    resolveAllowedOrigin(request, env) ?? allowedOrigins(env)[0] ?? DEFAULT_ALLOWED_ORIGINS[0];
+  const headers = new Headers({
+    'Access-Control-Allow-Origin': acao,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, content-type',
+    'Access-Control-Max-Age': String(CORS_MAX_AGE_SECONDS),
+    Vary: 'Origin',
+  });
+  return new Response(null, { status: 204, headers });
+}
+
+function json(status: number, body: unknown, traceId: string, acao: string | null): Response {
   const headers = new Headers({ 'content-type': 'application/json' });
   headers.set(TRACE_ID_HEADER, traceId);
+  applyCors(headers, acao);
   return new Response(JSON.stringify(body), { status, headers });
 }
 
-function fail(error: ReadError, traceId: string): Response {
-  return json(STATUS_BY_CODE[error.code], { error }, traceId);
+function fail(error: ReadError, traceId: string, acao: string | null): Response {
+  return json(STATUS_BY_CODE[error.code], { error }, traceId, acao);
 }
 
 /** Pull the required `asset_version_id` from the JSON body. */
@@ -254,15 +318,20 @@ export function createSupabaseAssetReadStore(env: {
   };
 }
 
-async function handlePost(request: Request, env: AssetReadEnv, traceId: string): Promise<Response> {
+async function handlePost(
+  request: Request,
+  env: AssetReadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
   const caller = await verifyCaller(request, env.SUPABASE_JWT_SECRET);
   if (!caller.ok) {
-    return fail(caller.error, traceId);
+    return fail(caller.error, traceId, acao);
   }
 
   const parsed = await readAssetVersionId(request);
   if (!parsed.ok) {
-    return fail(parsed.error, traceId);
+    return fail(parsed.error, traceId, acao);
   }
 
   const result = await authorizeAndSign(
@@ -285,26 +354,31 @@ async function handlePost(request: Request, env: AssetReadEnv, traceId: string):
         asset_version_id: parsed.value,
       });
     }
-    return fail(result.error, traceId);
+    return fail(result.error, traceId, acao);
   }
-  return json(200, result.value, traceId);
+  return json(200, result.value, traceId, acao);
 }
 
 export default {
   async fetch(request: Request, env: AssetReadEnv): Promise<Response> {
     const traceId = extractTraceId(request);
     logger.setTraceId(traceId);
+    const acao = resolveAllowedOrigin(request, env);
     try {
-      if (request.method !== 'POST') {
-        return fail({ code: 'bad_request', message: 'Use POST.' }, traceId);
+      if (request.method === 'OPTIONS') {
+        return preflightResponse(request, env);
       }
-      return await handlePost(request, env, traceId);
+      if (request.method !== 'POST') {
+        return fail({ code: 'bad_request', message: 'Use POST.' }, traceId, acao);
+      }
+      return await handlePost(request, env, traceId, acao);
     } catch (error) {
       logger.error('asset read failed', { error: String(error) });
       return json(
         500,
         { error: { code: 'internal_error', message: 'Failed to sign URL.' } },
         traceId,
+        acao,
       );
     } finally {
       logger.clearTraceId();
