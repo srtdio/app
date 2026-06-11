@@ -24,6 +24,7 @@ import {
   isJpegMime,
   isSvgMime,
   normalizeMime,
+  verifyMagicBytes,
   type StorageClient,
 } from '@srtdio/storage';
 import { isFileVersionRef, type AssetRepository, type FileVersionKind } from './repository';
@@ -59,6 +60,24 @@ function fileKindForMime(mimeType: string): FileVersionKind {
   }
   if (mimeType === 'application/pdf') {
     return 'pdf';
+  }
+  if (
+    mimeType === 'application/msword' ||
+    mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ) {
+    return 'document';
+  }
+  if (
+    mimeType === 'application/vnd.ms-excel' ||
+    mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ) {
+    return 'spreadsheet';
+  }
+  if (
+    mimeType === 'application/vnd.ms-powerpoint' ||
+    mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  ) {
+    return 'presentation';
   }
   throw new Error(`no file kind mapping for allowed mime type ${mimeType}`);
 }
@@ -110,6 +129,13 @@ export async function runUploadPipeline(
       code: 'file_too_large',
       message: `File exceeds ${MAX_FILE_SIZE_BYTES} bytes.`,
     });
+  }
+
+  // 2b. Magic-byte check (after the allowlist, before sanitize): the declared
+  // MIME type must match the file's actual leading bytes, so a renamed
+  // executable cannot ride in under an allowed type.
+  if (!verifyMagicBytes(input.bytes, mimeType)) {
+    return err({ code: 'mime_mismatch', message: 'File contents do not match the file type.' });
   }
 
   // If a target asset is named, it must exist in this workspace (cross-tenant

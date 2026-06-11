@@ -127,6 +127,53 @@ describe('runUploadPipeline', () => {
     expect(d.repository.versions).toHaveLength(0);
   });
 
+  it('rejects bytes whose contents do not match the declared MIME type', async () => {
+    // A Windows PE executable (MZ header) masquerading as a PDF.
+    const exeBytes = new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
+    const res = await runUploadPipeline(
+      d,
+      input({ contentType: 'application/pdf', filename: 'invoice.pdf', bytes: exeBytes }),
+    );
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error.code).toBe('mime_mismatch');
+    expect(d.repository.versions).toHaveLength(0);
+  });
+
+  it('accepts a docx by its ZIP signature without parsing the archive', async () => {
+    // ZIP local file header (50 4B 03 04) is sufficient for an OOXML claim.
+    const zipBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]);
+    const res = await runUploadPipeline(
+      d,
+      input({
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        filename: 'brief.docx',
+        bytes: zipBytes,
+      }),
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.versionNumber).toBe(1);
+    expect(d.repository.versions).toHaveLength(1);
+    expect(d.repository.versions[0]?.kind).toBe('document');
+  });
+
+  it('rejects a macro-enabled Office type as unsupported', async () => {
+    const zipBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]);
+    const res = await runUploadPipeline(
+      d,
+      input({
+        contentType: 'application/vnd.ms-word.document.macroEnabled.12',
+        filename: 'macro.docm',
+        bytes: zipBytes,
+      }),
+    );
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error.code).toBe('unsupported_mime');
+    expect(d.repository.versions).toHaveLength(0);
+  });
+
   it('rejects a file larger than 100 MB', async () => {
     const res = await runUploadPipeline(
       d,

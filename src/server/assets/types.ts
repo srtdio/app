@@ -16,6 +16,7 @@ export type AssetVersionInsert = Database['public']['Tables']['asset_versions'][
 /** Every expected, caller-handled failure in the pipeline. */
 export type UploadErrorCode =
   | 'unsupported_mime'
+  | 'mime_mismatch'
   | 'file_too_large'
   | 'virus_detected'
   | 'empty_file'
