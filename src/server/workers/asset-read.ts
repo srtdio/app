@@ -392,7 +392,10 @@ export default {
       }
       return await handlePost(request, env, traceId, acao);
     } catch (error) {
-      logger.error('asset read failed', { error: String(error) });
+      const errName = error instanceof Error ? error.name : 'UnknownError';
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const errStack = error instanceof Error && error.stack ? error.stack.split('\n')[1]?.trim() ?? '' : '';
+      logger.error(`asset read failed: ${errName}: ${errMsg} ${errStack}`.trim());
       return json(
         500,
         { error: { code: 'internal_error', message: 'Failed to sign URL.' } },
