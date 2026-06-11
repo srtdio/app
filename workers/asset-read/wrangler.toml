@@ -16,4 +16,3 @@ head_sampling_rate = 1.0
 #   CLOUDFLARE_R2_SECRET_ACCESS_KEY - R2 SigV4 secret
 #   SUPABASE_URL                    - project URL for the service-role lookups
 #   SUPABASE_SECRET_KEY             - service role: asset_version + membership reads
-#   SUPABASE_JWT_SECRET             - HS256 verify of the caller's access token
