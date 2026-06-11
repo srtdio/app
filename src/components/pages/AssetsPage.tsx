@@ -1,22 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { PageHead } from '@/components/shell/PageHead';
-import {
-  IconAssets,
-  IconChevronRight,
-  IconDownload,
-  IconSearch,
-  IconTrash,
-  IconUpload,
-  IconX,
-} from '@/components/ui/icons';
+import { IconAssets, IconChevronRight, IconSearch, IconUpload, IconX } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
-import { AssetDrawer } from '@/components/pages/assets/AssetDrawer';
+import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
+import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
+import { Toasts } from '@/components/pages/assets/Toasts';
+import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
@@ -30,7 +24,6 @@ import {
   ASSET_SORT_OPTIONS,
   breadcrumbSegments,
   buildKindCounts,
-  deleteAssetsBatch,
   filterAssets,
   KIND_LABELS,
   listAssets,
@@ -45,17 +38,16 @@ import {
 
 const ROOT_FOLDER = '/';
 const SKELETON_COUNT = 12;
-// Cap on simultaneous asset_delete calls in a bulk delete, mirroring the
-// presign concurrency ceiling so a large multi-select stays bounded.
-const DELETE_CONCURRENCY = 6;
+
+/** A viewer target: the index into the navigable list, plus whether Info opens. */
+interface ViewerState {
+  index: number;
+  infoOpen: boolean;
+}
 
 export function AssetsPage() {
-  const { workspaceId, workspaces } = useWorkspace();
+  const { workspaceId } = useWorkspace();
   const newTrace = useNewTrace();
-  const bucket = useMemo(
-    () => workspaces.find((w) => w.id === workspaceId)?.asset_bucket ?? null,
-    [workspaces, workspaceId],
-  );
 
   const [items, setItems] = useState<AssetListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,17 +56,15 @@ export function AssetsPage() {
   const [kind, setKind] = useState<KindFilter>('all');
   const [search, setSearch] = useState('');
   const [folder, setFolder] = useState(ROOT_FOLDER);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [openItem, setOpenItem] = useState<AssetListItem | null>(null);
+  const [viewer, setViewer] = useState<ViewerState | null>(null);
+  const [actionItem, setActionItem] = useState<AssetListItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
-  const [confirmBulk, setConfirmBulk] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { toasts, push, dismiss } = useToasts();
 
   // One presign cache for the whole page: bounds concurrency and caches URLs so
-  // a screen of image cards never fires a burst of presigns. Rebuilt only if the
-  // endpoint changes (effectively never within a session).
+  // the viewer never re-fetches a still-valid link. Rebuilt only if the endpoint
+  // changes (effectively never within a session).
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = useMemo(
     () =>
@@ -104,14 +94,12 @@ export function AssetsPage() {
     void loadAssets();
   }, [loadAssets]);
 
-  // Reset folder + selection when the active workspace changes.
+  // Reset folder + overlays when the active workspace changes.
   useEffect(() => {
     setFolder(ROOT_FOLDER);
-    setSelected(new Set());
-    setOpenItem(null);
+    setViewer(null);
+    setActionItem(null);
     setUploadOpen(false);
-    setConfirmBulk(false);
-    setActionError(null);
   }, [workspaceId]);
 
   const counts = useMemo(() => buildKindCounts(items), [items]);
@@ -130,6 +118,10 @@ export function AssetsPage() {
     return sortAssets(scoped, sort);
   }, [items, kind, search, folder, searching, sort]);
 
+  // The viewer iterates the currently visible list with links excluded; links
+  // open their external URL directly and never enter the lightbox.
+  const navigable = useMemo(() => visible.filter((item) => item.kind !== 'link'), [visible]);
+
   const folders = useMemo(
     () => (searching ? [] : subfolders(items, folder)),
     [items, folder, searching],
@@ -137,84 +129,40 @@ export function AssetsPage() {
 
   const segments = useMemo(() => breadcrumbSegments(folder), [folder]);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  // Tap a card: open its external link, or open the lightbox at that asset.
+  const openAsset = useCallback(
+    (item: AssetListItem, infoOpen = false): void => {
+      if (item.kind === 'link') {
+        if (item.externalUrl !== null) {
+          window.open(item.externalUrl, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
+      const index = navigable.findIndex((candidate) => candidate.id === item.id);
+      if (index >= 0) setViewer({ index, infoOpen });
+    },
+    [navigable],
+  );
 
-  const clearSelection = useCallback(() => setSelected(new Set()), []);
-
-  // Single delete (from the drawer): remove the row optimistically, call the
-  // proc, and roll the row back on failure. Resolves true so the drawer knows to
-  // close. Delete is offered to every member, matching asset_delete's policy
-  // (is_active_workspace_member); there is no UI role gate.
+  // Soft-delete one asset: remove the row optimistically and roll back on
+  // failure. Resolves true on success so the viewer can close onto the new list.
+  // Delete is offered to every member, matching asset_delete's policy.
   const deleteOne = useCallback(
     async (item: AssetListItem): Promise<boolean> => {
-      setActionError(null);
       const snapshot = items;
       setItems((prev) => removeAssetsById(prev, [item.id]));
       const result = await assetDelete(supabase, { p_asset_id: item.id, p_trace_id: newTrace() });
       if (!result.ok) {
         setItems(snapshot);
-        setActionError('Could not delete that asset. Please try again.');
         return false;
       }
-      setSelected((prev) => {
-        if (!prev.has(item.id)) return prev;
-        const next = new Set(prev);
-        next.delete(item.id);
-        return next;
-      });
       return true;
     },
     [items, newTrace],
   );
 
-  // Bulk delete (from the selection bar): fan out asset_delete with bounded
-  // concurrency, remove only the ids that succeeded, clear selection, and
-  // surface a count of any failures (their rows stay in the list).
-  const deleteSelected = useCallback(async (): Promise<void> => {
-    const ids = [...selected];
-    if (ids.length === 0) return;
-    setDeleting(true);
-    setActionError(null);
-    const outcome = await deleteAssetsBatch(ids, DELETE_CONCURRENCY, (id) =>
-      assetDelete(supabase, { p_asset_id: id, p_trace_id: newTrace() }),
-    );
-    if (outcome.succeeded.length > 0) {
-      setItems((prev) => removeAssetsById(prev, outcome.succeeded));
-    }
-    setDeleting(false);
-    setConfirmBulk(false);
-    setSelected(new Set());
-    if (outcome.failed.length > 0) {
-      const n = outcome.failed.length;
-      setActionError(`Could not delete ${n} ${n === 1 ? 'asset' : 'assets'}. Please try again.`);
-    }
-  }, [selected, newTrace]);
-
-  const downloadSelected = useCallback(async () => {
-    const chosen = items.filter((item) => selected.has(item.id));
-    for (const item of chosen) {
-      try {
-        const url =
-          item.kind === 'link'
-            ? item.externalUrl
-            : item.currentVersionId !== null
-              ? (await cache.resolve(item.currentVersionId)).url
-              : null;
-        if (url !== null) window.open(url, '_blank', 'noopener,noreferrer');
-      } catch {
-        // A single failed presign should not abort the rest of the batch.
-      }
-    }
-  }, [items, selected, cache]);
-
   const listLoading = workspaceId === null || (loading && items.length === 0);
+  const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
 
   return (
     <>
@@ -245,7 +193,7 @@ export function AssetsPage() {
         </div>
       ) : null}
 
-      {/* One-line toolbar at every breakpoint: search grows, sort + upload stay. */}
+      {/* Search above the chips, with leading icon and a clear button. */}
       <div className="px-4 md:px-6 mt-3 flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
@@ -256,14 +204,24 @@ export function AssetsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search files"
-            className="h-11 w-full rounded-md border border-border bg-panel pl-9 pr-3 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none md:h-9"
+            className="h-11 w-full rounded-md border border-border bg-panel pl-9 pr-11 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
           />
+          {searching ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setSearch('')}
+              className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 hover:bg-panel-2 hover:text-fg"
+            >
+              <IconX size={16} />
+            </button>
+          ) : null}
         </div>
         <SortMenu options={ASSET_SORT_OPTIONS} value={sort} onChange={setSort} />
         <Button
           variant="primary"
           size="lg"
-          className="h-11 shrink-0 md:h-9"
+          className="h-11 shrink-0"
           onClick={() => setUploadOpen(true)}
         >
           <IconUpload size={16} />
@@ -338,79 +296,59 @@ export function AssetsPage() {
           }
         />
       ) : visible.length === 0 ? (
-        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">No matching assets.</div>
+        searching ? (
+          <div className="px-4 md:px-6 py-12 text-center">
+            <p className="text-sm text-fg-2">No assets match &quot;{search.trim()}&quot;</p>
+            <p className="mt-1 text-xs text-fg-3">Try a different name or clear the search.</p>
+          </div>
+        ) : (
+          <div className="px-4 md:px-6 py-10 text-sm text-fg-3">No assets in this folder.</div>
+        )
       ) : (
         <div className="px-4 md:px-6 py-4">
           <AssetGrid
             items={visible}
-            selected={selected}
-            selecting={selected.size > 0}
             presignEnabled={presignEnabled}
             cache={cache}
-            onOpen={setOpenItem}
-            onToggleSelect={toggleSelect}
+            onOpen={(item) => openAsset(item)}
+            onLongPress={setActionItem}
           />
         </div>
       )}
 
-      {selected.size > 0 ? (
-        <div className="fixed inset-x-0 bottom-[56px] z-30 md:bottom-0">
-          <div className="mx-auto m-3 flex max-w-xl items-center gap-3 rounded-xl border border-border bg-panel px-4 py-2.5 shadow-lg">
-            <span className="text-sm font-medium">{selected.size} selected</span>
-            <span className="ml-auto flex items-center gap-2">
-              <Button variant="primary" size="sm" onClick={() => void downloadSelected()}>
-                <IconDownload size={16} />
-                Download
-              </Button>
-              <Button variant="danger" size="sm" onClick={() => setConfirmBulk(true)}>
-                <IconTrash size={16} />
-                Delete
-              </Button>
-              <Button variant="ghost" size="sm" onClick={clearSelection}>
-                <IconX size={16} />
-                Clear
-              </Button>
-            </span>
-          </div>
-        </div>
-      ) : null}
-
-      {actionError !== null ? (
-        <div className="fixed inset-x-0 bottom-[112px] z-30 px-3 md:bottom-[56px]">
-          <div
-            role="alert"
-            className="mx-auto max-w-xl rounded-xl border border-bad bg-panel px-4 py-2.5 text-sm text-bad shadow-lg"
-          >
-            {actionError}
-          </div>
-        </div>
-      ) : null}
-
-      {confirmBulk ? (
-        <ConfirmDialog
-          title="Delete assets?"
-          message={`Delete ${selected.size} ${selected.size === 1 ? 'asset' : 'assets'}? They will be removed from the library.`}
-          confirmLabel="Delete"
-          busyLabel="Deleting"
-          destructive
-          busy={deleting}
-          onConfirm={() => void deleteSelected()}
-          onCancel={() => setConfirmBulk(false)}
+      {viewer !== null && viewerItem !== undefined ? (
+        <AssetLightbox
+          items={navigable}
+          index={viewer.index}
+          presignEnabled={presignEnabled}
+          cache={cache}
+          initialInfoOpen={viewer.infoOpen}
+          onIndexChange={(index) =>
+            setViewer((prev) => (prev === null ? prev : { ...prev, index }))
+          }
+          onClose={() => setViewer(null)}
+          onDelete={deleteOne}
+          onToast={push}
         />
       ) : null}
 
-      {openItem !== null ? (
-        <AssetDrawer
-          item={openItem}
-          bucket={bucket}
+      {actionItem !== null ? (
+        <AssetActionSheet
+          item={actionItem}
           presignEnabled={presignEnabled}
           cache={cache}
-          onClose={() => setOpenItem(null)}
-          onDelete={deleteOne}
+          onClose={() => setActionItem(null)}
+          onInfo={(item) => {
+            setActionItem(null);
+            openAsset(item, true);
+          }}
+          onToast={push}
         />
       ) : null}
 
       <AssetUploadSheet open={uploadOpen} onClose={() => setUploadOpen(false)} />
+
+      <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

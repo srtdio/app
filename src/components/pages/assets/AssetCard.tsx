@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/cn';
-import { IconCheck, IconFile, IconLink } from '@/components/ui/icons';
+import { IconFile, IconLink } from '@/components/ui/icons';
 import { useInView } from '@/lib/use-in-view';
+import { useLongPress } from '@/components/pages/assets/useLongPress';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   displayLabel,
@@ -15,14 +16,13 @@ import {
 
 interface AssetCardProps {
   item: AssetListItem;
-  selected: boolean;
-  /** True when a selection is in progress, so the checkbox stays visible. */
-  selecting: boolean;
   /** Whether presigning is configured; when false, image tiles show a fallback. */
   presignEnabled: boolean;
   cache: PresignCache;
+  /** Tap: open the lightbox (files) or the external link (links). */
   onOpen: () => void;
-  onToggleSelect: () => void;
+  /** Long-press: open the bottom action sheet. */
+  onLongPress: () => void;
 }
 
 /** Lazily presign and keep fresh the thumbnail URL for an image-kind card. */
@@ -31,12 +31,12 @@ function useThumbnail(
   cache: PresignCache,
   enabled: boolean,
 ): {
-  ref: React.RefObject<HTMLDivElement>;
+  ref: React.RefObject<HTMLButtonElement>;
   url: string | null;
   failed: boolean;
   onError: () => void;
 } {
-  const { ref, inView } = useInView<HTMLDivElement>();
+  const { ref, inView } = useInView<HTMLButtonElement>();
   const versionId = item.currentVersionId;
   const active = enabled && item.kind === 'image' && versionId !== null;
   const [url, setUrl] = useState<string | null>(() =>
@@ -96,17 +96,10 @@ function Fallback({ item }: { item: AssetListItem }) {
   );
 }
 
-export function AssetCard({
-  item,
-  selected,
-  selecting,
-  presignEnabled,
-  cache,
-  onOpen,
-  onToggleSelect,
-}: AssetCardProps) {
+export function AssetCard({ item, presignEnabled, cache, onOpen, onLongPress }: AssetCardProps) {
   const { ref, url, failed, onError } = useThumbnail(item, cache, presignEnabled);
   const name = displayLabel(item);
+  const longPress = useLongPress(onLongPress, onOpen);
   const state =
     item.kind === 'image'
       ? imageTileState({
@@ -118,38 +111,17 @@ export function AssetCard({
       : 'fallback';
 
   return (
-    <div
+    <button
       ref={ref}
+      type="button"
+      aria-label={item.kind === 'link' ? `Open ${name}` : `View ${name}`}
+      {...longPress}
+      style={{ touchAction: 'manipulation' }}
       className={cn(
-        'group relative overflow-hidden rounded-xl border bg-panel transition-colors',
-        selected
-          ? 'border-accent ring-1 ring-accent-line'
-          : 'border-border hover:border-border-strong',
+        'group relative flex flex-col overflow-hidden rounded-xl border border-border bg-panel text-left transition-colors',
+        'hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
     >
-      <button
-        type="button"
-        aria-label={`Open ${name}`}
-        onClick={onOpen}
-        className="absolute inset-0 z-0 rounded-xl"
-      />
-
-      <button
-        type="button"
-        aria-label={selected ? `Deselect ${name}` : `Select ${name}`}
-        aria-pressed={selected}
-        onClick={onToggleSelect}
-        className={cn(
-          'absolute left-2 top-2 z-20 flex h-6 w-6 items-center justify-center rounded-md border transition-opacity',
-          selected
-            ? 'border-accent bg-accent text-accent-fg opacity-100'
-            : 'border-border-strong bg-panel/90 text-transparent opacity-0 focus:opacity-100 group-hover:opacity-100',
-          selecting && 'opacity-100',
-        )}
-      >
-        <IconCheck size={14} />
-      </button>
-
       <div className={cn(TILE, state === 'image' ? 'bg-panel-2' : 'bg-panel-3')}>
         {state === 'shimmer' ? (
           <div className="h-full w-full animate-pulse bg-panel-2" />
@@ -166,7 +138,7 @@ export function AssetCard({
         )}
       </div>
 
-      <div className="pointer-events-none relative z-0 flex items-center gap-2 border-t border-border px-2.5 py-2">
+      <div className="flex items-center gap-2 border-t border-border px-2.5 py-2">
         <span className="flex-1 truncate text-xs font-medium" title={name}>
           {name}
         </span>
@@ -177,9 +149,9 @@ export function AssetCard({
         ) : null}
       </div>
 
-      <div className="pointer-events-none relative z-0 px-2.5 pb-2 text-[11px] tabular-nums text-fg-3">
+      <div className="px-2.5 pb-2 text-[11px] tabular-nums text-fg-3">
         {item.kind === 'link' ? linkDomain(item.externalUrl) : humanizeSize(item.sizeBytes)}
       </div>
-    </div>
+    </button>
   );
 }

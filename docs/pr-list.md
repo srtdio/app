@@ -82,7 +82,7 @@ Every frontend PR ships with an explicit light AND dark mode parity check. 44x44
 | 37 | Briefs UI: client-only create, open/closed, comment + withdraw, read-only after creation, derived linked-post count, email-forward intake address | 32, 14 |
 | 38 | Inbox UI: icon + badge, state chips (All / Unread / Snoozed), scope chips (Everything / Posts / Briefs / People / Groups / Clients), snooze (1h / 4h / tomorrow 9am / next week), inline reply, click navigates to PCS | 30, 16 |
 | 39 | Chat UI: Agora SDK wrap, DM + Group channels, reads live from SDK, mirror never on read path. Chat unavailable does not affect the rest of the app. | 32, 17, 19 |
-| 40 | Assets UI: folders, tags, version chain, newer-version banner (Use new / Keep current), delete-protection toast and in-use modal, current-version display, kebab version history | 34, 15 |
+| 40 | Assets UI: fullscreen lightbox viewer (type-aware media for image / video / pdf / doc / xls / file, swipe + arrow + key navigation over the filtered list with links excluded), whole-card tap to open, long-press action sheet (Download / Copy link / Info), Info bottom sheet with delete, search + kind chips, toasts | 34, 15 |
 | 41 | Trash UI: Recently deleted drawer entry, restore button + countdown | 40, 26 |
 | 42 | Search UI: cmd+K palette, scope chips (All / Posts / Briefs / Comments / Chat / Assets / People), Postgres FTS for entities + Agora SDK for chat, recency + relevance ranking | 38, 22, 39 |
 | 43 | Workspace settings UI: name, timezone, default digest time, member roles, billing, 7-day soft-delete, ownership transfer (immediate, password confirm, owner cannot self-delete until transferred) | 30, 25 |
