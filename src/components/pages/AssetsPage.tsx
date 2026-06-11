@@ -11,6 +11,7 @@ import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
+import { openLinkInNewTab } from '@/components/pages/assets/openExternal';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
@@ -129,12 +130,13 @@ export function AssetsPage() {
 
   const segments = useMemo(() => breadcrumbSegments(folder), [folder]);
 
-  // Tap a card: open its external link, or open the lightbox at that asset.
+  // Tap a card: open its external link in a new tab, or open the lightbox at
+  // that asset. Opening a link never navigates the current Sorted tab.
   const openAsset = useCallback(
     (item: AssetListItem, infoOpen = false): void => {
       if (item.kind === 'link') {
         if (item.externalUrl !== null) {
-          window.open(item.externalUrl, '_blank', 'noopener,noreferrer');
+          openLinkInNewTab(item.externalUrl);
         }
         return;
       }
@@ -143,6 +145,40 @@ export function AssetsPage() {
     },
     [navigable],
   );
+
+  // Mint an attachment-disposition presigned URL for a stored asset version, so
+  // the browser saves the file instead of rendering it. Distinct from the cached
+  // inline presign used for in-place viewing; downloads are infrequent and must
+  // never be served from (or pollute) the inline-view cache.
+  const requestDownloadUrl = useCallback(async (item: AssetListItem): Promise<string> => {
+    const endpoint = env.VITE_ASSET_READ_URL;
+    if (endpoint === undefined || endpoint === '') {
+      throw new Error('Asset read endpoint is not configured.');
+    }
+    if (item.currentVersionId === null) {
+      throw new Error('Asset has no stored version.');
+    }
+    const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+    if (token === null || token === '') {
+      throw new Error('No active session.');
+    }
+    const response = await fetchWithTrace(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ asset_version_id: item.currentVersionId, disposition: 'attachment' }),
+    });
+    if (!response.ok) {
+      throw new Error(`Presign failed with status ${response.status}.`);
+    }
+    const body = (await response.json()) as { url?: unknown };
+    if (typeof body.url !== 'string') {
+      throw new Error('Presign response was malformed.');
+    }
+    return body.url;
+  }, []);
 
   // Soft-delete one asset: remove the row optimistically and roll back on
   // failure. Resolves true on success so the viewer can close onto the new list.
@@ -322,6 +358,7 @@ export function AssetsPage() {
           index={viewer.index}
           presignEnabled={presignEnabled}
           cache={cache}
+          requestDownloadUrl={requestDownloadUrl}
           initialInfoOpen={viewer.infoOpen}
           onIndexChange={(index) =>
             setViewer((prev) => (prev === null ? prev : { ...prev, index }))
@@ -337,6 +374,7 @@ export function AssetsPage() {
           item={actionItem}
           presignEnabled={presignEnabled}
           cache={cache}
+          requestDownloadUrl={requestDownloadUrl}
           onClose={() => setActionItem(null)}
           onInfo={(item) => {
             setActionItem(null);
