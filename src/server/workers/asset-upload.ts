@@ -21,7 +21,7 @@ import {
 import { R2StorageClient, type StorageClient } from '@srtdio/storage';
 import { extractTraceId } from '@/server/trace';
 import { TRACE_ID_HEADER } from '@/lib/trace';
-import { fetchWithTrace } from '@/lib/fetch';
+import { tracedFetch } from '@/server/traced-fetch';
 
 export interface AssetUploadEnv {
   CLOUDFLARE_ACCOUNT_ID: string;
@@ -54,7 +54,7 @@ function buildStorage(env: AssetUploadEnv): StorageClient {
       CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
       CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
     },
-    fetchWithTrace,
+    tracedFetch,
   );
 }
 
