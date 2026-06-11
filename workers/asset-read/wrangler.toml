@@ -1,3 +1,4 @@
+# deploy-trigger: 2026-06-11 surface error detail in logs
 name = "srtdio-asset-read"
 main = "../../src/server/workers/asset-read.ts"
 compatibility_date = "2026-05-16"
