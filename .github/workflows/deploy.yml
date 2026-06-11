@@ -27,6 +27,7 @@ jobs:
           VITE_SENTRY_DSN_FRONTEND: ${{ secrets.SENTRY_DSN_FRONTEND }}
           VITE_SENTRY_ENVIRONMENT: production
           VITE_SENTRY_RELEASE: ${{ github.sha }}
+          VITE_ASSET_READ_URL: ${{ vars.VITE_ASSET_READ_URL }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           CI: true
       - name: Print wrangler version
