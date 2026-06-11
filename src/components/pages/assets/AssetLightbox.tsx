@@ -11,7 +11,6 @@ import {
   resolveAssetUrl,
   typeLabel,
 } from '@/components/pages/assets/media';
-import { downloadFile } from '@/components/pages/assets/openExternal';
 
 const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
 const SWIPE_THRESHOLD = 48;
@@ -22,8 +21,6 @@ interface AssetLightboxProps {
   index: number;
   presignEnabled: boolean;
   cache: PresignCache;
-  /** Mint an attachment-disposition URL so a download saves in place, never navigating. */
-  requestDownloadUrl: (item: AssetListItem) => Promise<string>;
   /** Open the Info sheet immediately (used when reached from the long-press sheet). */
   initialInfoOpen?: boolean;
   onIndexChange: (index: number) => void;
@@ -60,7 +57,6 @@ export function AssetLightbox({
   index,
   presignEnabled,
   cache,
-  requestDownloadUrl,
   initialInfoOpen = false,
   onIndexChange,
   onClose,
@@ -159,14 +155,11 @@ export function AssetLightbox({
     }
   }
 
-  // Download saves the file in place via a content-disposition: attachment URL;
-  // the lightbox (and the Sorted tab behind it) never navigates away.
   const handleDownload = (): void => {
-    setBusy(true);
-    void downloadFile(() => requestDownloadUrl(asset))
-      .then(() => onToast('Download started'))
-      .catch(() => onToast(SIGN_FAIL))
-      .finally(() => setBusy(false));
+    void withUrl((url) => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      onToast('Download started');
+    });
   };
 
   const handleCopy = (): void => {

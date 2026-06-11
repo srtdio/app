@@ -126,39 +126,6 @@ function amzDate(now: Date): { full: string; short: string } {
   return { full, short: full.slice(0, 8) };
 }
 
-/**
- * Drop control characters, double quotes, and backslashes so the value can sit
- * safely inside a quoted Content-Disposition filename. Done char-by-char rather
- * than with a control-character regex so it stays lint-clean.
- */
-function sanitizeFilename(name: string): string {
-  let out = '';
-  for (const ch of name) {
-    const code = ch.codePointAt(0) ?? 0;
-    if (code < 0x20 || code === 0x7f || ch === '"' || ch === '\\') continue;
-    out += ch;
-  }
-  return out.trim();
-}
-
-/** RFC 5987 ext-value encoding of a UTF-8 string (for filename*=). */
-function encodeRfc5987(value: string): string {
-  return encodeURIComponent(value)
-    .replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
-    .replace(/%(7C|60|5E)/g, (_full, hex: string) => String.fromCharCode(parseInt(hex, 16)));
-}
-
-/**
- * A Content-Disposition: attachment value with a sanitized ASCII fallback and an
- * RFC 5987 filename* for the full UTF-8 name. The whole string is later RFC 3986
- * percent-encoded as a query value, so it is signed verbatim.
- */
-function attachmentDisposition(filename: string): string {
-  const clean = sanitizeFilename(filename) || 'download';
-  const ascii = clean.replace(/[^\x20-\x7e]/g, '_');
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeRfc5987(clean)}`;
-}
-
 export class R2StorageClient implements StorageClient {
   private readonly host: string;
 
@@ -213,13 +180,6 @@ export class R2StorageClient implements StorageClient {
     bucket: string;
     key: string;
     expiresInSeconds: number;
-    /**
-     * When set, the signed URL carries response-content-disposition=attachment
-     * with this filename, so the browser saves the object instead of rendering
-     * it inline. Omitted = inline; the signing path is then byte-identical to
-     * before, so image/video rendering is unaffected.
-     */
-    downloadFilename?: string;
   }): Promise<string> {
     const now = new Date();
     const { full, short } = amzDate(now);
@@ -231,9 +191,7 @@ export class R2StorageClient implements StorageClient {
     const credential = `${this.env.CLOUDFLARE_R2_ACCESS_KEY_ID}/${scope}`;
 
     // Query params must be sorted by key; values RFC 3986-encoded (encodeSegment
-    // also percent-encodes the '/' in Credential, as SigV4 requires). The
-    // optional response-content-disposition is a signed override and sorts after
-    // every X-Amz-* key ('X' < 'r' in byte order), so it is appended last.
+    // also percent-encodes the '/' in Credential, as SigV4 requires).
     const query: Array<[string, string]> = [
       ['X-Amz-Algorithm', ALGORITHM],
       ['X-Amz-Credential', credential],
@@ -241,9 +199,6 @@ export class R2StorageClient implements StorageClient {
       ['X-Amz-Expires', String(input.expiresInSeconds)],
       ['X-Amz-SignedHeaders', 'host'],
     ];
-    if (input.downloadFilename !== undefined) {
-      query.push(['response-content-disposition', attachmentDisposition(input.downloadFilename)]);
-    }
     const canonicalQuery = query
       .map(([k, v]) => `${encodeSegment(k)}=${encodeSegment(v)}`)
       .join('&');
