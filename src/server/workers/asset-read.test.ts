@@ -226,7 +226,7 @@ describe('worker.fetch CORS', () => {
   function preflight(origin: string | null): Request {
     const headers = new Headers({
       'access-control-request-method': 'POST',
-      'access-control-request-headers': 'authorization, content-type',
+      'access-control-request-headers': 'authorization, content-type, x-trace-id',
     });
     if (origin !== null) {
       headers.set('Origin', origin);
@@ -247,7 +247,9 @@ describe('worker.fetch CORS', () => {
     expect(res.status).toBe(204);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(ALLOWED_ORIGIN);
     expect(res.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS');
-    expect(res.headers.get('Access-Control-Allow-Headers')).toBe('authorization, content-type');
+    expect(res.headers.get('Access-Control-Allow-Headers')).toBe(
+      'authorization, content-type, x-trace-id',
+    );
     expect(res.headers.get('Access-Control-Max-Age')).toBe('86400');
     expect(res.headers.get('Vary')).toBe('Origin');
   });

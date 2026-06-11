@@ -225,7 +225,7 @@ function preflightResponse(request: Request, env: AssetReadEnv): Response {
   const headers = new Headers({
     'Access-Control-Allow-Origin': acao,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, content-type',
+    'Access-Control-Allow-Headers': `authorization, content-type, ${TRACE_ID_HEADER.toLowerCase()}`,
     'Access-Control-Max-Age': String(CORS_MAX_AGE_SECONDS),
     Vary: 'Origin',
   });
