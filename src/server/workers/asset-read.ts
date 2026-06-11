@@ -21,7 +21,7 @@ import { jwtVerify } from 'jose';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@srtdio/schemas';
 import { R2StorageClient } from '@srtdio/storage';
-import { fetchWithTrace } from '@/lib/fetch';
+import { tracedFetch } from '@/server/traced-fetch';
 import { err, ok, type Result } from '@/server/assets/types';
 import { extractTraceId } from '@/server/trace';
 import { logger } from '@/server/logger';
@@ -274,7 +274,7 @@ async function handlePost(request: Request, env: AssetReadEnv, traceId: string):
           CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
           CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
         },
-        fetchWithTrace,
+        tracedFetch,
       ),
     },
     { userId: caller.value, assetVersionId: parsed.value },
