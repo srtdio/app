@@ -204,14 +204,14 @@ export function AssetsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search files"
-            className="h-11 w-full rounded-md border border-border bg-panel pl-9 pr-10 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
+            className="h-11 w-full rounded-md border border-border bg-panel pl-9 pr-11 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
           />
           {searching ? (
             <button
               type="button"
               aria-label="Clear search"
               onClick={() => setSearch('')}
-              className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-md text-fg-3 hover:bg-panel-2 hover:text-fg"
+              className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 hover:bg-panel-2 hover:text-fg"
             >
               <IconX size={16} />
             </button>

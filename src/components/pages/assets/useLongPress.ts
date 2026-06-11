@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 /** Pointer handlers to spread onto an element to wire long-press + tap. */
 export interface LongPressHandlers {
@@ -35,6 +35,8 @@ export function useLongPress(
       timer.current = undefined;
     }
   }, []);
+
+  useEffect(() => clear, [clear]);
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent): void => {
