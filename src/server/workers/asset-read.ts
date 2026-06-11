@@ -5,9 +5,11 @@
 //      workspace, and returns a short-lived signed R2 GET URL:
 //      { url, expires_at }.
 //
-// The Worker is the only holder of the Supabase service-role key, the R2
-// credentials and the JWT secret; none is ever shipped to the browser. The
-// caller is identified from the verified token's `sub` claim only - never from
+// The Worker is the only holder of the Supabase service-role key and the R2
+// credentials; neither is ever shipped to the browser. Caller tokens are
+// verified against the project's published asymmetric JWKS (ES256), so no
+// shared secret is held here. The caller is identified from the verified
+// token's `sub` claim only - never from
 // a request-supplied id. Authorization is an explicit DB read against
 // workspace_members (membership is not in the JWT), not an RLS side effect, so
 // the lookup uses the service role and the worker gates access itself.
@@ -17,7 +19,7 @@
 // non-member) are returned as typed Results and mapped to 4xx; system faults
 // throw and become a 500.
 
-import { jwtVerify } from 'jose';
+import { jwtVerify, createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@srtdio/schemas';
 import { R2StorageClient } from '@srtdio/storage';
@@ -37,8 +39,6 @@ export interface AssetReadEnv {
   SUPABASE_URL: string;
   /** Service role: used only for the server-side row lookups below. */
   SUPABASE_SECRET_KEY: string;
-  /** Project JWT secret: local HS256 verification, no GoTrue round-trip. */
-  SUPABASE_JWT_SECRET: string;
   /**
    * Comma-separated list of browser origins allowed to call this Worker
    * cross-origin. Operator sets it as a Worker var/secret; when unset the code
@@ -158,13 +158,32 @@ export async function authorizeAndSign(
   return ok({ url, expires_at });
 }
 
+/** Path to a Supabase project's published JWKS (asymmetric signing keys). */
+const JWKS_PATH = '/auth/v1/.well-known/jwks.json';
+
 /**
- * Verify the Bearer token locally (HS256) and return the `sub` claim. Any
- * absent/malformed/expired token is an `unauthorized` Result, never a throw.
+ * Lazily-built remote JWKS resolver. Supabase signs user access tokens with
+ * ES256 and publishes the verifying public keys at {@link JWKS_PATH}; jose
+ * fetches and caches them inside this instance. It is built on first request,
+ * never at module eval - constructing it (or doing any I/O) at global scope
+ * trips Cloudflare error 10021. One instance per isolate is reused so keys are
+ * fetched at most once.
+ */
+let jwksCache: JWTVerifyGetKey | undefined;
+
+export function getSupabaseJwks(env: { SUPABASE_URL: string }): JWTVerifyGetKey {
+  jwksCache ??= createRemoteJWKSet(new URL(JWKS_PATH, env.SUPABASE_URL));
+  return jwksCache;
+}
+
+/**
+ * Verify the Bearer token against the project's asymmetric JWKS (ES256) and
+ * return the `sub` claim. Any absent/malformed/expired token is an
+ * `unauthorized` Result, never a throw.
  */
 export async function verifyCaller(
   request: Request,
-  jwtSecret: string,
+  getKey: JWTVerifyGetKey,
 ): Promise<Result<string, ReadError>> {
   const header = request.headers.get('Authorization') ?? request.headers.get('authorization');
   const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
@@ -172,8 +191,8 @@ export async function verifyCaller(
     return err({ code: 'unauthorized', message: 'Missing bearer token.' });
   }
   try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret), {
-      algorithms: ['HS256'],
+    const { payload } = await jwtVerify(token, getKey, {
+      algorithms: ['ES256'],
     });
     if (typeof payload.sub !== 'string' || payload.sub === '') {
       return err({ code: 'unauthorized', message: 'Token has no subject.' });
@@ -324,7 +343,7 @@ async function handlePost(
   traceId: string,
   acao: string | null,
 ): Promise<Response> {
-  const caller = await verifyCaller(request, env.SUPABASE_JWT_SECRET);
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
   if (!caller.ok) {
     return fail(caller.error, traceId, acao);
   }

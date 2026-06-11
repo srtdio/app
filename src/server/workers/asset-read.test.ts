@@ -1,16 +1,37 @@
-import { describe, expect, it } from 'vitest';
-import { SignJWT } from 'jose';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  SignJWT,
+  createRemoteJWKSet,
+  exportJWK,
+  generateKeyPair,
+  type JWK,
+  type JWTVerifyGetKey,
+  type KeyLike,
+} from 'jose';
+
+// jose's Node build resolves a remote JWKS via node:http (not global fetch), so
+// it cannot be intercepted by stubbing fetch the way the Workers runtime would.
+// We mock the remote-JWKS constructor to serve our local public key instead -
+// the "fetch" of the published key set, mocked. ES256 signature verification
+// itself stays real (jwtVerify and createLocalJWKSet are the genuine exports).
+const mockedJwks = vi.hoisted(() => ({ keys: [] as JWK[] }));
+vi.mock('jose', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('jose')>();
+  return {
+    ...actual,
+    createRemoteJWKSet: () => actual.createLocalJWKSet(mockedJwks),
+  };
+});
+
 import worker, {
   authorizeAndSign,
+  getSupabaseJwks,
   verifyCaller,
   type AssetReadEnv,
   type AssetReadStore,
   type AssetVersionLocator,
   type PresignedUrlSigner,
 } from './asset-read';
-
-const JWT_SECRET = 'test-secret-with-at-least-32-characters-long-xx';
-const SECRET_BYTES = new TextEncoder().encode(JWT_SECRET);
 
 const USER = '33333333-3333-7333-8333-333333333333';
 const OTHER_USER = '44444444-4444-7444-8444-444444444444';
@@ -20,14 +41,31 @@ const VERSION_ID = '55555555-5555-7555-8555-555555555555';
 const BUCKET = 'assets-acme';
 const R2_KEY = 'images/aaaa/v1-photo.jpg';
 
+const SUPABASE_URL = 'https://test.supabase.co';
+const JWKS_URL = `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`;
+const KID = 'test-es256-key';
+
+// A local ES256 keypair stands in for the Supabase signing key. The public half
+// is exported as a JWK and served by a mocked JWKS fetch; the private half signs
+// test tokens. Generated once so every test agrees on the same key material.
+let signingKey: KeyLike;
+let publicJwk: JWK;
+
+beforeAll(async () => {
+  const { publicKey, privateKey } = await generateKeyPair('ES256', { extractable: true });
+  signingKey = privateKey;
+  publicJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', use: 'sig', kid: KID };
+  mockedJwks.keys = [publicJwk];
+});
+
 async function mintToken(sub: string, expSecondsFromNow = 3600): Promise<string> {
   const nowSec = Math.floor(Date.now() / 1000);
   return new SignJWT({})
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: 'ES256', kid: KID })
     .setSubject(sub)
     .setIssuedAt(nowSec)
     .setExpirationTime(nowSec + expSecondsFromNow)
-    .sign(SECRET_BYTES);
+    .sign(signingKey);
 }
 
 class FakeStore implements AssetReadStore {
@@ -74,9 +112,14 @@ function bearerRequest(
   });
 }
 
+/** A remote JWKS resolver bound to the mocked fetch endpoint. */
+function remoteJwks(): JWTVerifyGetKey {
+  return createRemoteJWKSet(new URL(JWKS_URL));
+}
+
 describe('verifyCaller', () => {
   it('rejects a missing Authorization header with 401', async () => {
-    const result = await verifyCaller(bearerRequest(null), JWT_SECRET);
+    const result = await verifyCaller(bearerRequest(null), remoteJwks());
     expect(result).toEqual({
       ok: false,
       error: { code: 'unauthorized', message: expect.any(String) },
@@ -84,7 +127,7 @@ describe('verifyCaller', () => {
   });
 
   it('rejects a malformed token with 401', async () => {
-    const result = await verifyCaller(bearerRequest('not-a-real-jwt'), JWT_SECRET);
+    const result = await verifyCaller(bearerRequest('not-a-real-jwt'), remoteJwks());
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('unauthorized');
@@ -93,26 +136,37 @@ describe('verifyCaller', () => {
 
   it('rejects an expired token with 401', async () => {
     const token = await mintToken(USER, -10);
-    const result = await verifyCaller(bearerRequest(token), JWT_SECRET);
+    const result = await verifyCaller(bearerRequest(token), remoteJwks());
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe('unauthorized');
     }
   });
 
-  it('rejects a token signed with the wrong secret with 401', async () => {
+  it('rejects an HS256-signed token with 401', async () => {
+    // A symmetric token is the pre-migration shape: it must no longer verify.
     const token = await new SignJWT({})
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(USER)
       .setExpirationTime('1h')
       .sign(new TextEncoder().encode('a-totally-different-secret-32-characters'));
-    const result = await verifyCaller(bearerRequest(token), JWT_SECRET);
+    const result = await verifyCaller(bearerRequest(token), remoteJwks());
     expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('unauthorized');
+      expect(result.error.message).toBe('Invalid or expired token.');
+    }
   });
 
-  it('accepts a valid token and returns the sub claim', async () => {
+  it('accepts a valid ES256 token served by the mocked JWKS and returns the sub claim', async () => {
     const token = await mintToken(USER);
-    const result = await verifyCaller(bearerRequest(token), JWT_SECRET);
+    const result = await verifyCaller(bearerRequest(token), remoteJwks());
+    expect(result).toEqual({ ok: true, value: USER });
+  });
+
+  it('builds the JWKS resolver from SUPABASE_URL and verifies against it', async () => {
+    const token = await mintToken(USER);
+    const result = await verifyCaller(bearerRequest(token), getSupabaseJwks({ SUPABASE_URL }));
     expect(result).toEqual({ ok: true, value: USER });
   });
 });
@@ -185,14 +239,23 @@ describe('authorizeAndSign', () => {
   });
 });
 
+describe('module startup safety', () => {
+  it('imports without performing any network I/O at eval', async () => {
+    vi.resetModules();
+    const fetchSpy = vi.fn(() => Promise.reject(new Error('no fetch at import')));
+    vi.stubGlobal('fetch', fetchSpy);
+    await import('./asset-read');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('worker.fetch', () => {
   const env: AssetReadEnv = {
     CLOUDFLARE_ACCOUNT_ID: 'acct',
     CLOUDFLARE_R2_ACCESS_KEY_ID: 'akid',
     CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'secret',
-    SUPABASE_URL: 'https://test.supabase.co',
+    SUPABASE_URL,
     SUPABASE_SECRET_KEY: 'service-role-key',
-    SUPABASE_JWT_SECRET: JWT_SECRET,
   };
 
   it('returns 401 when the bearer token is absent', async () => {
@@ -218,9 +281,8 @@ describe('worker.fetch CORS', () => {
     CLOUDFLARE_ACCOUNT_ID: 'acct',
     CLOUDFLARE_R2_ACCESS_KEY_ID: 'akid',
     CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'secret',
-    SUPABASE_URL: 'https://test.supabase.co',
+    SUPABASE_URL,
     SUPABASE_SECRET_KEY: 'service-role-key',
-    SUPABASE_JWT_SECRET: JWT_SECRET,
   };
 
   function preflight(origin: string | null): Request {
@@ -267,7 +329,8 @@ describe('worker.fetch CORS', () => {
   it('carries ACAO on a successful POST response for an allowed origin', async () => {
     const token = await mintToken(USER);
     const res = await worker.fetch(postWith(token, OTHER_ALLOWED_ORIGIN, { bad: true }), env);
-    // 400 (bad body) still exercises the fail() path with CORS applied.
+    // 400 (bad body) still exercises the fail() path with CORS applied; the
+    // ES256 token verified against the mocked JWKS before the body was read.
     expect(res.status).toBe(400);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(OTHER_ALLOWED_ORIGIN);
     expect(res.headers.get('Vary')).toBe('Origin');
