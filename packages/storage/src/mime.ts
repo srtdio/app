@@ -10,6 +10,15 @@ export const ALLOWED_MIME_TYPES = [
   'video/mp4',
   'video/quicktime',
   'application/pdf',
+  // Office documents. Macro-enabled types (docm, xlsm, pptm and their
+  // application/vnd.ms-*.macroEnabled.12 MIME strings) are deliberately
+  // excluded: their VBA payloads are an unacceptable execution vector.
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ] as const;
 
 export type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
