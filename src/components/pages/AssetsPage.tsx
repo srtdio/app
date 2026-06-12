@@ -9,6 +9,7 @@ import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
 import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
+import { AddLinkSheet } from '@/components/pages/assets/AddLinkSheet';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { openLinkInNewTab } from '@/components/pages/assets/openExternal';
@@ -17,19 +18,30 @@ import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useSession } from '@/lib/session-context';
 import { useSort } from '@/lib/use-sort';
 import { PresignCache } from '@/lib/asset-presign';
-import { uploadAssetFile, type UploadOutcome } from '@/lib/asset-upload';
+import {
+  addAssetLink,
+  canRenameAssets,
+  renameAsset,
+  uploadAssetFile,
+  type LinkOutcome,
+  type RenameOutcome,
+  type UploadOutcome,
+} from '@/lib/asset-upload';
 import { assetDelete } from '@srtdio/rpc';
 import {
   ASSET_SORT_DEFAULT,
   ASSET_SORT_OPTIONS,
   breadcrumbSegments,
   buildKindCounts,
+  fetchMemberRole,
   filterAssets,
   KIND_LABELS,
   listAssets,
   removeAssetsById,
+  renameAssetInList,
   sortAssets,
   subfolders,
   visibleKinds,
@@ -49,7 +61,9 @@ interface ViewerState {
 
 export function AssetsPage() {
   const { workspaceId } = useWorkspace();
+  const { session } = useSession();
   const newTrace = useNewTrace();
+  const userId = session?.user.id ?? null;
 
   const [items, setItems] = useState<AssetListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,6 +75,8 @@ export function AssetsPage() {
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   const [actionItem, setActionItem] = useState<AssetListItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [addLinkOpen, setAddLinkOpen] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   const { toasts, push, dismiss } = useToasts();
 
@@ -102,7 +118,27 @@ export function AssetsPage() {
     setViewer(null);
     setActionItem(null);
     setUploadOpen(false);
+    setAddLinkOpen(false);
   }, [workspaceId]);
+
+  // Resolve the current member's workspace role with one RLS-scoped read (no
+  // worker round-trip), so the rename affordance can be gated to owner/admin/
+  // agency. A client (or any failed read) leaves the role null and hides edit.
+  useEffect(() => {
+    if (workspaceId === null || userId === null) {
+      setRole(null);
+      return;
+    }
+    let active = true;
+    void fetchMemberRole(supabase, workspaceId, userId).then((next) => {
+      if (active) setRole(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, [workspaceId, userId]);
+
+  const canRename = canRenameAssets(role);
 
   const counts = useMemo(() => buildKindCounts(items), [items]);
   const kinds = useMemo(() => visibleKinds(counts), [counts]);
@@ -227,6 +263,67 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, newTrace],
   );
 
+  // Add a link asset: POST {workspace_id, url, name} to the worker's /links
+  // route. The grid is refreshed by the sheet (onAdded) so the new link shows
+  // with the existing link-card rendering.
+  const handleAddLink = useCallback(
+    async (url: string, name: string): Promise<LinkOutcome> => {
+      if (uploadEndpoint === undefined || uploadEndpoint === '') {
+        return { ok: false, message: "Couldn't add the link. Check your connection and retry" };
+      }
+      if (workspaceId === null) {
+        return { ok: false, message: 'No workspace selected.' };
+      }
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      if (token === null || token === '') {
+        return { ok: false, message: 'Your session expired. Sign in again.' };
+      }
+      return addAssetLink({
+        endpoint: uploadEndpoint,
+        token,
+        workspaceId,
+        url,
+        name,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+    },
+    [uploadEndpoint, workspaceId, newTrace],
+  );
+
+  // Rename one asset via the worker's /rename route. On success the name is
+  // updated in place (grid card + open lightbox) without a full reload; a 403
+  // (defense in depth) surfaces the agency-only message.
+  const handleRename = useCallback(
+    async (item: AssetListItem, name: string): Promise<RenameOutcome> => {
+      if (uploadEndpoint === undefined || uploadEndpoint === '') {
+        return {
+          ok: false,
+          message: "Couldn't rename this asset. Check your connection and retry",
+        };
+      }
+      if (workspaceId === null) {
+        return { ok: false, message: 'No workspace selected.' };
+      }
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      if (token === null || token === '') {
+        return { ok: false, message: 'Your session expired. Sign in again.' };
+      }
+      const outcome = await renameAsset({
+        endpoint: uploadEndpoint,
+        token,
+        workspaceId,
+        assetId: item.id,
+        name,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+      if (outcome.ok) {
+        setItems((prev) => renameAssetInList(prev, item.id, name.trim()));
+      }
+      return outcome;
+    },
+    [uploadEndpoint, workspaceId, newTrace],
+  );
+
   const listLoading = workspaceId === null || (loading && items.length === 0);
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
 
@@ -282,7 +379,10 @@ export function AssetsPage() {
           ) : null}
         </div>
         <SortMenu options={ASSET_SORT_OPTIONS} value={sort} onChange={setSort} />
-        <AssetAddMenu onUploadFiles={() => setUploadOpen(true)} />
+        <AssetAddMenu
+          onUploadFiles={() => setUploadOpen(true)}
+          onAddLink={() => setAddLinkOpen(true)}
+        />
       </div>
 
       {/* Kind chips on a single horizontally-scrollable row; zero-count kinds hidden. */}
@@ -385,6 +485,8 @@ export function AssetsPage() {
           }
           onClose={() => setViewer(null)}
           onDelete={deleteOne}
+          canRename={canRename}
+          onRename={handleRename}
           onToast={push}
         />
       ) : null}
@@ -412,6 +514,14 @@ export function AssetsPage() {
         }
         onToast={push}
         onUploaded={() => void loadAssets()}
+      />
+
+      <AddLinkSheet
+        open={addLinkOpen}
+        onClose={() => setAddLinkOpen(false)}
+        onSubmit={handleAddLink}
+        onToast={push}
+        onAdded={() => void loadAssets()}
       />
 
       <Toasts toasts={toasts} onDismiss={dismiss} />

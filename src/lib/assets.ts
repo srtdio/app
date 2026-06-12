@@ -170,6 +170,42 @@ export async function listAssets(
   return { ok: true, data: shapeAssets(rows, counts) };
 }
 
+/**
+ * Read the current member's role in a workspace with one RLS-scoped SELECT
+ * (workspace_members is readable by members, mirroring the reads above; no proc,
+ * no worker round-trip). Returns null when there is no active membership or the
+ * read fails, and callers treat null as "no edit rights".
+ */
+export async function fetchMemberRole(
+  client: Client,
+  workspaceId: string,
+  userId: string,
+): Promise<string | null> {
+  const res = await client
+    .from('workspace_members')
+    .select('role')
+    .eq('workspace_id', workspaceId)
+    .eq('user_id', userId)
+    .eq('active', true)
+    .maybeSingle();
+  if (res.error || res.data === null) return null;
+  return (res.data as { role: string | null }).role;
+}
+
+/**
+ * Return a new list with one asset's display name replaced, so a rename updates
+ * the grid card (and the open lightbox, which derives its title from the same
+ * list) without a full reload. displayLabel prefers displayName, so setting it
+ * shows the new name regardless of which column the worker persisted.
+ */
+export function renameAssetInList(
+  items: AssetListItem[],
+  assetId: string,
+  name: string,
+): AssetListItem[] {
+  return items.map((item) => (item.id === assetId ? { ...item, displayName: name } : item));
+}
+
 /** The name shown on the card and matched by search/sort: display_name ?? filename. */
 export function displayLabel(item: Pick<AssetListItem, 'displayName' | 'filename'>): string {
   const name = item.displayName;

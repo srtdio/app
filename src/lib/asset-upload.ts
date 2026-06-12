@@ -165,6 +165,163 @@ export function allNamed(names: readonly string[]): boolean {
   return names.length > 0 && names.every((name) => name.trim() !== '');
 }
 
+// ---------------------------------------------------------------------------
+// Add link + rename. Both POST to sibling routes on the SAME asset-upload
+// worker (/links, /rename) behind the same Bearer auth + CORS as upload. The
+// network calls take an injected fetcher so tests drive them with a mock; pure
+// helpers (validation, the error maps, the role gate) are unit-tested directly.
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate the Add link field client-side, before any request: the value must
+ * parse as a URL and start with http:// or https:// (a bare host or a non-web
+ * scheme is rejected). Trims first so trailing whitespace never blocks a submit.
+ */
+export function isValidLinkUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return false;
+  try {
+    new URL(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Map a /links worker error code (or the transport failure code 'network') to
+ * the copy shown in a toast. Unknown codes fall back to the generic retry line.
+ * No em-dashes in any string (CLAUDE.md).
+ */
+export function linkErrorMessage(code: string): string {
+  switch (code) {
+    case 'invalid_url':
+      return 'Enter a full link starting with https://';
+    case 'name_required':
+      return 'The link needs a name';
+    default:
+      return "Couldn't add the link. Check your connection and retry";
+  }
+}
+
+export type LinkOutcome = { ok: true; assetId: string } | { ok: false; message: string };
+
+export interface AddLinkConfig {
+  /** The asset-upload worker base URL; the /links route is POSTed beneath it. */
+  endpoint: string;
+  token: string;
+  workspaceId: string;
+  url: string;
+  name: string;
+  /** Injected so tests pass a mock; the app passes fetchWithTrace. */
+  fetcher: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+/** Join the worker base URL with a sibling route, tolerating a trailing slash. */
+function workerRoute(base: string, path: string): string {
+  return `${base.replace(/\/+$/, '')}${path}`;
+}
+
+/**
+ * POST {workspace_id, url, name} to the worker's /links route with a Bearer
+ * token. Never throws: a transport failure or a non-OK status becomes
+ * { ok: false } with mapped copy. The url and name are sent trimmed.
+ */
+export async function addAssetLink(config: AddLinkConfig): Promise<LinkOutcome> {
+  let response: Response;
+  try {
+    response = await config.fetcher(workerRoute(config.endpoint, '/links'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({
+        workspace_id: config.workspaceId,
+        url: config.url.trim(),
+        name: config.name.trim(),
+      }),
+    });
+  } catch {
+    return { ok: false, message: linkErrorMessage('network') };
+  }
+
+  const body = await readJson(response);
+  if (!response.ok) {
+    return { ok: false, message: linkErrorMessage(errorCode(body)) };
+  }
+  return { ok: true, assetId: assetIdOf(body) };
+}
+
+/** Roles allowed to rename assets; mirrors the worker's 403 as defense in depth. */
+export function canRenameAssets(role: string | null): boolean {
+  return role === 'owner' || role === 'admin' || role === 'agency';
+}
+
+/**
+ * Map a /rename failure to toast copy. A 403 is the server-side role guard
+ * (defense in depth: the edit affordance is already hidden for clients), so it
+ * gets the agency-only line; everything else falls back to the retry line.
+ */
+export function renameErrorMessage(status: number): string {
+  if (status === 403) return 'Only the agency team can rename assets';
+  return "Couldn't rename this asset. Check your connection and retry";
+}
+
+export type RenameOutcome = { ok: true } | { ok: false; message: string };
+
+export interface RenameConfig {
+  /** The asset-upload worker base URL; the /rename route is POSTed beneath it. */
+  endpoint: string;
+  token: string;
+  workspaceId: string;
+  assetId: string;
+  name: string;
+  fetcher: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+/**
+ * POST {workspace_id, asset_id, name} to the worker's /rename route with a
+ * Bearer token. Never throws: a transport failure or a non-OK status becomes
+ * { ok: false } with mapped copy; a 200 is success.
+ */
+export async function renameAsset(config: RenameConfig): Promise<RenameOutcome> {
+  let response: Response;
+  try {
+    response = await config.fetcher(workerRoute(config.endpoint, '/rename'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({
+        workspace_id: config.workspaceId,
+        asset_id: config.assetId,
+        name: config.name.trim(),
+      }),
+    });
+  } catch {
+    return { ok: false, message: renameErrorMessage(0) };
+  }
+  if (!response.ok) {
+    return { ok: false, message: renameErrorMessage(response.status) };
+  }
+  return { ok: true };
+}
+
+/** Read the new asset's id from a {asset} body, tolerating assetId or id; '' when absent. */
+function assetIdOf(body: unknown): string {
+  if (typeof body === 'object' && body !== null) {
+    const asset = (body as { asset?: unknown }).asset;
+    if (typeof asset === 'object' && asset !== null) {
+      const a = asset as { assetId?: unknown; id?: unknown };
+      if (typeof a.assetId === 'string') return a.assetId;
+      if (typeof a.id === 'string') return a.id;
+    }
+  }
+  return '';
+}
+
 /** One item to upload: a stable id, the bytes, and the name to send it under. */
 export interface QueueItem {
   id: string;
