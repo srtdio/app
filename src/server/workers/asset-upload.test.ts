@@ -60,7 +60,7 @@ vi.mock('@/server/assets', async (importOriginal) => {
   };
 });
 
-import worker, { type AssetUploadEnv } from './asset-upload';
+import worker, { serializeError, type AssetUploadEnv } from './asset-upload';
 
 const USER = '33333333-3333-7333-8333-333333333333';
 const OTHER_USER = '44444444-4444-7444-8444-444444444444';
@@ -118,6 +118,18 @@ function uploadRequest(token: string | null, fields: Record<string, string>): Re
   return new Request('https://worker.test/', { method: 'POST', headers, body: form });
 }
 
+function readRequest(token: string | null, query: Record<string, string>): Request {
+  const url = new URL('https://worker.test/');
+  for (const [key, value] of Object.entries(query)) {
+    url.searchParams.set(key, value);
+  }
+  const headers = new Headers();
+  if (token !== null) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return new Request(url, { method: 'GET', headers });
+}
+
 describe('asset-upload worker.fetch', () => {
   it('returns 401 when the bearer token is absent', async () => {
     const res = await worker.fetch(uploadRequest(null, { workspace_id: WORKSPACE }), env);
@@ -165,5 +177,44 @@ describe('asset-upload worker.fetch', () => {
     expect(res.status).toBe(201);
     expect(state.capturedInput?.uploadedBy).toBe(USER);
     expect(state.capturedInput?.uploadedBy).not.toBe(OTHER_USER);
+  });
+
+  it('returns 400 (not 500) when asset_id is not a UUID on GET', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const res = await worker.fetch(
+      readRequest(token, { workspace_id: WORKSPACE, asset_id: 'undefined' }),
+      env,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('bad_request');
+    expect(body.error.message).toBe('Invalid id format.');
+  });
+
+  it('returns 400 when workspace_id is malformed on POST', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const res = await worker.fetch(uploadRequest(token, { workspace_id: 'not-a-uuid' }), env);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('bad_request');
+    expect(body.error.message).toBe('Invalid id format.');
+    // Validation happens before the pipeline runs.
+    expect(state.capturedInput).toBeNull();
+  });
+});
+
+describe('serializeError', () => {
+  it('serializes a plain PostgREST-style object into a string with code and message', () => {
+    const out = serializeError({ code: '23505', message: 'duplicate key value', hint: null });
+    expect(out).toContain('23505');
+    expect(out).toContain('duplicate key value');
+  });
+
+  it('serializes an Error using its name and message', () => {
+    const out = serializeError(new TypeError('boom'));
+    expect(out).toContain('TypeError');
+    expect(out).toContain('boom');
   });
 });

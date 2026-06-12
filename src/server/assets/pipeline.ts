@@ -231,6 +231,7 @@ export async function runUploadPipeline(
       workspaceId: input.workspaceId,
       action: 'asset.version.create',
       entityId: existingAssetId,
+      actorUserId: input.uploadedBy,
       payload: { version_id: versionId, version_number: versionNumber, sha256 },
     });
 
@@ -317,6 +318,7 @@ export async function runUploadPipeline(
     workspaceId: input.workspaceId,
     action: 'asset.create',
     entityId: assetId,
+    actorUserId: input.uploadedBy,
     payload: { version_id: versionId, version_number: versionNumber, sha256 },
   });
 

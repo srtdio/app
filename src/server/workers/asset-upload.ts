@@ -71,6 +71,13 @@ const STATUS_BY_CODE: Record<UploadResponseCode, number> = {
   internal_error: 500,
 };
 
+/** Canonical UUID shape (any version), case-insensitive. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
+
 /** The single membership read the upload path authorizes against. */
 export interface MembershipChecker {
   isActiveMember(input: { userId: string; workspaceId: string }): Promise<boolean>;
@@ -131,6 +138,28 @@ export async function authorizeAndUpload(
     return err(result.error);
   }
   return ok({ summary: result.value, reused: result.value.reused });
+}
+
+/**
+ * Render any thrown value into a stable log string. PostgREST surfaces failures
+ * as plain objects (not Error instances), so a bare template literal would log
+ * '[object Object]' and lose the code/message/details/hint. Never returned to
+ * the client - logging only.
+ */
+export function serializeError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ''}`;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const e = error as Record<string, unknown>;
+    return JSON.stringify({
+      code: e.code,
+      message: e.message,
+      details: e.details,
+      hint: e.hint,
+    });
+  }
+  return String(error);
 }
 
 function json(status: number, body: unknown, traceId: string): Response {
@@ -195,6 +224,9 @@ async function handlePost(
   if (typeof workspaceId !== 'string' || workspaceId === '') {
     return json(400, { error: { code: 'bad_request', message: 'Missing workspace_id.' } }, traceId);
   }
+  if (!isUuid(workspaceId)) {
+    return json(400, { error: { code: 'bad_request', message: 'Invalid id format.' } }, traceId);
+  }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const outcome = await authorizeAndUpload(
@@ -244,6 +276,9 @@ async function handleGet(
       traceId,
     );
   }
+  if (!isUuid(workspaceId) || !isUuid(assetId)) {
+    return json(400, { error: { code: 'bad_request', message: 'Invalid id format.' } }, traceId);
+  }
 
   const member = await createSupabaseAssetReadStore(env).isActiveMember({
     userId: caller.value,
@@ -282,9 +317,7 @@ export default {
         traceId,
       );
     } catch (error) {
-      const errName = error instanceof Error ? error.name : 'UnknownError';
-      const errMsg = error instanceof Error ? error.message : String(error);
-      logger.error(`asset upload failed: ${errName}: ${errMsg}`.trim());
+      logger.error(`asset upload failed: ${serializeError(error)}`);
       return json(500, { error: { code: 'internal_error', message: 'Upload failed.' } }, traceId);
     } finally {
       logger.clearTraceId();
