@@ -16,6 +16,7 @@ import {
   listAssets,
   mimeBadge,
   removeAssetsById,
+  renameAssetInList,
   shapeAssets,
   sortAssets,
   subfolders,
@@ -379,6 +380,29 @@ describe('removeAssetsById (optimistic remove + rollback)', () => {
     expect(optimistic.map((i) => i.id)).toEqual(['a', 'c']);
     // On failure the caller restores the untouched snapshot reference.
     expect(snapshot.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('renameAssetInList', () => {
+  it('replaces the matching asset display name, leaving other items untouched', () => {
+    const items = [
+      { ...base('a'), displayName: 'Old' },
+      { ...base('b'), displayName: 'Keep' },
+    ];
+    const out = renameAssetInList(items, 'a', 'New');
+    expect(out.map((i) => i.displayName)).toEqual(['New', 'Keep']);
+  });
+
+  it('returns a new array reference', () => {
+    const items = [base('a'), base('b')];
+    const out = renameAssetInList(items, 'a', 'New');
+    expect(out).not.toBe(items);
+  });
+
+  it('returns the list unchanged when no asset matches the id', () => {
+    const items = [base('a'), base('b')];
+    const out = renameAssetInList(items, 'zzz', 'New');
+    expect(out.map((i) => i.displayName)).toEqual([null, null]);
   });
 });
 
