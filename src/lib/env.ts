@@ -7,6 +7,10 @@ const envSchema = z.object({
   // versions. Optional - when unset, asset thumbnails and downloads degrade
   // gracefully (the library still lists and filters).
   VITE_ASSET_READ_URL: z.string().url().optional(),
+  // Asset-upload Worker URL: accepts multipart {file, workspace_id} + Bearer JWT
+  // and stores the asset. Optional - when unset, the Assets add menu still opens
+  // the sheet but the commit path stays disabled (naming only).
+  VITE_ASSET_UPLOAD_URL: z.string().url().optional(),
   VITE_SENTRY_DSN_FRONTEND: z.string().url().optional(),
   VITE_SENTRY_ENVIRONMENT: z.enum(['development', 'production']).default('development'),
   VITE_SENTRY_RELEASE: z.string().optional(),
