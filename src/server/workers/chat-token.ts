@@ -2,17 +2,19 @@
 //
 // POST application/json { workspace_id }
 //   -> verifies the caller's Bearer token, confirms they are an active member of
-//      workspace_id, ensures the Agora Chat user exists (username == the verified
-//      token's `sub`), and returns a freshly minted 24-hour Agora Chat user
-//      token: { token, expires_at, agora_username, app_key }.
+//      workspace_id, ensures the Agora Chat user exists (username derived from the
+//      verified token's `sub` via toAgoraUsername, since Agora rejects UUID-shaped
+//      names), and returns a freshly minted 24-hour Agora Chat user token:
+//      { token, expires_at, agora_username, app_key }.
 //
 // The Worker is the only holder of the Supabase service-role key and the Agora
 // App Certificate; neither is ever shipped to the browser. Caller tokens are
 // verified against the project's published asymmetric JWKS (ES256), reusing
-// asset-read's primitives so the workers cannot drift. The Agora username is the
-// Supabase user id (the verified `sub`), never an email or display name - a
-// request-supplied id is never trusted. Membership is an explicit service-role
-// read against workspace_members, not an RLS side effect.
+// asset-read's primitives so the workers cannot drift. The Agora username is a
+// canonical, reversible derivation of the Supabase user id (the verified `sub`),
+// never an email or display name - a request-supplied id is never trusted.
+// Membership is an explicit service-role read against workspace_members, not an
+// RLS side effect.
 //
 // Token lifetime is fixed at Agora's 24-hour maximum; the frontend renews via
 // the SDK's onTokenWillExpire. Revocation is handled by channel ACL removal in a
@@ -30,6 +32,7 @@ import { err, ok, type Result } from '@/server/assets/types';
 // worker cannot drift from the asset workers: same ES256 JWKS verification, same
 // service-role workspace_members read.
 import { createSupabaseAssetReadStore, getSupabaseJwks, verifyCaller } from './asset-read';
+import { toAgoraUsername } from './agora-identity';
 
 /** Token lifetime: 24 hours, Agora Chat's default and maximum. */
 const TOKEN_TTL_SECONDS = 86_400;
@@ -271,9 +274,12 @@ async function handlePost(
     return fail('forbidden', 'Not a member of this workspace.', traceId, acao);
   }
 
-  // Agora usernames are the Supabase user id (the verified sub), never an email
-  // or display name.
-  const agoraUsername = caller.value;
+  // Agora rejects UUID-shaped usernames, so the verified Supabase user id (the
+  // sub, never an email or display name) is run through toAgoraUsername to a
+  // canonical, reversible, non-UUID form. Every place that needs the username -
+  // the register body, the user-token subject, and the returned field - uses
+  // this single value so they cannot diverge.
+  const agoraUsername = toAgoraUsername(caller.value);
   await ensureChatUser(env, agoraUsername, traceId);
 
   const token = ChatTokenBuilder.buildUserToken(
