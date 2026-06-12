@@ -45,7 +45,23 @@ export interface AssetUploadEnv {
   SUPABASE_URL: string;
   SUPABASE_SECRET_KEY: string;
   VIRUS_SCAN_PROVIDER?: string;
+  /**
+   * Comma-separated list of browser origins allowed to call this Worker
+   * cross-origin. Operator sets it as a Worker var/secret; when unset the code
+   * falls back to {@link DEFAULT_ALLOWED_ORIGINS}.
+   */
+  ALLOWED_ORIGINS?: string;
 }
+
+/**
+ * Known site origins (Cloudflare Pages + production domain) used when
+ * ALLOWED_ORIGINS is unset. The first entry is treated as the primary origin.
+ * Mirrors asset-read so the two workers' CORS surface cannot drift.
+ */
+const DEFAULT_ALLOWED_ORIGINS = ['https://srtdio-app.pages.dev', 'https://srtd.io'] as const;
+
+/** Preflight cache lifetime: 24 hours. */
+const CORS_MAX_AGE_SECONDS = 86_400;
 
 /** Every code the worker can return, including the auth/transport layer. */
 export type UploadResponseCode =
@@ -162,9 +178,58 @@ export function serializeError(error: unknown): string {
   return String(error);
 }
 
-function json(status: number, body: unknown, traceId: string): Response {
+/** The configured allowlist, falling back to the known site origins. */
+function allowedOrigins(env: AssetUploadEnv): readonly string[] {
+  const list = (env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin !== '');
+  return list.length > 0 ? list : DEFAULT_ALLOWED_ORIGINS;
+}
+
+/**
+ * The Access-Control-Allow-Origin value to echo back, or null when the request
+ * carries no Origin or an origin outside the allowlist. Never `*`: requests
+ * carry Authorization, so the origin is reflected only when explicitly allowed.
+ */
+function resolveAllowedOrigin(request: Request, env: AssetUploadEnv): string | null {
+  const origin = request.headers.get('Origin');
+  if (origin === null) {
+    return null;
+  }
+  return allowedOrigins(env).includes(origin) ? origin : null;
+}
+
+/** Attach the reflected origin (and Vary) when one is allowed. */
+function applyCors(headers: Headers, acao: string | null): void {
+  if (acao !== null) {
+    headers.set('Access-Control-Allow-Origin', acao);
+    headers.set('Vary', 'Origin');
+  }
+}
+
+/**
+ * Answer a CORS preflight. The browser only accepts the actual request when the
+ * echoed origin matches, so an allowed origin is reflected and a disallowed one
+ * falls back to the primary site origin.
+ */
+function preflightResponse(request: Request, env: AssetUploadEnv): Response {
+  const acao =
+    resolveAllowedOrigin(request, env) ?? allowedOrigins(env)[0] ?? DEFAULT_ALLOWED_ORIGINS[0];
+  const headers = new Headers({
+    'Access-Control-Allow-Origin': acao,
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+    'Access-Control-Allow-Headers': `authorization, content-type, ${TRACE_ID_HEADER.toLowerCase()}`,
+    'Access-Control-Max-Age': String(CORS_MAX_AGE_SECONDS),
+    Vary: 'Origin',
+  });
+  return new Response(null, { status: 204, headers });
+}
+
+function json(status: number, body: unknown, traceId: string, acao: string | null): Response {
   const headers = new Headers({ 'content-type': 'application/json' });
   headers.set(TRACE_ID_HEADER, traceId);
+  applyCors(headers, acao);
   return new Response(JSON.stringify(body), { status, headers });
 }
 
@@ -199,10 +264,16 @@ async function handlePost(
   request: Request,
   env: AssetUploadEnv,
   traceId: string,
+  acao: string | null,
 ): Promise<Response> {
   const caller = await verifyCaller(request, getSupabaseJwks(env));
   if (!caller.ok) {
-    return json(401, { error: { code: 'unauthorized', message: caller.error.message } }, traceId);
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
   }
 
   // Idempotency-Key is accepted but needs no dedicated storage: the pipeline's
@@ -219,13 +290,28 @@ async function handlePost(
   const assetId = form.get('asset_id');
 
   if (!(file instanceof File)) {
-    return json(400, { error: { code: 'bad_request', message: 'Missing file part.' } }, traceId);
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Missing file part.' } },
+      traceId,
+      acao,
+    );
   }
   if (typeof workspaceId !== 'string' || workspaceId === '') {
-    return json(400, { error: { code: 'bad_request', message: 'Missing workspace_id.' } }, traceId);
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Missing workspace_id.' } },
+      traceId,
+      acao,
+    );
   }
   if (!isUuid(workspaceId)) {
-    return json(400, { error: { code: 'bad_request', message: 'Invalid id format.' } }, traceId);
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid id format.' } },
+      traceId,
+      acao,
+    );
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -251,19 +337,25 @@ async function handlePost(
         workspace_id: workspaceId,
       });
     }
-    return json(STATUS_BY_CODE[outcome.error.code], { error: outcome.error }, traceId);
+    return json(STATUS_BY_CODE[outcome.error.code], { error: outcome.error }, traceId, acao);
   }
-  return json(outcome.value.reused ? 200 : 201, { asset: outcome.value.summary }, traceId);
+  return json(outcome.value.reused ? 200 : 201, { asset: outcome.value.summary }, traceId, acao);
 }
 
 async function handleGet(
   request: Request,
   env: AssetUploadEnv,
   traceId: string,
+  acao: string | null,
 ): Promise<Response> {
   const caller = await verifyCaller(request, getSupabaseJwks(env));
   if (!caller.ok) {
-    return json(401, { error: { code: 'unauthorized', message: caller.error.message } }, traceId);
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
   }
 
   const url = new URL(request.url);
@@ -274,10 +366,16 @@ async function handleGet(
       400,
       { error: { code: 'bad_request', message: 'workspace_id and asset_id are required.' } },
       traceId,
+      acao,
     );
   }
   if (!isUuid(workspaceId) || !isUuid(assetId)) {
-    return json(400, { error: { code: 'bad_request', message: 'Invalid id format.' } }, traceId);
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid id format.' } },
+      traceId,
+      acao,
+    );
   }
 
   const member = await createSupabaseAssetReadStore(env).isActiveMember({
@@ -290,35 +388,46 @@ async function handleGet(
       403,
       { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
       traceId,
+      acao,
     );
   }
 
   const result = await getAssetSummary(buildRepository(env), { workspaceId, assetId });
   if (!result.ok) {
-    return json(STATUS_BY_CODE[result.error.code], { error: result.error }, traceId);
+    return json(STATUS_BY_CODE[result.error.code], { error: result.error }, traceId, acao);
   }
-  return json(200, { asset: result.value }, traceId);
+  return json(200, { asset: result.value }, traceId, acao);
 }
 
 export default {
   async fetch(request: Request, env: AssetUploadEnv): Promise<Response> {
     const traceId = extractTraceId(request);
     logger.setTraceId(traceId);
+    const acao = resolveAllowedOrigin(request, env);
     try {
+      if (request.method === 'OPTIONS') {
+        return preflightResponse(request, env);
+      }
       if (request.method === 'POST') {
-        return await handlePost(request, env, traceId);
+        return await handlePost(request, env, traceId, acao);
       }
       if (request.method === 'GET') {
-        return await handleGet(request, env, traceId);
+        return await handleGet(request, env, traceId, acao);
       }
       return json(
         405,
         { error: { code: 'method_not_allowed', message: 'Use GET or POST.' } },
         traceId,
+        acao,
       );
     } catch (error) {
       logger.error(`asset upload failed: ${serializeError(error)}`);
-      return json(500, { error: { code: 'internal_error', message: 'Upload failed.' } }, traceId);
+      return json(
+        500,
+        { error: { code: 'internal_error', message: 'Upload failed.' } },
+        traceId,
+        acao,
+      );
     } finally {
       logger.clearTraceId();
     }

@@ -166,6 +166,63 @@ describe('asset-upload worker.fetch', () => {
     expect(body.error.code).toBe('method_not_allowed');
   });
 
+  it('still returns 405 for DELETE after CORS handling is added', async () => {
+    const res = await worker.fetch(new Request('https://worker.test/', { method: 'DELETE' }), env);
+    expect(res.status).toBe(405);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('method_not_allowed');
+  });
+
+  it('answers OPTIONS preflight with 204 + CORS headers and no auth', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/', {
+        method: 'OPTIONS',
+        // No Authorization header: preflight must precede auth.
+        headers: { Origin: 'https://srtd.io' },
+      }),
+      env,
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://srtd.io');
+    const methods = res.headers.get('Access-Control-Allow-Methods') ?? '';
+    expect(methods).toContain('POST');
+    expect(methods).toContain('GET');
+    expect(methods).toContain('OPTIONS');
+    const allowHeaders = (res.headers.get('Access-Control-Allow-Headers') ?? '').toLowerCase();
+    expect(allowHeaders).toContain('authorization');
+    expect(allowHeaders).toContain('content-type');
+    expect(res.headers.get('Access-Control-Max-Age')).toBe('86400');
+  });
+
+  it('falls back to the primary origin when OPTIONS Origin is not allowed', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://evil.example' },
+      }),
+      env,
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://srtdio-app.pages.dev');
+  });
+
+  it('attaches CORS headers to the 401 error path for an allowed origin', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/', {
+        method: 'POST',
+        // No bearer token -> 401, but an allowed Origin must still be echoed.
+        headers: { Origin: 'https://srtd.io' },
+        body: new FormData(),
+      }),
+      env,
+    );
+    expect(res.status).toBe(401);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://srtd.io');
+    expect(res.headers.get('Vary')).toBe('Origin');
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('unauthorized');
+  });
+
   it('ignores uploaded_by in the form: the actor is the verified token sub', async () => {
     const token = await mintToken(USER);
     state.members.add(`${USER}:${WORKSPACE}`);
