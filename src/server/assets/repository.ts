@@ -77,7 +77,8 @@ export interface NewAsset {
   tags?: string[];
 }
 
-export interface NewVersion {
+/** A new stored-file version: bytes live in R2, so the byte columns are set. */
+export interface NewFileVersion {
   id: string;
   assetId: string;
   workspaceId: string;
@@ -91,6 +92,69 @@ export interface NewVersion {
   width?: number | null;
   height?: number | null;
   durationMs?: number | null;
+}
+
+/** A new link version: only an external URL, every byte column null. */
+export interface NewLinkVersion {
+  id: string;
+  assetId: string;
+  workspaceId: string;
+  versionNumber: number;
+  kind: 'link';
+  externalUrl: string;
+  uploadedBy: string;
+}
+
+/** A version to insert, discriminated on `kind` so the byte fields are reachable
+ * only on the file variant (the DB's kind_shape_check enforces the same split). */
+export type NewVersion = NewFileVersion | NewLinkVersion;
+
+function isNewLinkVersion(version: NewVersion): version is NewLinkVersion {
+  return version.kind === 'link';
+}
+
+/**
+ * The kind-dependent columns of an asset_versions row. A link sets external_url
+ * and nulls every byte column; a stored file does the reverse. Centralized so
+ * the service-role and in-memory repositories cannot drift from the DB CHECK.
+ */
+function versionShapeColumns(version: NewVersion): {
+  external_url: string | null;
+  r2_key: string | null;
+  mime_type: string | null;
+  sha256: string | null;
+  size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+} {
+  if (isNewLinkVersion(version)) {
+    return {
+      external_url: version.externalUrl,
+      r2_key: null,
+      mime_type: null,
+      sha256: null,
+      size_bytes: null,
+      width: null,
+      height: null,
+      duration_ms: null,
+    };
+  }
+  return {
+    external_url: null,
+    r2_key: version.r2Key,
+    mime_type: version.mimeType,
+    sha256: version.sha256,
+    size_bytes: version.sizeBytes,
+    width: version.width ?? null,
+    height: version.height ?? null,
+    duration_ms: version.durationMs ?? null,
+  };
+}
+
+/** An active workspace membership: just the role the authz layer gates on. */
+export interface Membership {
+  role: string;
 }
 
 export interface AuditEntry {
@@ -114,9 +178,15 @@ export interface AssetRepository {
   /** Existing version of a specific asset with this content hash. */
   findVersionByShaForAsset(assetId: string, sha256: string): Promise<VersionRef | null>;
   maxVersionNumber(assetId: string): Promise<number>;
+  /** The caller's active membership in the workspace, or null when not a member.
+   * One round trip: returns the role the rename authz check gates on. */
+  getMembership(workspaceId: string, userId: string): Promise<Membership | null>;
   insertAsset(asset: NewAsset): Promise<void>;
   insertVersion(version: NewVersion): Promise<void>;
   setCurrentVersion(assetId: string, versionId: string): Promise<void>;
+  /** Update assets.filename only, scoped to the workspace. Touches no version
+   * rows and no attachments. */
+  renameAsset(workspaceId: string, assetId: string, filename: string): Promise<void>;
   writeAudit(entry: AuditEntry): Promise<void>;
 }
 
@@ -276,6 +346,21 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
       }
     },
 
+    async getMembership(workspaceId, userId) {
+      const { data, error } = await client
+        .from('workspace_members')
+        .select('role')
+        .eq('workspace_id', workspaceId)
+        .eq('user_id', userId)
+        .eq('active', true)
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        throw error;
+      }
+      return data ? { role: data.role } : null;
+    },
+
     async insertVersion(version) {
       const { error } = await client.from('asset_versions').insert({
         id: version.id,
@@ -283,15 +368,8 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
         workspace_id: version.workspaceId,
         version_number: version.versionNumber,
         kind: version.kind,
-        external_url: null,
-        r2_key: version.r2Key,
-        mime_type: version.mimeType,
-        sha256: version.sha256,
-        size_bytes: version.sizeBytes,
         uploaded_by: version.uploadedBy,
-        width: version.width ?? null,
-        height: version.height ?? null,
-        duration_ms: version.durationMs ?? null,
+        ...versionShapeColumns(version),
       });
       if (error) {
         throw error;
@@ -303,6 +381,17 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
         .from('assets')
         .update({ current_version_id: versionId })
         .eq('id', assetId);
+      if (error) {
+        throw error;
+      }
+    },
+
+    async renameAsset(workspaceId, assetId, filename) {
+      const { error } = await client
+        .from('assets')
+        .update({ filename })
+        .eq('id', assetId)
+        .eq('workspace_id', workspaceId);
       if (error) {
         throw error;
       }
@@ -342,6 +431,8 @@ export class InMemoryAssetRepository implements AssetRepository {
   readonly assets = new Map<string, AssetRow>();
   readonly versions: AssetVersionRow[] = [];
   readonly audits: AuditRecord[] = [];
+  /** Active memberships keyed by `${userId}:${workspaceId}` -> role. */
+  readonly memberships = new Map<string, string>();
   /** Stand-in for the stored workspaces.asset_bucket. Per-workspace overrides
    * fall back to {@link assetBucket}, the default used by most tests. */
   assetBucket = 'assets-test-ws';
@@ -383,6 +474,11 @@ export class InMemoryAssetRepository implements AssetRepository {
     return Promise.resolve(max);
   }
 
+  getMembership(workspaceId: string, userId: string): Promise<Membership | null> {
+    const role = this.memberships.get(`${userId}:${workspaceId}`);
+    return Promise.resolve(role !== undefined ? { role } : null);
+  }
+
   insertAsset(asset: NewAsset): Promise<void> {
     const now = new Date().toISOString();
     this.assets.set(asset.id, {
@@ -407,16 +503,9 @@ export class InMemoryAssetRepository implements AssetRepository {
       workspace_id: version.workspaceId,
       version_number: version.versionNumber,
       kind: version.kind,
-      external_url: null,
-      r2_key: version.r2Key,
-      mime_type: version.mimeType,
-      sha256: version.sha256,
-      size_bytes: version.sizeBytes,
-      width: version.width ?? null,
-      height: version.height ?? null,
-      duration_ms: version.durationMs ?? null,
       uploaded_by: version.uploadedBy,
       uploaded_at: new Date().toISOString(),
+      ...versionShapeColumns(version),
     });
     return Promise.resolve();
   }
@@ -425,6 +514,14 @@ export class InMemoryAssetRepository implements AssetRepository {
     const asset = this.assets.get(assetId);
     if (asset) {
       this.assets.set(assetId, { ...asset, current_version_id: versionId });
+    }
+    return Promise.resolve();
+  }
+
+  renameAsset(workspaceId: string, assetId: string, filename: string): Promise<void> {
+    const asset = this.assets.get(assetId);
+    if (asset && asset.workspace_id === workspaceId && asset.deleted_at === null) {
+      this.assets.set(assetId, { ...asset, filename });
     }
     return Promise.resolve();
   }

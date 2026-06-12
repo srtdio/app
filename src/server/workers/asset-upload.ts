@@ -16,8 +16,10 @@
 // failures map to 4xx; unexpected faults bubble up to a 500.
 
 import {
+  createLinkAsset,
   createSupabaseAssetRepository,
   getAssetSummary,
+  renameAsset,
   runUploadPipeline,
   selectScanner,
   err,
@@ -93,6 +95,27 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function isUuid(value: string): boolean {
   return UUID_RE.test(value);
 }
+
+/**
+ * A link URL the DB will accept: it must start with http:// or https://
+ * (matching the asset_versions.external_url CHECK, case-sensitive like the
+ * Postgres regex) and parse as a URL. Rejecting here turns a would-be DB
+ * constraint throw (500) into a clean 400.
+ */
+function isHttpUrl(value: string): boolean {
+  if (!/^https?:\/\//.test(value)) {
+    return false;
+  }
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Roles permitted to rename an asset. A 'client' member is denied. */
+const RENAME_ROLES: ReadonlySet<string> = new Set(['owner', 'admin', 'agency']);
 
 /** The single membership read the upload path authorizes against. */
 export interface MembershipChecker {
@@ -399,6 +422,175 @@ async function handleGet(
   return json(200, { asset: result.value }, traceId, acao);
 }
 
+/** Trim a candidate name and confirm it is 1-500 chars, or null when invalid. */
+function validName(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length >= 1 && trimmed.length <= 500 ? trimmed : null;
+}
+
+/** Parse a JSON object body, or a bad_request error string when it is not one. */
+async function readJsonObject(request: Request): Promise<Result<Record<string, unknown>, string>> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return err('Body must be JSON.');
+  }
+  if (typeof body !== 'object' || body === null) {
+    return err('Body must be a JSON object.');
+  }
+  return ok(body as Record<string, unknown>);
+}
+
+/**
+ * POST /links: create a link asset. Same auth + membership gate as the file
+ * upload, then a link-shaped asset + version are written with no R2 interaction.
+ */
+async function handleCreateLink(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
+  }
+
+  const parsed = await readJsonObject(request);
+  if (!parsed.ok) {
+    return json(400, { error: { code: 'bad_request', message: parsed.error } }, traceId, acao);
+  }
+  const { workspace_id: workspaceId, url, name: rawName } = parsed.value;
+  if (typeof workspaceId !== 'string' || !isUuid(workspaceId)) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid workspace_id.' } },
+      traceId,
+      acao,
+    );
+  }
+  if (typeof url !== 'string' || !isHttpUrl(url)) {
+    return json(400, { error: { code: 'bad_request', message: 'Invalid url.' } }, traceId, acao);
+  }
+  const name = validName(rawName);
+  if (name === null) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'name must be 1 to 500 characters.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const member = await createSupabaseAssetReadStore(env).isActiveMember({
+    userId: caller.value,
+    workspaceId,
+  });
+  if (!member) {
+    logger.warn('link create denied: caller not a workspace member', { workspace_id: workspaceId });
+    return json(
+      403,
+      { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const summary = await createLinkAsset(buildRepository(env), {
+    workspaceId,
+    uploadedBy: caller.value,
+    name,
+    url,
+    traceId,
+  });
+  return json(201, { asset: summary }, traceId, acao);
+}
+
+/**
+ * POST /rename: rename an asset's filename. Membership is read with its role in
+ * one query; only owner/admin/agency may rename, a client is forbidden. Only
+ * assets.filename changes - version rows and attachments are never touched.
+ */
+async function handleRename(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
+  }
+
+  const parsed = await readJsonObject(request);
+  if (!parsed.ok) {
+    return json(400, { error: { code: 'bad_request', message: parsed.error } }, traceId, acao);
+  }
+  const { workspace_id: workspaceId, asset_id: assetId, name: rawName } = parsed.value;
+  if (
+    typeof workspaceId !== 'string' ||
+    !isUuid(workspaceId) ||
+    typeof assetId !== 'string' ||
+    !isUuid(assetId)
+  ) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid id format.' } },
+      traceId,
+      acao,
+    );
+  }
+  const name = validName(rawName);
+  if (name === null) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'name must be 1 to 500 characters.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const repository = buildRepository(env);
+  const membership = await repository.getMembership(workspaceId, caller.value);
+  if (membership === null || !RENAME_ROLES.has(membership.role)) {
+    logger.warn('asset rename denied: caller lacks an eligible role', {
+      workspace_id: workspaceId,
+    });
+    return json(
+      403,
+      { error: { code: 'forbidden', message: 'You do not have permission to rename assets.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const result = await renameAsset(repository, {
+    workspaceId,
+    assetId,
+    name,
+    actorUserId: caller.value,
+    traceId,
+  });
+  if (!result.ok) {
+    return json(STATUS_BY_CODE[result.error.code], { error: result.error }, traceId, acao);
+  }
+  return json(200, { asset: result.value }, traceId, acao);
+}
+
 export default {
   async fetch(request: Request, env: AssetUploadEnv): Promise<Response> {
     const traceId = extractTraceId(request);
@@ -409,6 +601,13 @@ export default {
         return preflightResponse(request, env);
       }
       if (request.method === 'POST') {
+        const path = new URL(request.url).pathname;
+        if (path === '/links') {
+          return await handleCreateLink(request, env, traceId, acao);
+        }
+        if (path === '/rename') {
+          return await handleRename(request, env, traceId, acao);
+        }
         return await handlePost(request, env, traceId, acao);
       }
       if (request.method === 'GET') {

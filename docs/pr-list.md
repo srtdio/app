@@ -90,6 +90,7 @@ Every frontend PR ships with an explicit light AND dark mode parity check. 44x44
 | 44 | Notifications (ephemeral): toast slide-in desktop + mobile, fires on Inbox triggers while user active, not stored | 38 |
 | 45 | Cockpit UI at platform.srtd.io: passkey auth, dashboard, workspace management, actions (replay webhook, restart job, revoke sessions, billing override, extend trial, open ticket, global kill switch), impersonation banner + emergency-exit.html | 23, 30 |
 | 47 | asset-upload worker CORS: handle OPTIONS preflight before auth (204 + reflected allowed-origin, methods POST/GET/OPTIONS, authorization + content-type + trace header, 24h max-age), attach CORS headers to every success and error response, mirroring asset-read exactly | 46, 15 |
+| 48 | asset-upload worker link + rename routes: POST /links creates a link asset (kind=link, external_url set, byte columns null, version 1, current_version_id set) behind the same verifyCaller + isActiveMember gate, no R2; POST /rename updates assets.filename only behind a role gate (owner/admin/agency, client forbidden) reading the role in one membership query, leaving version rows and attachments untouched; both write audit rows (asset.create / asset.rename) with the verified actor and trace_id. Reuses the live auth, CORS, and error model | 47, 15 |
 
 ## 5. Handoff rules
 
