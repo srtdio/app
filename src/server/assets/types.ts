@@ -55,6 +55,20 @@ export interface AssetSummary {
   reused: boolean;
 }
 
+/**
+ * Compact asset view returned by the link-create and rename routes. Unlike
+ * {@link AssetSummary} (which describes a stored file and always carries byte
+ * columns), this carries only the asset-level fields those routes touch.
+ * `externalUrl` is set for a link asset and omitted otherwise.
+ */
+export interface AssetMetaSummary {
+  assetId: string;
+  workspaceId: string;
+  filename: string;
+  currentVersionId: string | null;
+  externalUrl?: string;
+}
+
 /** Input to the pipeline. Bytes are the raw, pre-sanitization upload. */
 export interface UploadInput {
   workspaceId: string;

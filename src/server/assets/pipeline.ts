@@ -31,6 +31,7 @@ import { isFileVersionRef, type AssetRepository, type FileVersionKind } from './
 import {
   err,
   ok,
+  type AssetMetaSummary,
   type AssetSummary,
   type Result,
   type UploadError,
@@ -336,6 +337,105 @@ export async function runUploadPipeline(
       reused: false,
     }),
   );
+}
+
+/** Input to {@link createLinkAsset}. The actor is the verified JWT sub. */
+export interface LinkInput {
+  workspaceId: string;
+  uploadedBy: string;
+  /** User-given asset name; stored as assets.filename. */
+  name: string;
+  /** The external URL; stored as asset_versions.external_url (^https?://). */
+  url: string;
+  traceId: string;
+}
+
+/**
+ * Create a link asset: an assets row plus a single version-1 link version, with
+ * current_version_id pointing at it. No R2, no sha256, no dedup - a link has no
+ * bytes. The version's shape (kind='link', external_url set, byte columns null)
+ * is fixed by the repository so it satisfies the DB's kind_shape_check. Mirrors
+ * the new-upload path of {@link runUploadPipeline} without the storage steps.
+ */
+export async function createLinkAsset(
+  repository: AssetRepository,
+  input: LinkInput,
+): Promise<AssetMetaSummary> {
+  const assetId = uuidv7();
+  const versionId = uuidv7();
+  const versionNumber = 1;
+
+  await repository.insertAsset({
+    id: assetId,
+    workspaceId: input.workspaceId,
+    filename: input.name,
+    uploadedBy: input.uploadedBy,
+  });
+  await repository.insertVersion({
+    id: versionId,
+    assetId,
+    workspaceId: input.workspaceId,
+    versionNumber,
+    kind: 'link',
+    externalUrl: input.url,
+    uploadedBy: input.uploadedBy,
+  });
+  await repository.setCurrentVersion(assetId, versionId);
+  await repository.writeAudit({
+    traceId: input.traceId,
+    workspaceId: input.workspaceId,
+    action: 'asset.create',
+    entityId: assetId,
+    actorUserId: input.uploadedBy,
+    payload: { version_id: versionId, version_number: versionNumber, external_url: input.url },
+  });
+
+  return {
+    assetId,
+    workspaceId: input.workspaceId,
+    filename: input.name,
+    currentVersionId: versionId,
+    externalUrl: input.url,
+  };
+}
+
+/**
+ * Rename an asset: update assets.filename only. Version rows and attachments are
+ * never touched (annotations/attachments bind to immutable versions). Returns
+ * not_found for an unknown id or one owned by another workspace, mirroring the
+ * cross-tenant guard elsewhere in this module.
+ */
+export async function renameAsset(
+  repository: AssetRepository,
+  input: {
+    workspaceId: string;
+    assetId: string;
+    name: string;
+    actorUserId: string;
+    traceId: string;
+  },
+): Promise<Result<AssetMetaSummary, UploadError>> {
+  const asset = await repository.getAsset(input.workspaceId, input.assetId);
+  if (!asset) {
+    return err({ code: 'not_found', message: 'Asset not found in this workspace.' });
+  }
+
+  await repository.renameAsset(input.workspaceId, input.assetId, input.name);
+  await repository.writeAudit({
+    traceId: input.traceId,
+    workspaceId: input.workspaceId,
+    action: 'asset.rename',
+    entityId: input.assetId,
+    actorUserId: input.actorUserId,
+    payload: { filename: input.name, previous_filename: asset.filename },
+  });
+
+  return ok({
+    assetId: asset.id,
+    workspaceId: asset.workspace_id,
+    filename: input.name,
+    currentVersionId: asset.current_version_id,
+  });
 }
 
 /**
