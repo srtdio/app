@@ -3,11 +3,11 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SortMenu } from '@/components/ui/SortMenu';
-import { PageHead } from '@/components/shell/PageHead';
 import { IconAssets, IconChevronRight, IconSearch, IconUpload, IconX } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
+import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
@@ -19,6 +19,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSort } from '@/lib/use-sort';
 import { PresignCache } from '@/lib/asset-presign';
+import { uploadAssetFile, type UploadOutcome } from '@/lib/asset-upload';
 import { assetDelete } from '@srtdio/rpc';
 import {
   ASSET_SORT_DEFAULT,
@@ -197,13 +198,40 @@ export function AssetsPage() {
     [items, newTrace],
   );
 
+  // Commit one queued file to the asset-upload worker: the user's display name
+  // rides along as the multipart filename (the worker persists it as
+  // assets.filename for newly stored content). There is no authenticated client
+  // write path for assets, so the name cannot be re-applied after the fact (e.g.
+  // to a deduped/reused asset); see src/lib/asset-upload.ts for the gap note.
+  const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
+  const handleUploadFile = useCallback(
+    async (file: File, filename: string): Promise<UploadOutcome> => {
+      if (uploadEndpoint === undefined || uploadEndpoint === '') {
+        return { ok: false, message: 'Upload failed. Check your connection and retry' };
+      }
+      if (workspaceId === null) {
+        return { ok: false, message: 'No workspace selected.' };
+      }
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      if (token === null || token === '') {
+        return { ok: false, message: 'Your session expired. Sign in again.' };
+      }
+      return uploadAssetFile(file, {
+        endpoint: uploadEndpoint,
+        token,
+        workspaceId,
+        filename,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+    },
+    [uploadEndpoint, workspaceId, newTrace],
+  );
+
   const listLoading = workspaceId === null || (loading && items.length === 0);
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
 
   return (
     <>
-      <PageHead title="Assets" />
-
       {/* Breadcrumb only inside a folder; the root needs no lone "/" crumb. */}
       {!searching && segments.length > 0 ? (
         <div className="px-4 md:px-6 pt-3 flex items-center gap-1 text-sm text-fg-3 flex-wrap">
@@ -254,15 +282,7 @@ export function AssetsPage() {
           ) : null}
         </div>
         <SortMenu options={ASSET_SORT_OPTIONS} value={sort} onChange={setSort} />
-        <Button
-          variant="primary"
-          size="lg"
-          className="h-11 shrink-0"
-          onClick={() => setUploadOpen(true)}
-        >
-          <IconUpload size={16} />
-          <span className="hidden sm:inline">Upload</span>
-        </Button>
+        <AssetAddMenu onUploadFiles={() => setUploadOpen(true)} />
       </div>
 
       {/* Kind chips on a single horizontally-scrollable row; zero-count kinds hidden. */}
@@ -384,7 +404,15 @@ export function AssetsPage() {
         />
       ) : null}
 
-      <AssetUploadSheet open={uploadOpen} onClose={() => setUploadOpen(false)} />
+      <AssetUploadSheet
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onSubmit={
+          uploadEndpoint !== undefined && uploadEndpoint !== '' ? handleUploadFile : undefined
+        }
+        onToast={push}
+        onUploaded={() => void loadAssets()}
+      />
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
