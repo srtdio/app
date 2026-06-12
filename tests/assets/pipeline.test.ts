@@ -233,6 +233,13 @@ describe('runUploadPipeline', () => {
     expect(d.repository.audits[0]?.action).toBe('asset.create');
   });
 
+  it('records the authenticated uploader as the audit actor', async () => {
+    const res = await runUploadPipeline(d, input({ uploadedBy: USER }));
+    expect(res.ok).toBe(true);
+    expect(d.repository.audits).toHaveLength(1);
+    expect(d.repository.audits[0]?.actorUserId).toBe(USER);
+  });
+
   it('rejects an unknown or cross-tenant target asset_id', async () => {
     const res = await runUploadPipeline(
       d,

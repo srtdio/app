@@ -98,6 +98,8 @@ export interface AuditEntry {
   workspaceId: string;
   action: string;
   entityId: string;
+  /** The authenticated uploader (JWT sub) that caused this write. */
+  actorUserId: string;
   payload?: Record<string, unknown>;
 }
 
@@ -309,13 +311,14 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
     async writeAudit(entry) {
       // Direct insert via the service role (RLS bypassed). audit_log_write is the
       // authenticated path; the Worker has no auth.uid(), so actor_user_id is
-      // null and trace_id is carried explicitly. Swapped for the @srtdio/rpc
-      // helper once it lands.
+      // threaded explicitly from the verified JWT sub, as is trace_id. Swapped
+      // for the @srtdio/rpc helper once it lands.
       const { error } = await client.from('audit_log').insert({
         action: entry.action,
         outcome: 'success',
         trace_id: entry.traceId,
         workspace_id: entry.workspaceId,
+        actor_user_id: entry.actorUserId,
         entity_type: 'asset',
         entity_id: entry.entityId,
         payload: (entry.payload ?? null) as Json,
