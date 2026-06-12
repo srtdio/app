@@ -3,13 +3,21 @@ import { ALLOWED_MIME_TYPES } from '@srtdio/storage';
 import {
   MAX_UPLOAD_BYTES,
   UPLOAD_ACCEPT,
+  addAssetLink,
   allNamed,
+  canRenameAssets,
+  isValidLinkUrl,
+  linkErrorMessage,
   precheckFile,
+  renameAsset,
+  renameErrorMessage,
   runUploads,
   uploadAssetFile,
   uploadErrorMessage,
   uploadFilename,
+  type AddLinkConfig,
   type QueueItem,
+  type RenameConfig,
   type UploadConfig,
 } from '@/lib/asset-upload';
 
@@ -185,5 +193,154 @@ describe('uploadFilename', () => {
     expect(uploadFilename('My Logo', 'logo.png')).toBe('My Logo.png');
     expect(uploadFilename('keep.png', 'logo.png')).toBe('keep.png');
     expect(uploadFilename('noext', 'data')).toBe('noext');
+  });
+});
+
+const linkConfig = (fetcher: AddLinkConfig['fetcher']): AddLinkConfig => ({
+  endpoint: 'https://upload.example.workers.dev',
+  token: 'tok',
+  workspaceId: 'ws-1',
+  url: 'https://sorted.example.com/post',
+  name: 'Launch post',
+  fetcher,
+});
+
+describe('isValidLinkUrl gates a link before any network call', () => {
+  it('accepts full http(s) links and trims surrounding whitespace', () => {
+    expect(isValidLinkUrl('https://example.com')).toBe(true);
+    expect(isValidLinkUrl('http://example.com/a?b=c')).toBe(true);
+    expect(isValidLinkUrl('  https://example.com  ')).toBe(true);
+  });
+
+  it('rejects bare hosts, non-web schemes, and empties', () => {
+    expect(isValidLinkUrl('example.com')).toBe(false);
+    expect(isValidLinkUrl('ftp://example.com')).toBe(false);
+    expect(isValidLinkUrl('javascript:alert(1)')).toBe(false);
+    expect(isValidLinkUrl('https://')).toBe(false);
+    expect(isValidLinkUrl('')).toBe(false);
+  });
+
+  it('a bad url never reaches the network (the submit gate)', async () => {
+    const fetcher = vi.fn();
+    const url = 'not a url';
+    if (isValidLinkUrl(url)) {
+      await addAssetLink({ ...linkConfig(fetcher), url });
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe('linkErrorMessage maps worker codes to plain English', () => {
+  it('maps known codes and falls back for the rest', () => {
+    expect(linkErrorMessage('invalid_url')).toBe('Enter a full link starting with https://');
+    expect(linkErrorMessage('name_required')).toBe('The link needs a name');
+    expect(linkErrorMessage('network')).toBe(
+      "Couldn't add the link. Check your connection and retry",
+    );
+    expect(linkErrorMessage('whatever')).toBe(
+      "Couldn't add the link. Check your connection and retry",
+    );
+  });
+});
+
+describe('addAssetLink', () => {
+  it('posts {workspace_id, url, name} to /links with a Bearer token', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, { asset: { id: 'a-9' } }));
+
+    const out = await addAssetLink(linkConfig(fetcher));
+
+    expect(out).toEqual({ ok: true, assetId: 'a-9' });
+    expect(fetcher).toHaveBeenCalledOnce();
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://upload.example.workers.dev/links');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init.body as string)).toEqual({
+      workspace_id: 'ws-1',
+      url: 'https://sorted.example.com/post',
+      name: 'Launch post',
+    });
+  });
+
+  it('maps a worker error status to its message', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(400, { error: { code: 'invalid_url' } }));
+    const out = await addAssetLink(linkConfig(fetcher));
+    expect(out).toEqual({ ok: false, message: 'Enter a full link starting with https://' });
+  });
+
+  it('maps a transport failure to the link retry message', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
+    const out = await addAssetLink(linkConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      message: "Couldn't add the link. Check your connection and retry",
+    });
+  });
+});
+
+const renameConfig = (fetcher: RenameConfig['fetcher']): RenameConfig => ({
+  endpoint: 'https://upload.example.workers.dev/',
+  token: 'tok',
+  workspaceId: 'ws-1',
+  assetId: 'a-1',
+  name: 'New name',
+  fetcher,
+});
+
+describe('canRenameAssets gates the edit affordance by role', () => {
+  it('is true for owner/admin/agency and false for client or unknown', () => {
+    expect(canRenameAssets('owner')).toBe(true);
+    expect(canRenameAssets('admin')).toBe(true);
+    expect(canRenameAssets('agency')).toBe(true);
+    expect(canRenameAssets('client')).toBe(false);
+    expect(canRenameAssets(null)).toBe(false);
+  });
+});
+
+describe('renameErrorMessage', () => {
+  it('maps a 403 to the agency-only line and everything else to retry', () => {
+    expect(renameErrorMessage(403)).toBe('Only the agency team can rename assets');
+    expect(renameErrorMessage(0)).toBe(
+      "Couldn't rename this asset. Check your connection and retry",
+    );
+    expect(renameErrorMessage(500)).toBe(
+      "Couldn't rename this asset. Check your connection and retry",
+    );
+  });
+});
+
+describe('renameAsset', () => {
+  it('posts {workspace_id, asset_id, name} to /rename and succeeds on 200', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { asset: { id: 'a-1' } }));
+
+    const out = await renameAsset(renameConfig(fetcher));
+
+    expect(out).toEqual({ ok: true });
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://upload.example.workers.dev/rename');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init.body as string)).toEqual({
+      workspace_id: 'ws-1',
+      asset_id: 'a-1',
+      name: 'New name',
+    });
+  });
+
+  it('maps a 403 to the agency-only message', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(403, { error: { code: 'forbidden' } }));
+    const out = await renameAsset(renameConfig(fetcher));
+    expect(out).toEqual({ ok: false, message: 'Only the agency team can rename assets' });
+  });
+
+  it('maps a transport failure to the rename retry message', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
+    const out = await renameAsset(renameConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      message: "Couldn't rename this asset. Check your connection and retry",
+    });
   });
 });

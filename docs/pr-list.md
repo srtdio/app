@@ -90,6 +90,7 @@ Every frontend PR ships with an explicit light AND dark mode parity check. 44x44
 | 44 | Notifications (ephemeral): toast slide-in desktop + mobile, fires on Inbox triggers while user active, not stored | 38 |
 | 45 | Cockpit UI at platform.srtd.io: passkey auth, dashboard, workspace management, actions (replay webhook, restart job, revoke sessions, billing override, extend trial, open ticket, global kill switch), impersonation banner + emergency-exit.html | 23, 30 |
 | 47 | asset-upload worker CORS: handle OPTIONS preflight before auth (204 + reflected allowed-origin, methods POST/GET/OPTIONS, authorization + content-type + trace header, 24h max-age), attach CORS headers to every success and error response, mirroring asset-read exactly | 46, 15 |
+| 48 | Assets Add link + Rename wired in the frontend: enable the + Add menu "Add link" item opening a sheet (https:// link field + mandatory name, client-side validation, POST /links via the asset-upload client module, toast + grid refresh on success, worker-error to plain-English toasts), and a role-gated Edit affordance in the lightbox info sheet (owner/admin/agency only, role read once via workspace_members) turning the name into an inline input that POSTs /rename, updating the lightbox title and grid card without reload, 403 to the agency-only message | 46, 47 |
 
 ## 5. Handoff rules
 

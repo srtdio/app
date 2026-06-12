@@ -5,16 +5,18 @@ import { IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
 interface AssetAddMenuProps {
   /** Open the upload sheet (the "Upload files" option). */
   onUploadFiles: () => void;
+  /** Open the Add link sheet (the "Add link" option). */
+  onAddLink: () => void;
 }
 
 /**
  * The Assets toolbar add control: a 44x44 accent trigger that opens a small
  * two-option menu anchored beneath it. "Upload files" opens the upload sheet;
- * "Add link" is a disabled, Coming soon item until a later PR wires it. Outside
- * tap and Esc dismiss via MenuPopover. Themed with tokens so light and dark
- * match; no hover-only behaviour (tap toggles the menu).
+ * "Add link" opens the link sheet. Outside tap and Esc dismiss via MenuPopover.
+ * Themed with tokens so light and dark match; no hover-only behaviour (tap
+ * toggles the menu).
  */
-export function AssetAddMenu({ onUploadFiles }: AssetAddMenuProps) {
+export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -46,19 +48,20 @@ export function AssetAddMenu({ onUploadFiles }: AssetAddMenuProps) {
           <span>Upload files</span>
         </button>
 
-        <div
+        <button
+          type="button"
           role="menuitem"
-          aria-disabled="true"
-          className="flex min-h-[44px] w-full cursor-not-allowed items-center gap-3 rounded-md px-3 text-left text-sm text-fg-3 opacity-60"
+          onClick={() => {
+            setOpen(false);
+            onAddLink();
+          }}
+          className="flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
         >
-          <span className="shrink-0">
+          <span className="shrink-0 text-fg-3">
             <IconLink size={18} />
           </span>
-          <span className="flex flex-col leading-tight">
-            <span>Add link</span>
-            <span className="text-[11px] text-fg-3">Coming soon</span>
-          </span>
-        </div>
+          <span>Add link</span>
+        </button>
       </MenuPopover>
     </div>
   );

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { Input } from '@/components/ui/Input';
 import { IconChevronRight, IconCopy, IconDownload, IconX } from '@/components/ui/icons';
-import { IconChevronLeft, IconInfo } from '@/components/pages/assets/viewerIcons';
+import { IconChevronLeft, IconEdit, IconInfo } from '@/components/pages/assets/viewerIcons';
 import type { PresignCache } from '@/lib/asset-presign';
+import type { RenameOutcome } from '@/lib/asset-upload';
 import { displayLabel, humanizeSize, type AssetListItem } from '@/lib/assets';
 import {
   isInlineRenderable,
@@ -30,6 +32,10 @@ interface AssetLightboxProps {
   onClose: () => void;
   /** Soft-delete; resolves true on success so the viewer can close onto the new list. */
   onDelete: (item: AssetListItem) => Promise<boolean>;
+  /** True when the current member may rename (owner/admin/agency); clients see no edit. */
+  canRename: boolean;
+  /** Commit a rename to the worker; resolves the mapped outcome for the toast. */
+  onRename: (item: AssetListItem, name: string) => Promise<RenameOutcome>;
   onToast: (message: string) => void;
 }
 
@@ -65,6 +71,8 @@ export function AssetLightbox({
   onIndexChange,
   onClose,
   onDelete,
+  canRename,
+  onRename,
   onToast,
 }: AssetLightboxProps) {
   const item = items[index];
@@ -74,6 +82,9 @@ export function AssetLightbox({
   const [infoOpen, setInfoOpen] = useState(initialInfoOpen);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   const kind = item !== undefined ? mediaKind(item) : 'file';
@@ -125,8 +136,16 @@ export function AssetLightbox({
     }
   }, [index, items, presignEnabled, cache]);
 
-  // Reset the delete confirm when navigating to another asset.
-  useEffect(() => setConfirming(false), [index]);
+  // Reset the delete confirm and any in-progress rename when navigating to
+  // another asset, or when the Info sheet closes.
+  useEffect(() => {
+    setConfirming(false);
+    setEditingName(false);
+  }, [index]);
+
+  useEffect(() => {
+    if (!infoOpen) setEditingName(false);
+  }, [infoOpen]);
 
   // Esc closes; arrows navigate. Lock body scroll while open.
   useEffect(() => {
@@ -187,6 +206,24 @@ export function AssetLightbox({
     setDeleting(false);
     setConfirming(false);
     onToast("Couldn't delete this asset. Try again.");
+  }
+
+  // Commit an inline rename. Save is gated to a non-empty, changed name; on
+  // success the parent updates the shared list, so the new name flows back into
+  // both this title and the grid card, and the input collapses.
+  const trimmedDraft = nameDraft.trim();
+  const canSaveName = trimmedDraft !== '' && trimmedDraft !== name && !savingName;
+  async function saveName(): Promise<void> {
+    if (!canSaveName) return;
+    setSavingName(true);
+    const outcome = await onRename(asset, trimmedDraft);
+    setSavingName(false);
+    if (outcome.ok) {
+      setEditingName(false);
+      onToast('Renamed');
+    } else {
+      onToast(outcome.message);
+    }
   }
 
   const onTouchStart = (event: React.TouchEvent): void => {
@@ -318,7 +355,54 @@ export function AssetLightbox({
             </div>
 
             <dl className="mt-3 flex flex-col gap-3">
-              <Field label="Name" value={name} />
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-[11px] uppercase tracking-wide text-fg-3">Name</dt>
+                {editingName ? (
+                  <div className="mt-1 flex flex-col gap-2">
+                    <Input
+                      aria-label="Asset name"
+                      value={nameDraft}
+                      autoFocus
+                      disabled={savingName}
+                      onChange={(event) => setNameDraft(event.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        className="h-11 flex-1"
+                        onClick={() => setEditingName(false)}
+                        disabled={savingName}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="primary"
+                        className="h-11 flex-1"
+                        disabled={!canSaveName}
+                        onClick={() => void saveName()}
+                      >
+                        {savingName ? 'Saving' : 'Save'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <dd className="flex items-center gap-1">
+                    <span className="min-w-0 flex-1 break-words text-sm text-fg">{name}</span>
+                    {canRename ? (
+                      <button
+                        type="button"
+                        aria-label="Rename asset"
+                        onClick={() => {
+                          setNameDraft(name);
+                          setEditingName(true);
+                        }}
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft"
+                      >
+                        <IconEdit size={16} />
+                      </button>
+                    ) : null}
+                  </dd>
+                )}
+              </div>
               <Field label="Type" value={item.mimeType ?? typeLabel(kind)} />
               <Field label="Size" value={humanizeSize(item.sizeBytes)} />
               <Field
