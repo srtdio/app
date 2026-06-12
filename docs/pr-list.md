@@ -57,6 +57,7 @@ The v1 project ID appears only in the ETL script and the cutover PR.
 | - | Repo hygiene: stop tracking .env.production (public repo). git rm --cached only, file stays on disk; drop the !.env.production negation in .gitignore so the .env.* rule covers it and no production env file can be committed (a real secret could land there later). Tracking-only, no schema. | none |
 | - | Scaffold @srtdio/storage package (scaffold) | none |
 | - | Move R2 client, buildR2Key, assetBucketName, sha256, mime into @srtdio/storage (runtime-neutral; R2 client receives a traced-fetch via constructor) and repoint app worker imports | 15 |
+| - | Chat token Worker: mints 24-hour Agora Chat user tokens for authenticated workspace members (username == Supabase user id), ensures the Agora Chat user exists via REST (idempotent), reuses asset-read's ES256 verify + service-role membership read. Mint only; renewal via SDK onTokenWillExpire, revocation via channel ACL. | 15, 17 |
 
 ## 3. Phase 2: ETL
 
