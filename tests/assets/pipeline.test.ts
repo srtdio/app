@@ -3,8 +3,10 @@ import {
   InMemoryAssetRepository,
   MAX_FILE_SIZE_BYTES,
   NoOpScanner,
+  createLinkAsset,
   getAssetSummary,
   hasExifSegment,
+  renameAsset,
   runUploadPipeline,
   sanitizeSvg,
   type PipelineDeps,
@@ -248,6 +250,125 @@ describe('runUploadPipeline', () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error.code).toBe('not_found');
+  });
+});
+
+describe('createLinkAsset', () => {
+  let repo: InMemoryAssetRepository;
+  beforeEach(() => {
+    repo = new InMemoryAssetRepository();
+  });
+
+  it('creates a link-shaped asset: kind=link, external_url set, byte fields null, current set', async () => {
+    const summary = await createLinkAsset(repo, {
+      workspaceId: WORKSPACE_A,
+      uploadedBy: USER,
+      name: 'Brand guidelines',
+      url: 'https://example.com/guidelines',
+      traceId: TRACE,
+    });
+
+    expect(repo.assets.size).toBe(1);
+    expect(repo.versions).toHaveLength(1);
+
+    const version = repo.versions[0];
+    expect(version?.kind).toBe('link');
+    expect(version?.external_url).toBe('https://example.com/guidelines');
+    expect(version?.version_number).toBe(1);
+    expect(version?.r2_key).toBeNull();
+    expect(version?.mime_type).toBeNull();
+    expect(version?.sha256).toBeNull();
+    expect(version?.size_bytes).toBeNull();
+
+    const asset = repo.assets.get(summary.assetId);
+    expect(asset?.filename).toBe('Brand guidelines');
+    expect(asset?.current_version_id).toBe(summary.currentVersionId);
+    expect(summary.currentVersionId).toBe(version?.id);
+    expect(summary.externalUrl).toBe('https://example.com/guidelines');
+  });
+
+  it('writes an asset.create audit row with the trace_id and authenticated actor', async () => {
+    await createLinkAsset(repo, {
+      workspaceId: WORKSPACE_A,
+      uploadedBy: USER,
+      name: 'Link',
+      url: 'https://example.com',
+      traceId: TRACE,
+    });
+    expect(repo.audits).toHaveLength(1);
+    expect(repo.audits[0]?.action).toBe('asset.create');
+    expect(repo.audits[0]?.traceId).toBe(TRACE);
+    expect(repo.audits[0]?.actorUserId).toBe(USER);
+  });
+});
+
+describe('renameAsset', () => {
+  let repo: InMemoryAssetRepository;
+  beforeEach(() => {
+    repo = new InMemoryAssetRepository();
+  });
+
+  it('updates only the filename, leaving the version rows untouched', async () => {
+    const created = await runUploadPipeline(
+      { storage: new InMemoryStorageClient(), repository: repo, scanner: new NoOpScanner() },
+      input(),
+    );
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const versionCountBefore = repo.versions.length;
+    const r2KeyBefore = repo.versions[0]?.r2_key;
+
+    const result = await renameAsset(repo, {
+      workspaceId: WORKSPACE_A,
+      assetId: created.value.assetId,
+      name: 'Renamed file',
+      actorUserId: USER,
+      traceId: TRACE,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.filename).toBe('Renamed file');
+    expect(repo.assets.get(created.value.assetId)?.filename).toBe('Renamed file');
+    // Version rows are immutable: nothing added, nothing rewritten.
+    expect(repo.versions).toHaveLength(versionCountBefore);
+    expect(repo.versions[0]?.r2_key).toBe(r2KeyBefore);
+  });
+
+  it('writes an asset.rename audit row with the authenticated actor', async () => {
+    const created = await runUploadPipeline(
+      { storage: new InMemoryStorageClient(), repository: repo, scanner: new NoOpScanner() },
+      input(),
+    );
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    await renameAsset(repo, {
+      workspaceId: WORKSPACE_A,
+      assetId: created.value.assetId,
+      name: 'New name',
+      actorUserId: USER,
+      traceId: TRACE,
+    });
+    const rename = repo.audits.find((a) => a.action === 'asset.rename');
+    expect(rename).toBeDefined();
+    expect(rename?.actorUserId).toBe(USER);
+    expect(rename?.traceId).toBe(TRACE);
+  });
+
+  it('returns not_found for an unknown or cross-tenant asset', async () => {
+    const result = await renameAsset(repo, {
+      workspaceId: WORKSPACE_A,
+      assetId: '44444444-4444-7444-8444-444444444444',
+      name: 'Nope',
+      actorUserId: USER,
+      traceId: TRACE,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('not_found');
+    expect(repo.audits).toHaveLength(0);
   });
 });
 

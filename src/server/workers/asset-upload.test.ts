@@ -13,10 +13,12 @@ vi.mock('jose', async (importOriginal) => {
   };
 });
 
-// Shared mock state: who is a member, and the input the (mocked) pipeline saw.
+// Shared mock state: who is a member, the input the (mocked) pipeline saw, and a
+// per-test in-memory repository the link/rename routes write through.
 const state = vi.hoisted(() => ({
   members: new Set<string>(),
   capturedInput: null as Record<string, unknown> | null,
+  repo: null as unknown as InMemoryAssetRepository,
 }));
 
 // Substitute the service-role membership store with an in-memory set; keep the
@@ -35,10 +37,15 @@ vi.mock('./asset-read', async (importOriginal) => {
 
 // Replace only runUploadPipeline so we can assert the actor it receives without
 // touching R2 or Supabase; everything else in the module stays real.
+// Keep runUploadPipeline mocked (no R2/Supabase); keep createLinkAsset and
+// renameAsset real, but point the service-role repository factory at a per-test
+// in-memory repo so the link/rename routes exercise the real pipeline functions
+// without a network.
 vi.mock('@/server/assets', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/server/assets')>();
   return {
     ...actual,
+    createSupabaseAssetRepository: () => state.repo,
     runUploadPipeline: (_deps: unknown, input: Record<string, unknown>) => {
       state.capturedInput = input;
       return Promise.resolve({
@@ -61,10 +68,12 @@ vi.mock('@/server/assets', async (importOriginal) => {
 });
 
 import worker, { serializeError, type AssetUploadEnv } from './asset-upload';
+import { InMemoryAssetRepository } from '@/server/assets';
 
 const USER = '33333333-3333-7333-8333-333333333333';
 const OTHER_USER = '44444444-4444-7444-8444-444444444444';
 const WORKSPACE = '11111111-1111-7111-8111-111111111111';
+const ASSET = '55555555-5555-7555-8555-555555555555';
 const SUPABASE_URL = 'https://test.supabase.co';
 const KID = 'test-es256-key';
 
@@ -88,6 +97,7 @@ beforeAll(async () => {
 beforeEach(() => {
   state.members.clear();
   state.capturedInput = null;
+  state.repo = new InMemoryAssetRepository();
 });
 
 async function mintToken(sub: string, expSecondsFromNow = 3600): Promise<string> {
@@ -128,6 +138,44 @@ function readRequest(token: string | null, query: Record<string, string>): Reque
     headers.set('Authorization', `Bearer ${token}`);
   }
   return new Request(url, { method: 'GET', headers });
+}
+
+function jsonPost(path: string, token: string | null, body: unknown): Request {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (token !== null) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return new Request(`https://worker.test${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+/** Seed an asset (optionally with a stored-file version) into the test repo. */
+async function seedAsset(assetId: string, withVersion: boolean): Promise<void> {
+  await state.repo.insertAsset({
+    id: assetId,
+    workspaceId: WORKSPACE,
+    filename: 'original.png',
+    uploadedBy: USER,
+  });
+  if (withVersion) {
+    const versionId = '66666666-6666-7666-8666-666666666666';
+    await state.repo.insertVersion({
+      id: versionId,
+      assetId,
+      workspaceId: WORKSPACE,
+      versionNumber: 1,
+      kind: 'image',
+      r2Key: `images/${assetId}/v1-original.png`,
+      mimeType: 'image/png',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 10,
+      uploadedBy: USER,
+    });
+    await state.repo.setCurrentVersion(assetId, versionId);
+  }
 }
 
 describe('asset-upload worker.fetch', () => {
@@ -259,6 +307,153 @@ describe('asset-upload worker.fetch', () => {
     expect(body.error.message).toBe('Invalid id format.');
     // Validation happens before the pipeline runs.
     expect(state.capturedInput).toBeNull();
+  });
+});
+
+describe('POST /links', () => {
+  const URL_VAL = 'https://example.com/asset';
+
+  it('creates a link asset and returns 201 with the link shape', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const res = await worker.fetch(
+      jsonPost('/links', token, { workspace_id: WORKSPACE, url: URL_VAL, name: 'My link' }),
+      env,
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      asset: { externalUrl: string; filename: string; currentVersionId: string };
+    };
+    expect(body.asset.externalUrl).toBe(URL_VAL);
+    expect(body.asset.filename).toBe('My link');
+    expect(body.asset.currentVersionId).not.toBeNull();
+
+    // The persisted version carries the link shape; byte columns stay null.
+    expect(state.repo.versions).toHaveLength(1);
+    const version = state.repo.versions[0];
+    expect(version?.kind).toBe('link');
+    expect(version?.external_url).toBe(URL_VAL);
+    expect(version?.r2_key).toBeNull();
+    expect(version?.sha256).toBeNull();
+    expect(version?.size_bytes).toBeNull();
+
+    // Audit: asset.create with the authenticated actor.
+    expect(state.repo.audits).toHaveLength(1);
+    expect(state.repo.audits[0]?.action).toBe('asset.create');
+    expect(state.repo.audits[0]?.actorUserId).toBe(USER);
+  });
+
+  it('returns 400 for a non-http url', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const res = await worker.fetch(
+      jsonPost('/links', token, { workspace_id: WORKSPACE, url: 'ftp://nope', name: 'x' }),
+      env,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('bad_request');
+    expect(state.repo.versions).toHaveLength(0);
+  });
+
+  it('returns 400 when name is missing', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const res = await worker.fetch(
+      jsonPost('/links', token, { workspace_id: WORKSPACE, url: URL_VAL }),
+      env,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('bad_request');
+  });
+
+  it('returns 401 when the bearer token is absent', async () => {
+    const res = await worker.fetch(
+      jsonPost('/links', null, { workspace_id: WORKSPACE, url: URL_VAL, name: 'x' }),
+      env,
+    );
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('unauthorized');
+  });
+
+  it('returns 403 when the caller is not a member', async () => {
+    const token = await mintToken(USER);
+    // state.members intentionally empty.
+    const res = await worker.fetch(
+      jsonPost('/links', token, { workspace_id: WORKSPACE, url: URL_VAL, name: 'x' }),
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('forbidden');
+    expect(state.repo.versions).toHaveLength(0);
+  });
+});
+
+describe('POST /rename', () => {
+  it('renames the asset and returns 200, leaving version rows untouched', async () => {
+    const token = await mintToken(USER);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'admin');
+    await seedAsset(ASSET, true);
+    const versionsBefore = state.repo.versions.length;
+    const r2KeyBefore = state.repo.versions[0]?.r2_key;
+
+    const res = await worker.fetch(
+      jsonPost('/rename', token, { workspace_id: WORKSPACE, asset_id: ASSET, name: 'Renamed' }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { asset: { filename: string } };
+    expect(body.asset.filename).toBe('Renamed');
+    expect(state.repo.assets.get(ASSET)?.filename).toBe('Renamed');
+
+    // Versions are immutable: none added, r2_key unchanged.
+    expect(state.repo.versions).toHaveLength(versionsBefore);
+    expect(state.repo.versions[0]?.r2_key).toBe(r2KeyBefore);
+
+    const rename = state.repo.audits.find((a) => a.action === 'asset.rename');
+    expect(rename?.actorUserId).toBe(USER);
+  });
+
+  it('returns 200 for an agency-role caller', async () => {
+    const token = await mintToken(USER);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'agency');
+    await seedAsset(ASSET, false);
+    const res = await worker.fetch(
+      jsonPost('/rename', token, { workspace_id: WORKSPACE, asset_id: ASSET, name: 'Renamed' }),
+      env,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 403 for a client-role caller', async () => {
+    const token = await mintToken(USER);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'client');
+    await seedAsset(ASSET, false);
+    const res = await worker.fetch(
+      jsonPost('/rename', token, { workspace_id: WORKSPACE, asset_id: ASSET, name: 'Renamed' }),
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('forbidden');
+    // A denied rename never touches the asset.
+    expect(state.repo.assets.get(ASSET)?.filename).toBe('original.png');
+  });
+
+  it('returns 404 for an unknown asset', async () => {
+    const token = await mintToken(USER);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'owner');
+    // No asset seeded.
+    const res = await worker.fetch(
+      jsonPost('/rename', token, { workspace_id: WORKSPACE, asset_id: ASSET, name: 'Renamed' }),
+      env,
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('not_found');
   });
 });
 
