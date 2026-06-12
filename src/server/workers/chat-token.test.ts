@@ -103,7 +103,10 @@ describe('chat-token worker.fetch', () => {
   });
 
   it('returns 401 for an invalid token', async () => {
-    const res = await worker.fetch(tokenRequest('not-a-real-jwt', { workspace_id: WORKSPACE }), env);
+    const res = await worker.fetch(
+      tokenRequest('not-a-real-jwt', { workspace_id: WORKSPACE }),
+      env,
+    );
     expect(res.status).toBe(401);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe('unauthorized');
