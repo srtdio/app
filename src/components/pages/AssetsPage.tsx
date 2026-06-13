@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SortMenu } from '@/components/ui/SortMenu';
-import { IconAssets, IconChevronRight, IconSearch, IconUpload, IconX } from '@/components/ui/icons';
+import { SectionHeader } from '@/components/shell/SectionHeader';
+import { IconAssets, IconChevronRight, IconUpload } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
@@ -354,39 +354,19 @@ export function AssetsPage() {
         </div>
       ) : null}
 
-      {/* Search above the chips, with leading icon and a clear button. */}
-      <div className="px-4 md:px-6 mt-3 flex items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
-            <IconSearch size={16} />
-          </span>
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search files"
-            className="h-11 w-full rounded-md border border-border bg-panel pl-9 pr-11 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
-          />
-          {searching ? (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={() => setSearch('')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 hover:bg-panel-2 hover:text-fg"
-            >
-              <IconX size={16} />
-            </button>
-          ) : null}
-        </div>
-        <SortMenu options={ASSET_SORT_OPTIONS} value={sort} onChange={setSort} />
-        <AssetAddMenu
-          onUploadFiles={() => setUploadOpen(true)}
-          onAddLink={() => setAddLinkOpen(true)}
-        />
-      </div>
-
-      {/* Kind chips on a single horizontally-scrollable row; zero-count kinds hidden. */}
-      <div className="px-4 md:px-6 mt-3 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* Search + sort + add, then the kind chips: shared page-header chrome. */}
+      <SectionHeader<AssetSort>
+        search={{ value: search, onChange: setSearch, placeholder: 'Search files' }}
+        sort={{ options: ASSET_SORT_OPTIONS, value: sort, onChange: setSort }}
+        primaryAction={{
+          node: (
+            <AssetAddMenu
+              onUploadFiles={() => setUploadOpen(true)}
+              onAddLink={() => setAddLinkOpen(true)}
+            />
+          ),
+        }}
+      >
         <Chip
           label={`All ${counts.all}`}
           selected={kind === 'all'}
@@ -402,7 +382,7 @@ export function AssetsPage() {
             onClick={() => setKind(k)}
           />
         ))}
-      </div>
+      </SectionHeader>
 
       {!searching && folders.length > 0 ? (
         <div className="px-4 md:px-6 mt-3 flex flex-wrap gap-2">
