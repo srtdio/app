@@ -70,7 +70,6 @@ jobs:
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      VITE_CHAT_TOKEN_URL: ${{ vars.VITE_CHAT_TOKEN_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

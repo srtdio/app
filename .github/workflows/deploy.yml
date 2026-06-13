@@ -29,7 +29,6 @@ jobs:
           VITE_SENTRY_RELEASE: ${{ github.sha }}
           VITE_ASSET_READ_URL: ${{ vars.VITE_ASSET_READ_URL }}
           VITE_ASSET_UPLOAD_URL: ${{ vars.VITE_ASSET_UPLOAD_URL }}
-          VITE_CHAT_TOKEN_URL: ${{ vars.VITE_CHAT_TOKEN_URL }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           CI: true
       - name: Print wrangler version

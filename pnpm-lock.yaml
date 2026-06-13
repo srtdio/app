@@ -14,9 +14,6 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.105.4
         version: 2.105.4
-      agora-chat:
-        specifier: ^1.3.1
-        version: 1.3.1
       agora-token:
         specifier: 2.0.5
         version: 2.0.5
@@ -1502,9 +1499,6 @@ packages:
   agent-base@9.0.0:
     resolution: {integrity: sha512-TQf59BsZnytt8GdJKLPfUZ54g/iaUL2OWDSFCCvMOhsHduDQxO8xC4PNeyIkVcA5KwL2phPSv0douC0fgWzmnA==}
     engines: {node: '>= 20'}
-
-  agora-chat@1.3.1:
-    resolution: {integrity: sha512-562eGv1NY5F3j0FrXRpqabAFfaTIt45svRcBRkldYp1JtfkXx8a6BgP2sIJwPKiqe6pU2wuk4yiE4d92iVECBg==}
 
   agora-token@2.0.5:
     resolution: {integrity: sha512-0NcbzC3iuutlksv3b4bCMKHrW3pko6gdiGEMRo6APDice24kfXAuWyAlG9hRBrrPBVDShwm9/GUz2Scd3zuZQw==}
@@ -4239,8 +4233,6 @@ snapshots:
       - supports-color
 
   agent-base@9.0.0: {}
-
-  agora-chat@1.3.1: {}
 
   agora-token@2.0.5:
     dependencies:
