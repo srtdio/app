@@ -84,7 +84,16 @@ CREATE POLICY folders_select_member ON public.folders AS PERMISSIVE FOR SELECT T
 -- policy unreachable for the authenticated role at the table-grant level, and
 -- service_role has no CRUD grant. Recorded as-is; not changed in this PR.
 REVOKE SELECT, INSERT, UPDATE, DELETE ON public.folders FROM anon, authenticated, service_role;
-GRANT SELECT ON public.folders TO srtdio_readonly;
+-- srtdio_readonly is a platform-managed analytics role that exists only on the
+-- hosted live project, not in fresh/local builds (no baseline migration creates
+-- it). Guard the grant so it reproduces the live privilege where the role
+-- exists and is a harmless no-op where it does not.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'srtdio_readonly') THEN
+    GRANT SELECT ON public.folders TO srtdio_readonly;
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- assets.folder_id: nullable FK into folders, SET NULL on folder delete, plus a
