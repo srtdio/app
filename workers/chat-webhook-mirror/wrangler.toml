@@ -1,0 +1,16 @@
+name = "chat-webhook-mirror"
+main = "../../src/server/workers/chat-webhook-mirror.ts"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+# Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
+# srtdio-logs (see docs/cloudflare-logpush-setup.md).
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# All values are supplied as Worker secrets (wrangler secret put / CI), never
+# committed. Only binding names live here:
+#   SUPABASE_URL              - project URL for the chat_webhook_ingest rpc
+#   SUPABASE_SERVICE_ROLE_KEY - service role: bare client, no minted member JWT
+#   AGORA_WEBHOOK_SECRET      - shared secret for the Agora webhook signature
