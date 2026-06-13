@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildIngestParams,
   handle,
+  isGroupMessage,
   verifyAgoraSignature,
   type ChatIngestClient,
   type ChatWebhookIngestParams,
@@ -14,7 +15,10 @@ import { toAgoraUsername } from './agora-identity';
 
 const SECRET = 'agora-webhook-secret';
 const USER = '33333333-3333-7333-8333-333333333333';
-const CHANNEL = 'group__11111111-1111-7111-8111-111111111111__general';
+const CHANNEL = 'group__11111111-1111-7111-8111-111111111111__22222222-2222-7222-8222-222222222222';
+// A group webhook carries Agora's group id, NOT our channel_id; the worker
+// resolves it to CHANNEL via the chat_channels.agora_group_id SELECT.
+const AGORA_GROUP_ID = '170000000000000001';
 
 const env: ChatWebhookMirrorEnv = {
   SUPABASE_URL: 'https://test.supabase.co',
@@ -38,13 +42,37 @@ function webhookRequest(payload: Record<string, unknown>): Request {
   });
 }
 
-/** A spy client that captures the rpc args and returns the given proc result. */
-function spyClient(result: ChatWebhookIngestResult): {
-  client: ChatIngestClient;
-  rpc: ReturnType<typeof vi.fn>;
-} {
+/**
+ * A spy client that captures the rpc args, returns the given proc result, and
+ * resolves chat_channels.agora_group_id to our channel_id via the supplied map
+ * (defaulting AGORA_GROUP_ID -> CHANNEL).
+ */
+function spyClient(
+  result: ChatWebhookIngestResult,
+  channels: Record<string, string> = { [AGORA_GROUP_ID]: CHANNEL },
+): { client: ChatIngestClient; rpc: ReturnType<typeof vi.fn>; resolvedWith: () => string | null } {
   const rpc = vi.fn(() => Promise.resolve({ data: result, error: null }));
-  return { client: { rpc } as unknown as ChatIngestClient, rpc };
+  let lastResolved: string | null = null;
+  const from = vi.fn(() => ({
+    select: () => ({
+      eq: (_column: 'agora_group_id', value: string) => {
+        lastResolved = value;
+        const channelId = channels[value] ?? null;
+        return {
+          maybeSingle: () =>
+            Promise.resolve({
+              data: channelId ? { channel_id: channelId } : null,
+              error: null,
+            }),
+        };
+      },
+    }),
+  }));
+  return {
+    client: { rpc, from } as unknown as ChatIngestClient,
+    rpc,
+    resolvedWith: () => lastResolved,
+  };
 }
 
 function lastParams(rpc: ReturnType<typeof vi.fn>): ChatWebhookIngestParams {
@@ -57,7 +85,7 @@ const messageEvent = (overrides: Record<string, unknown> = {}): Record<string, u
     timestamp: 1_700_000_000_000,
     eventType: 'chat',
     chat_type: 'group',
-    group_id: CHANNEL,
+    group_id: AGORA_GROUP_ID,
     from: toAgoraUsername(USER),
     msg_id: 'msg-1',
     payload: {
@@ -73,6 +101,15 @@ describe('verifyAgoraSignature', () => {
     expect(verifyAgoraSignature(payload, SECRET)).toBe(true);
     expect(verifyAgoraSignature({ ...payload, security: 'deadbeef' }, SECRET)).toBe(false);
     expect(verifyAgoraSignature({ callId: 'c', timestamp: 123 }, SECRET)).toBe(false);
+  });
+});
+
+describe('isGroupMessage', () => {
+  it('detects group chat types and rejects DM types', () => {
+    expect(isGroupMessage({ chat_type: 'group' })).toBe(true);
+    expect(isGroupMessage({ chat_type: 'groupchat' })).toBe(true);
+    expect(isGroupMessage({ chat_type: 'chat' })).toBe(false);
+    expect(isGroupMessage({})).toBe(false);
   });
 });
 
@@ -104,8 +141,8 @@ describe('chat-webhook-mirror handle', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it('maps a message event for a known channel with the reverse-mapped sender', async () => {
-    const { client, rpc } = spyClient({
+  it('resolves a group message agora group id to our channel_id', async () => {
+    const { client, rpc, resolvedWith } = spyClient({
       webhook_event_id: 'we-1',
       message_stored: true,
       outcome: 'success',
@@ -113,9 +150,11 @@ describe('chat-webhook-mirror handle', () => {
     await handle(webhookRequest(messageEvent()), env, () => client);
 
     const params = lastParams(rpc);
+    // The webhook carried the Agora group id; the worker resolved it to CHANNEL.
+    expect(resolvedWith()).toBe(AGORA_GROUP_ID);
+    expect(params.p_channel_id).toBe(CHANNEL);
     expect(params.p_source_event_id).toBe('call-1');
     expect(params.p_event_type).toBe('chat');
-    expect(params.p_channel_id).toBe(CHANNEL);
     expect(params.p_message_id).toBe('msg-1');
     expect(params.p_agora_event_id).toBe('msg-1');
     expect(params.p_sender_user_id).toBe(USER);
@@ -125,22 +164,17 @@ describe('chat-webhook-mirror handle', () => {
     expect(params.p_created_at).toBe(new Date(1_700_000_000_000).toISOString());
   });
 
-  it('still acks 200 and calls the proc when the channel is unknown (skipped)', async () => {
-    const { client, rpc } = spyClient({
-      webhook_event_id: 'we-2',
-      message_stored: false,
-      outcome: 'skipped',
-    });
-    const res = await handle(
-      webhookRequest(
-        messageEvent({ group_id: 'group__deadbeef-dead-7dead-8dead-deaddeaddead__x' }),
-      ),
-      env,
-      () => client,
+  it('passes a null channel_id when the group id does not resolve (skipped)', async () => {
+    // An empty channel map: the group is not synced yet, so resolution misses.
+    const { client, rpc } = spyClient(
+      { webhook_event_id: 'we-2', message_stored: false, outcome: 'skipped' },
+      {},
     );
+    const res = await handle(webhookRequest(messageEvent()), env, () => client);
 
     expect(res.status).toBe(200);
     expect(rpc).toHaveBeenCalledTimes(1);
+    expect(lastParams(rpc).p_channel_id).toBeNull();
     const body = (await res.json()) as { outcome: string };
     expect(body.outcome).toBe('skipped');
   });
@@ -197,7 +231,14 @@ describe('chat-webhook-mirror handle', () => {
     const rpc = vi.fn(() =>
       Promise.resolve({ data: null, error: { message: 'connection refused' } }),
     );
-    const client = { rpc } as unknown as ChatIngestClient;
+    const from = vi.fn(() => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.resolve({ data: { channel_id: CHANNEL }, error: null }),
+        }),
+      }),
+    }));
+    const client = { rpc, from } as unknown as ChatIngestClient;
     const res = await handle(webhookRequest(messageEvent()), env, () => client);
     expect(res.status).toBe(500);
   });

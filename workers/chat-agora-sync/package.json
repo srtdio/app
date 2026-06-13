@@ -1,0 +1,25 @@
+{
+  "name": "@srtdio/chat-agora-sync",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "../../src/server/workers/chat-agora-sync.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@srtdio/schemas": "workspace:*",
+    "agora-token": "2.0.5",
+    "uuid": "^11.1.1"
+  },
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.105.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260516.1",
+    "@supabase/supabase-js": "^2.105.4",
+    "typescript": "5.9.3",
+    "wrangler": "^3.114.17"
+  }
+}

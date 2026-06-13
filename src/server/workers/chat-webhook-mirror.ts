@@ -8,8 +8,10 @@
 //
 // Connection follows the inbox-writer precedent: a bare service-role supabase-js
 // client (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY). This worker is not
-// member-attributed, so no member JWT is minted; it only calls
-// chat_webhook_ingest via .rpc(). No direct Postgres connection is opened.
+// member-attributed, so no member JWT is minted; it calls chat_webhook_ingest via
+// .rpc() and, for group messages, a single service-role SELECT on chat_channels
+// to resolve Agora's group id to our channel_id. No direct Postgres connection is
+// opened.
 //
 // Idempotency is the proc's job: webhook_events has a unique (source,
 // source_event_id) index and chat_messages a unique (agora_event_id,
@@ -65,12 +67,29 @@ export interface ChatWebhookIngestResult {
   outcome: 'success' | 'skipped' | 'failure' | string;
 }
 
+/** The chat_channels lookup chain used to resolve a group's channel_id. */
+export interface ChatChannelsQuery {
+  select(columns: 'channel_id'): {
+    eq(
+      column: 'agora_group_id',
+      value: string,
+    ): {
+      maybeSingle(): Promise<{
+        data: { channel_id: string } | null;
+        error: { message?: string } | null;
+      }>;
+    };
+  };
+}
+
 /** The minimal supabase-js surface the worker needs; injected for tests. */
 export interface ChatIngestClient {
   rpc(
     fn: 'chat_webhook_ingest',
     params: ChatWebhookIngestParams,
   ): Promise<{ data: ChatWebhookIngestResult | null; error: { message?: string } | null }>;
+  /** Resolve a group message's agora_group_id to our channel_id (service_role). */
+  from(table: 'chat_channels'): ChatChannelsQuery;
 }
 
 export type CreateChatIngestClient = (env: ChatWebhookMirrorEnv) => ChatIngestClient;
@@ -138,6 +157,43 @@ export function verifyAgoraSignature(payload: Record<string, unknown>, secret: s
     return false;
   }
   return timingSafeEqual(expectedBuf, providedBuf);
+}
+
+/**
+ * True when a message event is a group message. Agora carries the chat type as
+ * `chat_type`; group chats report a value containing "group" (e.g. "groupchat").
+ * DM ("chat"/"singlechat") messages return false and keep their existing
+ * channel_id handling.
+ */
+export function isGroupMessage(payload: Record<string, unknown>): boolean {
+  const chatType = firstString(payload.chat_type);
+  return chatType !== null && chatType.toLowerCase().includes('group');
+}
+
+/**
+ * Resolve a group message's Agora group id to our channel_id via the service-role
+ * SELECT on chat_channels.agora_group_id. Returns null when the group is not yet
+ * synced (no row), so the proc records the raw event and marks it skipped - its
+ * existing behavior for an unknown channel. A query error is logged and treated
+ * as unresolved rather than thrown, so the raw event is still captured.
+ */
+async function resolveGroupChannelId(
+  client: ChatIngestClient,
+  agoraGroupId: string,
+): Promise<string | null> {
+  const { data, error } = await client
+    .from('chat_channels')
+    .select('channel_id')
+    .eq('agora_group_id', agoraGroupId)
+    .maybeSingle();
+  if (error) {
+    logger.warn('chat webhook group channel resolution failed', {
+      agora_group_id: agoraGroupId,
+      error: serializeError(error),
+    });
+    return null;
+  }
+  return data?.channel_id ?? null;
 }
 
 /** Reverse-map the Agora sender username to a Supabase user id, or null. */
@@ -270,8 +326,18 @@ export async function handle(
 
     // Args assembled as a value (explicit p_trace_id), mirroring @srtdio/rpc and
     // the inbox-writer service-role rpc precedent.
-    const params = buildIngestParams(payload, traceId, true);
     const client = createClientFn(env);
+    const params = buildIngestParams(payload, traceId, true);
+
+    // A group message's webhook carries Agora's group id, not our channel_id, so
+    // resolve it to our channel_id before ingesting. DM messages keep the
+    // channel_id buildIngestParams already derived; an unresolved group id passes
+    // null, so the proc records the raw event and marks it skipped.
+    if (params.p_message_id !== null && isGroupMessage(payload)) {
+      const agoraGroupId = firstString(payload.group_id, payload.to);
+      params.p_channel_id = agoraGroupId ? await resolveGroupChannelId(client, agoraGroupId) : null;
+    }
+
     const { data, error } = await client.rpc('chat_webhook_ingest', params);
 
     if (error) {
