@@ -11,8 +11,7 @@ import { env } from '@/lib/env';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { PresignCache } from '@/lib/asset-presign';
-import { uploadChatAttachment } from '@/lib/chat/attachments';
-import type { UploadOutcome } from '@/lib/asset-upload';
+import { uploadChatAttachment, type ChatAttachmentUpload } from '@/lib/chat/attachments';
 
 export interface ChatAttachments {
   /** Whether the composer can upload (endpoint configured + a workspace selected). */
@@ -22,7 +21,7 @@ export interface ChatAttachments {
   /** One cache for the thread: bounds presign concurrency and caches URLs (no N+1). */
   presignCache: PresignCache;
   /** Upload one picked file; never throws (asset-upload Result contract). */
-  uploadFile: (file: File) => Promise<UploadOutcome>;
+  uploadFile: (file: File) => Promise<ChatAttachmentUpload>;
 }
 
 export function useChatAttachments(): ChatAttachments {
@@ -43,7 +42,7 @@ export function useChatAttachments(): ChatAttachments {
   );
 
   const uploadFile = useCallback(
-    async (file: File): Promise<UploadOutcome> => {
+    async (file: File): Promise<ChatAttachmentUpload> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
         return { ok: false, message: 'Upload failed. Check your connection and retry' };
       }

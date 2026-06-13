@@ -8,10 +8,12 @@ import { IconPaperclip } from '@/components/chat/AttachmentIcons';
 import { AttachmentMenu } from '@/components/chat/AttachmentMenu';
 import { attachmentMenuItems } from '@/lib/chat/attachment-menu';
 import { fileExtension } from '@/lib/assets';
-import { precheckFile, type UploadOutcome } from '@/lib/asset-upload';
+import { precheckFile } from '@/lib/asset-upload';
 import {
   canSendAttachmentMessage,
+  precheckImage,
   toMessageAttachment,
+  type ChatAttachmentUpload,
   type MessageAttachment,
 } from '@/lib/chat/attachments';
 
@@ -20,12 +22,12 @@ interface ComposerProps {
   onSend: (text: string, attachments: MessageAttachment[]) => Promise<void>;
   disabled: boolean;
   /** Upload one picked file via the asset pipeline; absent disables attaching. */
-  uploadFile?: ((file: File) => Promise<UploadOutcome>) | undefined;
+  uploadFile?: ((file: File) => Promise<ChatAttachmentUpload>) | undefined;
 }
 
 type PendingStatus =
   | { state: 'uploading' }
-  | { state: 'done'; assetId: string }
+  | { state: 'done'; versionId: string }
   | { state: 'error'; message: string };
 
 /** One picked file and its upload lifecycle, shown as a removable chip. */
@@ -41,7 +43,8 @@ let pendingSeq = 0;
 function completedAttachments(pending: readonly Pending[]): MessageAttachment[] {
   const out: MessageAttachment[] = [];
   for (const item of pending) {
-    if (item.status.state === 'done') out.push(toMessageAttachment(item.file, item.status.assetId));
+    if (item.status.state === 'done')
+      out.push(toMessageAttachment(item.file, item.status.versionId));
   }
   return out;
 }
@@ -84,12 +87,13 @@ export function Composer(props: ComposerProps): ReactElement {
     [],
   );
 
-  async function addFiles(list: FileList | null): Promise<void> {
+  async function addFiles(list: FileList | null, imageOnly: boolean): Promise<void> {
     const upload = props.uploadFile;
     if (list === null || list.length === 0 || upload === undefined) return;
     for (const file of Array.from(list)) {
       const id = `att-${(pendingSeq += 1)}`;
-      const check = precheckFile(file);
+      // The Photo path is image-only; the File path takes the full allowlist.
+      const check = imageOnly ? precheckImage(file) : precheckFile(file);
       if (!check.ok) {
         setPending((prev) => [
           ...prev,
@@ -106,7 +110,7 @@ export function Composer(props: ComposerProps): ReactElement {
             ? {
                 ...item,
                 status: outcome.ok
-                  ? { state: 'done', assetId: outcome.assetId }
+                  ? { state: 'done', versionId: outcome.versionId }
                   : { state: 'error', message: outcome.message },
               }
             : item,
@@ -190,7 +194,7 @@ export function Composer(props: ComposerProps): ReactElement {
         accept={menuItems.find((item) => item.id === 'photo')?.accept}
         className="sr-only"
         onChange={(event) => {
-          void addFiles(event.target.files);
+          void addFiles(event.target.files, true);
           event.target.value = '';
         }}
       />
@@ -201,7 +205,7 @@ export function Composer(props: ComposerProps): ReactElement {
         accept={menuItems.find((item) => item.id === 'file')?.accept}
         className="sr-only"
         onChange={(event) => {
-          void addFiles(event.target.files);
+          void addFiles(event.target.files, false);
           event.target.value = '';
         }}
       />

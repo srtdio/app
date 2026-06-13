@@ -79,6 +79,34 @@ function FileChip({ name, url }: { name: string; url: string | null }): ReactEle
   );
 }
 
+/**
+ * The render branch for one attachment, derived purely from its kind and presign
+ * lifecycle so it is unit-testable without a DOM (this codebase renders no React
+ * in tests). `image` is a resolved thumbnail, `image-pending` its loading shimmer,
+ * `file` the chip (whose Open link appears once `url` is non-null). PR6 extension
+ * point: add a 'post' variant here and a case below; the image / file branches
+ * stay untouched.
+ */
+export type AttachmentView =
+  | { kind: 'image'; src: string; alt: string }
+  | { kind: 'image-pending'; alt: string }
+  | { kind: 'file'; name: string; url: string | null };
+
+export function attachmentView(args: {
+  attachment: MessageAttachment;
+  presignEnabled: boolean;
+  url: string | null;
+  failed: boolean;
+}): AttachmentView {
+  const { attachment, presignEnabled, url, failed } = args;
+  if (classifyAttachment(attachment.mime) === 'image' && presignEnabled && !failed) {
+    return url !== null
+      ? { kind: 'image', src: url, alt: attachment.name }
+      : { kind: 'image-pending', alt: attachment.name };
+  }
+  return { kind: 'file', name: attachment.name, url };
+}
+
 function AttachmentItem({
   attachment,
   cache,
@@ -88,24 +116,25 @@ function AttachmentItem({
   cache: PresignCache;
   presignEnabled: boolean;
 }): ReactElement {
+  // The render layer presigns the attachment's VERSION id (assetId carries the
+  // asset_versions.id) through the shared cache, which dedupes in-flight ids.
   const { url, failed } = useAttachmentUrl(attachment.assetId, cache, presignEnabled);
+  const view = attachmentView({ attachment, presignEnabled, url, failed });
 
-  // Render dispatch by attachment kind. PR6 extension point: add a 'post' case
-  // here for a shared-post card; keep this branch (image / file) untouched.
-  if (classifyAttachment(attachment.mime) === 'image' && presignEnabled && !failed) {
-    if (url !== null) {
+  switch (view.kind) {
+    case 'image':
       return (
         <img
-          src={url}
-          alt={attachment.name}
+          src={view.src}
+          alt={view.alt}
           className="max-h-48 max-w-[260px] rounded-lg border border-border object-cover"
         />
       );
-    }
-    return <div className="h-32 w-44 animate-pulse rounded-lg border border-border bg-panel-2" />;
+    case 'image-pending':
+      return <div className="h-32 w-44 animate-pulse rounded-lg border border-border bg-panel-2" />;
+    case 'file':
+      return <FileChip name={view.name} url={view.url} />;
   }
-
-  return <FileChip name={attachment.name} url={url} />;
 }
 
 export function MessageAttachments({

@@ -1,20 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-// asset-upload is mocked so the chat upload command is asserted to reuse the
-// existing pipeline (file + workspace_id) without any network.
-const { uploadAssetFile } = vi.hoisted(() => ({ uploadAssetFile: vi.fn() }));
-vi.mock('@/lib/asset-upload', () => ({
-  uploadAssetFile,
-  UPLOAD_ACCEPT: 'image/png,application/pdf',
-}));
-
+import { precheckFile } from '@/lib/asset-upload';
 import {
   buildAttachmentExt,
   canSendAttachmentMessage,
   classifyAttachment,
   parseAttachments,
+  precheckImage,
   toMessageAttachment,
-  uniqueAssetIds,
   uploadChatAttachment,
   type MessageAttachment,
 } from '@/lib/chat/attachments';
@@ -23,11 +16,26 @@ function fakeFile(name: string, type: string): File {
   return { name, type } as unknown as File;
 }
 
+function workerResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+const ASSET_ID = '11111111-1111-4111-8111-111111111111';
+const VERSION_ID = '99999999-9999-4999-8999-999999999999';
+
 describe('uploadChatAttachment', () => {
-  it('uploads through the existing asset-upload path with {file, workspace_id} and collects the id', async () => {
-    uploadAssetFile.mockResolvedValueOnce({ ok: true, reused: false, assetId: 'ver-1' });
-    const file = fakeFile('photo.png', 'image/png');
-    const fetcher = vi.fn();
+  it('uploads via the asset-upload pipeline and carries the VERSION id, not the asset id', async () => {
+    // The worker returns both ids; the chat layer must surface the version id so
+    // the render path (asset-read on asset_versions.id) resolves instead of 404ing.
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        workerResponse(201, { asset: { assetId: ASSET_ID, versionId: VERSION_ID, reused: false } }),
+      );
+    const file = new File(['x'], 'photo.png', { type: 'image/png' });
 
     const outcome = await uploadChatAttachment({
       file,
@@ -37,32 +45,87 @@ describe('uploadChatAttachment', () => {
       fetcher,
     });
 
-    expect(uploadAssetFile).toHaveBeenCalledWith(file, {
-      endpoint: 'https://upload',
-      token: 'jwt',
-      workspaceId: 'ws-1',
-      filename: 'photo.png',
-      fetcher,
-    });
-    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'ver-1' });
+    expect(outcome).toEqual({ ok: true, reused: false, versionId: VERSION_ID });
+    if (outcome.ok) expect(outcome.versionId).not.toBe(ASSET_ID);
+
+    expect(fetcher).toHaveBeenCalledOnce();
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://upload');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer jwt');
+    const form = init.body as FormData;
+    expect(form.get('workspace_id')).toBe('ws-1');
+    expect((form.get('file') as File).name).toBe('photo.png');
   });
 
-  it('surfaces an upload failure as a Result and never throws', async () => {
-    uploadAssetFile.mockResolvedValueOnce({
-      ok: false,
-      message: 'Upload failed. Check your connection and retry',
-    });
+  it('treats a reused (200) response as success and still carries the version id', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        workerResponse(200, { asset: { assetId: ASSET_ID, versionId: VERSION_ID, reused: true } }),
+      );
+
     const outcome = await uploadChatAttachment({
-      file: fakeFile('a.pdf', 'application/pdf'),
+      file: new File(['x'], 'a.pdf', { type: 'application/pdf' }),
       workspaceId: 'ws-1',
       token: 'jwt',
       endpoint: 'https://upload',
-      fetcher: vi.fn(),
+      fetcher,
     });
+
+    expect(outcome).toEqual({ ok: true, reused: true, versionId: VERSION_ID });
+  });
+
+  it('fails closed when a success response carries no version id', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(workerResponse(201, { asset: { assetId: ASSET_ID, reused: false } }));
+
+    const outcome = await uploadChatAttachment({
+      file: new File(['x'], 'a.png', { type: 'image/png' }),
+      workspaceId: 'ws-1',
+      token: 'jwt',
+      endpoint: 'https://upload',
+      fetcher,
+    });
+
     expect(outcome).toEqual({
       ok: false,
       message: 'Upload failed. Check your connection and retry',
     });
+  });
+
+  it('surfaces an upload failure as a Result and never throws', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
+
+    const outcome = await uploadChatAttachment({
+      file: new File(['x'], 'a.pdf', { type: 'application/pdf' }),
+      workspaceId: 'ws-1',
+      token: 'jwt',
+      endpoint: 'https://upload',
+      fetcher,
+    });
+
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'Upload failed. Check your connection and retry',
+    });
+  });
+});
+
+describe('precheckImage gates the Photo path to images', () => {
+  it('rejects a non-image allowlisted file on the Photo path', () => {
+    expect(precheckImage(fakeFile('doc.pdf', 'application/pdf'))).toEqual({
+      ok: false,
+      message: 'Photos must be an image file',
+    });
+  });
+
+  it('accepts the same non-image file on the File path (full allowlist)', () => {
+    expect(precheckFile(fakeFile('doc.pdf', 'application/pdf'))).toEqual({ ok: true });
+  });
+
+  it('accepts an image on the Photo path', () => {
+    expect(precheckImage(fakeFile('photo.png', 'image/png'))).toEqual({ ok: true });
   });
 });
 
@@ -115,19 +178,6 @@ describe('classifyAttachment', () => {
   });
 });
 
-describe('uniqueAssetIds', () => {
-  it('dedupes ids and drops empties so the renderer never presigns the same id twice', () => {
-    expect(
-      uniqueAssetIds([
-        { assetId: 'a1', name: '', mime: '' },
-        { assetId: 'a1', name: '', mime: '' },
-        { assetId: '', name: '', mime: '' },
-        { assetId: 'a2', name: '', mime: '' },
-      ]),
-    ).toEqual(['a1', 'a2']);
-  });
-});
-
 describe('canSendAttachmentMessage', () => {
   it('blocks an empty send (no text, no attachments)', () => {
     expect(
@@ -165,9 +215,9 @@ describe('canSendAttachmentMessage', () => {
 });
 
 describe('toMessageAttachment', () => {
-  it('builds the attachment from the file and the uploaded id', () => {
-    expect(toMessageAttachment(fakeFile('doc.pdf', 'application/pdf'), 'ver-9')).toEqual({
-      assetId: 'ver-9',
+  it('builds the attachment from the file and the uploaded VERSION id', () => {
+    expect(toMessageAttachment(fakeFile('doc.pdf', 'application/pdf'), VERSION_ID)).toEqual({
+      assetId: VERSION_ID,
       name: 'doc.pdf',
       mime: 'application/pdf',
     });

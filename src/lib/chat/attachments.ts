@@ -5,17 +5,26 @@
 //  - the upload command that reuses the existing asset-upload pipeline as-is,
 //  - the small predicates the composer and renderer branch on.
 //
-// The asset id is whatever `uploadAssetFile` returns; this layer treats it as an
-// opaque reference (the presign cache keys on it) and never asserts asset-vs-
-// version semantics, so it stays correct against the asset libs used as-is.
+// The id carried is the asset VERSION id: the render path presigns through
+// asset-read, which looks up asset_versions.id, and the webhook mirror persists
+// the same ids on chat_messages.attachment_asset_ids. Binding to a version (not
+// the asset) matches asset_attachments.asset_version_id and how the Assets grid
+// presigns currentVersionId.
 
 import { ALLOWED_MIME_TYPES, isImageMime } from '@srtdio/storage';
-import { uploadAssetFile, UPLOAD_ACCEPT, type UploadOutcome } from '@/lib/asset-upload';
+import {
+  precheckFile,
+  uploadAssetFile,
+  uploadErrorMessage,
+  UPLOAD_ACCEPT,
+  type Precheck,
+} from '@/lib/asset-upload';
 
 /**
- * One Sorted asset referenced by a chat message: the id to presign plus the
- * metadata the receiver needs to render it without a second lookup (the name for
- * the file chip / image alt, the mime to dispatch image vs file).
+ * One Sorted asset version referenced by a chat message: the asset VERSION id to
+ * presign plus the metadata the receiver needs to render it without a second
+ * lookup (the name for the file chip / image alt, the mime to dispatch image vs
+ * file). `assetId` holds the version id (the value asset-read presigns).
  */
 export interface MessageAttachment {
   assetId: string;
@@ -96,19 +105,6 @@ export function parseAttachments(ext: unknown): MessageAttachment[] {
   return [];
 }
 
-/** Distinct, non-empty asset ids, preserving order: the set the renderer presigns. */
-export function uniqueAssetIds(attachments: readonly MessageAttachment[]): string[] {
-  const seen = new Set<string>();
-  const ids: string[] = [];
-  for (const attachment of attachments) {
-    if (attachment.assetId !== '' && !seen.has(attachment.assetId)) {
-      seen.add(attachment.assetId);
-      ids.push(attachment.assetId);
-    }
-  }
-  return ids;
-}
-
 /** Whether a compose action may send: text or at least one attachment, idle. */
 export function canSendAttachmentMessage(input: {
   text: string;
@@ -120,9 +116,25 @@ export function canSendAttachmentMessage(input: {
   return input.text.trim() !== '' || input.attachmentCount > 0;
 }
 
-/** Build the message attachment for a successfully uploaded file. */
-export function toMessageAttachment(file: File, assetId: string): MessageAttachment {
-  return { assetId, name: file.name, mime: file.type };
+/**
+ * Photo-path pre-check: image-only on top of the shared size/type gate. The File
+ * path uses `precheckFile` (the full allowlist); the Photo dialog restricts to
+ * images via its `accept`, but a determined pick can still surface an allowlisted
+ * non-image, so the Photo path additionally rejects any non-image MIME before a
+ * single byte leaves the device. Type is gated first so a non-image reports the
+ * image error regardless of size.
+ */
+export function precheckImage(file: File): Precheck {
+  if (!isImageMime(file.type)) {
+    return { ok: false, message: 'Photos must be an image file' };
+  }
+  return precheckFile(file);
+}
+
+/** Build the message attachment for a successfully uploaded file; `versionId` is
+ * the asset VERSION id the render path presigns. */
+export function toMessageAttachment(file: File, versionId: string): MessageAttachment {
+  return { assetId: versionId, name: file.name, mime: file.type };
 }
 
 export interface ChatUploadParams {
@@ -135,17 +147,58 @@ export interface ChatUploadParams {
 }
 
 /**
- * Upload one chat attachment through the existing asset-upload pipeline, sending
- * the file under its original name. Reuses `uploadAssetFile` verbatim (multipart
- * {file, workspace_id} + Bearer), so it inherits the never-throw Result contract:
- * a transport or worker failure comes back as { ok: false } with mapped copy.
+ * The chat upload result. It carries the asset VERSION id (presign binds to a
+ * specific version), not the asset id, so the render path resolves a thumbnail
+ * instead of 404ing. Never throws: it inherits asset-upload's Result contract.
  */
-export function uploadChatAttachment(params: ChatUploadParams): Promise<UploadOutcome> {
-  return uploadAssetFile(params.file, {
+export type ChatAttachmentUpload =
+  | { ok: true; reused: boolean; versionId: string }
+  | { ok: false; message: string };
+
+/** Read `asset.versionId` from the asset-upload worker JSON body; '' when absent. */
+function uploadedVersionId(body: unknown): string {
+  if (typeof body !== 'object' || body === null) return '';
+  const asset = (body as { asset?: unknown }).asset;
+  if (typeof asset !== 'object' || asset === null) return '';
+  const versionId = (asset as { versionId?: unknown }).versionId;
+  return typeof versionId === 'string' ? versionId : '';
+}
+
+/**
+ * Upload one chat attachment through the existing asset-upload pipeline, sending
+ * the file under its original name. The POST is `uploadAssetFile` verbatim
+ * (multipart {file, workspace_id} + Bearer); asset-upload surfaces only the asset
+ * id, but the chat render path presigns an asset VERSION id (asset-read looks up
+ * asset_versions.id). We capture `asset.versionId` off the same worker response
+ * via a clone (so uploadAssetFile still reads the body) rather than issuing a
+ * second request or duplicating the upload.
+ */
+export async function uploadChatAttachment(
+  params: ChatUploadParams,
+): Promise<ChatAttachmentUpload> {
+  let versionId = '';
+  const fetcher: ChatUploadParams['fetcher'] = async (input, init) => {
+    const response = await params.fetcher(input, init);
+    if (response.ok) {
+      try {
+        versionId = uploadedVersionId(await response.clone().json());
+      } catch {
+        versionId = '';
+      }
+    }
+    return response;
+  };
+
+  const outcome = await uploadAssetFile(params.file, {
     endpoint: params.endpoint,
     token: params.token,
     workspaceId: params.workspaceId,
     filename: params.file.name,
-    fetcher: params.fetcher,
+    fetcher,
   });
+  if (!outcome.ok) return outcome;
+  if (versionId === '') {
+    return { ok: false, message: uploadErrorMessage('network') };
+  }
+  return { ok: true, reused: outcome.reused, versionId };
 }
