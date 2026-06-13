@@ -18,6 +18,7 @@ import {
   generateTraceId,
   insertRow,
   loadRlsEnv,
+  randomSha256,
   seedScaffold,
   seedUser,
   seedWorkspace,
@@ -128,6 +129,70 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
     const res = await asGeneric(admin).from('posts').select('stage').eq('id', postId);
     const rows = res.data as Array<{ stage: string }> | null;
     return rows?.[0]?.stage;
+  }
+
+  // Activity (inbox) events are now emitted inline by the procs. Each proc-driven
+  // test seeds its own post / comment, so a (workspace_id, event_type, entity_id)
+  // filter isolates that one call's writes from the shared workspace's history.
+  async function inboxRecipients(
+    workspaceId: string,
+    eventType: string,
+    entityId: string,
+  ): Promise<Set<string>> {
+    const res = await asGeneric(admin)
+      .from('inbox_entries')
+      .select('user_id')
+      .eq('workspace_id', workspaceId)
+      .eq('event_type', eventType)
+      .eq('entity_id', entityId);
+    const rows = res.data as Array<{ user_id: string }> | null;
+    return new Set((rows ?? []).map((r) => r.user_id));
+  }
+
+  interface AttachmentRow {
+    asset_id: string;
+    asset_version_id: string;
+    position: number;
+    workspace_id: string;
+    entity_type: string;
+  }
+
+  async function commentAttachments(commentId: string): Promise<AttachmentRow[]> {
+    const res = await asGeneric(admin)
+      .from('asset_attachments')
+      .select('asset_id,asset_version_id,position,workspace_id,entity_type')
+      .eq('entity_type', 'comment')
+      .eq('entity_id', commentId);
+    return (res.data as AttachmentRow[] | null) ?? [];
+  }
+
+  // An asset with a pinned current version, so it satisfies comment_create's
+  // attachment guard (current_version_id IS NOT NULL, same workspace, live).
+  async function seedAssetWithVersion(
+    workspaceId: string,
+    uploadedBy: string,
+  ): Promise<{ assetId: string; versionId: string }> {
+    const asset = await insertRow(asGeneric(admin), 'assets', {
+      workspace_id: workspaceId,
+      filename: 'attach.png',
+      uploaded_by: uploadedBy,
+    });
+    const version = await insertRow(asGeneric(admin), 'asset_versions', {
+      asset_id: asset.id,
+      workspace_id: workspaceId,
+      version_number: 1,
+      kind: 'image',
+      r2_key: `k/${crypto.randomUUID()}`,
+      mime_type: 'image/png',
+      sha256: randomSha256(),
+      size_bytes: 1,
+      uploaded_by: uploadedBy,
+    });
+    await asGeneric(admin)
+      .from('assets')
+      .update({ current_version_id: version.id })
+      .eq('id', String(asset.id));
+    return { assetId: String(asset.id), versionId: String(version.id) };
   }
 
   beforeAll(async () => {
@@ -440,6 +505,157 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
         p_trace_id: generateTraceId(),
       });
       expect(expectError(result).code).toBe('invalid_payload');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // B-activity: comment attachments land in Assets, one-level threading is
+  // enforced, and comment / mention / stage_change Activity events fire inline.
+  // -------------------------------------------------------------------------
+  describe('comment attachments + activity side-effects', () => {
+    it('comment_create pins each attachment to the asset current version (entity_type=comment)', async () => {
+      const a1 = await seedAssetWithVersion(wsA.id, owner.id);
+      const a2 = await seedAssetWithVersion(wsA.id, owner.id);
+      const commentId = expectOk(
+        await commentCreate(ownerClient, {
+          p_workspace_id: wsA.id,
+          p_entity_type: 'post',
+          p_entity_id: ctxA.postId,
+          p_parent_comment_id: null as unknown as string,
+          p_body: 'see the attached refs',
+          p_mentions: null,
+          p_attachment_asset_ids: [a1.assetId, a2.assetId],
+          p_is_decision: false,
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      const rows = await commentAttachments(commentId);
+      expect(rows.length).toBe(2);
+      const byAsset = new Map(rows.map((r) => [r.asset_id, r]));
+      expect(byAsset.get(a1.assetId)?.asset_version_id).toBe(a1.versionId);
+      expect(byAsset.get(a2.assetId)?.asset_version_id).toBe(a2.versionId);
+      for (const r of rows) {
+        expect(r.entity_type).toBe('comment');
+        expect(r.workspace_id).toBe(wsA.id);
+      }
+      expect(new Set(rows.map((r) => r.position))).toEqual(new Set([0, 1]));
+    });
+
+    it('comment_create rejects an attachment with no current version (invalid_payload)', async () => {
+      const asset = await insertRow(asGeneric(admin), 'assets', {
+        workspace_id: wsA.id,
+        filename: 'no-version.png',
+        uploaded_by: owner.id,
+      });
+      const result = await commentCreate(ownerClient, {
+        p_workspace_id: wsA.id,
+        p_entity_type: 'post',
+        p_entity_id: ctxA.postId,
+        p_parent_comment_id: null as unknown as string,
+        p_body: 'attaching an asset with no version',
+        p_mentions: null,
+        p_attachment_asset_ids: [String(asset.id)],
+        p_is_decision: false,
+        p_trace_id: generateTraceId(),
+      });
+      expect(expectError(result).code).toBe('invalid_payload');
+    });
+
+    it('comment_create rejects an attachment from another workspace (invalid_payload)', async () => {
+      const foreign = await seedAssetWithVersion(wsB.id, ownerB.id);
+      const result = await commentCreate(ownerClient, {
+        p_workspace_id: wsA.id,
+        p_entity_type: 'post',
+        p_entity_id: ctxA.postId,
+        p_parent_comment_id: null as unknown as string,
+        p_body: 'cross-tenant attachment',
+        p_mentions: null,
+        p_attachment_asset_ids: [foreign.assetId],
+        p_is_decision: false,
+        p_trace_id: generateTraceId(),
+      });
+      expect(expectError(result).code).toBe('invalid_payload');
+    });
+
+    it('comment_create rejects a reply to an already-threaded comment (one level only)', async () => {
+      const child = expectOk(
+        await commentCreate(ownerClient, {
+          p_workspace_id: wsA.id,
+          p_entity_type: 'post',
+          p_entity_id: ctxA.postId,
+          p_parent_comment_id: ctxA.commentId,
+          p_body: 'first-level reply',
+          p_mentions: null,
+          p_attachment_asset_ids: [],
+          p_is_decision: false,
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      const result = await commentCreate(ownerClient, {
+        p_workspace_id: wsA.id,
+        p_entity_type: 'post',
+        p_entity_id: ctxA.postId,
+        p_parent_comment_id: child,
+        p_body: 'reply to a reply',
+        p_mentions: null,
+        p_attachment_asset_ids: [],
+        p_is_decision: false,
+        p_trace_id: generateTraceId(),
+      });
+      expect(expectError(result).code).toBe('invalid_payload');
+    });
+
+    it('a comment on a draft post notifies active members but isolates the client role', async () => {
+      const postId = await insertPost(ctxA, 'draft');
+      expectOk(
+        await commentCreate(ownerClient, {
+          p_workspace_id: wsA.id,
+          p_entity_type: 'post',
+          p_entity_id: postId,
+          p_parent_comment_id: null as unknown as string,
+          p_body: 'note on a draft',
+          p_mentions: null,
+          p_attachment_asset_ids: [],
+          p_is_decision: false,
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      const recipients = await inboxRecipients(wsA.id, 'comment', postId);
+      expect(recipients.has(agencyUser.id)).toBe(true); // active agency member is notified
+      expect(recipients.has(owner.id)).toBe(false); // the actor never notifies itself
+      expect(recipients.has(clientUser.id)).toBe(false); // draft isolation: client is excluded
+    });
+
+    it('a mention notifies the mentioned active member', async () => {
+      const postId = await insertPost(ctxA, 'review');
+      expectOk(
+        await commentCreate(ownerClient, {
+          p_workspace_id: wsA.id,
+          p_entity_type: 'post',
+          p_entity_id: postId,
+          p_parent_comment_id: null as unknown as string,
+          p_body: 'pinging the team',
+          p_mentions: [agencyUser.id],
+          p_attachment_asset_ids: [],
+          p_is_decision: false,
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(await inboxRecipients(wsA.id, 'mention', postId)).toEqual(new Set([agencyUser.id]));
+    });
+
+    it('stage_transition notifies every active member except the actor', async () => {
+      const postId = await insertPost(ctxA, 'draft');
+      expectOk(
+        await stageTransition(ownerClient, {
+          p_post_id: postId,
+          p_to_stage: 'review',
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(await inboxRecipients(wsA.id, 'stage_change', postId)).toEqual(
+        new Set([agencyUser.id, clientUser.id]),
+      );
     });
   });
 });
