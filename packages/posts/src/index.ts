@@ -1,6 +1,7 @@
 // @srtdio/posts: the post domain package. Writes go through the SECURITY
 // DEFINER procs (via @srtdio/rpc): post_create (which also makes version 1),
-// post_version_create (edits, v2+), annotation_create, and stage_transition.
+// post_version_create (edits, v2+), post_update (metadata), post_caption_update
+// and gallery_set (both auto-version), annotation_create, and stage_transition.
 // Reads are plain RLS-scoped SELECTs. The stage machine mirrors the locked DB
 // transition map for client-side gating; enforcement is always server-side.
 //
@@ -29,6 +30,12 @@ export {
 } from './create';
 
 export { postVersionCreate, type PostVersionCreateInput } from './version';
+
+export { postUpdate, PostUpdateSchema, type PostUpdateInput } from './update';
+
+export { postCaptionUpdate, PostCaptionUpdateSchema, type PostCaptionUpdateInput } from './caption';
+
+export { gallerySet, GallerySetSchema, type GallerySetInput } from './gallery';
 
 export { annotationCreate, AnnotationCreateSchema, type AnnotationCreateInput } from './annotate';
 
