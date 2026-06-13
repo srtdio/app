@@ -487,6 +487,7 @@ export class InMemoryAssetRepository implements AssetRepository {
       filename: asset.filename,
       display_name: null,
       current_version_id: null,
+      folder_id: null,
       folder_path: asset.folderPath ?? '/',
       tags: asset.tags ?? [],
       uploaded_by: asset.uploadedBy,
