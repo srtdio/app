@@ -2364,6 +2364,24 @@ export type Database = {
         Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
         Returns: string
       }
+      chat_webhook_ingest: {
+        Args: {
+          p_agora_event_id: string
+          p_attachment_asset_ids: string[]
+          p_body: string
+          p_channel_id: string
+          p_created_at: string
+          p_event_type: string
+          p_mentions: Json
+          p_message_id: string
+          p_raw_payload: Json
+          p_sender_user_id: string
+          p_signature_verified: boolean
+          p_source_event_id: string
+          p_trace_id: string
+        }
+        Returns: Json
+      }
       comment_create: {
         Args: {
           p_attachment_asset_ids: string[]
