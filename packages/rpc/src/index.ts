@@ -147,3 +147,59 @@ export function workspaceCreate(
 ): Promise<Result<ProcReturns<'workspace_create'>>> {
   return callProc(client, 'workspace_create', args);
 }
+
+// ---------------------------------------------------------------------------
+// chat channel / DM write procs
+//
+// Each proc resolves the acting user server-side via auth.uid(); none take a
+// caller-supplied user id for the actor. trace_id is carried as p_trace_id and
+// is minted by the caller (the hook layer), never here.
+// ---------------------------------------------------------------------------
+
+export type GroupCreateArgs = ProcArgs<'group_create'>;
+export function groupCreate(
+  client: Client,
+  args: GroupCreateArgs,
+): Promise<Result<ProcReturns<'group_create'>>> {
+  return callProc(client, 'group_create', args);
+}
+
+export type GroupRenameArgs = ProcArgs<'group_rename'>;
+export function groupRename(
+  client: Client,
+  args: GroupRenameArgs,
+): Promise<Result<ProcReturns<'group_rename'>>> {
+  return callProc(client, 'group_rename', args);
+}
+
+export type GroupMemberAddArgs = ProcArgs<'group_member_add'>;
+export function groupMemberAdd(
+  client: Client,
+  args: GroupMemberAddArgs,
+): Promise<Result<ProcReturns<'group_member_add'>>> {
+  return callProc(client, 'group_member_add', args);
+}
+
+export type GroupMemberRemoveArgs = ProcArgs<'group_member_remove'>;
+export function groupMemberRemove(
+  client: Client,
+  args: GroupMemberRemoveArgs,
+): Promise<Result<ProcReturns<'group_member_remove'>>> {
+  return callProc(client, 'group_member_remove', args);
+}
+
+export type GroupLeaveArgs = ProcArgs<'group_leave'>;
+export function groupLeave(
+  client: Client,
+  args: GroupLeaveArgs,
+): Promise<Result<ProcReturns<'group_leave'>>> {
+  return callProc(client, 'group_leave', args);
+}
+
+export type DmChannelEnsureArgs = ProcArgs<'dm_channel_ensure'>;
+export function dmChannelEnsure(
+  client: Client,
+  args: DmChannelEnsureArgs,
+): Promise<Result<ProcReturns<'dm_channel_ensure'>>> {
+  return callProc(client, 'dm_channel_ensure', args);
+}
