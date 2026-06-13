@@ -580,6 +580,17 @@ export const tenantTables: readonly TenantTableProbe[] = [
     },
   },
   {
+    table: 'folders',
+    seed: async (a, c) => {
+      const row = await insertRow(a, 'folders', {
+        workspace_id: c.workspaceId,
+        name: `Folder ${randomSuffix()}`,
+        created_by: c.userId,
+      });
+      return { match: [['id', String(row.id)]], patch: { name: `zz ${randomSuffix()}` } };
+    },
+  },
+  {
     table: 'groups',
     seed: (_a, c) => ({ match: [['id', c.groupId]], patch: { name: `Zz ${randomSuffix()}` } }),
   },

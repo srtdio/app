@@ -13,7 +13,7 @@ All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` un
 2. Content: workspace_buckets, posts, post_versions, post_annotations
 3. Discussion: comments, comment_reactions
 4. Briefs: briefs
-5. Assets: assets, asset_versions, asset_attachments
+5. Assets: assets, asset_versions, asset_attachments, folders
 6. People grouping: groups, group_members
 7. Chat (Agora mirror): chat_channels, chat_messages
 8. Inbox and delivery: inbox_entries, email_threads, delivery_attempts, webhook_events, webhook_processing_attempts
@@ -200,7 +200,9 @@ Versioned. Attachments bind to a specific asset_version_id.
 
 ### assets
 
-PK id. Fields: workspace_id FK, filename 1 to 500, display_name text nullable (human label, backfilled from post title), current_version_id nullable FK asset_versions.id, folder_path default '/', tags text[] default {}, uploaded_by FK users.id, uploaded_at, deleted_at nullable. Indexes: FTS filename, gin tags, (workspace_id, folder_path), (workspace_id, uploaded_at desc). All where deleted_at null.
+PK id. Fields: workspace_id FK, filename 1 to 500, display_name text nullable (human label, backfilled from post title), current_version_id nullable FK asset_versions.id, folder_id nullable FK folders.id (SET NULL on folder delete), folder_path default '/', tags text[] default {}, uploaded_by FK users.id, uploaded_at, deleted_at nullable. Indexes: FTS filename, gin tags, (workspace_id, folder_path), (workspace_id, folder_id), (workspace_id, uploaded_at desc). All where deleted_at null.
+
+folder_id and folder_path coexist for now: folder_id is the new structured folder reference, folder_path is the legacy string path. folder_path remains present pending a later reconciliation decision; no migration drops or backfills either column yet.
 
 ### asset_versions
 
@@ -222,6 +224,24 @@ NO ACTION on delete: live attachments block asset hard-delete.
 | attached_by | uuid | FK users.id |
 | attached_at | timestamptz | default now() |
 | deleted_at | timestamptz | nullable |
+
+### folders
+
+Per-workspace, self-referential asset folder tree. Created out-of-band on live and committed retroactively. Soft-deleted via deleted_at.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| workspace_id | uuid | FK workspaces.id (NO ACTION) |
+| name | text | 1 to 80 |
+| parent_id | uuid | nullable, FK folders.id (NO ACTION), self-reference |
+| created_by | uuid | nullable, FK users.id, SET NULL |
+| created_at / updated_at | timestamptz | default now() (no updated_at trigger) |
+| deleted_at | timestamptz | nullable |
+
+Indexes: unique (workspace_id, parent_id, lower(name)) NULLS NOT DISTINCT where deleted_at null; (workspace_id, parent_id) where deleted_at null. Trigger folders_cycle_guard (BEFORE INSERT OR UPDATE OF parent_id) calls folders_prevent_cycle() to reject self-parenting and parent-chain cycles.
+
+RLS enabled (not forced). One policy only: folders_select_member (SELECT, role PUBLIC) where deleted_at null AND caller is an active workspace_members row. No INSERT/UPDATE/DELETE policies. Grants: SELECT/INSERT/UPDATE/DELETE are revoked from anon, authenticated, and service_role (only REFERENCES/TRIGGER/TRUNCATE defaults remain); srtdio_readonly has SELECT. Net effect: the SELECT policy is currently unreachable for authenticated at the table-grant level, and service_role has no CRUD grant. Recorded as-is, not reconciled in this migration.
 
 ## 6. People grouping
 
@@ -346,4 +366,4 @@ These are dead references from the pre-MVP schema. Harmless (they only widen a C
 - intent_ledger.target_type still lists share_token. share_tokens table is dropped.
 - webhook_events.source lists stripe / resend / linkedin but not agora. To store the Agora chat webhook entry you wanted, this enum likely needs an agora value added.
 
-Counts: 30 base tables + 3 partitioned parents + 9 partition children = 42 relations in public. All RLS enabled.
+Counts: 33 base tables + 3 partitioned parents + 9 partition children = 45 relations in public (idempotency_keys, asset_renditions, and folders added since this line was first written). All RLS enabled.

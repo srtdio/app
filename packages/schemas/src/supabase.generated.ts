@@ -226,6 +226,7 @@ export type Database = {
           deleted_at: string | null
           display_name: string | null
           filename: string
+          folder_id: string | null
           folder_path: string
           id: string
           tags: string[]
@@ -238,6 +239,7 @@ export type Database = {
           deleted_at?: string | null
           display_name?: string | null
           filename: string
+          folder_id?: string | null
           folder_path?: string
           id?: string
           tags?: string[]
@@ -250,6 +252,7 @@ export type Database = {
           deleted_at?: string | null
           display_name?: string | null
           filename?: string
+          folder_id?: string | null
           folder_path?: string
           id?: string
           tags?: string[]
@@ -263,6 +266,13 @@ export type Database = {
             columns: ["current_version_id"]
             isOneToOne: false
             referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
             referencedColumns: ["id"]
           },
           {
@@ -1124,6 +1134,61 @@ export type Database = {
           },
           {
             foreignKeyName: "feature_flags_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      folders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folders_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
