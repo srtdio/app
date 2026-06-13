@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@/*": ["src/*"],
+      "@srtdio/schemas": ["packages/schemas/src/index.ts"],
+      "@srtdio/schemas/*": ["packages/schemas/src/*"]
+    }
+  },
+  "include": [
+    "../../src/server/workers",
+    "../../src/server/logger.ts",
+    "../../src/server/trace.ts",
+    "../../src/server/traced-fetch.ts"
+  ]
+}

@@ -579,6 +579,7 @@ export type Database = {
       }
       chat_channels: {
         Row: {
+          agora_group_id: string | null
           channel_id: string
           channel_type: string
           created_at: string
@@ -589,6 +590,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          agora_group_id?: string | null
           channel_id: string
           channel_type: string
           created_at?: string
@@ -599,6 +601,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          agora_group_id?: string | null
           channel_id?: string
           channel_type?: string
           created_at?: string
@@ -2363,6 +2366,14 @@ export type Database = {
       brief_create: {
         Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
         Returns: string
+      }
+      chat_channel_mark_synced: {
+        Args: {
+          p_agora_group_id: string
+          p_channel_id: string
+          p_trace_id: string
+        }
+        Returns: undefined
       }
       chat_webhook_ingest: {
         Args: {

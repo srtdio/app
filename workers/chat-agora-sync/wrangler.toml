@@ -1,0 +1,19 @@
+name = "chat-agora-sync"
+main = "../../src/server/workers/chat-agora-sync.ts"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+# Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
+# srtdio-logs (see docs/cloudflare-logpush-setup.md).
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# All values are supplied as Worker secrets (wrangler secret put / CI), never
+# committed. Only binding names live here:
+#   SUPABASE_URL              - project URL for the reads + chat_channel_mark_synced rpc
+#   SUPABASE_SERVICE_ROLE_KEY - service role: bare client, no minted member JWT
+#   AGORA_APP_ID              - Agora App ID; pairs with the certificate to sign tokens
+#   AGORA_APP_CERTIFICATE     - Agora App Certificate; REST app-token signing secret
+#   AGORA_CHAT_APP_KEY        - Agora Chat App Key
+#   AGORA_CHAT_REST_URL       - Agora Chat REST base URL (host + org + app)

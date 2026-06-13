@@ -1,0 +1,29 @@
+name: Chat Agora Sync
+
+# Runs the chat-agora-sync Worker (A2b) unit suite. Agora REST and the supabase
+# client (reads + chat_channel_mark_synced rpc) are mocked - calls are asserted,
+# not live network or DB state - so no local Supabase stack is needed, mirroring
+# the chat-webhook-mirror suite.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  chat-agora-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run chat-agora-sync worker suite
+        run: pnpm exec vitest run src/server/workers/chat-agora-sync.test.ts
