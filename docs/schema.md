@@ -366,4 +366,4 @@ These are dead references from the pre-MVP schema. Harmless (they only widen a C
 - intent_ledger.target_type still lists share_token. share_tokens table is dropped.
 - webhook_events.source lists stripe / resend / linkedin but not agora. To store the Agora chat webhook entry you wanted, this enum likely needs an agora value added.
 
-Counts: 30 base tables + 3 partitioned parents + 9 partition children = 42 relations in public. All RLS enabled.
+Counts: 33 base tables + 3 partitioned parents + 9 partition children = 45 relations in public (idempotency_keys, asset_renditions, and folders added since this line was first written). All RLS enabled.
