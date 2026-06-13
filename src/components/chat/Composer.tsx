@@ -6,6 +6,9 @@ import { Textarea } from '@/components/ui/Textarea';
 import { IconFile, IconX } from '@/components/ui/icons';
 import { IconPaperclip } from '@/components/chat/AttachmentIcons';
 import { AttachmentMenu } from '@/components/chat/AttachmentMenu';
+import { PostPicker } from '@/components/chat/PostPicker';
+import { SharedPostChip } from '@/components/chat/SharedPostChip';
+import { togglePost } from '@/components/chat/post-picker';
 import { attachmentMenuItems } from '@/lib/chat/attachment-menu';
 import { fileExtension } from '@/lib/assets';
 import { precheckFile } from '@/lib/asset-upload';
@@ -16,10 +19,15 @@ import {
   type ChatAttachmentUpload,
   type MessageAttachment,
 } from '@/lib/chat/attachments';
+import type { PostCardFields } from '@srtdio/posts';
 
 interface ComposerProps {
-  /** Sends the trimmed text plus any completed attachments; resolves on settle. */
-  onSend: (text: string, attachments: MessageAttachment[]) => Promise<void>;
+  /** Sends the trimmed text plus any completed attachments and shared posts. */
+  onSend: (
+    text: string,
+    attachments: MessageAttachment[],
+    sharedPostIds: string[],
+  ) => Promise<void>;
   disabled: boolean;
   /** Upload one picked file via the asset pipeline; absent disables attaching. */
   uploadFile?: ((file: File) => Promise<ChatAttachmentUpload>) | undefined;
@@ -60,7 +68,9 @@ function completedAttachments(pending: readonly Pending[]): MessageAttachment[] 
 export function Composer(props: ComposerProps): ReactElement {
   const [text, setText] = useState('');
   const [pending, setPending] = useState<Pending[]>([]);
+  const [sharedPosts, setSharedPosts] = useState<PostCardFields[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -74,6 +84,7 @@ export function Composer(props: ComposerProps): ReactElement {
     canSendAttachmentMessage({
       text,
       attachmentCount: ready.length,
+      sharedPostCount: sharedPosts.length,
       uploading,
       sending: submitting,
     });
@@ -83,6 +94,7 @@ export function Composer(props: ComposerProps): ReactElement {
       attachmentMenuItems({
         onPickPhoto: () => photoInputRef.current?.click(),
         onPickFile: () => fileInputRef.current?.click(),
+        onSharePost: () => setPickerOpen(true),
       }),
     [],
   );
@@ -127,21 +139,27 @@ export function Composer(props: ComposerProps): ReactElement {
     });
   }
 
+  function toggleSharedPost(post: PostCardFields): void {
+    setSharedPosts((prev) => togglePost(prev, post));
+  }
+
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!canSend) return;
     const pendingText = text;
     const attachments = ready;
+    const postIds = sharedPosts.map((post) => post.id);
     setSubmitting(true);
     try {
-      await props.onSend(pendingText, attachments);
+      await props.onSend(pendingText, attachments, postIds);
       for (const item of pending) {
         if (item.previewUrl != null) URL.revokeObjectURL(item.previewUrl);
       }
       setText('');
       setPending([]);
+      setSharedPosts([]);
     } catch {
-      // Keep the draft (text + chips) so a failed send is not silently lost.
+      // Keep the draft (text + chips + shared posts) so a failed send is not lost.
     } finally {
       setSubmitting(false);
     }
@@ -152,10 +170,13 @@ export function Composer(props: ComposerProps): ReactElement {
       onSubmit={submit}
       className="flex flex-col gap-2 border-t border-border bg-panel px-4 py-3"
     >
-      {pending.length > 0 ? (
+      {pending.length > 0 || sharedPosts.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {pending.map((item) => (
             <PendingChip key={item.id} item={item} onRemove={() => removePending(item.id)} />
+          ))}
+          {sharedPosts.map((post) => (
+            <SharedPostChip key={post.id} post={post} onRemove={() => toggleSharedPost(post)} />
           ))}
         </ul>
       ) : null}
@@ -208,6 +229,13 @@ export function Composer(props: ComposerProps): ReactElement {
           void addFiles(event.target.files, false);
           event.target.value = '';
         }}
+      />
+
+      <PostPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        selected={sharedPosts}
+        onToggle={toggleSharedPost}
       />
     </form>
   );

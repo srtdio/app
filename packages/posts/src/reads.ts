@@ -37,6 +37,87 @@ export interface PostDetail {
   annotations: PostAnnotation[];
 }
 
+/**
+ * The post fields the chat post-share surfaces use: the picker rows and the
+ * shared post card (title + platform + format + stage). A strict subset of the
+ * generated Row, so no column is fabricated. No cover image is surfaced here:
+ * a post's first image lives in `asset_attachments`, and building that join is
+ * out of scope, so the card renders a neutral placeholder instead.
+ */
+export type PostCardFields = Pick<Post, 'id' | 'title' | 'platform' | 'format' | 'stage'>;
+
+const POST_CARD_COLUMNS = 'id, title, platform, format, stage';
+
+export interface ListPostsForPickerInput {
+  /** Workspace to scope to; RLS confines reads to the caller's workspaces. */
+  workspaceId: string;
+  /** Optional stage filter (the picker's Review / Approved chips). */
+  stage?: Stage;
+  /** Optional case-insensitive title substring match (the picker's search). */
+  titleQuery?: string;
+  /** Page size. Defaults to {@link POSTS_PAGE_SIZE}, capped at {@link POSTS_PAGE_SIZE_MAX}. */
+  limit?: number;
+}
+
+/** Escape the LIKE metacharacters in a user-typed search term. */
+function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
+/**
+ * List posts for the chat post picker: an RLS-scoped select of the card fields,
+ * newest first, soft-deleted rows excluded. Stage and a simple case-insensitive
+ * title match are applied as filters in the single query (no full-text index).
+ * RLS already excludes stages a viewer cannot see (e.g. Draft for clients), so
+ * the "All Posts" filter passes no stage and never special-cases roles.
+ */
+export async function listPostsForPicker(
+  client: Client,
+  input: ListPostsForPickerInput,
+): Promise<Result<PostCardFields[]>> {
+  const limit = Math.min(input.limit ?? POSTS_PAGE_SIZE, POSTS_PAGE_SIZE_MAX);
+
+  let query = client
+    .from('posts')
+    .select(POST_CARD_COLUMNS)
+    .eq('workspace_id', input.workspaceId)
+    .is('deleted_at', null);
+
+  if (input.stage !== undefined) query = query.eq('stage', input.stage);
+  const title = input.titleQuery?.trim();
+  if (title !== undefined && title !== '') {
+    query = query.ilike('title', `%${escapeLike(title)}%`);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
+
+  if (error) return { ok: false, error: transportError(error.message) };
+  return { ok: true, data: (data ?? []) as PostCardFields[] };
+}
+
+/**
+ * Batched resolve of shared posts for the chat post card: one RLS-scoped IN read
+ * over every id in a message, never one read per id. A post the viewer cannot
+ * see (RLS) or that has been deleted simply does not come back; the caller renders
+ * those ids as an "unavailable" card. Returns [] for no ids without a round-trip.
+ */
+export async function readPostsByIds(
+  client: Client,
+  params: { workspaceId: string; ids: string[] },
+): Promise<Result<PostCardFields[]>> {
+  if (params.ids.length === 0) return { ok: true, data: [] };
+
+  const { data, error } = await client
+    .from('posts')
+    .select(POST_CARD_COLUMNS)
+    .eq('workspace_id', params.workspaceId)
+    .in('id', params.ids)
+    .is('deleted_at', null);
+
+  if (error) return { ok: false, error: transportError(error.message) };
+  return { ok: true, data: (data ?? []) as PostCardFields[] };
+}
+
 function transportError(message: string): DomainError {
   return { code: 'unknown', message };
 }

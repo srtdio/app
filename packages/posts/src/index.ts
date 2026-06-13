@@ -35,11 +35,15 @@ export { annotationCreate, AnnotationCreateSchema, type AnnotationCreateInput } 
 export {
   getPost,
   listPosts,
+  listPostsForPicker,
+  readPostsByIds,
   POSTS_PAGE_SIZE,
   POSTS_PAGE_SIZE_MAX,
+  type ListPostsForPickerInput,
   type ListPostsInput,
   type Post,
   type PostAnnotation,
+  type PostCardFields,
   type PostDetail,
   type PostVersion,
 } from './reads';

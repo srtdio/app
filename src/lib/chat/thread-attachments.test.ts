@@ -51,6 +51,7 @@ describe('sendText with attachments', () => {
       target: GROUP_TARGET,
       text: 'look',
       attachments: ATTACHMENTS,
+      sharedPostIds: [],
       createMessage,
     });
 
@@ -62,9 +63,51 @@ describe('sendText with attachments', () => {
       ext: {
         attachment_asset_ids: ['a1'],
         attachment_meta: [{ assetId: 'a1', name: 'p.png', mime: 'image/png' }],
+        shared_post_ids: [],
       },
     });
     expect(send).toHaveBeenCalledWith(created);
+  });
+});
+
+describe('sendText with shared posts', () => {
+  it('carries shared_post_ids on the ext, alongside attachment_asset_ids', async () => {
+    const created = { id: 'created' } as unknown as AgoraChat.MessageBody;
+    const createMessage = vi.fn().mockReturnValue(created);
+    const send = vi.fn().mockResolvedValue({ serverMsgId: 's1', localMsgId: 'l1' });
+    const connection = fakeConnection({ send });
+
+    await sendText({
+      connection,
+      target: GROUP_TARGET,
+      text: '',
+      attachments: ATTACHMENTS,
+      sharedPostIds: ['p1', 'p2'],
+      createMessage,
+    });
+
+    const ext = createMessage.mock.calls[0]?.[0]?.ext;
+    expect(ext.shared_post_ids).toEqual(['p1', 'p2']);
+    expect(ext.attachment_asset_ids).toEqual(['a1']);
+  });
+
+  it('shares posts with no text and no attachments (shared-posts-only send)', async () => {
+    const createMessage = vi.fn().mockReturnValue({} as AgoraChat.MessageBody);
+    const send = vi.fn().mockResolvedValue({ serverMsgId: 's1', localMsgId: 'l1' });
+
+    await sendText({
+      connection: fakeConnection({ send }),
+      target: GROUP_TARGET,
+      text: '',
+      attachments: [],
+      sharedPostIds: ['p1'],
+      createMessage,
+    });
+
+    const ext = createMessage.mock.calls[0]?.[0]?.ext;
+    expect(ext.shared_post_ids).toEqual(['p1']);
+    expect(ext.attachment_asset_ids).toEqual([]);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -91,6 +134,14 @@ describe('mapTextMessage attachments', () => {
   it('yields no attachments for a plain text message', () => {
     expect(mapTextMessage(txt(undefined), ME).attachments).toEqual([]);
   });
+
+  it('reads shared_post_ids off the ext (empty when absent)', () => {
+    expect(mapTextMessage(txt({ shared_post_ids: ['p1', 'p2'] }), ME).sharedPostIds).toEqual([
+      'p1',
+      'p2',
+    ]);
+    expect(mapTextMessage(txt(undefined), ME).sharedPostIds).toEqual([]);
+  });
 });
 
 describe('echoMessage attachments', () => {
@@ -101,6 +152,7 @@ describe('echoMessage attachments', () => {
       currentUserId: ME,
       time: 5000,
       attachments: ATTACHMENTS,
+      sharedPostIds: [],
     });
     expect(echo.attachments).toEqual(ATTACHMENTS);
   });

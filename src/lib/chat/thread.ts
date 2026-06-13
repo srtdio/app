@@ -15,10 +15,11 @@ import type { ChatConnection } from '@/lib/chat/types';
 import { toAgoraUsername, userIdFromAgoraUsername } from '@/lib/chat/agora-identity';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import {
-  buildAttachmentExt,
+  buildMessageExt,
   parseAttachments,
-  type AttachmentExt,
+  parseSharedPostIds,
   type MessageAttachment,
+  type MessageExt,
 } from '@/lib/chat/attachments';
 
 /** Our own SDK event-handler id, separate from the Foundation's 'sorted-chat'. */
@@ -46,6 +47,8 @@ export interface ThreadMessage {
   mine: boolean;
   /** Asset attachments read off the SDK message `ext`; empty when there are none. */
   attachments: MessageAttachment[];
+  /** Shared post uuids read off the SDK message `ext`; empty when there are none. */
+  sharedPostIds: string[];
 }
 
 /**
@@ -71,9 +74,10 @@ export type CreateTextMessage = (options: {
   msg: string;
   /**
    * Custom extension carried on the message. Present only when the send has
-   * attachments; plain text sends omit it, so text behaviour is unchanged.
+   * attachments and/or shared posts; plain text sends omit it, so text behaviour
+   * is unchanged.
    */
-  ext?: AttachmentExt;
+  ext?: MessageExt;
 }) => AgoraChat.MessageBody;
 
 /**
@@ -109,8 +113,9 @@ export function mapTextMessage(raw: AgoraChat.TextMsgBody, currentUserId: string
     time: raw.time,
     mine: senderUserId !== null && senderUserId === currentUserId,
     // `ext` is the SDK's custom-extension field carried on the message; the
-    // sender wrote the attachment ids + render metadata there.
+    // sender wrote the attachment ids + render metadata and shared post ids there.
     attachments: parseAttachments(raw.ext),
+    sharedPostIds: parseSharedPostIds(raw.ext),
   };
 }
 
@@ -169,23 +174,32 @@ export function subscribeIncoming(params: {
 
 /**
  * Send a message to the channel via the SDK's send method. Text-only sends pass
- * no `ext` (behaviour unchanged); a send carrying attachments adds the
- * attachment ids + render metadata to `ext`, which the receiver reads back and
- * the webhook mirror persists from `attachment_asset_ids`.
+ * no `ext` (behaviour unchanged); a send carrying attachments and/or shared posts
+ * adds the attachment ids + render metadata and the shared post ids to `ext`,
+ * which the receiver reads back and the webhook mirror persists via raw_payload.
  */
 export function sendText(params: {
   connection: ThreadConnection;
   target: ChannelTarget;
   text: string;
   attachments: readonly MessageAttachment[];
+  sharedPostIds: readonly string[];
   createMessage: CreateTextMessage;
 }): Promise<AgoraChat.SendMsgResult> {
+  const hasExt = params.attachments.length > 0 || params.sharedPostIds.length > 0;
   const message = params.createMessage({
     chatType: params.target.chatType,
     type: 'txt',
     to: params.target.targetId,
     msg: params.text,
-    ...(params.attachments.length > 0 ? { ext: buildAttachmentExt(params.attachments) } : {}),
+    ...(hasExt
+      ? {
+          ext: buildMessageExt({
+            attachments: params.attachments,
+            sharedPostIds: params.sharedPostIds,
+          }),
+        }
+      : {}),
   });
   return params.connection.send(message);
 }
@@ -201,6 +215,7 @@ export function echoMessage(params: {
   currentUserId: string;
   time: number;
   attachments: MessageAttachment[];
+  sharedPostIds: string[];
 }): ThreadMessage {
   return {
     id: params.result.serverMsgId,
@@ -209,6 +224,7 @@ export function echoMessage(params: {
     time: params.time,
     mine: true,
     attachments: params.attachments,
+    sharedPostIds: params.sharedPostIds,
   };
 }
 

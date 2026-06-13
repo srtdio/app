@@ -98,6 +98,7 @@ describe('mapTextMessage / belongsToTarget', () => {
       time: 1000,
       mine: false,
       attachments: [],
+      sharedPostIds: [],
     });
     expect(mapTextMessage(txt({ from: toAgoraUsername(ME) }), ME).mine).toBe(true);
   });
@@ -191,6 +192,7 @@ describe('sendText', () => {
       target: GROUP_TARGET,
       text: 'hello team',
       attachments: [],
+      sharedPostIds: [],
       createMessage,
     });
 
@@ -213,6 +215,7 @@ describe('echoMessage / appendMessage', () => {
       currentUserId: ME,
       time: 5000,
       attachments: [],
+      sharedPostIds: [],
     });
     expect(echo).toEqual({
       id: 's1',
@@ -221,6 +224,7 @@ describe('echoMessage / appendMessage', () => {
       time: 5000,
       mine: true,
       attachments: [],
+      sharedPostIds: [],
     });
   });
 

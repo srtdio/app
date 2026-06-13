@@ -10,6 +10,7 @@ import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
 import type { PresignCache } from '@/lib/asset-presign';
 import { Composer } from '@/components/chat/Composer';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
+import { SharedPostCards } from '@/components/chat/PostCard';
 
 interface MessageThreadProps {
   title: string;
@@ -20,7 +21,11 @@ interface MessageThreadProps {
   sending: boolean;
   /** False when the channel has no Agora target yet (e.g. group not synced). */
   canSend: boolean;
-  onSend: (text: string, attachments: MessageAttachment[]) => Promise<void>;
+  onSend: (
+    text: string,
+    attachments: MessageAttachment[],
+    sharedPostIds: string[],
+  ) => Promise<void>;
   /** Present on small screens only; renders a back affordance to the list. */
   onBack?: () => void;
   /** Present for group channels only; opens the group management panel. */
@@ -69,6 +74,9 @@ function MessageBubble(props: {
           cache={cache}
           presignEnabled={presignEnabled}
         />
+        {/* PR6 'post' extension point: shared posts resolve + render here,
+            separate from the attachment branch above. */}
+        <SharedPostCards postIds={message.sharedPostIds} />
       </div>
     </li>
   );

@@ -4,7 +4,7 @@
 // lets the unit job assert the menu is config-driven without a DOM.
 
 import type { ComponentType } from 'react';
-import { IconAssets, IconFile } from '@/components/ui/icons';
+import { IconAssets, IconFile, IconPipeline } from '@/components/ui/icons';
 import { FILE_ACCEPT, IMAGE_ACCEPT } from '@/lib/chat/attachments';
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>;
@@ -24,13 +24,14 @@ export interface AttachmentMenuItem {
 export interface AttachmentMenuHandlers {
   onPickPhoto: () => void;
   onPickFile: () => void;
+  onSharePost: () => void;
 }
 
 /**
- * Build the menu in display order. THIS PR ships Photo + File. PR6 extension
- * point: append a third entry here, e.g.
- *   { id: 'post', label: 'Share a post', Icon: IconPipeline, onSelect: handlers.onSharePost }
- * and add its render branch in MessageThread; the menu render does not change.
+ * Build the menu in display order: Photo + File (PR5) plus Share a post (PR6,
+ * appended here, not by editing AttachmentMenu's render). "Share a post" is a
+ * non-picker item, so it carries no `accept`; it opens the post picker instead.
+ * Further items append below; the menu render never changes.
  */
 export function attachmentMenuItems(handlers: AttachmentMenuHandlers): AttachmentMenuItem[] {
   return [
@@ -47,6 +48,12 @@ export function attachmentMenuItems(handlers: AttachmentMenuHandlers): Attachmen
       Icon: IconFile,
       accept: FILE_ACCEPT,
       onSelect: handlers.onPickFile,
+    },
+    {
+      id: 'post',
+      label: 'Share a post',
+      Icon: IconPipeline,
+      onSelect: handlers.onSharePost,
     },
   ];
 }
