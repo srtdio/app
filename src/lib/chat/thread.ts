@@ -14,6 +14,12 @@ import type { AgoraChat } from 'agora-chat';
 import type { ChatConnection } from '@/lib/chat/types';
 import { toAgoraUsername, userIdFromAgoraUsername } from '@/lib/chat/agora-identity';
 import type { ChannelSummary } from '@/lib/chat-reads';
+import {
+  buildAttachmentExt,
+  parseAttachments,
+  type AttachmentExt,
+  type MessageAttachment,
+} from '@/lib/chat/attachments';
 
 /** Our own SDK event-handler id, separate from the Foundation's 'sorted-chat'. */
 export const THREAD_EVENT_HANDLER_ID = 'chat-thread';
@@ -38,6 +44,8 @@ export interface ThreadMessage {
   time: number;
   /** True when the current user sent it (own bubble). */
   mine: boolean;
+  /** Asset attachments read off the SDK message `ext`; empty when there are none. */
+  attachments: MessageAttachment[];
 }
 
 /**
@@ -61,6 +69,11 @@ export type CreateTextMessage = (options: {
   type: 'txt';
   to: string;
   msg: string;
+  /**
+   * Custom extension carried on the message. Present only when the send has
+   * attachments; plain text sends omit it, so text behaviour is unchanged.
+   */
+  ext?: AttachmentExt;
 }) => AgoraChat.MessageBody;
 
 /**
@@ -95,6 +108,9 @@ export function mapTextMessage(raw: AgoraChat.TextMsgBody, currentUserId: string
     body: raw.msg,
     time: raw.time,
     mine: senderUserId !== null && senderUserId === currentUserId,
+    // `ext` is the SDK's custom-extension field carried on the message; the
+    // sender wrote the attachment ids + render metadata there.
+    attachments: parseAttachments(raw.ext),
   };
 }
 
@@ -151,11 +167,17 @@ export function subscribeIncoming(params: {
   return () => connection.removeEventHandler(THREAD_EVENT_HANDLER_ID);
 }
 
-/** Send plain text to the channel via the SDK's send method. */
+/**
+ * Send a message to the channel via the SDK's send method. Text-only sends pass
+ * no `ext` (behaviour unchanged); a send carrying attachments adds the
+ * attachment ids + render metadata to `ext`, which the receiver reads back and
+ * the webhook mirror persists from `attachment_asset_ids`.
+ */
 export function sendText(params: {
   connection: ThreadConnection;
   target: ChannelTarget;
   text: string;
+  attachments: readonly MessageAttachment[];
   createMessage: CreateTextMessage;
 }): Promise<AgoraChat.SendMsgResult> {
   const message = params.createMessage({
@@ -163,6 +185,7 @@ export function sendText(params: {
     type: 'txt',
     to: params.target.targetId,
     msg: params.text,
+    ...(params.attachments.length > 0 ? { ext: buildAttachmentExt(params.attachments) } : {}),
   });
   return params.connection.send(message);
 }
@@ -177,6 +200,7 @@ export function echoMessage(params: {
   text: string;
   currentUserId: string;
   time: number;
+  attachments: MessageAttachment[];
 }): ThreadMessage {
   return {
     id: params.result.serverMsgId,
@@ -184,6 +208,7 @@ export function echoMessage(params: {
     body: params.text,
     time: params.time,
     mine: true,
+    attachments: params.attachments,
   };
 }
 

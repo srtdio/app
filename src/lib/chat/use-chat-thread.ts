@@ -17,13 +17,15 @@ import {
   type ThreadConnection,
   type ThreadMessage,
 } from '@/lib/chat/thread';
+import type { MessageAttachment } from '@/lib/chat/attachments';
 import type { ChatConnection } from '@/lib/chat/types';
 
 export interface UseChatThread {
   messages: ThreadMessage[];
   loading: boolean;
   sending: boolean;
-  send: (text: string) => Promise<void>;
+  /** Send text and/or attachments; a send with neither is a no-op. */
+  send: (text: string, attachments?: readonly MessageAttachment[]) => Promise<void>;
 }
 
 /** The Foundation client is the real connection; widen it to the messaging surface. */
@@ -87,20 +89,28 @@ export function useChatThread(params: {
   }, [client, target, currentUserId]);
 
   const send = useCallback(
-    async (text: string): Promise<void> => {
+    async (text: string, attachments: readonly MessageAttachment[] = []): Promise<void> => {
       const connection = connectionRef.current;
       const sendTarget = targetRef.current;
       const trimmed = text.trim();
-      if (!connection || !sendTarget || trimmed === '') return;
+      // A send with neither text nor attachments is a no-op.
+      if (!connection || !sendTarget || (trimmed === '' && attachments.length === 0)) return;
       setSending(true);
       try {
         const result = await sendText({
           connection,
           target: sendTarget,
           text: trimmed,
+          attachments,
           createMessage: createTextMessage,
         });
-        const echo = echoMessage({ result, text: trimmed, currentUserId, time: Date.now() });
+        const echo = echoMessage({
+          result,
+          text: trimmed,
+          currentUserId,
+          time: Date.now(),
+          attachments: [...attachments],
+        });
         setMessages((prev) => appendMessage(prev, echo));
       } finally {
         setSending(false);

@@ -5,7 +5,11 @@ import { IconChat, IconChevronRight, IconSettings } from '@/components/ui/icons'
 import { cn } from '@/lib/cn';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { ThreadMessage } from '@/lib/chat/thread';
+import type { MessageAttachment } from '@/lib/chat/attachments';
+import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
+import type { PresignCache } from '@/lib/asset-presign';
 import { Composer } from '@/components/chat/Composer';
+import { MessageAttachments } from '@/components/chat/MessageAttachments';
 
 interface MessageThreadProps {
   title: string;
@@ -16,7 +20,7 @@ interface MessageThreadProps {
   sending: boolean;
   /** False when the channel has no Agora target yet (e.g. group not synced). */
   canSend: boolean;
-  onSend: (text: string) => Promise<void>;
+  onSend: (text: string, attachments: MessageAttachment[]) => Promise<void>;
   /** Present on small screens only; renders a back affordance to the list. */
   onBack?: () => void;
   /** Present for group channels only; opens the group management panel. */
@@ -44,8 +48,10 @@ function formatTime(time: number): string {
 function MessageBubble(props: {
   message: ThreadMessage;
   profiles: Map<string, ChatProfile>;
+  cache: PresignCache;
+  presignEnabled: boolean;
 }): ReactElement {
-  const { message, profiles } = props;
+  const { message, profiles, cache, presignEnabled } = props;
   const name = senderName(message, profiles);
   return (
     <li className="flex gap-3 px-4 py-2">
@@ -55,14 +61,24 @@ function MessageBubble(props: {
           <span className="text-sm font-medium text-fg">{name}</span>
           <span className="text-xs text-fg-3">{formatTime(message.time)}</span>
         </div>
-        <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
+        {message.body.trim() !== '' ? (
+          <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
+        ) : null}
+        <MessageAttachments
+          attachments={message.attachments}
+          cache={cache}
+          presignEnabled={presignEnabled}
+        />
       </div>
     </li>
   );
 }
 
 function ThreadBody(
-  props: Pick<MessageThreadProps, 'messages' | 'loading' | 'profiles'>,
+  props: Pick<MessageThreadProps, 'messages' | 'loading' | 'profiles'> & {
+    cache: PresignCache;
+    presignEnabled: boolean;
+  },
 ): ReactElement {
   if (props.loading) {
     return <div className="flex-1 px-4 py-6 text-sm text-fg-3">Loading messages</div>;
@@ -78,7 +94,13 @@ function ThreadBody(
   return (
     <ul className="flex-1 overflow-y-auto py-2">
       {props.messages.map((message) => (
-        <MessageBubble key={message.id} message={message} profiles={props.profiles} />
+        <MessageBubble
+          key={message.id}
+          message={message}
+          profiles={props.profiles}
+          cache={props.cache}
+          presignEnabled={props.presignEnabled}
+        />
       ))}
     </ul>
   );
@@ -86,6 +108,7 @@ function ThreadBody(
 
 /** The thread pane: header (+ optional back), message list, and composer. */
 export function MessageThread(props: MessageThreadProps): ReactElement {
+  const { canAttach, presignEnabled, presignCache, uploadFile } = useChatAttachments();
   return (
     <div className="flex h-full flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-border px-2 md:px-4 h-14">
@@ -108,8 +131,18 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           </IconButton>
         ) : null}
       </div>
-      <ThreadBody messages={props.messages} loading={props.loading} profiles={props.profiles} />
-      <Composer onSend={props.onSend} disabled={!props.canSend || props.sending} />
+      <ThreadBody
+        messages={props.messages}
+        loading={props.loading}
+        profiles={props.profiles}
+        cache={presignCache}
+        presignEnabled={presignEnabled}
+      />
+      <Composer
+        onSend={props.onSend}
+        disabled={!props.canSend || props.sending}
+        {...(canAttach ? { uploadFile } : {})}
+      />
     </div>
   );
 }

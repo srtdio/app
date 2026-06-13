@@ -97,6 +97,7 @@ describe('mapTextMessage / belongsToTarget', () => {
       body: 'hi',
       time: 1000,
       mine: false,
+      attachments: [],
     });
     expect(mapTextMessage(txt({ from: toAgoraUsername(ME) }), ME).mine).toBe(true);
   });
@@ -185,8 +186,15 @@ describe('sendText', () => {
     const send = vi.fn().mockResolvedValue({ serverMsgId: 's1', localMsgId: 'l1' });
     const connection = fakeConnection({ send });
 
-    await sendText({ connection, target: GROUP_TARGET, text: 'hello team', createMessage });
+    await sendText({
+      connection,
+      target: GROUP_TARGET,
+      text: 'hello team',
+      attachments: [],
+      createMessage,
+    });
 
+    // A text-only send carries no `ext`: the options are exactly the text shape.
     expect(createMessage).toHaveBeenCalledWith({
       chatType: 'groupChat',
       type: 'txt',
@@ -204,8 +212,16 @@ describe('echoMessage / appendMessage', () => {
       text: 'yo',
       currentUserId: ME,
       time: 5000,
+      attachments: [],
     });
-    expect(echo).toEqual({ id: 's1', senderUserId: ME, body: 'yo', time: 5000, mine: true });
+    expect(echo).toEqual({
+      id: 's1',
+      senderUserId: ME,
+      body: 'yo',
+      time: 5000,
+      mine: true,
+      attachments: [],
+    });
   });
 
   it('does not append a duplicate id', () => {
