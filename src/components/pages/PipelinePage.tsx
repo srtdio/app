@@ -1,17 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
-import { PageHead } from '@/components/shell/PageHead';
+import { SectionHeader } from '@/components/shell/SectionHeader';
 import { Tabs } from '@/components/shell/Tabs';
 import type { TabItem } from '@/components/shell/Tabs';
-import { IconCheck, IconSort, IconX } from '@/components/ui/icons';
+import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
 import { PostCard } from '@/components/pages/PostCard';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { dispatchSorted } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useSort } from '@/lib/use-sort';
+import {
+  DATE_SORT_DEFAULT,
+  DATE_SORT_OPTIONS,
+  filterByTitle,
+  sortByDate,
+  type DateSort,
+} from '@/lib/list-sort';
+import { groupByStage, stageColumns } from '@/lib/post-board';
 import { listPosts, STAGE_TRANSITIONS } from '@srtdio/posts';
 import type { Post, Stage } from '@srtdio/posts';
 
@@ -28,6 +37,45 @@ const STAGE_TABS: TabItem[] = [
   ...STAGES.map((stage) => ({ key: stage, label: stageLabel(stage) })),
 ];
 
+interface PipelineHeaderProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+  sort: DateSort;
+  onSortChange: (value: DateSort) => void;
+  stage: string;
+  onStageChange: (key: string) => void;
+}
+
+/**
+ * The Pipeline header chrome: the shared SectionHeader (search, sort, accent "+"
+ * create) with the stage tabs in the filter-chips slot. Pure (no hooks) so the
+ * wiring is unit-tested by walking the returned tree, mirroring SectionHeader's
+ * own tests; the page owns the state and re-fetch.
+ */
+export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
+  return (
+    <SectionHeader<DateSort>
+      search={{ value: props.search, onChange: props.onSearchChange, placeholder: 'Search posts' }}
+      sort={{ options: DATE_SORT_OPTIONS, value: props.sort, onChange: props.onSortChange }}
+      primaryAction={{
+        node: (
+          <Button
+            variant="primary"
+            size="lg"
+            aria-label="Create post"
+            className="w-11 px-0"
+            onClick={() => dispatchSorted('sorted:create-post')}
+          >
+            <IconPlus size={18} />
+          </Button>
+        ),
+      }}
+    >
+      <Tabs items={STAGE_TABS} active={props.stage} onChange={props.onStageChange} />
+    </SectionHeader>
+  );
+}
+
 interface OnboardingStep {
   key: string;
   label: string;
@@ -39,6 +87,8 @@ export function PipelinePage() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
   const [stage, setStage] = useState('all');
+  const [search, setSearch] = useState('');
+  const { value: sort, setValue: setSort } = useSort<DateSort>('pipeline', DATE_SORT_DEFAULT);
   const [cardDismissed, setCardDismissed] = useState(false);
   const [skipped, setSkipped] = useState<Record<string, boolean>>({});
 
@@ -77,16 +127,15 @@ export function PipelinePage() {
     };
   }, []);
 
-  const grouped = useMemo(() => {
-    const map = Object.fromEntries(STAGES.map((s) => [s, [] as Post[]])) as Record<Stage, Post[]>;
-    for (const post of posts) {
-      const column = map[post.stage as Stage];
-      if (column !== undefined) column.push(post);
-    }
-    return map;
-  }, [posts]);
+  // Search + sort are pure, derived over the in-memory list (listPosts loads the
+  // whole board), so no refetch and no N+1: filter by title, then order, then
+  // group into columns.
+  const grouped = useMemo(
+    () => groupByStage(sortByDate(filterByTitle(posts, search), sort), STAGES),
+    [posts, search, sort],
+  );
 
-  const visibleStages = stage === 'all' ? STAGES : STAGES.filter((s) => s === stage);
+  const visibleStages = stageColumns(STAGES, stage);
 
   const steps: OnboardingStep[] = [
     {
@@ -116,28 +165,17 @@ export function PipelinePage() {
 
   return (
     <>
-      <PageHead
-        title="Pipeline"
-        actions={
-          <Button>
-            <IconSort size={16} />
-            Sort
-          </Button>
-        }
-      />
+      {pipelineHeader({
+        search,
+        onSearchChange: setSearch,
+        sort,
+        onSortChange: setSort,
+        stage,
+        onStageChange: setStage,
+      })}
 
       <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">
         {posts.length} {posts.length === 1 ? 'post' : 'posts'}
-      </div>
-
-      <div className="px-4 md:px-6 mt-2">
-        <Tabs items={STAGE_TABS} active={stage} onChange={setStage} />
-      </div>
-
-      <div className="px-4 md:px-6 mt-3 flex flex-wrap gap-2">
-        <Chip label="+ Owner" variant="add" size="tap" />
-        <Chip label="+ Bucket" variant="add" size="tap" />
-        <Chip label="+ Date" variant="add" size="tap" />
       </div>
 
       {showCard ? (

@@ -1,35 +1,95 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { PageHead } from '@/components/shell/PageHead';
+import { SectionHeader } from '@/components/shell/SectionHeader';
 import { IconBriefs, IconPlus } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
-import type { BriefStatus } from '@/components/pages/BriefCard';
 import { CreateBriefSheet } from '@/components/pages/CreateBriefSheet';
 import { dispatchSorted } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
+import { useSort } from '@/lib/use-sort';
+import {
+  DATE_SORT_DEFAULT,
+  DATE_SORT_OPTIONS,
+  filterByTitle,
+  sortByDate,
+  type DateSort,
+} from '@/lib/list-sort';
+import { filterBriefsByStatus, type BriefFilter } from '@/lib/brief-list';
 import { briefClose } from '@srtdio/rpc';
 import { listBriefs } from '@srtdio/briefs';
 import type { Brief } from '@srtdio/briefs';
 
 // Filter chips: All shows everything; Open/Closed key off brief.status. The
 // status keys come from the @srtdio/briefs type, never inline literals.
-type FilterKey = 'all' | BriefStatus;
-const FILTERS: { key: FilterKey; label: string }[] = [
+const FILTERS: { key: BriefFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: BRIEF_STATUS.open, label: 'Open' },
   { key: BRIEF_STATUS.closed, label: 'Closed' },
 ];
 
+interface BriefsHeaderProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+  sort: DateSort;
+  onSortChange: (value: DateSort) => void;
+  filter: BriefFilter;
+  onFilterChange: (filter: BriefFilter) => void;
+}
+
+/**
+ * The Briefs header chrome: the shared SectionHeader (search, sort, accent "+"
+ * create) with the All / Open / Closed chips in the filter slot. Pure (no hooks)
+ * so the wiring is unit-tested by walking the returned tree.
+ */
+export function briefsHeader(props: BriefsHeaderProps): ReactElement {
+  return (
+    <SectionHeader<DateSort>
+      search={{
+        value: props.search,
+        onChange: props.onSearchChange,
+        placeholder: 'Search briefs',
+      }}
+      sort={{ options: DATE_SORT_OPTIONS, value: props.sort, onChange: props.onSortChange }}
+      primaryAction={{
+        node: (
+          <Button
+            variant="primary"
+            size="lg"
+            aria-label="Create brief"
+            className="w-11 px-0"
+            onClick={() => dispatchSorted('sorted:create-brief')}
+          >
+            <IconPlus size={18} />
+          </Button>
+        ),
+      }}
+    >
+      {FILTERS.map((item) => (
+        <Chip
+          key={item.key}
+          label={item.label}
+          selected={props.filter === item.key}
+          size="tap"
+          onClick={() => props.onFilterChange(item.key)}
+        />
+      ))}
+    </SectionHeader>
+  );
+}
+
 export function BriefsPage() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
   const newTrace = useNewTrace();
-  const [filter, setFilter] = useState<FilterKey>('all');
+  const [filter, setFilter] = useState<BriefFilter>('all');
+  const [search, setSearch] = useState('');
+  const { value: sort, setValue: setSort } = useSort<DateSort>('briefs', DATE_SORT_DEFAULT);
 
   const [briefs, setBriefs] = useState<Brief[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,10 +136,12 @@ export function BriefsPage() {
     [briefs, workspaceId],
   );
 
-  const visibleBriefs = useMemo(() => {
-    if (filter === 'all') return workspaceBriefs;
-    return workspaceBriefs.filter((brief) => brief.status === filter);
-  }, [workspaceBriefs, filter]);
+  // Search + sort are pure, derived over the loaded list (no refetch, no N+1):
+  // status chip, then title search, then date order.
+  const visibleBriefs = useMemo(
+    () => sortByDate(filterByTitle(filterBriefsByStatus(workspaceBriefs, filter), search), sort),
+    [workspaceBriefs, filter, search, sort],
+  );
 
   const openCount = useMemo(
     () => workspaceBriefs.filter((brief) => !isBriefClosed(brief)).length,
@@ -103,29 +165,16 @@ export function BriefsPage() {
 
   return (
     <>
-      <PageHead
-        title="Briefs"
-        actions={
-          <Button variant="primary" onClick={() => dispatchSorted('sorted:create-brief')}>
-            <IconPlus size={16} />
-            New brief
-          </Button>
-        }
-      />
+      {briefsHeader({
+        search,
+        onSearchChange: setSearch,
+        sort,
+        onSortChange: setSort,
+        filter,
+        onFilterChange: setFilter,
+      })}
 
       <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">{openCount} open</div>
-
-      <div className="px-4 md:px-6 mt-3 flex flex-wrap gap-2">
-        {FILTERS.map((item) => (
-          <Chip
-            key={item.key}
-            label={item.label}
-            selected={filter === item.key}
-            size="tap"
-            onClick={() => setFilter(item.key)}
-          />
-        ))}
-      </div>
 
       {error !== null ? (
         <div className="px-4 md:px-6 mt-4">
