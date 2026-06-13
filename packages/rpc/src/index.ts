@@ -84,6 +84,30 @@ export function postVersionCreate(
   return callProc(client, 'post_version_create', args);
 }
 
+export type PostUpdateArgs = ProcArgs<'post_update'>;
+export function postUpdate(
+  client: Client,
+  args: PostUpdateArgs,
+): Promise<Result<ProcReturns<'post_update'>>> {
+  return callProc(client, 'post_update', args);
+}
+
+export type PostCaptionUpdateArgs = ProcArgs<'post_caption_update'>;
+export function postCaptionUpdate(
+  client: Client,
+  args: PostCaptionUpdateArgs,
+): Promise<Result<ProcReturns<'post_caption_update'>>> {
+  return callProc(client, 'post_caption_update', args);
+}
+
+export type GallerySetArgs = ProcArgs<'gallery_set'>;
+export function gallerySet(
+  client: Client,
+  args: GallerySetArgs,
+): Promise<Result<ProcReturns<'gallery_set'>>> {
+  return callProc(client, 'gallery_set', args);
+}
+
 export type AnnotationCreateArgs = ProcArgs<'annotation_create'>;
 export function annotationCreate(
   client: Client,
@@ -138,6 +162,22 @@ export function commentCreate(
   args: CommentCreateArgs,
 ): Promise<Result<ProcReturns<'comment_create'>>> {
   return callProc(client, 'comment_create', args);
+}
+
+export type CommentEditArgs = ProcArgs<'comment_edit'>;
+export function commentEdit(
+  client: Client,
+  args: CommentEditArgs,
+): Promise<Result<ProcReturns<'comment_edit'>>> {
+  return callProc(client, 'comment_edit', args);
+}
+
+export type CommentSoftDeleteArgs = ProcArgs<'comment_soft_delete'>;
+export function commentSoftDelete(
+  client: Client,
+  args: CommentSoftDeleteArgs,
+): Promise<Result<ProcReturns<'comment_soft_delete'>>> {
+  return callProc(client, 'comment_soft_delete', args);
 }
 
 export type WorkspaceCreateArgs = ProcArgs<'workspace_create'>;

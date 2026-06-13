@@ -8,9 +8,12 @@
 //     authenticated caller. RLS confines every read to the caller's workspaces;
 //     the explicit workspace_id filter also pins the query to the entity/FTS
 //     indexes.
+//   * editComment and deleteComment write through the author-only
+//     comment_edit / comment_soft_delete SECURITY DEFINER procs (via the
+//     @srtdio/rpc wrappers); see ./edit and ./delete.
 //
-// trace_id is always an explicit parameter, never inferred. Edit, delete,
-// is_decision toggle, reactions and inbox fan-out are out of scope here.
+// trace_id is always an explicit parameter, never inferred. The is_decision
+// toggle, reactions and inbox fan-out are out of scope here.
 
 import type { Database, Json } from '@srtdio/schemas';
 import {
@@ -23,7 +26,10 @@ import {
 import { parseMentions } from './mentions';
 
 export { parseMentions } from './mentions';
-export type { Client } from '@srtdio/rpc';
+export type { Client, DomainError, Result } from '@srtdio/rpc';
+
+export { editComment, EditCommentSchema, type EditCommentInput } from './edit';
+export { deleteComment, DeleteCommentSchema, type DeleteCommentInput } from './delete';
 
 /** A persisted comment row, exactly as stored. */
 export type CommentRow = Database['public']['Tables']['comments']['Row'];
