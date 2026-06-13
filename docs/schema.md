@@ -253,6 +253,10 @@ PK id. Fields: workspace_id FK, name ^[A-Za-z0-9 -]{1,40}$, created_by FK, creat
 
 PK (group_id, user_id). Fields: workspace_id FK, joined_at. user_id FK auth.users.id.
 
+### Group + channel procs (A2a)
+
+Six SECURITY DEFINER procs (search_path='', EXECUTE to authenticated only): group_create, group_rename, group_member_add, group_member_remove, group_leave, dm_channel_ensure. group_create also seeds the group chat_channels row; dm_channel_ensure upserts the dm channel. Gating: group_create / dm_channel_ensure require an active workspace member; group_rename / group_member_add / group_member_remove require the group creator or a workspace owner/admin; group_leave is self only.
+
 ## 7. Chat (Agora mirror)
 
 Agora owns chat. These tables are a compliance/mirror only, fed by webhook. chat_messages is partitioned monthly.
