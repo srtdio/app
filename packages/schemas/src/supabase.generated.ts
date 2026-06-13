@@ -2324,6 +2324,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _post_snapshot: { Args: { p_post_id: string }; Returns: Json }
       annotation_create: {
         Args: {
           p_asset_attachment_id: string
@@ -2407,11 +2408,27 @@ export type Database = {
         }
         Returns: string
       }
+      comment_edit: {
+        Args: { p_body: string; p_comment_id: string; p_trace_id: string }
+        Returns: string
+      }
+      comment_soft_delete: {
+        Args: { p_comment_id: string; p_trace_id: string }
+        Returns: string
+      }
       dm_channel_ensure: {
         Args: {
           p_other_user_id: string
           p_trace_id: string
           p_workspace_id: string
+        }
+        Returns: string
+      }
+      gallery_set: {
+        Args: {
+          p_asset_version_ids: string[]
+          p_post_id: string
+          p_trace_id: string
         }
         Returns: string
       }
@@ -2473,8 +2490,16 @@ export type Database = {
         }
         Returns: string
       }
+      post_caption_update: {
+        Args: { p_caption: string; p_post_id: string; p_trace_id: string }
+        Returns: string
+      }
       post_create: {
         Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
+        Returns: string
+      }
+      post_update: {
+        Args: { p_payload: Json; p_post_id: string; p_trace_id: string }
         Returns: string
       }
       post_version_create: {
