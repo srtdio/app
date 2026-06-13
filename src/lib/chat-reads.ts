@@ -82,3 +82,139 @@ export async function listMessages(
   if (error) return transportError(error.message);
   return { ok: true, data: data ?? [] };
 }
+
+// ---------------------------------------------------------------------------
+// Channel display resolution (registry, not mirror).
+//
+// The channel list reads chat_channels (the Sorted registry) and enriches each
+// row with a human label: a group's name, or a DM peer's profile. Both lookups
+// are single batched IN-clause reads keyed on the ids gathered across all
+// channels, so the list never fans out into a per-row fetch loop.
+// ---------------------------------------------------------------------------
+
+/** A group's display name, typed from the generated Row. */
+export type GroupNameRow = Pick<Database['public']['Tables']['groups']['Row'], 'id' | 'name'>;
+
+/** A user's display profile, typed from the generated Row. */
+export type UserProfileRow = Pick<
+  Database['public']['Tables']['users']['Row'],
+  'id' | 'display_name' | 'avatar_url'
+>;
+
+/** A channel resolved to what the list renders: a label and an optional avatar. */
+export interface ChannelSummary {
+  channel: ChatChannelRow;
+  kind: 'group' | 'dm';
+  title: string;
+  avatarUrl: string | null;
+}
+
+/** Fetch group names for the given ids in one IN-clause read. */
+export async function listGroupsByIds(
+  client: Client,
+  input: { ids: string[] },
+): Promise<Result<GroupNameRow[]>> {
+  if (input.ids.length === 0) return { ok: true, data: [] };
+  const { data, error } = await client
+    .from('groups')
+    .select('id, name')
+    .in('id', input.ids)
+    .is('deleted_at', null);
+
+  if (error) return transportError(error.message);
+  return { ok: true, data: data ?? [] };
+}
+
+/** Fetch user display profiles for the given ids in one IN-clause read. */
+export async function listProfilesByIds(
+  client: Client,
+  input: { ids: string[] },
+): Promise<Result<UserProfileRow[]>> {
+  if (input.ids.length === 0) return { ok: true, data: [] };
+  const { data, error } = await client
+    .from('users')
+    .select('id, display_name, avatar_url')
+    .in('id', input.ids)
+    .is('deleted_at', null);
+
+  if (error) return transportError(error.message);
+  return { ok: true, data: data ?? [] };
+}
+
+export interface ResolveChannelSummariesInput {
+  channels: ChatChannelRow[];
+  currentUserId: string;
+}
+
+/**
+ * Resolve display info for a set of channels with exactly two batched reads (one
+ * for every group name, one for every DM peer profile), preserving input order.
+ * Group label = groups.name; DM label = the peer's display_name (peer = the side
+ * that is not the current user). Falls back to a generic label when a referenced
+ * group or profile is absent so the list still renders.
+ */
+export async function resolveChannelSummaries(
+  client: Client,
+  input: ResolveChannelSummariesInput,
+): Promise<Result<ChannelSummary[]>> {
+  const groupIds = collectGroupIds(input.channels);
+  const peerIds = collectPeerIds(input.channels, input.currentUserId);
+
+  const [groups, profiles] = await Promise.all([
+    listGroupsByIds(client, { ids: groupIds }),
+    listProfilesByIds(client, { ids: peerIds }),
+  ]);
+  if (!groups.ok) return groups;
+  if (!profiles.ok) return profiles;
+
+  const ctx: SummaryContext = {
+    currentUserId: input.currentUserId,
+    groupName: new Map(groups.data.map((g) => [g.id, g.name])),
+    profile: new Map(profiles.data.map((p) => [p.id, p])),
+  };
+  return { ok: true, data: input.channels.map((channel) => summarize(channel, ctx)) };
+}
+
+function collectGroupIds(channels: ChatChannelRow[]): string[] {
+  const ids = new Set<string>();
+  for (const channel of channels) {
+    if (channel.channel_type === 'group' && channel.entity_id !== null) ids.add(channel.entity_id);
+  }
+  return [...ids];
+}
+
+function collectPeerIds(channels: ChatChannelRow[], currentUserId: string): string[] {
+  const ids = new Set<string>();
+  for (const channel of channels) {
+    const peer = dmPeer(channel, currentUserId);
+    if (peer !== null) ids.add(peer);
+  }
+  return [...ids];
+}
+
+/** The DM peer id, or null for group channels and malformed DM rows. */
+function dmPeer(channel: ChatChannelRow, currentUserId: string): string | null {
+  if (channel.channel_type !== 'dm') return null;
+  return channel.dm_user_a === currentUserId ? channel.dm_user_b : channel.dm_user_a;
+}
+
+interface SummaryContext {
+  currentUserId: string;
+  groupName: Map<string, string>;
+  profile: Map<string, UserProfileRow>;
+}
+
+function summarize(channel: ChatChannelRow, ctx: SummaryContext): ChannelSummary {
+  if (channel.channel_type === 'group') {
+    const name = channel.entity_id !== null ? ctx.groupName.get(channel.entity_id) : undefined;
+    return { channel, kind: 'group', title: name ?? 'Group', avatarUrl: null };
+  }
+  const peer = dmPeer(channel, ctx.currentUserId);
+  const found = peer !== null ? ctx.profile.get(peer) : undefined;
+  return {
+    channel,
+    kind: 'dm',
+    title: found?.display_name ?? 'Direct message',
+    avatarUrl: found?.avatar_url ?? null,
+  };
+}

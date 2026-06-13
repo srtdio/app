@@ -1,32 +1,16 @@
-import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { PageHead } from '@/components/shell/PageHead';
-import { IconChat, IconPlus } from '@/components/ui/icons';
+import { ChatProvider } from '@/lib/chat';
+import { ChatShell } from '@/components/chat/ChatShell';
 
+/**
+ * Mounts the Foundation ChatProvider around the chat shell so the Agora
+ * connection lives only while /chat is open and tears down on navigate-away via
+ * the Foundation hook's cleanup. The connection is never mounted app-wide, so a
+ * chat outage cannot affect the rest of Sorted.
+ */
 export function ChatPage() {
   return (
-    <>
-      <PageHead
-        title="Chat"
-        actions={
-          <Button variant="primary">
-            <IconPlus size={16} />
-            New chat
-          </Button>
-        }
-      />
-
-      <EmptyState
-        icon={<IconChat size={24} />}
-        title="No conversations yet"
-        description="Start a chat to message your team."
-        action={
-          <Button variant="primary">
-            <IconPlus size={16} />
-            New chat
-          </Button>
-        }
-      />
-    </>
+    <ChatProvider>
+      <ChatShell />
+    </ChatProvider>
   );
 }
