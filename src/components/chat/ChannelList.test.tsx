@@ -11,6 +11,7 @@ function summary(over: Partial<ChannelSummary>): ChannelSummary {
     title: 'Team',
     avatarUrl: null,
     agoraGroupId: 'ag1',
+    groupId: 'g1',
     peerUserId: null,
     createdAt: 't',
     ...over,
@@ -18,18 +19,28 @@ function summary(over: Partial<ChannelSummary>): ChannelSummary {
 }
 
 describe('channelListView', () => {
-  it('renders the empty state with no action when there are zero channels', () => {
-    const view = channelListView({ channels: [], selectedChannelId: null, onSelect: () => {} });
+  it('renders the empty state with a New chat action when there are zero channels', () => {
+    const view = channelListView({
+      channels: [],
+      selectedChannelId: null,
+      onSelect: () => {},
+      onNewChat: () => {},
+    });
     expect(view.type).toBe(EmptyState);
     const props = view.props as { title: string; action?: unknown };
     expect(props.title).toBe('No conversations yet');
-    // The "New chat" action is PR4: no dead or disabled button here.
-    expect(props.action).toBeUndefined();
+    // PR4: the empty state now carries a real "New chat" action.
+    expect(props.action).toBeDefined();
   });
 
   it('renders one row per channel when there are channels', () => {
     const channels = [summary({ channelId: 'a' }), summary({ channelId: 'b' })];
-    const view = channelListView({ channels, selectedChannelId: 'a', onSelect: () => {} });
+    const view = channelListView({
+      channels,
+      selectedChannelId: 'a',
+      onSelect: () => {},
+      onNewChat: () => {},
+    });
     expect(view.type).toBe('ul');
     const children = (view.props as { children: ReactElement[] }).children;
     expect(children).toHaveLength(2);

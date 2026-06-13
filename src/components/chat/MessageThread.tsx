@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconChat, IconChevronRight } from '@/components/ui/icons';
+import { IconChat, IconChevronRight, IconSettings } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { ThreadMessage } from '@/lib/chat/thread';
@@ -19,6 +19,8 @@ interface MessageThreadProps {
   onSend: (text: string) => Promise<void>;
   /** Present on small screens only; renders a back affordance to the list. */
   onBack?: () => void;
+  /** Present for group channels only; opens the group management panel. */
+  onOpenInfo?: () => void;
 }
 
 function senderName(message: ThreadMessage, profiles: Map<string, ChatProfile>): string {
@@ -94,12 +96,17 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         ) : null}
         <span
           className={cn(
-            'truncate text-sm font-semibold text-fg',
+            'min-w-0 flex-1 truncate text-sm font-semibold text-fg',
             props.onBack === undefined && 'px-2',
           )}
         >
           {props.title}
         </span>
+        {props.onOpenInfo !== undefined ? (
+          <IconButton label="Group info" onClick={props.onOpenInfo}>
+            <IconSettings size={20} />
+          </IconButton>
+        ) : null}
       </div>
       <ThreadBody messages={props.messages} loading={props.loading} profiles={props.profiles} />
       <Composer onSend={props.onSend} disabled={!props.canSend || props.sending} />

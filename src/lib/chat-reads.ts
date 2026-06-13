@@ -16,6 +16,7 @@ import type { Database } from '@srtdio/schemas';
 
 type ChatChannelRow = Database['public']['Tables']['chat_channels']['Row'];
 type GroupRow = Database['public']['Tables']['groups']['Row'];
+type GroupMemberRow = Database['public']['Tables']['group_members']['Row'];
 type UserRow = Database['public']['Tables']['users']['Row'];
 
 /** A user's display info, the slice the chat UI shows. */
@@ -35,6 +36,8 @@ export interface ChannelSummary {
   avatarUrl: string | null;
   /** The Agora group id for group channels; null until the sync worker stamps it. */
   agoraGroupId: string | null;
+  /** The Sorted group id (chat_channels.entity_id) for group channels; null for DMs. */
+  groupId: string | null;
   /** The DM peer's Sorted user id (the participant who is not the current user). */
   peerUserId: string | null;
   createdAt: string;
@@ -75,6 +78,7 @@ export function shapeChannelSummaries(
         title: group?.name ?? 'Group',
         avatarUrl: null,
         agoraGroupId: channel.agora_group_id,
+        groupId: channel.entity_id,
         peerUserId: null,
         createdAt: channel.created_at,
       };
@@ -87,6 +91,7 @@ export function shapeChannelSummaries(
       title: peer?.display_name ?? 'Direct message',
       avatarUrl: peer?.avatar_url ?? null,
       agoraGroupId: channel.agora_group_id,
+      groupId: null,
       peerUserId: peerId,
       createdAt: channel.created_at,
     };
@@ -155,6 +160,22 @@ export async function readProfiles(
       avatarUrl: u.avatar_url,
     })),
   };
+}
+
+/**
+ * The Sorted user ids of one group's current members. A single RLS-scoped read
+ * of group_members (no per-member round-trip); callers enrich with readProfiles
+ * for display. Used by the group management panel to list members and to exclude
+ * existing members from the add-member picker.
+ */
+export async function listGroupMemberIds(
+  client: Client,
+  params: { groupId: string },
+): Promise<Result<string[]>> {
+  const res = await client.from('group_members').select('user_id').eq('group_id', params.groupId);
+  if (res.error) return fail(`listGroupMemberIds: ${res.error.message}`);
+  const rows = (res.data ?? []) as Pick<GroupMemberRow, 'user_id'>[];
+  return { ok: true, data: rows.map((r) => r.user_id) };
 }
 
 async function readGroups(client: Client, ids: string[]): Promise<Result<GroupRow[]>> {
