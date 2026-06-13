@@ -2396,6 +2396,39 @@ export type Database = {
         }
         Returns: string
       }
+      dm_channel_ensure: {
+        Args: {
+          p_other_user_id: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      group_create: {
+        Args: {
+          p_member_user_ids: string[]
+          p_name: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      group_leave: {
+        Args: { p_group_id: string; p_trace_id: string }
+        Returns: undefined
+      }
+      group_member_add: {
+        Args: { p_group_id: string; p_trace_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      group_member_remove: {
+        Args: { p_group_id: string; p_trace_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      group_rename: {
+        Args: { p_group_id: string; p_name: string; p_trace_id: string }
+        Returns: undefined
+      }
       has_capability: { Args: { p_capability: string }; Returns: boolean }
       inbox_entry_create: {
         Args: {
