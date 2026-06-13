@@ -71,6 +71,44 @@ export function buildAttachmentExt(attachments: readonly MessageAttachment[]): A
   };
 }
 
+/**
+ * The full custom-extension payload a chat message may carry: the attachment ids
+ * (PR5, unchanged) plus PR6's `shared_post_ids`, the post uuids shared into the
+ * message. Only post ids ride the wire; no post content is sent, each viewer
+ * resolves the cards through RLS. The webhook mirror persists the whole ext via
+ * raw_payload, so `shared_post_ids` is captured without a new column.
+ */
+export interface MessageExt extends AttachmentExt {
+  shared_post_ids: string[];
+}
+
+/**
+ * Build the message ext from attachments and/or shared post ids. Extends the PR5
+ * attachment ext with `shared_post_ids` rather than replacing it, so attachment
+ * sends keep `attachment_asset_ids` working unchanged and a send may carry both.
+ */
+export function buildMessageExt(input: {
+  attachments: readonly MessageAttachment[];
+  sharedPostIds: readonly string[];
+}): MessageExt {
+  return {
+    ...buildAttachmentExt(input.attachments),
+    shared_post_ids: [...input.sharedPostIds],
+  };
+}
+
+/**
+ * Read the shared post ids off a message's `ext`. Returns an empty array, never
+ * null, for a message that shares no posts. Mirrors {@link parseAttachments}: the
+ * render path branches on a non-empty result.
+ */
+export function parseSharedPostIds(ext: unknown): string[] {
+  if (typeof ext !== 'object' || ext === null) return [];
+  const ids = (ext as Record<string, unknown>).shared_post_ids;
+  if (!Array.isArray(ids)) return [];
+  return ids.filter((value): value is string => typeof value === 'string');
+}
+
 function isMessageAttachment(value: unknown): value is MessageAttachment {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<string, unknown>;
@@ -105,15 +143,21 @@ export function parseAttachments(ext: unknown): MessageAttachment[] {
   return [];
 }
 
-/** Whether a compose action may send: text or at least one attachment, idle. */
+/**
+ * Whether a compose action may send: text, at least one attachment, or at least
+ * one shared post, while idle. A shared-posts-only send is allowed; a send with
+ * none of the three is blocked. `sharedPostCount` is optional so the PR5 callers
+ * that predate post sharing keep their existing two-argument behaviour.
+ */
 export function canSendAttachmentMessage(input: {
   text: string;
   attachmentCount: number;
+  sharedPostCount?: number;
   uploading: boolean;
   sending: boolean;
 }): boolean {
   if (input.uploading || input.sending) return false;
-  return input.text.trim() !== '' || input.attachmentCount > 0;
+  return input.text.trim() !== '' || input.attachmentCount > 0 || (input.sharedPostCount ?? 0) > 0;
 }
 
 /**

@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { precheckFile } from '@/lib/asset-upload';
 import {
   buildAttachmentExt,
+  buildMessageExt,
   canSendAttachmentMessage,
   classifyAttachment,
   parseAttachments,
+  parseSharedPostIds,
   precheckImage,
   toMessageAttachment,
   uploadChatAttachment,
@@ -145,6 +147,39 @@ describe('buildAttachmentExt', () => {
   });
 });
 
+describe('buildMessageExt', () => {
+  it('carries shared_post_ids alongside the attachment ids + render meta', () => {
+    const attachments: MessageAttachment[] = [
+      { assetId: 'a1', name: 'one.png', mime: 'image/png' },
+    ];
+    expect(buildMessageExt({ attachments, sharedPostIds: ['p1', 'p2'] })).toEqual({
+      attachment_asset_ids: ['a1'],
+      attachment_meta: [{ assetId: 'a1', name: 'one.png', mime: 'image/png' }],
+      shared_post_ids: ['p1', 'p2'],
+    });
+  });
+
+  it('carries shared posts with no attachments (shared-posts-only send)', () => {
+    expect(buildMessageExt({ attachments: [], sharedPostIds: ['p1'] })).toEqual({
+      attachment_asset_ids: [],
+      attachment_meta: [],
+      shared_post_ids: ['p1'],
+    });
+  });
+});
+
+describe('parseSharedPostIds', () => {
+  it('reads the shared_post_ids array off the ext', () => {
+    expect(parseSharedPostIds({ shared_post_ids: ['p1', 'p2'] })).toEqual(['p1', 'p2']);
+  });
+
+  it('ignores non-string entries and returns [] when absent', () => {
+    expect(parseSharedPostIds({ shared_post_ids: ['p1', 7, null] })).toEqual(['p1']);
+    expect(parseSharedPostIds({ attachment_asset_ids: ['a1'] })).toEqual([]);
+    expect(parseSharedPostIds(undefined)).toEqual([]);
+  });
+});
+
 describe('parseAttachments', () => {
   it('prefers the rich attachment_meta', () => {
     expect(
@@ -190,7 +225,7 @@ describe('canSendAttachmentMessage', () => {
     ).toBe(false);
   });
 
-  it('allows attachments-only and text-only', () => {
+  it('allows attachments-only, text-only, and shared-posts-only', () => {
     expect(
       canSendAttachmentMessage({ text: '', attachmentCount: 1, uploading: false, sending: false }),
     ).toBe(true);
@@ -202,6 +237,28 @@ describe('canSendAttachmentMessage', () => {
         sending: false,
       }),
     ).toBe(true);
+    // Shared-posts-only: no text, no attachments, but a post is queued.
+    expect(
+      canSendAttachmentMessage({
+        text: '   ',
+        attachmentCount: 0,
+        sharedPostCount: 1,
+        uploading: false,
+        sending: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('blocks a fully empty send even with the shared-post field present', () => {
+    expect(
+      canSendAttachmentMessage({
+        text: '',
+        attachmentCount: 0,
+        sharedPostCount: 0,
+        uploading: false,
+        sending: false,
+      }),
+    ).toBe(false);
   });
 
   it('blocks while an upload is in flight or a send is settling', () => {

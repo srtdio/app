@@ -24,8 +24,12 @@ export interface UseChatThread {
   messages: ThreadMessage[];
   loading: boolean;
   sending: boolean;
-  /** Send text and/or attachments; a send with neither is a no-op. */
-  send: (text: string, attachments?: readonly MessageAttachment[]) => Promise<void>;
+  /** Send text and/or attachments and/or shared posts; a send with none is a no-op. */
+  send: (
+    text: string,
+    attachments?: readonly MessageAttachment[],
+    sharedPostIds?: readonly string[],
+  ) => Promise<void>;
 }
 
 /** The Foundation client is the real connection; widen it to the messaging surface. */
@@ -89,12 +93,21 @@ export function useChatThread(params: {
   }, [client, target, currentUserId]);
 
   const send = useCallback(
-    async (text: string, attachments: readonly MessageAttachment[] = []): Promise<void> => {
+    async (
+      text: string,
+      attachments: readonly MessageAttachment[] = [],
+      sharedPostIds: readonly string[] = [],
+    ): Promise<void> => {
       const connection = connectionRef.current;
       const sendTarget = targetRef.current;
       const trimmed = text.trim();
-      // A send with neither text nor attachments is a no-op.
-      if (!connection || !sendTarget || (trimmed === '' && attachments.length === 0)) return;
+      // A send with no text, no attachments and no shared posts is a no-op.
+      if (
+        !connection ||
+        !sendTarget ||
+        (trimmed === '' && attachments.length === 0 && sharedPostIds.length === 0)
+      )
+        return;
       setSending(true);
       try {
         const result = await sendText({
@@ -102,6 +115,7 @@ export function useChatThread(params: {
           target: sendTarget,
           text: trimmed,
           attachments,
+          sharedPostIds,
           createMessage: createTextMessage,
         });
         const echo = echoMessage({
@@ -110,6 +124,7 @@ export function useChatThread(params: {
           currentUserId,
           time: Date.now(),
           attachments: [...attachments],
+          sharedPostIds: [...sharedPostIds],
         });
         setMessages((prev) => appendMessage(prev, echo));
       } finally {
