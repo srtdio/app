@@ -117,3 +117,8 @@ BEGIN
   RETURN v_ver;
 END; $$;
 GRANT EXECUTE ON FUNCTION public.gallery_set(uuid,uuid[],uuid) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.post_update(uuid,jsonb,uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.post_caption_update(uuid,text,uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.comment_edit(uuid,text,uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.comment_soft_delete(uuid,uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.gallery_set(uuid,uuid[],uuid) FROM PUBLIC;
