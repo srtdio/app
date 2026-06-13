@@ -1,5 +1,4 @@
 import type { ReactElement } from 'react';
-import { PageHead } from '@/components/shell/PageHead';
 import { ChatProvider, useChat } from '@/lib/chat';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -39,7 +38,6 @@ function ChatScreen(): ReactElement {
 export function ChatPage(): ReactElement {
   return (
     <div className="flex h-full flex-col">
-      <PageHead title="Chat" />
       <div className="min-h-0 flex-1">
         <ChatProvider>
           <ChatScreen />

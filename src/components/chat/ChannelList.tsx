@@ -1,27 +1,35 @@
+import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconButton } from '@/components/ui/IconButton';
+import { SectionHeader } from '@/components/shell/SectionHeader';
 import { IconChat, IconPlus } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { filterChannelsByName } from '@/lib/channel-filter';
 import type { ChannelSummary } from '@/lib/chat-reads';
 
 interface ChannelListProps {
   channels: ChannelSummary[];
   selectedChannelId: string | null;
   onSelect: (channel: ChannelSummary) => void;
-  /** Opens the New chat sheet (list header and empty-state action). */
+  /** Opens the New chat sheet (header "+" and empty-state action). */
   onNewChat: () => void;
 }
 
+interface ChannelListBodyProps extends ChannelListProps {
+  /** Whether any conversations exist before the search filter is applied. */
+  hasChannels: boolean;
+}
+
 /**
- * The channel list body. Pure and exported so the zero-channels case is unit
- * tested: with no channels it returns the empty state, which now carries a real
- * "New chat" action that opens the New chat sheet.
+ * The channel list body. Pure and exported so its three states are unit tested:
+ * the zero-state when no conversations exist (with a real "New chat" action), a
+ * distinct "No matches" state when a search hides every conversation, and one row
+ * per channel otherwise.
  */
-export function channelListView(props: ChannelListProps): ReactElement {
-  if (props.channels.length === 0) {
+export function channelListView(props: ChannelListBodyProps): ReactElement {
+  if (!props.hasChannels) {
     return (
       <EmptyState
         icon={<IconChat size={24} />}
@@ -33,6 +41,14 @@ export function channelListView(props: ChannelListProps): ReactElement {
           </Button>
         }
       />
+    );
+  }
+  if (props.channels.length === 0) {
+    return (
+      <div className="px-4 py-12 text-center">
+        <p className="text-sm text-fg-2">No matches</p>
+        <p className="mt-1 text-xs text-fg-3">Try a different name or clear the search.</p>
+      </div>
     );
   }
   return (
@@ -75,19 +91,56 @@ function ChannelRow(props: {
   );
 }
 
-/** Scrollable channel list pane with a header carrying the New chat action. */
-export function ChannelList(props: ChannelListProps): ReactElement {
+interface ChannelListContentProps extends ChannelListProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+}
+
+/**
+ * The full channel list pane: the shared SectionHeader (controlled name search +
+ * accent "+" New chat, no sort, no chips) above the filtered body. Pure (no
+ * hooks) so the search wiring and the single-header guarantee are unit tested by
+ * walking the returned tree; ChannelList owns the search state.
+ */
+export function channelListContent(props: ChannelListContentProps): ReactElement {
+  const filtered = filterChannelsByName(props.channels, props.search);
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-border px-2 md:px-4 h-14">
-        <span className="px-2 text-sm font-semibold text-fg">Chat</span>
-        <span className="ml-auto">
-          <IconButton label="New chat" onClick={props.onNewChat}>
-            <IconPlus size={20} />
-          </IconButton>
-        </span>
+      <SectionHeader
+        search={{
+          value: props.search,
+          onChange: props.onSearchChange,
+          placeholder: 'Search conversations',
+        }}
+        primaryAction={{
+          node: (
+            <Button
+              variant="primary"
+              size="lg"
+              aria-label="New chat"
+              className="w-11 px-0"
+              onClick={props.onNewChat}
+            >
+              <IconPlus size={18} />
+            </Button>
+          ),
+        }}
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {channelListView({
+          channels: filtered,
+          hasChannels: props.channels.length > 0,
+          selectedChannelId: props.selectedChannelId,
+          onSelect: props.onSelect,
+          onNewChat: props.onNewChat,
+        })}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">{channelListView(props)}</div>
     </div>
   );
+}
+
+/** Scrollable channel list pane with the shared search/create header. */
+export function ChannelList(props: ChannelListProps): ReactElement {
+  const [search, setSearch] = useState('');
+  return channelListContent({ ...props, search, onSearchChange: setSearch });
 }
