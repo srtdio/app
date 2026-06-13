@@ -149,6 +149,19 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
     return new Set((rows ?? []).map((r) => r.user_id));
   }
 
+  // Active members of a workspace minus the actor. wsA accumulates members as
+  // the suite runs (e.g. the accepted invite), so stage_change fanout is checked
+  // against this ground truth rather than a hardcoded membership.
+  async function activeMemberIdsExcept(workspaceId: string, exclude: string): Promise<Set<string>> {
+    const res = await asGeneric(admin)
+      .from('workspace_members')
+      .select('user_id')
+      .eq('workspace_id', workspaceId)
+      .eq('active', true);
+    const rows = res.data as Array<{ user_id: string }> | null;
+    return new Set((rows ?? []).map((r) => r.user_id).filter((id) => id !== exclude));
+  }
+
   interface AttachmentRow {
     asset_id: string;
     asset_version_id: string;
@@ -653,9 +666,11 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
           p_trace_id: generateTraceId(),
         }),
       );
-      expect(await inboxRecipients(wsA.id, 'stage_change', postId)).toEqual(
-        new Set([agencyUser.id, clientUser.id]),
-      );
+      const recipients = await inboxRecipients(wsA.id, 'stage_change', postId);
+      expect(recipients).toEqual(await activeMemberIdsExcept(wsA.id, owner.id));
+      expect(recipients.has(owner.id)).toBe(false); // the actor never notifies itself
+      expect(recipients.has(agencyUser.id)).toBe(true);
+      expect(recipients.has(clientUser.id)).toBe(true);
     });
   });
 });
