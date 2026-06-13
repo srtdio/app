@@ -14,6 +14,8 @@ import { useChatThread } from '@/lib/chat/use-chat-thread';
 import type { ChatConnection } from '@/lib/chat/types';
 import { ChannelList } from '@/components/chat/ChannelList';
 import { MessageThread } from '@/components/chat/MessageThread';
+import { NewChatSheet } from '@/components/chat/NewChatSheet';
+import { GroupInfoSheet } from '@/components/chat/GroupInfoSheet';
 
 interface ChatConnectedProps {
   client: ChatConnection | null;
@@ -41,6 +43,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const [channels, setChannels] = useState<ChannelSummary[]>([]);
   const [selected, setSelected] = useState<ChannelSummary | null>(null);
   const [profiles, setProfiles] = useState<Map<string, ChatProfile>>(new Map());
+  const [newChatOpen, setNewChatOpen] = useState(false);
+  const [groupInfoOpen, setGroupInfoOpen] = useState(false);
 
   // Load the channel list (registry + batched display resolution) for the workspace.
   useEffect(() => {
@@ -55,6 +59,47 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       cancelled = true;
     };
   }, [workspaceId, currentUserId]);
+
+  // Re-read the channel list after a mutation. When channelId is given, the
+  // matching (possibly newly created) channel is selected and opened.
+  const refreshChannels = useCallback(
+    async (channelId: string | null): Promise<void> => {
+      const result = await listChannelSummaries(supabase, { workspaceId, currentUserId });
+      if (!result.ok) {
+        logger.error('chat: failed to refresh channels', { error: result.error.message });
+        return;
+      }
+      setChannels(result.data);
+      if (channelId !== null) {
+        const found = result.data.find((channel) => channel.channelId === channelId);
+        if (found !== undefined) setSelected(found);
+      }
+    },
+    [workspaceId, currentUserId],
+  );
+
+  const onDmReady = useCallback(
+    (channelId: string) => {
+      setNewChatOpen(false);
+      void refreshChannels(channelId);
+    },
+    [refreshChannels],
+  );
+
+  const onGroupCreated = useCallback(() => {
+    setNewChatOpen(false);
+    void refreshChannels(null);
+  }, [refreshChannels]);
+
+  const onGroupChanged = useCallback(() => {
+    void refreshChannels(selected?.channelId ?? null);
+  }, [refreshChannels, selected]);
+
+  const onGroupLeft = useCallback(() => {
+    setGroupInfoOpen(false);
+    setSelected(null);
+    void refreshChannels(null);
+  }, [refreshChannels]);
 
   const target = useMemo(() => safeTarget(selected), [selected]);
   const thread = useChatThread({ client, target, currentUserId });
@@ -90,6 +135,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const showList = isDesktop || selected === null;
   const showThread = isDesktop || selected !== null;
 
+  const isGroup = selected?.channelType === 'group';
+
   return (
     <div className="flex h-full min-h-0">
       {showList ? (
@@ -98,6 +145,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             channels={channels}
             selectedChannelId={selected?.channelId ?? null}
             onSelect={setSelected}
+            onNewChat={() => setNewChatOpen(true)}
           />
         </div>
       ) : null}
@@ -113,6 +161,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
               canSend={target !== null}
               onSend={thread.send}
               {...(isDesktop ? {} : { onBack })}
+              {...(isGroup ? { onOpenInfo: () => setGroupInfoOpen(true) } : {})}
             />
           ) : (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-fg-3">
@@ -120,6 +169,28 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             </div>
           )}
         </div>
+      ) : null}
+
+      <NewChatSheet
+        open={newChatOpen}
+        onClose={() => setNewChatOpen(false)}
+        workspaceId={workspaceId}
+        currentUserId={currentUserId}
+        onDmReady={onDmReady}
+        onGroupCreated={onGroupCreated}
+      />
+
+      {isGroup && selected?.groupId != null ? (
+        <GroupInfoSheet
+          open={groupInfoOpen}
+          onClose={() => setGroupInfoOpen(false)}
+          workspaceId={workspaceId}
+          groupId={selected.groupId}
+          groupName={selected.title}
+          currentUserId={currentUserId}
+          onChanged={onGroupChanged}
+          onLeft={onGroupLeft}
+        />
       ) : null}
     </div>
   );
