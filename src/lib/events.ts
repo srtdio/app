@@ -12,9 +12,3 @@ export type SortedEventName =
 export function dispatchSorted(name: SortedEventName): void {
   window.dispatchEvent(new CustomEvent(name));
 }
-
-/**
- * The signout event name as a value (the union above is types only). Listeners
- * that react to signout import this constant rather than hardcoding the string.
- */
-export const SIGNOUT_EVENT: SortedEventName = 'sorted:signout';
