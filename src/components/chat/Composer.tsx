@@ -144,7 +144,10 @@ export function Composer(props: ComposerProps): ReactElement {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2 border-t border-border bg-panel px-4 py-3">
+    <form
+      onSubmit={submit}
+      className="flex flex-col gap-2 border-t border-border bg-panel px-4 py-3"
+    >
       {pending.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {pending.map((item) => (

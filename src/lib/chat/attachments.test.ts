@@ -48,7 +48,10 @@ describe('uploadChatAttachment', () => {
   });
 
   it('surfaces an upload failure as a Result and never throws', async () => {
-    uploadAssetFile.mockResolvedValueOnce({ ok: false, message: 'Upload failed. Check your connection and retry' });
+    uploadAssetFile.mockResolvedValueOnce({
+      ok: false,
+      message: 'Upload failed. Check your connection and retry',
+    });
     const outcome = await uploadChatAttachment({
       file: fakeFile('a.pdf', 'application/pdf'),
       workspaceId: 'ws-1',
@@ -56,7 +59,10 @@ describe('uploadChatAttachment', () => {
       endpoint: 'https://upload',
       fetcher: vi.fn(),
     });
-    expect(outcome).toEqual({ ok: false, message: 'Upload failed. Check your connection and retry' });
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'Upload failed. Check your connection and retry',
+    });
   });
 });
 
@@ -124,17 +130,37 @@ describe('uniqueAssetIds', () => {
 
 describe('canSendAttachmentMessage', () => {
   it('blocks an empty send (no text, no attachments)', () => {
-    expect(canSendAttachmentMessage({ text: '   ', attachmentCount: 0, uploading: false, sending: false })).toBe(false);
+    expect(
+      canSendAttachmentMessage({
+        text: '   ',
+        attachmentCount: 0,
+        uploading: false,
+        sending: false,
+      }),
+    ).toBe(false);
   });
 
   it('allows attachments-only and text-only', () => {
-    expect(canSendAttachmentMessage({ text: '', attachmentCount: 1, uploading: false, sending: false })).toBe(true);
-    expect(canSendAttachmentMessage({ text: 'hi', attachmentCount: 0, uploading: false, sending: false })).toBe(true);
+    expect(
+      canSendAttachmentMessage({ text: '', attachmentCount: 1, uploading: false, sending: false }),
+    ).toBe(true);
+    expect(
+      canSendAttachmentMessage({
+        text: 'hi',
+        attachmentCount: 0,
+        uploading: false,
+        sending: false,
+      }),
+    ).toBe(true);
   });
 
   it('blocks while an upload is in flight or a send is settling', () => {
-    expect(canSendAttachmentMessage({ text: 'hi', attachmentCount: 1, uploading: true, sending: false })).toBe(false);
-    expect(canSendAttachmentMessage({ text: 'hi', attachmentCount: 1, uploading: false, sending: true })).toBe(false);
+    expect(
+      canSendAttachmentMessage({ text: 'hi', attachmentCount: 1, uploading: true, sending: false }),
+    ).toBe(false);
+    expect(
+      canSendAttachmentMessage({ text: 'hi', attachmentCount: 1, uploading: false, sending: true }),
+    ).toBe(false);
   });
 });
 
