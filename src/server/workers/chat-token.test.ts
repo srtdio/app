@@ -31,6 +31,7 @@ vi.mock('./asset-read', async (importOriginal) => {
 });
 
 import worker, { serializeError, type ChatTokenEnv } from './chat-token';
+import { toAgoraUsername } from './agora-identity';
 
 const USER = '33333333-3333-7333-8333-333333333333';
 const WORKSPACE = '11111111-1111-7111-8111-111111111111';
@@ -134,7 +135,7 @@ describe('chat-token worker.fetch', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('mints a 24h token for a member and echoes the JWT sub as the username', async () => {
+  it('mints a 24h token for a member and derives the Agora username from the JWT sub', async () => {
     const token = await mintToken(USER);
     state.members.add(`${USER}:${WORKSPACE}`);
     stubAgora(new Response(JSON.stringify({ entities: [{ username: USER }] }), { status: 200 }));
@@ -149,7 +150,9 @@ describe('chat-token worker.fetch', () => {
       app_key: string;
     };
     expect(body.token).not.toBe('');
-    expect(body.agora_username).toBe(USER);
+    // Agora rejects UUID-shaped names, so the username is the derived form.
+    expect(body.agora_username).toBe(toAgoraUsername(USER));
+    expect(body.agora_username).not.toBe(USER);
     expect(body.app_key).toBe(env.AGORA_CHAT_APP_KEY);
 
     // expires_at is ~24h ahead of now.
@@ -174,7 +177,7 @@ describe('chat-token worker.fetch', () => {
     const res = await worker.fetch(tokenRequest(token, { workspace_id: WORKSPACE }), env);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { agora_username: string };
-    expect(body.agora_username).toBe(USER);
+    expect(body.agora_username).toBe(toAgoraUsername(USER));
   });
 
   it('returns 500 when the Agora register call fails for another reason', async () => {
