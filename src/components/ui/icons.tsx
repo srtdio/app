@@ -1,18 +1,27 @@
 import type { ReactNode } from 'react';
 
-interface IconProps {
+export interface IconProps {
   className?: string;
   size?: number;
+  /**
+   * Render the icon inline with surrounding text instead of as a block.
+   * Tailwind preflight sets `svg { display: block }`, which drops an icon
+   * placed inside running text onto its own line. Opt in with `inline` so an
+   * in-text icon (e.g. a title edit pencil) sits beside the last word.
+   * Defaults to false; all existing call sites keep their block layout.
+   */
+  inline?: boolean;
 }
 
 interface SvgProps extends IconProps {
   children: ReactNode;
 }
 
-function Svg({ className, size = 18, children }: SvgProps) {
+function Svg({ className, size = 18, inline = false, children }: SvgProps) {
   return (
     <svg
       className={className}
+      style={inline ? { display: 'inline-block', verticalAlign: '-0.15em' } : undefined}
       width={size}
       height={size}
       viewBox="0 0 24 24"
