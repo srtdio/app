@@ -1,0 +1,28 @@
+name: Chat Webhook Mirror
+
+# Runs the chat-webhook-mirror Worker unit suite. The proc + supabase client are
+# mocked (rpc args asserted, not DB state), so no local Supabase stack is needed,
+# unlike the inbox-writer / comments suites this mirrors.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  chat-webhook-mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run chat-webhook-mirror worker suite
+        run: pnpm exec vitest run src/server/workers/chat-webhook-mirror.test.ts
