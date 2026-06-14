@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { supabase } from '@/lib/supabase';
@@ -10,10 +11,68 @@ import type { CommentEntityType, CommentRow } from '@srtdio/comments';
 // Post button disables and a friendly message shows before the request runs.
 const MAX_BODY = 10000;
 
+/** One caption_span annotation as it reads on a comment row. Optional surface:
+ *  posts pass it, briefs never do, so the chips are post-only by construction. */
+export interface CommentAnnotation {
+  n: number;
+  quote: string;
+  stale: boolean;
+  versionNumber: number;
+}
+
 interface CommentsProps {
   workspaceId: string;
   entityType: CommentEntityType;
   entityId: string;
+  /** Caption annotations keyed by comment id; absent on briefs (no chips). */
+  annotationsByCommentId?: Record<string, CommentAnnotation>;
+  /** Click a live chip; PostDetailPage scrolls to and flashes the highlight. */
+  onAnnotationChipClick?: (commentId: string) => void;
+  /** Bumped by the parent (e.g. after an annotate) to refetch page 0. */
+  refreshSignal?: number;
+}
+
+/** Stable DOM id for a comment row, so a caption highlight can scroll to it. */
+export function commentDomId(commentId: string): string {
+  return `comment-${commentId}`;
+}
+
+/**
+ * The caption-annotation chip for one comment row. Live (current copy) renders
+ * as a clickable amber chip with its quote; stale renders greyed and inert as
+ * "copy changed" with the version it was made on. Absent annotation (every
+ * brief comment) renders nothing, so the brief path is byte-unchanged.
+ */
+export function annotationChip(
+  commentId: string,
+  annotation: CommentAnnotation | undefined,
+  onClick?: (commentId: string) => void,
+): ReactNode {
+  if (annotation === undefined) return null;
+  if (annotation.stale) {
+    return (
+      <div className="mt-2">
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-panel-3 px-2.5 py-1 text-xs text-fg-3">
+          <span className="font-medium">copy changed · v{annotation.versionNumber}</span>
+          {annotation.quote !== '' ? (
+            <span className="max-w-[18rem] truncate">{annotation.quote}</span>
+          ) : null}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => onClick?.(commentId)}
+        className="inline-flex min-h-[44px] min-w-[44px] items-center gap-1.5 rounded-md border border-annotation-line bg-annotation-bg px-2.5 py-1 text-xs text-fg hover:opacity-90"
+      >
+        <sup className="text-[10px] font-semibold text-annotation-line">{annotation.n}</sup>
+        <span className="max-w-[18rem] truncate">{annotation.quote}</span>
+      </button>
+    </div>
+  );
 }
 
 // Format a stored timestamp as a localized date and time. Falls back to the raw
@@ -30,7 +89,14 @@ function formatTimestamp(value: string): string {
  * comments. Edit, delete, reply and the is_decision toggle after creation are
  * out of scope; the package exposes no such operations.
  */
-export function Comments({ workspaceId, entityType, entityId }: CommentsProps) {
+export function Comments({
+  workspaceId,
+  entityType,
+  entityId,
+  annotationsByCommentId,
+  onAnnotationChipClick,
+  refreshSignal,
+}: CommentsProps) {
   const newTrace = useNewTrace();
 
   const [comments, setComments] = useState<CommentRow[]>([]);
@@ -87,6 +153,17 @@ export function Comments({ workspaceId, entityType, entityId }: CommentsProps) {
   useEffect(() => {
     void loadPage(0);
   }, [loadPage]);
+
+  // A refreshSignal bump (e.g. a new caption annotation posted on the parent)
+  // refetches page 0. The mount load above already covers the initial value, so
+  // only an actual change reloads; an unset prop never reloads.
+  const lastSignal = useRef(refreshSignal);
+  useEffect(() => {
+    if (refreshSignal === undefined) return;
+    if (lastSignal.current === refreshSignal) return;
+    lastSignal.current = refreshSignal;
+    void loadPage(0);
+  }, [refreshSignal, loadPage]);
 
   const trimmed = body.trim();
   const tooLong = body.length > MAX_BODY;
@@ -175,7 +252,11 @@ export function Comments({ workspaceId, entityType, entityId }: CommentsProps) {
       ) : (
         <ul className="flex flex-col gap-3">
           {comments.map((comment) => (
-            <li key={comment.id} className="rounded-xl border border-border bg-panel-2 px-4 py-3">
+            <li
+              key={comment.id}
+              id={commentDomId(comment.id)}
+              className="rounded-xl border border-border bg-panel-2 px-4 py-3 transition-shadow"
+            >
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-xs font-medium text-fg-2 break-all">
                   {comment.author_user_id}
@@ -190,6 +271,11 @@ export function Comments({ workspaceId, entityType, entityId }: CommentsProps) {
                 </span>
               </div>
               <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">{comment.body}</p>
+              {annotationChip(
+                comment.id,
+                annotationsByCommentId?.[comment.id],
+                onAnnotationChipClick,
+              )}
             </li>
           ))}
         </ul>
