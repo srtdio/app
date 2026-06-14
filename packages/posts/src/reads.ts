@@ -154,6 +154,8 @@ export async function listPosts(client: Client, input: ListPostsInput): Promise<
  * Fetch one post by id together with its versions and annotations in a single
  * RLS-scoped query via PostgREST resource embedding (no per-row loops, no N+1).
  * Returns `{ ok: true, data: null }` when the post is absent or hidden by RLS.
+ * The embedded versions arrive ordered version_number ascending so callers (the
+ * F7.5 history viewer) get a deterministic chain without a second read.
  */
 export async function getPost(client: Client, postId: string): Promise<Result<PostDetail | null>> {
   const { data, error } = await client
@@ -161,6 +163,7 @@ export async function getPost(client: Client, postId: string): Promise<Result<Po
     .select('*, post_versions(*), post_annotations(*)')
     .eq('id', postId)
     .is('deleted_at', null)
+    .order('version_number', { referencedTable: 'post_versions', ascending: true })
     .maybeSingle();
 
   if (error) return { ok: false, error: transportError(error.message) };
