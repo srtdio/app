@@ -46,8 +46,7 @@ export interface SelectionLike {
 // member used, and a non-null value means this subtree is a superscript marker.
 function isMarker(node: Node): boolean {
   return (
-    node.nodeType === ELEMENT_NODE &&
-    (node as Element).getAttribute(CAPTION_MARKER_ATTR) !== null
+    node.nodeType === ELEMENT_NODE && (node as Element).getAttribute(CAPTION_MARKER_ATTR) !== null
   );
 }
 
@@ -149,13 +148,14 @@ interface CaptionViewModel {
  * first. Returned as a walkable element tree so it can be unit-tested without a
  * DOM, mirroring the gallery view helper.
  */
-export function captionView({ caption, annotations, onHighlightClick }: CaptionViewModel): ReactNode {
+export function captionView({
+  caption,
+  annotations,
+  onHighlightClick,
+}: CaptionViewModel): ReactNode {
   const valid = annotations
     .filter(
-      (a) =>
-        a.captionStart >= 0 &&
-        a.captionEnd <= caption.length &&
-        a.captionStart < a.captionEnd,
+      (a) => a.captionStart >= 0 && a.captionEnd <= caption.length && a.captionStart < a.captionEnd,
     )
     .sort((a, b) => a.captionStart - b.captionStart);
 
