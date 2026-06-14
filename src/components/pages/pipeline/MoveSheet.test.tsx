@@ -58,12 +58,13 @@ function labelOf(button: ReactElement): string | undefined {
   return undefined;
 }
 
-function targetRows(source: Stage): { label: string; disabled: boolean }[] {
+function targetRows(source: Stage, busy = false): { label: string; disabled: boolean }[] {
   const tree = MoveSheet({
     open: true,
     post: makePost(source),
     onClose: () => {},
     onMove: () => {},
+    busy,
   });
   const all: ReactElement[] = [];
   collect(tree, all);
@@ -140,6 +141,19 @@ describe('MoveSheet', () => {
     )!;
     (reviewRow.props as { onClick: () => void }).onClick();
     expect(onMove).toHaveBeenCalledWith('p1', 'review');
+  });
+
+  it('disables every move target while busy (in-flight move), overriding legality', () => {
+    const rows = targetRows('draft', true);
+    expect(rows.length).toBeGreaterThan(0);
+    // draft has legal targets (review, parked) that are enabled when idle; busy
+    // disables them too. Fails if MoveSheet ignores the busy prop.
+    expect(rows.every((row) => row.disabled)).toBe(true);
+  });
+
+  it('keeps legal targets enabled when not busy', () => {
+    const rows = targetRows('draft', false);
+    expect(rows.some((row) => !row.disabled)).toBe(true);
   });
 
   it('renders nothing when there is no post', () => {
