@@ -20,11 +20,11 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useSort } from '@/lib/use-sort';
 import {
-  DATE_SORT_DEFAULT,
-  DATE_SORT_OPTIONS,
-  filterByTitle,
-  sortByDate,
-  type DateSort,
+  POST_SORT_DEFAULT,
+  POST_SORT_OPTIONS,
+  filterByFields,
+  sortPosts,
+  type PostSort,
 } from '@/lib/list-sort';
 import { groupByStage, stageColumns } from '@/lib/post-board';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
@@ -43,8 +43,8 @@ const DESKTOP_QUERY = '(min-width: 768px)';
 interface PipelineHeaderProps {
   search: string;
   onSearchChange: (value: string) => void;
-  sort: DateSort;
-  onSortChange: (value: DateSort) => void;
+  sort: PostSort;
+  onSortChange: (value: PostSort) => void;
   stage: string;
   onStageChange: (key: string) => void;
   /** Per-tab post counts keyed by tab ('all' plus each Stage), shown as badges. */
@@ -68,9 +68,9 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
     })),
   ];
   return (
-    <SectionHeader<DateSort>
+    <SectionHeader<PostSort>
       search={{ value: props.search, onChange: props.onSearchChange, placeholder: 'Search posts' }}
-      sort={{ options: DATE_SORT_OPTIONS, value: props.sort, onChange: props.onSortChange }}
+      sort={{ options: POST_SORT_OPTIONS, value: props.sort, onChange: props.onSortChange }}
       primaryAction={{
         node: (
           <Button
@@ -193,7 +193,7 @@ export function PipelinePage() {
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [stage, setStage] = useState('all');
   const [search, setSearch] = useState('');
-  const { value: sort, setValue: setSort } = useSort<DateSort>('pipeline', DATE_SORT_DEFAULT);
+  const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
   const [cardDismissed, setCardDismissed] = useState(false);
   const [skipped, setSkipped] = useState<Record<string, boolean>>({});
 
@@ -253,11 +253,19 @@ export function PipelinePage() {
   }, []);
 
   // Search + sort are pure, derived over the in-memory list (listPosts loads the
-  // whole board), so no refetch and no N+1: filter by title, then order, then
-  // group into columns. groupByStage is generic over the element type, so it
-  // preserves PipelinePost (thumbnailAssetVersionId and all) with no assertion.
+  // whole board), so no refetch and no N+1: filter by title + caption + platform,
+  // then order, then group into columns. groupByStage is generic over the element
+  // type, so it preserves PipelinePost (thumbnailAssetVersionId and all) with no
+  // assertion.
   const grouped = useMemo(
-    () => groupByStage(sortByDate(filterByTitle(posts, search), sort), STAGES),
+    () =>
+      groupByStage(
+        sortPosts(
+          filterByFields(posts, search, (post) => [post.title, post.caption, post.platform]),
+          sort,
+        ),
+        STAGES,
+      ),
     [posts, search, sort],
   );
 
