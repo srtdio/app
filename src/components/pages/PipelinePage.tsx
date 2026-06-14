@@ -22,7 +22,10 @@ import {
 } from '@/lib/list-sort';
 import { groupByStage, stageColumns } from '@/lib/post-board';
 import { listPosts, STAGE_TRANSITIONS } from '@srtdio/posts';
-import type { Post, Stage } from '@srtdio/posts';
+import type { PipelinePost, Stage } from '@srtdio/posts';
+import { PresignCache } from '@/lib/asset-presign';
+import { fetchWithTrace } from '@/lib/fetch';
+import { env } from '@/lib/env';
 
 // The board columns are the workflow stages, in transition-map order. Stage
 // values come from the @srtdio/posts type, never hardcoded literals in JSX.
@@ -92,10 +95,25 @@ export function PipelinePage() {
   const [cardDismissed, setCardDismissed] = useState(false);
   const [skipped, setSkipped] = useState<Record<string, boolean>>({});
 
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<PipelinePost[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsError, setPostsError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // One presign cache for the whole board: it bounds concurrency and caches
+  // URLs so every card shares a single cap, mirroring AssetsPage. Cards
+  // lazy-resolve their own thumbnail via useInView; the page adds no fetches.
+  const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
+  const cache = useMemo(
+    () =>
+      new PresignCache({
+        endpoint: env.VITE_ASSET_READ_URL ?? null,
+        getAccessToken: async () =>
+          (await supabase.auth.getSession()).data.session?.access_token ?? null,
+        fetcher: (input, init) => fetchWithTrace(input, init),
+      }),
+    [],
+  );
 
   // One fetch for the whole board (no N+1): listPosts once, grouped in memory.
   const loadPosts = useCallback(async () => {
@@ -130,8 +148,16 @@ export function PipelinePage() {
   // Search + sort are pure, derived over the in-memory list (listPosts loads the
   // whole board), so no refetch and no N+1: filter by title, then order, then
   // group into columns.
+  // groupByStage is typed over the base Post, so it widens the element type back
+  // to Post and drops thumbnailAssetVersionId. The values are the very same
+  // PipelinePost objects from listPosts, so assert the element type back so each
+  // card receives the thumbnail field (no grouping behavior changes).
   const grouped = useMemo(
-    () => groupByStage(sortByDate(filterByTitle(posts, search), sort), STAGES),
+    () =>
+      groupByStage(sortByDate(filterByTitle(posts, search), sort), STAGES) as Record<
+        Stage,
+        PipelinePost[]
+      >,
     [posts, search, sort],
   );
 
@@ -246,7 +272,12 @@ export function PipelinePage() {
                 ) : (
                   <div className="flex flex-col gap-2 p-2">
                     {columnPosts.map((post) => (
-                      <PostCard key={post.id} post={post} />
+                      <PostCard
+                        key={post.id}
+                        post={post}
+                        cache={cache}
+                        presignEnabled={presignEnabled}
+                      />
                     ))}
                   </div>
                 )}
