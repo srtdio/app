@@ -7,11 +7,14 @@ import { SectionHeader } from '@/components/shell/SectionHeader';
 import { Tabs } from '@/components/shell/Tabs';
 import type { TabItem } from '@/components/shell/Tabs';
 import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
-import { PostCard } from '@/components/pages/PostCard';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
+import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
+import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
+import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { dispatchSorted } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useMediaQuery } from '@/lib/use-media-query';
 import { useSort } from '@/lib/use-sort';
 import {
   DATE_SORT_DEFAULT,
@@ -31,14 +34,8 @@ import { env } from '@/lib/env';
 // values come from the @srtdio/posts type, never hardcoded literals in JSX.
 const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 
-function stageLabel(stage: Stage): string {
-  return stage.charAt(0).toUpperCase() + stage.slice(1);
-}
-
-const STAGE_TABS: TabItem[] = [
-  { key: 'all', label: 'All' },
-  ...STAGES.map((stage) => ({ key: stage, label: stageLabel(stage) })),
-];
+// The app's md breakpoint: kanban at >=768px, the stacked tab feed below it.
+const DESKTOP_QUERY = '(min-width: 768px)';
 
 interface PipelineHeaderProps {
   search: string;
@@ -47,15 +44,26 @@ interface PipelineHeaderProps {
   onSortChange: (value: DateSort) => void;
   stage: string;
   onStageChange: (key: string) => void;
+  /** Per-tab post counts keyed by tab ('all' plus each Stage), shown as badges. */
+  counts: Record<string, number>;
 }
 
 /**
  * The Pipeline header chrome: the shared SectionHeader (search, sort, accent "+"
- * create) with the stage tabs in the filter-chips slot. Pure (no hooks) so the
- * wiring is unit-tested by walking the returned tree, mirroring SectionHeader's
- * own tests; the page owns the state and re-fetch.
+ * create) with the stage tabs in the filter-chips slot. Each tab carries its
+ * post count as a trailing badge in the label (the Tabs primitive renders a
+ * label, reused unchanged). Pure (no hooks) so the wiring is unit-tested by
+ * walking the returned tree, mirroring SectionHeader's own tests; the page owns
+ * the state and re-fetch.
  */
 export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
+  const tabs: TabItem[] = [
+    { key: 'all', label: `All ${props.counts.all ?? 0}` },
+    ...STAGES.map((stage) => ({
+      key: stage,
+      label: `${stageLabel(stage)} ${props.counts[stage] ?? 0}`,
+    })),
+  ];
   return (
     <SectionHeader<DateSort>
       search={{ value: props.search, onChange: props.onSearchChange, placeholder: 'Search posts' }}
@@ -74,7 +82,7 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
         ),
       }}
     >
-      <Tabs items={STAGE_TABS} active={props.stage} onChange={props.onStageChange} />
+      <Tabs items={tabs} active={props.stage} onChange={props.onStageChange} />
     </SectionHeader>
   );
 }
@@ -89,6 +97,7 @@ interface OnboardingStep {
 export function PipelinePage() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [stage, setStage] = useState('all');
   const [search, setSearch] = useState('');
   const { value: sort, setValue: setSort } = useSort<DateSort>('pipeline', DATE_SORT_DEFAULT);
@@ -147,19 +156,24 @@ export function PipelinePage() {
 
   // Search + sort are pure, derived over the in-memory list (listPosts loads the
   // whole board), so no refetch and no N+1: filter by title, then order, then
-  // group into columns.
-  // groupByStage is typed over the base Post, so it widens the element type back
-  // to Post and drops thumbnailAssetVersionId. The values are the very same
-  // PipelinePost objects from listPosts, so assert the element type back so each
-  // card receives the thumbnail field (no grouping behavior changes).
+  // group into columns. groupByStage is generic over the element type, so it
+  // preserves PipelinePost (thumbnailAssetVersionId and all) with no assertion.
   const grouped = useMemo(
-    () =>
-      groupByStage(sortByDate(filterByTitle(posts, search), sort), STAGES) as Record<
-        Stage,
-        PipelinePost[]
-      >,
+    () => groupByStage(sortByDate(filterByTitle(posts, search), sort), STAGES),
     [posts, search, sort],
   );
+
+  // Per-tab counts over the filtered list: each stage plus the 'all' total.
+  const counts = useMemo(() => {
+    const out: Record<string, number> = {};
+    let total = 0;
+    for (const s of STAGES) {
+      out[s] = grouped[s].length;
+      total += grouped[s].length;
+    }
+    out.all = total;
+    return out;
+  }, [grouped]);
 
   const visibleStages = stageColumns(STAGES, stage);
 
@@ -198,6 +212,7 @@ export function PipelinePage() {
         onSortChange: setSort,
         stage,
         onStageChange: setStage,
+        counts,
       })}
 
       <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">
@@ -250,41 +265,24 @@ export function PipelinePage() {
         </div>
       ) : boardLoading ? (
         <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading posts</div>
+      ) : isDesktop ? (
+        <PipelineBoard
+          stages={visibleStages}
+          grouped={grouped}
+          cap={stage === 'all' ? BOARD_CAP : null}
+          cache={cache}
+          presignEnabled={presignEnabled}
+          onViewAll={setStage}
+        />
       ) : (
-        <div className="px-4 md:px-6 py-4 flex gap-3 overflow-x-auto">
-          {visibleStages.map((columnStage) => {
-            const columnPosts = grouped[columnStage];
-            return (
-              <div
-                key={columnStage}
-                className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2"
-              >
-                <div className="flex items-center gap-2 px-3 h-11 border-b border-border">
-                  <span className="text-sm font-medium">{stageLabel(columnStage)}</span>
-                  <span className="ml-auto text-xs text-fg-3 tabular-nums">
-                    {columnPosts.length}
-                  </span>
-                </div>
-                {columnPosts.length === 0 ? (
-                  <div className="flex items-center justify-center min-h-[160px] px-3 py-6 text-sm text-fg-3">
-                    No posts
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2 p-2">
-                    {columnPosts.map((post) => (
-                      <PostCard
-                        key={post.id}
-                        post={post}
-                        cache={cache}
-                        presignEnabled={presignEnabled}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <PipelineFeed
+          stages={STAGES}
+          grouped={grouped}
+          activeStage={stage}
+          cache={cache}
+          presignEnabled={presignEnabled}
+          onViewAll={setStage}
+        />
       )}
 
       <CreatePostSheet

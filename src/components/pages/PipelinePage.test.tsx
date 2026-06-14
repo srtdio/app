@@ -59,6 +59,7 @@ function header(): ReactElement {
     onSortChange: () => {},
     stage: 'all',
     onStageChange: () => {},
+    counts: { all: 3, draft: 2, review: 1 },
   });
 }
 
@@ -82,8 +83,10 @@ describe('pipelineHeader', () => {
   it('keeps the stage tabs in the filter slot', () => {
     const tabs = findAll(header(), (el) => el.type === Tabs);
     expect(tabs).toHaveLength(1);
-    const items = (tabs[0]!.props as { items: { label: string }[] }).items;
-    expect(items.map((t) => t.label)).toContain('All');
+    const items = (tabs[0]!.props as { items: { key: string; label: string }[] }).items;
+    expect(items.map((t) => t.key)).toContain('all');
+    // The label carries the count as a trailing badge, e.g. "All 3".
+    expect(items.find((t) => t.key === 'all')?.label).toBe('All 3');
   });
 
   it('drops the dead Sort button and decorative add-chips', () => {
