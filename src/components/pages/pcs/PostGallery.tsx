@@ -63,23 +63,51 @@ function GalleryThumb({
   );
 }
 
+// Map the column count to a literal Tailwind grid class. The default (4)
+// reproduces the post gallery's responsive grid byte-for-byte; the brief gallery
+// passes 2. Literal strings keep both classes visible to the Tailwind JIT
+// scanner, which cannot see interpolated class names.
+function gridClass(columns: number): string {
+  return columns === 2
+    ? 'grid grid-cols-2 gap-3'
+    : 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4';
+}
+
+// Map the aspect token to a literal Tailwind arbitrary-aspect class, for the same
+// JIT-visibility reason. The default (4/5) matches the post gallery's tiles; the
+// brief gallery passes 3/2.
+function aspectClass(aspect: string): string {
+  return aspect === '3/2' ? 'aspect-[3/2]' : 'aspect-[4/5]';
+}
+
 interface GalleryViewProps {
   items: GalleryItem[];
   cache: PresignCache;
   presignEnabled: boolean;
   onOpen: (index: number) => void;
+  /** Grid columns. Defaults to the post gallery's responsive 4-up grid. */
+  columns?: number;
+  /** Tile aspect ratio token. Defaults to the post gallery's 4/5. */
+  aspect?: string;
+  /** Per-tile index badge. Defaults to on, as the post gallery shows it. */
+  showIndex?: boolean;
 }
 
 /**
  * The gallery's presentational tree, kept hookless so the tree-walking unit tests
  * can exercise it without a DOM renderer. Renders the ordered thumbnail grid, or a
- * calm empty state when the post has no images.
+ * calm empty state when the post has no images. The optional columns / aspect /
+ * showIndex props default to the post gallery's look, so callers that omit them
+ * (the post detail page) render unchanged; the brief gallery overrides all three.
  */
 export function galleryView({
   items,
   cache,
   presignEnabled,
   onOpen,
+  columns = 4,
+  aspect = '4/5',
+  showIndex = true,
 }: GalleryViewProps): ReactElement {
   if (items.length === 0) {
     return (
@@ -89,19 +117,21 @@ export function galleryView({
     );
   }
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+    <div className={gridClass(columns)}>
       {items.map((item, index) => (
         <button
           key={item.assetAttachmentId}
           type="button"
           aria-label={`View image ${index + 1}`}
           onClick={() => onOpen(index)}
-          className="group relative aspect-[4/5] overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className={`group relative ${aspectClass(aspect)} overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
         >
           <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
-          <span className="absolute left-1.5 top-1.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
-            {index + 1}/{items.length}
-          </span>
+          {showIndex ? (
+            <span className="absolute left-1.5 top-1.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
+              {index + 1}/{items.length}
+            </span>
+          ) : null}
         </button>
       ))}
     </div>
@@ -113,19 +143,43 @@ interface PostGalleryProps {
   cache: PresignCache;
   deps: PresignDeps;
   presignEnabled: boolean;
+  /** Grid columns. Defaults to the post gallery's responsive 4-up grid. */
+  columns?: number;
+  /** Tile aspect ratio token. Defaults to the post gallery's 4/5. */
+  aspect?: string;
+  /** Per-tile index badge. Defaults to on, as the post gallery shows it. */
+  showIndex?: boolean;
 }
 
 /**
- * The post's images as an ordered, view-only thumbnail grid. Tapping a tile opens
- * the PCS {@link PostLightbox} at that index. No add/reorder/remove (F7) and no
- * pins/annotations (F5) here; the lightbox carries the inert F5 seams.
+ * A post's (or brief's) images as an ordered, view-only thumbnail grid. Tapping a
+ * tile opens the PCS {@link PostLightbox} at that index. No add/reorder/remove
+ * (F7) and no pins/annotations (F5) here; the lightbox carries the inert F5 seams.
+ * The columns / aspect / showIndex props default to the post gallery's look, so
+ * the post detail page renders unchanged; the brief gallery overrides them.
  */
-export function PostGallery({ items, cache, deps, presignEnabled }: PostGalleryProps) {
+export function PostGallery({
+  items,
+  cache,
+  deps,
+  presignEnabled,
+  columns = 4,
+  aspect = '4/5',
+  showIndex = true,
+}: PostGalleryProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
     <>
-      {galleryView({ items, cache, presignEnabled, onOpen: setOpenIndex })}
+      {galleryView({
+        items,
+        cache,
+        presignEnabled,
+        onOpen: setOpenIndex,
+        columns,
+        aspect,
+        showIndex,
+      })}
       {openIndex !== null ? (
         <PostLightbox
           items={items}

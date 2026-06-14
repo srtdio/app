@@ -30,6 +30,10 @@ function label(el: ReactElement): string | undefined {
   return (el.props as { 'aria-label'?: string })['aria-label'];
 }
 
+function className(el: ReactElement): string {
+  return (el.props as { className?: string }).className ?? '';
+}
+
 // A presign cache stub: the walk never reaches GalleryThumb's hooks, so peek and
 // resolve only need to exist.
 const cache = {
@@ -79,5 +83,47 @@ describe('galleryView', () => {
       .map((el) => (el.props as { children?: ReactNode }).children)
       .filter((child): child is string => typeof child === 'string');
     expect(strings).toContain('No images on this post yet.');
+  });
+
+  it('honours the brief props: 2 columns, 3/2 aspect, no index badge', () => {
+    const items = [item(0), item(1)];
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      columns: 2,
+      aspect: '3/2',
+      showIndex: false,
+    });
+    const all = elements(tree);
+
+    // The grid container is 2-up, without the responsive 3-/4-up classes.
+    const grid = all.find((el) => className(el).startsWith('grid '))!;
+    expect(className(grid)).toContain('grid-cols-2');
+    expect(className(grid)).not.toContain('md:grid-cols-4');
+
+    // Every tile renders at the 3/2 aspect.
+    const tiles = all.filter((el) => label(el)?.startsWith('View image'));
+    expect(tiles.length).toBe(2);
+    expect(tiles.every((el) => className(el).includes('aspect-[3/2]'))).toBe(true);
+
+    // No per-tile index badge is emitted.
+    expect(all.some((el) => className(el).includes('text-overlay-fg'))).toBe(false);
+  });
+
+  it('defaults preserve the original post layout (4-up, 4/5, indexed)', () => {
+    const items = [item(0), item(1)];
+    const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
+    const all = elements(tree);
+
+    const grid = all.find((el) => className(el).startsWith('grid '))!;
+    expect(className(grid)).toBe('grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4');
+
+    const tiles = all.filter((el) => label(el)?.startsWith('View image'));
+    expect(tiles.every((el) => className(el).includes('aspect-[4/5]'))).toBe(true);
+
+    // The index badge is present by default.
+    expect(all.some((el) => className(el).includes('text-overlay-fg'))).toBe(true);
   });
 });

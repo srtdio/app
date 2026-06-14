@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconBriefs } from '@/components/ui/icons';
+import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
 import { supabase } from '@/lib/supabase';
+import { fetchWithTrace } from '@/lib/fetch';
+import { env } from '@/lib/env';
+import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
-import { getBrief } from '@srtdio/briefs';
-import type { BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
+import { getBrief, getBriefGallery } from '@srtdio/briefs';
+import type { BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
 import { briefClose } from '@srtdio/rpc';
 
 // Status badge styling. Open reads as the active/good state, Closed as muted;
@@ -62,6 +66,7 @@ export function BriefDetailPage() {
   const { workspaceId } = useWorkspace();
 
   const [detail, setDetail] = useState<BriefWithLinkedCount | null>(null);
+  const [gallery, setGallery] = useState<BriefGalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -69,6 +74,22 @@ export function BriefDetailPage() {
   const [confirming, setConfirming] = useState(false);
   const [closing, setClosing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // One presign setup for this page, built exactly as the post detail page does:
+  // the asset-read endpoint env, the existing access-token source, and the trace
+  // fetcher. deps are kept for the lightbox's attachment-disposition download; the
+  // cache bounds concurrency and reuses inline URLs across thumbnails.
+  const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
+  const deps = useMemo<PresignDeps>(
+    () => ({
+      endpoint: env.VITE_ASSET_READ_URL ?? null,
+      getAccessToken: async () =>
+        (await supabase.auth.getSession()).data.session?.access_token ?? null,
+      fetcher: (input, init) => fetchWithTrace(input, init),
+    }),
+    [],
+  );
+  const cache = useMemo(() => new PresignCache(deps), [deps]);
 
   // `silent` skips the full-page loading flip so the post-close refetch updates
   // the badge and the action in place rather than blanking the screen.
@@ -101,6 +122,23 @@ export function BriefDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The reference gallery is a separate read (asset_attachments has no FK back to
+  // briefs, so it cannot ride getBrief's read) and is non-critical: a failure or
+  // an absent brief simply leaves the gallery empty rather than blocking the page.
+  useEffect(() => {
+    if (briefId === undefined) {
+      setGallery([]);
+      return;
+    }
+    let active = true;
+    void getBriefGallery(supabase, briefId).then((result) => {
+      if (active) setGallery(result.ok ? result.data : []);
+    });
+    return () => {
+      active = false;
+    };
+  }, [briefId]);
 
   async function handleClose(): Promise<void> {
     if (briefId === undefined) return;
@@ -191,6 +229,24 @@ export function BriefDetailPage() {
 
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 flex flex-col gap-6">
+          {gallery.length > 0 ? (
+            <section>
+              <p className="mb-3 text-sm text-fg-3">
+                Reference images from the client. Tap for full screen or download. Briefs are
+                read-only after creation.
+              </p>
+              <PostGallery
+                items={gallery}
+                cache={cache}
+                deps={deps}
+                presignEnabled={presignEnabled}
+                columns={2}
+                aspect="3/2"
+                showIndex={false}
+              />
+            </section>
+          ) : null}
+
           <section>
             <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
               Objective
