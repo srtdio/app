@@ -60,7 +60,9 @@ describe('parseSnapshot', () => {
 
 describe('currentVersionNumber', () => {
   it('returns the highest version number', () => {
-    expect(currentVersionNumber([{ versionNumber: 1 }, { versionNumber: 3 }, { versionNumber: 2 }])).toBe(3);
+    expect(
+      currentVersionNumber([{ versionNumber: 1 }, { versionNumber: 3 }, { versionNumber: 2 }]),
+    ).toBe(3);
   });
 
   it('returns null for an empty list', () => {

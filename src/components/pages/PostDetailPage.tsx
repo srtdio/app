@@ -313,10 +313,7 @@ export function PostDetailPage() {
     () => (detail === null ? [] : toVersionViews(detail.versions)),
     [detail],
   );
-  const currentVersionNumber = useMemo(
-    () => currentVersionNumberOf(versionViews),
-    [versionViews],
-  );
+  const currentVersionNumber = useMemo(() => currentVersionNumberOf(versionViews), [versionViews]);
 
   // Read-only mode is gated solely by viewingVersion: when set to a non-current
   // version, every write affordance below is suppressed and the read-only view
@@ -880,177 +877,177 @@ export function PostDetailPage() {
           onBack={() => setViewingVersionId(null)}
         />
       ) : (
-      <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 flex flex-col gap-6">
-          <section>
-            <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-              Gallery
-            </div>
-            <PostGallery
-              items={gallery}
-              cache={cache}
-              deps={deps}
-              presignEnabled={presignEnabled}
-              pinOverlay={(item) => (
-                <PinOverlay
-                  pins={pinsByAttachment[item.assetAttachmentId] ?? []}
-                  onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
-                />
-              )}
-              onRequestPin={handleRequestPin}
-              onPlacePin={handlePlacePin}
-              pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
-              onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
-              onAddSlide={agencySide ? () => openAdd({ mode: 'append' }) : undefined}
-            />
-            {pinError !== null ? (
-              <div
-                role="alert"
-                className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-              >
-                {pinError}
+        <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2 flex flex-col gap-6">
+            <section>
+              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
+                Gallery
               </div>
-            ) : null}
-          </section>
-
-          <section>
-            <div className="mb-2 flex items-center gap-1">
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-3">Caption</div>
-              {agencySide && !editingCaption ? (
-                <button
-                  type="button"
-                  aria-label="Edit caption"
-                  onClick={openCaptionEditor}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              <PostGallery
+                items={gallery}
+                cache={cache}
+                deps={deps}
+                presignEnabled={presignEnabled}
+                pinOverlay={(item) => (
+                  <PinOverlay
+                    pins={pinsByAttachment[item.assetAttachmentId] ?? []}
+                    onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
+                  />
+                )}
+                onRequestPin={handleRequestPin}
+                onPlacePin={handlePlacePin}
+                pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
+                onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
+                onAddSlide={agencySide ? () => openAdd({ mode: 'append' }) : undefined}
+              />
+              {pinError !== null ? (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
                 >
-                  <IconPencil size={16} />
-                </button>
-              ) : null}
-            </div>
-            {editingCaption ? (
-              <div className="flex flex-col gap-2">
-                <Textarea
-                  autoFocus
-                  aria-label="Caption"
-                  value={captionDraft}
-                  disabled={captionSaving}
-                  onChange={(event) => setCaptionDraft(event.target.value)}
-                  className="min-h-[140px]"
-                />
-                {captionError !== null ? (
-                  <div role="alert" className="text-sm text-bad">
-                    {captionError}
-                  </div>
-                ) : null}
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    disabled={captionSaving}
-                    onClick={() => void saveCaption()}
-                  >
-                    {captionSaving ? 'Saving' : 'Save'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    disabled={captionSaving}
-                    onClick={() => {
-                      setEditingCaption(false);
-                      setCaptionError(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <span className="ml-auto text-xs tabular-nums text-fg-3">
-                    {captionDraft.trim().length}/5000
-                  </span>
+                  {pinError}
                 </div>
-              </div>
-            ) : post.caption !== null && post.caption.trim() !== '' ? (
-              <CaptionView
-                caption={post.caption}
-                annotations={highlights}
-                onHighlightClick={(commentId) => flashTo(`comment-${commentId}`)}
-                onAnnotate={handleAnnotate}
-              />
-            ) : (
-              <p className="text-sm text-fg-3">No caption yet.</p>
-            )}
-            {annotateError !== null ? (
-              <div
-                role="alert"
-                className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-              >
-                {annotateError}
-              </div>
-            ) : null}
-          </section>
+              ) : null}
+            </section>
 
-          <section>
-            <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-              Comments
-            </div>
-            {workspaceId !== null && postId !== undefined ? (
-              <Comments
-                workspaceId={workspaceId}
-                entityType="post"
-                entityId={postId}
-                annotationsByCommentId={annotationsByCommentId}
-                onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
-                refreshSignal={commentsRefresh}
-              />
-            ) : (
-              <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
-                Select a workspace to view comments.
-              </div>
-            )}
-          </section>
-        </div>
-
-        <aside className="flex flex-col gap-6">
-          <section>
-            <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-              Actions
-            </div>
-            {stageActions.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {stageActions.map((action) => (
-                  <Button
-                    key={action.to}
-                    size="lg"
-                    variant={action.variant}
-                    disabled={transitioning}
-                    onClick={() => void handleTransition(action.to)}
+            <section>
+              <div className="mb-2 flex items-center gap-1">
+                <div className="text-xs font-medium uppercase tracking-wide text-fg-3">Caption</div>
+                {agencySide && !editingCaption ? (
+                  <button
+                    type="button"
+                    aria-label="Edit caption"
+                    onClick={openCaptionEditor}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
-                    {action.label}
-                  </Button>
-                ))}
+                    <IconPencil size={16} />
+                  </button>
+                ) : null}
               </div>
-            ) : (
-              <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
-            )}
-            {actionError !== null ? (
-              <div
-                role="alert"
-                className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-              >
-                {actionError}
-              </div>
-            ) : null}
-          </section>
+              {editingCaption ? (
+                <div className="flex flex-col gap-2">
+                  <Textarea
+                    autoFocus
+                    aria-label="Caption"
+                    value={captionDraft}
+                    disabled={captionSaving}
+                    onChange={(event) => setCaptionDraft(event.target.value)}
+                    className="min-h-[140px]"
+                  />
+                  {captionError !== null ? (
+                    <div role="alert" className="text-sm text-bad">
+                      {captionError}
+                    </div>
+                  ) : null}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      disabled={captionSaving}
+                      onClick={() => void saveCaption()}
+                    >
+                      {captionSaving ? 'Saving' : 'Save'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="lg"
+                      disabled={captionSaving}
+                      onClick={() => {
+                        setEditingCaption(false);
+                        setCaptionError(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <span className="ml-auto text-xs tabular-nums text-fg-3">
+                      {captionDraft.trim().length}/5000
+                    </span>
+                  </div>
+                </div>
+              ) : post.caption !== null && post.caption.trim() !== '' ? (
+                <CaptionView
+                  caption={post.caption}
+                  annotations={highlights}
+                  onHighlightClick={(commentId) => flashTo(`comment-${commentId}`)}
+                  onAnnotate={handleAnnotate}
+                />
+              ) : (
+                <p className="text-sm text-fg-3">No caption yet.</p>
+              )}
+              {annotateError !== null ? (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+                >
+                  {annotateError}
+                </div>
+              ) : null}
+            </section>
 
-          <section>
-            <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-              Channel
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <Chip label={humanize(post.platform)} />
-              <Chip label={humanize(post.format)} />
-            </div>
-          </section>
-        </aside>
-      </div>
+            <section>
+              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
+                Comments
+              </div>
+              {workspaceId !== null && postId !== undefined ? (
+                <Comments
+                  workspaceId={workspaceId}
+                  entityType="post"
+                  entityId={postId}
+                  annotationsByCommentId={annotationsByCommentId}
+                  onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
+                  refreshSignal={commentsRefresh}
+                />
+              ) : (
+                <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
+                  Select a workspace to view comments.
+                </div>
+              )}
+            </section>
+          </div>
+
+          <aside className="flex flex-col gap-6">
+            <section>
+              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
+                Actions
+              </div>
+              {stageActions.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {stageActions.map((action) => (
+                    <Button
+                      key={action.to}
+                      size="lg"
+                      variant={action.variant}
+                      disabled={transitioning}
+                      onClick={() => void handleTransition(action.to)}
+                    >
+                      {action.label}
+                    </Button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
+              )}
+              {actionError !== null ? (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+                >
+                  {actionError}
+                </div>
+              ) : null}
+            </section>
+
+            <section>
+              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
+                Channel
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <Chip label={humanize(post.platform)} />
+                <Chip label={humanize(post.format)} />
+              </div>
+            </section>
+          </aside>
+        </div>
       )}
 
       <CaptionAnnotationComposer

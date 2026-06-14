@@ -47,8 +47,20 @@ function postRow() {
     stage: 'draft',
     deleted_at: null,
     post_versions: [
-      { id: 'v1', version_number: 1, snapshot: { caption: 'c', gallery: [] }, created_by: 'u', created_at: 't1' },
-      { id: 'v2', version_number: 2, snapshot: { caption: 'c2', gallery: [] }, created_by: 'u', created_at: 't2' },
+      {
+        id: 'v1',
+        version_number: 1,
+        snapshot: { caption: 'c', gallery: [] },
+        created_by: 'u',
+        created_at: 't1',
+      },
+      {
+        id: 'v2',
+        version_number: 2,
+        snapshot: { caption: 'c2', gallery: [] },
+        created_by: 'u',
+        created_at: 't2',
+      },
     ],
     post_annotations: [{ id: 'a1', kind: 'caption_span' }],
   };
