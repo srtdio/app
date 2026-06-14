@@ -5,9 +5,13 @@
 
 import type { Post, Stage } from '@srtdio/posts';
 
-/** Group posts into one bucket per stage, preserving the input order within each. */
-export function groupByStage(posts: Post[], stages: Stage[]): Record<Stage, Post[]> {
-  const map = Object.fromEntries(stages.map((s) => [s, [] as Post[]])) as Record<Stage, Post[]>;
+/**
+ * Group posts into one bucket per stage, preserving the input order within each.
+ * Generic over the post shape so the element type (e.g. PipelinePost, which adds
+ * thumbnailAssetVersionId) is preserved instead of widening back to Post.
+ */
+export function groupByStage<T extends Post>(posts: T[], stages: Stage[]): Record<Stage, T[]> {
+  const map = Object.fromEntries(stages.map((s) => [s, [] as T[]])) as Record<Stage, T[]>;
   for (const post of posts) {
     const column = map[post.stage as Stage];
     if (column !== undefined) column.push(post);
