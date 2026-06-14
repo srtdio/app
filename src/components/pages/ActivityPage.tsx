@@ -11,6 +11,7 @@ import { useToasts } from '@/components/pages/assets/useToasts';
 import { ActivityRow } from '@/components/pages/activity/ActivityRow';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
 import {
+  ACTIVITY_PAGE_SIZE,
   bucketActorNames,
   entityHref,
   fetchActivityEntries,
@@ -53,6 +54,97 @@ const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'oldest', label: 'Oldest' },
 ];
 
+/** Optimistic snoozed_until for a kind; the proc returns the authoritative value
+ * (workspace timezone), this only flips the row's local state until it lands. */
+function optimisticSnoozeUntil(kind: SnoozeKind, nowMs: number): string | null {
+  switch (kind) {
+    case '1h':
+      return new Date(nowMs + 3_600_000).toISOString();
+    case '4h':
+      return new Date(nowMs + 4 * 3_600_000).toISOString();
+    case 'tomorrow_9':
+      return new Date(nowMs + 86_400_000).toISOString();
+    case 'next_week':
+      return new Date(nowMs + 7 * 86_400_000).toISOString();
+    case 'clear':
+      return null;
+  }
+}
+
+interface ActivityGroupProps {
+  group: ActivityItem[];
+  nowMs: number;
+  onOpenGroup: (group: ActivityItem[]) => void;
+  onOpen: (item: ActivityItem) => void;
+  onSnooze: (item: ActivityItem, kind: SnoozeKind) => void;
+  onMarkRead: (item: ActivityItem) => void;
+}
+
+/**
+ * One digest entry. A solo group is a single row; a threaded group (>1 entry on
+ * the same entity) leads with one row plus a "+N more" toggle that expands the
+ * rest inline. Opening the lead marks the whole thread read and navigates from it.
+ */
+function ActivityGroup({
+  group,
+  nowMs,
+  onOpenGroup,
+  onOpen,
+  onSnooze,
+  onMarkRead,
+}: ActivityGroupProps) {
+  const [expanded, setExpanded] = useState(false);
+  const lead = group[0];
+  if (lead === undefined) return null;
+  const rest = group.slice(1);
+
+  if (rest.length === 0) {
+    return (
+      <ActivityRow
+        item={lead}
+        nowMs={nowMs}
+        onOpen={() => onOpenGroup(group)}
+        onSnooze={onSnooze}
+        onMarkRead={onMarkRead}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <ActivityRow
+        item={lead}
+        nowMs={nowMs}
+        onOpen={() => onOpenGroup(group)}
+        onSnooze={onSnooze}
+        onMarkRead={onMarkRead}
+      />
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((prev) => !prev)}
+        className="flex min-h-[44px] w-full items-center px-4 text-left text-xs font-medium text-accent transition-colors hover:bg-panel-2 md:px-6"
+      >
+        {expanded ? 'Show less' : `+${rest.length} more`}
+      </button>
+      {expanded ? (
+        <div className="divide-y divide-border border-t border-border">
+          {rest.map((item) => (
+            <ActivityRow
+              key={item.id}
+              item={item}
+              nowMs={nowMs}
+              onOpen={onOpen}
+              onSnooze={onSnooze}
+              onMarkRead={onMarkRead}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ActivityPage() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
@@ -64,6 +156,8 @@ export function ActivityPage() {
 
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const { toasts, push, dismiss } = useToasts();
@@ -80,7 +174,25 @@ export function ActivityPage() {
       return;
     }
     setItems(result.data);
+    setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
   }, [workspaceId]);
+
+  // Fetch the next, older page (rows strictly before the oldest loaded created_at)
+  // and append it, re-running enrichment for just the new rows.
+  const loadMore = useCallback(async () => {
+    if (workspaceId === null) return;
+    const oldest = items[items.length - 1]?.createdAt;
+    if (oldest === undefined) return;
+    setLoadingMore(true);
+    const result = await fetchActivityEntries(supabase, workspaceId, { before: oldest });
+    setLoadingMore(false);
+    if (!result.ok) {
+      push('Could not load more activity');
+      return;
+    }
+    setItems((prev) => [...prev, ...result.data]);
+    setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
+  }, [workspaceId, items, push]);
 
   useEffect(() => {
     void loadActivity();
@@ -124,6 +236,25 @@ export function ActivityPage() {
     [workspaceId, newTrace, navigate, markReadLocal],
   );
 
+  // Open a thread: mark every entry in the group read (optimistic) and navigate
+  // from the lead entry.
+  const handleOpenGroup = useCallback(
+    (group: ActivityItem[]) => {
+      if (workspaceId === null) return;
+      const lead = group[0];
+      if (lead === undefined) return;
+      for (const entry of group) {
+        if (entry.readAt === null) {
+          markReadLocal(entry.id);
+          void markEntryRead(supabase, entry, workspaceId, newTrace());
+        }
+      }
+      const href = entityHref(lead);
+      if (href !== null) navigate(href);
+    },
+    [workspaceId, newTrace, navigate, markReadLocal],
+  );
+
   const handleMarkRead = useCallback(
     (item: ActivityItem) => {
       if (workspaceId === null || item.readAt !== null) return;
@@ -158,19 +289,24 @@ export function ActivityPage() {
     });
   }, [workspaceId, items, nowMs, newTrace, push, loadActivity]);
 
+  // Optimistic snooze: flip the row's snoozed_until locally first, then call the
+  // proc; on failure revert and surface the error (matches handleMarkRead).
   const handleSnooze = useCallback(
     (item: ActivityItem, kind: SnoozeKind) => {
       if (workspaceId === null) return;
+      const previous = item.snoozedUntil;
+      const next = optimisticSnoozeUntil(kind, Date.now());
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: next } : i)));
       void snoozeEntry(supabase, item, workspaceId, kind, newTrace()).then((result) => {
         if (!result.ok) {
-          push('Could not update snooze');
-          return;
+          setItems((prev) =>
+            prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: previous } : i)),
+          );
+          push(result.error.message);
         }
-        push(kind === 'clear' ? 'Reminder cleared' : 'Snoozed');
-        void loadActivity();
       });
     },
-    [workspaceId, newTrace, push, loadActivity],
+    [workspaceId, newTrace, push],
   );
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
@@ -239,29 +375,41 @@ export function ActivityPage() {
         />
       ) : (
         <div className="pb-6">
-          {buckets.map((bucket) => (
-            <section key={bucket.key} className="mt-4">
-              <div className="flex items-center gap-2.5 px-4 md:px-6">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-3">
-                  {bucket.label}
-                </h2>
-                <AvatarStack names={bucketActorNames(bucket.items)} />
-                <span className="ml-auto text-xs text-fg-3">{bucket.items.length}</span>
-              </div>
-              <div className="mt-1 divide-y divide-border">
-                {bucket.items.map((item) => (
-                  <ActivityRow
-                    key={item.id}
-                    item={item}
-                    nowMs={nowMs}
-                    onOpen={handleOpen}
-                    onSnooze={handleSnooze}
-                    onMarkRead={handleMarkRead}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+          {buckets.map((bucket) => {
+            const entries = bucket.groups.flat();
+            return (
+              <section key={bucket.key} className="mt-4">
+                <div className="flex items-center gap-2.5 px-4 md:px-6">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-3">
+                    {bucket.label}
+                  </h2>
+                  <AvatarStack names={bucketActorNames(entries)} />
+                  <span className="ml-auto text-xs text-fg-3">{entries.length}</span>
+                </div>
+                <div className="mt-1 divide-y divide-border">
+                  {bucket.groups.map((group) => (
+                    <ActivityGroup
+                      key={group[0]?.id ?? bucket.key}
+                      group={group}
+                      nowMs={nowMs}
+                      onOpenGroup={handleOpenGroup}
+                      onOpen={handleOpen}
+                      onSnooze={handleSnooze}
+                      onMarkRead={handleMarkRead}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+
+          {hasMore ? (
+            <div className="mt-4 flex justify-center px-4 md:px-6">
+              <Button variant="ghost" onClick={() => void loadMore()} disabled={loadingMore}>
+                {loadingMore ? 'Loading' : 'Load more'}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
 

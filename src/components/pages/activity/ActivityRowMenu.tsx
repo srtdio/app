@@ -74,7 +74,7 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
         isolate(event);
         onClick();
       }}
-      className="flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-3 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg md:min-h-0 md:h-10"
+      className="flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-3 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-fg-3">{icon}</span>
       <span className="flex-1">{label}</span>

@@ -233,7 +233,8 @@ export function relativeTime(iso: string, nowMs: number): string {
 export interface DigestBucket {
   key: 'today' | 'yesterday' | 'earlier';
   label: string;
-  items: ActivityItem[];
+  /** Threaded groups: a 1-entry group renders solo, a multi-entry group threads. */
+  groups: ActivityItem[][];
 }
 
 function startOfDay(ms: number): number {
@@ -243,9 +244,49 @@ function startOfDay(ms: number): number {
 }
 
 /**
- * Bucket items into Today / Yesterday / Earlier and order both the buckets and
- * the entries by `direction`. 'newest' = Today -> Yesterday -> Earlier with the
- * newest entry first in each; 'oldest' reverses both. Empty buckets are dropped.
+ * The threading key for an entry. Post/brief entries that share an entity collapse
+ * into one thread; everything else (and any entry without an entity) stays solo so
+ * it never threads with an unrelated row.
+ */
+export function entityKey(item: ActivityItem): string {
+  if ((item.entityType === 'post' || item.entityType === 'brief') && item.entityId !== null) {
+    return `${item.entityType}:${item.entityId}`;
+  }
+  return `solo:${item.id}`;
+}
+
+const newestFirst = (a: ActivityItem, b: ActivityItem): number =>
+  Date.parse(b.createdAt) - Date.parse(a.createdAt);
+
+/**
+ * Thread one bucket's entries into per-entity groups, ordering both the entries
+ * within each group and the groups themselves by `direction` (groups keyed on the
+ * lead entry's timestamp). 'newest' leads with the newest entry/group.
+ */
+function threadGroups(bucket: ActivityItem[], direction: ActivityDirection): ActivityItem[][] {
+  const byKey = new Map<string, ActivityItem[]>();
+  for (const item of bucket) {
+    const key = entityKey(item);
+    const existing = byKey.get(key);
+    if (existing) existing.push(item);
+    else byKey.set(key, [item]);
+  }
+  const groups = [...byKey.values()].map((entries) => {
+    const sorted = [...entries].sort(newestFirst);
+    return direction === 'oldest' ? sorted.reverse() : sorted;
+  });
+  const leadMs = (group: ActivityItem[]): number => {
+    const lead = group[0];
+    return lead !== undefined ? Date.parse(lead.createdAt) : 0;
+  };
+  groups.sort((a, b) => leadMs(b) - leadMs(a));
+  return direction === 'oldest' ? groups.reverse() : groups;
+}
+
+/**
+ * Bucket items into Today / Yesterday / Earlier, then thread each bucket into
+ * per-entity groups. Buckets, groups and entries all follow `direction`. 'newest'
+ * = Today -> Yesterday -> Earlier, newest first; 'oldest' reverses. Empty dropped.
  */
 export function groupDigest(
   items: readonly ActivityItem[],
@@ -264,57 +305,144 @@ export function groupDigest(
     else earlier.push(item);
   }
 
-  const newestFirst = (a: ActivityItem, b: ActivityItem): number =>
-    Date.parse(b.createdAt) - Date.parse(a.createdAt);
-  const sortBucket = (bucket: ActivityItem[]): ActivityItem[] => {
-    const sorted = [...bucket].sort(newestFirst);
-    return direction === 'oldest' ? sorted.reverse() : sorted;
-  };
-
   const buckets: DigestBucket[] = [
-    { key: 'today', label: 'Today', items: sortBucket(today) },
-    { key: 'yesterday', label: 'Yesterday', items: sortBucket(yesterday) },
-    { key: 'earlier', label: 'Earlier', items: sortBucket(earlier) },
+    { key: 'today', label: 'Today', groups: threadGroups(today, direction) },
+    { key: 'yesterday', label: 'Yesterday', groups: threadGroups(yesterday, direction) },
+    { key: 'earlier', label: 'Earlier', groups: threadGroups(earlier, direction) },
   ];
   const ordered = direction === 'oldest' ? buckets.reverse() : buckets;
-  return ordered.filter((bucket) => bucket.items.length > 0);
+  return ordered.filter((bucket) => bucket.groups.length > 0);
 }
 
 // --- network -----------------------------------------------------------------
 
 export type LoadResult = { ok: true; data: ActivityItem[] } | { ok: false; error: string };
 
+/** One page of inbox rows. The live writer emits minimal payloads, so author and
+ * title are resolved by join (see fetchActivityEntries), never read from payload. */
+export const ACTIVITY_PAGE_SIZE = 50;
+
+/** Event types whose actor is the comment author, resolved via the comments join. */
+const COMMENT_EVENTS = ['comment', 'mention', 'decision_marked'];
+
+const SELECT_COLS =
+  'id, workspace_id, event_type, entity_type, entity_id, scope, tier, created_at, read_at, snoozed_until, payload';
+
 /**
- * Read the caller's inbox for a workspace and resolve actor display names. One
- * RLS-scoped select plus one batched profile read (no N+1). Soft-deleted rows
- * are excluded; the inbox itself is a permanent surface (never cleared).
+ * Read one page of the caller's inbox for a workspace and enrich each row with the
+ * data the live (minimal) payloads omit: the actor's display name and the entity
+ * title, both resolved by batched joins (no N+1). One RLS-scoped select, then wave
+ * one (comments / posts / briefs by id) and wave two (users by id). Every join is
+ * best-effort: a failed sub-query leaves its field null rather than failing the
+ * feed. Soft-deleted rows are excluded; the inbox is a permanent surface. Pass
+ * `before` (the oldest loaded created_at) to fetch the next, older page.
  */
 export async function fetchActivityEntries(
   client: Client,
   workspaceId: string,
+  input: { before?: string } = {},
 ): Promise<LoadResult> {
-  const res = await client
+  const base = client
     .from('inbox_entries')
-    .select(
-      'id, workspace_id, event_type, entity_type, entity_id, scope, tier, created_at, read_at, snoozed_until, payload',
-    )
+    .select(SELECT_COLS)
     .eq('workspace_id', workspaceId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(200);
+    .is('deleted_at', null);
+  const scoped = input.before !== undefined ? base.lt('created_at', input.before) : base;
+  const res = await scoped.order('created_at', { ascending: false }).limit(ACTIVITY_PAGE_SIZE);
   if (res.error) return { ok: false, error: res.error.message };
 
-  const items = (res.data ?? []).map((row) => mapEntry(row as InboxEntryRow));
-  const actorIds = unique(items.flatMap((item) => (item.actorId !== null ? [item.actorId] : [])));
-  if (actorIds.length > 0) {
-    const profiles = await readProfiles(client, actorIds);
-    if (profiles.ok) {
-      const names = new Map(profiles.data.map((p) => [p.userId, p.displayName]));
-      for (const item of items) {
-        if (item.actorId !== null) item.actorName = names.get(item.actorId) ?? null;
-      }
-    }
+  const rows = (res.data ?? []).map((row) => row as InboxEntryRow);
+  const items = rows.map(mapEntry);
+
+  const commentIds = unique(
+    items.flatMap((item) =>
+      COMMENT_EVENTS.includes(item.eventType) && item.commentId !== null ? [item.commentId] : [],
+    ),
+  );
+  const postIds = unique(
+    items.flatMap((item) =>
+      item.entityType === 'post' && item.entityId !== null ? [item.entityId] : [],
+    ),
+  );
+  const briefIds = unique(
+    items.flatMap((item) =>
+      item.entityType === 'brief' && item.entityId !== null ? [item.entityId] : [],
+    ),
+  );
+
+  // WAVE 1: resolve comment authors and entity titles. Each sub-query is fired
+  // only when it has ids; a failed one yields an empty map (never fails the feed).
+  const [commentsRes, postsRes, briefsRes] = await Promise.all([
+    commentIds.length > 0
+      ? client.from('comments').select('id, author_user_id').in('id', commentIds)
+      : Promise.resolve(null),
+    postIds.length > 0
+      ? client.from('posts').select('id, title').in('id', postIds)
+      : Promise.resolve(null),
+    briefIds.length > 0
+      ? client.from('briefs').select('id, title').in('id', briefIds)
+      : Promise.resolve(null),
+  ]);
+
+  const commentAuthors = new Map<string, string>();
+  if (commentsRes !== null && commentsRes.error === null) {
+    for (const r of commentsRes.data ?? []) commentAuthors.set(r.id, r.author_user_id);
   }
+  const postTitles = new Map<string, string>();
+  if (postsRes !== null && postsRes.error === null) {
+    for (const r of postsRes.data ?? []) postTitles.set(r.id, r.title);
+  }
+  const briefTitles = new Map<string, string>();
+  if (briefsRes !== null && briefsRes.error === null) {
+    for (const r of briefsRes.data ?? []) briefTitles.set(r.id, r.title);
+  }
+
+  // WAVE 2: resolve the display names for every actor id we now know about: the
+  // comment authors plus the payload-supplied created_by / invited_by (actorId).
+  const userIds = unique([
+    ...items
+      .flatMap((item) =>
+        COMMENT_EVENTS.includes(item.eventType) && item.commentId !== null
+          ? [commentAuthors.get(item.commentId)]
+          : [],
+      )
+      .filter((id): id is string => typeof id === 'string'),
+    ...items.flatMap((item) => (item.actorId !== null ? [item.actorId] : [])),
+  ]);
+  const userNames = new Map<string, string>();
+  if (userIds.length > 0) {
+    const profiles = await readProfiles(client, userIds);
+    if (profiles.ok) for (const p of profiles.data) userNames.set(p.userId, p.displayName);
+  }
+
+  // STITCH: fill actorName and the resolved entity title from the joins above.
+  items.forEach((item, idx) => {
+    const payload: unknown = rows[idx]?.payload as Json | undefined;
+    if (COMMENT_EVENTS.includes(item.eventType)) {
+      const author = item.commentId !== null ? commentAuthors.get(item.commentId) : undefined;
+      item.actorName = author !== undefined ? (userNames.get(author) ?? null) : null;
+    } else if (item.eventType === 'brief_created' || item.eventType === 'brief_closed') {
+      const by = payloadStr(payload, 'created_by');
+      item.actorName = by !== null ? (userNames.get(by) ?? null) : null;
+    } else if (item.eventType === 'invite') {
+      const by = payloadStr(payload, 'invited_by');
+      item.actorName = by !== null ? (userNames.get(by) ?? null) : null;
+    } else {
+      item.actorName = null;
+    }
+
+    if (item.entityType === 'post') {
+      item.title = item.entityId !== null ? (postTitles.get(item.entityId) ?? null) : null;
+    } else if (item.entityType === 'brief') {
+      const fromJoin = item.entityId !== null ? briefTitles.get(item.entityId) : undefined;
+      item.title = fromJoin ?? payloadStr(payload, 'title') ?? null;
+    } else if (item.eventType === 'asset_uploaded') {
+      item.title = payloadStr(payload, 'filename');
+    } else {
+      item.title = null;
+    }
+  });
+
   return { ok: true, data: items };
 }
 

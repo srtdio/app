@@ -4,6 +4,8 @@ import {
   activityLine,
   bucketActorNames,
   entityHref,
+  entityKey,
+  fetchActivityEntries,
   filterByScope,
   filterByState,
   groupDigest,
@@ -241,28 +243,62 @@ describe('groupDigest', () => {
   const yesterdayTs = new Date(startOfToday - 6 * 3_600_000).toISOString();
   const olderTs = new Date(startOfToday - 3 * dayMs).toISOString();
 
+  // Solo entries (no shared entity) so each is its own group and the bucket /
+  // entry ordering is observed directly through the flattened groups.
   const items = [
-    item({ id: 'today-a', createdAt: todayTs }),
-    item({ id: 'yest', createdAt: yesterdayTs }),
-    item({ id: 'old', createdAt: olderTs }),
-    item({ id: 'today-b', createdAt: new Date(startOfToday + 8 * 3_600_000).toISOString() }),
+    item({ id: 'today-a', entityType: null, entityId: null, createdAt: todayTs }),
+    item({ id: 'yest', entityType: null, entityId: null, createdAt: yesterdayTs }),
+    item({ id: 'old', entityType: null, entityId: null, createdAt: olderTs }),
+    item({
+      id: 'today-b',
+      entityType: null,
+      entityId: null,
+      createdAt: new Date(startOfToday + 8 * 3_600_000).toISOString(),
+    }),
   ];
 
   it('newest: Today -> Yesterday -> Earlier, newest entry first', () => {
     const buckets = groupDigest(items, 'newest');
     expect(buckets.map((b) => b.key)).toEqual(['today', 'yesterday', 'earlier']);
-    expect(buckets[0]?.items.map((i) => i.id)).toEqual(['today-b', 'today-a']);
+    expect(buckets[0]?.groups.flat().map((i) => i.id)).toEqual(['today-b', 'today-a']);
   });
 
   it('oldest reverses both bucket and entry order', () => {
     const buckets = groupDigest(items, 'oldest');
     expect(buckets.map((b) => b.key)).toEqual(['earlier', 'yesterday', 'today']);
-    expect(buckets[2]?.items.map((i) => i.id)).toEqual(['today-a', 'today-b']);
+    expect(buckets[2]?.groups.flat().map((i) => i.id)).toEqual(['today-a', 'today-b']);
   });
 
   it('drops empty buckets', () => {
     const buckets = groupDigest([item({ createdAt: todayTs })], 'newest');
     expect(buckets.map((b) => b.key)).toEqual(['today']);
+  });
+
+  it('threads entries that share a post/brief entity and leaves the rest solo', () => {
+    const a = item({ id: 'a', entityType: 'post', entityId: 'p1', createdAt: todayTs });
+    const b = item({
+      id: 'b',
+      entityType: 'post',
+      entityId: 'p1',
+      createdAt: new Date(startOfToday + 9 * 3_600_000).toISOString(),
+    });
+    const c = item({
+      id: 'c',
+      entityType: 'brief',
+      entityId: 'x9',
+      createdAt: new Date(startOfToday + 7 * 3_600_000).toISOString(),
+    });
+    const buckets = groupDigest([a, b, c], 'newest');
+    expect(buckets[0]?.groups.map((g) => g.map((i) => i.id))).toEqual([['b', 'a'], ['c']]);
+  });
+});
+
+describe('entityKey', () => {
+  it('threads by entity for post/brief and stays solo otherwise', () => {
+    expect(entityKey(item({ entityType: 'post', entityId: 'p1' }))).toBe('post:p1');
+    expect(entityKey(item({ entityType: 'brief', entityId: 'b2' }))).toBe('brief:b2');
+    expect(entityKey(item({ id: 'z', entityType: 'post', entityId: null }))).toBe('solo:z');
+    expect(entityKey(item({ id: 'q', entityType: null, entityId: null }))).toBe('solo:q');
   });
 });
 
@@ -275,5 +311,146 @@ describe('bucketActorNames', () => {
       item({ actorName: 'Alice' }),
     ]);
     expect(names).toEqual(['Alice', 'Bo']);
+  });
+});
+
+// A hand-rolled PostgREST-ish fake: every builder method returns the same
+// chainable, which resolves (it is a thenable) to the canned result for its
+// table. No network, no Supabase. Covers from/select/eq/is/order/limit/lt for the
+// inbox read and from/select/in for the enrichment joins.
+describe('fetchActivityEntries enrichment', () => {
+  type QueryResult = { data: Record<string, unknown>[] | null; error: { message: string } | null };
+  type FakeClient = Parameters<typeof fetchActivityEntries>[0];
+
+  interface FakeBuilder extends PromiseLike<QueryResult> {
+    select(cols?: string): FakeBuilder;
+    eq(col: string, val: unknown): FakeBuilder;
+    is(col: string, val: unknown): FakeBuilder;
+    order(col: string, opts?: unknown): FakeBuilder;
+    limit(n: number): FakeBuilder;
+    lt(col: string, val: unknown): FakeBuilder;
+    in(col: string, vals: readonly unknown[]): FakeBuilder;
+  }
+
+  function builder(result: QueryResult): FakeBuilder {
+    const self: FakeBuilder = {
+      select: () => self,
+      eq: () => self,
+      is: () => self,
+      order: () => self,
+      limit: () => self,
+      lt: () => self,
+      in: () => self,
+      then(onfulfilled, onrejected) {
+        return Promise.resolve(result).then(onfulfilled, onrejected);
+      },
+    };
+    return self;
+  }
+
+  function fakeClient(tables: Record<string, QueryResult>): FakeClient {
+    const client = {
+      from(table: string): FakeBuilder {
+        return builder(tables[table] ?? { data: [], error: null });
+      },
+    };
+    return client as unknown as FakeClient;
+  }
+
+  const ok = (data: Record<string, unknown>[]): QueryResult => ({ data, error: null });
+  const err = (message: string): QueryResult => ({ data: null, error: { message } });
+
+  const inboxRow = (over: Partial<InboxEntryRow>): Record<string, unknown> =>
+    row(over) as unknown as Record<string, unknown>;
+
+  it('resolves a comment actorName via comments -> users and the title via posts', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-comment',
+          event_type: 'comment',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { comment_id: 'c1' },
+        }),
+      ]),
+      comments: ok([{ id: 'c1', author_user_id: 'u-alice' }]),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch' }]),
+      users: ok([{ id: 'u-alice', display_name: 'Alice', avatar_url: null }]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data[0]?.actorName).toBe('Alice');
+      expect(res.data[0]?.title).toBe('Q3 Launch');
+    }
+  });
+
+  it('resolves a stage_change title via posts with a null actor and the payload stage', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-stage',
+          event_type: 'stage_change',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { from: 'draft', to: 'review' },
+        }),
+      ]),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch' }]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data[0]?.title).toBe('Q3 Launch');
+      expect(res.data[0]?.actorName).toBeNull();
+      expect(res.data[0]?.toStage).toBe('review');
+    }
+  });
+
+  it('degrades when the comments sub-query errors: feed ok, actorName null', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-comment',
+          event_type: 'comment',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { comment_id: 'c1' },
+        }),
+      ]),
+      comments: err('comments boom'),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch' }]),
+      users: ok([{ id: 'u-alice', display_name: 'Alice', avatar_url: null }]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data[0]?.actorName).toBeNull();
+      expect(res.data[0]?.title).toBe('Q3 Launch');
+    }
+  });
+
+  it('degrades when the users sub-query errors: feed ok, actorName null', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-comment',
+          event_type: 'comment',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { comment_id: 'c1' },
+        }),
+      ]),
+      comments: ok([{ id: 'c1', author_user_id: 'u-alice' }]),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch' }]),
+      users: err('users down'),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data[0]?.actorName).toBeNull();
+      expect(res.data[0]?.title).toBe('Q3 Launch');
+    }
   });
 });

@@ -97,6 +97,27 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
     expect((await readEntry(id)).readAt).not.toBeNull();
   });
 
+  it('inbox_mark_read is idempotent: a second call keeps read_at set, no error', async () => {
+    const id = await insertEntry(member.id);
+    const first = await inboxMarkRead(clientFor(member.id), {
+      p_entry_id: id,
+      p_workspace_id: ws.id,
+      p_created_at: partitionTimestamp,
+      p_trace_id: generateTraceId(),
+    });
+    expect(first.ok).toBe(true);
+    expect((await readEntry(id)).readAt).not.toBeNull();
+
+    const second = await inboxMarkRead(clientFor(member.id), {
+      p_entry_id: id,
+      p_workspace_id: ws.id,
+      p_created_at: partitionTimestamp,
+      p_trace_id: generateTraceId(),
+    });
+    expect(second.ok).toBe(true);
+    expect((await readEntry(id)).readAt).not.toBeNull();
+  });
+
   it('inbox_mark_read never touches another user row', async () => {
     const ownerEntry = await insertEntry(owner.id);
     const result = await inboxMarkRead(clientFor(member.id), {
