@@ -34,18 +34,79 @@ export interface BriefWithLinkedCount {
   linked_posts_count: number;
 }
 
+/**
+ * A brief list row plus the asset_version_id of its first reference image (for the
+ * card thumbnail), or null when the brief has no image attachment. The thumbnail is
+ * resolved by {@link listBriefs} in one extra batched query over every returned
+ * brief, never one query per brief. Mirrors @srtdio/posts PipelinePost.
+ */
+export type BriefWithThumbnail = Brief & { thumbnailAssetVersionId: string | null };
+
 function transportError(message: string): DomainError {
   return { code: 'unknown', message };
 }
 
+// One row of the batched first-image lookup: an asset_attachments row with its
+// pinned version's mime_type embedded via an inner join (so only image-backed
+// attachments survive). The aliased select is wider than the generated row type
+// can express, so callers cast through `unknown`. Mirrors @srtdio/posts.
+interface FirstImageRow {
+  entity_id: string;
+  asset_version_id: string;
+  asset_versions: { mime_type: string | null } | null;
+}
+
+/**
+ * Resolve each brief's first image attachment's asset_version_id in ONE query over
+ * asset_attachments (no N+1, never one read per brief). "First image" is the live
+ * (deleted_at IS NULL), image-mime attachment with the lowest position, tie-broken
+ * by the earliest attached_at. The inner join + LIKE 'image/%' drops video/link/
+ * file attachments server-side; rows arrive grouped by entity_id and ordered
+ * position then attached_at ascending, so the first row seen per brief wins. Briefs
+ * with no image attachment never appear in the map (the caller maps them to null).
+ * entity_id is a TEXT column and brief ids are JS strings, so no uuid cast is
+ * needed. Returns an empty map without a round trip when there are no brief ids.
+ * A re-implementation of @srtdio/posts firstImageByPost for entity_type='brief';
+ * firstImageByPost is not exported, so this never imports from packages/posts.
+ */
+async function firstImageByBrief(
+  client: Client,
+  briefIds: string[],
+): Promise<Result<Map<string, string>>> {
+  if (briefIds.length === 0) return { ok: true, data: new Map() };
+
+  const { data, error } = await client
+    .from('asset_attachments')
+    .select('entity_id, asset_version_id, asset_versions!inner(mime_type)')
+    .eq('entity_type', 'brief')
+    .in('entity_id', briefIds)
+    .is('deleted_at', null)
+    .like('asset_versions.mime_type', 'image/%')
+    .order('entity_id', { ascending: true })
+    .order('position', { ascending: true })
+    .order('attached_at', { ascending: true });
+
+  if (error) return { ok: false, error: transportError(error.message) };
+
+  const rows = (data ?? []) as unknown as FirstImageRow[];
+  const firstByBrief = new Map<string, string>();
+  for (const row of rows) {
+    if (!firstByBrief.has(row.entity_id)) firstByBrief.set(row.entity_id, row.asset_version_id);
+  }
+  return { ok: true, data: firstByBrief };
+}
+
 /**
  * List briefs visible to the caller, newest first. Soft-deleted briefs are
- * excluded; the "recently deleted" surface is a separate concern.
+ * excluded; the "recently deleted" surface is a separate concern. One additional
+ * batched query then resolves each row's first reference image's asset_version_id
+ * for the card thumbnail ({@link firstImageByBrief}); briefs with no image carry
+ * null. No N+1. Returns [] (never null) when no briefs match.
  */
 export async function listBriefs(
   client: Client,
   filters: ListBriefsFilters = {},
-): Promise<Result<Brief[]>> {
+): Promise<Result<BriefWithThumbnail[]>> {
   let query = client.from('briefs').select('*').is('deleted_at', null);
   if (filters.status !== undefined) query = query.eq('status', filters.status);
   if (filters.createdBy !== undefined) query = query.eq('created_by', filters.createdBy);
@@ -61,7 +122,21 @@ export async function listBriefs(
     .range(offset, offset + limit - 1);
 
   if (error) return { ok: false, error: transportError(error.message) };
-  return { ok: true, data: data ?? [] };
+
+  const briefs = data ?? [];
+  const thumbnails = await firstImageByBrief(
+    client,
+    briefs.map((brief) => brief.id),
+  );
+  if (!thumbnails.ok) return thumbnails;
+
+  return {
+    ok: true,
+    data: briefs.map((brief) => ({
+      ...brief,
+      thumbnailAssetVersionId: thumbnails.data.get(brief.id) ?? null,
+    })),
+  };
 }
 
 /**

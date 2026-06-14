@@ -34,9 +34,11 @@ interface MockResult {
 interface MockBuilder extends PromiseLike<MockResult> {
   select(columns?: string, opts?: { count?: 'exact'; head?: boolean }): MockBuilder;
   eq(column: string, value: unknown): MockBuilder;
+  in(column: string, values: unknown): MockBuilder;
   is(column: string, value: unknown): MockBuilder;
   gte(column: string, value: unknown): MockBuilder;
   lte(column: string, value: unknown): MockBuilder;
+  like(column: string, value: unknown): MockBuilder;
   order(column: string, opts: { ascending: boolean }): MockBuilder;
   range(from: number, to: number): MockBuilder;
   maybeSingle(): Promise<MockResult>;
@@ -70,8 +72,16 @@ function mockClient(resultByTable: Record<string, MockResult>): {
         op.filters.push(['eq', column, value]);
         return builder;
       },
+      in(column, values) {
+        op.filters.push(['in', column, values]);
+        return builder;
+      },
       is(column, value) {
         op.filters.push(['is', column, value]);
+        return builder;
+      },
+      like(column, value) {
+        op.filters.push(['like', column, value]);
         return builder;
       },
       gte(column, value) {
@@ -239,7 +249,12 @@ describe('listBriefs', () => {
       offset: 20,
     });
 
-    expect(result).toEqual({ ok: true, data: rows });
+    // The list rows carry the additive derived thumbnail field; no asset_attachments
+    // result is configured, so each brief's thumbnail resolves to null.
+    expect(result).toEqual({
+      ok: true,
+      data: rows.map((brief) => ({ ...brief, thumbnailAssetVersionId: null })),
+    });
     const op = ops[0]!;
     expect(op.table).toBe('briefs');
     expect(op.filters).toContainEqual(['is', 'deleted_at', null]);
