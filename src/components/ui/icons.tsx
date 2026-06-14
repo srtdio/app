@@ -301,3 +301,105 @@ export function IconPin(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconComment(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-4 3V6z" />
+    </Svg>
+  );
+}
+
+export function IconMention(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M15.2 12v1.5a2.3 2.3 0 0 0 4.6 0V12a7.8 7.8 0 1 0-3 6.2" />
+    </Svg>
+  );
+}
+
+export function IconStageMove(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 12h13M13 7l5 5-5 5" />
+    </Svg>
+  );
+}
+
+export function IconFlag(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 21V4M5 4h11l-2 3 2 3H5" />
+    </Svg>
+  );
+}
+
+export function IconCheckCircle(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21 12a9 9 0 1 1-9-9M8.5 12l2.5 2.5L21 6" />
+    </Svg>
+  );
+}
+
+export function IconLayers(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5" />
+    </Svg>
+  );
+}
+
+export function IconUserPlus(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3.5 20a5.5 5.5 0 0 1 11 0M18 8v6M21 11h-6" />
+      <circle cx="9" cy="8" r="3.2" />
+    </Svg>
+  );
+}
+
+export function IconClock(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </Svg>
+  );
+}
+
+export function IconAlert(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4l9 16H3zM12 10v4M12 17h.01" />
+    </Svg>
+  );
+}
+
+export function IconInfo(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8h.01" />
+    </Svg>
+  );
+}
+
+export function IconBell(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6zM10 20a2 2 0 0 0 4 0" />
+    </Svg>
+  );
+}
+
+export function IconKebab(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="5.5" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="18.5" r="1.6" fill="currentColor" />
+    </Svg>
+  );
+}
