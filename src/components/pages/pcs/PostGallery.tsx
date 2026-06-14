@@ -171,7 +171,15 @@ export function PostGallery({
 
   return (
     <>
-      {galleryView({ items, cache, presignEnabled, onOpen: setOpenIndex, columns, aspect, showIndex })}
+      {galleryView({
+        items,
+        cache,
+        presignEnabled,
+        onOpen: setOpenIndex,
+        columns,
+        aspect,
+        showIndex,
+      })}
       {openIndex !== null ? (
         <PostLightbox
           items={items}
