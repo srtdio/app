@@ -17,6 +17,7 @@ export const PostSchema = z.object({
   created_by: z.string().uuid(),
   created_at: z.string(),
   updated_at: z.string(),
+  stage_entered_at: z.string(),
   deleted_at: z.string().nullable(),
 });
 
