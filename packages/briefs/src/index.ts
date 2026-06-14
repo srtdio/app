@@ -15,3 +15,4 @@ export {
   type BriefWithLinkedCount,
   type ListBriefsFilters,
 } from './read';
+export { getBriefGallery, type BriefGalleryItem } from './reads';
