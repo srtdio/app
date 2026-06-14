@@ -91,6 +91,13 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
 }
 
 /**
+ * Friendly copy for an unmapped domain code OR a transport-level throw (network /
+ * RPC failure with no Result). Shared by {@link moveErrorMessage}'s default and the
+ * catch in {@link runMovePost} so both paths surface the same retry line.
+ */
+export const MOVE_FALLBACK_MESSAGE = 'Could not move the post. Please try again.';
+
+/**
  * Map a proc domain error to friendly copy. The raw codes (invalid_stage_transition,
  * forbidden_role, ...) never reach the user; an unmapped/transport error gets a
  * generic retry line.
@@ -103,7 +110,7 @@ export function moveErrorMessage(code: DomainErrorCode): string {
     case 'workspace_member_only':
       return 'You do not have permission to move this post.';
     default:
-      return 'Could not move the post. Please try again.';
+      return MOVE_FALLBACK_MESSAGE;
   }
 }
 
@@ -175,6 +182,13 @@ export async function runMovePost(
     );
     deps.onClose();
     deps.toast(`"${target.title}" moved to ${stageLabel(toStage)}`);
+  } catch {
+    // Transport-level failure (network / RPC throw, not a domain Result): without
+    // this the throw surfaced nothing to the user. No optimistic flip is applied
+    // (the local stage update runs only after a successful proc), so the board is
+    // already consistent and there is nothing to revert. The finally below still
+    // clears the in-flight guard, exactly as on the success and domain-error paths.
+    deps.toast(MOVE_FALLBACK_MESSAGE);
   } finally {
     deps.inFlight.delete(postId);
   }
@@ -202,6 +216,9 @@ export function PipelinePage() {
   const [postsError, setPostsError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [movePostTarget, setMovePostTarget] = useState<PipelinePost | null>(null);
+  // Reactive mirror of the in-flight guard for the open move sheet: the guard
+  // itself is a ref (no re-render), so this state drives the sheet's busy prop.
+  const [movingId, setMovingId] = useState<string | null>(null);
   const { toasts, push, dismiss } = useToasts();
   // Per-post in-flight guard for the move handler (a ref so a re-render never
   // resets it mid-flight); shared by the desktop drop and mobile sheet paths.
@@ -276,6 +293,13 @@ export function PipelinePage() {
   // this, which awaits the proc then re-groups on success (see runMovePost).
   const movePost = useCallback(
     (postId: string, toStage: Stage): void => {
+      // Mirror runMovePost's in-flight guard so the busy bookkeeping only runs for
+      // a move we actually start; a double-fire is dropped here (and again inside
+      // runMovePost, which stays the authority for firing the proc once).
+      if (inFlight.current.has(postId)) {
+        return;
+      }
+      setMovingId(postId);
       void runMovePost(
         {
           client: supabase,
@@ -287,7 +311,9 @@ export function PipelinePage() {
         },
         postId,
         toStage,
-      );
+      ).finally(() => {
+        setMovingId((current) => (current === postId ? null : current));
+      });
     },
     [posts, push],
   );
@@ -408,6 +434,7 @@ export function PipelinePage() {
       <MoveSheet
         open={movePostTarget !== null}
         post={movePostTarget}
+        busy={movePostTarget !== null && movingId === movePostTarget.id}
         onClose={() => setMovePostTarget(null)}
         onMove={movePost}
       />

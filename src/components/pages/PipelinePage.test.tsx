@@ -10,6 +10,7 @@ vi.mock('@srtdio/posts', async () => {
 });
 
 import {
+  MOVE_FALLBACK_MESSAGE,
   moveErrorMessage,
   pipelineHeader,
   postCountLabel,
@@ -265,6 +266,22 @@ describe('runMovePost', () => {
     expect(h.state()[0]!.stage).toBe('draft');
     expect(h.closed()).toBe(false);
     expect(h.toasts).toEqual([moveErrorMessage('invalid_stage_transition')]);
+  });
+
+  it('transport failure: a thrown proc toasts the fallback error, leaves the post put, and clears the in-flight guard', async () => {
+    stMock.mockRejectedValue(new Error('network down'));
+    const h = harness([makePost('p1', 'draft')]);
+
+    // Must not reject: the catch swallows the throw into a toast. If the catch is
+    // removed this await rejects and the test fails.
+    await runMovePost(h.deps, 'p1', 'review');
+
+    expect(h.setPostsCalls()).toBe(0);
+    expect(h.state()[0]!.stage).toBe('draft');
+    expect(h.closed()).toBe(false);
+    expect(h.toasts).toEqual([MOVE_FALLBACK_MESSAGE]);
+    // The double-fire guard cleared on failure exactly as on success.
+    expect(h.deps.inFlight.has('p1')).toBe(false);
   });
 
   it('double-fire guard: two rapid calls for the same post fire the proc once', async () => {
