@@ -18,6 +18,14 @@ import { buildPinData } from '@/components/pages/pcs/pin-annotations';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
 import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
+import { VersionPill } from '@/components/pages/pcs/VersionPill';
+import { VersionHistorySheet } from '@/components/pages/pcs/VersionHistorySheet';
+import { ReadOnlyVersionView } from '@/components/pages/pcs/ReadOnlyVersionView';
+import {
+  currentVersionNumber as currentVersionNumberOf,
+  parseSnapshot,
+  toVersionViews,
+} from '@/lib/post-versions';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import { visibleStageActions } from '@/components/pages/pcs/stage-actions';
@@ -170,6 +178,18 @@ export function PostDetailPage() {
   >(null);
   const uploadedVersionIds = useRef<string[]>([]);
 
+  // F7.5 version-history viewer. historyOpen drives the sheet; viewingVersionId,
+  // when set to a non-current version, puts the whole PCS into read-only mode.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [viewingVersionId, setViewingVersionId] = useState<string | null>(null);
+
+  // Switching posts leaves read-only mode and closes the sheet so a stale version
+  // never bleeds across navigations.
+  useEffect(() => {
+    setHistoryOpen(false);
+    setViewingVersionId(null);
+  }, [postId]);
+
   useEffect(() => {
     if (workspaceId === null || userId === null) {
       setRole(null);
@@ -285,6 +305,42 @@ export function PostDetailPage() {
     if (detail === null || detail.versions.length === 0) return null;
     return detail.versions.reduce((top, v) => (v.version_number > top.version_number ? v : top)).id;
   }, [detail]);
+
+  // F7.5 view-model: the camelCased version chain (ascending) plus the current
+  // version number that drives the pill. Derived from getPost's existing embed,
+  // no extra read.
+  const versionViews = useMemo(
+    () => (detail === null ? [] : toVersionViews(detail.versions)),
+    [detail],
+  );
+  const currentVersionNumber = useMemo(
+    () => currentVersionNumberOf(versionViews),
+    [versionViews],
+  );
+
+  // Read-only mode is gated solely by viewingVersion: when set to a non-current
+  // version, every write affordance below is suppressed and the read-only view
+  // replaces the editable surface. An id that no longer resolves drops the mode.
+  const viewingVersion = useMemo(
+    () => versionViews.find((v) => v.id === viewingVersionId) ?? null,
+    [versionViews, viewingVersionId],
+  );
+  const readOnly = viewingVersion !== null;
+  const viewingSnapshot = useMemo(
+    () => (viewingVersion === null ? null : parseSnapshot(viewingVersion.snapshot)),
+    [viewingVersion],
+  );
+
+  // Resolve a version's createdBy to a display name via the same members read PCS
+  // already uses; a null author or one who is no longer a current member reads
+  // (ex-member), never a raw uuid.
+  const resolveAuthorName = useCallback(
+    (authorUserId: string | null): string => {
+      if (authorUserId === null || authorUserId === '') return '(ex-member)';
+      return memberById.get(authorUserId)?.displayName ?? '(ex-member)';
+    },
+    [memberById],
+  );
 
   // From the embedded annotations, build (a) the in-bounds current-version
   // caption_span highlights for CaptionView and (b) a per-comment map covering
@@ -744,7 +800,7 @@ export function PostDetailPage() {
     <>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
         {backButton}
-        {agencySide ? (
+        {agencySide && !readOnly ? (
           editingTitle ? (
             <input
               autoFocus
@@ -769,18 +825,27 @@ export function PostDetailPage() {
         ) : (
           <h1 className="text-[15px] font-semibold truncate">{post.title}</h1>
         )}
-        <span
-          className={`ml-auto shrink-0 inline-flex items-center rounded-full border px-3 h-7 text-xs font-medium ${STAGE_BADGE[currentStage]}`}
-        >
-          {stageLabel(currentStage)}
-        </span>
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          {currentVersionNumber !== null ? (
+            <VersionPill
+              versionNumber={currentVersionNumber}
+              onClick={() => setHistoryOpen(true)}
+            />
+          ) : null}
+          <span
+            className={`inline-flex items-center rounded-full border px-3 h-7 text-xs font-medium ${STAGE_BADGE[currentStage]}`}
+          >
+            {stageLabel(currentStage)}
+          </span>
+        </div>
       </div>
 
       <div className="px-4 md:px-6 pt-4">
         <button
           type="button"
           onClick={() => setShowDetails(true)}
-          className="flex min-h-[44px] max-w-full flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          disabled={readOnly}
+          className="flex min-h-[44px] max-w-full flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none"
         >
           <Avatar
             name={ownerInfo.name}
@@ -798,12 +863,23 @@ export function PostDetailPage() {
             ·
           </span>
           <span>{post.origin === 'brief' ? 'From brief' : 'Direct'}</span>
-          <span className="text-fg-3">
-            <IconChevronRight size={16} />
-          </span>
+          {!readOnly ? (
+            <span className="text-fg-3">
+              <IconChevronRight size={16} />
+            </span>
+          ) : null}
         </button>
       </div>
 
+      {readOnly && viewingVersion !== null && currentVersionNumber !== null ? (
+        <ReadOnlyVersionView
+          versionNumber={viewingVersion.versionNumber}
+          currentVersionNumber={currentVersionNumber}
+          caption={viewingSnapshot?.caption ?? null}
+          imageCount={viewingSnapshot?.galleryVersionIds.length ?? 0}
+          onBack={() => setViewingVersionId(null)}
+        />
+      ) : (
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 flex flex-col gap-6">
           <section>
@@ -975,6 +1051,7 @@ export function PostDetailPage() {
           </section>
         </aside>
       </div>
+      )}
 
       <CaptionAnnotationComposer
         open={composer !== null}
@@ -1048,6 +1125,18 @@ export function PostDetailPage() {
         }
         onToast={push}
         onUploaded={() => void handleUploaded()}
+      />
+
+      <VersionHistorySheet
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        versions={versionViews}
+        currentVersionNumber={currentVersionNumber}
+        resolveAuthor={resolveAuthorName}
+        onSelectVersion={(id) => {
+          setViewingVersionId(id);
+          setHistoryOpen(false);
+        }}
       />
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
