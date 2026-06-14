@@ -9,12 +9,19 @@ vi.mock('@srtdio/posts', async () => {
   return { ...actual, stageTransition: vi.fn() };
 });
 
-import { moveErrorMessage, pipelineHeader, runMovePost } from '@/components/pages/PipelinePage';
+import {
+  moveErrorMessage,
+  pipelineHeader,
+  postCountLabel,
+  runMovePost,
+  stageCounts,
+} from '@/components/pages/PipelinePage';
 import type { MovePostDeps } from '@/components/pages/PipelinePage';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, PipelinePost, Result, Stage } from '@srtdio/posts';
 import { groupByStage } from '@/lib/post-board';
+import { filterByTitle, sortByDate } from '@/lib/list-sort';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { Tabs } from '@/components/shell/Tabs';
@@ -166,6 +173,46 @@ describe('pipelineHeader', () => {
     expect(labels).not.toContain('+ Owner');
     expect(labels).not.toContain('+ Bucket');
     expect(labels).not.toContain('+ Date');
+  });
+});
+
+describe('honest post counter (fix 3)', () => {
+  // Mirror PipelinePage's derivation exactly: filter -> sort -> group -> count ->
+  // label. The header counter must read this filtered total (counts.all), never
+  // the raw unfiltered posts.length and never a per-stage display cap.
+  function deriveLabel(posts: PipelinePost[], search: string): string {
+    const grouped = groupByStage(sortByDate(filterByTitle(posts, search), 'newest'), STAGES);
+    return postCountLabel(stageCounts(grouped, STAGES).all ?? 0);
+  }
+
+  const posts: PipelinePost[] = [
+    { ...makePost('1', 'draft'), title: 'Alpha launch' },
+    { ...makePost('2', 'review'), title: 'Beta teaser' },
+    { ...makePost('3', 'approved'), title: 'Beta recap' },
+    { ...makePost('4', 'parked'), title: 'Gamma promo' },
+    { ...makePost('5', 'rejected'), title: 'Delta note' },
+  ];
+
+  it('reflects the full total when the search is empty', () => {
+    expect(deriveLabel(posts, '')).toBe('5 posts');
+  });
+
+  it('reflects the FILTERED total under an active search (not the unfiltered length)', () => {
+    // "beta" matches two posts spread across two stages.
+    expect(deriveLabel(posts, 'beta')).toBe('2 posts');
+    // A single match is singularised.
+    expect(deriveLabel(posts, 'alpha')).toBe('1 post');
+    // Guard: the counter must move with the search, never revert to posts.length.
+    expect(deriveLabel(posts, 'alpha')).not.toBe(postCountLabel(posts.length));
+  });
+
+  it('counts the filtered total across stages, never the per-stage display cap', () => {
+    const many: PipelinePost[] = Array.from({ length: 25 }, (_unused, i) => ({
+      ...makePost(`m${i}`, 'draft'),
+      title: 'Capped item',
+    }));
+    // 25 matches in one stage: the filtered total, not a cap of 10.
+    expect(deriveLabel(many, 'capped')).toBe('25 posts');
   });
 });
 

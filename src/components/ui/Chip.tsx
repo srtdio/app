@@ -9,6 +9,12 @@ interface ChipProps {
    * size for chips that act as tappable inputs (filters, selectable options).
    */
   size?: 'sm' | 'tap';
+  /**
+   * Optional extra classes appended last (e.g. a consumer's layout constraints
+   * like shrink-0 / truncate). Purely additive: omitted by default so every
+   * existing consumer renders byte-for-byte the same.
+   */
+  className?: string;
   onClick?: () => void;
 }
 
@@ -22,6 +28,7 @@ export function Chip({
   selected = false,
   variant = 'default',
   size = 'sm',
+  className,
   onClick,
 }: ChipProps) {
   return (
@@ -34,6 +41,7 @@ export function Chip({
         'border-border text-fg-2 hover:bg-panel-2',
         selected && 'bg-accent-soft text-accent border-accent-line',
         variant === 'add' && 'border-dashed border-border text-fg-3',
+        className,
       )}
     >
       {label}

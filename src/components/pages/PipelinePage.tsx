@@ -107,6 +107,31 @@ export function moveErrorMessage(code: DomainErrorCode): string {
   }
 }
 
+/**
+ * Per-tab counts over the ALREADY-FILTERED, grouped list: each stage's column
+ * length plus an `all` that is the FILTERED TOTAL (the sum across stages), not the
+ * raw unfiltered post count and not the per-stage display cap. Reused for both the
+ * tab badges and the header "N posts" counter so the counter tracks the search.
+ */
+export function stageCounts(
+  grouped: Record<Stage, PipelinePost[]>,
+  stages: Stage[],
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  let total = 0;
+  for (const s of stages) {
+    out[s] = grouped[s].length;
+    total += grouped[s].length;
+  }
+  out.all = total;
+  return out;
+}
+
+/** The header counter label, driven by the filtered total from {@link stageCounts}. */
+export function postCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'post' : 'posts'}`;
+}
+
 /** Everything {@link runMovePost} needs, so the page wires it and tests drive it directly. */
 export interface MovePostDeps {
   client: Client;
@@ -237,16 +262,7 @@ export function PipelinePage() {
   );
 
   // Per-tab counts over the filtered list: each stage plus the 'all' total.
-  const counts = useMemo(() => {
-    const out: Record<string, number> = {};
-    let total = 0;
-    for (const s of STAGES) {
-      out[s] = grouped[s].length;
-      total += grouped[s].length;
-    }
-    out.all = total;
-    return out;
-  }, [grouped]);
+  const counts = useMemo(() => stageCounts(grouped, STAGES), [grouped]);
 
   // Single source for the move: both the desktop drop and the mobile sheet call
   // this, which awaits the proc then re-groups on success (see runMovePost).
@@ -308,9 +324,10 @@ export function PipelinePage() {
         counts,
       })}
 
-      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">
-        {posts.length} {posts.length === 1 ? 'post' : 'posts'}
-      </div>
+      {/* Honest counter: the FILTERED total (counts.all, summed from the same
+          grouped list the board/feed render), so it tracks the active search
+          instead of freezing at the unfiltered posts.length. */}
+      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">{postCountLabel(counts.all ?? 0)}</div>
 
       {showCard ? (
         <div className="px-4 md:px-6 mt-4">
