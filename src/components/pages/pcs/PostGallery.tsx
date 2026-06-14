@@ -135,7 +135,20 @@ export function galleryView({
   if (items.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
-        No images on this post yet.
+        <p>No images on this post yet.</p>
+        {onAddSlide !== undefined ? (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              aria-label="Add image"
+              onClick={onAddSlide}
+              className="inline-flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border-strong bg-panel-2 px-4 py-3 text-fg-3 transition-colors hover:bg-panel-3 hover:text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <IconPlus size={22} />
+              <span className="text-xs font-medium">Add</span>
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -157,7 +170,7 @@ export function galleryView({
           >
             <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
             {showIndex ? (
-              <span className="absolute left-1.5 top-1.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
+              <span className="absolute left-1.5 bottom-1.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
                 {index + 1}/{items.length}
               </span>
             ) : null}
@@ -170,17 +183,6 @@ export function galleryView({
           </button>
         );
       })}
-      {onAddSlide !== undefined ? (
-        <button
-          type="button"
-          aria-label="Add image"
-          onClick={onAddSlide}
-          className={`flex ${aspectClass(aspect)} flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border-strong bg-panel-2 text-fg-3 transition-colors hover:bg-panel-3 hover:text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
-        >
-          <IconPlus size={22} />
-          <span className="text-xs font-medium">Add</span>
-        </button>
-      ) : null}
     </div>
   );
 }

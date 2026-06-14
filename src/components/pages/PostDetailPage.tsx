@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
+import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
-import { Comments } from '@/components/comments/Comments';
+import { Comments, writeClipboard } from '@/components/comments/Comments';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconChevronRight, IconPipeline } from '@/components/ui/icons';
+import { IconChevronLeft, IconChevronRight, IconCopy, IconPipeline } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { CaptionView } from '@/components/pages/pcs/CaptionView';
 import type { CaptionAnnotationView } from '@/components/pages/pcs/CaptionView';
@@ -42,6 +42,7 @@ import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
+import { listBuckets, type BucketOption } from '@/lib/buckets';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
@@ -78,6 +79,15 @@ function stageLabel(stage: Stage): string {
   return stage.charAt(0).toUpperCase() + stage.slice(1);
 }
 
+// Split a title into everything-but-the-last-word and the last word, so the body
+// title can keep the trailing edit pencil glued to the final word (wrapped in a
+// nowrap span) instead of letting the glyph wrap onto its own line.
+function splitLastWord(title: string): { head: string; last: string } {
+  const words = title.split(' ');
+  const last = words.pop() ?? title;
+  return { head: words.join(' '), last };
+}
+
 // Title-case a snake_case enum value for display (e.g. single_image -> Single
 // Image). Mirrors the Create Post sheet so platform/format read the same way.
 function humanize(value: string): string {
@@ -87,15 +97,28 @@ function humanize(value: string): string {
     .join(' ');
 }
 
-// Stage badge styling per stage, using theme tokens so light/dark parity is
-// automatic (the tokens flip in dark mode). Border + text only, no translucent
-// fills, matching the inline-alert pattern used elsewhere.
-const STAGE_BADGE: Record<Stage, string> = {
-  draft: 'border-border text-fg-2',
-  review: 'border-accent-line text-accent',
-  approved: 'border-good text-good',
-  parked: 'border-warn text-warn',
-  rejected: 'border-bad text-bad',
+// Soft-filled stage pill styling per stage, from existing theme tokens so
+// light/dark parity is automatic. draft/review resolve to soft fills
+// (panel-3 / accent-soft are concrete tokens). approved/parked/rejected fall
+// back to the stage's coloured border + text: the good/warn/bad tokens are bare
+// hex CSS vars, so Tailwind's `/opacity` modifier cannot mint a soft tint from
+// them and there is no good-soft/warn-soft/bad-soft token to substitute.
+const STAGE_PILL: Record<Stage, string> = {
+  draft: 'bg-panel-3 text-fg-2',
+  review: 'bg-accent-soft text-accent',
+  approved: 'border border-good text-good',
+  parked: 'border border-warn text-warn',
+  rejected: 'border border-bad text-bad',
+};
+
+// Display label per stage for the pill (distinct from stageLabel, which the
+// read-only status line reuses).
+const STAGE_PILL_LABEL: Record<Stage, string> = {
+  draft: 'Draft',
+  review: 'In review',
+  approved: 'Approved',
+  parked: 'Parked',
+  rejected: 'Rejected',
 };
 
 // Map the proc's domain errors to friendly, inline copy. The proc owns the
@@ -161,6 +184,10 @@ export function PostDetailPage() {
   const { toasts, push, dismiss } = useToasts();
 
   const [showDetails, setShowDetails] = useState(false);
+  // Workspace buckets, fetched once per workspace to resolve the post's bucket
+  // chip (mirrors PostDetailsSheet). A failure leaves the list empty: the chip
+  // simply does not render, no spinner, no flash.
+  const [buckets, setBuckets] = useState<BucketOption[]>([]);
   // F8 post action sheet (Send to chat / Copy link / Download all images). Live
   // PCS only; the trigger is suppressed in read-only mode below.
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -207,6 +234,20 @@ export function PostDetailPage() {
       cancelled = true;
     };
   }, [workspaceId, userId]);
+
+  useEffect(() => {
+    if (workspaceId === null) {
+      setBuckets([]);
+      return;
+    }
+    let cancelled = false;
+    void listBuckets(supabase, workspaceId).then((result) => {
+      if (!cancelled && result.ok) setBuckets(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
 
   const agencySide = isAgencySide(role);
   const clientRole = isClient(role);
@@ -741,9 +782,9 @@ export function PostDetailPage() {
   }
 
   const backButton = (
-    <Button size="lg" onClick={() => navigate('/pipeline')}>
-      Back
-    </Button>
+    <IconButton label="Back" className="shrink-0" onClick={() => navigate('/pipeline')}>
+      <IconChevronLeft size={20} />
+    </IconButton>
   );
 
   if (loading) {
@@ -796,11 +837,90 @@ export function PostDetailPage() {
   const currentStage = post.stage as Stage;
   const stageActions = visibleStageActions(currentStage, role);
   const ownerInfo = resolveOwner(post.owner_user_id);
+  const bucket = buckets.find((b) => b.id === post.bucket_id) ?? null;
+  const hasCaption = post.caption !== null && post.caption.trim() !== '';
+  const { head: titleHead, last: titleLast } = splitLastWord(post.title);
+
+  // The stage rail buttons, shared by the review helpers and the default branch.
+  // The Approve target gets a green success fill from the `good` token (there is
+  // no on-good token, so its text is white, as the danger variant does); cn here
+  // is a plain join, but Tailwind emits bg-good/text-white/hover:bg-good after
+  // the primary variant's classes, so they deterministically win the override.
+  const stageButtons = (
+    <div className="flex flex-col gap-2">
+      {stageActions.map((action) => (
+        <Button
+          key={action.to}
+          size="lg"
+          variant={action.variant}
+          disabled={transitioning}
+          onClick={() => void handleTransition(action.to)}
+          className={action.to === 'approved' ? 'bg-good text-white hover:bg-good' : undefined}
+        >
+          {action.label}
+        </Button>
+      ))}
+    </div>
+  );
 
   return (
     <>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
         {backButton}
+        <h1 className="min-w-0 flex-1 truncate text-center text-[15px] font-semibold">
+          {post.title}
+        </h1>
+        {!readOnly ? (
+          <button
+            type="button"
+            aria-label="Post actions"
+            onClick={() => setActionsOpen(true)}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <IconMoreVertical size={18} />
+          </button>
+        ) : (
+          <div className="h-11 w-11 shrink-0" />
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3 px-4 md:px-6 pt-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {bucket !== null ? (
+            agencySide ? (
+              <button
+                type="button"
+                onClick={() => setShowDetails(true)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <span
+                  aria-hidden
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: bucket.colorHex }}
+                />
+                {bucket.name}
+              </button>
+            ) : (
+              <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg">
+                <span
+                  aria-hidden
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: bucket.colorHex }}
+                />
+                {bucket.name}
+              </span>
+            )
+          ) : null}
+          <span
+            className={`inline-flex h-7 items-center rounded-full px-2.5 text-xs font-semibold ${STAGE_PILL[currentStage]}`}
+          >
+            {STAGE_PILL_LABEL[currentStage]}
+          </span>
+          <span className="text-sm text-fg-2">
+            {humanize(post.platform)} · {humanize(post.format)}
+          </span>
+        </div>
+
         {agencySide && !readOnly ? (
           editingTitle ? (
             <input
@@ -811,47 +931,26 @@ export function PostDetailPage() {
               onChange={(event) => setTitleDraft(event.target.value)}
               onBlur={onTitleBlur}
               onKeyDown={onTitleKeyDown}
-              className="min-w-0 flex-1 h-9 rounded-md border border-border bg-panel-2 px-2 text-[15px] font-semibold text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
+              className="w-full rounded-md border border-border bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
             />
           ) : (
             <button
               type="button"
+              aria-label="Edit title"
               onClick={openTitleEditor}
-              className="group flex min-h-[44px] min-w-0 items-center gap-1.5 rounded-md px-1 text-left hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="block rounded-md text-left text-[28px] font-semibold leading-tight tracking-tight focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <span className="truncate text-[15px] font-semibold">{post.title}</span>
-              <IconPencil size={15} inline className="shrink-0 text-fg-3 group-hover:text-fg-2" />
+              {titleHead !== '' ? `${titleHead} ` : ''}
+              <span className="whitespace-nowrap">
+                {titleLast}
+                <IconPencil size={16} inline className="ml-1 text-fg-3" />
+              </span>
             </button>
           )
         ) : (
-          <h1 className="text-[15px] font-semibold truncate">{post.title}</h1>
+          <h1 className="text-[28px] font-semibold leading-tight tracking-tight">{post.title}</h1>
         )}
-        <div className="ml-auto flex shrink-0 items-center gap-3">
-          {currentVersionNumber !== null ? (
-            <VersionPill
-              versionNumber={currentVersionNumber}
-              onClick={() => setHistoryOpen(true)}
-            />
-          ) : null}
-          <span
-            className={`inline-flex items-center rounded-full border px-3 h-7 text-xs font-medium ${STAGE_BADGE[currentStage]}`}
-          >
-            {stageLabel(currentStage)}
-          </span>
-          {!readOnly ? (
-            <button
-              type="button"
-              aria-label="Post actions"
-              onClick={() => setActionsOpen(true)}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <IconMoreVertical size={18} />
-            </button>
-          ) : null}
-        </div>
-      </div>
 
-      <div className="px-4 md:px-6 pt-4">
         <button
           type="button"
           onClick={() => setShowDetails(true)}
@@ -894,9 +993,6 @@ export function PostDetailPage() {
         <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 flex flex-col gap-6">
             <section>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-                Gallery
-              </div>
               <PostGallery
                 items={gallery}
                 cache={cache}
@@ -912,8 +1008,14 @@ export function PostDetailPage() {
                 onPlacePin={handlePlacePin}
                 pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
                 onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
-                onAddSlide={agencySide ? () => openAdd({ mode: 'append' }) : undefined}
               />
+              {gallery.length > 0 ? (
+                <p className="mt-2.5 text-xs text-fg-3">
+                  {agencySide
+                    ? 'Tap a slide for full screen. Long-press to reorder or remove.'
+                    : 'Tap a slide for full screen, pins, and download.'}
+                </p>
+              ) : null}
               {pinError !== null ? (
                 <div
                   role="alert"
@@ -924,22 +1026,36 @@ export function PostDetailPage() {
               ) : null}
             </section>
 
-            <section>
-              <div className="mb-2 flex items-center gap-1">
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-3">Caption</div>
-                {agencySide && !editingCaption ? (
-                  <button
-                    type="button"
-                    aria-label="Edit caption"
-                    onClick={openCaptionEditor}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            <section className="rounded-xl border border-border bg-panel-2 p-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-fg-3">
+                  Caption
+                </span>
+                {currentVersionNumber !== null ? (
+                  <VersionPill
+                    versionNumber={currentVersionNumber}
+                    onClick={() => setHistoryOpen(true)}
+                  />
+                ) : null}
+                <div className="flex-1" />
+                {hasCaption && !editingCaption ? (
+                  <IconButton
+                    label="Copy caption"
+                    onClick={() => {
+                      void writeClipboard(post.caption ?? '').then(() => push('Caption copied'));
+                    }}
                   >
+                    <IconCopy size={18} />
+                  </IconButton>
+                ) : null}
+                {agencySide && !editingCaption && !readOnly ? (
+                  <IconButton label="Edit caption" onClick={openCaptionEditor}>
                     <IconPencil size={16} />
-                  </button>
+                  </IconButton>
                 ) : null}
               </div>
               {editingCaption ? (
-                <div className="flex flex-col gap-2">
+                <div className="mt-3 flex flex-col gap-2">
                   <Textarea
                     autoFocus
                     aria-label="Caption"
@@ -978,15 +1094,20 @@ export function PostDetailPage() {
                     </span>
                   </div>
                 </div>
-              ) : post.caption !== null && post.caption.trim() !== '' ? (
-                <CaptionView
-                  caption={post.caption}
-                  annotations={highlights}
-                  onHighlightClick={(commentId) => flashTo(`comment-${commentId}`)}
-                  onAnnotate={handleAnnotate}
-                />
+              ) : hasCaption ? (
+                <>
+                  <div className="mt-3">
+                    <CaptionView
+                      caption={post.caption ?? ''}
+                      annotations={highlights}
+                      onHighlightClick={(commentId) => flashTo(`comment-${commentId}`)}
+                      onAnnotate={handleAnnotate}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-fg-3">Select any text to comment on it.</p>
+                </>
               ) : (
-                <p className="text-sm text-fg-3">No caption yet.</p>
+                <p className="mt-3 text-sm text-fg-3">No caption yet.</p>
               )}
               {annotateError !== null ? (
                 <div
@@ -997,47 +1118,26 @@ export function PostDetailPage() {
                 </div>
               ) : null}
             </section>
-
-            <section>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-                Comments
-              </div>
-              {workspaceId !== null && postId !== undefined ? (
-                <Comments
-                  workspaceId={workspaceId}
-                  entityType="post"
-                  entityId={postId}
-                  annotationsByCommentId={annotationsByCommentId}
-                  onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
-                  refreshSignal={commentsRefresh}
-                />
-              ) : (
-                <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
-                  Select a workspace to view comments.
-                </div>
-              )}
-            </section>
           </div>
 
           <aside className="flex flex-col gap-6">
-            <section>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-                Actions
-              </div>
-              {stageActions.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {stageActions.map((action) => (
-                    <Button
-                      key={action.to}
-                      size="lg"
-                      variant={action.variant}
-                      disabled={transitioning}
-                      onClick={() => void handleTransition(action.to)}
-                    >
-                      {action.label}
-                    </Button>
-                  ))}
-                </div>
+            <section className="rounded-xl border border-border bg-panel-2 p-4">
+              {currentStage === 'review' && clientRole ? (
+                <>
+                  <p className="mb-3 text-sm text-fg-2">
+                    Commenting keeps the post in review. Approval is deliberate, one post at a time.
+                  </p>
+                  {stageButtons}
+                </>
+              ) : currentStage === 'review' && agencySide ? (
+                <>
+                  <p className="mb-3 text-sm text-fg-2">
+                    Waiting on the client. Content edits create a new version.
+                  </p>
+                  {stageButtons}
+                </>
+              ) : stageActions.length > 0 ? (
+                stageButtons
               ) : (
                 <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
               )}
@@ -1051,14 +1151,27 @@ export function PostDetailPage() {
               ) : null}
             </section>
 
-            <section>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-                Channel
+            <section className="rounded-xl border border-border bg-panel-2 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-fg-3">
+                  Comments
+                </span>
+                <span className="text-xs text-fg-3">Long-press for actions</span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                <Chip label={humanize(post.platform)} />
-                <Chip label={humanize(post.format)} />
-              </div>
+              {workspaceId !== null && postId !== undefined ? (
+                <Comments
+                  workspaceId={workspaceId}
+                  entityType="post"
+                  entityId={postId}
+                  annotationsByCommentId={annotationsByCommentId}
+                  onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
+                  refreshSignal={commentsRefresh}
+                />
+              ) : (
+                <div className="px-4 py-8 text-center text-sm text-fg-3">
+                  Select a workspace to view comments.
+                </div>
+              )}
             </section>
           </aside>
         </div>
