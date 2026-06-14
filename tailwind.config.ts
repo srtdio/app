@@ -22,6 +22,12 @@ export default {
         good: 'var(--good)',
         warn: 'var(--warn)',
         bad: 'var(--bad)',
+        'annotation-bg': 'var(--annotation-bg)',
+        'annotation-line': 'var(--annotation-line)',
+        'stage-review': 'var(--stage-review)',
+        'stage-approved': 'var(--stage-approved)',
+        'stage-rejected': 'var(--stage-rejected)',
+        'stage-parked': 'var(--stage-parked)',
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
