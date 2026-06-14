@@ -24,6 +24,7 @@ function post(over: Partial<Post>): Post {
     row_version: 1,
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
+    stage_entered_at: '2026-01-01',
     ...over,
   };
 }
