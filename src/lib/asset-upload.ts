@@ -58,7 +58,7 @@ export function uploadErrorMessage(code: string): string {
 }
 
 export type UploadOutcome =
-  | { ok: true; reused: boolean; assetId: string }
+  | { ok: true; reused: boolean; assetId: string; assetVersionId?: string }
   | { ok: false; message: string };
 
 export interface UploadConfig {
@@ -115,7 +115,14 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   if (asset === null) {
     return { ok: false, message: uploadErrorMessage('network') };
   }
-  return { ok: true, reused: asset.reused, assetId: asset.assetId };
+  // assetVersionId is the version the gallery add flow pins; include the key only
+  // when the worker returned it, so callers that ignore it are unaffected.
+  return {
+    ok: true,
+    reused: asset.reused,
+    assetId: asset.assetId,
+    ...(asset.assetVersionId !== null ? { assetVersionId: asset.assetVersionId } : {}),
+  };
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -137,14 +144,21 @@ function errorCode(body: unknown): string {
   return 'network';
 }
 
-function assetField(body: unknown): { assetId: string; reused: boolean } | null {
+function assetField(
+  body: unknown,
+): { assetId: string; reused: boolean; assetVersionId: string | null } | null {
   if (typeof body !== 'object' || body === null) return null;
   const asset = (body as { asset?: unknown }).asset;
   if (typeof asset !== 'object' || asset === null) return null;
   const assetId = (asset as { assetId?: unknown }).assetId;
   const reused = (asset as { reused?: unknown }).reused;
+  const versionId = (asset as { versionId?: unknown }).versionId;
   if (typeof assetId !== 'string') return null;
-  return { assetId, reused: reused === true };
+  return {
+    assetId,
+    reused: reused === true,
+    assetVersionId: typeof versionId === 'string' ? versionId : null,
+  };
 }
 
 /**
