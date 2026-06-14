@@ -213,6 +213,44 @@ export function toCommentAttachments(
   }));
 }
 
+/** Which row actions a comment offers. Copy is harmless and shown on every live
+ *  comment; edit / delete stay author-only; a tombstone offers nothing. */
+export interface CommentActions {
+  canCopy: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+export function commentActions(
+  comment: Pick<CommentRow, 'author_user_id' | 'deleted_at'>,
+  currentUserId: string | null,
+  tombstone: boolean,
+): CommentActions {
+  if (tombstone) return { canCopy: false, canEdit: false, canDelete: false };
+  const mine = canModifyComment(comment, currentUserId);
+  return { canCopy: true, canEdit: mine, canDelete: mine };
+}
+
+/** The plain text copied to the clipboard: the stored body with each @[uuid]
+ *  token resolved to its "@Name" display form (or "@(ex-member)"), reusing the
+ *  profile map already built for rendering. */
+export function commentCopyText(body: string, nameOf: (id: string) => string | null): string {
+  return body.replace(
+    MENTION_TOKEN,
+    (_match, id: string) => `@${nameOf(id.toLowerCase()) ?? EX_MEMBER_LABEL}`,
+  );
+}
+
+/** Copy text to the clipboard; never throws when the clipboard is unavailable. */
+export async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Write action helpers (one trace per action; mind the wrapper asymmetry)
 // ---------------------------------------------------------------------------
@@ -315,6 +353,7 @@ export function Comments({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // The decision toggle is a post-only affordance; briefs never carry it.
   const showDecisionToggle = entityType === 'post';
@@ -491,6 +530,15 @@ export function Comments({
     await loadPage(0);
   }
 
+  async function handleCopy(comment: CommentRow): Promise<void> {
+    const ok = await writeClipboard(commentCopyText(comment.body, nameOf));
+    if (!ok) return;
+    setCopiedId(comment.id);
+    window.setTimeout(() => {
+      setCopiedId((current) => (current === comment.id ? null : current));
+    }, 2000);
+  }
+
   function toggleExpanded(id: string): void {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -553,7 +601,9 @@ export function Comments({
   }
 
   function renderCommentCard(comment: CommentRow, isReply: boolean): ReactNode {
-    const mine = canModifyComment(comment, currentUserId);
+    // A reply is never a tombstone (deleted replies are filtered out) and roots
+    // render their own tombstone, so the card itself is always a live comment.
+    const actions = commentActions(comment, currentUserId, false);
     const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
     const authorName = nameOf(comment.author_user_id) ?? EX_MEMBER_LABEL;
     const editing = editingId === comment.id;
@@ -598,24 +648,43 @@ export function Comments({
           </>
         )}
 
-        {mine && !editing ? (
+        {!editing ? (
           <div className="mt-2 flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="min-h-[44px] min-w-[44px]"
-              onClick={() => startEdit(comment)}
-            >
-              Edit
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="min-h-[44px] min-w-[44px] text-bad"
-              onClick={() => void handleDelete(comment.id)}
-            >
-              Delete
-            </Button>
+            {actions.canCopy ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="min-h-[44px] min-w-[44px]"
+                onClick={() => void handleCopy(comment)}
+              >
+                Copy text
+              </Button>
+            ) : null}
+            {actions.canEdit ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="min-h-[44px] min-w-[44px]"
+                onClick={() => startEdit(comment)}
+              >
+                Edit
+              </Button>
+            ) : null}
+            {actions.canDelete ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="min-h-[44px] min-w-[44px] text-bad"
+                onClick={() => void handleDelete(comment.id)}
+              >
+                Delete
+              </Button>
+            ) : null}
+            {copiedId === comment.id ? (
+              <span role="status" className="text-xs text-fg-3">
+                Comment copied
+              </span>
+            ) : null}
           </div>
         ) : null}
 

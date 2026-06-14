@@ -20,12 +20,15 @@ import {
   buildCreateInput,
   buildThreads,
   canModifyComment,
+  commentActions,
+  commentCopyText,
   commentDomId,
   renderCommentBody,
   runDeleteComment,
   runEditComment,
   toCommentAttachments,
   tombstoneText,
+  writeClipboard,
 } from '@/components/comments/Comments';
 import { resolveName } from '@/components/comments/commentProfiles';
 import { attachmentView } from '@/components/chat/MessageAttachments';
@@ -267,6 +270,56 @@ describe('write-action wiring', () => {
     const client = {} as never;
     await runDeleteComment(client, 'cid', 'trace-2');
     expect(deleteComment).toHaveBeenCalledWith(client, { commentId: 'cid' }, 'trace-2');
+  });
+});
+
+describe('copy comment text', () => {
+  it('offers Copy on any comment (author-independent), edit/delete author-only', () => {
+    const others = row({ id: 'o', author_user_id: UUID_B });
+    expect(commentActions(others, UUID_A, false)).toEqual({
+      canCopy: true,
+      canEdit: false,
+      canDelete: false,
+    });
+    const mine = row({ id: 'm', author_user_id: UUID_A });
+    expect(commentActions(mine, UUID_A, false)).toEqual({
+      canCopy: true,
+      canEdit: true,
+      canDelete: true,
+    });
+  });
+
+  it('offers no actions on a tombstone', () => {
+    const deleted = row({ id: 'd', deleted_at: '2026-01-05T00:00:00.000Z' });
+    expect(commentActions(deleted, UUID_A, true)).toEqual({
+      canCopy: false,
+      canEdit: false,
+      canDelete: false,
+    });
+  });
+
+  it('copies the body with mentions resolved to @Name', () => {
+    expect(commentCopyText(`see @[${UUID_A}] now`, (id) => (id === UUID_A ? 'Ada' : null))).toBe(
+      'see @Ada now',
+    );
+    expect(commentCopyText(`plain text`, () => null)).toBe('plain text');
+  });
+
+  it('writes the comment body to the clipboard and never throws', async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    await expect(writeClipboard('hello body')).resolves.toBe(true);
+    expect(writeText).toHaveBeenCalledWith('hello body');
+
+    vi.stubGlobal('navigator', {
+      clipboard: {
+        writeText: async () => {
+          throw new Error('denied');
+        },
+      },
+    });
+    await expect(writeClipboard('x')).resolves.toBe(false);
+    vi.unstubAllGlobals();
   });
 });
 
