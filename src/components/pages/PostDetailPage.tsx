@@ -29,7 +29,8 @@ import {
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import { visibleStageActions } from '@/components/pages/pcs/stage-actions';
-import { IconPencil } from '@/components/pages/pcs/post-icons';
+import { IconPencil, IconMoreVertical } from '@/components/pages/pcs/post-icons';
+import { PostActionSheet } from '@/components/pages/pcs/PostActionSheet';
 import {
   append,
   insertAfter,
@@ -160,6 +161,9 @@ export function PostDetailPage() {
   const { toasts, push, dismiss } = useToasts();
 
   const [showDetails, setShowDetails] = useState(false);
+  // F8 post action sheet (Send to chat / Copy link / Download all images). Live
+  // PCS only; the trigger is suppressed in read-only mode below.
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [savingMeta, setSavingMeta] = useState(false);
@@ -834,6 +838,16 @@ export function PostDetailPage() {
           >
             {stageLabel(currentStage)}
           </span>
+          {!readOnly ? (
+            <button
+              type="button"
+              aria-label="Post actions"
+              onClick={() => setActionsOpen(true)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <IconMoreVertical size={18} />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -1135,6 +1149,19 @@ export function PostDetailPage() {
           setHistoryOpen(false);
         }}
       />
+
+      {!readOnly ? (
+        <PostActionSheet
+          open={actionsOpen}
+          onClose={() => setActionsOpen(false)}
+          postId={post.id}
+          workspaceId={workspaceId ?? ''}
+          currentUserId={userId ?? ''}
+          gallery={gallery}
+          deps={deps}
+          onToast={push}
+        />
+      ) : null}
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
