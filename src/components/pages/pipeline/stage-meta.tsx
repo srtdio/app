@@ -2,6 +2,8 @@
 // (desktop kanban + mobile feed). Stage values flow in from the @srtdio/posts
 // type; no workflow literals are invented here beyond the per-stage dot colour.
 
+import type { ReactElement } from 'react';
+import { cn } from '@/lib/cn';
 import type { Stage } from '@srtdio/posts';
 
 /** Cards shown per stage before the "View all" affordance (All feed + kanban columns). */
@@ -25,6 +27,15 @@ export const STAGE_DOT: Record<Stage, string> = {
   parked: 'bg-stage-parked',
   rejected: 'bg-stage-rejected',
 };
+
+/**
+ * The small per-stage colour dot. Single source for both board surfaces (desktop
+ * kanban + mobile feed) and the move sheet; previously duplicated verbatim in
+ * PipelineBoard and PipelineFeed.
+ */
+export function StageDot({ stage }: { stage: Stage }): ReactElement {
+  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', STAGE_DOT[stage])} />;
+}
 
 /** Empty-stage copy for the single-stage feed view. */
 export function emptyStageMessage(stage: Stage): string {

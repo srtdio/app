@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import type { ReactElement, ReactNode } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import type { DragEvent, ReactElement, ReactNode } from 'react';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { BOARD_CAP, emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
@@ -72,6 +72,15 @@ function dataStage(el: ReactElement): string | undefined {
   return (el.props as { 'data-stage'?: string })['data-stage'];
 }
 
+/** A minimal synthetic DragEvent carrying a "fromStage:postId" payload on drop. */
+function dropEvent(payload: string): DragEvent<HTMLDivElement> {
+  return {
+    preventDefault: () => {},
+    currentTarget: { classList: { remove: () => {} } },
+    dataTransfer: { getData: () => payload },
+  } as unknown as DragEvent<HTMLDivElement>;
+}
+
 describe('PipelineFeed', () => {
   it('All tab renders one grouped section per stage, capped at the board cap', () => {
     const first = STAGES[0]!;
@@ -83,6 +92,7 @@ describe('PipelineFeed', () => {
       cache,
       presignEnabled: false,
       onViewAll: () => {},
+      onLongPressPost: () => {},
     });
 
     const sections = findAll(tree, (el) =>
@@ -107,6 +117,7 @@ describe('PipelineFeed', () => {
       onViewAll: (s) => {
         viewed = s;
       },
+      onLongPressPost: () => {},
     });
 
     const viewAll = findAll(tree, (el) => {
@@ -128,6 +139,7 @@ describe('PipelineFeed', () => {
       cache,
       presignEnabled: false,
       onViewAll: () => {},
+      onLongPressPost: () => {},
     });
     expect(cardCount(tree)).toBe(BOARD_CAP + 7);
   });
@@ -142,6 +154,7 @@ describe('PipelineFeed', () => {
       cache,
       presignEnabled: false,
       onViewAll: () => {},
+      onLongPressPost: () => {},
     });
     const empties = findAll(tree, (el) => el.type === EmptyState);
     expect(empties).toHaveLength(1);
@@ -159,10 +172,51 @@ describe('PipelineBoard', () => {
       cache,
       presignEnabled: false,
       onViewAll: () => {},
+      onMovePost: () => {},
     });
     const columns = findAll(tree, (el) =>
       Boolean((el.props as { 'data-drag-container'?: boolean })['data-drag-container']),
     );
     expect(columns.map(dataStage)).toEqual(STAGES);
+  });
+
+  it('a drop onto a legal target calls the move handler with the post + target stage', () => {
+    const onMovePost = vi.fn();
+    const grouped = groupByStage([makePost('p1', 'draft')], STAGES);
+    const tree = PipelineBoard({
+      stages: STAGES,
+      grouped,
+      cap: BOARD_CAP,
+      cache,
+      presignEnabled: false,
+      onViewAll: () => {},
+      onMovePost,
+    });
+    const review = findAll(tree, (el) => dataStage(el) === 'review' && 'onDrop' in el.props)[0]!;
+    // draft -> review is legal per the transition map.
+    (review.props as { onDrop: (e: DragEvent<HTMLDivElement>) => void }).onDrop(
+      dropEvent('draft:p1'),
+    );
+    expect(onMovePost).toHaveBeenCalledWith('p1', 'review');
+  });
+
+  it('a drop onto an invalid target does NOT call the move handler', () => {
+    const onMovePost = vi.fn();
+    const grouped = groupByStage([makePost('p1', 'approved')], STAGES);
+    const tree = PipelineBoard({
+      stages: STAGES,
+      grouped,
+      cap: BOARD_CAP,
+      cache,
+      presignEnabled: false,
+      onViewAll: () => {},
+      onMovePost,
+    });
+    const draft = findAll(tree, (el) => dataStage(el) === 'draft' && 'onDrop' in el.props)[0]!;
+    // approved -> draft is NOT in the transition map; the drop must bounce.
+    (draft.props as { onDrop: (e: DragEvent<HTMLDivElement>) => void }).onDrop(
+      dropEvent('approved:p1'),
+    );
+    expect(onMovePost).not.toHaveBeenCalled();
   });
 });

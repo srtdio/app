@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -10,7 +10,10 @@ import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
+import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
 import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { Toasts } from '@/components/pages/assets/Toasts';
+import { useToasts } from '@/components/pages/assets/useToasts';
 import { dispatchSorted } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -24,8 +27,8 @@ import {
   type DateSort,
 } from '@/lib/list-sort';
 import { groupByStage, stageColumns } from '@/lib/post-board';
-import { listPosts, STAGE_TRANSITIONS } from '@srtdio/posts';
-import type { PipelinePost, Stage } from '@srtdio/posts';
+import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
+import type { Client, DomainErrorCode, PipelinePost, Stage } from '@srtdio/posts';
 import { PresignCache } from '@/lib/asset-presign';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
@@ -87,6 +90,71 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
   );
 }
 
+/**
+ * Map a proc domain error to friendly copy. The raw codes (invalid_stage_transition,
+ * forbidden_role, ...) never reach the user; an unmapped/transport error gets a
+ * generic retry line.
+ */
+export function moveErrorMessage(code: DomainErrorCode): string {
+  switch (code) {
+    case 'invalid_stage_transition':
+      return 'That move is not allowed from this stage.';
+    case 'forbidden_role':
+    case 'workspace_member_only':
+      return 'You do not have permission to move this post.';
+    default:
+      return 'Could not move the post. Please try again.';
+  }
+}
+
+/** Everything {@link runMovePost} needs, so the page wires it and tests drive it directly. */
+export interface MovePostDeps {
+  client: Client;
+  posts: PipelinePost[];
+  /** In-flight post ids; the double-fire guard. Shared across calls (a ref's .current). */
+  inFlight: Set<string>;
+  setPosts: (updater: (prev: PipelinePost[]) => PipelinePost[]) => void;
+  /** Close the move sheet (no-op on the desktop drag path). */
+  onClose: () => void;
+  toast: (message: string) => void;
+}
+
+/**
+ * The single move handler: AWAIT the stage_transition proc, then on success flip
+ * the post's local stage (the page's useMemo re-groups it into the new column /
+ * section) and toast; on failure leave the post where it was and toast a friendly
+ * error. A per-post in-flight guard drops a double fire (a slow network can't
+ * double-submit). Command, not query: it mutates state and toasts, returns nothing.
+ */
+export async function runMovePost(
+  deps: MovePostDeps,
+  postId: string,
+  toStage: Stage,
+): Promise<void> {
+  if (deps.inFlight.has(postId)) {
+    return;
+  }
+  const target = deps.posts.find((post) => post.id === postId);
+  if (target === undefined) {
+    return;
+  }
+  deps.inFlight.add(postId);
+  try {
+    const result = await stageTransition(deps.client, { postId, toStage });
+    if (!result.ok) {
+      deps.toast(moveErrorMessage(result.error.code));
+      return;
+    }
+    deps.setPosts((prev) =>
+      prev.map((post) => (post.id === postId ? { ...post, stage: toStage } : post)),
+    );
+    deps.onClose();
+    deps.toast(`"${target.title}" moved to ${stageLabel(toStage)}`);
+  } finally {
+    deps.inFlight.delete(postId);
+  }
+}
+
 interface OnboardingStep {
   key: string;
   label: string;
@@ -108,6 +176,11 @@ export function PipelinePage() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsError, setPostsError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [movePostTarget, setMovePostTarget] = useState<PipelinePost | null>(null);
+  const { toasts, push, dismiss } = useToasts();
+  // Per-post in-flight guard for the move handler (a ref so a re-render never
+  // resets it mid-flight); shared by the desktop drop and mobile sheet paths.
+  const inFlight = useRef<Set<string>>(new Set());
 
   // One presign cache for the whole board: it bounds concurrency and caches
   // URLs so every card shares a single cap, mirroring AssetsPage. Cards
@@ -174,6 +247,26 @@ export function PipelinePage() {
     out.all = total;
     return out;
   }, [grouped]);
+
+  // Single source for the move: both the desktop drop and the mobile sheet call
+  // this, which awaits the proc then re-groups on success (see runMovePost).
+  const movePost = useCallback(
+    (postId: string, toStage: Stage): void => {
+      void runMovePost(
+        {
+          client: supabase,
+          posts,
+          inFlight: inFlight.current,
+          setPosts,
+          onClose: () => setMovePostTarget(null),
+          toast: push,
+        },
+        postId,
+        toStage,
+      );
+    },
+    [posts, push],
+  );
 
   const visibleStages = stageColumns(STAGES, stage);
 
@@ -273,6 +366,7 @@ export function PipelinePage() {
           cache={cache}
           presignEnabled={presignEnabled}
           onViewAll={setStage}
+          onMovePost={movePost}
         />
       ) : (
         <PipelineFeed
@@ -282,8 +376,16 @@ export function PipelinePage() {
           cache={cache}
           presignEnabled={presignEnabled}
           onViewAll={setStage}
+          onLongPressPost={setMovePostTarget}
         />
       )}
+
+      <MoveSheet
+        open={movePostTarget !== null}
+        post={movePostTarget}
+        onClose={() => setMovePostTarget(null)}
+        onMove={movePost}
+      />
 
       <CreatePostSheet
         open={createOpen}
@@ -294,6 +396,8 @@ export function PipelinePage() {
           void loadPosts();
         }}
       />
+
+      <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }
