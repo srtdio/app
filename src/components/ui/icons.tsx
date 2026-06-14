@@ -264,3 +264,40 @@ export function IconChevronRight(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconChevronLeft(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M15 6l-6 6 6 6" />
+    </Svg>
+  );
+}
+
+export function IconZoomIn(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx={11} cy={11} r={7} />
+      <path d="M21 21l-4.3-4.3" />
+      <path d="M11 8v6M8 11h6" />
+    </Svg>
+  );
+}
+
+export function IconZoomOut(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx={11} cy={11} r={7} />
+      <path d="M21 21l-4.3-4.3" />
+      <path d="M8 11h6" />
+    </Svg>
+  );
+}
+
+export function IconPin(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 17v5" />
+      <path d="M9 3h6l-1 7 3 3H7l3-3-1-7z" />
+    </Svg>
+  );
+}
