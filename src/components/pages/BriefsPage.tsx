@@ -9,6 +9,9 @@ import { IconBriefs, IconPlus } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
 import { CreateBriefSheet } from '@/components/pages/CreateBriefSheet';
 import { dispatchSorted } from '@/lib/events';
+import { env } from '@/lib/env';
+import { fetchWithTrace } from '@/lib/fetch';
+import { PresignCache } from '@/lib/asset-presign';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
@@ -23,7 +26,7 @@ import {
 import { filterBriefsByStatus, type BriefFilter } from '@/lib/brief-list';
 import { briefClose } from '@srtdio/rpc';
 import { listBriefs } from '@srtdio/briefs';
-import type { Brief } from '@srtdio/briefs';
+import type { BriefWithThumbnail } from '@srtdio/briefs';
 
 // Filter chips: All shows everything; Open/Closed key off brief.status. The
 // status keys come from the @srtdio/briefs type, never inline literals.
@@ -83,6 +86,38 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
   );
 }
 
+interface BriefCardListDeps {
+  briefs: BriefWithThumbnail[];
+  /** The ONE page-owned cache, threaded unchanged into every card (no per-card cache). */
+  cache: PresignCache;
+  presignEnabled: boolean;
+  closingId: string | null;
+  closeError: { id: string; message: string } | null;
+  onClose: (briefId: string) => void;
+  onOpen: (briefId: string) => void;
+}
+
+/**
+ * Map the visible briefs to their cards, threading the single shared presign cache
+ * and presignEnabled into each. Pure (no hooks) so the wiring (one cache shared
+ * across cards, per-brief closing/error/open) is unit-tested without rendering the
+ * page, mirroring briefsHeader.
+ */
+export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
+  return deps.briefs.map((brief) => (
+    <BriefCard
+      key={brief.id}
+      brief={brief}
+      cache={deps.cache}
+      presignEnabled={deps.presignEnabled}
+      closing={deps.closingId === brief.id}
+      closeError={deps.closeError?.id === brief.id ? deps.closeError.message : null}
+      onConfirmClose={() => deps.onClose(brief.id)}
+      onOpen={() => deps.onOpen(brief.id)}
+    />
+  ));
+}
+
 export function BriefsPage() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
@@ -91,12 +126,28 @@ export function BriefsPage() {
   const [search, setSearch] = useState('');
   const { value: sort, setValue: setSort } = useSort<DateSort>('briefs', DATE_SORT_DEFAULT);
 
-  const [briefs, setBriefs] = useState<Brief[]>([]);
+  const [briefs, setBriefs] = useState<BriefWithThumbnail[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<{ id: string; message: string } | null>(null);
+
+  // One presign cache + presignEnabled for the WHOLE list (the wiring fix: the page
+  // previously built none, so image thumbnails could never resolve). Built exactly as
+  // BriefDetailPage builds it, and shared across every card so they share one
+  // concurrency cap and warm-URL cache; cards lazy-resolve via useInView.
+  const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
+  const cache = useMemo(
+    () =>
+      new PresignCache({
+        endpoint: env.VITE_ASSET_READ_URL ?? null,
+        getAccessToken: async () =>
+          (await supabase.auth.getSession()).data.session?.access_token ?? null,
+        fetcher: (input, init) => fetchWithTrace(input, init),
+      }),
+    [],
+  );
 
   // One read for the whole surface (no N+1): listBriefs once, then group and
   // filter in memory. Reads are direct RLS selects, no proc, no per-status call.
@@ -137,11 +188,23 @@ export function BriefsPage() {
   );
 
   // Search + sort are pure, derived over the loaded list (no refetch, no N+1):
-  // status chip, then title search, then date order.
-  const visibleBriefs = useMemo(
-    () => sortByDate(filterByTitle(filterBriefsByStatus(workspaceBriefs, filter), search), sort),
-    [workspaceBriefs, filter, search, sort],
+  // status chip, then title search, then date order. filterBriefsByStatus is typed
+  // over the bare Brief, so re-narrow each ordered row back to its BriefWithThumbnail
+  // (same object reference) via this id map; the cards need thumbnailAssetVersionId.
+  const byId = useMemo(
+    () => new Map(workspaceBriefs.map((brief) => [brief.id, brief])),
+    [workspaceBriefs],
   );
+  const visibleBriefs = useMemo<BriefWithThumbnail[]>(() => {
+    const ordered = sortByDate(
+      filterByTitle(filterBriefsByStatus(workspaceBriefs, filter), search),
+      sort,
+    );
+    return ordered.flatMap((brief) => {
+      const full = byId.get(brief.id);
+      return full !== undefined ? [full] : [];
+    });
+  }, [workspaceBriefs, byId, filter, search, sort]);
 
   const openCount = useMemo(
     () => workspaceBriefs.filter((brief) => !isBriefClosed(brief)).length,
@@ -192,16 +255,15 @@ export function BriefsPage() {
         />
       ) : (
         <div className="px-4 md:px-6 py-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleBriefs.map((brief) => (
-            <BriefCard
-              key={brief.id}
-              brief={brief}
-              closing={closingId === brief.id}
-              closeError={closeError?.id === brief.id ? closeError.message : null}
-              onConfirmClose={() => void handleClose(brief.id)}
-              onOpen={() => navigate(`/briefs/${brief.id}`)}
-            />
-          ))}
+          {briefCardList({
+            briefs: visibleBriefs,
+            cache,
+            presignEnabled,
+            closingId,
+            closeError,
+            onClose: (briefId) => void handleClose(briefId),
+            onOpen: (briefId) => navigate(`/briefs/${briefId}`),
+          })}
         </div>
       )}
 
