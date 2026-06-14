@@ -10,6 +10,10 @@ import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { CaptionView } from '@/components/pages/pcs/CaptionView';
 import type { CaptionAnnotationView } from '@/components/pages/pcs/CaptionView';
 import { CaptionAnnotationComposer } from '@/components/pages/pcs/CaptionAnnotationComposer';
+import { PinAnnotationComposer } from '@/components/pages/pcs/PinAnnotationComposer';
+import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
+import { buildPinData } from '@/components/pages/pcs/pin-annotations';
+import type { PinDot } from '@/components/pages/pcs/pin-annotations';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
@@ -132,6 +136,14 @@ export function PostDetailPage() {
   const [annotateError, setAnnotateError] = useState<string | null>(null);
   const [commentsRefresh, setCommentsRefresh] = useState(0);
 
+  // Pin annotation state (F5): the placed point drives the pin composer, sibling
+  // to the caption composer above. Posting mirrors the caption write path.
+  const [pinComposer, setPinComposer] = useState<{ index: number; x: number; y: number } | null>(
+    null,
+  );
+  const [pinSubmitting, setPinSubmitting] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+
   // One presign setup for this page, built exactly as the Assets page does: the
   // asset-read endpoint env, the existing access-token source, and the trace
   // fetcher. deps are kept for the lightbox's attachment-disposition download;
@@ -210,10 +222,12 @@ export function PostDetailPage() {
   // are numbered in caption order; stale ones carry their original quote sliced
   // from their own version snapshot. Out-of-bounds or inverted ranges are
   // skipped rather than mis-sliced.
-  const { highlights, annotationsByCommentId } = useMemo(() => {
+  const { highlights, annotationsByCommentId, pinsByAttachment } = useMemo(() => {
     const list: CaptionAnnotationView[] = [];
     const byComment: Record<string, CommentAnnotation> = {};
-    if (detail === null) return { highlights: list, annotationsByCommentId: byComment };
+    const noPins: Record<string, PinDot[]> = {};
+    if (detail === null)
+      return { highlights: list, annotationsByCommentId: byComment, pinsByAttachment: noPins };
 
     const liveCaption = detail.post.caption ?? '';
     const versionById = new Map(detail.versions.map((v) => [v.id, v]));
@@ -264,8 +278,24 @@ export function PostDetailPage() {
       byComment[a.comment_id] = { n: 0, quote, stale: true, versionNumber };
     }
 
-    return { highlights: list, annotationsByCommentId: byComment };
-  }, [detail, currentVersionId]);
+    // Second pass: number the image pins AFTER the captions (continuing liveN)
+    // and match current-version pins to their slides for the overlay. Caption
+    // numbering above is untouched.
+    const pinData = buildPinData(
+      detail.annotations,
+      currentVersionId,
+      detail.versions,
+      gallery,
+      liveN,
+    );
+    Object.assign(byComment, pinData.pinChipsByCommentId);
+
+    return {
+      highlights: list,
+      annotationsByCommentId: byComment,
+      pinsByAttachment: pinData.pinsByAttachment,
+    };
+  }, [detail, currentVersionId, gallery]);
 
   // Open the composer for a captured caption selection.
   const handleAnnotate = useCallback((start: number, end: number, quote: string): void => {
@@ -326,6 +356,65 @@ export function PostDetailPage() {
 
     setAnnotating(false);
     setComposer(null);
+    await load(true);
+    setCommentsRefresh((n) => n + 1);
+  }
+
+  // Pin placement (F5): the lightbox owns the armed state; arming just clears any
+  // prior error, and a valid tap opens the pin composer at the captured point.
+  const handleRequestPin = useCallback((): void => {
+    setPinError(null);
+  }, []);
+
+  const handlePlacePin = useCallback((index: number, x: number, y: number): void => {
+    setPinError(null);
+    setPinComposer({ index, x, y });
+  }, []);
+
+  // Comment-first, image_pin-second on one shared trace, mirroring the caption
+  // write path. An annotation failure after the comment lands leaves a plain
+  // comment with an error notice and no retry.
+  async function submitPinAnnotation(body: string): Promise<void> {
+    if (pinComposer === null || detail === null || currentVersionId === null) return;
+    const item = gallery[pinComposer.index];
+    if (item === undefined) return;
+    setPinSubmitting(true);
+    setPinError(null);
+    const traceId = newTrace();
+
+    const commentResult = await createComment(supabase, {
+      workspace_id: detail.post.workspace_id,
+      entity_type: 'post',
+      entity_id: detail.post.id,
+      body,
+      trace_id: traceId,
+    });
+    if (!commentResult.ok) {
+      setPinSubmitting(false);
+      setPinError(commentResult.error.message);
+      return;
+    }
+
+    const annotationResult = await annotationCreate(supabase, {
+      kind: 'image_pin',
+      postId: detail.post.id,
+      postVersionId: currentVersionId,
+      commentId: commentResult.data,
+      assetAttachmentId: item.assetAttachmentId,
+      imageX: pinComposer.x,
+      imageY: pinComposer.y,
+      traceId,
+    });
+    if (!annotationResult.ok) {
+      setPinSubmitting(false);
+      setPinComposer(null);
+      setPinError('Could not anchor the comment to the image. It was posted as a plain comment.');
+      setCommentsRefresh((n) => n + 1);
+      return;
+    }
+
+    setPinSubmitting(false);
+    setPinComposer(null);
     await load(true);
     setCommentsRefresh((n) => n + 1);
   }
@@ -429,7 +518,23 @@ export function PostDetailPage() {
               cache={cache}
               deps={deps}
               presignEnabled={presignEnabled}
+              pinOverlay={(item) => (
+                <PinOverlay
+                  pins={pinsByAttachment[item.assetAttachmentId] ?? []}
+                  onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
+                />
+              )}
+              onRequestPin={handleRequestPin}
+              onPlacePin={handlePlacePin}
             />
+            {pinError !== null ? (
+              <div
+                role="alert"
+                className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+              >
+                {pinError}
+              </div>
+            ) : null}
           </section>
 
           <section>
@@ -544,6 +649,20 @@ export function PostDetailPage() {
           if (!annotating) setComposer(null);
         }}
         onSubmit={submitAnnotation}
+      />
+
+      <PinAnnotationComposer
+        open={pinComposer !== null}
+        context={
+          pinComposer !== null
+            ? (gallery[pinComposer.index]?.filename ?? `Slide ${pinComposer.index + 1}`)
+            : ''
+        }
+        submitting={pinSubmitting}
+        onClose={() => {
+          if (!pinSubmitting) setPinComposer(null);
+        }}
+        onSubmit={submitPinAnnotation}
       />
     </>
   );

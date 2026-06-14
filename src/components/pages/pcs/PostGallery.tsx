@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { IconAssets } from '@/components/ui/icons';
 import { PostLightbox } from '@/components/pages/pcs/PostLightbox';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
@@ -149,6 +149,12 @@ interface PostGalleryProps {
   aspect?: string;
   /** Per-tile index badge. Defaults to on, as the post gallery shows it. */
   showIndex?: boolean;
+  /** F5: overlay rendered over the open slide (numbered pins); none when omitted. */
+  pinOverlay?: (item: GalleryItem, index: number) => ReactNode;
+  /** F5: the lightbox [pin] button seam; the button is inert when omitted. */
+  onRequestPin?: (index: number) => void;
+  /** F5: a placed pin reports the slide index + normalised point. */
+  onPlacePin?: (index: number, x: number, y: number) => void;
 }
 
 /**
@@ -166,6 +172,9 @@ export function PostGallery({
   columns = 4,
   aspect = '4/5',
   showIndex = true,
+  pinOverlay,
+  onRequestPin,
+  onPlacePin,
 }: PostGalleryProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -189,6 +198,9 @@ export function PostGallery({
           deps={deps}
           onIndexChange={setOpenIndex}
           onClose={() => setOpenIndex(null)}
+          pinOverlay={pinOverlay}
+          onRequestPin={onRequestPin}
+          onPlacePin={onPlacePin}
         />
       ) : null}
     </>
