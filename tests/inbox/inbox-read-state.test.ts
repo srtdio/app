@@ -23,11 +23,7 @@ import {
   type SeededUser,
   type SeededWorkspace,
 } from '../../packages/test-utils/rls';
-import {
-  inboxMarkAllRead,
-  inboxMarkRead,
-  inboxSnooze,
-} from '../../packages/rpc/src/index';
+import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '../../packages/rpc/src/index';
 
 const INBOX_SUITE = process.env.INBOX_SUITE === '1';
 
@@ -53,7 +49,9 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
     return String(row.id);
   }
 
-  async function readEntry(id: string): Promise<{ readAt: string | null; snoozedUntil: string | null }> {
+  async function readEntry(
+    id: string,
+  ): Promise<{ readAt: string | null; snoozedUntil: string | null }> {
     const res = await admin
       .from('inbox_entries')
       .select('read_at, snoozed_until')

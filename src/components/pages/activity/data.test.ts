@@ -108,7 +108,11 @@ describe('mapEntry', () => {
   });
 
   it('never throws on a malformed payload', () => {
-    const mapped = mapEntry(row({ payload: 42 as unknown as Database['public']['Tables']['inbox_entries']['Row']['payload'] }));
+    const mapped = mapEntry(
+      row({
+        payload: 42 as unknown as Database['public']['Tables']['inbox_entries']['Row']['payload'],
+      }),
+    );
     expect(mapped.title).toBeNull();
     expect(mapped.actorId).toBeNull();
   });
@@ -116,8 +120,12 @@ describe('mapEntry', () => {
 
 describe('activityLine null-safe rendering', () => {
   it('drops a missing actor name per event type', () => {
-    expect(activityLine(item({ eventType: 'comment', actorName: null }))).toBe('New comment on a post');
-    expect(activityLine(item({ eventType: 'mention', actorName: null }))).toBe('New mention in a post');
+    expect(activityLine(item({ eventType: 'comment', actorName: null }))).toBe(
+      'New comment on a post',
+    );
+    expect(activityLine(item({ eventType: 'mention', actorName: null }))).toBe(
+      'New mention in a post',
+    );
     expect(activityLine(item({ eventType: 'decision_marked', actorName: null }))).toBe(
       'Decision flagged on a post',
     );
@@ -136,11 +144,18 @@ describe('activityLine null-safe rendering', () => {
   });
 
   it('uses the actor name and title when present', () => {
+    expect(activityLine(item({ eventType: 'comment', actorName: 'Alice', title: 'Q3 post' }))).toBe(
+      'Alice commented on Q3 post',
+    );
     expect(
-      activityLine(item({ eventType: 'comment', actorName: 'Alice', title: 'Q3 post' })),
-    ).toBe('Alice commented on Q3 post');
-    expect(
-      activityLine(item({ eventType: 'brief_created', actorName: 'Bo', entityType: 'brief', title: 'Brief X' })),
+      activityLine(
+        item({
+          eventType: 'brief_created',
+          actorName: 'Bo',
+          entityType: 'brief',
+          title: 'Brief X',
+        }),
+      ),
     ).toBe('Bo created Brief X');
   });
 

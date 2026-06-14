@@ -77,13 +77,13 @@ describe('ActivityRow', () => {
 
   it('shows the unread dot for an unread row and hides it once read', () => {
     const unread = renderRow(item({ readAt: null }));
-    expect(unread.some((n) => (n.props as { ['aria-label']?: string })['aria-label'] === 'Unread')).toBe(
-      true,
-    );
+    expect(
+      unread.some((n) => (n.props as { ['aria-label']?: string })['aria-label'] === 'Unread'),
+    ).toBe(true);
     const read = renderRow(item({ readAt: '2026-06-14T00:30:00.000Z' }));
-    expect(read.some((n) => (n.props as { ['aria-label']?: string })['aria-label'] === 'Unread')).toBe(
-      false,
-    );
+    expect(
+      read.some((n) => (n.props as { ['aria-label']?: string })['aria-label'] === 'Unread'),
+    ).toBe(false);
   });
 });
 
@@ -93,9 +93,7 @@ describe('AvatarStack', () => {
   });
 
   it('overlaps up to three and shows a +N indicator beyond that', () => {
-    const html = renderToStaticMarkup(
-      <AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />,
-    );
+    const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
     expect(html).toContain('+2');
   });
 });
