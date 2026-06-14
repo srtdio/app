@@ -2476,6 +2476,29 @@ export type Database = {
         }
         Returns: string
       }
+      inbox_mark_all_read: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
+      inbox_mark_read: {
+        Args: {
+          p_created_at: string
+          p_entry_id: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
+      inbox_snooze: {
+        Args: {
+          p_created_at: string
+          p_entry_id: string
+          p_kind: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       is_active_workspace_member: {
         Args: { p_workspace_id: string }
         Returns: boolean
