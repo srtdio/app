@@ -27,6 +27,15 @@
   --stage-approved: #15803d;
   --stage-rejected: #b91c1c;
   --stage-parked: #52606d;
+  /* Neutral overlay scale for fullscreen media surfaces (the PCS lightbox). A
+     media backdrop reads as dark in both themes, so these stay constant across
+     light/dark for parity rather than flipping. */
+  --overlay: rgba(9, 10, 12, 0.92);
+  --overlay-fg: #f4f5f6;
+  --overlay-fg-dim: rgba(244, 245, 246, 0.7);
+  --overlay-surface: rgba(244, 245, 246, 0.12);
+  --overlay-line: rgba(244, 245, 246, 0.14);
+  --overlay-dot: rgba(244, 245, 246, 0.4);
 }
 .dark {
   --bg: #0c0d10;
@@ -52,6 +61,14 @@
   --stage-approved: #46b47a;
   --stage-rejected: #e0685a;
   --stage-parked: #8a949e;
+  /* Overlay scale held constant with :root so the lightbox backdrop reads the
+     same dark in light and dark mode (parity). */
+  --overlay: rgba(0, 0, 0, 0.94);
+  --overlay-fg: #f4f5f6;
+  --overlay-fg-dim: rgba(244, 245, 246, 0.7);
+  --overlay-surface: rgba(244, 245, 246, 0.12);
+  --overlay-line: rgba(244, 245, 246, 0.14);
+  --overlay-dot: rgba(244, 245, 246, 0.4);
 }
 @layer base {
   html,

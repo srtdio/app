@@ -28,6 +28,12 @@ export default {
         'stage-approved': 'var(--stage-approved)',
         'stage-rejected': 'var(--stage-rejected)',
         'stage-parked': 'var(--stage-parked)',
+        overlay: 'var(--overlay)',
+        'overlay-fg': 'var(--overlay-fg)',
+        'overlay-fg-dim': 'var(--overlay-fg-dim)',
+        'overlay-surface': 'var(--overlay-surface)',
+        'overlay-line': 'var(--overlay-line)',
+        'overlay-dot': 'var(--overlay-dot)',
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],

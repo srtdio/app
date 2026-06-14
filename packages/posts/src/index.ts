@@ -41,11 +41,13 @@ export { annotationCreate, AnnotationCreateSchema, type AnnotationCreateInput } 
 
 export {
   getPost,
+  getPostGallery,
   listPosts,
   listPostsForPicker,
   readPostsByIds,
   POSTS_PAGE_SIZE,
   POSTS_PAGE_SIZE_MAX,
+  type GalleryItem,
   type ListPostsForPickerInput,
   type ListPostsInput,
   type Post,

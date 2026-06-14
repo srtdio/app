@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Comments } from '@/components/comments/Comments';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
+import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { supabase } from '@/lib/supabase';
+import { fetchWithTrace } from '@/lib/fetch';
+import { env } from '@/lib/env';
+import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
-import { getPost, STAGE_TRANSITIONS } from '@srtdio/posts';
-import type { DomainError, PostDetail, Stage } from '@srtdio/posts';
+import { getPost, getPostGallery, STAGE_TRANSITIONS } from '@srtdio/posts';
+import type { DomainError, GalleryItem, PostDetail, Stage } from '@srtdio/posts';
 import { stageTransition } from '@srtdio/rpc';
 
 // Title-case a single workflow stage for display. Stage values come from
@@ -96,12 +100,29 @@ export function PostDetailPage() {
   const { workspaceId } = useWorkspace();
 
   const [detail, setDetail] = useState<PostDetail | null>(null);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
   const [transitioning, setTransitioning] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // One presign setup for this page, built exactly as the Assets page does: the
+  // asset-read endpoint env, the existing access-token source, and the trace
+  // fetcher. deps are kept for the lightbox's attachment-disposition download;
+  // the cache bounds concurrency and reuses inline URLs across thumbnails.
+  const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
+  const deps = useMemo<PresignDeps>(
+    () => ({
+      endpoint: env.VITE_ASSET_READ_URL ?? null,
+      getAccessToken: async () =>
+        (await supabase.auth.getSession()).data.session?.access_token ?? null,
+      fetcher: (input, init) => fetchWithTrace(input, init),
+    }),
+    [],
+  );
+  const cache = useMemo(() => new PresignCache(deps), [deps]);
 
   // `silent` skips the full-page loading flip so a post-transition refetch
   // updates the badge and buttons in place rather than blanking the screen.
@@ -134,6 +155,23 @@ export function PostDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The gallery is a separate read (asset_attachments has no FK back to posts, so
+  // it cannot ride getPost's embed) and is non-critical: a failure or an absent
+  // post simply leaves the grid empty rather than blocking the page.
+  useEffect(() => {
+    if (postId === undefined) {
+      setGallery([]);
+      return;
+    }
+    let active = true;
+    void getPostGallery(supabase, postId).then((result) => {
+      if (active) setGallery(result.ok ? result.data : []);
+    });
+    return () => {
+      active = false;
+    };
+  }, [postId]);
 
   async function handleTransition(to: Stage): Promise<void> {
     if (postId === undefined) return;
@@ -225,6 +263,18 @@ export function PostDetailPage() {
 
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 flex flex-col gap-6">
+          <section>
+            <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
+              Gallery
+            </div>
+            <PostGallery
+              items={gallery}
+              cache={cache}
+              deps={deps}
+              presignEnabled={presignEnabled}
+            />
+          </section>
+
           <section>
             <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
               Caption

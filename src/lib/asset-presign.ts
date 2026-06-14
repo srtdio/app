@@ -44,6 +44,7 @@ export class PresignError extends Error {
 export async function requestPresignedUrl(
   deps: PresignDeps,
   assetVersionId: string,
+  disposition: 'inline' | 'attachment' = 'inline',
 ): Promise<PresignedUrl> {
   if (deps.endpoint === null || deps.endpoint === '') {
     throw new PresignError('Asset read endpoint is not configured.', 'unconfigured');
@@ -59,7 +60,13 @@ export async function requestPresignedUrl(
       'content-type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ asset_version_id: assetVersionId }),
+    // 'inline' is the worker's default; omit it so the inline request body (and
+    // thus PresignCache.resolve's wire format) stays byte-for-byte unchanged.
+    body: JSON.stringify(
+      disposition === 'attachment'
+        ? { asset_version_id: assetVersionId, disposition }
+        : { asset_version_id: assetVersionId },
+    ),
   });
   if (!response.ok) {
     throw new PresignError(`Presign failed with status ${response.status}.`, 'request_failed');
