@@ -1821,6 +1821,7 @@ export type Database = {
           platform: string
           row_version: number
           stage: string
+          stage_entered_at: string
           target_date: string | null
           title: string
           updated_at: string
@@ -1840,6 +1841,7 @@ export type Database = {
           platform: string
           row_version?: number
           stage?: string
+          stage_entered_at?: string
           target_date?: string | null
           title: string
           updated_at?: string
@@ -1859,6 +1861,7 @@ export type Database = {
           platform?: string
           row_version?: number
           stage?: string
+          stage_entered_at?: string
           target_date?: string | null
           title?: string
           updated_at?: string
