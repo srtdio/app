@@ -67,7 +67,7 @@ export function PostCard({ post, cache, presignEnabled }: PostCardProps) {
   const navigate = useNavigate();
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2">
+    <div className="relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2">
       <button
         type="button"
         aria-label={`Open post ${post.title}`}
@@ -86,11 +86,15 @@ export function PostCard({ post, cache, presignEnabled }: PostCardProps) {
       </Thumbnail>
       <div className="flex flex-col gap-2 p-3">
         <div className="truncate text-sm font-medium leading-snug">{post.title}</div>
-        <div className="flex items-center gap-1.5">
-          <Chip label={post.platform} />
-          <Chip label={post.format} />
+        {/* min-w-0 lets the row shrink to the grid column; flex-wrap drops chips to
+            a new line instead of pushing the card past its 2-col mobile track. The
+            chips carry shrink-0 + truncate so a long label clips rather than widening
+            the card. The card root's overflow-hidden clips any residual overflow. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <Chip label={post.platform} className="min-w-0 shrink truncate" />
+          <Chip label={post.format} className="min-w-0 shrink truncate" />
           {post.target_date !== null ? (
-            <span className="ml-auto text-xs tabular-nums text-fg-3">
+            <span className="ml-auto shrink-0 text-xs tabular-nums text-fg-3">
               {formatTargetDate(post.target_date)}
             </span>
           ) : null}

@@ -180,6 +180,28 @@ describe('PipelineBoard', () => {
     expect(columns.map(dataStage)).toEqual(STAGES);
   });
 
+  it('(structural) the horizontal scroll container locks the vertical axis to the page', () => {
+    const grouped = groupByStage([], STAGES);
+    const tree = PipelineBoard({
+      stages: STAGES,
+      grouped,
+      cap: BOARD_CAP,
+      cache,
+      presignEnabled: false,
+      onViewAll: () => {},
+      onMovePost: () => {},
+    });
+    const scroll = findAll(tree, (el) =>
+      Boolean((el.props as { 'data-board-scroll'?: boolean })['data-board-scroll']),
+    );
+    expect(scroll).toHaveLength(1);
+    const className = (scroll[0]!.props as { className: string }).className;
+    expect(className).toContain('overflow-x-auto');
+    // Vertical-lock: only the horizontal axis scrolls; the page owns vertical scroll.
+    expect(className).toContain('overflow-y-hidden');
+    expect(className).toContain('min-h-0');
+  });
+
   it('a drop onto a legal target calls the move handler with the post + target stage', () => {
     const onMovePost = vi.fn();
     const grouped = groupByStage([makePost('p1', 'draft')], STAGES);

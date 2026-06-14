@@ -95,7 +95,13 @@ export function PipelineBoard({
   onMovePost,
 }: PipelineBoardProps): ReactElement {
   return (
-    <div className="flex gap-3 overflow-x-auto px-4 py-4 md:px-6">
+    // Lock scrolling to the horizontal axis only: with bare overflow-x-auto the
+    // y-axis resolves to auto, so a both-axis scroll fights the app-shell main.
+    // overflow-y-hidden + min-h-0 keep vertical scrolling owned by the page.
+    <div
+      data-board-scroll
+      className="flex min-h-0 gap-3 overflow-x-auto overflow-y-hidden px-4 py-4 md:px-6"
+    >
       {stages.map((stage) => {
         const all = grouped[stage];
         const shown = cap === null ? all : all.slice(0, cap);

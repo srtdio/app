@@ -115,6 +115,24 @@ describe('PostCard thumbnail frame', () => {
     expect(out).toContain('<svg');
   });
 
+  it('(structural) chip row wraps/clips and the platform + format chips carry shrink + truncate', () => {
+    const { cache } = makeCache(null);
+    const out = render({
+      post: makePost({ platform: 'instagram', format: 'single_image', target_date: null }),
+      cache,
+      presignEnabled: true,
+    });
+    // The chip row may shrink to its grid column and wraps instead of overflowing.
+    expect(out).toContain('flex min-w-0 flex-wrap items-center gap-1.5');
+    // Each display chip can shrink and truncates rather than forcing the card wider.
+    // Two chips (platform + format) both carry the constraint.
+    const chipMatches = out.match(/min-w-0 shrink truncate/g) ?? [];
+    expect(chipMatches.length).toBe(2);
+    // The card root can shrink to its track and clips any residual overflow.
+    expect(out).toContain('min-w-0');
+    expect(out).toContain('overflow-hidden');
+  });
+
   it('shows the carousel badge on a carousel post', () => {
     const { cache } = makeCache(null);
     const out = render({
