@@ -50,6 +50,7 @@ export {
   type GalleryItem,
   type ListPostsForPickerInput,
   type ListPostsInput,
+  type PipelinePost,
   type Post,
   type PostAnnotation,
   type PostCardFields,

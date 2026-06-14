@@ -30,6 +30,14 @@ export interface ListPostsInput {
   before?: string;
 }
 
+/**
+ * A Pipeline board row: the full post Row plus the asset_version_id of its first
+ * image attachment (for the card thumbnail), or null when the post has no image
+ * attached. The thumbnail is resolved by {@link listPosts} in one extra batched
+ * query over every returned post, never one query per post.
+ */
+export type PipelinePost = Post & { thumbnailAssetVersionId: string | null };
+
 /** A post with its full version chain and annotations, fetched in one query. */
 export interface PostDetail {
   post: Post;
@@ -122,13 +130,65 @@ function transportError(message: string): DomainError {
   return { code: 'unknown', message };
 }
 
+// One row of the batched first-image lookup: an asset_attachments row with its
+// pinned version's mime_type embedded via an inner join (so only image-backed
+// attachments survive). The aliased select is wider than the generated row type
+// can express, so callers cast through `unknown`.
+interface FirstImageRow {
+  entity_id: string;
+  asset_version_id: string;
+  asset_versions: { mime_type: string | null } | null;
+}
+
+/**
+ * Resolve each post's first image attachment's asset_version_id in ONE query over
+ * asset_attachments (no N+1, never one read per post). "First image" is the live
+ * (deleted_at IS NULL), image-mime attachment with the lowest position, tie-broken
+ * by the earliest attached_at. The inner join + LIKE 'image/%' drops video/link/
+ * file attachments server-side; rows arrive grouped by entity_id and ordered
+ * position then attached_at ascending, so the first row seen per post wins. Posts
+ * with no image attachment never appear in the map (the caller maps them to null).
+ * Returns an empty map without a round trip when there are no post ids.
+ */
+async function firstImageByPost(
+  client: Client,
+  postIds: string[],
+): Promise<Result<Map<string, string>>> {
+  if (postIds.length === 0) return { ok: true, data: new Map() };
+
+  const { data, error } = await client
+    .from('asset_attachments')
+    .select('entity_id, asset_version_id, asset_versions!inner(mime_type)')
+    .eq('entity_type', 'post')
+    .in('entity_id', postIds)
+    .is('deleted_at', null)
+    .like('asset_versions.mime_type', 'image/%')
+    .order('entity_id', { ascending: true })
+    .order('position', { ascending: true })
+    .order('attached_at', { ascending: true });
+
+  if (error) return { ok: false, error: transportError(error.message) };
+
+  const rows = (data ?? []) as unknown as FirstImageRow[];
+  const firstByPost = new Map<string, string>();
+  for (const row of rows) {
+    if (!firstByPost.has(row.entity_id)) firstByPost.set(row.entity_id, row.asset_version_id);
+  }
+  return { ok: true, data: firstByPost };
+}
+
 /**
  * List live posts in a workspace, newest first. Soft-deleted rows are excluded.
- * A single query: stage and the `before` cursor are applied as filters, the
+ * A single posts query: stage and the `before` cursor are applied as filters, the
  * page size is capped, and ordering matches the composite index
- * (workspace_id, stage, created_at desc).
+ * (workspace_id, stage, created_at desc). One additional batched query then
+ * resolves each row's first-image asset_version_id for the card thumbnail
+ * ({@link firstImageByPost}); posts with no image carry null. No N+1.
  */
-export async function listPosts(client: Client, input: ListPostsInput): Promise<Result<Post[]>> {
+export async function listPosts(
+  client: Client,
+  input: ListPostsInput,
+): Promise<Result<PipelinePost[]>> {
   const limit = Math.min(input.limit ?? POSTS_PAGE_SIZE, POSTS_PAGE_SIZE_MAX);
 
   let query = client
@@ -147,7 +207,21 @@ export async function listPosts(client: Client, input: ListPostsInput): Promise<
     .limit(limit);
 
   if (error) return { ok: false, error: transportError(error.message) };
-  return { ok: true, data: data ?? [] };
+
+  const posts = data ?? [];
+  const thumbnails = await firstImageByPost(
+    client,
+    posts.map((post) => post.id),
+  );
+  if (!thumbnails.ok) return thumbnails;
+
+  return {
+    ok: true,
+    data: posts.map((post) => ({
+      ...post,
+      thumbnailAssetVersionId: thumbnails.data.get(post.id) ?? null,
+    })),
+  };
 }
 
 /**
