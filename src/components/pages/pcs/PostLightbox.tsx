@@ -40,6 +40,62 @@ export function lightboxCounter(index: number, count: number): string {
   return `${index + 1} of ${count}`;
 }
 
+/** The minimal rect shape the pin math reads off the rendered image. */
+interface RectLike {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+function clamp01(value: number): number {
+  return value < 0 ? 0 : value > 1 ? 1 : value;
+}
+
+/**
+ * Normalised [0,1] point of a click inside an image rect, or null when the click
+ * falls outside the rect (those taps are ignored). The in-range result is clamped
+ * defensively so a float edge never escapes [0,1]. Pure. (F5 placement.)
+ */
+export function pinPointFromRect(
+  rect: RectLike,
+  clientX: number,
+  clientY: number,
+): { x: number; y: number } | null {
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  const x = (clientX - rect.left) / rect.width;
+  const y = (clientY - rect.top) / rect.height;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+  return { x: clamp01(x), y: clamp01(y) };
+}
+
+/** As {@link pinPointFromRect}, but reading the rect off the tapped element. */
+export function placePinFromEvent(
+  target: { getBoundingClientRect: () => RectLike },
+  clientX: number,
+  clientY: number,
+): { x: number; y: number } | null {
+  return pinPointFromRect(target.getBoundingClientRect(), clientX, clientY);
+}
+
+/**
+ * What the [pin] button does given the current zoom/arm state. Placement is
+ * disabled while zoomed (object-contain vs the zoom scroller skews coordinates),
+ * so a zoomed click first exits zoom rather than arming. Pure. (F5 placement.)
+ */
+export function pinButtonAction(zoomed: boolean, armed: boolean): 'exit-zoom' | 'arm' | 'disarm' {
+  if (zoomed) return 'exit-zoom';
+  return armed ? 'disarm' : 'arm';
+}
+
+/** The image's className for the current zoom/arm state (crosshair while armed). */
+function imageClass(zoomed: boolean, armed: boolean): string {
+  if (armed) return 'max-h-full max-w-full cursor-crosshair object-contain';
+  return zoomed
+    ? 'max-w-none cursor-zoom-out'
+    : 'max-h-full max-w-full cursor-zoom-in object-contain';
+}
+
 interface LightboxViewProps {
   item: GalleryItem;
   index: number;
@@ -61,6 +117,10 @@ interface LightboxViewProps {
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
   /** Pin request (F5); the [pin] button is disabled/no-op when undefined. */
   onRequestPin?: ((index: number) => void) | undefined;
+  /** Placement-armed (F5): a tap on the image drops a pin instead of zooming. */
+  armed?: boolean;
+  /** Image tap while armed (F5): captures the pin point from the rendered image. */
+  onPlace?: ((event: React.MouseEvent<HTMLImageElement>) => void) | undefined;
 }
 
 const TOOLBAR_BUTTON =
@@ -97,6 +157,8 @@ export function lightboxView({
   onScrimTouchEnd,
   pinOverlay,
   onRequestPin,
+  armed = false,
+  onPlace,
 }: LightboxViewProps): ReactElement {
   const canPin = onRequestPin !== undefined;
   const showInline =
@@ -167,6 +229,14 @@ export function lightboxView({
         onTouchStart={onScrimTouchStart}
         onTouchEnd={onScrimTouchEnd}
       >
+        {armed ? (
+          <div
+            role="status"
+            className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-xs font-medium text-overlay-fg"
+          >
+            Tap the image to place a pin
+          </div>
+        ) : null}
         {count > 1 ? (
           <>
             <button
@@ -194,12 +264,8 @@ export function lightboxView({
             <img
               src={mediaSrc}
               alt={item.filename}
-              className={
-                zoomed
-                  ? 'max-w-none cursor-zoom-out'
-                  : 'max-h-full max-w-full cursor-zoom-in object-contain'
-              }
-              onClick={onToggleZoom}
+              className={imageClass(zoomed, armed)}
+              onClick={armed && onPlace !== undefined ? onPlace : onToggleZoom}
             />
           ) : showInline && isVideo(item) ? (
             <video src={mediaSrc} controls className="max-h-full max-w-full" />
@@ -288,9 +354,11 @@ interface PostLightboxProps {
   onIndexChange: (index: number) => void;
   onClose: () => void;
   /** F5 seam: overlay rendered over the image area; nothing renders when omitted. */
-  pinOverlay?: (item: GalleryItem, index: number) => ReactNode;
+  pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
   /** F5 seam: the [pin] button calls this; the button is inert when omitted. */
-  onRequestPin?: (index: number) => void;
+  onRequestPin?: ((index: number) => void) | undefined;
+  /** F5: a valid tap while armed reports the slide index + normalised point. */
+  onPlacePin?: ((index: number, x: number, y: number) => void) | undefined;
 }
 
 /**
@@ -311,11 +379,13 @@ export function PostLightbox({
   onClose,
   pinOverlay,
   onRequestPin,
+  onPlacePin,
 }: PostLightboxProps) {
   const item = items[index];
   const [mediaSrc, setMediaSrc] = useState<string | null>(null);
   const [mediaFailed, setMediaFailed] = useState(false);
   const [zoomed, setZoomed] = useState(false);
+  const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
@@ -331,6 +401,7 @@ export function PostLightbox({
     setMediaSrc(null);
     setMediaFailed(false);
     setZoomed(false);
+    setArmed(false);
     if (item === undefined || !presignEnabled || !isInlineRenderable(item)) return;
     let live = true;
     cache
@@ -383,6 +454,31 @@ export function PostLightbox({
       .finally(() => setBusy(false));
   };
 
+  // The [pin] button: exit zoom first if zoomed (coords are only meaningful at
+  // object-contain scale), otherwise toggle the placement-armed state. Arming
+  // also fires the optional onRequestPin seam with the current index.
+  const handleRequestPin = (i: number): void => {
+    const action = pinButtonAction(zoomed, armed);
+    if (action === 'exit-zoom') {
+      setZoomed(false);
+      return;
+    }
+    if (action === 'arm') {
+      setArmed(true);
+      onRequestPin?.(i);
+      return;
+    }
+    setArmed(false);
+  };
+
+  // A tap on the image while armed: capture the normalised point and disarm.
+  // Outside-rect taps are ignored (placePinFromEvent returns null).
+  const handlePlace = (event: React.MouseEvent<HTMLImageElement>): void => {
+    const point = placePinFromEvent(event.currentTarget, event.clientX, event.clientY);
+    setArmed(false);
+    if (point !== null) onPlacePin?.(index, point.x, point.y);
+  };
+
   const onScrimTouchStart = (event: React.TouchEvent): void => {
     touchStartX.current = event.touches[0]?.clientX ?? null;
   };
@@ -412,6 +508,8 @@ export function PostLightbox({
     onScrimTouchStart,
     onScrimTouchEnd,
     pinOverlay,
-    onRequestPin,
+    onRequestPin: onRequestPin !== undefined ? handleRequestPin : undefined,
+    armed,
+    onPlace: handlePlace,
   });
 }

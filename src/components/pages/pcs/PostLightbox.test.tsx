@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
-import { lightboxView, lightboxCounter, wrapIndex } from '@/components/pages/pcs/PostLightbox';
+import {
+  lightboxView,
+  lightboxCounter,
+  wrapIndex,
+  pinPointFromRect,
+  placePinFromEvent,
+  pinButtonAction,
+} from '@/components/pages/pcs/PostLightbox';
 import type { GalleryItem } from '@srtdio/posts';
 
 // node test environment (no DOM renderer): walk the hookless lightboxView tree.
@@ -76,6 +83,34 @@ describe('wrapIndex', () => {
   });
 });
 
+describe('pin placement helpers', () => {
+  const rect = { left: 100, top: 50, width: 200, height: 100 };
+
+  it('normalizes an in-rect tap and clamps to [0,1]', () => {
+    expect(pinPointFromRect(rect, 200, 100)).toEqual({ x: 0.5, y: 0.5 });
+    // The far corner clamps to the unit bound rather than overshooting.
+    expect(pinPointFromRect(rect, 300, 150)).toEqual({ x: 1, y: 1 });
+  });
+
+  it('ignores a tap outside the rect', () => {
+    expect(pinPointFromRect(rect, 50, 100)).toBeNull();
+    expect(pinPointFromRect(rect, 200, 200)).toBeNull();
+  });
+
+  it('reads the rect off the tapped element (mocked getBoundingClientRect)', () => {
+    const target = { getBoundingClientRect: vi.fn(() => rect) };
+    expect(placePinFromEvent(target, 150, 75)).toEqual({ x: 0.25, y: 0.25 });
+    expect(target.getBoundingClientRect).toHaveBeenCalledOnce();
+  });
+
+  it('disables placement while zoomed (exit zoom first)', () => {
+    expect(pinButtonAction(true, false)).toBe('exit-zoom');
+    expect(pinButtonAction(true, true)).toBe('exit-zoom');
+    expect(pinButtonAction(false, false)).toBe('arm');
+    expect(pinButtonAction(false, true)).toBe('disarm');
+  });
+});
+
 describe('lightboxView', () => {
   it('shows the "i of n" counter', () => {
     const tree = lightboxView(props({ index: 0, count: 3 }));
@@ -111,6 +146,35 @@ describe('lightboxView', () => {
     expect((pin!.props as { disabled?: boolean }).disabled).toBe(false);
     (pin!.props as { onClick: () => void }).onClick();
     expect(onRequestPin).toHaveBeenCalledWith(2);
+  });
+
+  it('arming shows placement mode and routes an image tap to onPlace, not zoom', () => {
+    const onPlace = vi.fn();
+    const onToggleZoom = vi.fn();
+    const tree = lightboxView(props({ armed: true, onPlace, onToggleZoom }));
+    // A placement hint is shown while armed.
+    const hint = elements(tree).find((el) => (el.props as { role?: string }).role === 'status');
+    expect(hint).toBeDefined();
+    // The image tap places a pin and does not toggle zoom.
+    const img = elements(tree).find((el) => el.type === 'img');
+    (img!.props as { onClick: () => void }).onClick();
+    expect(onPlace).toHaveBeenCalledOnce();
+    expect(onToggleZoom).not.toHaveBeenCalled();
+    // The crosshair cursor signals placement mode.
+    expect((img!.props as { className: string }).className).toContain('cursor-crosshair');
+  });
+
+  it('an unarmed image tap still toggles zoom', () => {
+    const onPlace = vi.fn();
+    const onToggleZoom = vi.fn();
+    const tree = lightboxView(props({ armed: false, onPlace, onToggleZoom }));
+    expect(elements(tree).some((el) => (el.props as { role?: string }).role === 'status')).toBe(
+      false,
+    );
+    const img = elements(tree).find((el) => el.type === 'img');
+    (img!.props as { onClick: () => void }).onClick();
+    expect(onToggleZoom).toHaveBeenCalledOnce();
+    expect(onPlace).not.toHaveBeenCalled();
   });
 
   it('renders the pin overlay only when provided', () => {
