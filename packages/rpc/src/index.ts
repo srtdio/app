@@ -235,3 +235,27 @@ export function dmChannelEnsure(
 ): Promise<Result<ProcReturns<'dm_channel_ensure'>>> {
   return callProc(client, 'dm_channel_ensure', args);
 }
+
+export type InboxMarkReadArgs = ProcArgs<'inbox_mark_read'>;
+export function inboxMarkRead(
+  client: Client,
+  args: InboxMarkReadArgs,
+): Promise<Result<ProcReturns<'inbox_mark_read'>>> {
+  return callProc(client, 'inbox_mark_read', args);
+}
+
+export type InboxMarkAllReadArgs = ProcArgs<'inbox_mark_all_read'>;
+export function inboxMarkAllRead(
+  client: Client,
+  args: InboxMarkAllReadArgs,
+): Promise<Result<ProcReturns<'inbox_mark_all_read'>>> {
+  return callProc(client, 'inbox_mark_all_read', args);
+}
+
+export type InboxSnoozeArgs = ProcArgs<'inbox_snooze'>;
+export function inboxSnooze(
+  client: Client,
+  args: InboxSnoozeArgs,
+): Promise<Result<ProcReturns<'inbox_snooze'>>> {
+  return callProc(client, 'inbox_snooze', args);
+}

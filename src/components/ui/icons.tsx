@@ -301,3 +301,22 @@ export function IconPin(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconClock(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx={12} cy={12} r={8} />
+      <path d="M12 8v4l3 2" />
+    </Svg>
+  );
+}
+
+export function IconMore(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx={12} cy={5} r={1.2} />
+      <circle cx={12} cy={12} r={1.2} />
+      <circle cx={12} cy={19} r={1.2} />
+    </Svg>
+  );
+}
