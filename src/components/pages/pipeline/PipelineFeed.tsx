@@ -1,12 +1,12 @@
-import type { ReactElement } from 'react';
-import { cn } from '@/lib/cn';
+import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
+import { useLongPress } from '@/components/ui/useLongPress';
 import { PostCard } from '@/components/pages/PostCard';
 import {
   BOARD_CAP,
-  STAGE_DOT,
+  StageDot,
   emptyStageMessage,
   stageLabel,
 } from '@/components/pages/pipeline/stage-meta';
@@ -24,32 +24,65 @@ export interface PipelineFeedProps {
   presignEnabled: boolean;
   /** "View all N" on a capped All-view section; the page switches the active tab. */
   onViewAll: (stage: Stage) => void;
-}
-
-function StageDot({ stage }: { stage: Stage }): ReactElement {
-  return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', STAGE_DOT[stage])} />;
+  /** A long-press on a card asks the page to open the move sheet for that post. */
+  onLongPressPost: (post: PipelinePost) => void;
 }
 
 /**
- * A 2-column card grid. A plain helper (not a component) so the rendered cards
- * are inlined into the feed tree and walkable by the structure tests. Each card
- * wrapper reserves an inert long-press gesture target for the later move PR.
+ * One mobile card: a long-press (press-and-hold) target that asks the page to
+ * open the move sheet, while a short tap still falls through to PostCard's own
+ * navigation. PostCard is received as children so the board structure tests can
+ * still find it by walking the element tree. The click that trails a long-press
+ * is swallowed in the capture phase, before it reaches PostCard's nav button.
+ */
+function FeedCard({
+  post,
+  onLongPressPost,
+  children,
+}: {
+  post: PipelinePost;
+  onLongPressPost: (post: PipelinePost) => void;
+  children: ReactNode;
+}): ReactElement {
+  const { handlers, consumeClickSuppression } = useLongPress(() => onLongPressPost(post));
+  return (
+    <div
+      data-post-id={post.id}
+      className="rounded-lg"
+      onPointerDown={(event) => handlers.onPointerDown(event)}
+      onPointerMove={(event) => handlers.onPointerMove(event)}
+      onPointerUp={() => handlers.onPointerUp()}
+      onPointerCancel={() => handlers.onPointerCancel()}
+      onClickCapture={(event) => {
+        if (consumeClickSuppression()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A 2-column card grid. A plain helper (not a component) so each card's PostCard
+ * is inlined into the feed tree (via FeedCard's children) and walkable by the
+ * structure tests. Each card carries the long-press -> move gesture.
  */
 function cardGrid(
   posts: PipelinePost[],
   cache: PresignCache,
   presignEnabled: boolean,
+  onLongPressPost: (post: PipelinePost) => void,
 ): ReactElement {
   return (
     <div className="grid grid-cols-2 gap-2">
-      {posts.map((post) => {
-        // TODO(PR4): long-press -> move sheet. Wrapper is the reserved gesture target; inert here.
-        return (
-          <div key={post.id} data-post-id={post.id} className="rounded-lg">
-            <PostCard post={post} cache={cache} presignEnabled={presignEnabled} />
-          </div>
-        );
-      })}
+      {posts.map((post) => (
+        <FeedCard key={post.id} post={post} onLongPressPost={onLongPressPost}>
+          <PostCard post={post} cache={cache} presignEnabled={presignEnabled} />
+        </FeedCard>
+      ))}
     </div>
   );
 }
@@ -58,8 +91,9 @@ function cardGrid(
  * Mobile feed driven entirely by the stage tabs. The All tab renders one grouped
  * section per stage in the locked order, each capped at BOARD_CAP with a View all
  * affordance when it overflows; a single-stage tab renders that stage uncapped,
- * or the EmptyState when it holds nothing. Pure (no hooks) so the structure is
- * unit-tested by walking the returned tree.
+ * or the EmptyState when it holds nothing. Hookless at the top level (the only
+ * hook lives in the per-card FeedCard) so the structure is unit-tested by walking
+ * the returned tree.
  */
 export function PipelineFeed({
   stages,
@@ -68,6 +102,7 @@ export function PipelineFeed({
   cache,
   presignEnabled,
   onViewAll,
+  onLongPressPost,
 }: PipelineFeedProps): ReactElement {
   if (activeStage !== 'all') {
     const stage = activeStage as Stage;
@@ -77,7 +112,7 @@ export function PipelineFeed({
         {posts.length === 0 ? (
           <EmptyState icon={<IconPipeline size={22} />} title={emptyStageMessage(stage)} />
         ) : (
-          cardGrid(posts, cache, presignEnabled)
+          cardGrid(posts, cache, presignEnabled, onLongPressPost)
         )}
       </div>
     );
@@ -113,7 +148,7 @@ export function PipelineFeed({
                 Empty
               </div>
             ) : (
-              cardGrid(shown, cache, presignEnabled)
+              cardGrid(shown, cache, presignEnabled, onLongPressPost)
             )}
           </section>
         );
