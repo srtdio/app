@@ -161,9 +161,14 @@ export interface ListCommentsInput {
 }
 
 /**
- * List the live comments on one entity, newest first, one page at a time.
- * Soft-deleted rows are excluded. RLS guarantees the caller only ever sees rows
- * in workspaces they are an active member of.
+ * List the comments on one entity, newest first, one page at a time. Unlike
+ * searchComments, this listing INCLUDES soft-deleted rows: it powers the post /
+ * brief comment panel, where a soft-deleted parent that still has live replies
+ * must render as a "Comment deleted" tombstone so the one-level thread stays
+ * intact (the panel itself omits dangling deleted leaves). The retained row
+ * carries deleted_at, so the UI distinguishes live from deleted. RLS still
+ * guarantees the caller only ever sees rows in workspaces they are an active
+ * member of. Ordering and pagination are unchanged.
  */
 export async function listComments(
   client: Client,
@@ -177,8 +182,7 @@ export async function listComments(
     .select('*')
     .eq('workspace_id', input.workspace_id)
     .eq('entity_type', input.entity_type)
-    .eq('entity_id', input.entity_id)
-    .is('deleted_at', null);
+    .eq('entity_id', input.entity_id);
 
   if (input.is_decision !== undefined) query = query.eq('is_decision', input.is_decision);
   if (input.author !== undefined) query = query.eq('author_user_id', input.author);
