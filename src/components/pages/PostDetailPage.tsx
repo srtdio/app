@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { Avatar } from '@/components/ui/Avatar';
+import { Textarea } from '@/components/ui/Textarea';
 import { Comments } from '@/components/comments/Comments';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconPipeline } from '@/components/ui/icons';
+import { IconChevronRight, IconPipeline } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { CaptionView } from '@/components/pages/pcs/CaptionView';
 import type { CaptionAnnotationView } from '@/components/pages/pcs/CaptionView';
@@ -14,14 +16,40 @@ import { PinAnnotationComposer } from '@/components/pages/pcs/PinAnnotationCompo
 import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
 import { buildPinData } from '@/components/pages/pcs/pin-annotations';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
+import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
+import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
+import { usePostMembers } from '@/components/pages/pcs/use-post-members';
+import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
+import { visibleStageActions } from '@/components/pages/pcs/stage-actions';
+import { IconPencil } from '@/components/pages/pcs/post-icons';
+import {
+  append,
+  insertAfter,
+  moveLeft,
+  moveRight,
+  removeAt,
+} from '@/components/pages/pcs/gallery-transforms';
+import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
+import { Toasts } from '@/components/pages/assets/Toasts';
+import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
+import { fetchMemberRole } from '@/lib/assets';
+import { uploadAssetFile, type UploadOutcome } from '@/lib/asset-upload';
 import { useNewTrace } from '@/lib/trace-context';
+import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
-import { annotationCreate, getPost, getPostGallery, STAGE_TRANSITIONS } from '@srtdio/posts';
-import type { DomainError, GalleryItem, PostDetail, Stage } from '@srtdio/posts';
+import {
+  annotationCreate,
+  getPost,
+  getPostGallery,
+  gallerySet,
+  postCaptionUpdate,
+  postUpdate,
+} from '@srtdio/posts';
+import type { DomainError, GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/posts';
 import { createComment } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
 import { stageTransition } from '@srtdio/rpc';
@@ -60,35 +88,6 @@ const STAGE_BADGE: Record<Stage, string> = {
   parked: 'border-warn text-warn',
   rejected: 'border-bad text-bad',
 };
-
-// Intent labels for a stage transition, keyed by the TARGET stage. The SET of
-// buttons is derived from STAGE_TRANSITIONS, never from this map; this is pure
-// presentation. `draft` is never a transition target but is kept for a total
-// Record.
-const TRANSITION_LABEL: Record<Stage, string> = {
-  draft: 'Back to draft',
-  review: 'Move to review',
-  approved: 'Approve',
-  rejected: 'Reject',
-  parked: 'Park',
-};
-
-// The one source-sensitive label: from draft, moving to review reads "Send to
-// review" rather than "Move to review". Kept as a minimal override so the base
-// labels stay keyed by target stage.
-const TRANSITION_LABEL_OVERRIDE: Partial<Record<Stage, Partial<Record<Stage, string>>>> = {
-  draft: { review: 'Send to review' },
-};
-
-// Forward, affirmative moves read as the primary action; the rest are default.
-const TRANSITION_VARIANT: Partial<Record<Stage, 'primary' | 'default'>> = {
-  review: 'primary',
-  approved: 'primary',
-};
-
-function transitionLabel(from: Stage, to: Stage): string {
-  return TRANSITION_LABEL_OVERRIDE[from]?.[to] ?? TRANSITION_LABEL[to];
-}
 
 // Map the proc's domain errors to friendly, inline copy. The proc owns the
 // policy: it raises forbidden_role when the role lacks approve/reject
@@ -144,6 +143,67 @@ export function PostDetailPage() {
   const [pinSubmitting, setPinSubmitting] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
 
+  // F7 editing state. The viewer's role gates every editing surface; it loads
+  // once from the membership and an unknown role stays fully read-only.
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
+  const [role, setRole] = useState<string | null>(null);
+  const { options: memberOptions } = usePostMembers(workspaceId);
+  const { toasts, push, dismiss } = useToasts();
+
+  const [showDetails, setShowDetails] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [savingMeta, setSavingMeta] = useState(false);
+  const suppressTitleBlur = useRef(false);
+
+  const [editingCaption, setEditingCaption] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState('');
+  const [captionError, setCaptionError] = useState<string | null>(null);
+  const [captionSaving, setCaptionSaving] = useState(false);
+
+  // Gallery slide-action state: the open sheet's slide index, the per-run upload
+  // target (append vs insert-after), and the version ids collected during a run.
+  const [slideIndex, setSlideIndex] = useState<number | null>(null);
+  const [addTarget, setAddTarget] = useState<
+    { mode: 'append' } | { mode: 'insertAfter'; index: number } | null
+  >(null);
+  const uploadedVersionIds = useRef<string[]>([]);
+
+  useEffect(() => {
+    if (workspaceId === null || userId === null) {
+      setRole(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchMemberRole(supabase, workspaceId, userId).then((next) => {
+      if (!cancelled) setRole(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, userId]);
+
+  const agencySide = isAgencySide(role);
+  const clientRole = isClient(role);
+
+  // Resolve the post owner to a display name + avatar from the active members,
+  // never a raw uuid: an owner who is no longer a current member reads "(ex-member)".
+  const memberById = useMemo(
+    () => new Map(memberOptions.map((option) => [option.userId, option])),
+    [memberOptions],
+  );
+  const resolveOwner = useCallback(
+    (ownerUserId: string | null): { name: string; avatarUrl: string | null } => {
+      if (ownerUserId === null || ownerUserId === '')
+        return { name: 'Unassigned', avatarUrl: null };
+      const option = memberById.get(ownerUserId);
+      if (option === undefined) return { name: '(ex-member)', avatarUrl: null };
+      return { name: option.displayName, avatarUrl: option.avatarUrl };
+    },
+    [memberById],
+  );
+
   // One presign setup for this page, built exactly as the Assets page does: the
   // asset-read endpoint env, the existing access-token source, and the trace
   // fetcher. deps are kept for the lightbox's attachment-disposition download;
@@ -194,7 +254,17 @@ export function PostDetailPage() {
 
   // The gallery is a separate read (asset_attachments has no FK back to posts, so
   // it cannot ride getPost's embed) and is non-critical: a failure or an absent
-  // post simply leaves the grid empty rather than blocking the page.
+  // post simply leaves the grid empty rather than blocking the page. Extracted so
+  // a gallery_set write can refresh it (load(true) only refreshes the post).
+  const reloadGallery = useCallback(async (): Promise<void> => {
+    if (postId === undefined) {
+      setGallery([]);
+      return;
+    }
+    const result = await getPostGallery(supabase, postId);
+    setGallery(result.ok ? result.data : []);
+  }, [postId]);
+
   useEffect(() => {
     if (postId === undefined) {
       setGallery([]);
@@ -438,6 +508,181 @@ export function PostDetailPage() {
     setTransitioning(false);
   }
 
+  // One field at a time through post_update; the proc bumps row_version itself
+  // and load(true) refreshes the page. A failure surfaces as a toast.
+  const applyPostUpdate = useCallback(
+    async (
+      patch: Partial<Pick<PostUpdateInput, 'title' | 'bucketId' | 'ownerUserId' | 'targetDate'>>,
+    ): Promise<void> => {
+      if (postId === undefined) return;
+      setSavingMeta(true);
+      const result = await postUpdate(supabase, { postId, ...patch }, newTrace());
+      setSavingMeta(false);
+      if (!result.ok) {
+        push('Could not save the change. Please try again.');
+        return;
+      }
+      await load(true);
+    },
+    [postId, newTrace, load, push],
+  );
+
+  // Title is internal: a trimmed, changed value writes via post_update (no new
+  // version); empty or unchanged simply cancels. Escape and the post-save blur
+  // both suppress the trailing blur-save so the write never doubles.
+  function openTitleEditor(): void {
+    if (detail === null) return;
+    setTitleDraft(detail.post.title);
+    setEditingTitle(true);
+  }
+  async function saveTitle(): Promise<void> {
+    if (detail === null) {
+      setEditingTitle(false);
+      return;
+    }
+    const trimmed = titleDraft.trim();
+    if (trimmed === '' || trimmed === detail.post.title) {
+      setEditingTitle(false);
+      return;
+    }
+    await applyPostUpdate({ title: trimmed });
+    setEditingTitle(false);
+  }
+  function onTitleBlur(): void {
+    if (suppressTitleBlur.current) {
+      suppressTitleBlur.current = false;
+      return;
+    }
+    void saveTitle();
+  }
+  function onTitleKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      suppressTitleBlur.current = true;
+      void saveTitle();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      suppressTitleBlur.current = true;
+      setEditingTitle(false);
+    }
+  }
+
+  // Caption edit (agency side): seed from the live caption, validate 1..5000 on
+  // the trimmed value with no call on failure, then post_caption_update (which
+  // auto-versions in-txn) and refresh.
+  function openCaptionEditor(): void {
+    setCaptionDraft(detail?.post.caption ?? '');
+    setCaptionError(null);
+    setEditingCaption(true);
+  }
+  async function saveCaption(): Promise<void> {
+    if (postId === undefined) return;
+    const value = captionDraft.trim();
+    if (value.length < 1) {
+      setCaptionError('Add a caption before saving.');
+      return;
+    }
+    if (value.length > 5000) {
+      setCaptionError('Captions are limited to 5000 characters.');
+      return;
+    }
+    setCaptionSaving(true);
+    const result = await postCaptionUpdate(supabase, { postId, caption: value }, newTrace());
+    setCaptionSaving(false);
+    if (!result.ok) {
+      setCaptionError('Could not save the caption. Please try again.');
+      return;
+    }
+    setEditingCaption(false);
+    await load(true);
+  }
+
+  // Whole-gallery replace via gallery_set (auto-versions + re-stales annotations
+  // server-side). load(true) refreshes the post; reloadGallery refreshes the grid.
+  const commitGallery = useCallback(
+    async (ids: string[]): Promise<void> => {
+      if (postId === undefined) return;
+      const result = await gallerySet(supabase, { postId, assetVersionIds: ids }, newTrace());
+      if (!result.ok) {
+        push('Could not update the gallery. Please try again.');
+        return;
+      }
+      await Promise.all([load(true), reloadGallery()]);
+    },
+    [postId, newTrace, load, reloadGallery, push],
+  );
+
+  const orderedIds = useMemo(() => gallery.map((item) => item.assetVersionId), [gallery]);
+
+  function handleMoveLeft(index: number): void {
+    void commitGallery(moveLeft(orderedIds, index));
+  }
+  function handleMoveRight(index: number): void {
+    void commitGallery(moveRight(orderedIds, index));
+  }
+  function handleRemove(index: number): void {
+    if (orderedIds.length <= 1) {
+      push('A post needs at least one image.');
+      return;
+    }
+    void commitGallery(removeAt(orderedIds, index));
+  }
+  function openAdd(target: { mode: 'append' } | { mode: 'insertAfter'; index: number }): void {
+    uploadedVersionIds.current = [];
+    setAddTarget(target);
+  }
+
+  // The upload sheet posts each file to the asset-upload worker; capture the
+  // version id of every success so the gallery add can pin them on close.
+  const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
+  const handleUploadFile = useCallback(
+    async (file: File, filename: string): Promise<UploadOutcome> => {
+      if (uploadEndpoint === undefined || uploadEndpoint === '') {
+        return { ok: false, message: 'Upload failed. Check your connection and retry' };
+      }
+      if (workspaceId === null) {
+        return { ok: false, message: 'No workspace selected.' };
+      }
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      if (token === null || token === '') {
+        return { ok: false, message: 'Your session expired. Sign in again.' };
+      }
+      const outcome = await uploadAssetFile(file, {
+        endpoint: uploadEndpoint,
+        token,
+        workspaceId,
+        filename,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+      if (outcome.ok && outcome.assetVersionId !== undefined && outcome.assetVersionId !== '') {
+        uploadedVersionIds.current.push(outcome.assetVersionId);
+      }
+      return outcome;
+    },
+    [uploadEndpoint, workspaceId, newTrace],
+  );
+
+  // After a fully-successful upload run, apply append or insert-after for each
+  // new version id over the current order, then commit the whole gallery once.
+  async function handleUploaded(): Promise<void> {
+    const versionIds = uploadedVersionIds.current;
+    uploadedVersionIds.current = [];
+    const target = addTarget;
+    setAddTarget(null);
+    if (versionIds.length === 0 || target === null) return;
+    let ids = orderedIds;
+    if (target.mode === 'append') {
+      for (const versionId of versionIds) ids = append(ids, versionId);
+    } else {
+      let at = target.index;
+      for (const versionId of versionIds) {
+        ids = insertAfter(ids, at, versionId);
+        at += 1;
+      }
+    }
+    await commitGallery(ids);
+  }
+
   const backButton = (
     <Button size="lg" onClick={() => navigate('/pipeline')}>
       Back
@@ -492,19 +737,71 @@ export function PostDetailPage() {
 
   const post = detail.post;
   const currentStage = post.stage as Stage;
-  const targets: readonly Stage[] = STAGE_TRANSITIONS[currentStage] ?? [];
-  const owner = post.owner_user_id.length > 0 ? post.owner_user_id : 'Unassigned';
+  const stageActions = visibleStageActions(currentStage, role);
+  const ownerInfo = resolveOwner(post.owner_user_id);
 
   return (
     <>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
         {backButton}
-        <h1 className="text-[15px] font-semibold truncate">{post.title}</h1>
+        {agencySide ? (
+          editingTitle ? (
+            <input
+              autoFocus
+              aria-label="Post title"
+              value={titleDraft}
+              disabled={savingMeta}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onBlur={onTitleBlur}
+              onKeyDown={onTitleKeyDown}
+              className="min-w-0 flex-1 h-9 rounded-md border border-border bg-panel-2 px-2 text-[15px] font-semibold text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={openTitleEditor}
+              className="group flex min-h-[44px] min-w-0 items-center gap-1.5 rounded-md px-1 text-left hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <span className="truncate text-[15px] font-semibold">{post.title}</span>
+              <IconPencil size={15} inline className="shrink-0 text-fg-3 group-hover:text-fg-2" />
+            </button>
+          )
+        ) : (
+          <h1 className="text-[15px] font-semibold truncate">{post.title}</h1>
+        )}
         <span
           className={`ml-auto shrink-0 inline-flex items-center rounded-full border px-3 h-7 text-xs font-medium ${STAGE_BADGE[currentStage]}`}
         >
           {stageLabel(currentStage)}
         </span>
+      </div>
+
+      <div className="px-4 md:px-6 pt-4">
+        <button
+          type="button"
+          onClick={() => setShowDetails(true)}
+          className="flex min-h-[44px] max-w-full flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <Avatar
+            name={ownerInfo.name}
+            size="sm"
+            {...(ownerInfo.avatarUrl !== null ? { src: ownerInfo.avatarUrl } : {})}
+          />
+          <span className="truncate font-medium text-fg">{ownerInfo.name}</span>
+          <span aria-hidden className="text-fg-3">
+            ·
+          </span>
+          <span className="tabular-nums">
+            {post.target_date !== null ? formatTargetDate(post.target_date) : 'No date'}
+          </span>
+          <span aria-hidden className="text-fg-3">
+            ·
+          </span>
+          <span>{post.origin === 'brief' ? 'From brief' : 'Direct'}</span>
+          <span className="text-fg-3">
+            <IconChevronRight size={16} />
+          </span>
+        </button>
       </div>
 
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -526,6 +823,9 @@ export function PostDetailPage() {
               )}
               onRequestPin={handleRequestPin}
               onPlacePin={handlePlacePin}
+              pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
+              onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
+              onAddSlide={agencySide ? () => openAdd({ mode: 'append' }) : undefined}
             />
             {pinError !== null ? (
               <div
@@ -538,10 +838,60 @@ export function PostDetailPage() {
           </section>
 
           <section>
-            <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-              Caption
+            <div className="mb-2 flex items-center gap-1">
+              <div className="text-xs font-medium uppercase tracking-wide text-fg-3">Caption</div>
+              {agencySide && !editingCaption ? (
+                <button
+                  type="button"
+                  aria-label="Edit caption"
+                  onClick={openCaptionEditor}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <IconPencil size={16} />
+                </button>
+              ) : null}
             </div>
-            {post.caption !== null && post.caption.trim() !== '' ? (
+            {editingCaption ? (
+              <div className="flex flex-col gap-2">
+                <Textarea
+                  autoFocus
+                  aria-label="Caption"
+                  value={captionDraft}
+                  disabled={captionSaving}
+                  onChange={(event) => setCaptionDraft(event.target.value)}
+                  className="min-h-[140px]"
+                />
+                {captionError !== null ? (
+                  <div role="alert" className="text-sm text-bad">
+                    {captionError}
+                  </div>
+                ) : null}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    disabled={captionSaving}
+                    onClick={() => void saveCaption()}
+                  >
+                    {captionSaving ? 'Saving' : 'Save'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    disabled={captionSaving}
+                    onClick={() => {
+                      setEditingCaption(false);
+                      setCaptionError(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <span className="ml-auto text-xs tabular-nums text-fg-3">
+                    {captionDraft.trim().length}/5000
+                  </span>
+                </div>
+              </div>
+            ) : post.caption !== null && post.caption.trim() !== '' ? (
               <CaptionView
                 caption={post.caption}
                 annotations={highlights}
@@ -587,22 +937,22 @@ export function PostDetailPage() {
             <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
               Actions
             </div>
-            {targets.length > 0 ? (
+            {stageActions.length > 0 ? (
               <div className="flex flex-col gap-2">
-                {targets.map((target) => (
+                {stageActions.map((action) => (
                   <Button
-                    key={target}
+                    key={action.to}
                     size="lg"
-                    variant={TRANSITION_VARIANT[target] ?? 'default'}
+                    variant={action.variant}
                     disabled={transitioning}
-                    onClick={() => void handleTransition(target)}
+                    onClick={() => void handleTransition(action.to)}
                   >
-                    {transitionLabel(currentStage, target)}
+                    {action.label}
                   </Button>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-fg-3">No actions available.</p>
+              <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
             )}
             {actionError !== null ? (
               <div
@@ -616,27 +966,12 @@ export function PostDetailPage() {
 
           <section>
             <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-              Details
+              Channel
             </div>
-            <dl className="flex flex-col gap-3 text-sm">
-              <div className="flex flex-col gap-1">
-                <dt className="text-fg-3">Channel</dt>
-                <dd className="flex flex-wrap gap-1.5">
-                  <Chip label={humanize(post.platform)} />
-                  <Chip label={humanize(post.format)} />
-                </dd>
-              </div>
-              <div className="flex flex-col gap-1">
-                <dt className="text-fg-3">Target date</dt>
-                <dd className="tabular-nums">
-                  {post.target_date !== null ? formatTargetDate(post.target_date) : 'Not set'}
-                </dd>
-              </div>
-              <div className="flex flex-col gap-1">
-                <dt className="text-fg-3">Owner</dt>
-                <dd className="break-all">{owner}</dd>
-              </div>
-            </dl>
+            <div className="flex flex-wrap gap-1.5">
+              <Chip label={humanize(post.platform)} />
+              <Chip label={humanize(post.format)} />
+            </div>
           </section>
         </aside>
       </div>
@@ -664,6 +999,58 @@ export function PostDetailPage() {
         }}
         onSubmit={submitPinAnnotation}
       />
+
+      <PostDetailsSheet
+        open={showDetails}
+        onClose={() => setShowDetails(false)}
+        workspaceId={workspaceId ?? ''}
+        isAgencySide={agencySide}
+        isClient={clientRole}
+        bucketId={post.bucket_id}
+        ownerUserId={post.owner_user_id}
+        targetDate={post.target_date}
+        origin={post.origin}
+        memberOptions={memberOptions}
+        ownerName={ownerInfo.name}
+        ownerAvatarUrl={ownerInfo.avatarUrl}
+        onChangeBucket={(bucketId) => void applyPostUpdate({ bucketId })}
+        onChangeOwner={(ownerUserId) => void applyPostUpdate({ ownerUserId })}
+        onChangeTargetDate={(targetDate) => void applyPostUpdate({ targetDate })}
+      />
+
+      <SlideActionsSheet
+        open={slideIndex !== null}
+        onClose={() => setSlideIndex(null)}
+        index={slideIndex ?? 0}
+        count={gallery.length}
+        onMoveLeft={() => {
+          if (slideIndex !== null) handleMoveLeft(slideIndex);
+        }}
+        onMoveRight={() => {
+          if (slideIndex !== null) handleMoveRight(slideIndex);
+        }}
+        onAddAfter={() => {
+          if (slideIndex !== null) openAdd({ mode: 'insertAfter', index: slideIndex });
+        }}
+        onRemove={() => {
+          if (slideIndex !== null) handleRemove(slideIndex);
+        }}
+      />
+
+      <AssetUploadSheet
+        open={addTarget !== null}
+        onClose={() => {
+          uploadedVersionIds.current = [];
+          setAddTarget(null);
+        }}
+        onSubmit={
+          uploadEndpoint !== undefined && uploadEndpoint !== '' ? handleUploadFile : undefined
+        }
+        onToast={push}
+        onUploaded={() => void handleUploaded()}
+      />
+
+      <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

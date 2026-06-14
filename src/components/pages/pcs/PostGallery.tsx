@@ -1,9 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { IconAssets } from '@/components/ui/icons';
+import { IconAssets, IconPin, IconPlus } from '@/components/ui/icons';
+import { useLongPress } from '@/components/ui/useLongPress';
 import { PostLightbox } from '@/components/pages/pcs/PostLightbox';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
+
+/** The gesture handlers an agency-side tile spreads for long-press + right-click. */
+export interface TileGestures {
+  onPointerDown: (event: ReactPointerEvent) => void;
+  onPointerMove: (event: ReactPointerEvent) => void;
+  onPointerUp: () => void;
+  onPointerCancel: () => void;
+  onContextMenu: (event: ReactMouseEvent) => void;
+}
 
 /** True when this item has an inline image preview worth resolving for a tile. */
 function isImage(item: GalleryItem): boolean {
@@ -91,6 +102,14 @@ interface GalleryViewProps {
   aspect?: string;
   /** Per-tile index badge. Defaults to on, as the post gallery shows it. */
   showIndex?: boolean;
+  /** F7: agency-side gesture handlers per tile (long-press + right-click). */
+  slideGestures?: ((index: number) => TileGestures) | undefined;
+  /** F7: swallow the click that trails a long-press so it does not open the lightbox. */
+  consumeClickSuppression?: (() => boolean) | undefined;
+  /** F7: pin-count badge per tile; the badge renders only when this returns > 0. */
+  pinCountFor?: ((item: GalleryItem) => number) | undefined;
+  /** F7: agency-only dashed Add tile at the end of the grid (append flow). */
+  onAddSlide?: (() => void) | undefined;
 }
 
 /**
@@ -108,6 +127,10 @@ export function galleryView({
   columns = 4,
   aspect = '4/5',
   showIndex = true,
+  slideGestures,
+  consumeClickSuppression,
+  pinCountFor,
+  onAddSlide,
 }: GalleryViewProps): ReactElement {
   if (items.length === 0) {
     return (
@@ -118,22 +141,46 @@ export function galleryView({
   }
   return (
     <div className={gridClass(columns)}>
-      {items.map((item, index) => (
+      {items.map((item, index) => {
+        const pinCount = pinCountFor !== undefined ? pinCountFor(item) : 0;
+        return (
+          <button
+            key={item.assetAttachmentId}
+            type="button"
+            aria-label={`View image ${index + 1}`}
+            {...(slideGestures !== undefined ? slideGestures(index) : {})}
+            onClick={() => {
+              if (consumeClickSuppression !== undefined && consumeClickSuppression()) return;
+              onOpen(index);
+            }}
+            className={`group relative ${aspectClass(aspect)} overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+          >
+            <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
+            {showIndex ? (
+              <span className="absolute left-1.5 top-1.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
+                {index + 1}/{items.length}
+              </span>
+            ) : null}
+            {pinCount > 0 ? (
+              <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
+                <IconPin size={11} />
+                {pinCount}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+      {onAddSlide !== undefined ? (
         <button
-          key={item.assetAttachmentId}
           type="button"
-          aria-label={`View image ${index + 1}`}
-          onClick={() => onOpen(index)}
-          className={`group relative ${aspectClass(aspect)} overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+          aria-label="Add image"
+          onClick={onAddSlide}
+          className={`flex ${aspectClass(aspect)} flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border-strong bg-panel-2 text-fg-3 transition-colors hover:bg-panel-3 hover:text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
         >
-          <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
-          {showIndex ? (
-            <span className="absolute left-1.5 top-1.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
-              {index + 1}/{items.length}
-            </span>
-          ) : null}
+          <IconPlus size={22} />
+          <span className="text-xs font-medium">Add</span>
         </button>
-      ))}
+      ) : null}
     </div>
   );
 }
@@ -155,6 +202,15 @@ interface PostGalleryProps {
   onRequestPin?: (index: number) => void;
   /** F5: a placed pin reports the slide index + normalised point. */
   onPlacePin?: (index: number, x: number, y: number) => void;
+  /** F7: pin-count badge per tile; the badge renders only when this returns > 0. */
+  pinCountFor?: ((item: GalleryItem) => number) | undefined;
+  /**
+   * F7 (agency-side): open the slide-actions sheet for a slide. When provided,
+   * grid tiles gain long-press + right-click and the lightbox gains a kebab.
+   */
+  onSlideActions?: ((index: number) => void) | undefined;
+  /** F7 (agency-side): the dashed Add tile at the grid's end (append flow). */
+  onAddSlide?: (() => void) | undefined;
 }
 
 /**
@@ -175,8 +231,36 @@ export function PostGallery({
   pinOverlay,
   onRequestPin,
   onPlacePin,
+  pinCountFor,
+  onSlideActions,
+  onAddSlide,
 }: PostGalleryProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  // One long-press controller for the whole grid: the pressed tile records its
+  // index on pointer-down, and a fired long-press opens that slide's actions.
+  // Only one press is live at a time, so a single controller is sufficient.
+  const pressIndexRef = useRef(0);
+  const { handlers, consumeClickSuppression } = useLongPress(() => {
+    if (onSlideActions !== undefined) onSlideActions(pressIndexRef.current);
+  });
+
+  const slideGestures =
+    onSlideActions !== undefined
+      ? (index: number): TileGestures => ({
+          onPointerDown: (event) => {
+            pressIndexRef.current = index;
+            handlers.onPointerDown(event);
+          },
+          onPointerMove: (event) => handlers.onPointerMove(event),
+          onPointerUp: () => handlers.onPointerUp(),
+          onPointerCancel: () => handlers.onPointerCancel(),
+          onContextMenu: (event) => {
+            event.preventDefault();
+            onSlideActions(index);
+          },
+        })
+      : undefined;
 
   return (
     <>
@@ -188,6 +272,10 @@ export function PostGallery({
         columns,
         aspect,
         showIndex,
+        slideGestures,
+        consumeClickSuppression: onSlideActions !== undefined ? consumeClickSuppression : undefined,
+        pinCountFor,
+        onAddSlide,
       })}
       {openIndex !== null ? (
         <PostLightbox
@@ -201,6 +289,7 @@ export function PostGallery({
           pinOverlay={pinOverlay}
           onRequestPin={onRequestPin}
           onPlacePin={onPlacePin}
+          onSlideActions={onSlideActions}
         />
       ) : null}
     </>

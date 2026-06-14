@@ -9,6 +9,7 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from '@/components/ui/icons';
+import { IconMoreVertical } from '@/components/pages/pcs/post-icons';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
@@ -121,6 +122,8 @@ interface LightboxViewProps {
   armed?: boolean;
   /** Image tap while armed (F5): captures the pin point from the rendered image. */
   onPlace?: ((event: React.MouseEvent<HTMLImageElement>) => void) | undefined;
+  /** F7 (agency-side): the kebab opens the slide actions for the current slide. */
+  onSlideActions?: ((index: number) => void) | undefined;
 }
 
 const TOOLBAR_BUTTON =
@@ -159,8 +162,10 @@ export function lightboxView({
   onRequestPin,
   armed = false,
   onPlace,
+  onSlideActions,
 }: LightboxViewProps): ReactElement {
   const canPin = onRequestPin !== undefined;
+  const canEditSlides = onSlideActions !== undefined;
   const showInline =
     presignEnabled && isInlineRenderable(item) && mediaSrc !== null && !mediaFailed;
 
@@ -183,6 +188,16 @@ export function lightboxView({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {canEditSlides ? (
+            <button
+              type="button"
+              aria-label="Slide actions"
+              onClick={() => onSlideActions(index)}
+              className={TOOLBAR_BUTTON}
+            >
+              <IconMoreVertical size={20} />
+            </button>
+          ) : null}
           <button
             type="button"
             aria-label="Add pin"
@@ -359,6 +374,8 @@ interface PostLightboxProps {
   onRequestPin?: ((index: number) => void) | undefined;
   /** F5: a valid tap while armed reports the slide index + normalised point. */
   onPlacePin?: ((index: number, x: number, y: number) => void) | undefined;
+  /** F7 (agency-side): the toolbar kebab opens the slide actions for this slide. */
+  onSlideActions?: ((index: number) => void) | undefined;
 }
 
 /**
@@ -380,6 +397,7 @@ export function PostLightbox({
   pinOverlay,
   onRequestPin,
   onPlacePin,
+  onSlideActions,
 }: PostLightboxProps) {
   const item = items[index];
   const [mediaSrc, setMediaSrc] = useState<string | null>(null);
@@ -511,5 +529,6 @@ export function PostLightbox({
     onRequestPin: onRequestPin !== undefined ? handleRequestPin : undefined,
     armed,
     onPlace: handlePlace,
+    onSlideActions,
   });
 }
