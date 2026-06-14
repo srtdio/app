@@ -21,6 +21,12 @@
   --good: #3e7d54;
   --warn: #b8772b;
   --bad: #c2392b;
+  --annotation-bg: #ffe9b8;
+  --annotation-line: #d9a93c;
+  --stage-review: #b45309;
+  --stage-approved: #15803d;
+  --stage-rejected: #b91c1c;
+  --stage-parked: #52606d;
 }
 .dark {
   --bg: #0c0d10;
@@ -40,6 +46,12 @@
   --good: #5fb07d;
   --warn: #d59a4a;
   --bad: #e0685a;
+  --annotation-bg: #4a3a14;
+  --annotation-line: #d9a93c;
+  --stage-review: #b45309;
+  --stage-approved: #15803d;
+  --stage-rejected: #b91c1c;
+  --stage-parked: #52606d;
 }
 @layer base {
   html,

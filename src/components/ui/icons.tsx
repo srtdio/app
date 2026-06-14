@@ -1,15 +1,25 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
-interface IconProps {
+export interface IconProps {
   className?: string;
   size?: number;
+  /**
+   * Render the svg inline-block (with a baseline-friendly vertical align) so it
+   * sits beside running text instead of dropping to its own line. Tailwind
+   * preflight sets `svg { display: block }`, which is correct for standalone
+   * icons (every existing call site) but wrong for an in-text glyph such as a
+   * title edit pencil. Opt in per call; defaults to the block behaviour.
+   */
+  inline?: boolean;
 }
 
 interface SvgProps extends IconProps {
   children: ReactNode;
 }
 
-function Svg({ className, size = 18, children }: SvgProps) {
+const inlineStyle: CSSProperties = { display: 'inline-block', verticalAlign: '-0.125em' };
+
+function Svg({ className, size = 18, inline = false, children }: SvgProps) {
   return (
     <svg
       className={className}
@@ -21,6 +31,7 @@ function Svg({ className, size = 18, children }: SvgProps) {
       strokeWidth={1.7}
       strokeLinecap="round"
       strokeLinejoin="round"
+      style={inline ? inlineStyle : undefined}
     >
       {children}
     </svg>
