@@ -8,7 +8,7 @@ import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import { IconActivity } from '@/components/ui/icons';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
-import { ActivityRow } from '@/components/pages/activity/ActivityRow';
+import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
 import {
   ACTIVITY_PAGE_SIZE,
@@ -69,80 +69,6 @@ function optimisticSnoozeUntil(kind: SnoozeKind, nowMs: number): string | null {
     case 'clear':
       return null;
   }
-}
-
-interface ActivityGroupProps {
-  group: ActivityItem[];
-  nowMs: number;
-  onOpenGroup: (group: ActivityItem[]) => void;
-  onOpen: (item: ActivityItem) => void;
-  onSnooze: (item: ActivityItem, kind: SnoozeKind) => void;
-  onMarkRead: (item: ActivityItem) => void;
-}
-
-/**
- * One digest entry. A solo group is a single row; a threaded group (>1 entry on
- * the same entity) leads with one row plus a "+N more" toggle that expands the
- * rest inline. Opening the lead marks the whole thread read and navigates from it.
- */
-function ActivityGroup({
-  group,
-  nowMs,
-  onOpenGroup,
-  onOpen,
-  onSnooze,
-  onMarkRead,
-}: ActivityGroupProps) {
-  const [expanded, setExpanded] = useState(false);
-  const lead = group[0];
-  if (lead === undefined) return null;
-  const rest = group.slice(1);
-
-  if (rest.length === 0) {
-    return (
-      <ActivityRow
-        item={lead}
-        nowMs={nowMs}
-        onOpen={() => onOpenGroup(group)}
-        onSnooze={onSnooze}
-        onMarkRead={onMarkRead}
-      />
-    );
-  }
-
-  return (
-    <div>
-      <ActivityRow
-        item={lead}
-        nowMs={nowMs}
-        onOpen={() => onOpenGroup(group)}
-        onSnooze={onSnooze}
-        onMarkRead={onMarkRead}
-      />
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((prev) => !prev)}
-        className="flex min-h-[44px] w-full items-center px-4 text-left text-xs font-medium text-accent transition-colors hover:bg-panel-2 md:px-6"
-      >
-        {expanded ? 'Show less' : `+${rest.length} more`}
-      </button>
-      {expanded ? (
-        <div className="divide-y divide-border border-t border-border">
-          {rest.map((item) => (
-            <ActivityRow
-              key={item.id}
-              item={item}
-              nowMs={nowMs}
-              onOpen={onOpen}
-              onSnooze={onSnooze}
-              onMarkRead={onMarkRead}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 export function ActivityPage() {
@@ -222,19 +148,6 @@ export function ActivityPage() {
       ),
     );
   }, []);
-
-  const handleOpen = useCallback(
-    (item: ActivityItem) => {
-      if (workspaceId === null) return;
-      if (item.readAt === null) {
-        markReadLocal(item.id);
-        void markEntryRead(supabase, item, workspaceId, newTrace());
-      }
-      const href = entityHref(item);
-      if (href !== null) navigate(href);
-    },
-    [workspaceId, newTrace, navigate, markReadLocal],
-  );
 
   // Open a thread: mark every entry in the group read (optimistic) and navigate
   // from the lead entry.
@@ -332,25 +245,27 @@ export function ActivityPage() {
         }
       />
 
-      <div className="px-4 md:px-6 pt-3 flex flex-wrap gap-2">
+      {/* One horizontally scrollable line: state chips, a thin divider, then scope
+          chips. Never wraps; each chip is shrink-0 and the row scrolls sideways. */}
+      <div className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:px-6">
         {STATE_CHIPS.map((item) => (
           <Chip
             key={item.key}
             label={item.key === 'unread' && totalUnread > 0 ? `Unread ${totalUnread}` : item.label}
             selected={state === item.key}
             size="tap"
+            className="flex-none whitespace-nowrap"
             onClick={() => setState(item.key)}
           />
         ))}
-      </div>
-
-      <div className="px-4 md:px-6 mt-2 flex flex-wrap gap-2">
+        <span aria-hidden="true" className="h-6 w-px flex-none self-center bg-border" />
         {SCOPE_CHIPS.map((item) => (
           <Chip
             key={item.key}
             label={item.label}
             selected={scope === item.key}
             size="tap"
+            className="flex-none whitespace-nowrap"
             onClick={() => setScope(item.key)}
           />
         ))}
@@ -386,14 +301,13 @@ export function ActivityPage() {
                   <AvatarStack names={bucketActorNames(entries)} />
                   <span className="ml-auto text-xs text-fg-3">{entries.length}</span>
                 </div>
-                <div className="mt-1 divide-y divide-border">
+                <div className="mt-2 flex flex-col gap-2 px-4 md:px-6">
                   {bucket.groups.map((group) => (
-                    <ActivityGroup
+                    <ActivityCard
                       key={group[0]?.id ?? bucket.key}
                       group={group}
                       nowMs={nowMs}
                       onOpenGroup={handleOpenGroup}
-                      onOpen={handleOpen}
                       onSnooze={handleSnooze}
                       onMarkRead={handleMarkRead}
                     />
