@@ -159,6 +159,48 @@ export function activityLine(item: ActivityItem): string {
   }
 }
 
+/**
+ * The card header title: the entity title when known, a generic entity label for
+ * a post/brief without a resolved title, and the full activity line otherwise (so
+ * a non-entity entry, e.g. an invite, still reads as a sentence). Null-safe.
+ */
+export function cardTitle(item: ActivityItem): string {
+  if (item.title !== null) return item.title;
+  if (item.entityType === 'post') return 'Untitled post';
+  if (item.entityType === 'brief') return 'Untitled brief';
+  return activityLine(item);
+}
+
+/**
+ * The short event line for inside a card: the event WITHOUT the entity title or
+ * actor (the title is the card header, the actor is the avatar). Used for the lead
+ * line and every threaded event line so the title is never repeated.
+ */
+export function shortLine(item: ActivityItem): string {
+  switch (item.eventType) {
+    case 'comment':
+      return 'New comment';
+    case 'mention':
+      return 'New mention';
+    case 'decision_marked':
+      return 'Decision flagged';
+    case 'stage_change':
+      return `Moved to ${item.toStage ?? 'a new stage'}`;
+    case 'brief_created':
+      return 'Brief created';
+    case 'brief_closed':
+      return 'Brief closed';
+    case 'asset_uploaded':
+      return 'New asset';
+    case 'asset_version_added':
+      return 'New asset version';
+    case 'invite':
+      return 'New member invited';
+    default:
+      return 'Activity';
+  }
+}
+
 /** Route to open when a row is clicked, or null when it has no detail surface. */
 export function entityHref(item: ActivityItem): string | null {
   if (item.entityId === null) return null;

@@ -3,6 +3,7 @@ import type { Database } from '@srtdio/schemas';
 import {
   activityLine,
   bucketActorNames,
+  cardTitle,
   entityHref,
   entityKey,
   fetchActivityEntries,
@@ -13,6 +14,7 @@ import {
   mapEntry,
   payloadStr,
   relativeTime,
+  shortLine,
   unreadCount,
   type ActivityItem,
 } from '@/components/pages/activity/data';
@@ -164,6 +166,41 @@ describe('activityLine null-safe rendering', () => {
   it('never prints undefined or null', () => {
     for (const type of ['comment', 'mention', 'stage_change', 'brief_created', 'invite']) {
       const line = activityLine(item({ eventType: type }));
+      expect(line).not.toContain('undefined');
+      expect(line).not.toContain('null');
+    }
+  });
+});
+
+describe('cardTitle', () => {
+  it('uses the entity title when present', () => {
+    expect(cardTitle(item({ entityType: 'post', title: 'Q3 post' }))).toBe('Q3 post');
+  });
+  it('falls back to a generic entity label for a post/brief without a title', () => {
+    expect(cardTitle(item({ entityType: 'post', title: null }))).toBe('Untitled post');
+    expect(cardTitle(item({ entityType: 'brief', title: null }))).toBe('Untitled brief');
+  });
+  it('falls back to the full activity line for a non-entity event', () => {
+    expect(cardTitle(item({ eventType: 'invite', entityType: null, actorName: 'Bo' }))).toBe(
+      'Bo invited a new member',
+    );
+  });
+});
+
+describe('shortLine', () => {
+  it('drops the entity title and actor, leaving the event only', () => {
+    expect(shortLine(item({ eventType: 'comment', actorName: 'Alice', title: 'Q3' }))).toBe(
+      'New comment',
+    );
+    expect(shortLine(item({ eventType: 'mention', title: 'Q3' }))).toBe('New mention');
+    expect(shortLine(item({ eventType: 'stage_change', toStage: 'approved' }))).toBe(
+      'Moved to approved',
+    );
+    expect(shortLine(item({ eventType: 'brief_closed' }))).toBe('Brief closed');
+  });
+  it('never prints undefined or null', () => {
+    for (const type of ['comment', 'mention', 'stage_change', 'brief_created', 'invite']) {
+      const line = shortLine(item({ eventType: type }));
       expect(line).not.toContain('undefined');
       expect(line).not.toContain('null');
     }
