@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHead } from '@/components/shell/PageHead';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
@@ -9,6 +8,7 @@ import { IconActivity } from '@/components/ui/icons';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
+import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
 import {
   ACTIVITY_PAGE_SIZE,
@@ -33,21 +33,6 @@ import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSort } from '@/lib/use-sort';
-
-const STATE_CHIPS: { key: ActivityState; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'unread', label: 'Unread' },
-  { key: 'snoozed', label: 'Snoozed' },
-];
-
-const SCOPE_CHIPS: { key: ActivityScope; label: string }[] = [
-  { key: 'everything', label: 'Everything' },
-  { key: 'posts', label: 'Posts' },
-  { key: 'briefs', label: 'Briefs' },
-  { key: 'people', label: 'People' },
-  { key: 'groups', label: 'Groups' },
-  { key: 'clients', label: 'Clients' },
-];
 
 const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'newest', label: 'Newest' },
@@ -245,31 +230,13 @@ export function ActivityPage() {
         }
       />
 
-      {/* One horizontally scrollable line: state chips, a thin divider, then scope
-          chips. Never wraps; each chip is shrink-0 and the row scrolls sideways. */}
-      <div className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 md:px-6">
-        {STATE_CHIPS.map((item) => (
-          <Chip
-            key={item.key}
-            label={item.key === 'unread' && totalUnread > 0 ? `Unread ${totalUnread}` : item.label}
-            selected={state === item.key}
-            size="tap"
-            className="flex-none whitespace-nowrap"
-            onClick={() => setState(item.key)}
-          />
-        ))}
-        <span aria-hidden="true" className="h-6 w-px flex-none self-center bg-border" />
-        {SCOPE_CHIPS.map((item) => (
-          <Chip
-            key={item.key}
-            label={item.label}
-            selected={scope === item.key}
-            size="tap"
-            className="flex-none whitespace-nowrap"
-            onClick={() => setScope(item.key)}
-          />
-        ))}
-      </div>
+      <ActivityFilterBar
+        state={state}
+        onStateChange={setState}
+        scope={scope}
+        onScopeChange={setScope}
+        totalUnread={totalUnread}
+      />
 
       {error !== null ? (
         <div className="px-4 md:px-6 mt-4">
