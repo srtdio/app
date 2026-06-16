@@ -32,6 +32,12 @@ export interface CreateBriefInput {
   targetDate?: string;
   /** Optional jsonb blob of reference links. */
   referenceLinks?: Json;
+  /**
+   * Optional, ordered list of asset_version ids (any kind: image / video / pdf /
+   * doc / link) to attach to the brief at creation. Position is array order.
+   * Briefs are read-only after creation, so this is the only attach point.
+   */
+  attachmentAssetVersionIds?: string[];
   /** Optional. When non-empty, posts the brief's opening (root) comment. */
   initialCommentBody?: string;
 }
@@ -60,6 +66,8 @@ export async function createBrief(
   if (input.brandRequirements !== undefined) payload.brand_requirements = input.brandRequirements;
   if (input.targetDate !== undefined) payload.target_date = input.targetDate;
   if (input.referenceLinks !== undefined) payload.reference_links = input.referenceLinks;
+  if (input.attachmentAssetVersionIds !== undefined)
+    payload.attachment_asset_version_ids = input.attachmentAssetVersionIds;
 
   const created = await briefCreate(client, {
     p_workspace_id: input.workspaceId,

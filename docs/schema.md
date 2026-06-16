@@ -194,6 +194,8 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 
 Indexes: (workspace_id, status, created_at desc), target_date partial, created_by, FTS on title+objective.
 
+brief_create(p_workspace_id, p_payload, p_trace_id) SECURITY DEFINER: client-only create gated on an active member with the brief.create capability. The payload also accepts an optional field attachment_asset_version_ids (an ordered array of asset_version ids, any kind: image / video / pdf / Office-doc / link). Because briefs are read-only after creation, creation is the only attach point: each id is written as an asset_attachments row with entity_type='brief', entity_id = the new brief id, and position = array order. A non-array value, a non-uuid element, or an id whose asset_version is missing or in another workspace raises invalid_payload and writes no brief and no attachments.
+
 ## 5. Assets
 
 Versioned. Attachments bind to a specific asset_version_id.

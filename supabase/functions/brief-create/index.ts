@@ -52,6 +52,17 @@ function readInput(body: unknown): CreateBriefInput | null {
   if (typeof b.targetDate === 'string') input.targetDate = b.targetDate;
   if (b.referenceLinks !== undefined)
     input.referenceLinks = b.referenceLinks as CreateBriefInput['referenceLinks'];
+  if (b.attachmentAssetVersionIds !== undefined) {
+    // Optional ordered asset_version ids. Reject anything that is not an array of
+    // non-empty strings; the proc re-validates uuid shape and workspace ownership.
+    if (
+      !Array.isArray(b.attachmentAssetVersionIds) ||
+      !b.attachmentAssetVersionIds.every((v) => typeof v === 'string' && v.length > 0)
+    ) {
+      return null;
+    }
+    input.attachmentAssetVersionIds = b.attachmentAssetVersionIds;
+  }
   if (typeof b.initialCommentBody === 'string') input.initialCommentBody = b.initialCommentBody;
   return input;
 }
