@@ -143,7 +143,12 @@ describe('runCatchup gating', () => {
           entityId: 'p1',
           payload: { author_user_id: ACTOR, comment_id: 'c1' },
         }),
-        entry({ id: 'e2', eventType: 'stage_change', entityId: 'p2', payload: { to_stage: 'approved' } }),
+        entry({
+          id: 'e2',
+          eventType: 'stage_change',
+          entityId: 'p2',
+          payload: { to_stage: 'approved' },
+        }),
       ],
       users: { [U1]: RECIPIENT_TZ, [ACTOR]: { displayName: 'Asha', timezone: null } },
       workspaces: { [W1]: WS_TZ },
@@ -209,11 +214,24 @@ describe('runCatchup grouping + assembly', () => {
   it('splits one user across two workspaces into two separate emails', async () => {
     const f = makeFake({
       entries: [
-        entry({ id: 'e1', workspaceId: W1, entityId: 'p1', payload: { author_user_id: ACTOR, comment_id: 'c1' } }),
-        entry({ id: 'e2', workspaceId: W2, entityId: 'p2', payload: { author_user_id: ACTOR, comment_id: 'c2' } }),
+        entry({
+          id: 'e1',
+          workspaceId: W1,
+          entityId: 'p1',
+          payload: { author_user_id: ACTOR, comment_id: 'c1' },
+        }),
+        entry({
+          id: 'e2',
+          workspaceId: W2,
+          entityId: 'p2',
+          payload: { author_user_id: ACTOR, comment_id: 'c2' },
+        }),
       ],
       users: { [U1]: RECIPIENT_TZ, [ACTOR]: { displayName: 'Asha', timezone: null } },
-      workspaces: { [W1]: { name: 'Acme', timezone: 'UTC' }, [W2]: { name: 'Globex', timezone: 'UTC' } },
+      workspaces: {
+        [W1]: { name: 'Acme', timezone: 'UTC' },
+        [W2]: { name: 'Globex', timezone: 'UTC' },
+      },
       posts: { p1: 'Spring', p2: 'Summer' },
       latestSeen: {},
       emails: { [U1]: 'r@example.test' },
@@ -233,8 +251,18 @@ describe('runCatchup grouping + assembly', () => {
   it('renders the stage row actor-less in Stage while the comment keeps its actor', async () => {
     const f = makeFake({
       entries: [
-        entry({ id: 'e1', eventType: 'comment', entityId: 'p1', payload: { author_user_id: ACTOR, comment_id: 'c1' } }),
-        entry({ id: 'e2', eventType: 'stage_change', entityId: 'p2', payload: { to_stage: 'approved' } }),
+        entry({
+          id: 'e1',
+          eventType: 'comment',
+          entityId: 'p1',
+          payload: { author_user_id: ACTOR, comment_id: 'c1' },
+        }),
+        entry({
+          id: 'e2',
+          eventType: 'stage_change',
+          entityId: 'p2',
+          payload: { to_stage: 'approved' },
+        }),
       ],
       users: { [U1]: RECIPIENT_TZ, [ACTOR]: { displayName: 'Asha', timezone: null } },
       workspaces: { [W1]: WS_TZ },
@@ -255,7 +283,12 @@ describe('runCatchup grouping + assembly', () => {
     const f = makeFake({
       entries: [
         // Only U1 has inbox entries; U2 is chat-only and never a candidate.
-        entry({ id: 'e1', eventType: 'comment', entityId: 'p1', payload: { author_user_id: ACTOR, comment_id: 'c1' } }),
+        entry({
+          id: 'e1',
+          eventType: 'comment',
+          entityId: 'p1',
+          payload: { author_user_id: ACTOR, comment_id: 'c1' },
+        }),
       ],
       users: {
         [U1]: RECIPIENT_TZ,
@@ -311,8 +344,20 @@ describe('runCatchup failure + batching', () => {
   it('resolves every kind in ONE batched call with id arrays (no N+1)', async () => {
     const f = makeFake({
       entries: [
-        entry({ id: 'e1', userId: U1, eventType: 'comment', entityId: 'p1', payload: { author_user_id: ACTOR, comment_id: 'c1' } }),
-        entry({ id: 'e2', userId: U2, eventType: 'comment', entityId: 'p2', payload: { author_user_id: PEER, comment_id: 'c2' } }),
+        entry({
+          id: 'e1',
+          userId: U1,
+          eventType: 'comment',
+          entityId: 'p1',
+          payload: { author_user_id: ACTOR, comment_id: 'c1' },
+        }),
+        entry({
+          id: 'e2',
+          userId: U2,
+          eventType: 'comment',
+          entityId: 'p2',
+          payload: { author_user_id: PEER, comment_id: 'c2' },
+        }),
       ],
       users: {
         [U1]: RECIPIENT_TZ,

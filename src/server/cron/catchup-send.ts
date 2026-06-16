@@ -318,7 +318,8 @@ export async function runCatchup(
         case 'mention':
         case 'decision_marked': {
           const et: 'post' | 'brief' = e.entityType === 'brief' ? 'brief' : 'post';
-          const title = (et === 'brief' ? briefs.get(e.entityId) : posts.get(e.entityId)) ?? 'Untitled';
+          const title =
+            (et === 'brief' ? briefs.get(e.entityId) : posts.get(e.entityId)) ?? 'Untitled';
           const verb =
             e.eventType === 'comment'
               ? 'commented on'
@@ -711,7 +712,8 @@ export function createCatchupGateways(
           const floor = floors.get(recipient);
           if (floor !== undefined && !(msg.created_at > floor)) continue;
           const peer = ch.dm_user_a === recipient ? ch.dm_user_b : ch.dm_user_a;
-          const peerMap = acc.get(recipient) ?? new Map<string, { count: number; channelId: string }>();
+          const peerMap =
+            acc.get(recipient) ?? new Map<string, { count: number; channelId: string }>();
           const cell = peerMap.get(peer) ?? { count: 0, channelId: ch.channel_id };
           cell.count += 1;
           peerMap.set(peer, cell);

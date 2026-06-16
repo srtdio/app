@@ -233,7 +233,13 @@ describe('renderCatchupEmail', () => {
     const { html, text } = renderCatchupEmail(
       data({
         stages: [
-          { verb: '', target: 'Spring', time: '2pm', url: 'https://app.test/posts/p1?w=ws1', stage: 'approved' },
+          {
+            verb: '',
+            target: 'Spring',
+            time: '2pm',
+            url: 'https://app.test/posts/p1?w=ws1',
+            stage: 'approved',
+          },
         ],
       }),
     );
