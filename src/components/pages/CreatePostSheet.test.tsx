@@ -55,7 +55,12 @@ describe('buildPostCreatePayload', () => {
   });
 
   it('omits owner_user_id and bucket_id when unset', () => {
-    const result = buildPostCreatePayload({ ...base, ownerUserId: '', bucketId: '', targetDate: '' });
+    const result = buildPostCreatePayload({
+      ...base,
+      ownerUserId: '',
+      bucketId: '',
+      targetDate: '',
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect('owner_user_id' in (result.payload as object)).toBe(false);
@@ -83,11 +88,10 @@ describe('submitCreatePost', () => {
       versionIds: overrides.versionIds ?? [],
       newTrace: () => 'tr',
       postCreate:
-        overrides.postCreate ??
-        (vi.fn(async () => ({ ok: true, data: 'post-1' }) as Result<string>)),
+        overrides.postCreate ?? vi.fn(async () => ({ ok: true, data: 'post-1' }) as Result<string>),
       gallerySet:
         overrides.gallerySet ??
-        (vi.fn(async () => ({ ok: true, data: 'gallery' }) as Result<string>)),
+        vi.fn(async () => ({ ok: true, data: 'gallery' }) as Result<string>),
     };
   }
 
@@ -118,7 +122,9 @@ describe('submitCreatePost', () => {
     const gallerySet = vi.fn(async () => ({ ok: true, data: 'g' }) as Result<string>);
     const d = deps({
       versionIds: ['v1'],
-      postCreate: vi.fn(async () => ({ ok: false, error: { code: 'unknown', message: 'boom' } }) as Result<string>),
+      postCreate: vi.fn(
+        async () => ({ ok: false, error: { code: 'unknown', message: 'boom' } }) as Result<string>,
+      ),
       gallerySet,
     });
     const result = await submitCreatePost(d);

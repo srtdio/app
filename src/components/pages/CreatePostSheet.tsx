@@ -451,7 +451,10 @@ export function CreatePostSheet({ open, workspaceId, onClose, onCreated }: Creat
                 value={form.origin}
                 options={originOptions}
                 onChange={(value) =>
-                  patch({ origin: value as OriginValue, ...(value === 'none' ? { briefId: '' } : {}) })
+                  patch({
+                    origin: value as OriginValue,
+                    ...(value === 'none' ? { briefId: '' } : {}),
+                  })
                 }
               />
             </Field>

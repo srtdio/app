@@ -42,7 +42,9 @@ describe('attachment list helpers', () => {
 describe('runFileAttachment', () => {
   it('uploads a photo and resolves a versionId with an image kind', async () => {
     const file = new File(['x'], 'photo.png', { type: 'image/png' });
-    const uploadFile = vi.fn(async () => ({ ok: true, reused: false, versionId: 'ver-1' }) as const);
+    const uploadFile = vi.fn(
+      async () => ({ ok: true, reused: false, versionId: 'ver-1' }) as const,
+    );
     const result = await runFileAttachment(file, true, uploadFile);
     expect(result).toEqual({
       ok: true,
@@ -52,7 +54,9 @@ describe('runFileAttachment', () => {
 
   it('uploads a document and resolves a versionId with a file kind', async () => {
     const file = new File(['x'], 'doc.pdf', { type: 'application/pdf' });
-    const uploadFile = vi.fn(async () => ({ ok: true, reused: false, versionId: 'ver-2' }) as const);
+    const uploadFile = vi.fn(
+      async () => ({ ok: true, reused: false, versionId: 'ver-2' }) as const,
+    );
     const result = await runFileAttachment(file, false, uploadFile);
     expect(result).toEqual({
       ok: true,

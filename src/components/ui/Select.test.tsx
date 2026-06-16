@@ -49,7 +49,13 @@ describe('selectOptionRows', () => {
 
 describe('SelectMenu', () => {
   function menu(onChange: () => void = () => {}, onClose: () => void = () => {}): ReactElement {
-    return SelectMenu({ options, value: 'a', placement: 'down', onChange, onClose }) as ReactElement;
+    return SelectMenu({
+      options,
+      value: 'a',
+      placement: 'down',
+      onChange,
+      onClose,
+    }) as ReactElement;
   }
   function parts(el: ReactElement): { backdrop: ReactElement; panel: ReactElement } {
     const children = (el.props as { children: ReactElement[] }).children;

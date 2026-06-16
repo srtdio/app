@@ -55,9 +55,7 @@ export function removeAttachmentAt(
   return items.filter((_item, i) => i !== index);
 }
 
-export type AttachmentResult =
-  | { ok: true; item: AttachmentItem }
-  | { ok: false; message: string };
+export type AttachmentResult = { ok: true; item: AttachmentItem } | { ok: false; message: string };
 
 /**
  * Pre-check then upload one picked file through the shared chat upload runner
@@ -275,7 +273,13 @@ export function AttachmentsField({
         if (previewUrl !== null) URL.revokeObjectURL(previewUrl);
         setPending((prev) => [
           ...prev,
-          { id: `${id}-err`, name: file.name, kind: isImage ? 'image' : 'file', previewUrl: null, error: result.message },
+          {
+            id: `${id}-err`,
+            name: file.name,
+            kind: isImage ? 'image' : 'file',
+            previewUrl: null,
+            error: result.message,
+          },
         ]);
       }
     }
@@ -379,17 +383,16 @@ export function AttachmentsField({
       {pending.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {pending.map((item) => (
-            <li
-              key={item.id}
-              className={cnPending(item.error)}
-            >
+            <li key={item.id} className={cnPending(item.error)}>
               <span className="shrink-0 text-fg-3">
                 {item.kind === 'link' ? <IconLink size={16} /> : <IconFile size={16} />}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm text-fg" title={item.name}>
                 {item.name}
               </span>
-              <span className={item.error !== null ? 'text-[11px] text-bad' : 'text-[11px] text-fg-3'}>
+              <span
+                className={item.error !== null ? 'text-[11px] text-bad' : 'text-[11px] text-fg-3'}
+              >
                 {item.error ?? 'Uploading'}
               </span>
               {item.error !== null ? (
