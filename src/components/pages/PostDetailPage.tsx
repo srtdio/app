@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
 import { Comments, writeClipboard } from '@/components/comments/Comments';
 import type { CommentAnnotation } from '@/components/comments/Comments';
+import { flashNode } from '@/components/comments/flash-node';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconChevronLeft, IconChevronRight, IconCopy, IconPipeline } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
@@ -148,6 +149,24 @@ export function PostDetailPage() {
   const navigate = useNavigate();
   const newTrace = useNewTrace();
   const { workspaceId } = useWorkspace();
+
+  // Email deep-link: ?comment={commentId} focuses that comment row. Captured into
+  // state so it survives the immediate strip below, then handed to Comments which
+  // flashes it once the row loads. Fired once per distinct id; only 'comment' is
+  // stripped, preserving any sibling deep-link param.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
+  const handledCommentParam = useRef<string | null>(null);
+  useEffect(() => {
+    const comment = searchParams.get('comment');
+    if (comment === null || comment === '') return;
+    if (handledCommentParam.current === comment) return;
+    handledCommentParam.current = comment;
+    setFocusCommentId(comment);
+    const next = new URLSearchParams(searchParams);
+    next.delete('comment');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const [detail, setDetail] = useState<PostDetail | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
@@ -474,11 +493,7 @@ export function PostDetailPage() {
   // Scroll to (and briefly flash) a DOM node by id; best-effort, never throws if
   // the target is not currently rendered (e.g. on an unloaded comments page).
   function flashTo(elementId: string): void {
-    const node = document.getElementById(elementId);
-    if (node === null) return;
-    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    node.classList.add('ring-2', 'ring-annotation-line');
-    window.setTimeout(() => node.classList.remove('ring-2', 'ring-annotation-line'), 1200);
+    flashNode(elementId);
   }
 
   // Comment-first, annotation-second on one shared trace. If the annotation
@@ -1166,6 +1181,7 @@ export function PostDetailPage() {
                   annotationsByCommentId={annotationsByCommentId}
                   onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
                   refreshSignal={commentsRefresh}
+                  focusCommentId={focusCommentId}
                 />
               ) : (
                 <div className="px-4 py-8 text-center text-sm text-fg-3">

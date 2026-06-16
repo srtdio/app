@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -64,6 +64,24 @@ export function BriefDetailPage() {
   const navigate = useNavigate();
   const newTrace = useNewTrace();
   const { workspaceId } = useWorkspace();
+
+  // Email deep-link: ?comment={commentId} focuses that comment row. Captured into
+  // state so it survives the immediate strip below, then handed to Comments which
+  // owns the scroll-to-and-flash. Fired once per distinct id; only 'comment' is
+  // stripped, preserving any sibling deep-link param.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
+  const handledCommentParam = useRef<string | null>(null);
+  useEffect(() => {
+    const comment = searchParams.get('comment');
+    if (comment === null || comment === '') return;
+    if (handledCommentParam.current === comment) return;
+    handledCommentParam.current = comment;
+    setFocusCommentId(comment);
+    const next = new URLSearchParams(searchParams);
+    next.delete('comment');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const [detail, setDetail] = useState<BriefWithLinkedCount | null>(null);
   const [gallery, setGallery] = useState<BriefGalleryItem[]>([]);
@@ -292,7 +310,12 @@ export function BriefDetailPage() {
               Comments
             </div>
             {workspaceId !== null && briefId !== undefined ? (
-              <Comments workspaceId={workspaceId} entityType="brief" entityId={briefId} />
+              <Comments
+                workspaceId={workspaceId}
+                entityType="brief"
+                entityId={briefId}
+                focusCommentId={focusCommentId}
+              />
             ) : (
               <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
                 Select a workspace to view comments.
