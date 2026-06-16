@@ -119,9 +119,10 @@ describe.runIf(BRIEFS_SUITE)('brief_create attachments (authenticated client mem
       .from('asset_attachments')
       .select('entity_type,entity_id,asset_version_id,asset_id,position')
       .eq('entity_type', 'brief')
-      .eq('entity_id', briefId)
-      .order('position', { ascending: true });
-    return (res.data as AttachmentRow[] | null) ?? [];
+      .eq('entity_id', briefId);
+    const rows = (res.data as AttachmentRow[] | null) ?? [];
+    // The typed test builder cannot chain .order(); sort by position in memory.
+    return [...rows].sort((a, b) => a.position - b.position);
   }
 
   beforeAll(async () => {
