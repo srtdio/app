@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useSession } from '@/lib/session-context';
 
 /**
@@ -16,8 +16,13 @@ function SessionLoading() {
 /** App routes: require a session, otherwise redirect to /signin. */
 export function RequireAuth() {
   const { session, loading } = useSession();
+  const location = useLocation();
   if (loading) return <SessionLoading />;
-  return session ? <Outlet /> : <Navigate to="/signin" replace />;
+  return session ? (
+    <Outlet />
+  ) : (
+    <Navigate to="/signin" replace state={{ from: location.pathname + location.search }} />
+  );
 }
 
 /** Auth routes: redirect to /pipeline when a session already exists. */
