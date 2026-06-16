@@ -16,6 +16,16 @@ export { createSupabaseReader, resolveActingMember } from './reader';
 export { createActingClient, mintServiceRoleToken } from './acting';
 export { isActionable, stageChanged, decisionFlipped, briefClosed, stageTier } from './transitions';
 
+// --- catch-up email core (pure render + helpers; no I/O) --------------------
+export {
+  summarizeCatchup,
+  renderCatchupEmail,
+  buildCatchupUrls,
+  isInSendWindow,
+  shouldShowCounts,
+  countCells,
+} from './catchup';
+
 export type { RecipientReader } from './recipients';
 export type { RpcClient, InboxEntryInput } from './write';
 export type { ActingClientOptions } from './acting';
@@ -38,3 +48,13 @@ export type {
   WorkspaceMemberRow,
 } from './types';
 export { AGENCY_ROLES, ADMIN_ROLES } from './types';
+
+export type {
+  CatchupRow,
+  ChatRow,
+  CatchupData,
+  StageKind,
+  CatchupUrlBuilders,
+  CatchupCountCell,
+  CatchupEmail,
+} from './catchup';
