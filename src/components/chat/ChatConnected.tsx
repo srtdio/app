@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -46,14 +47,37 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
 
+  // Email deep-link: ?channel={channelId} selects that channel once the list
+  // loads. Read through refs so the initial-load effect keeps its existing deps
+  // (no extra channel refetch); the selection fires once per distinct id and only
+  // 'channel' is stripped, preserving any sibling deep-link param.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+  const setSearchParamsRef = useRef(setSearchParams);
+  setSearchParamsRef.current = setSearchParams;
+  const selectedFromParam = useRef<string | null>(null);
+
   // Load the channel list (registry + batched display resolution) for the workspace.
   useEffect(() => {
     let cancelled = false;
     void listChannelSummaries(supabase, { workspaceId, currentUserId }).then((result) => {
       if (cancelled) return;
       setChannels(result.ok ? result.data : []);
-      if (!result.ok)
+      if (!result.ok) {
         logger.error('chat: failed to list channels', { error: result.error.message });
+        return;
+      }
+      const channel = searchParamsRef.current.get('channel');
+      if (channel === null || channel === '') return;
+      if (selectedFromParam.current !== channel) {
+        selectedFromParam.current = channel;
+        const found = result.data.find((c) => c.channelId === channel);
+        if (found !== undefined) setSelected(found);
+      }
+      const next = new URLSearchParams(searchParamsRef.current);
+      next.delete('channel');
+      setSearchParamsRef.current(next, { replace: true });
     });
     return () => {
       cancelled = true;

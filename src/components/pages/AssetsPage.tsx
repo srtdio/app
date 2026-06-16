@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -79,6 +80,8 @@ export function AssetsPage() {
   const [role, setRole] = useState<string | null>(null);
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   const { toasts, push, dismiss } = useToasts();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openedAssetParam = useRef<string | null>(null);
 
   // One presign cache for the whole page: bounds concurrency and caches URLs so
   // the viewer never re-fetches a still-valid link. Rebuilt only if the endpoint
@@ -182,6 +185,23 @@ export function AssetsPage() {
     },
     [navigable],
   );
+
+  // Email deep-link: ?asset={assetId} opens that asset in the lightbox once the
+  // list has loaded. Fired once per distinct id; only 'asset' is stripped,
+  // preserving any sibling deep-link param. If the asset is not in the currently
+  // loaded/visible set, openAsset no-ops (it can only open a navigable item).
+  useEffect(() => {
+    if (items.length === 0) return;
+    const asset = searchParams.get('asset');
+    if (asset === null || asset === '') return;
+    if (openedAssetParam.current === asset) return;
+    openedAssetParam.current = asset;
+    const item = items.find((candidate) => candidate.id === asset);
+    if (item !== undefined) openAsset(item);
+    const next = new URLSearchParams(searchParams);
+    next.delete('asset');
+    setSearchParams(next, { replace: true });
+  }, [items, searchParams, setSearchParams, openAsset]);
 
   // Mint an attachment-disposition presigned URL for a stored asset version, so
   // the browser saves the file instead of rendering it. Distinct from the cached

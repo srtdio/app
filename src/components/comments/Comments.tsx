@@ -23,6 +23,7 @@ import type {
 } from '@srtdio/comments';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import { CommentComposer } from '@/components/comments/CommentComposer';
+import { flashNode } from '@/components/comments/flash-node';
 import {
   EX_MEMBER_LABEL,
   fetchCommentProfiles,
@@ -49,6 +50,9 @@ interface CommentsProps {
   onAnnotationChipClick?: (commentId: string) => void;
   /** Bumped by the parent (e.g. after an annotate) to refetch page 0. */
   refreshSignal?: number;
+  /** Email deep-link target: once this comment is present in the loaded list it
+   *  is scrolled to and flashed exactly once (per distinct id). */
+  focusCommentId?: string | null;
 }
 
 /** Stable DOM id for a comment row, so a caption highlight can scroll to it. */
@@ -333,6 +337,7 @@ export function Comments({
   annotationsByCommentId,
   onAnnotationChipClick,
   refreshSignal,
+  focusCommentId,
 }: CommentsProps) {
   const newTrace = useNewTrace();
   const { canAttach, presignEnabled, presignCache, uploadFile } = useChatAttachments();
@@ -419,6 +424,18 @@ export function Comments({
     lastSignal.current = refreshSignal;
     void loadPage(0);
   }, [refreshSignal, loadPage]);
+
+  // Email deep-link focus: once the targeted comment lands in the loaded list,
+  // scroll to and flash its row exactly once per distinct id. Best-effort: an id
+  // not present (wrong entity, deleted, or beyond page 0) simply never fires.
+  const flashedCommentId = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusCommentId === undefined || focusCommentId === null || focusCommentId === '') return;
+    if (flashedCommentId.current === focusCommentId) return;
+    if (!comments.some((c) => c.id === focusCommentId)) return;
+    flashedCommentId.current = focusCommentId;
+    flashNode(commentDomId(focusCommentId));
+  }, [comments, focusCommentId]);
 
   // Resolve author + mention display names in one batched read. The attempted
   // set dedupes ids and stops a missing (ex-member) id from refetching forever.
