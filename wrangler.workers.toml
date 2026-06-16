@@ -8,5 +8,6 @@ head_sampling_rate = 1.0
 
 # Idempotency-key cleanup. Daily 03:00 UTC: deletes idempotency_keys rows whose
 # expires_at has passed. Handler: src/server/cron/idempotency-cleanup.ts.
+# Catch-up email. Every 30 min: reads unsent activity, gates per recipient timezone, sends, stamps. Handler: src/server/cron/catchup-send.ts.
 [triggers]
-crons = ["0 3 * * *"]
+crons = ["0 3 * * *", "*/30 * * * *"]

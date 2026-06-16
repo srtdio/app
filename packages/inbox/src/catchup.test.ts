@@ -93,6 +93,17 @@ describe('summarizeCatchup', () => {
     const out = summarizeCatchup(data({ assets: [row({}), row({}), row({})] }));
     expect(out).toBe('Three updates while you were away.');
   });
+
+  it('ignores actor-less rows when choosing the dominant actor', () => {
+    const out = summarizeCatchup(
+      data({
+        comments: [row({ who: 'Bo', verb: 'commented on', target: 'A' })],
+        // Actor-less stage row: must not steal attribution from Bo.
+        stages: [{ verb: '', target: 'B', time: '2pm', url: 'u', stage: 'approved' }],
+      }),
+    );
+    expect(out).toBe('Bo left one comment.');
+  });
 });
 
 describe('shouldShowCounts / countCells', () => {
@@ -216,6 +227,35 @@ describe('renderCatchupEmail', () => {
     expect(renderCatchupEmail(full).html).toContain('>Stage<');
     const sparse = data({ stages: [row({})], comments: [row({})] });
     expect(renderCatchupEmail(sparse).html).not.toContain('>Stage<');
+  });
+
+  it('renders an actor-less stage row without an avatar but with the stage word', () => {
+    const { html, text } = renderCatchupEmail(
+      data({
+        stages: [
+          {
+            verb: '',
+            target: 'Spring',
+            time: '2pm',
+            url: 'https://app.test/posts/p1?w=ws1',
+            stage: 'approved',
+          },
+        ],
+      }),
+    );
+    // No actor -> no avatar cell anywhere, but the coloured stage word remains.
+    expect(html).not.toContain('class="avatar"');
+    expect(html).toContain('stage-approved');
+    expect(html).toContain('Spring');
+    expect(text).toContain('Spring approved - https://app.test/posts/p1?w=ws1');
+  });
+
+  it('keeps the avatar for actor-bearing rows', () => {
+    const { html } = renderCatchupEmail(
+      data({ comments: [row({ who: 'Bo', verb: 'commented on', target: 'Summer' })] }),
+    );
+    expect(html).toContain('class="avatar"');
+    expect(html).toContain('Bo commented on Summer');
   });
 
   it('emits a non-empty text alternative containing every url', () => {

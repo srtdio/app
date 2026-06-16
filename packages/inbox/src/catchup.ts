@@ -10,7 +10,9 @@
 export type StageKind = 'approved' | 'rejected' | 'review' | 'parked';
 
 export interface CatchupRow {
-  who: string;
+  // Optional: state-led rows (stage changes, brief_closed) have no actor, so
+  // they render without an avatar and never count toward the dominant actor.
+  who?: string;
   verb: string;
   target: string;
   time: string;
@@ -114,14 +116,17 @@ export function summarizeCatchup(data: CatchupData): string {
     // Name the single update specifically.
     const b = data.briefs[0];
     const r = activityRows(data)[0];
-    if (b) {
+    if (b && b.who !== undefined) {
       lead = `${b.who} opened a brief: ${b.target}.`;
-    } else if (r) {
+    } else if (r && r.who !== undefined) {
       lead = `${r.who} ${r.verb} ${r.target}.`;
     }
   } else if (activityCount > 1) {
     // Attribute the gist to the dominant actor (most items; ties -> first seen).
-    const all = activityRows(data);
+    // Actor-less rows carry no who and are ignored when picking the actor.
+    const all = activityRows(data).filter(
+      (r): r is CatchupRow & { who: string } => r.who !== undefined,
+    );
     const counts = new Map<string, number>();
     for (const r of all) counts.set(r.who, (counts.get(r.who) ?? 0) + 1);
     let actor = '';
@@ -265,12 +270,21 @@ function stageWord(stage: StageKind): string {
 }
 
 function rowHtml(r: CatchupRow): string {
-  const body = `${esc(r.who)} ${esc(r.verb)} ${esc(r.target)}${r.stage ? stageWord(r.stage) : ''}`;
+  const who = r.who;
+  const stageSuffix = r.stage ? stageWord(r.stage) : '';
+  // Actor-less rows drop the avatar and lead with the target ("{target} STAGE")
+  // for stage changes, or "{verb} {target}" (e.g. "Brief closed: {title}").
+  const body =
+    who === undefined
+      ? r.stage
+        ? `${esc(r.target)}${stageSuffix}`
+        : `${esc(r.verb)} ${esc(r.target)}`
+      : `${esc(who)} ${esc(r.verb)} ${esc(r.target)}${stageSuffix}`;
   return (
     `<tr><td style="padding:0">` +
     `<a href="${r.url}" class="rowlink" style="display:block;text-decoration:none;color:inherit;padding:10px 16px;border-top:1px solid ${LIGHT.border}">` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>` +
-    avatarCell(r.who) +
+    (who === undefined ? '' : avatarCell(who)) +
     `<td class="fg" style="font-family:${SANS};font-size:14px;color:${LIGHT.fg};vertical-align:middle">${body}</td>` +
     `<td class="fg3" align="right" style="font-family:${MONO};font-size:12px;color:${LIGHT.fg3};white-space:nowrap;vertical-align:middle">${esc(r.time)}&nbsp;&rsaquo;</td>` +
     `</tr></table></a></td></tr>`
@@ -400,7 +414,15 @@ export function renderCatchupEmail(data: CatchupData): CatchupEmail {
     `</table></td></tr></table></body></html>`;
 
   const textLines: string[] = [summary, ''];
-  for (const r of activityRows(data)) textLines.push(`${r.who} ${r.verb} ${r.target} - ${r.url}`);
+  for (const r of activityRows(data)) {
+    const label =
+      r.who === undefined
+        ? r.stage
+          ? `${r.target} ${r.stage}`
+          : `${r.verb} ${r.target}`
+        : `${r.who} ${r.verb} ${r.target}`;
+    textLines.push(`${label} - ${r.url}`);
+  }
   for (const c of data.chats)
     textLines.push(
       `${c.who} sent ${spell(c.count)} new message${c.count === 1 ? '' : 's'} - ${c.url}`,
