@@ -35,6 +35,7 @@ App-level profile. id mirrors auth.users.id (FK).
 | designation | text | nullable, 1 to 80 |
 | avatar_url | text | nullable, ^https?:// |
 | deleted_at | timestamptz | nullable, account-level soft-delete |
+| timezone | text | nullable, IANA tz; null falls back to workspaces.timezone for catch-up scheduling |
 | created_at / updated_at | timestamptz | default now() |
 
 ### workspaces

@@ -1946,6 +1946,7 @@ export type Database = {
           designation: string | null
           display_name: string
           id: string
+          timezone: string | null
           updated_at: string
         }
         Insert: {
@@ -1955,6 +1956,7 @@ export type Database = {
           designation?: string | null
           display_name: string
           id: string
+          timezone?: string | null
           updated_at?: string
         }
         Update: {
@@ -1964,6 +1966,7 @@ export type Database = {
           designation?: string | null
           display_name?: string
           id?: string
+          timezone?: string | null
           updated_at?: string
         }
         Relationships: []
