@@ -134,7 +134,7 @@ export function attachmentItemList(
             type="button"
             aria-label={`Remove ${item.name}`}
             onClick={() => onRemove(index)}
-            className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white"
+            className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white"
           >
             <IconX size={14} />
           </button>
