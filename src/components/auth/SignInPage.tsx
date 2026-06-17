@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 
 export function SignInPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +23,12 @@ export function SignInPage() {
       setSubmitting(false);
       return;
     }
-    navigate('/pipeline', { replace: true });
+    const rawFrom = (location.state as { from?: unknown } | null)?.from;
+    const dest =
+      typeof rawFrom === 'string' && rawFrom.startsWith('/') && !rawFrom.startsWith('//')
+        ? rawFrom
+        : '/pipeline';
+    navigate(dest, { replace: true });
   }
 
   return (
