@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
+    "zod": "npm:zod@3.25.76",
+    "@srtdio/auth": "../../../packages/auth/src/index.ts",
+    "@srtdio/workspace": "../../../packages/workspace/src/index.ts",
+    "@srtdio/rpc": "../../../packages/rpc/src/index.ts",
+    "@srtdio/schemas": "../../../packages/schemas/src/index.ts"
+  }
+}
