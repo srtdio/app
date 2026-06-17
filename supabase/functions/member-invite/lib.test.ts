@@ -140,7 +140,10 @@ describe('uuidv7', () => {
   });
 
   it('sets the version nibble to 7 and the variant to 10xx', () => {
-    const id = uuidv7(Date.now(), new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
+    const id = uuidv7(
+      Date.now(),
+      new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+    );
     expect(id[14]).toBe('7');
     expect(['8', '9', 'a', 'b']).toContain(id[19]);
   });
