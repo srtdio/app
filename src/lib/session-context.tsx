@@ -1,8 +1,25 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+
+/**
+ * Decide the next session from an onAuthStateChange event. A null `nextSession`
+ * is only authoritative on an explicit SIGNED_OUT or on the INITIAL_SESSION at
+ * boot; a transient null from a refresh hiccup (e.g. TOKEN_REFRESHED) leaves the
+ * current session in place so auto-refresh can recover without flashing /signin.
+ */
+export function resolveSession(
+  event: AuthChangeEvent,
+  nextSession: Session | null,
+  current: Session | null,
+): Session | null {
+  if (event === 'SIGNED_OUT') return null;
+  if (nextSession) return nextSession;
+  if (event === 'INITIAL_SESSION') return null;
+  return current;
+}
 
 /**
  * Resolved auth state for the route guards. `loading` is true only until the
@@ -38,8 +55,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setSession((current) => resolveSession(event, nextSession, current));
       setLoading(false);
     });
 

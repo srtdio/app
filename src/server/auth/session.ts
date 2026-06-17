@@ -55,9 +55,10 @@ export interface SignOutInput {
 
 /**
  * Revoke the session's refresh token server-side. We hydrate an ephemeral
- * session from the supplied tokens, then call GoTrue logout with global scope so
- * the refresh token can no longer mint access tokens. Idempotent: signing out an
- * already-dead session still resolves ok.
+ * session from the supplied tokens, then call GoTrue logout with local scope so
+ * only this device's refresh token is revoked; sessions on the user's other
+ * devices keep working. Idempotent: signing out an already-dead session still
+ * resolves ok.
  */
 export async function signOut(
   client: SupabaseClient,
@@ -83,7 +84,7 @@ export async function signOut(
     return { ok: false, error: mapped };
   }
 
-  const { error } = await client.auth.signOut({ scope: 'global' });
+  const { error } = await client.auth.signOut({ scope: 'local' });
   if (error) {
     const mapped = mapAuthError(error);
     logger.warn('auth.signout failed', { code: mapped.code });
