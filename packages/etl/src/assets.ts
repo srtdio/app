@@ -32,6 +32,7 @@ import { chunk, insertRows, INSERT_CHUNK, type Row } from './load';
 import { BATCH_SIZE, type SourceDb } from './source';
 import {
   type AssetKind,
+  extensionMime,
   filenameFromUrl,
   isHttpUrl,
   linkLabel,
@@ -94,6 +95,14 @@ export interface PlanContext {
 export interface PlanDeps {
   storage: StorageClient;
   fetchBytes: (url: string) => Promise<FetchResult>;
+  devSeed: boolean;
+}
+
+// dev-seed vs cutover discriminator. Mirrors the same one-line check load.ts uses
+// for PII scrubbing; kept local because load.ts's copy is not exported and load.ts
+// is out of scope for this change.
+function isDevSeed(config: EtlConfig): boolean {
+  return config.cli.mode === 'dev-seed';
 }
 
 export interface AssetLoadSummary {
@@ -239,6 +248,39 @@ async function processFile(
   if (pathHit !== undefined) {
     acc.plan.attachmentRows.push(attachmentRow(ctx, pathHit, item));
     acc.plan.summary.deduped += 1;
+    return;
+  }
+
+  // dev-seed: synthesize an asset/version/attachment row set with NO image bytes.
+  // No fetch, no R2 upload. The version still satisfies asset_versions_kind_shape:
+  // a non-link kind carries r2_key + sha256 + size_bytes + mime_type (external_url
+  // null). mime/kind come from the filename extension; sha is a deterministic hash
+  // of the URL so re-runs are stable and same-URL rows dedup; size_bytes is a
+  // synthetic positive 1. The real fetch/sniff/putObject path below is never run.
+  if (deps.devSeed) {
+    const filename = truncate(filenameFromUrl(item.url), FILENAME_MAX);
+    const mime = normalizeMime(extensionMime(filename));
+    if (!isAllowedMime(mime)) {
+      fail(acc, item.url, 'mime_not_allowed');
+      return;
+    }
+    const sha = await computeSha256(new TextEncoder().encode(item.url));
+    const shaHit = acc.bySha.get(sha);
+    if (shaHit !== undefined) {
+      acc.byPath.set(path, shaHit);
+      acc.plan.attachmentRows.push(attachmentRow(ctx, shaHit, item));
+      acc.plan.summary.deduped += 1;
+      return;
+    }
+    const ref: VersionRef = { assetId: uuidv7(), versionId: uuidv7() };
+    const kind = mimeToKind(mime);
+    const key = buildR2Key({ kind, assetId: ref.assetId, versionNumber: 1, filename });
+    pushAsset(acc.plan, ctx, { ...ref, filename });
+    acc.plan.versionRows.push(fileVersionRow(ctx, ref, { kind, key, mime, sha, size: 1 }));
+    acc.bySha.set(sha, ref);
+    acc.byPath.set(path, ref);
+    acc.plan.attachmentRows.push(attachmentRow(ctx, ref, item));
+    acc.plan.summary.filesMigrated += 1;
     return;
   }
 
@@ -502,6 +544,7 @@ export async function loadAssets(
   const plan = await buildAssetPlan(collected.items, ctx, {
     storage,
     fetchBytes: fetchBytesViaHttp,
+    devSeed: isDevSeed(config),
   });
   for (const f of collected.failures) plan.failures.push(f);
   plan.summary.failed += collected.failures.length;
