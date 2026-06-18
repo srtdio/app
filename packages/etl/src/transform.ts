@@ -337,7 +337,7 @@ export function parseMediaUrls(value: unknown): string[] {
   return [];
 }
 
-function extensionMime(filename: string): string {
+export function extensionMime(filename: string): string {
   const dot = filename.lastIndexOf('.');
   switch (dot === -1 ? '' : filename.slice(dot + 1).toLowerCase()) {
     case 'jpg':
