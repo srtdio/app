@@ -1,6 +1,7 @@
 // Pure boundary coverage for every transform.ts mapping function. No database.
 // Each stage / format / content_type value (including nulls) is asserted, plus
-// the cases most often gotten wrong: published -> approved and is_draft -> draft,
+// the cases most often gotten wrong: published/scheduled -> approved, ready ->
+// draft, and is_draft -> draft,
 // the objective fallback when description is blank, truncation at each CHECK
 // limit, and PII scrub redaction.
 
@@ -32,7 +33,9 @@ describe('mapPostStage', () => {
   it('maps every published-like v1 stage to approved', () => {
     expect(mapPostStage('published', false)).toBe('approved');
     expect(mapPostStage('scheduled', false)).toBe('approved');
-    expect(mapPostStage('ready', false)).toBe('approved');
+  });
+  it('maps ready to draft (not approved)', () => {
+    expect(mapPostStage('ready', false)).toBe('draft');
   });
   it('maps awaiting stages to review', () => {
     expect(mapPostStage('awaiting_approval', false)).toBe('review');

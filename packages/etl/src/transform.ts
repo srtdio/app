@@ -144,16 +144,17 @@ export function mapPostFormat(format: string | null): PostFormat {
   }
 }
 
-// stage: is_draft true wins -> draft. Otherwise published/scheduled/ready ->
-// approved, awaiting_approval/awaiting_brand_input -> review, rejected ->
-// rejected, parked -> parked, anything else -> draft.
+// stage: is_draft true wins -> draft. Otherwise published/scheduled ->
+// approved, ready -> draft, awaiting_approval/awaiting_brand_input -> review,
+// rejected -> rejected, parked -> parked, anything else -> draft.
 export function mapPostStage(stage: string | null, isDraft: boolean): PostStage {
   if (isDraft) return 'draft';
   switch ((stage ?? '').trim().toLowerCase()) {
     case 'published':
     case 'scheduled':
-    case 'ready':
       return 'approved';
+    case 'ready':
+      return 'draft';
     case 'awaiting_approval':
     case 'awaiting_brand_input':
       return 'review';
