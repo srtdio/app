@@ -138,9 +138,7 @@ export function MembersInviteForm() {
           {submitting ? 'Sending' : 'Send invite'}
         </Button>
       </div>
-      {sentTo !== null ? (
-        <p className="text-sm text-good">Invitation sent to {sentTo}.</p>
-      ) : null}
+      {sentTo !== null ? <p className="text-sm text-good">Invitation sent to {sentTo}.</p> : null}
       {failed ? <p className="text-sm text-bad">{INVITE_ERROR_MESSAGE}</p> : null}
     </form>
   );
