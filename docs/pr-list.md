@@ -77,6 +77,7 @@ The v1 project ID appears only in the ETL script and the cutover PR.
 | 28 | ETL v1 to v2 single-shot: dev-seed mode (PII scrubbed) + cutover mode. Brings over workspaces, posts, briefs, assets, comments. Does NOT bring over users (fresh signup post-cutover). Legacy *_by columns set NULL, displayed as ex-member. Owner set to agency operator at ETL time. The v1 project ID appears here. | 1, 5 |
 | 29 | Cutover run: interceptor on v1, ETL cutover mode, checksum validator, rollback rehearsal. Post-cutover the agency invites each client fresh via the invite flow. The v1 project ID appears here. | 28, and a working backend (Phase 1 complete) |
 | 30 | ETL Run (manual): workflow_dispatch-only GitHub Actions workflow (.github/workflows/etl-run.yml) to run the @srtdio/etl migration. Inputs: mode (dev-seed/cutover), dry_run, operator_email, operator_display_name, workspace_name, confirm_cutover. Guard step fails fast on cutover without confirm_cutover. Never fires on push/PR. Touches no package source. | 28 |
+| - | ETL post stage mapping fix: map v1 ready to v2 draft (the locked decision), not approved. mapPostStage in packages/etl/src/transform.ts drops ready from the approved group and adds an explicit ready -> draft case; published/scheduled still map to approved, awaiting_* -> review, rejected -> rejected, parked -> parked, is_draft and the default still -> draft. Doc comment and unit tests updated. Code-only, no schema change, nothing touches v1. | 28 |
 
 ## 4. Phase 3: Frontend
 

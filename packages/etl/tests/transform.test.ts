@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { briefCloseFields, buildSnapshot, mapBriefStatus } from '../src/transform.ts';
+import {
+  briefCloseFields,
+  buildSnapshot,
+  mapBriefStatus,
+  mapPostStage,
+} from '../src/transform.ts';
 
 // Regression tests for the briefs close columns. The bug: load.ts set
 // briefs.status from mapBriefStatus but never set closed_at/closed_by, so a
@@ -60,6 +65,34 @@ describe('briefCloseFields', () => {
       expect(satisfiesConstraint(status, close.closed_at, close.closed_by)).toBe(true);
     },
   );
+});
+
+// Regression for the v1 -> v2 post.stage mapping. The locked decision is that a
+// v1 'ready' post is NOT yet approved: it maps to 'draft', not 'approved'. Only
+// genuinely live work (published/scheduled) maps to 'approved'.
+describe('mapPostStage', () => {
+  it('maps ready to draft (not approved)', () => {
+    expect(mapPostStage('ready', false)).toBe('draft');
+  });
+
+  it.each(['published', 'scheduled'])('maps %s to approved', (stage) => {
+    expect(mapPostStage(stage, false)).toBe('approved');
+  });
+
+  it.each(['awaiting_approval', 'awaiting_brand_input'])('maps %s to review', (stage) => {
+    expect(mapPostStage(stage, false)).toBe('review');
+  });
+
+  it('maps rejected to rejected and parked to parked', () => {
+    expect(mapPostStage('rejected', false)).toBe('rejected');
+    expect(mapPostStage('parked', false)).toBe('parked');
+  });
+
+  it('maps unknown/null stage to draft and lets is_draft win', () => {
+    expect(mapPostStage('something_else', false)).toBe('draft');
+    expect(mapPostStage(null, false)).toBe('draft');
+    expect(mapPostStage('published', true)).toBe('draft');
+  });
 });
 
 // Regression for the post_versions snapshot. The bug: the version snapshot read
