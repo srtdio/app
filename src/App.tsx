@@ -11,6 +11,7 @@ import { SettingsPage } from '@/components/pages/SettingsPage';
 import { DeletedPage } from '@/components/pages/DeletedPage';
 import { SignInPage } from '@/components/auth/SignInPage';
 import { SignUpPage } from '@/components/auth/SignUpPage';
+import { AcceptInvitePage } from '@/components/auth/AcceptInvitePage';
 import { RequireAuth, RequireGuest } from '@/components/auth/RouteGuards';
 import { SessionProvider } from '@/lib/session-context';
 import { WorkspaceProvider } from '@/lib/workspace-context';
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/signup" element={<SignUpPage />} />
           </Route>
           <Route element={<RequireAuth />}>
+            <Route path="/invite/accept" element={<AcceptInvitePage />} />
             <Route element={<WorkspaceLayout />}>
               <Route path="/" element={<Navigate to="/pipeline" replace />} />
               <Route path="/pipeline" element={<PipelinePage />} />
