@@ -25,6 +25,12 @@ export interface EtlConfig {
   cli: Cli;
 }
 
+// dev-seed vs cutover discriminator. The single source of truth for this check,
+// imported by both load.ts (PII scrubbing) and assets.ts (no-bytes asset rows).
+export function isDevSeed(config: EtlConfig): boolean {
+  return config.cli.mode === 'dev-seed';
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DEFAULT_TIMEZONE = 'Asia/Kolkata';
 

@@ -27,7 +27,7 @@ import {
   type TracedFetch,
 } from '@srtdio/storage';
 
-import type { EtlConfig } from './config';
+import { isDevSeed, type EtlConfig } from './config';
 import { chunk, insertRows, INSERT_CHUNK, type Row } from './load';
 import { BATCH_SIZE, type SourceDb } from './source';
 import {
@@ -96,13 +96,6 @@ export interface PlanDeps {
   storage: StorageClient;
   fetchBytes: (url: string) => Promise<FetchResult>;
   devSeed: boolean;
-}
-
-// dev-seed vs cutover discriminator. Mirrors the same one-line check load.ts uses
-// for PII scrubbing; kept local because load.ts's copy is not exported and load.ts
-// is out of scope for this change.
-function isDevSeed(config: EtlConfig): boolean {
-  return config.cli.mode === 'dev-seed';
 }
 
 export interface AssetLoadSummary {
