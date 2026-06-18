@@ -506,6 +506,7 @@ export type Database = {
           deleted_at: string | null
           format_requested: string | null
           id: string
+          legacy_author_name: string | null
           objective: string
           reference_links: Json | null
           row_version: number
@@ -525,6 +526,7 @@ export type Database = {
           deleted_at?: string | null
           format_requested?: string | null
           id?: string
+          legacy_author_name?: string | null
           objective: string
           reference_links?: Json | null
           row_version?: number
@@ -544,6 +546,7 @@ export type Database = {
           deleted_at?: string | null
           format_requested?: string | null
           id?: string
+          legacy_author_name?: string | null
           objective?: string
           reference_links?: Json | null
           row_version?: number
@@ -1759,6 +1762,7 @@ export type Database = {
           created_at: string
           created_by: string
           id: string
+          legacy_author_name: string | null
           post_id: string
           snapshot: Json
           version_number: number
@@ -1768,6 +1772,7 @@ export type Database = {
           created_at?: string
           created_by: string
           id?: string
+          legacy_author_name?: string | null
           post_id: string
           snapshot: Json
           version_number: number
@@ -1777,6 +1782,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           id?: string
+          legacy_author_name?: string | null
           post_id?: string
           snapshot?: Json
           version_number?: number
@@ -1816,6 +1822,7 @@ export type Database = {
           deleted_at: string | null
           format: string
           id: string
+          legacy_author_name: string | null
           origin: string
           owner_user_id: string
           platform: string
@@ -1836,6 +1843,7 @@ export type Database = {
           deleted_at?: string | null
           format: string
           id?: string
+          legacy_author_name?: string | null
           origin?: string
           owner_user_id: string
           platform: string
@@ -1856,6 +1864,7 @@ export type Database = {
           deleted_at?: string | null
           format?: string
           id?: string
+          legacy_author_name?: string | null
           origin?: string
           owner_user_id?: string
           platform?: string
