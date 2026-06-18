@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { briefCloseFields, buildSnapshot, mapBriefStatus } from '../src/transform.ts';
+import {
+  briefCloseFields,
+  buildSnapshot,
+  mapBriefStatus,
+  NAME_REDACTION,
+  redactAuthorName,
+} from '../src/transform.ts';
 
 // Regression tests for the briefs close columns. The bug: load.ts set
 // briefs.status from mapBriefStatus but never set closed_at/closed_by, so a
@@ -106,5 +112,28 @@ describe('buildSnapshot from a v1 post_version', () => {
     );
     // dev-seed replaces the preserved person name with the redaction constant.
     expect((buildSnapshot(inputFromV1, true) as Record<string, unknown>).edited_by).toBe('Member');
+  });
+});
+
+// redactAuthorName carries the resolved v1 author display name onto the v2
+// legacy_author_name column. It mirrors the edited_by redaction exactly: cutover
+// (scrub=false) passes the real name through; dev-seed (scrub=true) replaces a
+// real name with NAME_REDACTION so no PII enters dev-seed; a null author (an
+// unresolvable v1 user) always stays null and renders as "(ex-member)".
+describe('redactAuthorName', () => {
+  it('scrub=false returns a real name unchanged', () => {
+    expect(redactAuthorName('Jane Doe', false)).toBe('Jane Doe');
+  });
+
+  it('scrub=false leaves null as null', () => {
+    expect(redactAuthorName(null, false)).toBeNull();
+  });
+
+  it('scrub=true replaces a non-null name with NAME_REDACTION', () => {
+    expect(redactAuthorName('Jane Doe', true)).toBe(NAME_REDACTION);
+  });
+
+  it('scrub=true leaves null as null', () => {
+    expect(redactAuthorName(null, true)).toBeNull();
   });
 });

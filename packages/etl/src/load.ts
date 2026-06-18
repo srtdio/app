@@ -24,6 +24,7 @@ import {
   postCaption,
   postOrigin,
   postTitle,
+  redactAuthorName,
   truncate,
   WORKSPACE_NAME_MAX,
   type SnapshotInput,
@@ -187,6 +188,7 @@ export async function loadBriefs(
         closed_at: close.closed_at,
         closed_by: close.closed_by,
         reference_links: JSON.stringify(buildReferenceLinks(r.drive_link, r.images)),
+        legacy_author_name: redactAuthorName(r.legacy_author_name, scrub),
         created_by: config.operatorUserId,
         created_via: 'app',
         row_version: 1,
@@ -206,6 +208,7 @@ export async function loadBriefs(
         'closed_at',
         'closed_by',
         'reference_links',
+        'legacy_author_name',
         'created_by',
         'created_via',
         'row_version',
@@ -246,6 +249,7 @@ export async function loadPosts(
         stage: mapPostStage(p.stage, p.is_draft === true),
         origin,
         brief_id: briefId,
+        legacy_author_name: redactAuthorName(p.legacy_author_name, scrub),
         target_date: p.target_date,
         row_version: 1,
         created_at: p.created_at,
@@ -267,6 +271,7 @@ export async function loadPosts(
         'stage',
         'origin',
         'brief_id',
+        'legacy_author_name',
         'target_date',
         'row_version',
         'created_at',
@@ -286,6 +291,7 @@ function versionRow(
   postId: string,
   versionNumber: number,
   snapshot: SnapshotInput,
+  legacyAuthorName: string | null,
   scrub: boolean,
 ): Row {
   return {
@@ -294,6 +300,7 @@ function versionRow(
     workspace_id: workspaceId,
     version_number: versionNumber,
     snapshot: JSON.stringify(buildSnapshot(snapshot, scrub)),
+    legacy_author_name: redactAuthorName(legacyAuthorName, scrub),
     created_by: operatorUserId,
   };
 }
@@ -307,7 +314,15 @@ export async function loadPostVersions(
   workspaceId: string,
 ): Promise<number> {
   const scrub = isDevSeed(config);
-  const cols = ['id', 'post_id', 'workspace_id', 'version_number', 'snapshot', 'created_by'];
+  const cols = [
+    'id',
+    'post_id',
+    'workspace_id',
+    'version_number',
+    'snapshot',
+    'legacy_author_name',
+    'created_by',
+  ];
   let count = 0;
   for (let offset = 0; ; offset += BATCH_SIZE) {
     const posts = await source.fetchPostsBatch(offset, BATCH_SIZE);
@@ -342,6 +357,7 @@ export async function loadPostVersions(
               location: null,
               editedBy: null,
             },
+            null,
             scrub,
           ),
         );
@@ -367,6 +383,7 @@ export async function loadPostVersions(
                 location: null,
                 editedBy: v.edited_by,
               },
+              v.legacy_author_name,
               scrub,
             ),
           );
