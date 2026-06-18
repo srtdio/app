@@ -168,7 +168,7 @@ describe('buildAssetPlan row shaping', () => {
       },
     ];
 
-    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes });
+    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes, devSeed: false });
 
     expect(plan.assetRows).toHaveLength(2);
     expect(plan.versionRows).toHaveLength(2);
@@ -202,7 +202,7 @@ describe('buildAssetPlan row shaping', () => {
       { type: 'link', url: 'see attached', entityType: 'post', entityId: 'p', position: 0 },
     ];
 
-    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes });
+    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes, devSeed: false });
 
     expect(plan.versionRows).toHaveLength(0);
     expect(plan.summary.skipped).toBe(1);
@@ -217,7 +217,7 @@ describe('buildAssetPlan row shaping', () => {
       fileItem('https://x.io/ok.jpg', 1),
     ];
 
-    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes });
+    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes, devSeed: false });
 
     expect(plan.summary.filesMigrated).toBe(1);
     expect(plan.summary.failed).toBe(1);
@@ -230,6 +230,7 @@ describe('buildAssetPlan row shaping', () => {
     const plan = await buildAssetPlan([fileItem('https://x.io/data.bin', 0)], CTX, {
       storage,
       fetchBytes,
+      devSeed: false,
     });
 
     expect(objects).toHaveLength(0);
@@ -252,7 +253,7 @@ describe('buildAssetPlan dedup', () => {
       fileItem('https://pub-x.r2.dev/b/photo.jpg', 1),
     ];
 
-    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes });
+    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes, devSeed: false });
 
     expect(plan.assetRows).toHaveLength(1);
     expect(plan.versionRows).toHaveLength(1);
@@ -270,7 +271,7 @@ describe('buildAssetPlan dedup', () => {
       fileItem('https://x.io/a.jpg', 1),
     ];
 
-    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes });
+    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes, devSeed: false });
 
     expect(plan.versionRows).toHaveLength(1);
     expect(plan.attachmentRows).toHaveLength(2);
@@ -286,7 +287,7 @@ describe('buildAssetPlan dedup', () => {
       fileItem('https://x.io/a.jpg', 3),
     ];
 
-    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes });
+    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes, devSeed: false });
     const positions = plan.attachmentRows.map((r) => r.position).sort();
     expect(positions).toEqual([0, 3]);
     // both attachments point at the single version
