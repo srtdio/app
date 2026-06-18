@@ -22,6 +22,14 @@ export const WORKSPACE_NAME_MAX = 80;
 // In dev-seed mode the preserved v1 person name is replaced with this constant.
 export const NAME_REDACTION = 'Member';
 
+// Legacy author-name attribution. Mirrors the edited_by redaction in
+// buildSnapshot exactly: dev-seed replaces a real preserved name with 'Member' so
+// no PII enters dev-seed; cutover passes the real name through; a null name (an
+// unresolvable author) stays null and renders as "(ex-member)" in the UI.
+export function redactAuthorName(name: string | null, scrub: boolean): string | null {
+  return scrub ? (name === null ? null : NAME_REDACTION) : name;
+}
+
 function isBlank(value: string | null | undefined): boolean {
   return value === null || value === undefined || value.trim() === '';
 }

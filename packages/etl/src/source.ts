@@ -18,6 +18,7 @@ export type V1Request = {
   target_date: Date | string | null;
   drive_link: string | null;
   images: string[] | null;
+  legacy_author_name: string | null;
 };
 
 // v1 public.posts. id (uuid) becomes the v2 posts.id; post_id (text) is the key
@@ -34,6 +35,7 @@ export type V1Post = {
   target_date: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
+  legacy_author_name: string | null;
 };
 
 // v1 public.post_versions, keyed by the owning v1 post id (= v2 post id). v1
@@ -46,6 +48,7 @@ export type V1PostVersion = {
   caption: string | null;
   edited_by: string | null;
   edited_at: Date | string | null;
+  legacy_author_name: string | null;
 };
 
 // Lightweight (id, reply_to) pair used to build the comment id map first pass.
@@ -133,8 +136,15 @@ export class SourceDb {
 
   async fetchRequestsBatch(offset: number, limit: number): Promise<V1Request[]> {
     return this.read<V1Request>(
-      `SELECT id::text AS id, title, description, content_type, status, target_date, drive_link, images
-         FROM public.requests
+      `SELECT r.id::text AS id, title, description, content_type, status, target_date, drive_link, images,
+              COALESCE(pid.display_name, pem.display_name,
+                CASE WHEN r.created_by IS NOT NULL
+                      AND r.created_by !~ '@'
+                      AND r.created_by !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                     THEN r.created_by END) AS legacy_author_name
+         FROM public.requests r
+         LEFT JOIN public.profiles pid ON pid.id::text = r.created_by
+         LEFT JOIN public.profiles pem ON lower(pem.email) = lower(r.created_by)
         ORDER BY id
         LIMIT $1 OFFSET $2`,
       [limit, offset],
@@ -143,9 +153,16 @@ export class SourceDb {
 
   async fetchPostsBatch(offset: number, limit: number): Promise<V1Post[]> {
     return this.read<V1Post>(
-      `SELECT id::text AS id, post_id::text AS post_id, title, caption, format, is_draft, stage,
-              brief_id::text AS brief_id, target_date, created_at, updated_at
-         FROM public.posts
+      `SELECT p.id::text AS id, post_id::text AS post_id, title, caption, format, is_draft, stage,
+              brief_id::text AS brief_id, target_date, created_at, updated_at,
+              COALESCE(pr1.display_name, pr2.display_name,
+                CASE WHEN p.created_by IS NOT NULL
+                      AND p.created_by !~ '@'
+                      AND p.created_by !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                     THEN p.created_by END) AS legacy_author_name
+         FROM public.posts p
+         LEFT JOIN public.profiles pr1 ON pr1.id = p.owner_profile_id
+         LEFT JOIN public.profiles pr2 ON lower(pr2.email) = lower(p.created_by)
         ORDER BY id
         LIMIT $1 OFFSET $2`,
       [limit, offset],
@@ -157,8 +174,15 @@ export class SourceDb {
   async fetchVersionsForPosts(postIds: readonly string[]): Promise<V1PostVersion[]> {
     if (postIds.length === 0) return [];
     return this.read<V1PostVersion>(
-      `SELECT pv.post_id::text AS post_id, pv.caption, pv.edited_by, pv.edited_at
+      `SELECT pv.post_id::text AS post_id, pv.caption, pv.edited_by, pv.edited_at,
+              COALESCE(pid.display_name, pem.display_name,
+                CASE WHEN pv.edited_by IS NOT NULL
+                      AND pv.edited_by !~ '@'
+                      AND pv.edited_by !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                     THEN pv.edited_by END) AS legacy_author_name
          FROM public.post_versions pv
+         LEFT JOIN public.profiles pid ON pid.id::text = pv.edited_by
+         LEFT JOIN public.profiles pem ON lower(pem.email) = lower(pv.edited_by)
         WHERE pv.post_id = ANY($1::uuid[])
         ORDER BY pv.post_id, pv.edited_at ASC NULLS FIRST`,
       [[...postIds]],
