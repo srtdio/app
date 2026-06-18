@@ -39,6 +39,7 @@ function makePost(id: string, stage: Stage): PipelinePost {
     platform: 'instagram',
     format: 'reel',
     origin: 'manual',
+    legacy_author_name: null,
     caption: null,
     brief_id: null,
     bucket_id: null,

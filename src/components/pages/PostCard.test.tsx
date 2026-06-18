@@ -21,6 +21,7 @@ function makePost(overrides: Partial<PipelinePost>): PipelinePost {
     target_date: null,
     stage: 'draft',
     origin: 'manual',
+    legacy_author_name: null,
     bucket_id: null,
     brief_id: null,
     owner_user_id: 'u1',
