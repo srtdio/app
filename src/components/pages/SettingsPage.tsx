@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { PageHead } from '@/components/shell/PageHead';
 import { Tabs } from '@/components/shell/Tabs';
 import type { TabItem } from '@/components/shell/Tabs';
-import { IconUser } from '@/components/ui/icons';
+import { MembersInviteForm } from '@/components/pages/settings/MembersInviteForm';
 
 const PANELS: TabItem[] = [
   { key: 'workspace', label: 'Workspace' },
@@ -41,14 +40,7 @@ function WorkspacePanel() {
 }
 
 function MembersPanel() {
-  return (
-    <EmptyState
-      icon={<IconUser size={24} />}
-      title="No members yet"
-      description="Invite teammates and clients to collaborate in this workspace."
-      action={<Button variant="primary">Invite member</Button>}
-    />
-  );
+  return <MembersInviteForm />;
 }
 
 function BillingPanel() {
