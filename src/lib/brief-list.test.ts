@@ -9,6 +9,7 @@ function brief(over: Partial<Brief>): Brief {
     workspace_id: 'w',
     title: 'Untitled',
     objective: 'o',
+    legacy_author_name: null,
     status: BRIEF_STATUS.open,
     created_via: 'manual',
     created_by: 'u',

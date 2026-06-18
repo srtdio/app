@@ -88,6 +88,7 @@ function makeBrief(id: string, overrides: Partial<BriefWithThumbnail> = {}): Bri
     workspace_id: 'w1',
     title: `Brief ${id}`,
     objective: 'objective',
+    legacy_author_name: null,
     status: 'open',
     target_date: null,
     reference_links: null,
