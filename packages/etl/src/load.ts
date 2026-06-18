@@ -7,7 +7,7 @@
 import type { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
-import type { EtlConfig } from './config';
+import { isDevSeed, type EtlConfig } from './config';
 import { BATCH_SIZE, type SourceDb, type V1Post, type V1PostVersion } from './source';
 import {
   briefCloseFields,
@@ -35,10 +35,6 @@ import {
 export const INSERT_CHUNK = 500;
 
 export type Row = Record<string, unknown>;
-
-function isDevSeed(config: EtlConfig): boolean {
-  return config.cli.mode === 'dev-seed';
-}
 
 export function chunk<T>(items: readonly T[], size: number): T[][] {
   const out: T[][] = [];

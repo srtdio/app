@@ -80,6 +80,30 @@ const fileItem = (url: string, position: number): MediaItem => ({
   position,
 });
 
+// dev-seed throw-on-use stubs: a storage whose putObject throws (and records that
+// nothing was uploaded) and a fetchBytes that throws, so any R2 write or network
+// read fails the test rather than silently passing.
+function throwOnUploadStorage() {
+  const uploads: string[] = [];
+  const storage = {
+    ensureBucket: (): Promise<void> => Promise.resolve(),
+    putObject: (input: { key: string }): Promise<void> => {
+      uploads.push(input.key);
+      throw new Error(`dev-seed must not upload to R2 (got putObject for '${input.key}')`);
+    },
+  };
+  return { storage, uploads };
+}
+
+function throwOnFetchBytes() {
+  const calls: string[] = [];
+  const fetchBytes = (url: string): Promise<FetchResult> => {
+    calls.push(url);
+    throw new Error(`dev-seed must not fetch bytes (got fetch for '${url}')`);
+  };
+  return { fetchBytes, calls };
+}
+
 describe('parseMediaUrls (comment-attachment 4 shapes)', () => {
   it('A: native array of url strings', () => {
     expect(parseMediaUrls(['https://x.io/a.jpg', 'https://x.io/b.png'])).toEqual([
@@ -293,5 +317,61 @@ describe('buildAssetPlan dedup', () => {
     // both attachments point at the single version
     const versionId = plan.versionRows[0]?.id;
     expect(plan.attachmentRows.every((r) => r.asset_version_id === versionId)).toBe(true);
+  });
+});
+
+describe('buildAssetPlan dev-seed (no bytes, no upload)', () => {
+  it('shapes one image asset/version/attachment without fetching or uploading', async () => {
+    const { storage, uploads } = throwOnUploadStorage();
+    const { fetchBytes, calls } = throwOnFetchBytes();
+
+    const plan = await buildAssetPlan([fileItem('https://x.io/a.jpg', 0)], CTX, {
+      storage,
+      fetchBytes,
+      devSeed: true,
+    });
+
+    // Exactly one of each row, no failures.
+    expect(plan.assetRows).toHaveLength(1);
+    expect(plan.versionRows).toHaveLength(1);
+    expect(plan.attachmentRows).toHaveLength(1);
+    expect(plan.summary).toMatchObject({ filesMigrated: 1, failed: 0 });
+
+    // kind_shape compliance: real image kind, synthetic-but-present byte columns,
+    // external_url null.
+    const v = plan.versionRows[0];
+    expect(v?.kind).toBe('image');
+    expect(typeof v?.r2_key).toBe('string');
+    expect((v?.r2_key as string).length).toBeGreaterThan(0);
+    expect(v?.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(v?.size_bytes as number).toBeGreaterThan(0);
+    expect(v?.mime_type).toBe('image/jpeg');
+    expect(v?.external_url).toBeNull();
+
+    // Proof: neither stub was ever invoked (no network read, no R2 write).
+    expect(calls).toHaveLength(0);
+    expect(uploads).toHaveLength(0);
+  });
+
+  it('dedups two attachments of the same url to one asset, still no I/O', async () => {
+    const { storage, uploads } = throwOnUploadStorage();
+    const { fetchBytes, calls } = throwOnFetchBytes();
+
+    const plan = await buildAssetPlan(
+      [fileItem('https://x.io/a.jpg', 0), fileItem('https://x.io/a.jpg', 1)],
+      CTX,
+      { storage, fetchBytes, devSeed: true },
+    );
+
+    expect(plan.assetRows).toHaveLength(1);
+    expect(plan.versionRows).toHaveLength(1);
+    expect(plan.attachmentRows).toHaveLength(2);
+    expect(plan.summary).toMatchObject({ filesMigrated: 1, deduped: 1 });
+
+    const versionId = plan.versionRows[0]?.id;
+    expect(plan.attachmentRows.every((r) => r.asset_version_id === versionId)).toBe(true);
+
+    expect(calls).toHaveLength(0);
+    expect(uploads).toHaveLength(0);
   });
 });
