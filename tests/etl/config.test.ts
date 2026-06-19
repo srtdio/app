@@ -33,11 +33,13 @@ function baseEnv(): Record<string, string | undefined> {
 }
 
 describe('parseCli', () => {
-  it('defaults to dev-seed, no dry-run, no confirm, no validate', () => {
+  it('defaults to dev-seed, no dry-run, no confirm, no wipe, no validate', () => {
     expect(parseCli([])).toEqual({
       mode: 'dev-seed',
       dryRun: false,
       confirmCutover: false,
+      wipe: false,
+      confirmWipe: false,
       validate: false,
     });
   });
@@ -46,6 +48,8 @@ describe('parseCli', () => {
       mode: 'cutover',
       dryRun: true,
       confirmCutover: true,
+      wipe: false,
+      confirmWipe: false,
       validate: true,
     });
   });
@@ -54,8 +58,23 @@ describe('parseCli', () => {
       mode: 'dev-seed',
       dryRun: false,
       confirmCutover: false,
+      wipe: false,
+      confirmWipe: false,
       validate: true,
     });
+  });
+  it('parses --wipe and --confirm-wipe', () => {
+    expect(parseCli(['--wipe', '--confirm-wipe'])).toEqual({
+      mode: 'dev-seed',
+      dryRun: false,
+      confirmCutover: false,
+      wipe: true,
+      confirmWipe: true,
+      validate: false,
+    });
+  });
+  it('parses --validate', () => {
+    expect(parseCli(['--validate'])).toMatchObject({ validate: true });
   });
   it('rejects an invalid mode', () => {
     expect(() => parseCli(['--mode=wipe'])).toThrow(/Invalid --mode/);
@@ -163,5 +182,66 @@ describe('assertSafe', () => {
       cli: { mode: 'cutover', dryRun: false, confirmCutover: false, validate: true },
     };
     expect(() => assertSafe(validateCfg)).toThrow(/EXPECTED_TARGET_REF/);
+  });
+
+  it('aborts a wipe without --confirm-wipe', () => {
+    const wipe: EtlConfig = {
+      ...base,
+      cli: { mode: 'dev-seed', dryRun: false, confirmCutover: false, wipe: true },
+    };
+    expect(() => assertSafe(wipe)).toThrow(/--confirm-wipe/);
+  });
+  it('allows a confirmed wipe', () => {
+    const wipe: EtlConfig = {
+      ...base,
+      cli: {
+        mode: 'dev-seed',
+        dryRun: false,
+        confirmCutover: false,
+        wipe: true,
+        confirmWipe: true,
+      },
+    };
+    expect(() => assertSafe(wipe)).not.toThrow();
+  });
+  it('still aborts a confirmed wipe when source and target are the same database', () => {
+    const wipe: EtlConfig = {
+      ...base,
+      sourceUrl: TARGET,
+      cli: {
+        mode: 'dev-seed',
+        dryRun: false,
+        confirmCutover: false,
+        wipe: true,
+        confirmWipe: true,
+      },
+    };
+    expect(() => assertSafe(wipe)).toThrow(/same database/);
+  });
+  it('still aborts a confirmed wipe when the target ref does not match', () => {
+    const wipe: EtlConfig = {
+      ...base,
+      expectedTargetRef: 'other000000000000000',
+      cli: {
+        mode: 'dev-seed',
+        dryRun: false,
+        confirmCutover: false,
+        wipe: true,
+        confirmWipe: true,
+      },
+    };
+    expect(() => assertSafe(wipe)).toThrow(/EXPECTED_TARGET_REF/);
+  });
+  it('does not require --confirm-cutover for a validate or a wipe run', () => {
+    const validate: EtlConfig = {
+      ...base,
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: false, validate: true },
+    };
+    const wipe: EtlConfig = {
+      ...base,
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: false, wipe: true, confirmWipe: true },
+    };
+    expect(() => assertSafe(validate)).not.toThrow();
+    expect(() => assertSafe(wipe)).not.toThrow();
   });
 });

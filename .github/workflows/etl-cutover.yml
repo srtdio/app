@@ -1,0 +1,70 @@
+name: ETL Cutover (manual)
+
+# Manually-triggered driver for the v1 -> v2 cutover rehearsal. workflow_dispatch
+# ONLY: this never fires on push or pull_request. Mirrors etl-dev-seed.yml for the
+# Node 22 + pnpm setup and reuses the same repo secrets. Destructive actions
+# (wipe, cutover) require typing the action word into `confirm` so a fat-finger
+# on the dropdown cannot nuke or overwrite the target.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to run against the target
+        type: choice
+        options:
+          - dry-run
+          - wipe
+          - cutover
+          - validate
+        default: dry-run
+      confirm:
+        description: Type the action word ('wipe' or 'cutover') to confirm a destructive run
+        type: string
+        default: ''
+
+jobs:
+  etl-cutover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require typed confirmation for destructive actions
+        if: ${{ (inputs.action == 'wipe' || inputs.action == 'cutover') && inputs.confirm != inputs.action }}
+        run: |
+          echo "::error::action='${{ inputs.action }}' requires confirm to exactly equal '${{ inputs.action }}'. Refusing to run."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve ETL flags
+        id: flags
+        run: |
+          case "${{ inputs.action }}" in
+            dry-run)  echo "args=--mode=cutover --dry-run" >> "$GITHUB_OUTPUT" ;;
+            wipe)     echo "args=--wipe --confirm-wipe" >> "$GITHUB_OUTPUT" ;;
+            cutover)  echo "args=--mode=cutover --confirm-cutover" >> "$GITHUB_OUTPUT" ;;
+            validate) echo "args=--validate" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::unknown action '${{ inputs.action }}'"; exit 1 ;;
+          esac
+
+      - name: Run cutover ETL (${{ inputs.action }})
+        run: pnpm --filter @srtdio/etl run etl -- ${{ steps.flags.outputs.args }}
+        env:
+          SOURCE_DATABASE_URL: ${{ secrets.SOURCE_DATABASE_URL }}
+          TARGET_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          EXPECTED_TARGET_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
+          OPERATOR_USER_ID: ${{ secrets.OPERATOR_USER_ID }}
+          OPERATOR_EMAIL: ${{ secrets.OPERATOR_EMAIL }}
+          OPERATOR_DISPLAY_NAME: ${{ secrets.OPERATOR_DISPLAY_NAME }}
+          TARGET_WORKSPACE_NAME: ${{ secrets.TARGET_WORKSPACE_NAME }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
