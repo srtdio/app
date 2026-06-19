@@ -8,10 +8,18 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildAssetPlan,
+  collectMediaItems,
   type FetchResult,
   type MediaItem,
   type PlanContext,
+  withKindSuffix,
 } from '../../packages/etl/src/assets';
+import type {
+  SourceDb,
+  V1CommentMedia,
+  V1PostMedia,
+  V1RequestMedia,
+} from '../../packages/etl/src/source';
 import {
   filenameFromUrl,
   linkLabel,
@@ -75,12 +83,13 @@ function fetchStub(map: Record<string, Uint8Array>) {
   return { fetchBytes, calls };
 }
 
-const fileItem = (url: string, position: number): MediaItem => ({
+const fileItem = (url: string, position: number, contextLabel = 'Test post'): MediaItem => ({
   type: 'file',
   url,
   entityType: 'post',
   entityId: '0190a000-0000-7000-8000-00000000post',
   position,
+  contextLabel,
 });
 
 // dev-seed throw-on-use stubs: a storage whose putObject throws (and records that
@@ -194,6 +203,7 @@ describe('buildAssetPlan row shaping', () => {
         entityType: 'post',
         entityId: 'p',
         position: 1,
+        contextLabel: 'My Post',
       },
     ];
 
@@ -230,11 +240,39 @@ describe('buildAssetPlan row shaping', () => {
     expect(plan.summary).toMatchObject({ filesMigrated: 1, linksMigrated: 1, failed: 0 });
   });
 
+  it('writes the context label into assets.display_name for files and links', async () => {
+    const { storage } = storageStub();
+    const { fetchBytes } = fetchStub({ 'https://x.io/a.jpg': jpeg(1) });
+    const items: MediaItem[] = [
+      fileItem('https://x.io/a.jpg', 0, 'My Post'),
+      {
+        type: 'link',
+        url: 'https://drive.google.com/d/abc',
+        entityType: 'brief',
+        entityId: 'b',
+        position: 1,
+        contextLabel: 'My Brief (brief)',
+      },
+    ];
+
+    const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes, devSeed: false });
+
+    expect(plan.assetRows[0]?.display_name).toBe('My Post');
+    expect(plan.assetRows[1]?.display_name).toBe('My Brief (brief)');
+  });
+
   it('skips a non-http link, counted but not migrated', async () => {
     const { storage } = storageStub();
     const { fetchBytes } = fetchStub({});
     const items: MediaItem[] = [
-      { type: 'link', url: 'see attached', entityType: 'post', entityId: 'p', position: 0 },
+      {
+        type: 'link',
+        url: 'see attached',
+        entityType: 'post',
+        entityId: 'p',
+        position: 0,
+        contextLabel: 'Test post',
+      },
     ];
 
     const plan = await buildAssetPlan(items, CTX, { storage, fetchBytes, devSeed: false });
@@ -465,5 +503,73 @@ describe('buildAssetPlan dev-seed (no bytes, no upload)', () => {
 
     expect(calls).toHaveLength(0);
     expect(uploads).toHaveLength(0);
+  });
+});
+
+describe('withKindSuffix', () => {
+  it('leaves a post title unchanged and suffixes brief / comment', () => {
+    expect(withKindSuffix('post', 'base')).toBe('base');
+    expect(withKindSuffix('brief', 'base')).toBe('base (brief)');
+    expect(withKindSuffix('comment', 'base')).toBe('base (comment)');
+  });
+});
+
+describe('collectMediaItems context labels', () => {
+  it('labels post (plain title), brief (+ brief), comment (post title + comment)', async () => {
+    // Minimal SourceDb: one fixed row per media source on offset 0, empty after.
+    const source = {
+      fetchPostMediaBatch: (offset: number): Promise<V1PostMedia[]> =>
+        Promise.resolve(
+          offset === 0
+            ? [
+                {
+                  id: 'post-1',
+                  title: 'Post Title',
+                  images: ['https://x.io/p.jpg'],
+                  drive_link: null,
+                },
+              ]
+            : [],
+        ),
+      fetchRequestMediaBatch: (offset: number): Promise<V1RequestMedia[]> =>
+        Promise.resolve(
+          offset === 0
+            ? [
+                {
+                  id: 'req-1',
+                  title: 'Brief Title',
+                  images: ['https://x.io/r.jpg'],
+                  drive_link: null,
+                },
+              ]
+            : [],
+        ),
+      fetchCommentAttachmentsBatch: (offset: number): Promise<V1CommentMedia[]> =>
+        Promise.resolve(
+          offset === 0
+            ? [
+                {
+                  id: 'cmt-1',
+                  post_title: 'Comment Post Title',
+                  attachments: ['https://x.io/c.jpg'],
+                },
+              ]
+            : [],
+        ),
+    } as unknown as SourceDb;
+
+    const briefsMap = new Map([['req-1', '0190a000-0000-7000-8000-000000brief']]);
+    const commentsMap = new Map([['cmt-1', '0190a000-0000-7000-8000-0000000cmt']]);
+
+    const { items } = await collectMediaItems(source, briefsMap, commentsMap);
+
+    const post = items.find((i) => i.entityType === 'post');
+    const brief = items.find((i) => i.entityType === 'brief');
+    const comment = items.find((i) => i.entityType === 'comment');
+
+    expect(post?.contextLabel).toBe('Post Title');
+    expect(brief?.contextLabel).toBe('Brief Title (brief)');
+    // Proves the comment -> owning-post-title hop plus the suffix.
+    expect(comment?.contextLabel).toBe('Comment Post Title (comment)');
   });
 });

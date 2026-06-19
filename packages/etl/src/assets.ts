@@ -32,6 +32,7 @@ import { chunk, insertRows, INSERT_CHUNK, type Row } from './load';
 import { BATCH_SIZE, type SourceDb } from './source';
 import {
   type AssetKind,
+  briefTitle,
   extensionMime,
   filenameFromUrl,
   isHttpUrl,
@@ -39,6 +40,7 @@ import {
   mimeToKind,
   normalizeMediaPath,
   parseMediaUrls,
+  postTitle,
   sniffMime,
   truncate,
 } from './transform';
@@ -52,7 +54,14 @@ const FILENAME_MAX = 500;
 // reuses the prior key instead of minting a fresh uuidv7 and orphaning objects.
 const ASSET_ID_NAMESPACE = '7f2a3c4d-5e6b-4a8c-9d0e-1f2a3b4c5d6e';
 
-const ASSET_COLS = ['id', 'workspace_id', 'filename', 'current_version_id', 'uploaded_by'] as const;
+const ASSET_COLS = [
+  'id',
+  'workspace_id',
+  'filename',
+  'display_name',
+  'current_version_id',
+  'uploaded_by',
+] as const;
 const VERSION_COLS = [
   'id',
   'asset_id',
@@ -85,7 +94,17 @@ export type MediaItem = {
   entityType: EntityType;
   entityId: string;
   position: number;
+  contextLabel: string;
 };
+
+// Suffix the migrated parent title with its source kind so the Assets card can
+// tell a brief- or comment-attached asset from a post-attached one at a glance.
+// Posts carry the title verbatim (they are the common case).
+export function withKindSuffix(entityType: EntityType, baseTitle: string): string {
+  if (entityType === 'brief') return `${baseTitle} (brief)`;
+  if (entityType === 'comment') return `${baseTitle} (comment)`;
+  return baseTitle;
+}
 
 // The result of pulling one file's bytes. A non-ok result carries the status so
 // the failure summary is actionable.
@@ -154,12 +173,13 @@ function emptyPlan(): AssetPlan {
 function pushAsset(
   plan: AssetPlan,
   ctx: PlanContext,
-  asset: VersionRef & { filename: string },
+  asset: VersionRef & { filename: string; displayName: string },
 ): void {
   plan.assetRows.push({
     id: asset.assetId,
     workspace_id: ctx.workspaceId,
     filename: asset.filename,
+    display_name: asset.displayName,
     current_version_id: null,
     // Users are never migrated; leave the FK author column NULL.
     uploaded_by: null,
@@ -231,7 +251,11 @@ function processLink(item: MediaItem, ctx: PlanContext, acc: Accumulator): void 
     return;
   }
   const ref: VersionRef = { assetId: uuidv7(), versionId: uuidv7() };
-  pushAsset(acc.plan, ctx, { ...ref, filename: truncate(linkLabel(item.url), FILENAME_MAX) });
+  pushAsset(acc.plan, ctx, {
+    ...ref,
+    filename: truncate(linkLabel(item.url), FILENAME_MAX),
+    displayName: item.contextLabel,
+  });
   acc.plan.versionRows.push(linkVersionRow(ctx, ref, item.url));
   acc.plan.attachmentRows.push(attachmentRow(ctx, ref, item));
   acc.plan.summary.linksMigrated += 1;
@@ -280,7 +304,7 @@ async function processFile(
     const ref: VersionRef = { assetId: uuidv5(path, ASSET_ID_NAMESPACE), versionId: uuidv7() };
     const kind = mimeToKind(mime);
     const key = buildR2Key({ kind, assetId: ref.assetId, versionNumber: 1, filename });
-    pushAsset(acc.plan, ctx, { ...ref, filename });
+    pushAsset(acc.plan, ctx, { ...ref, filename, displayName: item.contextLabel });
     acc.plan.versionRows.push(fileVersionRow(ctx, ref, { kind, key, mime, sha, size: 1 }));
     acc.bySha.set(sha, ref);
     acc.byPath.set(path, ref);
@@ -340,7 +364,7 @@ async function processFile(
     });
   }
 
-  pushAsset(acc.plan, ctx, { ...ref, filename });
+  pushAsset(acc.plan, ctx, { ...ref, filename, displayName: item.contextLabel });
   acc.plan.versionRows.push(
     fileVersionRow(ctx, ref, { kind: mimeToKind(mime), key, mime, sha, size: bytes.length }),
   );
@@ -369,7 +393,13 @@ export async function buildAssetPlan(
 // images first (position = index), then the drive link (position = image count).
 function appendEntityMedia(
   items: MediaItem[],
-  entity: { entityType: EntityType; entityId: string; images: unknown; driveLink: string | null },
+  entity: {
+    entityType: EntityType;
+    entityId: string;
+    images: unknown;
+    driveLink: string | null;
+    contextLabel: string;
+  },
 ): void {
   const urls = parseMediaUrls(entity.images);
   urls.forEach((url, position) =>
@@ -379,6 +409,7 @@ function appendEntityMedia(
       entityType: entity.entityType,
       entityId: entity.entityId,
       position,
+      contextLabel: entity.contextLabel,
     }),
   );
   if (entity.driveLink !== null && entity.driveLink.trim() !== '') {
@@ -388,6 +419,7 @@ function appendEntityMedia(
       entityType: entity.entityType,
       entityId: entity.entityId,
       position: urls.length,
+      contextLabel: entity.contextLabel,
     });
   }
 }
@@ -399,7 +431,7 @@ function hasMedia(images: unknown, driveLink: string | null): boolean {
 // Page every v1 source, resolving each entity to its v2 id, and flatten into one
 // ordered item list. Media whose entity was not migrated is recorded as a failure
 // (post media uses the v1 post id verbatim, so only briefs/comments can miss).
-async function collectMediaItems(
+export async function collectMediaItems(
   source: SourceDb,
   briefsMap: ReadonlyMap<string, string>,
   commentsMap: ReadonlyMap<string, string>,
@@ -416,6 +448,7 @@ async function collectMediaItems(
         entityId: p.id,
         images: p.images,
         driveLink: p.drive_link,
+        contextLabel: withKindSuffix('post', postTitle(p.title)),
       });
     }
     if (batch.length < BATCH_SIZE) break;
@@ -436,6 +469,7 @@ async function collectMediaItems(
         entityId: briefId,
         images: r.images,
         driveLink: r.drive_link,
+        contextLabel: withKindSuffix('brief', briefTitle(r.title)),
       });
     }
     if (batch.length < BATCH_SIZE) break;
@@ -452,8 +486,16 @@ async function collectMediaItems(
         failures.push({ ref: c.id, reason: 'comment_not_mapped' });
         continue;
       }
+      const contextLabel = withKindSuffix('comment', postTitle(c.post_title));
       urls.forEach((url, position) =>
-        items.push({ type: 'file', url, entityType: 'comment', entityId: commentId, position }),
+        items.push({
+          type: 'file',
+          url,
+          entityType: 'comment',
+          entityId: commentId,
+          position,
+          contextLabel,
+        }),
       );
     }
     if (batch.length < BATCH_SIZE) break;
