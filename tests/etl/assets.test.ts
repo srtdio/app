@@ -200,6 +200,9 @@ describe('buildAssetPlan row shaping', () => {
 
     // Users are never migrated: assets.uploaded_by is left NULL, never the operator.
     expect(plan.assetRows.every((a) => a.uploaded_by === null)).toBe(true);
+    // Same rule on the version + attachment author FKs (cutover mode).
+    expect(plan.versionRows.every((v) => v.uploaded_by === null)).toBe(true);
+    expect(plan.attachmentRows.every((a) => a.attached_by === null)).toBe(true);
 
     const fileV = plan.versionRows.find((v) => v.kind !== 'link');
     const linkV = plan.versionRows.find((v) => v.kind === 'link');
@@ -339,6 +342,11 @@ describe('buildAssetPlan dev-seed (no bytes, no upload)', () => {
     expect(plan.versionRows).toHaveLength(1);
     expect(plan.attachmentRows).toHaveLength(1);
     expect(plan.summary).toMatchObject({ filesMigrated: 1, failed: 0 });
+
+    // Users are never migrated: author FKs are left NULL (dev-seed mode).
+    expect(plan.assetRows.every((a) => a.uploaded_by === null)).toBe(true);
+    expect(plan.versionRows.every((v) => v.uploaded_by === null)).toBe(true);
+    expect(plan.attachmentRows.every((a) => a.attached_by === null)).toBe(true);
 
     // kind_shape compliance: real image kind, synthetic-but-present byte columns,
     // external_url null.

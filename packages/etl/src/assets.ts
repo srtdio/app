@@ -170,7 +170,8 @@ function attachmentRow(ctx: PlanContext, ref: VersionRef, item: MediaItem): Row 
     entity_id: item.entityId,
     workspace_id: ctx.workspaceId,
     position: item.position,
-    attached_by: ctx.operatorUserId,
+    // Users are never migrated; leave the FK author column NULL.
+    attached_by: null,
   };
 }
 
@@ -190,7 +191,8 @@ function fileVersionRow(
     sha256: meta.sha,
     size_bytes: meta.size,
     external_url: null,
-    uploaded_by: ctx.operatorUserId,
+    // Users are never migrated; leave the FK author column NULL.
+    uploaded_by: null,
   };
 }
 
@@ -206,7 +208,8 @@ function linkVersionRow(ctx: PlanContext, ref: VersionRef, url: string): Row {
     sha256: null,
     size_bytes: null,
     external_url: url,
-    uploaded_by: ctx.operatorUserId,
+    // Users are never migrated; leave the FK author column NULL.
+    uploaded_by: null,
   };
 }
 
