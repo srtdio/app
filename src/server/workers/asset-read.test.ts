@@ -272,7 +272,7 @@ describe('worker.fetch', () => {
 });
 
 describe('worker.fetch CORS', () => {
-  const ALLOWED_ORIGIN = 'https://srtdio-app.pages.dev';
+  const ALLOWED_ORIGIN = 'https://srtd.io';
   const OTHER_ALLOWED_ORIGIN = 'https://srtd.io';
   const DISALLOWED_ORIGIN = 'https://evil.example';
 

@@ -56,11 +56,11 @@ export interface AssetUploadEnv {
 }
 
 /**
- * Known site origins (Cloudflare Pages + production domain) used when
- * ALLOWED_ORIGINS is unset. The first entry is treated as the primary origin.
+ * Known site origin (the production domain srtd.io) used when ALLOWED_ORIGINS is
+ * unset. The sole entry is treated as the primary origin.
  * Mirrors asset-read so the two workers' CORS surface cannot drift.
  */
-const DEFAULT_ALLOWED_ORIGINS = ['https://srtdio-app.pages.dev', 'https://srtd.io'] as const;
+const DEFAULT_ALLOWED_ORIGINS = ['https://srtd.io'] as const;
 
 /** Preflight cache lifetime: 24 hours. */
 const CORS_MAX_AGE_SECONDS = 86_400;

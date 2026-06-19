@@ -251,7 +251,7 @@ describe('asset-upload worker.fetch', () => {
       env,
     );
     expect(res.status).toBe(204);
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://srtdio-app.pages.dev');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://srtd.io');
   });
 
   it('attaches CORS headers to the 401 error path for an allowed origin', async () => {
