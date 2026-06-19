@@ -401,9 +401,9 @@ describe('buildAssetPlan idempotency (deterministic keys, skip-if-present)', () 
       traceId: CTX.traceId,
     });
 
-    expect(await mem.objectExists('b', 'images/x/v1-a.jpg', CTX.traceId)).toBe(true);
-    expect(await mem.objectExists('b', 'images/x/v1-missing.jpg', CTX.traceId)).toBe(false);
-    expect(await mem.objectExists('other', 'images/x/v1-a.jpg', CTX.traceId)).toBe(false);
+    expect(await mem.objectExists('b', 'images/x/v1-a.jpg')).toBe(true);
+    expect(await mem.objectExists('b', 'images/x/v1-missing.jpg')).toBe(false);
+    expect(await mem.objectExists('other', 'images/x/v1-a.jpg')).toBe(false);
   });
 });
 
