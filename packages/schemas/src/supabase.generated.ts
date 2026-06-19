@@ -231,7 +231,7 @@ export type Database = {
           id: string
           tags: string[]
           uploaded_at: string
-          uploaded_by: string
+          uploaded_by: string | null
           workspace_id: string
         }
         Insert: {
@@ -244,7 +244,7 @@ export type Database = {
           id?: string
           tags?: string[]
           uploaded_at?: string
-          uploaded_by: string
+          uploaded_by?: string | null
           workspace_id: string
         }
         Update: {
@@ -257,7 +257,7 @@ export type Database = {
           id?: string
           tags?: string[]
           uploaded_at?: string
-          uploaded_by?: string
+          uploaded_by?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -501,7 +501,7 @@ export type Database = {
           closed_at: string | null
           closed_by: string | null
           created_at: string
-          created_by: string
+          created_by: string | null
           created_via: string
           deleted_at: string | null
           format_requested: string | null
@@ -521,7 +521,7 @@ export type Database = {
           closed_at?: string | null
           closed_by?: string | null
           created_at?: string
-          created_by: string
+          created_by?: string | null
           created_via?: string
           deleted_at?: string | null
           format_requested?: string | null
@@ -541,7 +541,7 @@ export type Database = {
           closed_at?: string | null
           closed_by?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           created_via?: string
           deleted_at?: string | null
           format_requested?: string | null
@@ -1760,7 +1760,7 @@ export type Database = {
       post_versions: {
         Row: {
           created_at: string
-          created_by: string
+          created_by: string | null
           id: string
           legacy_author_name: string | null
           post_id: string
@@ -1770,7 +1770,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          created_by: string
+          created_by?: string | null
           id?: string
           legacy_author_name?: string | null
           post_id: string
@@ -1780,7 +1780,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           id?: string
           legacy_author_name?: string | null
           post_id?: string
@@ -1818,13 +1818,13 @@ export type Database = {
           bucket_id: string | null
           caption: string | null
           created_at: string
-          created_by: string
+          created_by: string | null
           deleted_at: string | null
           format: string
           id: string
           legacy_author_name: string | null
           origin: string
-          owner_user_id: string
+          owner_user_id: string | null
           platform: string
           row_version: number
           stage: string
@@ -1839,13 +1839,13 @@ export type Database = {
           bucket_id?: string | null
           caption?: string | null
           created_at?: string
-          created_by: string
+          created_by?: string | null
           deleted_at?: string | null
           format: string
           id?: string
           legacy_author_name?: string | null
           origin?: string
-          owner_user_id: string
+          owner_user_id?: string | null
           platform: string
           row_version?: number
           stage?: string
@@ -1860,13 +1860,13 @@ export type Database = {
           bucket_id?: string | null
           caption?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           deleted_at?: string | null
           format?: string
           id?: string
           legacy_author_name?: string | null
           origin?: string
-          owner_user_id?: string
+          owner_user_id?: string | null
           platform?: string
           row_version?: number
           stage?: string

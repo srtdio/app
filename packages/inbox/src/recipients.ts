@@ -34,9 +34,11 @@ export interface RecipientReader {
   validateMembers(workspaceId: string, candidates: readonly string[]): Promise<string[]>;
 }
 
-/** Build Recipients from a user-id list, dropping the actor and de-duping. */
+// Build Recipients from a user-id list, dropping null/empty ids (a null
+// author is an ex-member with no account, so there is nobody to notify),
+// the actor, and de-duping.
 function build(
-  userIds: readonly string[],
+  userIds: readonly (string | null)[],
   eventType: InboxEventType,
   tier: Recipient['tier'],
   exclude?: string | null,
