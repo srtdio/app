@@ -185,7 +185,9 @@ export async function loadBriefs(
         closed_by: close.closed_by,
         reference_links: JSON.stringify(buildReferenceLinks(r.drive_link, r.images)),
         legacy_author_name: redactAuthorName(r.legacy_author_name, scrub),
-        created_by: config.operatorUserId,
+        // Users are never migrated; legacy authorship is preserved only in
+        // legacy_author_name. Leave the FK author column NULL.
+        created_by: null,
         created_via: 'app',
         row_version: 1,
       };
@@ -239,8 +241,10 @@ export async function loadPosts(
         title: postTitle(p.title),
         caption: postCaption(p.caption, scrub),
         platform: 'linkedin',
-        owner_user_id: config.operatorUserId,
-        created_by: config.operatorUserId,
+        // Users are never migrated; legacy authorship is preserved only in
+        // legacy_author_name. Leave the FK author columns NULL.
+        owner_user_id: null,
+        created_by: null,
         format: mapPostFormat(p.format),
         stage: mapPostStage(p.stage, p.is_draft === true),
         origin,
@@ -283,7 +287,6 @@ export async function loadPosts(
 
 function versionRow(
   workspaceId: string,
-  operatorUserId: string,
   postId: string,
   versionNumber: number,
   snapshot: SnapshotInput,
@@ -297,7 +300,9 @@ function versionRow(
     version_number: versionNumber,
     snapshot: JSON.stringify(buildSnapshot(snapshot, scrub)),
     legacy_author_name: redactAuthorName(legacyAuthorName, scrub),
-    created_by: operatorUserId,
+    // Users are never migrated; legacy authorship is preserved only in
+    // legacy_author_name. Leave the FK author column NULL.
+    created_by: null,
   };
 }
 
@@ -339,7 +344,6 @@ export async function loadPostVersions(
         rows.push(
           versionRow(
             workspaceId,
-            config.operatorUserId,
             post.id,
             1,
             {
@@ -362,7 +366,6 @@ export async function loadPostVersions(
           rows.push(
             versionRow(
               workspaceId,
-              config.operatorUserId,
               post.id,
               i + 1,
               {
