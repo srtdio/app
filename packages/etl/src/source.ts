@@ -76,6 +76,11 @@ export type V1PostMedia = { id: string; images: unknown; drive_link: string | nu
 export type V1RequestMedia = { id: string; images: unknown; drive_link: string | null };
 export type V1CommentMedia = { id: string; attachments: unknown };
 
+// Catalog evidence the cutover gate reads (SELECT-only) to confirm v1 is frozen
+// for writes: whether v1 is a read-only standby, and the database/role GUC
+// entries (each `name=value`) that may carry a persisted read-only default.
+export type FreezeEvidence = { inRecovery: boolean; configs: readonly string[] };
+
 export class SourceDb {
   private readonly pool: Pool;
 
@@ -103,6 +108,24 @@ export class SourceDb {
   private async count(sql: string): Promise<number> {
     const rows = await this.read<{ n: string }>(sql);
     return rows.length > 0 ? Number(rows[0]?.n ?? 0) : 0;
+  }
+
+  // SELECT-only freeze evidence for the cutover interceptor. Reads whether v1 is
+  // a standby and the database/role-scoped GUC entries (ALTER DATABASE / ALTER
+  // ROLE land in pg_db_role_setting); never writes to v1. The persisted default
+  // is independent of this session's own forced read-only option, so a frozen v1
+  // is distinguishable from our always-read-only connection.
+  async readFreezeEvidence(): Promise<FreezeEvidence> {
+    const recovery = await this.read<{ in_recovery: boolean }>(
+      'SELECT pg_is_in_recovery() AS in_recovery',
+    );
+    const configs = await this.read<{ cfg: string }>(
+      `SELECT unnest(s.setconfig) AS cfg
+         FROM pg_db_role_setting s
+         LEFT JOIN pg_database d ON d.oid = s.setdatabase
+        WHERE s.setdatabase = 0 OR d.datname = current_database()`,
+    );
+    return { inRecovery: recovery[0]?.in_recovery ?? false, configs: configs.map((r) => r.cfg) };
   }
 
   async countRequests(): Promise<number> {

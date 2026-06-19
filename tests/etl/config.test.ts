@@ -33,14 +33,20 @@ function baseEnv(): Record<string, string | undefined> {
 }
 
 describe('parseCli', () => {
-  it('defaults to dev-seed, no dry-run, no confirm', () => {
-    expect(parseCli([])).toEqual({ mode: 'dev-seed', dryRun: false, confirmCutover: false });
+  it('defaults to dev-seed, no dry-run, no confirm, no rehearse', () => {
+    expect(parseCli([])).toEqual({
+      mode: 'dev-seed',
+      dryRun: false,
+      confirmCutover: false,
+      rehearse: false,
+    });
   });
   it('parses the flags', () => {
-    expect(parseCli(['--mode=cutover', '--dry-run', '--confirm-cutover'])).toEqual({
+    expect(parseCli(['--mode=cutover', '--dry-run', '--confirm-cutover', '--rehearse'])).toEqual({
       mode: 'cutover',
       dryRun: true,
       confirmCutover: true,
+      rehearse: true,
     });
   });
   it('rejects an invalid mode', () => {
@@ -124,15 +130,40 @@ describe('assertSafe', () => {
   it('aborts cutover without --confirm-cutover', () => {
     const cutover: EtlConfig = {
       ...base,
-      cli: { mode: 'cutover', dryRun: false, confirmCutover: false },
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: false, rehearse: false },
     };
     expect(() => assertSafe(cutover)).toThrow(/--confirm-cutover/);
   });
   it('allows cutover with --confirm-cutover', () => {
     const cutover: EtlConfig = {
       ...base,
-      cli: { mode: 'cutover', dryRun: false, confirmCutover: true },
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: true, rehearse: false },
     };
     expect(() => assertSafe(cutover)).not.toThrow();
+  });
+
+  // The cutover dress rehearsal runs the full load then rolls back, so it commits
+  // nothing: exempt from --confirm-cutover, but invalid outside cutover and
+  // contradictory with --dry-run.
+  it('allows a cutover rehearsal without --confirm-cutover', () => {
+    const rehearse: EtlConfig = {
+      ...base,
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: false, rehearse: true },
+    };
+    expect(() => assertSafe(rehearse)).not.toThrow();
+  });
+  it('aborts --rehearse outside cutover mode', () => {
+    const rehearse: EtlConfig = {
+      ...base,
+      cli: { mode: 'dev-seed', dryRun: false, confirmCutover: false, rehearse: true },
+    };
+    expect(() => assertSafe(rehearse)).toThrow(/only valid with --mode=cutover/);
+  });
+  it('aborts --rehearse combined with --dry-run', () => {
+    const rehearse: EtlConfig = {
+      ...base,
+      cli: { mode: 'cutover', dryRun: true, confirmCutover: false, rehearse: true },
+    };
+    expect(() => assertSafe(rehearse)).toThrow(/either --dry-run or --rehearse/);
   });
 });

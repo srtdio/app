@@ -11,6 +11,10 @@ export interface Cli {
   mode: Mode;
   dryRun: boolean;
   confirmCutover: boolean;
+  // Cutover-only dress rehearsal: run the full real-data load + checksum against
+  // live v1, then ROLLBACK instead of COMMIT. Commits nothing, so it does not
+  // require --confirm-cutover.
+  rehearse: boolean;
 }
 
 export interface EtlConfig {
@@ -41,6 +45,7 @@ export function parseCli(argv: readonly string[]): Cli {
   let mode: Mode = 'dev-seed';
   let dryRun = false;
   let confirmCutover = false;
+  let rehearse = false;
   for (const arg of argv) {
     if (arg === '--') {
       // Bare separator (e.g. inserted by `pnpm run etl -- ...`); ignore it.
@@ -49,6 +54,8 @@ export function parseCli(argv: readonly string[]): Cli {
       dryRun = true;
     } else if (arg === '--confirm-cutover') {
       confirmCutover = true;
+    } else if (arg === '--rehearse') {
+      rehearse = true;
     } else if (arg.startsWith('--mode=')) {
       const value = arg.slice('--mode='.length);
       if (value !== 'dev-seed' && value !== 'cutover') {
@@ -59,7 +66,7 @@ export function parseCli(argv: readonly string[]): Cli {
       throw new Error(`Unknown argument '${arg}'.`);
     }
   }
-  return { mode, dryRun, confirmCutover };
+  return { mode, dryRun, confirmCutover, rehearse };
 }
 
 // Read and validate every required variable. Missing ones are collected and
@@ -180,7 +187,15 @@ export function assertSafe(config: EtlConfig): void {
       `Refusing to run: TARGET_DATABASE_URL does not point at EXPECTED_TARGET_REF='${config.expectedTargetRef}'.`,
     );
   }
-  if (config.cli.mode === 'cutover' && !config.cli.confirmCutover) {
+  if (config.cli.rehearse && config.cli.mode !== 'cutover') {
+    throw new Error('Refusing to run: --rehearse is only valid with --mode=cutover.');
+  }
+  if (config.cli.rehearse && config.cli.dryRun) {
+    throw new Error('Refusing to run: pass either --dry-run or --rehearse, not both.');
+  }
+  // A rehearsal commits nothing, so it is exempt from the --confirm-cutover gate;
+  // a real cutover (commits) still requires it.
+  if (config.cli.mode === 'cutover' && !config.cli.confirmCutover && !config.cli.rehearse) {
     throw new Error('Refusing to run cutover mode: pass --confirm-cutover to proceed.');
   }
 }

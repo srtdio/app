@@ -25,6 +25,13 @@ import {
 } from './load';
 import { SourceDb } from './source';
 import {
+  compareCounts,
+  fingerprintTarget,
+  readTargetCounts,
+  verifyV1Frozen,
+  type PlanCounts,
+} from './verify';
+import {
   briefObjective,
   briefTitle,
   buildReferenceLinks,
@@ -69,6 +76,20 @@ async function migrate(config: EtlConfig): Promise<void> {
   const source = new SourceDb(config.sourceUrl);
   const target = new Pool({ connectionString: config.targetUrl, max: 4 });
   try {
+    // Interceptor: a real cutover refuses to proceed unless v1 is verified frozen
+    // for writes. Verify-only (SELECT against the v1 catalog); the freeze itself
+    // is applied out-of-band. A rehearsal commits nothing, so the freeze is
+    // advisory there.
+    if (config.cli.mode === 'cutover') {
+      const freeze = await verifyV1Frozen(source);
+      log(`v1 freeze check: ${freeze.frozen ? 'FROZEN' : 'NOT FROZEN'} (${freeze.evidence}).`);
+      if (!config.cli.rehearse && !freeze.frozen) {
+        throw new Error(
+          `Refusing to run cutover: v1 is not frozen for writes (${freeze.evidence}). ` +
+            'Apply the freeze (see README runbook) and retry.',
+        );
+      }
+    }
     const client = await target.connect();
     try {
       await client.query('BEGIN');
@@ -105,8 +126,52 @@ async function migrate(config: EtlConfig): Promise<void> {
         `assets: files=${assets.filesMigrated} links=${assets.linksMigrated} ` +
           `deduped=${assets.deduped} skipped=${assets.skipped} failed=${assets.failed}`,
       );
-      await client.query('COMMIT');
-      log('COMMIT. Migration complete.');
+
+      // Checksum gate (both modes): source-planned vs loaded vs target-in-
+      // workspace counts must agree before anything commits. A mismatch throws,
+      // which trips the ROLLBACK below, so a partial or contaminated load (e.g. a
+      // cutover into a workspace that is not empty) never commits.
+      const plan: PlanCounts = {
+        briefs: await source.countRequests(),
+        posts: await source.countPosts(),
+        postVersions:
+          (await source.countPostVersionsJoined()) + (await source.countPostsWithoutVersions()),
+        comments: await source.countMigratableComments(),
+      };
+      const checksum = compareCounts({
+        plan,
+        loaded: {
+          briefs: briefs.count,
+          posts,
+          postVersions: versions,
+          comments: commentsCount,
+          assets: assets.filesMigrated + assets.linksMigrated,
+        },
+        target: await readTargetCounts(client, workspaceId),
+      });
+      for (const r of checksum.rows) {
+        log(
+          `verify count ${r.table}: plan=${r.plan ?? '-'} loaded=${r.loaded} ` +
+            `target=${r.target} ${r.ok ? 'OK' : 'MISMATCH'}`,
+        );
+      }
+      if (!checksum.ok) {
+        throw new Error(`Checksum failed: row-count parity mismatch [${checksum.summary}].`);
+      }
+
+      const fingerprint = await fingerprintTarget(client, workspaceId);
+      for (const part of fingerprint.parts) log(`verify digest ${part.table}: ${part.digest}`);
+      log(`verify digest combined: ${fingerprint.combined}`);
+
+      if (config.cli.rehearse) {
+        // Force-rollback dress rehearsal: the full real-data load ran and the
+        // checksum passed, but nothing is committed.
+        await client.query('ROLLBACK');
+        log('REHEARSAL COMPLETE. Checksum passed; zero writes committed.');
+      } else {
+        await client.query('COMMIT');
+        log('COMMIT. Migration complete.');
+      }
     } catch (err) {
       await client.query('ROLLBACK');
       log('ROLLBACK. No changes were committed.');

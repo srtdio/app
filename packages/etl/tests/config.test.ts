@@ -27,7 +27,7 @@ const configFor = (sourceUrl: string, targetUrl: string, expectedTargetRef: stri
   operatorDisplayName: 'Op',
   workspaceName: 'WS',
   workspaceTimezone: 'Asia/Kolkata',
-  cli: { mode: 'dev-seed', dryRun: true, confirmCutover: false },
+  cli: { mode: 'dev-seed', dryRun: true, confirmCutover: false, rehearse: false },
 });
 
 describe('sameDatabase', () => {
