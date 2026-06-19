@@ -1,0 +1,36 @@
+# dev-seed only, manual trigger. Wipes and reloads the dev-seed workspace
+# content in v2. Never runs on push or pull_request. No cutover path.
+name: etl-dev-seed
+
+on:
+  workflow_dispatch:
+
+jobs:
+  etl-dev-seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run dev-seed ETL
+        run: pnpm --filter @srtdio/etl run etl -- --mode=dev-seed
+        env:
+          SOURCE_DATABASE_URL: ${{ secrets.SOURCE_DATABASE_URL }}
+          TARGET_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          EXPECTED_TARGET_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
+          OPERATOR_USER_ID: ${{ secrets.OPERATOR_USER_ID }}
+          OPERATOR_EMAIL: ${{ secrets.OPERATOR_EMAIL }}
+          OPERATOR_DISPLAY_NAME: ${{ secrets.OPERATOR_DISPLAY_NAME }}
+          TARGET_WORKSPACE_NAME: ${{ secrets.TARGET_WORKSPACE_NAME }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
