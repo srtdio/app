@@ -81,7 +81,7 @@ const CONFIG: EtlConfig = {
   operatorDisplayName: 'Operator',
   workspaceName: 'Client',
   workspaceTimezone: 'Asia/Kolkata',
-  cli: { mode: 'dev-seed', dryRun: false, confirmCutover: false },
+  cli: { mode: 'dev-seed', dryRun: false, confirmCutover: false, validate: false },
 };
 
 const POST1 = '0190a000-0000-7000-8000-00000000ps01';
