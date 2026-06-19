@@ -11,6 +11,7 @@ export interface Cli {
   mode: Mode;
   dryRun: boolean;
   confirmCutover: boolean;
+  validate: boolean;
 }
 
 export interface EtlConfig {
@@ -41,6 +42,7 @@ export function parseCli(argv: readonly string[]): Cli {
   let mode: Mode = 'dev-seed';
   let dryRun = false;
   let confirmCutover = false;
+  let validate = false;
   for (const arg of argv) {
     if (arg === '--') {
       // Bare separator (e.g. inserted by `pnpm run etl -- ...`); ignore it.
@@ -49,6 +51,8 @@ export function parseCli(argv: readonly string[]): Cli {
       dryRun = true;
     } else if (arg === '--confirm-cutover') {
       confirmCutover = true;
+    } else if (arg === '--validate') {
+      validate = true;
     } else if (arg.startsWith('--mode=')) {
       const value = arg.slice('--mode='.length);
       if (value !== 'dev-seed' && value !== 'cutover') {
@@ -59,7 +63,7 @@ export function parseCli(argv: readonly string[]): Cli {
       throw new Error(`Unknown argument '${arg}'.`);
     }
   }
-  return { mode, dryRun, confirmCutover };
+  return { mode, dryRun, confirmCutover, validate };
 }
 
 // Read and validate every required variable. Missing ones are collected and
@@ -180,7 +184,10 @@ export function assertSafe(config: EtlConfig): void {
       `Refusing to run: TARGET_DATABASE_URL does not point at EXPECTED_TARGET_REF='${config.expectedTargetRef}'.`,
     );
   }
-  if (config.cli.mode === 'cutover' && !config.cli.confirmCutover) {
+  // --validate is read-only (no writes, no R2 deletes), so it never needs the
+  // cutover confirmation even against a cutover-mode config. The same-database
+  // refusal and target-ref pinning above stay in force for it.
+  if (config.cli.mode === 'cutover' && !config.cli.confirmCutover && !config.cli.validate) {
     throw new Error('Refusing to run cutover mode: pass --confirm-cutover to proceed.');
   }
 }

@@ -33,14 +33,28 @@ function baseEnv(): Record<string, string | undefined> {
 }
 
 describe('parseCli', () => {
-  it('defaults to dev-seed, no dry-run, no confirm', () => {
-    expect(parseCli([])).toEqual({ mode: 'dev-seed', dryRun: false, confirmCutover: false });
+  it('defaults to dev-seed, no dry-run, no confirm, no validate', () => {
+    expect(parseCli([])).toEqual({
+      mode: 'dev-seed',
+      dryRun: false,
+      confirmCutover: false,
+      validate: false,
+    });
   });
   it('parses the flags', () => {
-    expect(parseCli(['--mode=cutover', '--dry-run', '--confirm-cutover'])).toEqual({
+    expect(parseCli(['--mode=cutover', '--dry-run', '--confirm-cutover', '--validate'])).toEqual({
       mode: 'cutover',
       dryRun: true,
       confirmCutover: true,
+      validate: true,
+    });
+  });
+  it('parses --validate on its own (read-only, no confirm needed)', () => {
+    expect(parseCli(['--validate'])).toEqual({
+      mode: 'dev-seed',
+      dryRun: false,
+      confirmCutover: false,
+      validate: true,
     });
   });
   it('rejects an invalid mode', () => {
@@ -124,15 +138,30 @@ describe('assertSafe', () => {
   it('aborts cutover without --confirm-cutover', () => {
     const cutover: EtlConfig = {
       ...base,
-      cli: { mode: 'cutover', dryRun: false, confirmCutover: false },
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: false, validate: false },
     };
     expect(() => assertSafe(cutover)).toThrow(/--confirm-cutover/);
   });
   it('allows cutover with --confirm-cutover', () => {
     const cutover: EtlConfig = {
       ...base,
-      cli: { mode: 'cutover', dryRun: false, confirmCutover: true },
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: true, validate: false },
     };
     expect(() => assertSafe(cutover)).not.toThrow();
+  });
+  it('allows --validate against a cutover config without --confirm-cutover (read-only)', () => {
+    const validateCutoverCfg: EtlConfig = {
+      ...base,
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: false, validate: true },
+    };
+    expect(() => assertSafe(validateCutoverCfg)).not.toThrow();
+  });
+  it('still pins the target ref under --validate', () => {
+    const validateCfg: EtlConfig = {
+      ...base,
+      expectedTargetRef: 'other000000000000000',
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: false, validate: true },
+    };
+    expect(() => assertSafe(validateCfg)).toThrow(/EXPECTED_TARGET_REF/);
   });
 });
