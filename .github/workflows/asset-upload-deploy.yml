@@ -30,3 +30,11 @@ jobs:
           workingDirectory: workers/asset-upload
           wranglerVersion: '3.114.17'
           packageManager: pnpm
+          secrets: |
+            CLOUDFLARE_ACCOUNT_ID
+            CLOUDFLARE_R2_ACCESS_KEY_ID
+            CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
