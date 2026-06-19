@@ -71,8 +71,9 @@ export function loadConfig(
   const cli = parseCli(argv);
   const missing: string[] = [];
   const get = (name: string): string => {
-    const value = env[name];
-    if (value === undefined || value.trim() === '') {
+    const raw = env[name];
+    const value = raw === undefined ? '' : raw.trim();
+    if (value === '') {
       missing.push(name);
       return '';
     }
