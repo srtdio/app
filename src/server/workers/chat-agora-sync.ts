@@ -100,7 +100,7 @@ export function mapChangePayload(payload: ChangePayload): SyncEvent | null {
 
 /** The DB reads + mark-synced write the consumer needs; injected for tests. */
 export interface SyncReader {
-  getGroup(groupId: string): Promise<{ name: string; createdBy: string } | null>;
+  getGroup(groupId: string): Promise<{ name: string; createdBy: string | null } | null>;
   getGroupMemberIds(groupId: string): Promise<string[]>;
   getChannelByGroupId(
     groupId: string,
@@ -213,6 +213,15 @@ async function handleChannelInsert(
   const group = await deps.reader.getGroup(event.groupId);
   if (!group) {
     deps.log.error('chat_agora_sync group not found for channel', {
+      trace_id: traceId,
+      group_id: event.groupId,
+    });
+    return;
+  }
+  // created_by is nullable (ex-member, FK ON DELETE SET NULL); an Agora group
+  // needs a real owner, so a creator-less group is unsyncable here.
+  if (group.createdBy === null) {
+    deps.log.error('chat_agora_sync group has no creator to own the agora group', {
       trace_id: traceId,
       group_id: event.groupId,
     });
