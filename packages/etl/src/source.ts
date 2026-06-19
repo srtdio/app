@@ -136,7 +136,7 @@ export class SourceDb {
 
   async fetchRequestsBatch(offset: number, limit: number): Promise<V1Request[]> {
     return this.read<V1Request>(
-      `SELECT r.id::text AS id, title, description, content_type, status, target_date, drive_link, images,
+      `SELECT r.id::text AS id, r.title, r.description, r.content_type, r.status, r.target_date, r.drive_link, r.images,
               COALESCE(pid.display_name, pem.display_name,
                 CASE WHEN r.created_by IS NOT NULL
                       AND r.created_by !~ '@'
@@ -153,8 +153,8 @@ export class SourceDb {
 
   async fetchPostsBatch(offset: number, limit: number): Promise<V1Post[]> {
     return this.read<V1Post>(
-      `SELECT p.id::text AS id, post_id::text AS post_id, title, caption, format, is_draft, stage,
-              brief_id::text AS brief_id, target_date, created_at, updated_at,
+      `SELECT p.id::text AS id, p.post_id::text AS post_id, p.title, p.caption, p.format, p.is_draft, p.stage,
+              p.brief_id::text AS brief_id, p.target_date, p.created_at, p.updated_at,
               COALESCE(pr1.display_name, pr2.display_name,
                 CASE WHEN p.created_by IS NOT NULL
                       AND p.created_by !~ '@'
