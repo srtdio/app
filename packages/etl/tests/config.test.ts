@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sameDatabase, assertSafe, loadConfig, type EtlConfig } from '../src/config.ts';
+import { sameDatabase, assertSafe, loadConfig, parseCli, type EtlConfig } from '../src/config.ts';
 
 // Regression tests for the same-database safety guard. The bug: two distinct
 // Supabase projects in one region share host/port/database behind the session
@@ -102,5 +102,58 @@ describe('assertSafe same-database guard', () => {
     expect(() => assertSafe(configFor(poolerUrl(REF_A), poolerUrl(REF_A), REF_A))).toThrow(
       /same database/i,
     );
+  });
+});
+
+// Cutover-rehearsal wipe flags: parsing plus the safety guards that keep a wipe
+// pinned to EXPECTED_TARGET_REF and off v1, and the confirm-cutover exemption.
+describe('parseCli wipe / validate flags', () => {
+  it('defaults wipe and confirmWipe to false', () => {
+    expect(parseCli([])).toMatchObject({ wipe: false, confirmWipe: false, validate: false });
+  });
+  it('parses --wipe and --confirm-wipe', () => {
+    expect(parseCli(['--wipe', '--confirm-wipe'])).toMatchObject({ wipe: true, confirmWipe: true });
+  });
+});
+
+describe('assertSafe wipe guard', () => {
+  const wipeConfig = (
+    sourceUrl: string,
+    targetUrl: string,
+    expectedTargetRef: string,
+    confirmWipe: boolean,
+  ): EtlConfig => ({
+    ...configFor(sourceUrl, targetUrl, expectedTargetRef),
+    cli: { mode: 'dev-seed', dryRun: false, confirmCutover: false, wipe: true, confirmWipe },
+  });
+
+  it('throws when wipe is set without --confirm-wipe', () => {
+    expect(() => assertSafe(wipeConfig(poolerUrl(REF_A), poolerUrl(REF_B), REF_B, false))).toThrow(
+      /--confirm-wipe/,
+    );
+  });
+  it('allows a confirmed wipe pinned to the expected ref', () => {
+    expect(() =>
+      assertSafe(wipeConfig(poolerUrl(REF_A), poolerUrl(REF_B), REF_B, true)),
+    ).not.toThrow();
+  });
+  it('still refuses a confirmed wipe when source and target share a ref', () => {
+    expect(() => assertSafe(wipeConfig(poolerUrl(REF_A), poolerUrl(REF_A), REF_A, true))).toThrow(
+      /same database/i,
+    );
+  });
+  it('still refuses a confirmed wipe when the target ref does not match', () => {
+    expect(() => assertSafe(wipeConfig(poolerUrl(REF_A), poolerUrl(REF_B), REF_A, true))).toThrow(
+      /EXPECTED_TARGET_REF/,
+    );
+  });
+  it('does not require --confirm-cutover for a wipe or a validate run', () => {
+    const wipe = wipeConfig(poolerUrl(REF_A), poolerUrl(REF_B), REF_B, true);
+    const validate: EtlConfig = {
+      ...configFor(poolerUrl(REF_A), poolerUrl(REF_B), REF_B),
+      cli: { mode: 'cutover', dryRun: false, confirmCutover: false, validate: true },
+    };
+    expect(() => assertSafe({ ...wipe, cli: { ...wipe.cli, mode: 'cutover' } })).not.toThrow();
+    expect(() => assertSafe(validate)).not.toThrow();
   });
 });

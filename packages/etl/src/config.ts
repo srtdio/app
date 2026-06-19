@@ -11,7 +11,11 @@ export interface Cli {
   mode: Mode;
   dryRun: boolean;
   confirmCutover: boolean;
-  validate: boolean;
+  // Cutover-rehearsal flags. Optional so older EtlConfig literals (e.g. the load
+  // suite fixtures) keep type-checking; parseCli always returns concrete booleans.
+  wipe?: boolean;
+  confirmWipe?: boolean;
+  validate?: boolean;
 }
 
 export interface EtlConfig {
@@ -42,6 +46,8 @@ export function parseCli(argv: readonly string[]): Cli {
   let mode: Mode = 'dev-seed';
   let dryRun = false;
   let confirmCutover = false;
+  let wipe = false;
+  let confirmWipe = false;
   let validate = false;
   for (const arg of argv) {
     if (arg === '--') {
@@ -51,6 +57,10 @@ export function parseCli(argv: readonly string[]): Cli {
       dryRun = true;
     } else if (arg === '--confirm-cutover') {
       confirmCutover = true;
+    } else if (arg === '--wipe') {
+      wipe = true;
+    } else if (arg === '--confirm-wipe') {
+      confirmWipe = true;
     } else if (arg === '--validate') {
       validate = true;
     } else if (arg.startsWith('--mode=')) {
@@ -63,7 +73,7 @@ export function parseCli(argv: readonly string[]): Cli {
       throw new Error(`Unknown argument '${arg}'.`);
     }
   }
-  return { mode, dryRun, confirmCutover, validate };
+  return { mode, dryRun, confirmCutover, wipe, confirmWipe, validate };
 }
 
 // Read and validate every required variable. Missing ones are collected and
@@ -184,10 +194,21 @@ export function assertSafe(config: EtlConfig): void {
       `Refusing to run: TARGET_DATABASE_URL does not point at EXPECTED_TARGET_REF='${config.expectedTargetRef}'.`,
     );
   }
-  // --validate is read-only (no writes, no R2 deletes), so it never needs the
-  // cutover confirmation even against a cutover-mode config. The same-database
-  // refusal and target-ref pinning above stay in force for it.
-  if (config.cli.mode === 'cutover' && !config.cli.confirmCutover && !config.cli.validate) {
+  // A wipe is destructive, so it is double-gated. The sameDatabase and
+  // targetRefMatches guards above already pinned it to EXPECTED_TARGET_REF and
+  // kept it off v1; this requires an explicit --confirm-wipe on top.
+  if (config.cli.wipe && !config.cli.confirmWipe) {
+    throw new Error('Refusing to wipe: pass --confirm-wipe to proceed.');
+  }
+  // The confirm-cutover gate applies ONLY to an actual cutover load. A validate
+  // pass (read-only) and a wipe never load, so neither requires --confirm-cutover.
+  // The same-database refusal and target-ref pinning above stay in force for all.
+  if (
+    config.cli.mode === 'cutover' &&
+    !config.cli.validate &&
+    !config.cli.wipe &&
+    !config.cli.confirmCutover
+  ) {
     throw new Error('Refusing to run cutover mode: pass --confirm-cutover to proceed.');
   }
 }

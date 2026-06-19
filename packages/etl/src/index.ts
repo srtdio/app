@@ -68,6 +68,46 @@ async function dryRun(config: EtlConfig): Promise<void> {
   }
 }
 
+// Cutover-rehearsal wipe: clear the target workspace's content in place, with no
+// SOURCE read and no R2 work. The workspace is resolved read-only by name (it
+// must already exist); the destructive delete runs inside a single transaction
+// via the existing wipeWorkspaceContent, mirroring migrate()'s lifecycle. The
+// hard safety guards (same-database refusal, EXPECTED_TARGET_REF pinning,
+// --confirm-wipe) all ran in assertSafe before we reach here.
+async function wipe(config: EtlConfig): Promise<void> {
+  const target = new Pool({ connectionString: config.targetUrl, max: 4 });
+  try {
+    const client = await target.connect();
+    try {
+      const found = await client.query<{ id: string }>(
+        'SELECT id FROM public.workspaces WHERE name = $1',
+        [config.workspaceName],
+      );
+      const workspaceId = found.rows[0]?.id;
+      if (workspaceId === undefined) {
+        throw new Error(
+          `Refusing to wipe: no workspace named '${config.workspaceName}' exists in the target.`,
+        );
+      }
+      try {
+        await client.query('BEGIN');
+        log(`Wipe: clearing content for workspace ${workspaceId} ('${config.workspaceName}').`);
+        await wipeWorkspaceContent(client, workspaceId);
+        await client.query('COMMIT');
+        log('COMMIT. Wipe complete.');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        log('ROLLBACK. No changes were committed.');
+        throw err;
+      }
+    } finally {
+      client.release();
+    }
+  } finally {
+    await target.end();
+  }
+}
+
 async function migrate(config: EtlConfig): Promise<void> {
   const source = new SourceDb(config.sourceUrl);
   const target = new Pool({ connectionString: config.targetUrl, max: 4 });
@@ -338,6 +378,10 @@ async function main(): Promise<void> {
   const config = loadConfig(process.env, argv);
   assertSafe(config);
 
+  if (config.cli.wipe) {
+    await wipe(config);
+    return;
+  }
   if (config.cli.validate) {
     await validate(config);
     return;
