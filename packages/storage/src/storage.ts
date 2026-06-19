@@ -27,6 +27,8 @@ export interface StorageClient {
   /** Create the bucket if it does not already exist. Idempotent. */
   ensureBucket(bucket: string, traceId: string): Promise<void>;
   putObject(input: PutObjectInput): Promise<void>;
+  /** True if an object already exists at bucket/key. Lets a resumed run skip re-uploading bytes. */
+  objectExists(bucket: string, key: string, traceId: string): Promise<boolean>;
 }
 
 /**
@@ -203,6 +205,26 @@ export class R2StorageClient implements StorageClient {
     }
   }
 
+  async objectExists(bucket: string, key: string, traceId: string): Promise<boolean> {
+    // S3 HEAD object: 200 means the bytes are already present, 404 means absent.
+    // Any other status is unexpected and surfaced like putObject/ensureBucket.
+    const res = await this.signedFetch({
+      method: 'HEAD',
+      path: `/${encodeSegment(bucket)}/${key.split('/').map(encodeSegment).join('/')}`,
+      body: new Uint8Array(0),
+      contentType: 'application/octet-stream',
+      traceId,
+    });
+    if (res.status === 200) {
+      return true;
+    }
+    if (res.status === 404) {
+      return false;
+    }
+    const text = await res.text();
+    throw new Error(`R2 objectExists failed (${res.status}): ${text}`);
+  }
+
   /**
    * Mint a query-string SigV4 presigned GET URL the browser can fetch directly.
    * No request is sent here - this only signs - so the caller never proxies the
@@ -354,6 +376,10 @@ export class InMemoryStorageClient implements StorageClient {
       contentType: input.contentType,
     });
     return Promise.resolve();
+  }
+
+  objectExists(bucket: string, key: string): Promise<boolean> {
+    return Promise.resolve(this.objects.has(this.id(bucket, key)));
   }
 
   get(bucket: string, key: string): StoredObject | undefined {
