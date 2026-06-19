@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sameDatabase, assertSafe, type EtlConfig } from '../src/config.ts';
+import { sameDatabase, assertSafe, loadConfig, type EtlConfig } from '../src/config.ts';
 
 // Regression tests for the same-database safety guard. The bug: two distinct
 // Supabase projects in one region share host/port/database behind the session
@@ -55,6 +55,41 @@ describe('sameDatabase', () => {
     expect(sameDatabase(poolerUrl(REF_A), noRef)).toBe(false);
     expect(sameDatabase(noRef, other)).toBe(true);
     expect(sameDatabase(noRef, different)).toBe(false);
+  });
+});
+
+// Regression: a secret pasted with a trailing newline or surrounding whitespace
+// (common from copy-paste) must not fail validation. loadConfig's get() trims on
+// read, so OPERATOR_USER_ID survives UUID validation and every required var comes
+// back clean.
+const VALID_UUID = 'c92a4e1b-e212-4bdd-8636-283ebbe427a5';
+const validEnv = (): Record<string, string | undefined> => ({
+  SOURCE_DATABASE_URL: poolerUrl(REF_A),
+  TARGET_DATABASE_URL: poolerUrl(REF_B),
+  EXPECTED_TARGET_REF: REF_B,
+  OPERATOR_USER_ID: VALID_UUID,
+  OPERATOR_EMAIL: 'op@example.com',
+  OPERATOR_DISPLAY_NAME: 'Op',
+  TARGET_WORKSPACE_NAME: 'WS',
+});
+
+describe('loadConfig whitespace trimming', () => {
+  it('trims surrounding whitespace and a trailing newline before UUID validation', () => {
+    const env = validEnv();
+    env.OPERATOR_USER_ID = `  ${VALID_UUID}\n`;
+    let config: EtlConfig | undefined;
+    expect(() => {
+      config = loadConfig(env, []);
+    }).not.toThrow();
+    expect(config?.operatorUserId).toBe(VALID_UUID);
+    expect(config?.operatorUserId).toHaveLength(36);
+  });
+
+  it('trims surrounding whitespace on a required string var', () => {
+    const env = validEnv();
+    env.TARGET_WORKSPACE_NAME = '  Acme Co  \n';
+    const config = loadConfig(env, []);
+    expect(config.workspaceName).toBe('Acme Co');
   });
 });
 
