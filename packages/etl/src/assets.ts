@@ -155,7 +155,8 @@ function pushAsset(
     workspace_id: ctx.workspaceId,
     filename: asset.filename,
     current_version_id: null,
-    uploaded_by: ctx.operatorUserId,
+    // Users are never migrated; leave the FK author column NULL.
+    uploaded_by: null,
   });
   plan.currentVersions.push({ assetId: asset.assetId, versionId: asset.versionId });
 }

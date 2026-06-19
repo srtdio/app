@@ -198,6 +198,9 @@ describe('buildAssetPlan row shaping', () => {
     expect(plan.versionRows).toHaveLength(2);
     expect(plan.attachmentRows).toHaveLength(2);
 
+    // Users are never migrated: assets.uploaded_by is left NULL, never the operator.
+    expect(plan.assetRows.every((a) => a.uploaded_by === null)).toBe(true);
+
     const fileV = plan.versionRows.find((v) => v.kind !== 'link');
     const linkV = plan.versionRows.find((v) => v.kind === 'link');
 
