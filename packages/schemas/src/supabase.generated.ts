@@ -21,7 +21,7 @@ export type Database = {
           asset_id: string
           asset_version_id: string
           attached_at: string
-          attached_by: string
+          attached_by: string | null
           deleted_at: string | null
           entity_id: string
           entity_type: string
@@ -33,7 +33,7 @@ export type Database = {
           asset_id: string
           asset_version_id: string
           attached_at?: string
-          attached_by: string
+          attached_by?: string | null
           deleted_at?: string | null
           entity_id: string
           entity_type: string
@@ -45,7 +45,7 @@ export type Database = {
           asset_id?: string
           asset_version_id?: string
           attached_at?: string
-          attached_by?: string
+          attached_by?: string | null
           deleted_at?: string | null
           entity_id?: string
           entity_type?: string
@@ -157,7 +157,7 @@ export type Database = {
           sha256: string | null
           size_bytes: number | null
           uploaded_at: string
-          uploaded_by: string
+          uploaded_by: string | null
           version_number: number
           width: number | null
           workspace_id: string
@@ -174,7 +174,7 @@ export type Database = {
           sha256?: string | null
           size_bytes?: number | null
           uploaded_at?: string
-          uploaded_by: string
+          uploaded_by?: string | null
           version_number: number
           width?: number | null
           workspace_id: string
@@ -191,7 +191,7 @@ export type Database = {
           sha256?: string | null
           size_bytes?: number | null
           uploaded_at?: string
-          uploaded_by?: string
+          uploaded_by?: string | null
           version_number?: number
           width?: number | null
           workspace_id?: string
@@ -848,21 +848,21 @@ export type Database = {
       cockpit_procedure_allowlist: {
         Row: {
           added_at: string
-          added_by: string
+          added_by: string | null
           description: string
           procedure_name: string
           risk_tier: string
         }
         Insert: {
           added_at?: string
-          added_by: string
+          added_by?: string | null
           description: string
           procedure_name: string
           risk_tier: string
         }
         Update: {
           added_at?: string
-          added_by?: string
+          added_by?: string | null
           description?: string
           procedure_name?: string
           risk_tier?: string
@@ -1241,7 +1241,7 @@ export type Database = {
       groups: {
         Row: {
           created_at: string
-          created_by: string
+          created_by: string | null
           deleted_at: string | null
           id: string
           name: string
@@ -1249,7 +1249,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          created_by: string
+          created_by?: string | null
           deleted_at?: string | null
           id?: string
           name: string
@@ -1257,7 +1257,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           deleted_at?: string | null
           id?: string
           name?: string
