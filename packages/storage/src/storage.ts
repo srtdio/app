@@ -335,11 +335,15 @@ export class R2StorageClient implements StorageClient {
       'content-type': req.contentType,
     });
 
-    return this.tracedFetch(
-      `https://${this.host}${req.path}`,
-      { method: req.method, headers, body: req.body as BodyInit },
-      req.traceId,
-    );
+    // GET/HEAD must not carry a body: Node's fetch rejects them with "Request
+    // with GET/HEAD method cannot have body." The SigV4 signature above already
+    // hashed the (empty) payload, so x-amz-content-sha256 stays correct; only the
+    // literal fetch body is dropped for bodyless methods. PUT is unaffected.
+    const sendsBody = req.method !== 'GET' && req.method !== 'HEAD';
+    const init: RequestInit = sendsBody
+      ? { method: req.method, headers, body: req.body as BodyInit }
+      : { method: req.method, headers };
+    return this.tracedFetch(`https://${this.host}${req.path}`, init, req.traceId);
   }
 }
 
