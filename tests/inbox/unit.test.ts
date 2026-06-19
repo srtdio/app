@@ -203,7 +203,13 @@ describe('computeRecipients - posts stage_change', () => {
     const event: ChangeEvent = {
       table: 'posts',
       type: 'UPDATE',
-      row: { id: 'post1', workspace_id: U.ws, owner_user_id: null, brief_id: null, stage: 'review' } as never,
+      row: {
+        id: 'post1',
+        workspace_id: U.ws,
+        owner_user_id: null,
+        brief_id: null,
+        stage: 'review',
+      } as never,
       old: { stage: 'draft' } as never,
     };
     const recs = await computeRecipients(event, reader({ membersByRole: async () => [U.admin] }));
@@ -247,7 +253,13 @@ describe('computeRecipients - briefs / assets / members', () => {
     const event: ChangeEvent = {
       table: 'briefs',
       type: 'UPDATE',
-      row: { id: 'brief1', workspace_id: U.ws, title: 'T', status: 'closed', created_by: null } as never,
+      row: {
+        id: 'brief1',
+        workspace_id: U.ws,
+        title: 'T',
+        status: 'closed',
+        created_by: null,
+      } as never,
       old: { status: 'open' } as never,
     };
     const recs = await computeRecipients(event, reader({ membersByRole: async () => [U.agency] }));
