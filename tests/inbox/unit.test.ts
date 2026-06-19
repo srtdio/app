@@ -198,6 +198,17 @@ describe('computeRecipients - posts stage_change', () => {
     const recs = await computeRecipients(postUpdate('review', 'review', null), reader({}));
     expect(recs).toEqual([]);
   });
+
+  it('excludes a null owner_user_id (ex-member) from recipients', async () => {
+    const event: ChangeEvent = {
+      table: 'posts',
+      type: 'UPDATE',
+      row: { id: 'post1', workspace_id: U.ws, owner_user_id: null, brief_id: null, stage: 'review' } as never,
+      old: { stage: 'draft' } as never,
+    };
+    const recs = await computeRecipients(event, reader({ membersByRole: async () => [U.admin] }));
+    expect(ids(recs, 'stage_change')).toEqual(new Set([U.admin]));
+  });
 });
 
 describe('computeRecipients - briefs / assets / members', () => {
@@ -230,6 +241,17 @@ describe('computeRecipients - briefs / assets / members', () => {
     };
     const recs = await computeRecipients(event, reader({ membersByRole: async () => [U.agency] }));
     expect(ids(recs, 'brief_closed')).toEqual(new Set([U.agency, U.creator]));
+  });
+
+  it('brief UPDATE -> closed excludes a null created_by (ex-member)', async () => {
+    const event: ChangeEvent = {
+      table: 'briefs',
+      type: 'UPDATE',
+      row: { id: 'brief1', workspace_id: U.ws, title: 'T', status: 'closed', created_by: null } as never,
+      old: { status: 'open' } as never,
+    };
+    const recs = await computeRecipients(event, reader({ membersByRole: async () => [U.agency] }));
+    expect(ids(recs, 'brief_closed')).toEqual(new Set([U.agency]));
   });
 
   it('asset INSERT -> asset_uploaded to agency roles', async () => {
