@@ -14,7 +14,7 @@
 // a time; only small row metadata accumulates for the set-based inserts.
 
 import type { PoolClient } from 'pg';
-import { v7 as uuidv7 } from 'uuid';
+import { v5 as uuidv5, v7 as uuidv7 } from 'uuid';
 
 import {
   buildR2Key,
@@ -45,6 +45,12 @@ import {
 
 // assets.filename CHECK is 1..500 (schema.md section 5).
 const FILENAME_MAX = 500;
+
+// Fixed namespace for deriving a deterministic asset id from a file's normalized
+// source path. Stable across runs so buildR2Key produces the same r2_key on a
+// retry/resume, which is what makes the cutover byte copy idempotent: a re-run
+// reuses the prior key instead of minting a fresh uuidv7 and orphaning objects.
+const ASSET_ID_NAMESPACE = '7f2a3c4d-5e6b-4a8c-9d0e-1f2a3b4c5d6e';
 
 const ASSET_COLS = ['id', 'workspace_id', 'filename', 'current_version_id', 'uploaded_by'] as const;
 const VERSION_COLS = [
@@ -269,7 +275,9 @@ async function processFile(
       acc.plan.summary.deduped += 1;
       return;
     }
-    const ref: VersionRef = { assetId: uuidv7(), versionId: uuidv7() };
+    // Deterministic asset id (and therefore r2_key) keyed on the normalized
+    // source path; versionId stays uuidv7 since it is DB-only and reloaded each run.
+    const ref: VersionRef = { assetId: uuidv5(path, ASSET_ID_NAMESPACE), versionId: uuidv7() };
     const kind = mimeToKind(mime);
     const key = buildR2Key({ kind, assetId: ref.assetId, versionNumber: 1, filename });
     pushAsset(acc.plan, ctx, { ...ref, filename });
@@ -307,7 +315,9 @@ async function processFile(
     return;
   }
 
-  const ref: VersionRef = { assetId: uuidv7(), versionId: uuidv7() };
+  // Deterministic asset id (and therefore r2_key) keyed on the normalized source
+  // path; versionId stays uuidv7 since it is DB-only and reloaded each run.
+  const ref: VersionRef = { assetId: uuidv5(path, ASSET_ID_NAMESPACE), versionId: uuidv7() };
   const filename = truncate(filenameFromUrl(item.url), FILENAME_MAX);
   const key = buildR2Key({
     kind: mimeToKind(mime),
@@ -315,13 +325,20 @@ async function processFile(
     versionNumber: 1,
     filename,
   });
-  await deps.storage.putObject({
-    bucket: ctx.bucket,
-    key,
-    body: bytes,
-    contentType: mime,
-    traceId: ctx.traceId,
-  });
+  // Idempotent byte copy: skip the upload when the object is already present from
+  // a prior run. Correctness on retry relies on the v1 write-freeze making each
+  // source URL's bytes immutable during the cutover window, so a stable key always
+  // maps to the same bytes.
+  const alreadyUploaded = await deps.storage.objectExists(ctx.bucket, key, ctx.traceId);
+  if (!alreadyUploaded) {
+    await deps.storage.putObject({
+      bucket: ctx.bucket,
+      key,
+      body: bytes,
+      contentType: mime,
+      traceId: ctx.traceId,
+    });
+  }
 
   pushAsset(acc.plan, ctx, { ...ref, filename });
   acc.plan.versionRows.push(

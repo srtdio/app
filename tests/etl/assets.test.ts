@@ -3,6 +3,7 @@
 // and the pure helpers are asserted directly. Mirrors the offline style of the
 // rest of the etl suite.
 
+import { InMemoryStorageClient } from '@srtdio/storage';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -55,6 +56,8 @@ function storageStub() {
       objects.push({ key: input.key, contentType: input.contentType, size: input.body.length });
       return Promise.resolve();
     },
+    // Nothing pre-exists in this stub, so every file takes the upload path.
+    objectExists: (): Promise<boolean> => Promise.resolve(false),
   };
   return { storage, objects };
 }
@@ -91,6 +94,8 @@ function throwOnUploadStorage() {
       uploads.push(input.key);
       throw new Error(`dev-seed must not upload to R2 (got putObject for '${input.key}')`);
     },
+    // dev-seed never probes R2; present only to satisfy the StorageClient shape.
+    objectExists: (): Promise<boolean> => Promise.resolve(false),
   };
   return { storage, uploads };
 }
@@ -323,6 +328,82 @@ describe('buildAssetPlan dedup', () => {
     // both attachments point at the single version
     const versionId = plan.versionRows[0]?.id;
     expect(plan.attachmentRows.every((r) => r.asset_version_id === versionId)).toBe(true);
+  });
+});
+
+describe('buildAssetPlan idempotency (deterministic keys, skip-if-present)', () => {
+  it('yields the same r2_key and asset id for a file item across two runs', async () => {
+    const url = 'https://x.io/a.jpg';
+    const items: MediaItem[] = [fileItem(url, 0)];
+    const run = () => {
+      const { storage } = storageStub();
+      const { fetchBytes } = fetchStub({ [url]: jpeg(1) });
+      return buildAssetPlan(items, CTX, { storage, fetchBytes, devSeed: false });
+    };
+
+    const first = await run();
+    const second = await run();
+
+    expect(first.assetRows[0]?.id).toBe(second.assetRows[0]?.id);
+    expect(first.versionRows[0]?.r2_key).toBe(second.versionRows[0]?.r2_key);
+  });
+
+  it('skips the upload when the object already exists but still records its rows', async () => {
+    const url = 'https://x.io/skip.jpg';
+    const realBytes = jpeg(7);
+
+    // Discover the deterministic key this item maps to.
+    const probe = storageStub();
+    await buildAssetPlan([fileItem(url, 0)], CTX, {
+      storage: probe.storage,
+      fetchBytes: fetchStub({ [url]: realBytes }).fetchBytes,
+      devSeed: false,
+    });
+    const key = probe.objects[0]?.key as string;
+
+    // Pre-seed an InMemoryStorageClient at that key with marker bytes, so
+    // objectExists returns true and any re-put would overwrite the marker.
+    const mem = new InMemoryStorageClient();
+    const marker = new Uint8Array([9, 9, 9]);
+    await mem.putObject({
+      bucket: CTX.bucket,
+      key,
+      body: marker,
+      contentType: 'image/jpeg',
+      traceId: CTX.traceId,
+    });
+    const before = mem.objects.size;
+
+    const plan = await buildAssetPlan([fileItem(url, 0)], CTX, {
+      storage: mem,
+      fetchBytes: fetchStub({ [url]: realBytes }).fetchBytes,
+      devSeed: false,
+    });
+
+    // Rows recorded exactly as a normal migration.
+    expect(plan.assetRows).toHaveLength(1);
+    expect(plan.versionRows).toHaveLength(1);
+    expect(plan.attachmentRows).toHaveLength(1);
+    expect(plan.summary.filesMigrated).toBe(1);
+
+    // Bytes were NOT re-put: object count unchanged and the marker survives.
+    expect(mem.objects.size).toBe(before);
+    expect(mem.get(CTX.bucket, key)?.body).toEqual(marker);
+  });
+
+  it('objectExists on InMemoryStorageClient is true for a stored key, false otherwise', async () => {
+    const mem = new InMemoryStorageClient();
+    await mem.putObject({
+      bucket: 'b',
+      key: 'images/x/v1-a.jpg',
+      body: new Uint8Array([1]),
+      contentType: 'image/jpeg',
+      traceId: CTX.traceId,
+    });
+
+    expect(await mem.objectExists('b', 'images/x/v1-a.jpg')).toBe(true);
+    expect(await mem.objectExists('b', 'images/x/v1-missing.jpg')).toBe(false);
+    expect(await mem.objectExists('other', 'images/x/v1-a.jpg')).toBe(false);
   });
 });
 
