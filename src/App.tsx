@@ -38,6 +38,7 @@ export default function App() {
           </Route>
           <Route element={<RequireAuth />}>
             <Route path="/invite/accept" element={<AcceptInvitePage />} />
+            <Route path="/invite/accept/:inviteId" element={<AcceptInvitePage />} />
             <Route element={<WorkspaceLayout />}>
               <Route path="/" element={<Navigate to="/pipeline" replace />} />
               <Route path="/pipeline" element={<PipelinePage />} />
