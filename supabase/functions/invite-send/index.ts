@@ -96,12 +96,43 @@ function inviteEmailBody(input: { workspaceName: string; role: string; acceptUrl
   text: string;
 } {
   const text =
-    `You have been invited to join ${input.workspaceName} as ${input.role}. ` +
-    `Accept your invite: ${input.acceptUrl}`;
+    `You have been invited to join ${input.workspaceName} as ${input.role}.\n\n` +
+    `Accept your invite: ${input.acceptUrl}\n\n` +
+    `Or paste this link into your browser:\n${input.acceptUrl}`;
+  const safeWorkspace = escapeHtml(input.workspaceName);
+  const safeRole = escapeHtml(input.role);
+  const safeUrl = escapeHtml(input.acceptUrl);
+  // Self-contained responsive email: every color is set inline on its element so
+  // the card carries its OWN background + high-contrast text and stays legible
+  // whether the client renders on a light or a dark canvas. No <style> block
+  // (clients strip them); no reliance on client default colors.
   const html =
-    `<p>You have been invited to join <strong>${escapeHtml(input.workspaceName)}</strong> ` +
-    `as ${escapeHtml(input.role)}.</p>` +
-    `<p><a href="${escapeHtml(input.acceptUrl)}">Accept your invite</a></p>`;
+    `<!DOCTYPE html><html><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width, initial-scale=1.0"></head>` +
+    `<body style="margin:0;padding:0;background-color:#0f172a;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ` +
+    `style="background-color:#0f172a;padding:24px 0;">` +
+    `<tr><td align="center">` +
+    `<table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" ` +
+    `style="max-width:520px;width:100%;background-color:#ffffff;border-radius:12px;` +
+    `border:1px solid #e2e8f0;overflow:hidden;">` +
+    `<tr><td style="padding:32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
+    `<h1 style="margin:0 0 16px 0;font-size:20px;line-height:1.3;color:#0f172a;font-weight:600;">` +
+    `You're invited</h1>` +
+    `<p style="margin:0 0 24px 0;font-size:15px;line-height:1.5;color:#334155;">` +
+    `You have been invited to join <strong style="color:#0f172a;">${safeWorkspace}</strong> ` +
+    `as ${safeRole}.</p>` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">` +
+    `<tr><td style="border-radius:8px;background-color:#4f46e5;">` +
+    `<a href="${safeUrl}" style="display:inline-block;padding:12px 24px;font-size:15px;` +
+    `font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;` +
+    `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
+    `Accept your invite</a></td></tr></table>` +
+    `<p style="margin:0 0 8px 0;font-size:13px;line-height:1.5;color:#64748b;">` +
+    `Or paste this link into your browser:</p>` +
+    `<p style="margin:0;font-size:13px;line-height:1.5;color:#4f46e5;word-break:break-all;">` +
+    `${safeUrl}</p>` +
+    `</td></tr></table></td></tr></table></body></html>`;
   return { html, text };
 }
 
@@ -113,6 +144,7 @@ async function sendViaResend(opts: {
   to: string;
   subject: string;
   html: string;
+  text: string;
 }): Promise<string> {
   // globalThis.fetch (not the bare global) satisfies the ESLint fetch guard;
   // this edge function has no src/lib/fetch wrapper to reach for.
@@ -127,6 +159,7 @@ async function sendViaResend(opts: {
       to: opts.to,
       subject: opts.subject,
       html: opts.html,
+      text: opts.text,
     }),
   });
   if (!response.ok) {
@@ -310,7 +343,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const link = await adminClient.auth.admin.generateLink({
         type: 'magiclink',
         email,
-        options: { redirectTo: `${appBaseUrl}/invite/set-password?invite=${inviteId}` },
+        options: { redirectTo: `${appBaseUrl}/invite/accept?invite=${inviteId}` },
       });
       const actionLink = link.data?.properties?.action_link;
       if (link.error || !actionLink) {
@@ -340,6 +373,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             to: email,
             subject: inviteSubject(workspaceName),
             html: body.html,
+            text: body.text,
           });
           emailed = true;
         } catch (err) {
