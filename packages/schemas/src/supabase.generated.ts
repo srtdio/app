@@ -1954,7 +1954,9 @@ export type Database = {
           deleted_at: string | null
           designation: string | null
           display_name: string
+          email_opt_in: boolean
           id: string
+          profile_completed_at: string | null
           timezone: string | null
           updated_at: string
         }
@@ -1964,7 +1966,9 @@ export type Database = {
           deleted_at?: string | null
           designation?: string | null
           display_name: string
+          email_opt_in?: boolean
           id: string
+          profile_completed_at?: string | null
           timezone?: string | null
           updated_at?: string
         }
@@ -1974,7 +1978,9 @@ export type Database = {
           deleted_at?: string | null
           designation?: string | null
           display_name?: string
+          email_opt_in?: boolean
           id?: string
+          profile_completed_at?: string | null
           timezone?: string | null
           updated_at?: string
         }
@@ -2551,6 +2557,16 @@ export type Database = {
       slugify_workspace: { Args: { p: string }; Returns: string }
       stage_transition: {
         Args: { p_post_id: string; p_to_stage: string; p_trace_id: string }
+        Returns: string
+      }
+      user_profile_update: {
+        Args: {
+          p_avatar_url: string
+          p_designation: string
+          p_display_name: string
+          p_email_opt_in: boolean
+          p_trace_id: string
+        }
         Returns: string
       }
       uuidv7: { Args: never; Returns: string }
