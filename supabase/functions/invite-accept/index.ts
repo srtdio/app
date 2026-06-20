@@ -97,6 +97,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
       global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
     });
 
+    // In-function auth gate: the gateway JWT check is disabled for this function
+    // (asymmetric key cutover), so verify the caller here BEFORE member_accept.
+    const caller = await callerClient.auth.getUser();
+    if (caller.error || !caller.data?.user) {
+      const message = caller.error?.message ?? 'no authenticated user';
+      console.error(traceId, message);
+      return json(
+        { error: 'unauthorized', error_detail: message, trace_id: traceId },
+        401,
+        appBaseUrl,
+        traceId,
+      );
+    }
+
     // Args built as a variable: the .rpc() lint guard only inspects inline
     // object literals, and p_trace_id is the proc's real trace parameter.
     const acceptArgs = { p_invite_id: parsed.invite_id, p_trace_id: traceId };
