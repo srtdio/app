@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
-import { resolveSession } from './session-context';
+import { describe, expect, it, vi } from 'vitest';
+import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js';
+import { performSignout, resolveSession } from './session-context';
 
 // A stand-in for the GoTrue session; only identity matters to these assertions.
 const aSession = {
@@ -47,5 +47,20 @@ describe('onAuthStateChange session reducer', () => {
     const h = makeHandler(null);
     h.invoke('SIGNED_IN', aSession);
     expect(h.session).toBe(aSession);
+  });
+});
+
+describe('performSignout', () => {
+  it('signs out this device only (local scope)', async () => {
+    const signOut = vi.fn().mockResolvedValue({ error: null });
+    const client = { auth: { signOut } } as unknown as SupabaseClient;
+    await performSignout(client);
+    expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  it('resolves without throwing when signOut returns an error', async () => {
+    const signOut = vi.fn().mockResolvedValue({ error: { message: 'boom' } });
+    const client = { auth: { signOut } } as unknown as SupabaseClient;
+    await expect(performSignout(client)).resolves.toBeUndefined();
   });
 });
