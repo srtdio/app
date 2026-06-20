@@ -186,6 +186,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
       global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
     });
 
+    // In-function auth gate: the gateway JWT check is disabled for this function
+    // (asymmetric key cutover), so verify the caller here BEFORE any provisioning.
+    // Guarantees no unauthenticated request can ever reach createUser.
+    const caller = await callerClient.auth.getUser();
+    if (caller.error || !caller.data?.user) {
+      const message = caller.error?.message ?? 'no authenticated user';
+      console.error(traceId, message);
+      return json(
+        { error: 'unauthorized', error_detail: message, trace_id: traceId },
+        401,
+        appBaseUrl,
+        traceId,
+      );
+    }
+
     // Resolve the invitee; provision the auth user when absent so member_invite
     // can find the row. createUser mints a confirmed user without sending any
     // email; the login link is generated separately after the invite row exists.
