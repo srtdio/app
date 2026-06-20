@@ -235,7 +235,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const message = invited.error.message;
         console.error(traceId, message);
         return json(
-          { error: status === 500 ? 'internal' : message, error_detail: message, trace_id: traceId },
+          {
+            error: status === 500 ? 'internal' : message,
+            error_detail: message,
+            trace_id: traceId,
+          },
           status,
           appBaseUrl,
           traceId,
@@ -352,6 +356,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(traceId, message);
-    return json({ error: 'internal', error_detail: message, trace_id: traceId }, 500, appBaseUrl, traceId);
+    return json(
+      { error: 'internal', error_detail: message, trace_id: traceId },
+      500,
+      appBaseUrl,
+      traceId,
+    );
   }
 });
