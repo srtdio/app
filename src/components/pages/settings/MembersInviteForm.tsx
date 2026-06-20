@@ -29,6 +29,52 @@ type InvokeInviteSend = (
   },
 ) => Promise<InvokeResult>;
 
+// supabase-js surfaces a failed invoke as a FunctionsHttpError whose `context`
+// is the raw Response. The edge function answers { error, error_detail, trace_id }
+// on failure, so we read that body to show the real reason instead of a constant.
+interface InvokeErrorWithContext {
+  context: { json: () => Promise<unknown> };
+}
+
+function hasResponseContext(value: unknown): value is InvokeErrorWithContext {
+  if (typeof value !== 'object' || value === null || !('context' in value)) return false;
+  const context = (value as { context: unknown }).context;
+  return (
+    typeof context === 'object' &&
+    context !== null &&
+    'json' in context &&
+    typeof (context as { json: unknown }).json === 'function'
+  );
+}
+
+function readString(body: Record<string, unknown>, key: string): string | undefined {
+  const value = body[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+/**
+ * Best-effort read of the structured failure body. Returns a user-facing message
+ * built from error_detail (plus trace_id when present), or null when no JSON body
+ * with a detail can be read so the caller can fall back to the generic copy.
+ */
+async function readInviteErrorDetail(error: unknown): Promise<string | null> {
+  if (!hasResponseContext(error)) return null;
+  let body: unknown;
+  try {
+    body = await error.context.json();
+  } catch {
+    return null;
+  }
+  if (typeof body !== 'object' || body === null) return null;
+  const record = body as Record<string, unknown>;
+  const detail = readString(record, 'error_detail');
+  if (detail === undefined) return null;
+  const traceId = readString(record, 'trace_id');
+  return traceId !== undefined
+    ? `Invite failed: ${detail} (trace ${traceId})`
+    : `Invite failed: ${detail}`;
+}
+
 /**
  * Pure send step: POST { workspace_id, email, role } to the deployed invite-send
  * function with the trace id on x-trace-id, then branch on the returned error.
@@ -41,14 +87,14 @@ export async function sendInvite(deps: {
   traceId: string;
   invoke: InvokeInviteSend;
   onSuccess: () => void;
-  onError: () => void;
+  onError: (detail: string | null) => void;
 }): Promise<void> {
   const { error } = await deps.invoke('invite-send', {
     body: { workspace_id: deps.workspaceId, email: deps.email, role: deps.role },
     headers: { 'x-trace-id': deps.traceId },
   });
   if (error !== null && error !== undefined) {
-    deps.onError();
+    deps.onError(await readInviteErrorDetail(error));
     return;
   }
   deps.onSuccess();
@@ -71,7 +117,7 @@ export function MembersInviteForm() {
   const [role, setRole] = useState<InviteRole>('client');
   const [submitting, setSubmitting] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // No active workspace: there is nothing to invite into. Say so and stop.
   if (workspaceId === null) {
@@ -90,7 +136,7 @@ export function MembersInviteForm() {
     const target = trimmed;
     setSubmitting(true);
     setSentTo(null);
-    setFailed(false);
+    setErrorMessage(null);
     await sendInvite({
       workspaceId: activeWorkspaceId,
       email: target,
@@ -103,9 +149,10 @@ export function MembersInviteForm() {
         setSentTo(target);
         setSubmitting(false);
       },
-      onError: () => {
-        // Keep the email so the user can retry.
-        setFailed(true);
+      onError: (detail) => {
+        // Keep the email so the user can retry. Prefer the function's real
+        // reason; fall back to the generic copy when no body could be read.
+        setErrorMessage(detail ?? INVITE_ERROR_MESSAGE);
         setSubmitting(false);
       },
     });
@@ -139,7 +186,7 @@ export function MembersInviteForm() {
         </Button>
       </div>
       {sentTo !== null ? <p className="text-sm text-good">Invitation sent to {sentTo}.</p> : null}
-      {failed ? <p className="text-sm text-bad">{INVITE_ERROR_MESSAGE}</p> : null}
+      {errorMessage !== null ? <p className="text-sm text-bad">{errorMessage}</p> : null}
     </form>
   );
 }
