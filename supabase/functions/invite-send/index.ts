@@ -54,9 +54,10 @@ function uuidv7(): string {
 
 function corsHeaders(origin: string): Record<string, string> {
   return {
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': origin.replace(/\/$/, ''),
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, content-type, x-trace-id, x-device-fingerprint',
+    'Access-Control-Allow-Headers':
+      'authorization, apikey, x-client-info, content-type, x-trace-id, x-device-fingerprint',
     'Access-Control-Max-Age': '86400',
   };
 }
@@ -158,19 +159,24 @@ function mapInviteErrorStatus(message: string): number {
 Deno.serve(async (req: Request): Promise<Response> => {
   const appBaseUrl = requireEnv('APP_BASE_URL');
   const traceId = req.headers.get(TRACE_ID_HEADER) ?? uuidv7();
+  // Reflect the caller's exact Origin so the allowed origin never depends on the
+  // exact APP_BASE_URL value; fall back to APP_BASE_URL (trailing slash stripped)
+  // for server-to-server callers that send no Origin header. Safe because this
+  // function enforces auth via its own getUser check; CORS is not the boundary.
+  const allowedOrigin = req.headers.get('Origin') ?? appBaseUrl.replace(/\/$/, '');
 
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders(appBaseUrl) });
+    return new Response(null, { status: 204, headers: corsHeaders(allowedOrigin) });
   }
   if (req.method !== 'POST') {
-    return json({ error: 'method_not_allowed', trace_id: traceId }, 405, appBaseUrl, traceId);
+    return json({ error: 'method_not_allowed', trace_id: traceId }, 405, allowedOrigin, traceId);
   }
 
   let parsed: z.infer<typeof inputSchema>;
   try {
     parsed = inputSchema.parse(await req.json());
   } catch {
-    return json({ error: 'invalid_payload', trace_id: traceId }, 400, appBaseUrl, traceId);
+    return json({ error: 'invalid_payload', trace_id: traceId }, 400, allowedOrigin, traceId);
   }
   const { workspace_id, email, role } = parsed;
 
@@ -196,7 +202,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return json(
         { error: 'unauthorized', error_detail: message, trace_id: traceId },
         401,
-        appBaseUrl,
+        allowedOrigin,
         traceId,
       );
     }
@@ -213,7 +219,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return json(
           { error: 'provisioning_failed', error_detail: message, trace_id: traceId },
           500,
-          appBaseUrl,
+          allowedOrigin,
           traceId,
         );
       }
@@ -256,7 +262,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             trace_id: traceId,
           },
           status,
-          appBaseUrl,
+          allowedOrigin,
           traceId,
         );
       }
@@ -285,7 +291,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return json(
         { error: 'delivery_record_failed', error_detail: message, trace_id: traceId },
         500,
-        appBaseUrl,
+        allowedOrigin,
         traceId,
       );
     }
@@ -365,7 +371,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         trace_id: traceId,
       },
       200,
-      appBaseUrl,
+      allowedOrigin,
       traceId,
     );
   } catch (err) {
@@ -374,7 +380,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json(
       { error: 'internal', error_detail: message, trace_id: traceId },
       500,
-      appBaseUrl,
+      allowedOrigin,
       traceId,
     );
   }
