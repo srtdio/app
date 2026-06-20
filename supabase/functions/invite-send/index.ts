@@ -88,7 +88,7 @@ function escapeHtml(value: string): string {
 }
 
 function inviteSubject(workspaceName: string): string {
-  return `[${workspaceName}] You have been invited.`;
+  return `You're invited to ${workspaceName} on Sorted`;
 }
 
 function inviteEmailBody(input: { workspaceName: string; role: string; acceptUrl: string }): {
@@ -96,9 +96,10 @@ function inviteEmailBody(input: { workspaceName: string; role: string; acceptUrl
   text: string;
 } {
   const text =
-    `You have been invited to join ${input.workspaceName} as ${input.role}.\n\n` +
-    `Accept your invite: ${input.acceptUrl}\n\n` +
-    `Or paste this link into your browser:\n${input.acceptUrl}`;
+    `You're invited to join the ${input.workspaceName} workspace on Sorted as a ${input.role}.\n\n` +
+    `Accept your invitation:\n${input.acceptUrl}\n\n` +
+    `This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.\n\n` +
+    `Sent by Sorted.`;
   const safeWorkspace = escapeHtml(input.workspaceName);
   const safeRole = escapeHtml(input.role);
   const safeUrl = escapeHtml(input.acceptUrl);
@@ -107,32 +108,28 @@ function inviteEmailBody(input: { workspaceName: string; role: string; acceptUrl
   // whether the client renders on a light or a dark canvas. No <style> block
   // (clients strip them); no reliance on client default colors.
   const html =
-    `<!DOCTYPE html><html><head><meta charset="utf-8">` +
-    `<meta name="viewport" content="width=device-width, initial-scale=1.0"></head>` +
-    `<body style="margin:0;padding:0;background-color:#0f172a;">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ` +
-    `style="background-color:#0f172a;padding:24px 0;">` +
-    `<tr><td align="center">` +
-    `<table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" ` +
-    `style="max-width:520px;width:100%;background-color:#ffffff;border-radius:12px;` +
-    `border:1px solid #e2e8f0;overflow:hidden;">` +
-    `<tr><td style="padding:32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
-    `<h1 style="margin:0 0 16px 0;font-size:20px;line-height:1.3;color:#0f172a;font-weight:600;">` +
-    `You're invited</h1>` +
-    `<p style="margin:0 0 24px 0;font-size:15px;line-height:1.5;color:#334155;">` +
-    `You have been invited to join <strong style="color:#0f172a;">${safeWorkspace}</strong> ` +
-    `as ${safeRole}.</p>` +
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">` +
-    `<tr><td style="border-radius:8px;background-color:#4f46e5;">` +
-    `<a href="${safeUrl}" style="display:inline-block;padding:12px 24px;font-size:15px;` +
-    `font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;` +
-    `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
-    `Accept your invite</a></td></tr></table>` +
-    `<p style="margin:0 0 8px 0;font-size:13px;line-height:1.5;color:#64748b;">` +
-    `Or paste this link into your browser:</p>` +
-    `<p style="margin:0;font-size:13px;line-height:1.5;color:#4f46e5;word-break:break-all;">` +
-    `${safeUrl}</p>` +
-    `</td></tr></table></td></tr></table></body></html>`;
+    `<!DOCTYPE html>` +
+    `<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>` +
+    `<body style="margin:0;padding:0;background-color:#1e1b2e;-webkit-text-size-adjust:100%;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#1e1b2e;"><tr><td align="center" style="padding:32px 16px;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background-color:#ffffff;border-radius:16px;border:1px solid #e7e5ef;overflow:hidden;">` +
+    `<tr><td align="left" style="padding:40px 40px 0 40px;">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
+    `<td style="vertical-align:middle;"><span style="display:inline-block;width:30px;height:30px;border-radius:8px;background-color:#5a3fe0;">&nbsp;</span></td>` +
+    `<td style="vertical-align:middle;padding-left:12px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;letter-spacing:-0.3px;color:#1e1b2e;">Sorted</span></td>` +
+    `</tr></table></td></tr>` +
+    `<tr><td align="left" style="padding:28px 40px 0 40px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#5a3fe0;">You're invited</span></td></tr>` +
+    `<tr><td align="left" style="padding:8px 40px 0 40px;"><h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.4px;color:#1e1b2e;">Join ${safeWorkspace} on Sorted</h1></td></tr>` +
+    `<tr><td align="left" style="padding:16px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#4a4660;">You've been added to the <strong style="color:#1e1b2e;">${safeWorkspace}</strong> workspace as a <strong style="color:#1e1b2e;">${safeRole}</strong>. Sorted is where your team drafts posts, you review them, and approvals happen in one place.</p></td></tr>` +
+    `<tr><td style="padding:24px 40px 8px 40px;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
+    `<td height="52" align="center" valign="middle" style="height:52px;border-radius:10px;background-color:#5a3fe0;box-shadow:0 4px 10px rgba(30,27,46,0.20);">` +
+    `<a href="${safeUrl}" style="display:block;height:52px;line-height:52px;padding:0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;text-align:center;">Accept invitation</a>` +
+    `</td></tr></table></td></tr>` +
+    `<tr><td align="left" style="padding:10px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#8b8799;">This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.</p></td></tr>` +
+    `<tr><td style="padding:26px 40px 0 40px;"><div style="height:1px;background-color:#eeecf4;line-height:1px;font-size:1px;">&nbsp;</div></td></tr>` +
+    `<tr><td align="left" style="padding:20px 40px 36px 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#a8a4b5;">Sent by <strong style="color:#5a3fe0;font-weight:600;">Sorted</strong> for the ${safeWorkspace} workspace.</p></td></tr>` +
+    `</table></td></tr></table></body></html>`;
   return { html, text };
 }
 
