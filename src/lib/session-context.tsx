@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { SIGNOUT_EVENT } from '@/lib/events';
 import { logger } from '@/lib/logger';
 
 /**
@@ -19,6 +20,19 @@ export function resolveSession(
   if (nextSession) return nextSession;
   if (event === 'INITIAL_SESSION') return null;
   return current;
+}
+
+/**
+ * End the GoTrue session for this device only. Scope is always 'local' so a
+ * sign-out here never revokes the user's sessions on other devices, matching
+ * src/server/auth/session.ts. The resulting SIGNED_OUT event is what clears the
+ * provider state and routes to /signin; this only asks GoTrue to sign out.
+ */
+export async function performSignout(client: SupabaseClient): Promise<void> {
+  const { error } = await client.auth.signOut({ scope: 'local' });
+  if (error) {
+    logger.error('signOut failed', { error: error.message });
+  }
 }
 
 /**
@@ -60,9 +74,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
+    const handleSignout = () => {
+      void performSignout(supabase);
+    };
+    window.addEventListener(SIGNOUT_EVENT, handleSignout);
+
     return () => {
       active = false;
       subscription.subscription.unsubscribe();
+      window.removeEventListener(SIGNOUT_EVENT, handleSignout);
     };
   }, []);
 

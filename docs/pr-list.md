@@ -175,6 +175,8 @@ Every frontend PR ships with an explicit light AND dark mode parity check. 44x44
 
 | - | asset-upload deploy pushes R2 secrets: the asset-upload deploy workflow now pushes the Worker's R2 credentials on every deploy, mirroring the asset-read deploy workflow, so the presigned R2 PUT URLs sign for the correct Cloudflare account instead of a stale hand-set dev account. The existing wrangler-action Deploy step gains a `secrets:` list (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY) and a matching `env:` block wiring each from ${{ secrets.* }}, the three names identical to asset-read. CI-only config change: no .ts, no wrangler.toml, no other workflow, no secret value printed or hardcoded, no schema. | none |
 
+| - | Client sign-out wiring: the shell dispatches a `sorted:signout` window event but nothing on the client ends the Supabase session, so Sign out never logs the user out. SessionProvider now registers a `SIGNOUT_EVENT` window listener inside its existing effect (removed on cleanup) that calls a new exported `performSignout(client)` helper; the helper calls `client.auth.signOut({ scope: 'local' })` (never other devices, matching src/server/auth/session.ts) and logs via logger on error, letting the existing onAuthStateChange SIGNED_OUT path clear the session and route to /signin (no manual setSession(null)). Unit tests cover the local-scope call and the error path resolving without throwing. No schema, no new package. | none |
+
 ## 5. Handoff rules
 
 - One PR per Claude Code prompt.
