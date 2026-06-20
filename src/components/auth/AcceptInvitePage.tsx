@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
@@ -45,10 +45,45 @@ export async function acceptInvite(deps: {
 
 export function AcceptInvitePage() {
   const navigate = useNavigate();
+  // Path id is the canonical form (/invite/accept/:inviteId); the ?invite=
+  // query is kept only for backward compatibility with older links.
+  const { inviteId: paramId } = useParams();
   const [searchParams] = useSearchParams();
-  const inviteId = (searchParams.get('invite') ?? '').trim();
-  const [submitting, setSubmitting] = useState(false);
+  const queryId = searchParams.get('invite');
+  const inviteId = (paramId ?? queryId ?? '').trim();
+  // Auto-accept starts immediately on mount, so the in-flight state is the
+  // initial render for a valid id (no extra click).
+  const [submitting, setSubmitting] = useState(true);
   const [failed, setFailed] = useState(false);
+  // One-shot guard: React strict mode double-invokes effects in dev, so the ref
+  // keeps the accept from firing twice for a single mount.
+  const startedRef = useRef(false);
+
+  // Deliberate run, reused by both the mount auto-accept and the retry button.
+  async function handleAccept(): Promise<void> {
+    setFailed(false);
+    setSubmitting(true);
+    await acceptInvite({
+      inviteId,
+      traceId: crypto.randomUUID(),
+      invoke: (name, options) => supabase.functions.invoke(name, options),
+      onSuccess: () => navigate('/pipeline', { replace: true }),
+      onError: () => {
+        setFailed(true);
+        setSubmitting(false);
+      },
+    });
+  }
+
+  // Auto-accept once the page mounts with a usable id.
+  useEffect(() => {
+    if (inviteId === '' || startedRef.current) return;
+    startedRef.current = true;
+    void handleAccept();
+    // handleAccept is intentionally not a dependency; the ref guard makes this
+    // run exactly once per valid id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteId]);
 
   // No id in the link: explain and bounce to sign in. Never call the function.
   if (inviteId === '') {
@@ -67,26 +102,10 @@ export function AcceptInvitePage() {
     );
   }
 
-  // Deliberate click only; never auto-accept on mount.
-  async function handleAccept(): Promise<void> {
-    setFailed(false);
-    setSubmitting(true);
-    await acceptInvite({
-      inviteId,
-      traceId: crypto.randomUUID(),
-      invoke: (name, options) => supabase.functions.invoke(name, options),
-      onSuccess: () => navigate('/pipeline', { replace: true }),
-      onError: () => {
-        setFailed(true);
-        setSubmitting(false);
-      },
-    });
-  }
-
   return (
     <AuthShell
       title="Join a workspace on Sorted"
-      subtitle="You've been invited to collaborate. Accept to get started."
+      subtitle="You've been invited to collaborate. Hang tight while we add you."
       footer={
         <Link
           to="/signin"
@@ -100,6 +119,16 @@ export function AcceptInvitePage() {
         {failed ? (
           <>
             <p className="text-sm text-bad">{ACCEPT_ERROR_MESSAGE}</p>
+            {/* Retry reuses the same accept path the mount effect runs. */}
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full"
+              onClick={handleAccept}
+              disabled={submitting}
+            >
+              Try again
+            </Button>
             {/* Secondary path so an already-joined user is never stuck. */}
             <Button
               variant="default"
@@ -111,15 +140,7 @@ export function AcceptInvitePage() {
             </Button>
           </>
         ) : (
-          <Button
-            variant="primary"
-            size="lg"
-            className="w-full"
-            onClick={handleAccept}
-            disabled={submitting}
-          >
-            {submitting ? 'Accepting' : 'Accept invitation'}
-          </Button>
+          <p className="text-sm text-fg-2">Joining your workspace…</p>
         )}
       </div>
     </AuthShell>

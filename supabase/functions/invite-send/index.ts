@@ -302,7 +302,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       inviteId = invited.data as string;
     }
 
-    const acceptUrl = `${appBaseUrl}/invite/accept?invite=${inviteId}`;
+    const acceptUrl = `${appBaseUrl}/invite/accept/${inviteId}`;
 
     // Record one delivery attempt; send when a Resend key is configured.
     const attempt = await adminClient
@@ -343,7 +343,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const link = await adminClient.auth.admin.generateLink({
         type: 'magiclink',
         email,
-        options: { redirectTo: `${appBaseUrl}/invite/accept?invite=${inviteId}` },
+        options: { redirectTo: `${appBaseUrl}/invite/accept/${inviteId}` },
       });
       const actionLink = link.data?.properties?.action_link;
       if (link.error || !actionLink) {
