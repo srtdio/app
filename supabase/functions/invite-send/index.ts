@@ -54,9 +54,10 @@ function uuidv7(): string {
 
 function corsHeaders(origin: string): Record<string, string> {
   return {
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': origin.replace(/\/$/, ''),
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, content-type, x-trace-id, x-device-fingerprint',
+    'Access-Control-Allow-Headers':
+      'authorization, apikey, x-client-info, content-type, x-trace-id, x-device-fingerprint',
     'Access-Control-Max-Age': '86400',
   };
 }
