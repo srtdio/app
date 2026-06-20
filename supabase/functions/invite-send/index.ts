@@ -187,19 +187,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
 
     // Resolve the invitee; provision the auth user when absent so member_invite
-    // can find the row. generateLink type=invite both mints the user and sends
-    // them to the accept path.
+    // can find the row. createUser mints a confirmed user without sending any
+    // email; the login link is generated separately after the invite row exists.
     let invitedUserId = await findUserIdByEmail(adminClient, email);
     if (!invitedUserId) {
-      const link = await adminClient.auth.admin.generateLink({
-        type: 'invite',
-        email,
-        options: { redirectTo: `${appBaseUrl}/invite/accept` },
-      });
-      if (link.error || !link.data?.user) {
-        return json({ error: 'unknown', trace_id: traceId }, 500, appBaseUrl, traceId);
+      const created = await adminClient.auth.admin.createUser({ email, email_confirm: true });
+      if (created.error || !created.data?.user) {
+        const message = created.error?.message ?? 'createUser returned no user';
+        console.error(traceId, message);
+        return json(
+          { error: 'provisioning_failed', error_detail: message, trace_id: traceId },
+          500,
+          appBaseUrl,
+          traceId,
+        );
       }
-      invitedUserId = link.data.user.id;
+      invitedUserId = created.data.user.id;
     }
 
     // Dedup: reuse a pending invite row instead of re-inviting.
@@ -229,8 +232,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const invited = await callerClient.rpc('member_invite', inviteArgs);
       if (invited.error) {
         const status = mapInviteErrorStatus(invited.error.message);
+        const message = invited.error.message;
+        console.error(traceId, message);
         return json(
-          { error: status === 500 ? 'unknown' : invited.error.message, trace_id: traceId },
+          {
+            error: status === 500 ? 'internal' : message,
+            error_detail: message,
+            trace_id: traceId,
+          },
           status,
           appBaseUrl,
           traceId,
@@ -256,46 +265,79 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .select('id')
       .single();
     if (attempt.error || !attempt.data) {
-      return json({ error: 'unknown', trace_id: traceId }, 500, appBaseUrl, traceId);
+      const message = attempt.error?.message ?? 'delivery_attempts insert returned no row';
+      console.error(traceId, message);
+      return json(
+        { error: 'delivery_record_failed', error_detail: message, trace_id: traceId },
+        500,
+        appBaseUrl,
+        traceId,
+      );
     }
 
     let emailed = false;
+    let errorDetail: string | null = null;
     const resendKey = Deno.env.get('RESEND_API_KEY');
-    if (resendKey) {
-      const workspace = await callerClient
-        .from('workspaces')
-        .select('name')
-        .eq('id', workspace_id)
-        .maybeSingle();
-      const workspaceName = (workspace.data?.name as string | undefined) ?? '';
-      const body = inviteEmailBody({ workspaceName, role, acceptUrl });
+    const fromAddress = Deno.env.get('INVITE_FROM_ADDRESS');
+    if (!resendKey || !fromAddress) {
+      errorDetail = 'resend_not_configured';
+      console.error(traceId, errorDetail);
+    } else {
+      // Passwordless login link for the email: lands the invitee on the
+      // set-password screen carrying the invite id. A failure here must not
+      // discard the provisioned user or the invite row.
+      const link = await adminClient.auth.admin.generateLink({
+        type: 'magiclink',
+        email,
+        options: { redirectTo: `${appBaseUrl}/invite/set-password?invite=${inviteId}` },
+      });
+      const actionLink = link.data?.properties?.action_link;
+      if (link.error || !actionLink) {
+        const message = link.error?.message ?? 'generateLink returned no action_link';
+        errorDetail = message;
+        console.error(traceId, message);
+        await adminClient
+          .from('delivery_attempts')
+          .update({ status: 'failed', provider_message_id: null, error: message, sent_at: null })
+          .eq('id', attempt.data.id);
+      } else {
+        const workspace = await callerClient
+          .from('workspaces')
+          .select('name')
+          .eq('id', workspace_id)
+          .maybeSingle();
+        const workspaceName = (workspace.data?.name as string | undefined) ?? '';
+        const body = inviteEmailBody({ workspaceName, role, acceptUrl: actionLink });
 
-      let status: 'sent' | 'failed' = 'sent';
-      let providerMessageId: string | null = null;
-      let sendError: string | null = null;
-      try {
-        providerMessageId = await sendViaResend({
-          apiKey: resendKey,
-          from: requireEnv('INVITE_FROM_ADDRESS'),
-          to: email,
-          subject: inviteSubject(workspaceName),
-          html: body.html,
-        });
-        emailed = true;
-      } catch (err) {
-        status = 'failed';
-        sendError = err instanceof Error ? err.message : String(err);
+        let status: 'sent' | 'failed' = 'sent';
+        let providerMessageId: string | null = null;
+        let sendError: string | null = null;
+        try {
+          providerMessageId = await sendViaResend({
+            apiKey: resendKey,
+            from: fromAddress,
+            to: email,
+            subject: inviteSubject(workspaceName),
+            html: body.html,
+          });
+          emailed = true;
+        } catch (err) {
+          status = 'failed';
+          sendError = err instanceof Error ? err.message : String(err);
+          errorDetail = sendError;
+          console.error(traceId, sendError);
+        }
+
+        await adminClient
+          .from('delivery_attempts')
+          .update({
+            status,
+            provider_message_id: providerMessageId,
+            error: sendError,
+            sent_at: status === 'sent' ? new Date().toISOString() : null,
+          })
+          .eq('id', attempt.data.id);
       }
-
-      await adminClient
-        .from('delivery_attempts')
-        .update({
-          status,
-          provider_message_id: providerMessageId,
-          error: sendError,
-          sent_at: status === 'sent' ? new Date().toISOString() : null,
-        })
-        .eq('id', attempt.data.id);
     }
 
     return json(
@@ -304,13 +346,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
         invited_user_id: invitedUserId,
         accept_url: acceptUrl,
         emailed,
+        error_detail: errorDetail,
         trace_id: traceId,
       },
       200,
       appBaseUrl,
       traceId,
     );
-  } catch {
-    return json({ error: 'unknown', trace_id: traceId }, 500, appBaseUrl, traceId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(traceId, message);
+    return json(
+      { error: 'internal', error_detail: message, trace_id: traceId },
+      500,
+      appBaseUrl,
+      traceId,
+    );
   }
 });

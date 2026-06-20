@@ -104,8 +104,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (accepted.error) {
       const status = mapAcceptErrorStatus(accepted.error.message);
+      const message = accepted.error.message;
+      console.error(traceId, message);
       return json(
-        { error: status === 500 ? 'unknown' : accepted.error.message, trace_id: traceId },
+        { error: status === 500 ? 'internal' : message, error_detail: message, trace_id: traceId },
         status,
         appBaseUrl,
         traceId,
@@ -113,7 +115,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     return json({ member_id: accepted.data, trace_id: traceId }, 200, appBaseUrl, traceId);
-  } catch {
-    return json({ error: 'unknown', trace_id: traceId }, 500, appBaseUrl, traceId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(traceId, message);
+    return json(
+      { error: 'internal', error_detail: message, trace_id: traceId },
+      500,
+      appBaseUrl,
+      traceId,
+    );
   }
 });
