@@ -262,7 +262,11 @@ function AvatarCropperImpl(
   }
 
   function stepZoom(delta: number): void {
-    setScaleAround(baseScaleRef.current * (scaleRef.current / baseScaleRef.current + delta), FRAME / 2, FRAME / 2);
+    setScaleAround(
+      baseScaleRef.current * (scaleRef.current / baseScaleRef.current + delta),
+      FRAME / 2,
+      FRAME / 2,
+    );
   }
 
   return (
@@ -284,7 +288,12 @@ function AvatarCropperImpl(
         style={{ width: FRAME, height: FRAME, touchAction: 'none' }}
         className="relative overflow-hidden rounded-md border border-border bg-panel-2"
       >
-        <canvas ref={canvasRef} width={FRAME} height={FRAME} style={{ width: FRAME, height: FRAME }} />
+        <canvas
+          ref={canvasRef}
+          width={FRAME}
+          height={FRAME}
+          style={{ width: FRAME, height: FRAME }}
+        />
         {/* Circular crop guide: a ring using the accent-line token. */}
         <div
           aria-hidden="true"
@@ -297,7 +306,12 @@ function AvatarCropperImpl(
         ) : null}
       </div>
 
-      <Button type="button" variant="default" size="lg" onClick={() => fileInputRef.current?.click()}>
+      <Button
+        type="button"
+        variant="default"
+        size="lg"
+        onClick={() => fileInputRef.current?.click()}
+      >
         Choose photo
       </Button>
 
@@ -322,7 +336,11 @@ function AvatarCropperImpl(
             disabled={!hasPhoto}
             aria-label="Zoom"
             onChange={(event) =>
-              setScaleAround(baseScaleRef.current * parseFloat(event.target.value), FRAME / 2, FRAME / 2)
+              setScaleAround(
+                baseScaleRef.current * parseFloat(event.target.value),
+                FRAME / 2,
+                FRAME / 2,
+              )
             }
             className="h-11 flex-1 accent-accent disabled:opacity-50"
           />

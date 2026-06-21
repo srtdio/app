@@ -9,10 +9,12 @@ function file(): File {
 }
 
 function okUpload(avatarUrl: string) {
-  return vi.fn(async (): Promise<Result<{ avatarUrl: string }>> => ({
-    ok: true,
-    data: { avatarUrl },
-  }));
+  return vi.fn(
+    async (): Promise<Result<{ avatarUrl: string }>> => ({
+      ok: true,
+      data: { avatarUrl },
+    }),
+  );
 }
 
 describe('submitProfileSetup', () => {
@@ -65,10 +67,12 @@ describe('submitProfileSetup', () => {
   });
 
   it('returns the upload error and never calls saveProfile when the upload fails', async () => {
-    const uploadAvatar = vi.fn(async (): Promise<Result<{ avatarUrl: string }>> => ({
-      ok: false,
-      error: { code: 'unknown', message: 'upload boom' },
-    }));
+    const uploadAvatar = vi.fn(
+      async (): Promise<Result<{ avatarUrl: string }>> => ({
+        ok: false,
+        error: { code: 'unknown', message: 'upload boom' },
+      }),
+    );
     const saveProfile = vi.fn(async (): Promise<Result<string>> => ({ ok: true, data: 'u' }));
 
     const result = await submitProfileSetup({
@@ -87,10 +91,12 @@ describe('submitProfileSetup', () => {
   });
 
   it('returns the saveProfile error when the save fails', async () => {
-    const saveProfile = vi.fn(async (): Promise<Result<string>> => ({
-      ok: false,
-      error: { code: 'invalid_payload', message: 'bad name' },
-    }));
+    const saveProfile = vi.fn(
+      async (): Promise<Result<string>> => ({
+        ok: false,
+        error: { code: 'invalid_payload', message: 'bad name' },
+      }),
+    );
 
     const result = await submitProfileSetup({
       client,
