@@ -124,13 +124,14 @@ The approval unit. stage is the only workflow state. No publish_status.
 | brief_id | uuid | nullable, FK briefs.id, SET NULL |
 | row_version | bigint | default 1 |
 | created_by | uuid | FK users.id, SET NULL |
+| legacy_author_name | text | nullable, frozen original v1 author/creator name shown when the live created_by is null, used by the detail pages with an "(ex-member)" fallback |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
 
 Stage CHECK: draft, review, approved, parked, rejected. No publish/schedule/platform columns. Indexes: (workspace_id, stage, created_at desc), (workspace_id, target_date) where target_date not null, brief_id partial, owner partial. All where deleted_at null.
 
 ### post_versions
 
-Immutable edit history. No deleted_at. PK id. Fields: post_id FK, workspace_id FK, version_number, snapshot jsonb, created_by FK users.id SET NULL, created_at. Unique (post_id, version_number).
+Immutable edit history. No deleted_at. PK id. Fields: post_id FK, workspace_id FK, version_number, snapshot jsonb, created_by FK users.id SET NULL, legacy_author_name (text, nullable: frozen original v1 author/creator name shown when the live created_by is null, used by the detail pages with an "(ex-member)" fallback), created_at. Unique (post_id, version_number).
 
 ### post_annotations
 
@@ -195,6 +196,7 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 | status | text | open / closed, default open |
 | closed_at / closed_by | | nullable, closed_by FK users.id |
 | created_by | uuid | FK users.id |
+| legacy_author_name | text | nullable, frozen original v1 author/creator name shown when the live created_by is null, used by the detail pages with an "(ex-member)" fallback |
 | created_via | text | app / email_forward, default app |
 | row_version | bigint | default 1 |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
