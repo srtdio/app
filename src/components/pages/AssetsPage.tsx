@@ -343,7 +343,10 @@ export function AssetsPage() {
   const handleCreateFolder = useCallback(
     async (name: string): Promise<FolderCreateOutcome> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
-        return { ok: false, message: "Couldn't create the folder. Check your connection and retry" };
+        return {
+          ok: false,
+          message: "Couldn't create the folder. Check your connection and retry",
+        };
       }
       if (workspaceId === null) {
         return { ok: false, message: 'No workspace selected.' };

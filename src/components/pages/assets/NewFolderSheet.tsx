@@ -60,7 +60,13 @@ export async function submitNewFolder(args: {
  * auto-numbered), refreshes the folder list, and closes; on failure it surfaces
  * the mapped error. Theme tokens only so light and dark match; targets >=44px.
  */
-export function NewFolderSheet({ open, onClose, onSubmit, onToast, onCreated }: NewFolderSheetProps) {
+export function NewFolderSheet({
+  open,
+  onClose,
+  onSubmit,
+  onToast,
+  onCreated,
+}: NewFolderSheetProps) {
   const [name, setName] = useState('');
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);

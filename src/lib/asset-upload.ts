@@ -302,7 +302,9 @@ export interface CreateFolderConfig {
  * { ok: false } with mapped copy. On success returns the created folder (the
  * server may auto-number the name, so the returned name is authoritative).
  */
-export async function createFolderRequest(config: CreateFolderConfig): Promise<FolderCreateOutcome> {
+export async function createFolderRequest(
+  config: CreateFolderConfig,
+): Promise<FolderCreateOutcome> {
   let response: Response;
   try {
     response = await config.fetcher(workerRoute(config.endpoint, '/folders'), {
@@ -333,9 +335,7 @@ export async function createFolderRequest(config: CreateFolderConfig): Promise<F
 }
 
 /** Read the created folder from a {folder:{id,name,parent_id}} body; null when absent. */
-function folderField(
-  body: unknown,
-): { id: string; name: string; parentId: string | null } | null {
+function folderField(body: unknown): { id: string; name: string; parentId: string | null } | null {
   if (typeof body !== 'object' || body === null) return null;
   const folder = (body as { folder?: unknown }).folder;
   if (typeof folder !== 'object' || folder === null) return null;
