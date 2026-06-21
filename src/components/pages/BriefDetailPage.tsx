@@ -5,6 +5,7 @@ import { Comments } from '@/components/comments/Comments';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconBriefs } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
+import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
@@ -59,11 +60,33 @@ function friendlyCloseError(error: DomainError): string {
   }
 }
 
+// Resolve a brief's "Created by" to a display name: prefer the current member
+// name for created_by, then the ETL-frozen legacy author name, then "(ex-member)"
+// for a creator who is no longer a workspace member and has no legacy name. Pure
+// so the precedence is unit-tested without rendering.
+export function briefAuthorLabel(
+  createdBy: string | null,
+  legacyAuthorName: string | null,
+  memberName: (id: string) => string | null,
+): string {
+  const member = createdBy !== null && createdBy !== '' ? memberName(createdBy) : null;
+  return member ?? legacyAuthorName ?? '(ex-member)';
+}
+
 export function BriefDetailPage() {
   const { briefId } = useParams();
   const navigate = useNavigate();
   const newTrace = useNewTrace();
   const { workspaceId } = useWorkspace();
+
+  // Resolve created_by to a current member's display name, never a raw uuid.
+  // Reuses the post detail page's member hook unchanged; the map is the resolver
+  // behind briefAuthorLabel below.
+  const { options: memberOptions } = usePostMembers(workspaceId);
+  const memberById = useMemo(
+    () => new Map(memberOptions.map((o) => [o.userId, o.displayName])),
+    [memberOptions],
+  );
 
   // Email deep-link: ?comment={commentId} focuses that comment row. Captured into
   // state so it survives the immediate strip below, then handed to Comments which
@@ -387,7 +410,11 @@ export function BriefDetailPage() {
               <div className="flex flex-col gap-1">
                 <dt className="text-fg-3">Created by</dt>
                 <dd className="break-all">
-                  {brief.legacy_author_name ?? brief.created_by ?? '(ex-member)'}
+                  {briefAuthorLabel(
+                    brief.created_by,
+                    brief.legacy_author_name,
+                    (id) => memberById.get(id) ?? null,
+                  )}
                 </dd>
               </div>
             </dl>
