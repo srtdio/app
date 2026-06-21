@@ -15,6 +15,7 @@ import { Pool } from 'pg';
 import { R2StorageClient, type R2StorageEnv, type TracedFetch } from '@srtdio/storage';
 
 import { loadAssets } from './assets';
+import { runBackfillCommentAuthors } from './backfill-comment-authors';
 import { assertSafe, loadConfig, parseCli, type EtlConfig } from './config';
 import { validateCutover, type ImageVersionRow, type TableName } from './validate';
 import {
@@ -367,6 +368,15 @@ function transformSelfCheck(): void {
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+
+  // One-time legacy comment-author backfill subcommand. Dispatched before the
+  // migration CLI parse so its own --mode flag (dry-run|apply) never reaches
+  // parseCli. Self-contained: own config load, safety guards, and pools.
+  if (argv[0] === 'backfill-comment-authors') {
+    await runBackfillCommentAuthors(argv.slice(1));
+    return;
+  }
+
   const cli = parseCli(argv);
 
   // CI path: --dry-run with no database configured runs the offline self-check.
