@@ -9,7 +9,20 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@srtdio/schemas';
-import type { AssetRow, AssetVersionRow } from './types';
+import {
+  err,
+  ok,
+  type AssetRow,
+  type AssetVersionRow,
+  type CreateFolderInput,
+  type DeleteFolderInput,
+  type FolderError,
+  type FolderRow,
+  type FolderSummary,
+  type MoveAssetsInput,
+  type RenameFolderInput,
+  type Result,
+} from './types';
 
 /** The asset_versions.kind values that are backed by stored bytes (not links). */
 export type FileVersionKind =
@@ -187,7 +200,64 @@ export interface AssetRepository {
   /** Update assets.filename only, scoped to the workspace. Touches no version
    * rows and no attachments. */
   renameAsset(workspaceId: string, assetId: string, filename: string): Promise<void>;
+  /** An active folder by id, scoped to a workspace (cross-tenant or soft-deleted
+   * returns null). The route's parent/target/existence guard. */
+  getFolder(workspaceId: string, folderId: string): Promise<FolderRow | null>;
+  /** Insert a folder; a unique-name collision is a folder_name_taken Result. */
+  createFolder(input: CreateFolderInput): Promise<Result<FolderSummary, FolderError>>;
+  /** Rename an existing (already-verified) folder; collision -> folder_name_taken. */
+  renameFolder(input: RenameFolderInput): Promise<Result<FolderSummary, FolderError>>;
+  /** Reparent child folders to root, detach assets, then soft-delete the folder. */
+  softDeleteFolderWithDetach(input: DeleteFolderInput): Promise<void>;
+  /** Move the in-workspace, live assets among assetIds into a folder; returns the
+   * number of rows updated. */
+  moveAssetsToFolder(input: MoveAssetsInput): Promise<number>;
   writeAudit(entry: AuditEntry): Promise<void>;
+}
+
+/**
+ * Write a success folder audit row via the service role, mirroring
+ * {@link AssetRepository.writeAudit} but with entity_type 'folder'. Folder writes
+ * record success-path rows only.
+ */
+async function insertFolderAudit(
+  client: SupabaseClient<Database>,
+  entry: {
+    action: string;
+    traceId: string;
+    workspaceId: string;
+    actorUserId: string;
+    entityId: string | null;
+    payload: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { error } = await client.from('audit_log').insert({
+    action: entry.action,
+    outcome: 'success',
+    trace_id: entry.traceId,
+    workspace_id: entry.workspaceId,
+    actor_user_id: entry.actorUserId,
+    entity_type: 'folder',
+    entity_id: entry.entityId,
+    payload: entry.payload as Json,
+  });
+  if (error) {
+    throw error;
+  }
+}
+
+/** PostgREST surfaces a unique-constraint violation (folders_unique_name) as 23505. */
+function isUniqueViolation(error: { code?: string } | null): boolean {
+  return error?.code === '23505';
+}
+
+const FOLDER_COLS = 'id,name,parent_id';
+
+function folderNameTaken(): { ok: false; error: FolderError } {
+  return err({
+    code: 'folder_name_taken',
+    message: 'A folder with this name already exists here.',
+  });
 }
 
 function toVersionRef(row: AssetVersionRow): VersionRef {
@@ -397,6 +467,140 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
       }
     },
 
+    async getFolder(workspaceId, folderId) {
+      const { data, error } = await client
+        .from('folders')
+        .select('*')
+        .eq('id', folderId)
+        .eq('workspace_id', workspaceId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (error) {
+        throw error;
+      }
+      return data ?? null;
+    },
+
+    async createFolder(input) {
+      const { data, error } = await client
+        .from('folders')
+        .insert({
+          workspace_id: input.workspaceId,
+          name: input.name,
+          parent_id: input.parentId,
+          created_by: input.actorUserId,
+        })
+        .select(FOLDER_COLS)
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return folderNameTaken();
+        }
+        throw error;
+      }
+      await insertFolderAudit(client, {
+        action: 'folder.create',
+        traceId: input.traceId,
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+        entityId: data.id,
+        payload: { name: data.name, parent_id: data.parent_id },
+      });
+      return ok({ id: data.id, name: data.name, parentId: data.parent_id });
+    },
+
+    async renameFolder(input) {
+      const { data, error } = await client
+        .from('folders')
+        .update({ name: input.name, updated_at: new Date().toISOString() })
+        .eq('id', input.folderId)
+        .eq('workspace_id', input.workspaceId)
+        .is('deleted_at', null)
+        .select(FOLDER_COLS)
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return folderNameTaken();
+        }
+        throw error;
+      }
+      await insertFolderAudit(client, {
+        action: 'folder.rename',
+        traceId: input.traceId,
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+        entityId: data.id,
+        payload: { name: data.name },
+      });
+      return ok({ id: data.id, name: data.name, parentId: data.parent_id });
+    },
+
+    async softDeleteFolderWithDetach(input) {
+      // PostgREST is per-statement (no transaction), so order the three writes so
+      // a partial failure leaves a recoverable state, mirroring createLinkAsset's
+      // non-transactional multi-row writes: detach references before the tombstone.
+      const now = new Date().toISOString();
+      const { error: reparentError } = await client
+        .from('folders')
+        .update({ parent_id: null, updated_at: now })
+        .eq('parent_id', input.folderId)
+        .eq('workspace_id', input.workspaceId)
+        .is('deleted_at', null);
+      if (reparentError) {
+        throw reparentError;
+      }
+      const { error: detachError } = await client
+        .from('assets')
+        .update({ folder_id: null })
+        .eq('folder_id', input.folderId)
+        .eq('workspace_id', input.workspaceId)
+        .is('deleted_at', null);
+      if (detachError) {
+        throw detachError;
+      }
+      const { error: deleteError } = await client
+        .from('folders')
+        .update({ deleted_at: now, updated_at: now })
+        .eq('id', input.folderId)
+        .eq('workspace_id', input.workspaceId)
+        .is('deleted_at', null);
+      if (deleteError) {
+        throw deleteError;
+      }
+      await insertFolderAudit(client, {
+        action: 'folder.delete',
+        traceId: input.traceId,
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+        entityId: input.folderId,
+        payload: {},
+      });
+    },
+
+    async moveAssetsToFolder(input) {
+      // One batch statement (id = ANY(asset_ids)); never a per-id loop.
+      const { data, error } = await client
+        .from('assets')
+        .update({ folder_id: input.targetFolderId })
+        .in('id', input.assetIds)
+        .eq('workspace_id', input.workspaceId)
+        .is('deleted_at', null)
+        .select('id');
+      if (error) {
+        throw error;
+      }
+      const moved = data?.length ?? 0;
+      await insertFolderAudit(client, {
+        action: 'folder.move',
+        traceId: input.traceId,
+        workspaceId: input.workspaceId,
+        actorUserId: input.actorUserId,
+        entityId: input.targetFolderId,
+        payload: { target_folder_id: input.targetFolderId, moved },
+      });
+      return moved;
+    },
+
     async writeAudit(entry) {
       // Direct insert via the service role (RLS bypassed). audit_log_write is the
       // authenticated path; the Worker has no auth.uid(), so actor_user_id is
@@ -430,6 +634,7 @@ export interface AuditRecord extends AuditEntry {
 export class InMemoryAssetRepository implements AssetRepository {
   readonly assets = new Map<string, AssetRow>();
   readonly versions: AssetVersionRow[] = [];
+  readonly folders = new Map<string, FolderRow>();
   readonly audits: AuditRecord[] = [];
   /** Active memberships keyed by `${userId}:${workspaceId}` -> role. */
   readonly memberships = new Map<string, string>();
@@ -525,6 +730,150 @@ export class InMemoryAssetRepository implements AssetRepository {
       this.assets.set(assetId, { ...asset, filename });
     }
     return Promise.resolve();
+  }
+
+  getFolder(workspaceId: string, folderId: string): Promise<FolderRow | null> {
+    const folder = this.folders.get(folderId);
+    if (!folder || folder.workspace_id !== workspaceId || folder.deleted_at !== null) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(folder);
+  }
+
+  /** Active sibling with the same case-insensitive name (the folders_unique_name
+   * shape: per workspace + parent, NULL parents not distinct), excluding `exceptId`. */
+  private hasNameCollision(
+    workspaceId: string,
+    parentId: string | null,
+    name: string,
+    exceptId: string | null,
+  ): boolean {
+    const lowered = name.toLowerCase();
+    for (const folder of this.folders.values()) {
+      if (
+        folder.id !== exceptId &&
+        folder.deleted_at === null &&
+        folder.workspace_id === workspaceId &&
+        folder.parent_id === parentId &&
+        folder.name.toLowerCase() === lowered
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  createFolder(input: CreateFolderInput): Promise<Result<FolderSummary, FolderError>> {
+    if (this.hasNameCollision(input.workspaceId, input.parentId, input.name, null)) {
+      return Promise.resolve(folderNameTaken());
+    }
+    const id = globalThis.crypto.randomUUID();
+    const now = new Date().toISOString();
+    this.folders.set(id, {
+      id,
+      workspace_id: input.workspaceId,
+      name: input.name,
+      parent_id: input.parentId,
+      created_by: input.actorUserId,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    });
+    this.audits.push({
+      traceId: input.traceId,
+      workspaceId: input.workspaceId,
+      action: 'folder.create',
+      entityId: id,
+      actorUserId: input.actorUserId,
+      payload: { name: input.name, parent_id: input.parentId },
+      outcome: 'success',
+    });
+    return Promise.resolve(ok({ id, name: input.name, parentId: input.parentId }));
+  }
+
+  renameFolder(input: RenameFolderInput): Promise<Result<FolderSummary, FolderError>> {
+    const folder = this.folders.get(input.folderId);
+    const parentId = folder?.parent_id ?? null;
+    if (this.hasNameCollision(input.workspaceId, parentId, input.name, input.folderId)) {
+      return Promise.resolve(folderNameTaken());
+    }
+    if (folder) {
+      this.folders.set(folder.id, {
+        ...folder,
+        name: input.name,
+        updated_at: new Date().toISOString(),
+      });
+    }
+    this.audits.push({
+      traceId: input.traceId,
+      workspaceId: input.workspaceId,
+      action: 'folder.rename',
+      entityId: input.folderId,
+      actorUserId: input.actorUserId,
+      payload: { name: input.name },
+      outcome: 'success',
+    });
+    return Promise.resolve(ok({ id: input.folderId, name: input.name, parentId }));
+  }
+
+  softDeleteFolderWithDetach(input: DeleteFolderInput): Promise<void> {
+    const now = new Date().toISOString();
+    // a) reparent child folders to root
+    for (const folder of this.folders.values()) {
+      if (
+        folder.parent_id === input.folderId &&
+        folder.workspace_id === input.workspaceId &&
+        folder.deleted_at === null
+      ) {
+        this.folders.set(folder.id, { ...folder, parent_id: null, updated_at: now });
+      }
+    }
+    // b) detach assets to the All assets root
+    for (const [id, asset] of this.assets) {
+      if (
+        asset.folder_id === input.folderId &&
+        asset.workspace_id === input.workspaceId &&
+        asset.deleted_at === null
+      ) {
+        this.assets.set(id, { ...asset, folder_id: null });
+      }
+    }
+    // c) soft-delete the folder itself
+    const target = this.folders.get(input.folderId);
+    if (target && target.workspace_id === input.workspaceId && target.deleted_at === null) {
+      this.folders.set(target.id, { ...target, deleted_at: now, updated_at: now });
+    }
+    this.audits.push({
+      traceId: input.traceId,
+      workspaceId: input.workspaceId,
+      action: 'folder.delete',
+      entityId: input.folderId,
+      actorUserId: input.actorUserId,
+      payload: {},
+      outcome: 'success',
+    });
+    return Promise.resolve();
+  }
+
+  moveAssetsToFolder(input: MoveAssetsInput): Promise<number> {
+    let moved = 0;
+    for (const id of input.assetIds) {
+      const asset = this.assets.get(id);
+      if (asset && asset.workspace_id === input.workspaceId && asset.deleted_at === null) {
+        this.assets.set(id, { ...asset, folder_id: input.targetFolderId });
+        moved += 1;
+      }
+    }
+    this.audits.push({
+      traceId: input.traceId,
+      workspaceId: input.workspaceId,
+      action: 'folder.move',
+      entityId: input.targetFolderId ?? '',
+      actorUserId: input.actorUserId,
+      payload: { target_folder_id: input.targetFolderId, moved },
+      outcome: 'success',
+    });
+    return Promise.resolve(moved);
   }
 
   writeAudit(entry: AuditEntry): Promise<void> {

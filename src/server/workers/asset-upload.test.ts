@@ -73,7 +73,10 @@ import { InMemoryAssetRepository } from '@/server/assets';
 const USER = '33333333-3333-7333-8333-333333333333';
 const OTHER_USER = '44444444-4444-7444-8444-444444444444';
 const WORKSPACE = '11111111-1111-7111-8111-111111111111';
+const OTHER_WORKSPACE = '22222222-2222-7222-8222-222222222222';
 const ASSET = '55555555-5555-7555-8555-555555555555';
+const OTHER_ASSET = '77777777-7777-7777-8777-777777777777';
+const FOLDER = '88888888-8888-7888-8888-888888888888';
 const SUPABASE_URL = 'https://test.supabase.co';
 const KID = 'test-es256-key';
 
@@ -454,6 +457,331 @@ describe('POST /rename', () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe('not_found');
+  });
+});
+
+/** Read the JSON body of a folder route response with a loose shape. */
+async function folderBody(res: Response): Promise<{
+  folder?: { id: string; name: string; parentId: string | null };
+  error?: { code: string; message: string };
+  ok?: boolean;
+  moved?: number;
+}> {
+  return (await res.json()) as {
+    folder?: { id: string; name: string; parentId: string | null };
+    error?: { code: string; message: string };
+    ok?: boolean;
+    moved?: number;
+  };
+}
+
+/** Create a folder via the API and return its id. Caller must be an active member. */
+async function createFolder(token: string, name: string, parentId: string | null): Promise<string> {
+  const res = await worker.fetch(
+    jsonPost('/folders', token, { workspace_id: WORKSPACE, name, parent_id: parentId }),
+    env,
+  );
+  expect(res.status).toBe(201);
+  const body = await folderBody(res);
+  return body.folder?.id ?? '';
+}
+
+describe('POST /folders (create)', () => {
+  it('creates a root folder and returns 201 with the folder shape', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const res = await worker.fetch(
+      jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'Campaigns', parent_id: null }),
+      env,
+    );
+    expect(res.status).toBe(201);
+    const body = await folderBody(res);
+    expect(body.folder?.name).toBe('Campaigns');
+    expect(body.folder?.parentId).toBeNull();
+    expect(state.repo.folders.size).toBe(1);
+
+    const audit = state.repo.audits.find((a) => a.action === 'folder.create');
+    expect(audit?.actorUserId).toBe(USER);
+  });
+
+  it('returns 409 folder_name_taken for a duplicate active name in the same parent', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    await createFolder(token, 'Campaigns', null);
+    const res = await worker.fetch(
+      // Same name, same (null) parent, case-insensitive.
+      jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'campaigns', parent_id: null }),
+      env,
+    );
+    expect(res.status).toBe(409);
+    const body = await folderBody(res);
+    expect(body.error?.code).toBe('folder_name_taken');
+    expect(state.repo.folders.size).toBe(1);
+  });
+
+  it('rejects a parent folder in another workspace with 400', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const now = new Date().toISOString();
+    // A real folder, but owned by a different workspace: must not be a valid parent.
+    state.repo.folders.set(FOLDER, {
+      id: FOLDER,
+      workspace_id: OTHER_WORKSPACE,
+      name: 'Foreign',
+      parent_id: null,
+      created_by: USER,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    });
+    const res = await worker.fetch(
+      jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'Child', parent_id: FOLDER }),
+      env,
+    );
+    expect(res.status).toBe(400);
+    const body = await folderBody(res);
+    expect(body.error?.code).toBe('bad_request');
+    // Only the seeded foreign folder exists; nothing was created in WORKSPACE.
+    expect(state.repo.folders.size).toBe(1);
+  });
+
+  it('returns 403 when the caller is not a member', async () => {
+    const token = await mintToken(USER);
+    // state.members intentionally empty.
+    const res = await worker.fetch(
+      jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'Campaigns', parent_id: null }),
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = await folderBody(res);
+    expect(body.error?.code).toBe('forbidden');
+    expect(state.repo.folders.size).toBe(0);
+  });
+
+  it('allows a client-role active member to create', async () => {
+    const token = await mintToken(USER);
+    // Any active member may create; role is not consulted on this route.
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'client');
+    const res = await worker.fetch(
+      jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'Drafts', parent_id: null }),
+      env,
+    );
+    expect(res.status).toBe(201);
+  });
+});
+
+describe('POST /folders/rename', () => {
+  it('renames a folder and returns 200 for an admin', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'admin');
+    const folderId = await createFolder(token, 'Old', null);
+
+    const res = await worker.fetch(
+      jsonPost('/folders/rename', token, {
+        workspace_id: WORKSPACE,
+        folder_id: folderId,
+        name: 'New',
+      }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = await folderBody(res);
+    expect(body.folder?.name).toBe('New');
+    expect(state.repo.folders.get(folderId)?.name).toBe('New');
+    expect(state.repo.audits.some((a) => a.action === 'folder.rename')).toBe(true);
+  });
+
+  it('returns 409 when the new name collides with a sibling', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'admin');
+    await createFolder(token, 'Taken', null);
+    const folderId = await createFolder(token, 'Free', null);
+
+    const res = await worker.fetch(
+      jsonPost('/folders/rename', token, {
+        workspace_id: WORKSPACE,
+        folder_id: folderId,
+        name: 'Taken',
+      }),
+      env,
+    );
+    expect(res.status).toBe(409);
+    const body = await folderBody(res);
+    expect(body.error?.code).toBe('folder_name_taken');
+  });
+
+  it('returns 403 for a client-role caller', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'client');
+    const folderId = await createFolder(token, 'Old', null);
+
+    const res = await worker.fetch(
+      jsonPost('/folders/rename', token, {
+        workspace_id: WORKSPACE,
+        folder_id: folderId,
+        name: 'New',
+      }),
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = await folderBody(res);
+    expect(body.error?.code).toBe('forbidden');
+    expect(state.repo.folders.get(folderId)?.name).toBe('Old');
+  });
+
+  it('returns 403 when the caller is not a member', async () => {
+    const token = await mintToken(USER);
+    // No membership row.
+    const res = await worker.fetch(
+      jsonPost('/folders/rename', token, {
+        workspace_id: WORKSPACE,
+        folder_id: FOLDER,
+        name: 'New',
+      }),
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = await folderBody(res);
+    expect(body.error?.code).toBe('forbidden');
+  });
+
+  it('returns 404 for an unknown folder', async () => {
+    const token = await mintToken(USER);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'owner');
+    const res = await worker.fetch(
+      jsonPost('/folders/rename', token, {
+        workspace_id: WORKSPACE,
+        folder_id: FOLDER,
+        name: 'New',
+      }),
+      env,
+    );
+    expect(res.status).toBe(404);
+    const body = await folderBody(res);
+    expect(body.error?.code).toBe('not_found');
+  });
+});
+
+describe('POST /folders/delete', () => {
+  it('reparents child folders and detaches assets, then soft-deletes', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'admin');
+    const parentId = await createFolder(token, 'Parent', null);
+    const childId = await createFolder(token, 'Child', parentId);
+    // An asset filed under the parent folder.
+    await seedAsset(ASSET, false);
+    const seeded = state.repo.assets.get(ASSET);
+    expect(seeded).toBeDefined();
+    state.repo.assets.set(ASSET, { ...seeded!, folder_id: parentId });
+
+    const res = await worker.fetch(
+      jsonPost('/folders/delete', token, { workspace_id: WORKSPACE, folder_id: parentId }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = await folderBody(res);
+    expect(body.ok).toBe(true);
+
+    // Child reparented to root, asset detached, parent tombstoned.
+    expect(state.repo.folders.get(childId)?.parent_id).toBeNull();
+    expect(state.repo.assets.get(ASSET)?.folder_id).toBeNull();
+    expect(state.repo.folders.get(parentId)?.deleted_at).not.toBeNull();
+    expect(state.repo.audits.some((a) => a.action === 'folder.delete')).toBe(true);
+  });
+
+  it('returns 403 for a client-role caller', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'client');
+    const folderId = await createFolder(token, 'Keep', null);
+
+    const res = await worker.fetch(
+      jsonPost('/folders/delete', token, { workspace_id: WORKSPACE, folder_id: folderId }),
+      env,
+    );
+    expect(res.status).toBe(403);
+    expect(state.repo.folders.get(folderId)?.deleted_at).toBeNull();
+  });
+
+  it('returns 403 when the caller is not a member', async () => {
+    const token = await mintToken(USER);
+    const res = await worker.fetch(
+      jsonPost('/folders/delete', token, { workspace_id: WORKSPACE, folder_id: FOLDER }),
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = await folderBody(res);
+    expect(body.error?.code).toBe('forbidden');
+  });
+});
+
+describe('POST /folders/move', () => {
+  it('moves only in-workspace assets and returns the moved count', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const targetId = await createFolder(token, 'Target', null);
+    // One asset in WORKSPACE, one in another workspace sharing the same request.
+    await seedAsset(ASSET, false);
+    await state.repo.insertAsset({
+      id: OTHER_ASSET,
+      workspaceId: OTHER_WORKSPACE,
+      filename: 'foreign.png',
+      uploadedBy: USER,
+    });
+
+    const res = await worker.fetch(
+      jsonPost('/folders/move', token, {
+        workspace_id: WORKSPACE,
+        asset_ids: [ASSET, OTHER_ASSET],
+        target_folder_id: targetId,
+      }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = await folderBody(res);
+    expect(body.moved).toBe(1);
+    expect(state.repo.assets.get(ASSET)?.folder_id).toBe(targetId);
+    // The out-of-workspace asset is untouched.
+    expect(state.repo.assets.get(OTHER_ASSET)?.folder_id).toBeNull();
+    expect(state.repo.audits.some((a) => a.action === 'folder.move')).toBe(true);
+  });
+
+  it('allows a client-role active member to move', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.repo.memberships.set(`${USER}:${WORKSPACE}`, 'client');
+    await seedAsset(ASSET, false);
+    const res = await worker.fetch(
+      jsonPost('/folders/move', token, {
+        workspace_id: WORKSPACE,
+        asset_ids: [ASSET],
+        target_folder_id: null,
+      }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = await folderBody(res);
+    expect(body.moved).toBe(1);
+  });
+
+  it('returns 403 when the caller is not a member', async () => {
+    const token = await mintToken(USER);
+    const res = await worker.fetch(
+      jsonPost('/folders/move', token, {
+        workspace_id: WORKSPACE,
+        asset_ids: [ASSET],
+        target_folder_id: null,
+      }),
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = await folderBody(res);
+    expect(body.error?.code).toBe('forbidden');
   });
 });
 
