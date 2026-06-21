@@ -628,7 +628,9 @@ const FOLDER_MANAGE_ROLES = RENAME_ROLES;
 /**
  * POST /folders: create a folder. Same auth + membership gate as the file upload
  * (any active member). A non-null parent must be a live folder in the same
- * workspace (no cross-workspace parent); a name collision is a 409.
+ * workspace (no cross-workspace parent). A sibling-name collision is resolved
+ * desktop-style in the repository ("Campaigns", "Campaigns 2", ...), so create
+ * never returns folder_name_taken; the response carries the resolved name.
  */
 async function handleCreateFolder(
   request: Request,
@@ -707,17 +709,14 @@ async function handleCreateFolder(
     }
   }
 
-  const result = await repository.createFolder({
+  const folder = await repository.createFolder({
     workspaceId,
     name,
     parentId,
     actorUserId: caller.value,
     traceId,
   });
-  if (!result.ok) {
-    return json(STATUS_BY_CODE[result.error.code], { error: result.error }, traceId, acao);
-  }
-  return json(201, { folder: result.value }, traceId, acao);
+  return json(201, { folder }, traceId, acao);
 }
 
 /**

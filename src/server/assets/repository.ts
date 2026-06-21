@@ -203,8 +203,9 @@ export interface AssetRepository {
   /** An active folder by id, scoped to a workspace (cross-tenant or soft-deleted
    * returns null). The route's parent/target/existence guard. */
   getFolder(workspaceId: string, folderId: string): Promise<FolderRow | null>;
-  /** Insert a folder; a unique-name collision is a folder_name_taken Result. */
-  createFolder(input: CreateFolderInput): Promise<Result<FolderSummary, FolderError>>;
+  /** Insert a folder, resolving a sibling-name collision desktop-style (BASE, then
+   * "BASE 2", "BASE 3", ...) server-side; never returns folder_name_taken. */
+  createFolder(input: CreateFolderInput): Promise<FolderSummary>;
   /** Rename an existing (already-verified) folder; collision -> folder_name_taken. */
   renameFolder(input: RenameFolderInput): Promise<Result<FolderSummary, FolderError>>;
   /** Reparent child folders to root, detach assets, then soft-delete the folder. */
@@ -252,6 +253,35 @@ function isUniqueViolation(error: { code?: string } | null): boolean {
 }
 
 const FOLDER_COLS = 'id,name,parent_id';
+
+/** folders.name is a 1..80 column; an over-length name would hit the DB CHECK. */
+const FOLDER_NAME_MAX = 80;
+
+/** Service-role createFolder retries this many times when a concurrent creator
+ * takes the computed name (23505) between the sibling read and the insert. */
+const CREATE_FOLDER_MAX_ATTEMPTS = 5;
+
+/**
+ * Desktop-style collision resolution: keep BASE when it is free, else the lowest
+ * integer N>=2 such that `${BASE} ${N}` is free, all case-insensitive against
+ * `lowerNames` (the active siblings' lower(name) values, matching the
+ * folders_unique_name shape). The base portion is truncated so the final name
+ * never exceeds {@link FOLDER_NAME_MAX}. Mirrors the upload auto-naming convention.
+ */
+function resolveFolderName(base: string, lowerNames: ReadonlySet<string>): string {
+  if (!lowerNames.has(base.toLowerCase())) {
+    return base;
+  }
+  for (let n = 2; ; n += 1) {
+    const suffix = ` ${n}`;
+    const room = FOLDER_NAME_MAX - suffix.length;
+    const truncatedBase = base.length > room ? base.slice(0, room) : base;
+    const candidate = `${truncatedBase}${suffix}`;
+    if (!lowerNames.has(candidate.toLowerCase())) {
+      return candidate;
+    }
+  }
+}
 
 function folderNameTaken(): { ok: false; error: FolderError } {
   return err({
@@ -482,31 +512,54 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
     },
 
     async createFolder(input) {
-      const { data, error } = await client
-        .from('folders')
-        .insert({
-          workspace_id: input.workspaceId,
-          name: input.name,
-          parent_id: input.parentId,
-          created_by: input.actorUserId,
-        })
-        .select(FOLDER_COLS)
-        .single();
-      if (error) {
-        if (isUniqueViolation(error)) {
-          return folderNameTaken();
+      // Resolve the name desktop-style server-side: read the active siblings in
+      // one query, compute BASE / "BASE N", then insert. A concurrent creator may
+      // take the computed name between the read and the insert (23505); retry from
+      // the read, bounded, rather than loop unbounded.
+      for (let attempt = 0; attempt < CREATE_FOLDER_MAX_ATTEMPTS; attempt += 1) {
+        let siblingsQuery = client
+          .from('folders')
+          .select('name')
+          .eq('workspace_id', input.workspaceId)
+          .is('deleted_at', null);
+        siblingsQuery =
+          input.parentId === null
+            ? siblingsQuery.is('parent_id', null)
+            : siblingsQuery.eq('parent_id', input.parentId);
+        const { data: siblings, error: siblingsError } = await siblingsQuery;
+        if (siblingsError) {
+          throw siblingsError;
         }
-        throw error;
+        const lowerNames = new Set((siblings ?? []).map((row) => row.name.toLowerCase()));
+        const name = resolveFolderName(input.name, lowerNames);
+
+        const { data, error } = await client
+          .from('folders')
+          .insert({
+            workspace_id: input.workspaceId,
+            name,
+            parent_id: input.parentId,
+            created_by: input.actorUserId,
+          })
+          .select(FOLDER_COLS)
+          .single();
+        if (error) {
+          if (isUniqueViolation(error)) {
+            continue;
+          }
+          throw error;
+        }
+        await insertFolderAudit(client, {
+          action: 'folder.create',
+          traceId: input.traceId,
+          workspaceId: input.workspaceId,
+          actorUserId: input.actorUserId,
+          entityId: data.id,
+          payload: { name: data.name, parent_id: data.parent_id },
+        });
+        return { id: data.id, name: data.name, parentId: data.parent_id };
       }
-      await insertFolderAudit(client, {
-        action: 'folder.create',
-        traceId: input.traceId,
-        workspaceId: input.workspaceId,
-        actorUserId: input.actorUserId,
-        entityId: data.id,
-        payload: { name: data.name, parent_id: data.parent_id },
-      });
-      return ok({ id: data.id, name: data.name, parentId: data.parent_id });
+      throw new Error('createFolder: could not resolve a unique folder name after retries');
     },
 
     async renameFolder(input) {
@@ -763,16 +816,26 @@ export class InMemoryAssetRepository implements AssetRepository {
     return false;
   }
 
-  createFolder(input: CreateFolderInput): Promise<Result<FolderSummary, FolderError>> {
-    if (this.hasNameCollision(input.workspaceId, input.parentId, input.name, null)) {
-      return Promise.resolve(folderNameTaken());
+  createFolder(input: CreateFolderInput): Promise<FolderSummary> {
+    // Mirror the service-role impl: collect the active siblings' lower(name) for
+    // this workspace+parent (NULL parents grouped), then resolve desktop-style.
+    const lowerNames = new Set<string>();
+    for (const folder of this.folders.values()) {
+      if (
+        folder.deleted_at === null &&
+        folder.workspace_id === input.workspaceId &&
+        folder.parent_id === input.parentId
+      ) {
+        lowerNames.add(folder.name.toLowerCase());
+      }
     }
+    const name = resolveFolderName(input.name, lowerNames);
     const id = globalThis.crypto.randomUUID();
     const now = new Date().toISOString();
     this.folders.set(id, {
       id,
       workspace_id: input.workspaceId,
-      name: input.name,
+      name,
       parent_id: input.parentId,
       created_by: input.actorUserId,
       created_at: now,
@@ -785,10 +848,10 @@ export class InMemoryAssetRepository implements AssetRepository {
       action: 'folder.create',
       entityId: id,
       actorUserId: input.actorUserId,
-      payload: { name: input.name, parent_id: input.parentId },
+      payload: { name, parent_id: input.parentId },
       outcome: 'success',
     });
-    return Promise.resolve(ok({ id, name: input.name, parentId: input.parentId }));
+    return Promise.resolve({ id, name, parentId: input.parentId });
   }
 
   renameFolder(input: RenameFolderInput): Promise<Result<FolderSummary, FolderError>> {

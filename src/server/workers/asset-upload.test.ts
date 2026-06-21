@@ -504,19 +504,64 @@ describe('POST /folders (create)', () => {
     expect(audit?.actorUserId).toBe(USER);
   });
 
-  it('returns 409 folder_name_taken for a duplicate active name in the same parent', async () => {
+  it('auto-numbers a duplicate active name desktop-style instead of 409', async () => {
     const token = await mintToken(USER);
     state.members.add(`${USER}:${WORKSPACE}`);
     await createFolder(token, 'Campaigns', null);
+
+    // Second create with the same name resolves to "Campaigns 2".
+    const second = await worker.fetch(
+      jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'Campaigns', parent_id: null }),
+      env,
+    );
+    expect(second.status).toBe(201);
+    expect((await folderBody(second)).folder?.name).toBe('Campaigns 2');
+
+    // A third resolves to "Campaigns 3".
+    const third = await worker.fetch(
+      jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'Campaigns', parent_id: null }),
+      env,
+    );
+    expect(third.status).toBe(201);
+    expect((await folderBody(third)).folder?.name).toBe('Campaigns 3');
+
+    expect(state.repo.folders.size).toBe(3);
+  });
+
+  it('auto-numbers case-insensitively, preserving the typed casing', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    await createFolder(token, 'Campaigns', null);
+
     const res = await worker.fetch(
-      // Same name, same (null) parent, case-insensitive.
+      // Differs only in case from the existing folder.
       jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'campaigns', parent_id: null }),
       env,
     );
-    expect(res.status).toBe(409);
-    const body = await folderBody(res);
-    expect(body.error?.code).toBe('folder_name_taken');
-    expect(state.repo.folders.size).toBe(1);
+    expect(res.status).toBe(201);
+    expect((await folderBody(res)).folder?.name).toBe('campaigns 2');
+  });
+
+  it('scopes auto-numbering per parent: the same base name is bare under each parent', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const parentA = await createFolder(token, 'Parent A', null);
+    const parentB = await createFolder(token, 'Parent B', null);
+
+    const underA = await worker.fetch(
+      jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'Shared', parent_id: parentA }),
+      env,
+    );
+    expect(underA.status).toBe(201);
+    expect((await folderBody(underA)).folder?.name).toBe('Shared');
+
+    // Different parent: no collision, so the bare base name is kept (no suffix).
+    const underB = await worker.fetch(
+      jsonPost('/folders', token, { workspace_id: WORKSPACE, name: 'Shared', parent_id: parentB }),
+      env,
+    );
+    expect(underB.status).toBe(201);
+    expect((await folderBody(underB)).folder?.name).toBe('Shared');
   });
 
   it('rejects a parent folder in another workspace with 400', async () => {
