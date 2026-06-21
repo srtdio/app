@@ -138,7 +138,11 @@ export function ProfileSettingsPanel(): React.ReactElement {
   return (
     <div className="max-w-[520px] flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <Avatar size="lg" name={trimmedName.length > 0 ? trimmedName : profile.display_name} {...avatarSrcProps} />
+        <Avatar
+          size="lg"
+          name={trimmedName.length > 0 ? trimmedName : profile.display_name}
+          {...avatarSrcProps}
+        />
         <AvatarCropper
           ref={cropperRef}
           onPhotoChange={(info) => {
