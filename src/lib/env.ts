@@ -17,6 +17,10 @@ export const envSchema = z.object({
   // and stores the asset. Optional - when unset, the Assets add menu still opens
   // the sheet but the commit path stays disabled (naming only).
   VITE_ASSET_UPLOAD_URL: optionalUrl,
+  // Avatar-upload Worker URL: accepts a multipart {file} + Bearer JWT, stores the
+  // cropped avatar and returns { avatar_url }. Optional - when unset, onboarding
+  // disables the save and shows that photo upload is not configured.
+  VITE_AVATAR_UPLOAD_URL: optionalUrl,
   // Chat-token Worker URL: mints short-lived Agora Chat user tokens for the
   // signed-in workspace member. Optional - when unset, chat is unavailable and
   // the rest of the app keeps working.

@@ -8,10 +8,19 @@ import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
+import { OnboardingProfileForm } from '@/components/onboarding/OnboardingProfileForm';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useCurrentProfile } from '@/lib/use-current-profile';
+import { logger } from '@/lib/logger';
 
 export function AppLayout() {
   const { workspaceName, workspaces, loading, workspaceId, setActiveWorkspaceId } = useWorkspace();
+  const {
+    profile,
+    loading: profileLoading,
+    error: profileError,
+    refetch: refetchProfile,
+  } = useCurrentProfile();
   const [searchParams, setSearchParams] = useSearchParams();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -58,6 +67,34 @@ export function AppLayout() {
       window.removeEventListener('keydown', onKeyDown);
     };
   }, []);
+
+  // Onboarding gate. Runs before the workspace checks and escapes the chrome with
+  // an early return, exactly like the zero-workspace EmptyState below. The form is
+  // workspace-independent, so we never read useWorkspace from it.
+  if (profileLoading) {
+    // Reuse the shell's minimal centered loading state (RouteGuards' SessionLoading).
+    return (
+      <div className="min-h-full w-full grid place-items-center bg-bg">
+        <span className="text-sm text-fg-3">Loading</span>
+      </div>
+    );
+  }
+  if (!profileError && profile !== null && profile.profile_completed_at === null) {
+    return (
+      <OnboardingProfileForm
+        initialDisplayName={profile.display_name}
+        initialDesignation={profile.designation}
+        initialEmailOptIn={profile.email_opt_in}
+        onComplete={refetchProfile}
+      />
+    );
+  }
+  // Fail open on a profile load error: a transient fetch failure must never trap
+  // the user behind onboarding. We fall through to the app here and the gate runs
+  // again on the next mount; the failure was already logged in useCurrentProfile.
+  if (profileError) {
+    logger.error('onboarding gate: profile load failed, falling through to app');
+  }
 
   // An authed user with zero workspaces is a benign state, not a crash: show a
   // calm full-page empty state instead of an empty board.
