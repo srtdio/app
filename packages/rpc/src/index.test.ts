@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { assetDelete, type Client } from './index';
+import { assetDelete, userProfileUpdate, type Client } from './index';
 
 // A minimal client whose rpc() returns the configured PostgREST shape and
 // records how it was called. assetDelete must forward the proc name and the
@@ -46,5 +46,36 @@ describe('assetDelete', () => {
     const { client } = makeClient({ data: null, error: { message: 'network down' } });
     const result = await assetDelete(client, args);
     expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
+  });
+});
+
+describe('userProfileUpdate', () => {
+  const args = {
+    p_display_name: 'Asha Rao',
+    // designation is optional in the proc (coalesce); the generated arg type is
+    // non-nullable, so cast null the same way the proc suite does.
+    p_designation: null as unknown as string,
+    p_avatar_url: 'https://x/a.png',
+    p_email_opt_in: true,
+    p_trace_id: '33333333-3333-3333-3333-333333333333',
+  };
+
+  it('returns ok and forwards the proc name + args on success', async () => {
+    const { client, rpc } = makeClient({
+      data: '44444444-4444-4444-4444-444444444444',
+      error: null,
+    });
+    const result = await userProfileUpdate(client, args);
+    expect(result.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('user_profile_update', args);
+  });
+
+  it('maps the invalid_payload exception to a domain error', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'invalid_payload' } });
+    const result = await userProfileUpdate(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'invalid_payload', message: 'invalid_payload' },
+    });
   });
 });

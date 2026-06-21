@@ -259,3 +259,11 @@ export function inboxSnooze(
 ): Promise<Result<ProcReturns<'inbox_snooze'>>> {
   return callProc(client, 'inbox_snooze', args);
 }
+
+export type UserProfileUpdateArgs = ProcArgs<'user_profile_update'>;
+export function userProfileUpdate(
+  client: Client,
+  args: UserProfileUpdateArgs,
+): Promise<Result<ProcReturns<'user_profile_update'>>> {
+  return callProc(client, 'user_profile_update', args);
+}
