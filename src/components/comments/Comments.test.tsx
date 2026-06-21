@@ -30,7 +30,8 @@ import {
   tombstoneText,
   writeClipboard,
 } from '@/components/comments/Comments';
-import { resolveName } from '@/components/comments/commentProfiles';
+import { EX_MEMBER_LABEL, resolveName } from '@/components/comments/commentProfiles';
+import type { CommentProfile } from '@/components/comments/commentProfiles';
 import { attachmentView } from '@/components/chat/MessageAttachments';
 
 // Node unit environment: walk the JSX returned by the hookless helpers and
@@ -190,6 +191,18 @@ describe('tombstoneText', () => {
     const c = row({ id: 'P', deleted_at: '2026-01-05T00:00:00.000Z' });
     expect(tombstoneText(c, () => null)).toMatch(/^Comment deleted · /);
   });
+
+  it('prefers the legacy author name over the resolved FK author', () => {
+    const c = row({
+      id: 'P',
+      author_user_id: UUID_A,
+      deleted_at: '2026-01-05T00:00:00.000Z',
+      legacy_author_name: 'Bob (v1)',
+    });
+    expect(tombstoneText(c, (id) => (id === UUID_A ? 'Operator' : null))).toMatch(
+      /^Deleted by Bob \(v1\) · /,
+    );
+  });
 });
 
 describe('canModifyComment', () => {
@@ -204,6 +217,46 @@ describe('canModifyComment', () => {
       deleted_at: '2026-01-05T00:00:00.000Z',
     });
     expect(canModifyComment(deleted, UUID_A)).toBe(false);
+  });
+
+  it('is false for a legacy (migrated) comment even when the current user is its FK author', () => {
+    const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (v1)' });
+    expect(canModifyComment(legacy, UUID_A)).toBe(false);
+  });
+});
+
+describe('legacy author display (migrated v1 comments)', () => {
+  // The card computes the author name/avatar inline; mirror its exact expressions
+  // over the same profiles map so a migrated comment is attributed to its frozen
+  // v1 author, never the cutover operator whose FK it still carries.
+  const profiles = new Map<string, CommentProfile>([
+    [UUID_A, { displayName: 'Operator', avatarUrl: 'https://cdn/operator.png' }],
+  ]);
+  const nameOf = (id: string): string | null => resolveName(profiles, id);
+  const avatarOf = (id: string): string | null => profiles.get(id)?.avatarUrl ?? null;
+
+  it('renders the legacy name, not the resolved FK (operator) name', () => {
+    const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (v1)' });
+    const authorName =
+      legacy.legacy_author_name ?? nameOf(legacy.author_user_id) ?? EX_MEMBER_LABEL;
+    expect(authorName).toBe('Bob (v1)');
+    expect(authorName).not.toBe('Operator');
+  });
+
+  it('borrows no avatar for a legacy comment (initials only, no src)', () => {
+    const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (v1)' });
+    const authorAvatarUrl =
+      legacy.legacy_author_name !== null ? null : avatarOf(legacy.author_user_id);
+    expect(authorAvatarUrl).toBeNull();
+  });
+
+  it('keeps the resolved name and avatar for a non-legacy comment', () => {
+    const live = row({ id: 'c', author_user_id: UUID_A });
+    const authorName = live.legacy_author_name ?? nameOf(live.author_user_id) ?? EX_MEMBER_LABEL;
+    const authorAvatarUrl =
+      live.legacy_author_name !== null ? null : avatarOf(live.author_user_id);
+    expect(authorName).toBe('Operator');
+    expect(authorAvatarUrl).toBe('https://cdn/operator.png');
   });
 });
 
