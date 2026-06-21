@@ -253,8 +253,7 @@ describe('legacy author display (migrated v1 comments)', () => {
   it('keeps the resolved name and avatar for a non-legacy comment', () => {
     const live = row({ id: 'c', author_user_id: UUID_A });
     const authorName = live.legacy_author_name ?? nameOf(live.author_user_id) ?? EX_MEMBER_LABEL;
-    const authorAvatarUrl =
-      live.legacy_author_name !== null ? null : avatarOf(live.author_user_id);
+    const authorAvatarUrl = live.legacy_author_name !== null ? null : avatarOf(live.author_user_id);
     expect(authorName).toBe('Operator');
     expect(authorAvatarUrl).toBe('https://cdn/operator.png');
   });
