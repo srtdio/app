@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -8,6 +7,7 @@ import { PageHead } from '@/components/shell/PageHead';
 import { Tabs } from '@/components/shell/Tabs';
 import type { TabItem } from '@/components/shell/Tabs';
 import { MembersInviteForm } from '@/components/pages/settings/MembersInviteForm';
+import { ProfileSettingsPanel } from '@/components/settings/ProfileSettingsPanel';
 
 const PANELS: TabItem[] = [
   { key: 'workspace', label: 'Workspace' },
@@ -54,26 +54,6 @@ function BillingPanel() {
   );
 }
 
-function ProfilePanel() {
-  return (
-    <div className="max-w-[520px] flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <Avatar size="lg" />
-        <Button>Change photo</Button>
-      </div>
-      <Field label="Display name">
-        <Input placeholder="Your name" />
-      </Field>
-      <Field label="Designation">
-        <Input placeholder="Your role" />
-      </Field>
-      <div>
-        <Button variant="primary">Save profile</Button>
-      </div>
-    </div>
-  );
-}
-
 export function SettingsPage() {
   const [params] = useSearchParams();
   const requested = params.get('panel');
@@ -89,7 +69,7 @@ export function SettingsPage() {
         {active === 'workspace' ? <WorkspacePanel /> : null}
         {active === 'members' ? <MembersPanel /> : null}
         {active === 'billing' ? <BillingPanel /> : null}
-        {active === 'profile' ? <ProfilePanel /> : null}
+        {active === 'profile' ? <ProfileSettingsPanel /> : null}
       </div>
     </>
   );
