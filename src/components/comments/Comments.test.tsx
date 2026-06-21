@@ -79,6 +79,8 @@ function row(partial: Partial<CommentRow> & { id: string }): CommentRow {
     entity_id: 'entity',
     entity_type: 'post',
     is_decision: false,
+    legacy_author_name: null,
+    legacy_author_email: null,
     mentions: null,
     parent_comment_id: null,
     workspace_id: 'ws',
