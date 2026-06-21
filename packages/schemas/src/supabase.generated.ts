@@ -2548,6 +2548,10 @@ export type Database = {
         Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
         Returns: string
       }
+      post_soft_delete: {
+        Args: { p_post_id: string; p_trace_id: string }
+        Returns: string
+      }
       post_update: {
         Args: { p_payload: Json; p_post_id: string; p_trace_id: string }
         Returns: string
