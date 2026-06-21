@@ -928,6 +928,8 @@ export type Database = {
           entity_type: string
           id: string
           is_decision: boolean
+          legacy_author_email: string | null
+          legacy_author_name: string | null
           mentions: Json | null
           parent_comment_id: string | null
           workspace_id: string
@@ -943,6 +945,8 @@ export type Database = {
           entity_type: string
           id?: string
           is_decision?: boolean
+          legacy_author_email?: string | null
+          legacy_author_name?: string | null
           mentions?: Json | null
           parent_comment_id?: string | null
           workspace_id: string
@@ -958,6 +962,8 @@ export type Database = {
           entity_type?: string
           id?: string
           is_decision?: boolean
+          legacy_author_email?: string | null
+          legacy_author_name?: string | null
           mentions?: Json | null
           parent_comment_id?: string | null
           workspace_id?: string

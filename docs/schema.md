@@ -167,6 +167,8 @@ Two primitives: Comments (Postgres, here) and Chat (Agora, section 7).
 | mentions | jsonb | nullable |
 | attachment_asset_ids | uuid[] | nullable |
 | is_decision | boolean | default false |
+| legacy_author_name | text | nullable, 1 to 120, frozen original author name for migrated v1 comments |
+| legacy_author_email | text | nullable, 3 to 320, original author email, used to reclaim authorship when that person later joins with the same email |
 | edited_at / deleted_at | timestamptz | nullable |
 | created_at | timestamptz | default now() |
 
