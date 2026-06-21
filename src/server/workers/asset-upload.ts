@@ -68,6 +68,7 @@ const CORS_MAX_AGE_SECONDS = 86_400;
 /** Every code the worker can return, including the auth/transport layer. */
 export type UploadResponseCode =
   | UploadErrorCode
+  | 'folder_name_taken'
   | 'bad_request'
   | 'unauthorized'
   | 'forbidden'
@@ -82,6 +83,7 @@ const STATUS_BY_CODE: Record<UploadResponseCode, number> = {
   invalid_image: 422,
   virus_detected: 422,
   not_found: 404,
+  folder_name_taken: 409,
   bad_request: 400,
   unauthorized: 401,
   forbidden: 403,
@@ -431,6 +433,34 @@ function validName(value: unknown): string | null {
   return trimmed.length >= 1 && trimmed.length <= 500 ? trimmed : null;
 }
 
+/**
+ * Trim a candidate folder name and confirm it is 1-80 chars, or null when
+ * invalid. Distinct from {@link validName} (1-500, asset filenames): folders.name
+ * is a 1..80 column, so reuse would let an over-long name reach a DB CHECK throw.
+ */
+function validFolderName(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length >= 1 && trimmed.length <= 80 ? trimmed : null;
+}
+
+/**
+ * Read an optional parent/target folder reference from a JSON body. `null` or an
+ * absent field means the root; a present value must be a UUID. Returns the
+ * normalized id (or null) on success, or `false` when the value is malformed.
+ */
+function readOptionalFolderId(value: unknown): string | null | false {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'string' && isUuid(value)) {
+    return value;
+  }
+  return false;
+}
+
 /** Parse a JSON object body, or a bad_request error string when it is not one. */
 async function readJsonObject(request: Request): Promise<Result<Record<string, unknown>, string>> {
   let body: unknown;
@@ -591,6 +621,370 @@ async function handleRename(
   return json(200, { asset: result.value }, traceId, acao);
 }
 
+/** Roles permitted to rename or delete a folder. Same set as asset rename; a
+ * 'client' member is denied. */
+const FOLDER_MANAGE_ROLES = RENAME_ROLES;
+
+/**
+ * POST /folders: create a folder. Same auth + membership gate as the file upload
+ * (any active member). A non-null parent must be a live folder in the same
+ * workspace (no cross-workspace parent); a name collision is a 409.
+ */
+async function handleCreateFolder(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
+  }
+
+  const parsed = await readJsonObject(request);
+  if (!parsed.ok) {
+    return json(400, { error: { code: 'bad_request', message: parsed.error } }, traceId, acao);
+  }
+  const { workspace_id: workspaceId, name: rawName, parent_id: rawParentId } = parsed.value;
+  if (typeof workspaceId !== 'string' || !isUuid(workspaceId)) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid workspace_id.' } },
+      traceId,
+      acao,
+    );
+  }
+  const name = validFolderName(rawName);
+  if (name === null) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'name must be 1 to 80 characters.' } },
+      traceId,
+      acao,
+    );
+  }
+  const parentId = readOptionalFolderId(rawParentId);
+  if (parentId === false) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid parent_id.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const member = await createSupabaseAssetReadStore(env).isActiveMember({
+    userId: caller.value,
+    workspaceId,
+  });
+  if (!member) {
+    logger.warn('folder create denied: caller not a workspace member', {
+      workspace_id: workspaceId,
+    });
+    return json(
+      403,
+      { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const repository = buildRepository(env);
+  if (parentId !== null) {
+    const parent = await repository.getFolder(workspaceId, parentId);
+    if (parent === null) {
+      return json(
+        400,
+        { error: { code: 'bad_request', message: 'Parent folder not found in this workspace.' } },
+        traceId,
+        acao,
+      );
+    }
+  }
+
+  const result = await repository.createFolder({
+    workspaceId,
+    name,
+    parentId,
+    actorUserId: caller.value,
+    traceId,
+  });
+  if (!result.ok) {
+    return json(STATUS_BY_CODE[result.error.code], { error: result.error }, traceId, acao);
+  }
+  return json(201, { folder: result.value }, traceId, acao);
+}
+
+/**
+ * POST /folders/rename: rename a folder. owner/admin/agency only (a client is
+ * forbidden), mirroring the asset rename role gate. 404 for an unknown or
+ * cross-tenant folder; a name collision is a 409.
+ */
+async function handleRenameFolder(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
+  }
+
+  const parsed = await readJsonObject(request);
+  if (!parsed.ok) {
+    return json(400, { error: { code: 'bad_request', message: parsed.error } }, traceId, acao);
+  }
+  const { workspace_id: workspaceId, folder_id: folderId, name: rawName } = parsed.value;
+  if (
+    typeof workspaceId !== 'string' ||
+    !isUuid(workspaceId) ||
+    typeof folderId !== 'string' ||
+    !isUuid(folderId)
+  ) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid id format.' } },
+      traceId,
+      acao,
+    );
+  }
+  const name = validFolderName(rawName);
+  if (name === null) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'name must be 1 to 80 characters.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const repository = buildRepository(env);
+  const membership = await repository.getMembership(workspaceId, caller.value);
+  if (membership === null || !FOLDER_MANAGE_ROLES.has(membership.role)) {
+    logger.warn('folder rename denied: caller lacks an eligible role', {
+      workspace_id: workspaceId,
+    });
+    return json(
+      403,
+      { error: { code: 'forbidden', message: 'You do not have permission to manage folders.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const folder = await repository.getFolder(workspaceId, folderId);
+  if (folder === null) {
+    return json(
+      404,
+      { error: { code: 'not_found', message: 'Folder not found in this workspace.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const result = await repository.renameFolder({
+    workspaceId,
+    folderId,
+    name,
+    actorUserId: caller.value,
+    traceId,
+  });
+  if (!result.ok) {
+    return json(STATUS_BY_CODE[result.error.code], { error: result.error }, traceId, acao);
+  }
+  return json(200, { folder: result.value }, traceId, acao);
+}
+
+/**
+ * POST /folders/delete: soft-delete a folder. owner/admin/agency only. Child
+ * folders are reparented to root and assets detached to All assets before the
+ * folder is tombstoned. 404 for an unknown or cross-tenant folder.
+ */
+async function handleDeleteFolder(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
+  }
+
+  const parsed = await readJsonObject(request);
+  if (!parsed.ok) {
+    return json(400, { error: { code: 'bad_request', message: parsed.error } }, traceId, acao);
+  }
+  const { workspace_id: workspaceId, folder_id: folderId } = parsed.value;
+  if (
+    typeof workspaceId !== 'string' ||
+    !isUuid(workspaceId) ||
+    typeof folderId !== 'string' ||
+    !isUuid(folderId)
+  ) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid id format.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const repository = buildRepository(env);
+  const membership = await repository.getMembership(workspaceId, caller.value);
+  if (membership === null || !FOLDER_MANAGE_ROLES.has(membership.role)) {
+    logger.warn('folder delete denied: caller lacks an eligible role', {
+      workspace_id: workspaceId,
+    });
+    return json(
+      403,
+      { error: { code: 'forbidden', message: 'You do not have permission to manage folders.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const folder = await repository.getFolder(workspaceId, folderId);
+  if (folder === null) {
+    return json(
+      404,
+      { error: { code: 'not_found', message: 'Folder not found in this workspace.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  await repository.softDeleteFolderWithDetach({
+    workspaceId,
+    folderId,
+    actorUserId: caller.value,
+    traceId,
+  });
+  return json(200, { ok: true }, traceId, acao);
+}
+
+/**
+ * POST /folders/move: move assets into a folder (or to the All assets root when
+ * target_folder_id is null). Any active member. The id set is 1..200 UUIDs; a
+ * non-null target must be a live folder in the same workspace. One batch update.
+ */
+async function handleMoveAssets(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
+  }
+
+  const parsed = await readJsonObject(request);
+  if (!parsed.ok) {
+    return json(400, { error: { code: 'bad_request', message: parsed.error } }, traceId, acao);
+  }
+  const {
+    workspace_id: workspaceId,
+    asset_ids: rawAssetIds,
+    target_folder_id: rawTargetId,
+  } = parsed.value;
+  if (typeof workspaceId !== 'string' || !isUuid(workspaceId)) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid workspace_id.' } },
+      traceId,
+      acao,
+    );
+  }
+  if (!Array.isArray(rawAssetIds) || rawAssetIds.length < 1 || rawAssetIds.length > 200) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'asset_ids must be 1 to 200 ids.' } },
+      traceId,
+      acao,
+    );
+  }
+  for (const id of rawAssetIds) {
+    if (typeof id !== 'string' || !isUuid(id)) {
+      return json(
+        400,
+        { error: { code: 'bad_request', message: 'Invalid id format.' } },
+        traceId,
+        acao,
+      );
+    }
+  }
+  const assetIds = rawAssetIds as string[];
+  const targetFolderId = readOptionalFolderId(rawTargetId);
+  if (targetFolderId === false) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid target_folder_id.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const member = await createSupabaseAssetReadStore(env).isActiveMember({
+    userId: caller.value,
+    workspaceId,
+  });
+  if (!member) {
+    logger.warn('folder move denied: caller not a workspace member', {
+      workspace_id: workspaceId,
+    });
+    return json(
+      403,
+      { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const repository = buildRepository(env);
+  if (targetFolderId !== null) {
+    const target = await repository.getFolder(workspaceId, targetFolderId);
+    if (target === null) {
+      return json(
+        400,
+        { error: { code: 'bad_request', message: 'Target folder not found in this workspace.' } },
+        traceId,
+        acao,
+      );
+    }
+  }
+
+  const moved = await repository.moveAssetsToFolder({
+    workspaceId,
+    assetIds,
+    targetFolderId,
+    actorUserId: caller.value,
+    traceId,
+  });
+  return json(200, { moved }, traceId, acao);
+}
+
 export default {
   async fetch(request: Request, env: AssetUploadEnv): Promise<Response> {
     const traceId = extractTraceId(request);
@@ -607,6 +1001,18 @@ export default {
         }
         if (path === '/rename') {
           return await handleRename(request, env, traceId, acao);
+        }
+        if (path === '/folders') {
+          return await handleCreateFolder(request, env, traceId, acao);
+        }
+        if (path === '/folders/rename') {
+          return await handleRenameFolder(request, env, traceId, acao);
+        }
+        if (path === '/folders/delete') {
+          return await handleDeleteFolder(request, env, traceId, acao);
+        }
+        if (path === '/folders/move') {
+          return await handleMoveAssets(request, env, traceId, acao);
         }
         return await handlePost(request, env, traceId, acao);
       }

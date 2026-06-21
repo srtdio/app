@@ -10,6 +10,7 @@ import type { Database } from '@srtdio/schemas';
 
 export type AssetRow = Database['public']['Tables']['assets']['Row'];
 export type AssetVersionRow = Database['public']['Tables']['asset_versions']['Row'];
+export type FolderRow = Database['public']['Tables']['folders']['Row'];
 export type AssetInsert = Database['public']['Tables']['assets']['Insert'];
 export type AssetVersionInsert = Database['public']['Tables']['asset_versions']['Insert'];
 
@@ -67,6 +68,62 @@ export interface AssetMetaSummary {
   filename: string;
   currentVersionId: string | null;
   externalUrl?: string;
+}
+
+/**
+ * Expected, caller-handled failures unique to folder writes. A name collision is
+ * the only domain error the folder repository methods surface as a Result; an
+ * unknown/cross-tenant folder is caught by the route's getFolder check (404) and
+ * a bad parent/target by a 400, so neither needs a code here. Routed through the
+ * worker's status map the same way {@link UploadError} is.
+ */
+export type FolderErrorCode = 'folder_name_taken';
+
+export interface FolderError {
+  code: FolderErrorCode;
+  message: string;
+}
+
+/** The folder view returned by the folder create/rename routes. */
+export interface FolderSummary {
+  id: string;
+  name: string;
+  parentId: string | null;
+}
+
+/** Create a folder. parentId null means a root folder. Actor is the verified sub. */
+export interface CreateFolderInput {
+  workspaceId: string;
+  name: string;
+  parentId: string | null;
+  actorUserId: string;
+  traceId: string;
+}
+
+/** Rename a folder in place; parent is never moved here. */
+export interface RenameFolderInput {
+  workspaceId: string;
+  folderId: string;
+  name: string;
+  actorUserId: string;
+  traceId: string;
+}
+
+/** Soft-delete a folder, reparenting its child folders and detaching its assets. */
+export interface DeleteFolderInput {
+  workspaceId: string;
+  folderId: string;
+  actorUserId: string;
+  traceId: string;
+}
+
+/** Move assets into a folder (targetFolderId null = the All assets root). */
+export interface MoveAssetsInput {
+  workspaceId: string;
+  assetIds: string[];
+  targetFolderId: string | null;
+  actorUserId: string;
+  traceId: string;
 }
 
 /** Input to the pipeline. Bytes are the raw, pre-sanitization upload. */
