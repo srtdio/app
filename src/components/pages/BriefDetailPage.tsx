@@ -386,7 +386,9 @@ export function BriefDetailPage() {
               </div>
               <div className="flex flex-col gap-1">
                 <dt className="text-fg-3">Created by</dt>
-                <dd className="break-all">{brief.created_by}</dd>
+                <dd className="break-all">
+                  {brief.legacy_author_name ?? brief.created_by ?? '(ex-member)'}
+                </dd>
               </div>
             </dl>
           </section>

@@ -15,8 +15,9 @@ interface VersionHistorySheetProps {
   versions: readonly PostVersionView[];
   /** The current (highest) version number, or null when there are none. */
   currentVersionNumber: number | null;
-  /** Resolve a createdBy uuid to a display name, with the (ex-member) fallback. */
-  resolveAuthor: (userId: string | null) => string;
+  /** Resolve a createdBy uuid (with its legacy author name) to a display name,
+   *  falling back to the legacy name then (ex-member). */
+  resolveAuthor: (userId: string | null, legacyName: string | null) => string;
   /** Enter the read-only view for a non-current version. */
   onSelectVersion: (id: string) => void;
 }
@@ -57,7 +58,7 @@ export function VersionHistorySheet({
                     v{version.versionNumber}
                   </span>
                   <span className="truncate text-xs text-fg-3">
-                    {resolveAuthor(version.createdBy)}
+                    {resolveAuthor(version.createdBy, version.legacyAuthorName)}
                     <span aria-hidden> · </span>
                     {formatTimestamp(version.createdAt)}
                   </span>

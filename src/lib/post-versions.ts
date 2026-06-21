@@ -17,6 +17,8 @@ export interface PostVersionView {
   snapshot: Json;
   /** Author uuid, or null when the row predates / lost its created_by (SET NULL). */
   createdBy: string | null;
+  /** Cutover author name carried on legacy rows; null for natively-authored ones. */
+  legacyAuthorName: string | null;
   createdAt: string;
 }
 
@@ -76,6 +78,7 @@ export function toVersionViews(rows: readonly PostVersion[]): PostVersionView[] 
       versionNumber: row.version_number,
       snapshot: row.snapshot,
       createdBy: row.created_by,
+      legacyAuthorName: row.legacy_author_name,
       createdAt: row.created_at,
     }))
     .sort((a, b) => a.versionNumber - b.versionNumber);

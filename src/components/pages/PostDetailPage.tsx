@@ -278,11 +278,14 @@ export function PostDetailPage() {
     [memberOptions],
   );
   const resolveOwner = useCallback(
-    (ownerUserId: string | null): { name: string; avatarUrl: string | null } => {
+    (
+      ownerUserId: string | null,
+      legacyName: string | null,
+    ): { name: string; avatarUrl: string | null } => {
       if (ownerUserId === null || ownerUserId === '')
-        return { name: 'Unassigned', avatarUrl: null };
+        return { name: legacyName ?? 'Unassigned', avatarUrl: null };
       const option = memberById.get(ownerUserId);
-      if (option === undefined) return { name: '(ex-member)', avatarUrl: null };
+      if (option === undefined) return { name: legacyName ?? '(ex-member)', avatarUrl: null };
       return { name: option.displayName, avatarUrl: option.avatarUrl };
     },
     [memberById],
@@ -396,9 +399,9 @@ export function PostDetailPage() {
   // already uses; a null author or one who is no longer a current member reads
   // (ex-member), never a raw uuid.
   const resolveAuthorName = useCallback(
-    (authorUserId: string | null): string => {
-      if (authorUserId === null || authorUserId === '') return '(ex-member)';
-      return memberById.get(authorUserId)?.displayName ?? '(ex-member)';
+    (authorUserId: string | null, legacyName: string | null): string => {
+      if (authorUserId === null || authorUserId === '') return legacyName ?? '(ex-member)';
+      return memberById.get(authorUserId)?.displayName ?? legacyName ?? '(ex-member)';
     },
     [memberById],
   );
@@ -851,7 +854,7 @@ export function PostDetailPage() {
   const post = detail.post;
   const currentStage = post.stage as Stage;
   const stageActions = visibleStageActions(currentStage, role);
-  const ownerInfo = resolveOwner(post.owner_user_id);
+  const ownerInfo = resolveOwner(post.owner_user_id, post.legacy_author_name);
   const bucket = buckets.find((b) => b.id === post.bucket_id) ?? null;
   const hasCaption = post.caption !== null && post.caption.trim() !== '';
   const { head: titleHead, last: titleLast } = splitLastWord(post.title);
