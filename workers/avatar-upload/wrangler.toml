@@ -5,11 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ALLOWED_ORIGINS = "https://srtd.io,https://srtdio-app.pages.dev"
-# TODO(shubham): set SUPABASE_URL to the real public project URL. asset-upload
-# supplies it as a Worker secret rather than a committed var, so there is no
-# value in the repo to copy. This worker uses it for JWKS verification only (no
-# service-role key). The placeholder below must be replaced before deploy.
-SUPABASE_URL = "TODO_SET_SUPABASE_PROJECT_URL"
+SUPABASE_URL = "https://movnexawfhsyuluspxoc.supabase.co"
 AVATAR_PUBLIC_BASE = "https://cdn.srtd.io"
 AVATAR_BUCKET = "user-avatars"
 
