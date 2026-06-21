@@ -1,0 +1,22 @@
+name = "srtdio-avatar-upload"
+main = "../../src/server/workers/avatar-upload.ts"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ALLOWED_ORIGINS = "https://srtd.io,https://srtdio-app.pages.dev"
+SUPABASE_URL = "https://movnexawfhsyuluspxoc.supabase.co"
+AVATAR_PUBLIC_BASE = "https://cdn.srtd.io"
+AVATAR_BUCKET = "user-avatars"
+
+# Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
+# srtdio-logs (see docs/cloudflare-logpush-setup.md).
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# Only the three R2 signing credentials are secrets; supplied as Worker secrets
+# (wrangler secret put / CI), never committed. Only binding names live here:
+#   CLOUDFLARE_ACCOUNT_ID           - R2 S3 endpoint host
+#   CLOUDFLARE_R2_ACCESS_KEY_ID     - R2 SigV4 access key
+#   CLOUDFLARE_R2_SECRET_ACCESS_KEY - R2 SigV4 secret
