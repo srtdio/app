@@ -150,9 +150,10 @@ export function buildThreads(rows: readonly CommentRow[]): ThreadRoot[] {
 
 /** A comment may be edited / deleted only by its author, and only while live. */
 export function canModifyComment(
-  comment: Pick<CommentRow, 'author_user_id' | 'deleted_at'>,
+  comment: Pick<CommentRow, 'author_user_id' | 'deleted_at' | 'legacy_author_name'>,
   currentUserId: string | null,
 ): boolean {
+  if (comment.legacy_author_name !== null) return false;
   return (
     currentUserId !== null &&
     comment.author_user_id === currentUserId &&
@@ -195,11 +196,11 @@ export function renderCommentBody(
 /** The tombstone line for a soft-deleted root. Author-only delete means the
  *  deleter is the author; name it when it resolves, else stay anonymous. */
 export function tombstoneText(
-  comment: Pick<CommentRow, 'author_user_id' | 'deleted_at' | 'created_at'>,
+  comment: Pick<CommentRow, 'author_user_id' | 'deleted_at' | 'created_at' | 'legacy_author_name'>,
   nameOf: (id: string) => string | null,
 ): string {
   const when = formatTimestamp(comment.deleted_at ?? comment.created_at);
-  const who = nameOf(comment.author_user_id);
+  const who = comment.legacy_author_name ?? nameOf(comment.author_user_id);
   return who !== null ? `Deleted by ${who} · ${when}` : `Comment deleted · ${when}`;
 }
 
@@ -226,7 +227,7 @@ export interface CommentActions {
 }
 
 export function commentActions(
-  comment: Pick<CommentRow, 'author_user_id' | 'deleted_at'>,
+  comment: Pick<CommentRow, 'author_user_id' | 'deleted_at' | 'legacy_author_name'>,
   currentUserId: string | null,
   tombstone: boolean,
 ): CommentActions {
@@ -628,8 +629,10 @@ export function Comments({
     // render their own tombstone, so the card itself is always a live comment.
     const actions = commentActions(comment, currentUserId, false);
     const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
-    const authorName = nameOf(comment.author_user_id) ?? EX_MEMBER_LABEL;
-    const authorAvatarUrl = avatarOf(comment.author_user_id);
+    const authorName =
+      comment.legacy_author_name ?? nameOf(comment.author_user_id) ?? EX_MEMBER_LABEL;
+    const authorAvatarUrl =
+      comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
     const editing = editingId === comment.id;
 
     return (
