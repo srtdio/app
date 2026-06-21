@@ -11,6 +11,8 @@ import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
 import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { AddLinkSheet } from '@/components/pages/assets/AddLinkSheet';
+import { FolderCard } from '@/components/pages/assets/FolderCard';
+import { NewFolderSheet } from '@/components/pages/assets/NewFolderSheet';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { openLinkInNewTab } from '@/components/pages/assets/openExternal';
@@ -25,8 +27,10 @@ import { PresignCache } from '@/lib/asset-presign';
 import {
   addAssetLink,
   canRenameAssets,
+  createFolderRequest,
   renameAsset,
   uploadAssetFile,
+  type FolderCreateOutcome,
   type LinkOutcome,
   type RenameOutcome,
   type UploadOutcome,
@@ -35,23 +39,25 @@ import { assetDelete } from '@srtdio/rpc';
 import {
   ASSET_SORT_DEFAULT,
   ASSET_SORT_OPTIONS,
-  breadcrumbSegments,
   buildKindCounts,
+  childFolders,
+  fetchFolders,
   fetchMemberRole,
   filterAssets,
+  folderBreadcrumb,
+  folderChildCount,
   KIND_LABELS,
   listAssets,
   removeAssetsById,
   renameAssetInList,
   sortAssets,
-  subfolders,
   visibleKinds,
   type AssetListItem,
   type AssetSort,
+  type FolderItem,
   type KindFilter,
 } from '@/lib/assets';
 
-const ROOT_FOLDER = '/';
 const SKELETON_COUNT = 12;
 
 /** A viewer target: the index into the navigable list, plus whether Info opens. */
@@ -67,16 +73,18 @@ export function AssetsPage() {
   const userId = session?.user.id ?? null;
 
   const [items, setItems] = useState<AssetListItem[]>([]);
+  const [folders, setFolders] = useState<FolderItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [kind, setKind] = useState<KindFilter>('all');
   const [search, setSearch] = useState('');
-  const [folder, setFolder] = useState(ROOT_FOLDER);
+  const [folderId, setFolderId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   const [actionItem, setActionItem] = useState<AssetListItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   const { toasts, push, dismiss } = useToasts();
@@ -111,17 +119,28 @@ export function AssetsPage() {
     setItems(result.data);
   }, [workspaceId]);
 
+  // Load the workspace's folder rows alongside the assets. A failed read leaves
+  // the folder list empty (every asset then sits at the root), never blocking the
+  // grid, which is why this does not feed the page error banner.
+  const loadFolders = useCallback(async () => {
+    if (workspaceId === null) return;
+    const result = await fetchFolders(supabase, workspaceId);
+    if (result.ok) setFolders(result.data);
+  }, [workspaceId]);
+
   useEffect(() => {
     void loadAssets();
-  }, [loadAssets]);
+    void loadFolders();
+  }, [loadAssets, loadFolders]);
 
   // Reset folder + overlays when the active workspace changes.
   useEffect(() => {
-    setFolder(ROOT_FOLDER);
+    setFolderId(null);
     setViewer(null);
     setActionItem(null);
     setUploadOpen(false);
     setAddLinkOpen(false);
+    setNewFolderOpen(false);
   }, [workspaceId]);
 
   // Resolve the current member's workspace role with one RLS-scoped read (no
@@ -143,9 +162,15 @@ export function AssetsPage() {
 
   const canRename = canRenameAssets(role);
 
-  const counts = useMemo(() => buildKindCounts(items), [items]);
-  const kinds = useMemo(() => visibleKinds(counts), [counts]);
   const searching = search.trim() !== '';
+
+  // Chip counts reflect what the grid shows: the whole library while searching,
+  // otherwise just the open folder's assets.
+  const counts = useMemo(
+    () => buildKindCounts(searching ? items : items.filter((item) => item.folderId === folderId)),
+    [items, searching, folderId],
+  );
+  const kinds = useMemo(() => visibleKinds(counts), [counts]);
 
   // If the active kind chip drops to zero (workspace switch, deletion), fall back
   // to All so the grid never silently shows nothing for a hidden chip.
@@ -155,20 +180,21 @@ export function AssetsPage() {
 
   const visible = useMemo(() => {
     const byKind = filterAssets(items, kind, search);
-    const scoped = searching ? byKind : byKind.filter((item) => item.folderPath === folder);
+    const scoped = searching ? byKind : byKind.filter((item) => item.folderId === folderId);
     return sortAssets(scoped, sort);
-  }, [items, kind, search, folder, searching, sort]);
+  }, [items, kind, search, folderId, searching, sort]);
 
   // The viewer iterates the currently visible list with links excluded; links
   // open their external URL directly and never enter the lightbox.
   const navigable = useMemo(() => visible.filter((item) => item.kind !== 'link'), [visible]);
 
-  const folders = useMemo(
-    () => (searching ? [] : subfolders(items, folder)),
-    [items, folder, searching],
+  // Child folders of the current level (none while searching, which spans folders).
+  const currentFolders = useMemo(
+    () => (searching ? [] : childFolders(folders, folderId)),
+    [folders, folderId, searching],
   );
 
-  const segments = useMemo(() => breadcrumbSegments(folder), [folder]);
+  const segments = useMemo(() => folderBreadcrumb(folders, folderId), [folders, folderId]);
 
   // Tap a card: open its external link in a new tab, or open the lightbox at
   // that asset. Opening a link never navigates the current Sorted tab.
@@ -310,6 +336,37 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, newTrace],
   );
 
+  // Create a folder under the current level: POST {workspace_id, name, parent_id}
+  // to the worker's /folders route. The folder list is refreshed by the sheet
+  // (onCreated) so the new folder shows immediately. Allowed for every active
+  // member (no role gate on New folder).
+  const handleCreateFolder = useCallback(
+    async (name: string): Promise<FolderCreateOutcome> => {
+      if (uploadEndpoint === undefined || uploadEndpoint === '') {
+        return {
+          ok: false,
+          message: "Couldn't create the folder. Check your connection and retry",
+        };
+      }
+      if (workspaceId === null) {
+        return { ok: false, message: 'No workspace selected.' };
+      }
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      if (token === null || token === '') {
+        return { ok: false, message: 'Your session expired. Sign in again.' };
+      }
+      return createFolderRequest({
+        endpoint: uploadEndpoint,
+        token,
+        workspaceId,
+        name,
+        parentId: folderId,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+    },
+    [uploadEndpoint, workspaceId, folderId, newTrace],
+  );
+
   // Rename one asset via the worker's /rename route. On success the name is
   // updated in place (grid card + open lightbox) without a full reload; a 403
   // (defense in depth) surfaces the agency-only message.
@@ -354,17 +411,17 @@ export function AssetsPage() {
         <div className="px-4 md:px-6 pt-3 flex items-center gap-1 text-sm text-fg-3 flex-wrap">
           <button
             type="button"
-            onClick={() => setFolder(ROOT_FOLDER)}
+            onClick={() => setFolderId(null)}
             className="hover:text-fg transition-colors"
           >
             Assets
           </button>
           {segments.map((segment) => (
-            <span key={segment.path} className="flex items-center gap-1">
+            <span key={segment.id} className="flex items-center gap-1">
               <IconChevronRight size={14} className="text-fg-3" />
               <button
                 type="button"
-                onClick={() => setFolder(segment.path)}
+                onClick={() => setFolderId(segment.id)}
                 className="hover:text-fg transition-colors"
               >
                 {segment.name}
@@ -381,6 +438,7 @@ export function AssetsPage() {
         primaryAction={{
           node: (
             <AssetAddMenu
+              onNewFolder={() => setNewFolderOpen(true)}
               onUploadFiles={() => setUploadOpen(true)}
               onAddLink={() => setAddLinkOpen(true)}
             />
@@ -404,17 +462,18 @@ export function AssetsPage() {
         ))}
       </SectionHeader>
 
-      {!searching && folders.length > 0 ? (
-        <div className="px-4 md:px-6 mt-3 flex flex-wrap gap-2">
-          {folders.map((name) => (
-            <Chip
-              key={name}
-              label={name}
-              variant="add"
-              size="tap"
-              onClick={() => setFolder(`${folder.endsWith('/') ? folder : `${folder}/`}${name}/`)}
-            />
-          ))}
+      {!searching && currentFolders.length > 0 ? (
+        <div className="px-4 md:px-6 mt-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
+            {currentFolders.map((f) => (
+              <FolderCard
+                key={f.id}
+                name={f.name}
+                count={folderChildCount(folders, items, f.id)}
+                onOpen={() => setFolderId(f.id)}
+              />
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -439,7 +498,7 @@ export function AssetsPage() {
             </div>
           ))}
         </div>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && folders.length === 0 ? (
         <EmptyState
           icon={<IconAssets size={24} />}
           title="No assets yet"
@@ -457,9 +516,9 @@ export function AssetsPage() {
             <p className="text-sm text-fg-2">No assets match &quot;{search.trim()}&quot;</p>
             <p className="mt-1 text-xs text-fg-3">Try a different name or clear the search.</p>
           </div>
-        ) : (
-          <div className="px-4 md:px-6 py-10 text-sm text-fg-3">No assets in this folder.</div>
-        )
+        ) : currentFolders.length === 0 ? (
+          <div className="px-4 md:px-6 py-10 text-sm text-fg-3">This folder is empty.</div>
+        ) : null
       ) : (
         <div className="px-4 md:px-6 py-4">
           <AssetGrid
@@ -522,6 +581,14 @@ export function AssetsPage() {
         onSubmit={handleAddLink}
         onToast={push}
         onAdded={() => void loadAssets()}
+      />
+
+      <NewFolderSheet
+        open={newFolderOpen}
+        onClose={() => setNewFolderOpen(false)}
+        onSubmit={handleCreateFolder}
+        onToast={push}
+        onCreated={() => void loadFolders()}
       />
 
       <Toasts toasts={toasts} onDismiss={dismiss} />

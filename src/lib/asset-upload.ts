@@ -267,6 +267,83 @@ export async function addAssetLink(config: AddLinkConfig): Promise<LinkOutcome> 
   return { ok: true, assetId: assetIdOf(body) };
 }
 
+/**
+ * Map a /folders create failure (or the transport code 'network') to toast copy.
+ * Create never returns folder_name_taken (the worker auto-numbers a sibling
+ * collision), so there is no collision line; everything falls back to the
+ * generic retry copy. No em-dashes in any string (CLAUDE.md).
+ */
+export function folderErrorMessage(code: string): string {
+  switch (code) {
+    default:
+      return "Couldn't create the folder. Check your connection and retry";
+  }
+}
+
+export type FolderCreateOutcome =
+  | { ok: true; folder: { id: string; name: string; parentId: string | null } }
+  | { ok: false; message: string };
+
+export interface CreateFolderConfig {
+  /** The asset-upload worker base URL; the /folders route is POSTed beneath it. */
+  endpoint: string;
+  token: string;
+  workspaceId: string;
+  name: string;
+  /** The parent folder id, or null to create at the library root. */
+  parentId: string | null;
+  /** Injected so tests pass a mock; the app passes fetchWithTrace. */
+  fetcher: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+/**
+ * POST {workspace_id, name, parent_id} to the worker's /folders route with a
+ * Bearer token. Never throws: a transport failure or a non-OK status becomes
+ * { ok: false } with mapped copy. On success returns the created folder (the
+ * server may auto-number the name, so the returned name is authoritative).
+ */
+export async function createFolderRequest(
+  config: CreateFolderConfig,
+): Promise<FolderCreateOutcome> {
+  let response: Response;
+  try {
+    response = await config.fetcher(workerRoute(config.endpoint, '/folders'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({
+        workspace_id: config.workspaceId,
+        name: config.name.trim(),
+        parent_id: config.parentId,
+      }),
+    });
+  } catch {
+    return { ok: false, message: folderErrorMessage('network') };
+  }
+
+  const body = await readJson(response);
+  if (!response.ok) {
+    return { ok: false, message: folderErrorMessage(errorCode(body)) };
+  }
+  const folder = folderField(body);
+  if (folder === null) {
+    return { ok: false, message: folderErrorMessage('network') };
+  }
+  return { ok: true, folder };
+}
+
+/** Read the created folder from a {folder:{id,name,parent_id}} body; null when absent. */
+function folderField(body: unknown): { id: string; name: string; parentId: string | null } | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const folder = (body as { folder?: unknown }).folder;
+  if (typeof folder !== 'object' || folder === null) return null;
+  const f = folder as { id?: unknown; name?: unknown; parent_id?: unknown };
+  if (typeof f.id !== 'string' || typeof f.name !== 'string') return null;
+  return { id: f.id, name: f.name, parentId: typeof f.parent_id === 'string' ? f.parent_id : null };
+}
+
 /** Roles allowed to rename assets; mirrors the worker's 403 as defense in depth. */
 export function canRenameAssets(role: string | null): boolean {
   return role === 'owner' || role === 'admin' || role === 'agency';

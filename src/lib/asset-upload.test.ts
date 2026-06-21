@@ -6,6 +6,7 @@ import {
   addAssetLink,
   allNamed,
   canRenameAssets,
+  createFolderRequest,
   isValidLinkUrl,
   linkErrorMessage,
   precheckFile,
@@ -16,6 +17,7 @@ import {
   uploadErrorMessage,
   uploadFilename,
   type AddLinkConfig,
+  type CreateFolderConfig,
   type QueueItem,
   type RenameConfig,
   type UploadConfig,
@@ -276,6 +278,77 @@ describe('addAssetLink', () => {
     expect(out).toEqual({
       ok: false,
       message: "Couldn't add the link. Check your connection and retry",
+    });
+  });
+});
+
+const folderConfig = (
+  fetcher: CreateFolderConfig['fetcher'],
+  parentId: string | null = null,
+): CreateFolderConfig => ({
+  endpoint: 'https://upload.example.workers.dev',
+  token: 'tok',
+  workspaceId: 'ws-1',
+  name: 'Campaigns',
+  parentId,
+  fetcher,
+});
+
+describe('createFolderRequest', () => {
+  it('posts {workspace_id, name, parent_id} to /folders and returns the folder', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(201, { folder: { id: 'f-1', name: 'Campaigns', parent_id: null } }),
+      );
+
+    const out = await createFolderRequest(folderConfig(fetcher));
+
+    expect(out).toEqual({ ok: true, folder: { id: 'f-1', name: 'Campaigns', parentId: null } });
+    expect(fetcher).toHaveBeenCalledOnce();
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://upload.example.workers.dev/folders');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init.body as string)).toEqual({
+      workspace_id: 'ws-1',
+      name: 'Campaigns',
+      parent_id: null,
+    });
+  });
+
+  it('returns the auto-numbered name the server resolved, under a parent', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(201, { folder: { id: 'f-2', name: 'Campaigns 2', parent_id: 'f-1' } }),
+      );
+    const out = await createFolderRequest(folderConfig(fetcher, 'f-1'));
+    expect(out).toEqual({
+      ok: true,
+      folder: { id: 'f-2', name: 'Campaigns 2', parentId: 'f-1' },
+    });
+    const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).parent_id).toBe('f-1');
+  });
+
+  it('maps a non-OK status to the retry message', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(500, { error: { code: 'internal_error' } }));
+    const out = await createFolderRequest(folderConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      message: "Couldn't create the folder. Check your connection and retry",
+    });
+  });
+
+  it('maps a transport failure to the retry message', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
+    const out = await createFolderRequest(folderConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      message: "Couldn't create the folder. Check your connection and retry",
     });
   });
 });
