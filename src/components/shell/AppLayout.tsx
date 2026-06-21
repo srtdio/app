@@ -116,7 +116,7 @@ export function AppLayout() {
       <div className="flex flex-1 min-w-0 flex-col h-full">
         <Topbar
           workspaceName={workspaceName}
-          currentUserName={profile?.display_name ?? undefined}
+          {...(profile !== null ? { currentUserName: profile.display_name } : {})}
           currentUserAvatarUrl={profile?.avatar_url ?? null}
           onOpenPalette={() => setPaletteOpen(true)}
           onOpenAvatar={() => setAvatarOpen(true)}
