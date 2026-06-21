@@ -90,6 +90,7 @@ describe('toVersionViews', () => {
       version_number: 1,
       snapshot: { caption: 'c', gallery: [] } as Json,
       created_by: 'u-1' as string | null,
+      legacy_author_name: null as string | null,
       created_at: '2026-06-01T00:00:00.000Z',
     };
     return { ...base, ...over } as unknown as PostVersion;
@@ -103,5 +104,14 @@ describe('toVersionViews', () => {
     expect(views.map((v) => v.versionNumber)).toEqual([1, 2]);
     expect(views[0]).toMatchObject({ id: 'a', versionNumber: 1, createdBy: null });
     expect(views[1]).toMatchObject({ id: 'b', versionNumber: 2, createdBy: 'u-1' });
+  });
+
+  it('carries legacy_author_name through to legacyAuthorName, null when absent', () => {
+    const views = toVersionViews([
+      row({ id: 'a', version_number: 1, created_by: null, legacy_author_name: 'Casey Cutover' }),
+      row({ id: 'b', version_number: 2, created_by: 'u-1', legacy_author_name: null }),
+    ]);
+    expect(views[0]).toMatchObject({ createdBy: null, legacyAuthorName: 'Casey Cutover' });
+    expect(views[1]).toMatchObject({ createdBy: 'u-1', legacyAuthorName: null });
   });
 });
