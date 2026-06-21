@@ -487,6 +487,12 @@ export function Comments({
   }, [comments]);
 
   const nameOf = useCallback((id: string): string | null => resolveName(profiles, id), [profiles]);
+  // Author avatar URL from the SAME profiles map the card already holds; no new
+  // query. Absent member -> null, so the card keeps its initials fallback.
+  const avatarOf = useCallback(
+    (id: string): string | null => profiles.get(id)?.avatarUrl ?? null,
+    [profiles],
+  );
 
   async function handleCreate(
     body: string,
@@ -623,12 +629,19 @@ export function Comments({
     const actions = commentActions(comment, currentUserId, false);
     const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
     const authorName = nameOf(comment.author_user_id) ?? EX_MEMBER_LABEL;
+    const authorAvatarUrl = avatarOf(comment.author_user_id);
     const editing = editingId === comment.id;
 
     return (
       <>
         <div className="flex items-center gap-2 mb-1.5">
-          <Avatar name={authorName} size={isReply ? 'sm' : 'md'} />
+          <Avatar
+            name={authorName}
+            size={isReply ? 'sm' : 'md'}
+            {...(authorAvatarUrl !== null && authorAvatarUrl !== undefined
+              ? { src: authorAvatarUrl }
+              : {})}
+          />
           <span className="text-xs font-medium text-fg-2">{authorName}</span>
           {comment.is_decision ? (
             <span className="inline-flex items-center rounded-full border border-accent-line px-2 h-5 text-[11px] font-medium text-accent">

@@ -8,11 +8,19 @@ import { dispatchSorted } from '@/lib/events';
 
 interface TopbarProps {
   workspaceName: string | null;
+  currentUserName?: string;
+  currentUserAvatarUrl?: string | null;
   onOpenPalette: () => void;
   onOpenAvatar: () => void;
 }
 
-export function Topbar({ workspaceName, onOpenPalette, onOpenAvatar }: TopbarProps) {
+export function Topbar({
+  workspaceName,
+  currentUserName,
+  currentUserAvatarUrl,
+  onOpenPalette,
+  onOpenAvatar,
+}: TopbarProps) {
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
@@ -68,7 +76,11 @@ export function Topbar({ workspaceName, onOpenPalette, onOpenAvatar }: TopbarPro
           onClick={onOpenAvatar}
           className="inline-flex items-center justify-center h-11 w-11 rounded-md hover:bg-panel-2 transition-colors"
         >
-          <Avatar size="md" />
+          <Avatar
+            size="md"
+            {...(currentUserName !== undefined ? { name: currentUserName } : {})}
+            {...(currentUserAvatarUrl ? { src: currentUserAvatarUrl } : {})}
+          />
         </button>
       </div>
     </header>
