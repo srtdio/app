@@ -43,6 +43,8 @@ export interface AssetListItem {
   /** Human-friendly name (backfilled from the post title); may be null. */
   displayName: string | null;
   folderPath: string;
+  /** The real folders-table parent of this asset; null = library root. */
+  folderId: string | null;
   tags: string[];
   uploadedAt: string;
   currentVersionId: string | null;
@@ -79,6 +81,7 @@ interface RawAssetRow {
   filename: string;
   display_name: string | null;
   folder_path: string;
+  folder_id: string | null;
   tags: string[];
   uploaded_at: string;
   current_version_id: string | null;
@@ -89,7 +92,7 @@ interface RawAssetRow {
 // between the same pair of tables, so the embed MUST be disambiguated by the
 // exact constraint name or PostgREST 300s on the ambiguous relationship.
 const ASSET_SELECT =
-  'id, filename, display_name, folder_path, tags, uploaded_at, current_version_id, ' +
+  'id, filename, display_name, folder_path, folder_id, tags, uploaded_at, current_version_id, ' +
   'current_version:asset_versions!assets_current_version_id_fkey(' +
   'id, kind, mime_type, size_bytes, width, height, duration_ms, external_url, r2_key, version_number)';
 
@@ -110,6 +113,7 @@ export function shapeAssets(
       filename: row.filename,
       displayName: row.display_name ?? null,
       folderPath: row.folder_path,
+      folderId: row.folder_id,
       tags: row.tags,
       uploadedAt: row.uploaded_at,
       currentVersionId: row.current_version_id,
@@ -355,30 +359,81 @@ export function imageTileState(args: {
   return 'shimmer';
 }
 
-/** Immediate child folder names of `folder` derived from every asset path. */
-export function subfolders(items: AssetListItem[], folder: string): string[] {
-  const prefix = folder.endsWith('/') ? folder : `${folder}/`;
-  const names = new Set<string>();
-  for (const item of items) {
-    const path = item.folderPath;
-    if (!path.startsWith(prefix) || path === prefix) continue;
-    const rest = path.slice(prefix.length);
-    const name = rest.split('/')[0];
-    if (name !== undefined && name !== '') names.add(name);
-  }
-  return [...names].sort((a, b) => a.localeCompare(b));
+/** One folder row from the real folders table, shaped for navigation. */
+export interface FolderItem {
+  id: string;
+  name: string;
+  parentId: string | null;
 }
 
-/** Split a folder path into breadcrumb segments with their cumulative paths. */
-export function breadcrumbSegments(folder: string): { name: string; path: string }[] {
-  const parts = folder.split('/').filter((p) => p !== '');
-  const segments: { name: string; path: string }[] = [];
-  let acc = '';
-  for (const part of parts) {
-    acc = `${acc}/${part}`;
-    segments.push({ name: part, path: `${acc}/` });
+/** Shape of one raw folders-table row (the subset selected below). */
+interface RawFolderRow {
+  id: string;
+  name: string;
+  parent_id: string | null;
+}
+
+/**
+ * List one workspace's folders with a plain RLS-scoped SELECT (the folders
+ * policy scopes to active member rows and excludes soft-deleted), mirroring
+ * listAssets' Result handling: a transport/PostgREST failure surfaces as
+ * { ok: false } rather than a throw.
+ */
+export async function fetchFolders(
+  client: Client,
+  workspaceId: string,
+): Promise<Result<FolderItem[]>> {
+  const result = await client
+    .from('folders')
+    .select('id,name,parent_id')
+    .eq('workspace_id', workspaceId);
+  if (result.error) {
+    return { ok: false, error: { code: 'unknown', message: result.error.message } };
   }
-  return segments;
+  const rows = (result.data ?? []) as unknown as RawFolderRow[];
+  const data = rows.map((row) => ({ id: row.id, name: row.name, parentId: row.parent_id }));
+  return { ok: true, data };
+}
+
+/** Immediate child folders of `parentId` (null = root), sorted by name caselessly. */
+export function childFolders(folders: FolderItem[], parentId: string | null): FolderItem[] {
+  return folders
+    .filter((folder) => folder.parentId === parentId)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+/**
+ * The root -> current trail for `folderId`, walking parent_id upward. Null (root)
+ * or an unknown id returns []; a cycle stops as soon as an id repeats.
+ */
+export function folderBreadcrumb(
+  folders: FolderItem[],
+  folderId: string | null,
+): { id: string; name: string }[] {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const trail: { id: string; name: string }[] = [];
+  const seen = new Set<string>();
+  let current = folderId;
+  while (current !== null) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    const folder = byId.get(current);
+    if (folder === undefined) return [];
+    trail.unshift({ id: folder.id, name: folder.name });
+    current = folder.parentId;
+  }
+  return trail;
+}
+
+/** How many child folders plus assets live directly inside `folderId`. */
+export function folderChildCount(
+  folders: FolderItem[],
+  items: AssetListItem[],
+  folderId: string,
+): number {
+  const folderCount = folders.filter((folder) => folder.parentId === folderId).length;
+  const assetCount = items.filter((item) => item.folderId === folderId).length;
+  return folderCount + assetCount;
 }
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];

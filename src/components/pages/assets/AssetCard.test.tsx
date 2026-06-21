@@ -15,6 +15,7 @@ function makeAsset(overrides: Partial<AssetListItem>): AssetListItem {
     filename: 'report.pdf',
     displayName: null,
     folderPath: '/',
+    folderId: null,
     tags: [],
     uploadedAt: '2026-01-01T00:00:00Z',
     currentVersionId: 'av1',
