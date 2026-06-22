@@ -9,10 +9,12 @@ import {
   asGeneric,
   cleanupWorkspaces,
   clientFor,
+  countWhere,
   createAdminClient,
   generateTraceId,
   insertRow,
   loadRlsEnv,
+  randomSha256,
   seedScaffold,
   seedUser,
   seedWorkspace,
@@ -191,5 +193,104 @@ describe.runIf(COMMENTS_SUITE)('comments create + read layer (authenticated role
     );
     expect(rows.length).toBeGreaterThanOrEqual(1);
     expect(rows.every((r) => r.body.includes('kerning'))).toBe(true);
+  });
+});
+
+// Regression: comment_create binds attachments by asset_VERSION id (the composer
+// passes version ids in p_attachment_asset_ids). A version in the comment's own
+// workspace whose asset is live attaches; a version belonging to another
+// workspace is rejected as invalid_payload and writes no asset_attachments row.
+describe.runIf(COMMENTS_SUITE)('comment_create attachment binding (version ids)', () => {
+  let admin: SupabaseClient<Database>;
+  let owner: SeededUser;
+  let wsA: SeededWorkspace;
+  let wsB: SeededWorkspace;
+  let ctxA: Ctx;
+  let ownerClient: Client;
+
+  // Seed an asset + one version through the service role only, mirroring the
+  // upload pipeline, and pin the asset's current_version_id. Returns both ids.
+  async function seedAssetVersion(
+    workspaceId: string,
+  ): Promise<{ assetId: string; versionId: string }> {
+    const g = asGeneric(admin);
+    const asset = await insertRow(g, 'assets', {
+      workspace_id: workspaceId,
+      filename: 'attachment.png',
+      uploaded_by: owner.id,
+    });
+    const version = await insertRow(g, 'asset_versions', {
+      asset_id: asset.id,
+      workspace_id: workspaceId,
+      version_number: 1,
+      kind: 'image',
+      r2_key: `key/${crypto.randomUUID()}`,
+      mime_type: 'image/png',
+      sha256: randomSha256(),
+      size_bytes: 1234,
+      uploaded_by: owner.id,
+    });
+    await g.from('assets').update({ current_version_id: version.id }).eq('id', String(asset.id));
+    return { assetId: String(asset.id), versionId: String(version.id) };
+  }
+
+  beforeAll(async () => {
+    const env = loadRlsEnv();
+    admin = createAdminClient(env);
+
+    owner = await seedUser(env, admin);
+    wsA = await seedWorkspace(admin, owner, `Attach A ${owner.email}`);
+    ctxA = await seedScaffold(admin, wsA);
+    ownerClient = clientFor(owner.id);
+
+    // A second workspace (also owned by the same user) supplies a foreign version.
+    wsB = await seedWorkspace(admin, owner, `Attach B ${owner.email}`);
+    await seedScaffold(admin, wsB);
+  });
+
+  afterAll(async () => {
+    await cleanupWorkspaces(admin, [wsA, wsB], [owner]);
+  });
+
+  it('binds a same-workspace version to an asset_attachments row', async () => {
+    const { assetId, versionId } = await seedAssetVersion(wsA.id);
+    const id = expectOk(
+      await createComment(ownerClient, {
+        workspace_id: wsA.id,
+        entity_type: 'post',
+        entity_id: ctxA.postId,
+        body: 'see the attached version',
+        attachment_asset_ids: [versionId],
+        trace_id: generateTraceId(),
+      }),
+    );
+    const res = await asGeneric(admin)
+      .from('asset_attachments')
+      .select('asset_id, asset_version_id')
+      .eq('entity_type', 'comment')
+      .eq('entity_id', id);
+    const rows = res.data as Array<{ asset_id: string; asset_version_id: string }> | null;
+    expect(rows?.length).toBe(1);
+    expect(rows?.[0]?.asset_version_id).toBe(versionId);
+    expect(rows?.[0]?.asset_id).toBe(assetId);
+  });
+
+  it('rejects a foreign-workspace version with invalid_payload and writes nothing', async () => {
+    const { versionId } = await seedAssetVersion(wsB.id);
+    const result = await createComment(ownerClient, {
+      workspace_id: wsA.id,
+      entity_type: 'post',
+      entity_id: ctxA.postId,
+      body: 'attaching a foreign version',
+      attachment_asset_ids: [versionId],
+      trace_id: generateTraceId(),
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('invalid_payload');
+    const written = await countWhere(asGeneric(admin), 'asset_attachments', [
+      ['entity_type', 'comment'],
+      ['asset_version_id', versionId],
+    ]);
+    expect(written).toBe(0);
   });
 });
