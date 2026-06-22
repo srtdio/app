@@ -104,3 +104,60 @@ describe('AssetCard thumbnail', () => {
     expect(out).toContain('<svg');
   });
 });
+
+// Select mode swaps the tap target onto onToggleSelect and overlays a tick. The
+// node test env has no DOM, so the wiring is asserted through the rendered
+// affordances: the select aria-label + aria-pressed (which replace the open
+// label and carry the toggle), the selected outline, and the tick. A vi.fn for
+// onToggleSelect/onOpen is passed so the SSR render exercises the select branch.
+describe('AssetCard select mode', () => {
+  function renderSelect(selected: boolean): string {
+    const { cache } = makeCache(null);
+    return renderToStaticMarkup(
+      <AssetCard
+        item={makeAsset({ filename: 'report.pdf' })}
+        cache={cache}
+        presignEnabled={false}
+        onOpen={vi.fn()}
+        onLongPress={vi.fn()}
+        selectMode
+        selected={selected}
+        onToggleSelect={vi.fn()}
+      />,
+    );
+  }
+
+  it('renders a selection toggle (not an open target) with the tick when selected', () => {
+    const out = renderSelect(true);
+    expect(out).toContain('aria-label="Select report.pdf"');
+    expect(out).toContain('aria-pressed="true"');
+    expect(out).not.toContain('View report.pdf');
+    // Selected outline + filled tick (white check on the accent circle).
+    expect(out).toContain('border-accent');
+    expect(out).toContain('bg-accent');
+    expect(out).toContain('<svg');
+  });
+
+  it('shows a translucent ring and no check when not selected', () => {
+    const out = renderSelect(false);
+    expect(out).toContain('aria-pressed="false"');
+    expect(out).toContain('border-2 border-white');
+    expect(out).toContain('bg-black/40');
+  });
+
+  it('keeps the open behaviour and no selection affordance out of select mode', () => {
+    const { cache } = makeCache(null);
+    const out = renderToStaticMarkup(
+      <AssetCard
+        item={makeAsset({ filename: 'report.pdf' })}
+        cache={cache}
+        presignEnabled={false}
+        onOpen={vi.fn()}
+        onLongPress={vi.fn()}
+      />,
+    );
+    expect(out).toContain('aria-label="View report.pdf"');
+    expect(out).not.toContain('aria-pressed');
+    expect(out).not.toContain('Select report.pdf');
+  });
+});

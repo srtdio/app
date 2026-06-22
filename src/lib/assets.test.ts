@@ -10,6 +10,7 @@ import {
   fetchFolders,
   fileExtension,
   filterAssets,
+  flattenFolders,
   folderBreadcrumb,
   folderChildCount,
   formatDimensions,
@@ -360,6 +361,41 @@ describe('folder helpers', () => {
     // f-brand has one child folder (f-logos) and two assets.
     expect(folderChildCount(folders, items, 'f-brand')).toBe(3);
     expect(folderChildCount(folders, items, 'f-camp')).toBe(0);
+  });
+});
+
+describe('flattenFolders', () => {
+  it('walks depth-first parent-before-children with per-level depth and name-sorted siblings', () => {
+    // Root siblings 'Brand' and 'campaigns' sort caselessly (B before c); each
+    // child appears immediately after its parent at the next depth.
+    const folders: FolderItem[] = [
+      { id: 'f-camp', name: 'campaigns', parentId: null },
+      { id: 'f-brand', name: 'Brand', parentId: null },
+      { id: 'f-logos', name: 'Logos', parentId: 'f-brand' },
+      { id: 'f-icons', name: 'Icons', parentId: 'f-brand' },
+      { id: 'f-q1', name: 'Q1', parentId: 'f-camp' },
+    ];
+
+    expect(flattenFolders(folders)).toEqual([
+      { id: 'f-brand', name: 'Brand', depth: 0 },
+      { id: 'f-icons', name: 'Icons', depth: 1 },
+      { id: 'f-logos', name: 'Logos', depth: 1 },
+      { id: 'f-camp', name: 'campaigns', depth: 0 },
+      { id: 'f-q1', name: 'Q1', depth: 1 },
+    ]);
+  });
+
+  it('increments depth one level per generation', () => {
+    const folders: FolderItem[] = [
+      { id: 'a', name: 'A', parentId: null },
+      { id: 'b', name: 'B', parentId: 'a' },
+      { id: 'c', name: 'C', parentId: 'b' },
+    ];
+    expect(flattenFolders(folders).map((f) => f.depth)).toEqual([0, 1, 2]);
+  });
+
+  it('is empty when there are no folders', () => {
+    expect(flattenFolders([])).toEqual([]);
   });
 });
 

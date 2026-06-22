@@ -468,6 +468,64 @@ export async function deleteFolderRequest(
   return { ok: true };
 }
 
+export type MoveAssetsOutcome = { ok: true; moved: number } | { ok: false; message: string };
+
+export interface MoveAssetsConfig {
+  /** The asset-upload worker base URL; the /folders/move route is POSTed beneath it. */
+  endpoint: string;
+  token: string;
+  workspaceId: string;
+  /** The assets to relocate; the worker batch-updates their folder_id. */
+  assetIds: string[];
+  /** The destination folder id, or null to move back to the library root. */
+  targetFolderId: string | null;
+  /** Injected so tests pass a mock; the app passes fetchWithTrace. */
+  fetcher: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+/** Shared retry copy for a failed move. No em-dashes in any string (CLAUDE.md). */
+const MOVE_RETRY = "Couldn't move the files. Check your connection and retry";
+
+/**
+ * POST {workspace_id, asset_ids, target_folder_id} to the worker's /folders/move
+ * route with a Bearer token. Never throws: a transport failure or a non-OK status
+ * becomes { ok: false } with the retry copy. On success it reads a numeric
+ * `moved` count from the body (0 when absent or not a number). Move is allowed
+ * for every active member, so there is no role-gated 403 branch.
+ */
+export async function moveAssetsRequest(config: MoveAssetsConfig): Promise<MoveAssetsOutcome> {
+  let response: Response;
+  try {
+    response = await config.fetcher(workerRoute(config.endpoint, '/folders/move'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({
+        workspace_id: config.workspaceId,
+        asset_ids: config.assetIds,
+        target_folder_id: config.targetFolderId,
+      }),
+    });
+  } catch {
+    return { ok: false, message: MOVE_RETRY };
+  }
+  if (!response.ok) {
+    return { ok: false, message: MOVE_RETRY };
+  }
+  return { ok: true, moved: movedCount(await readJson(response)) };
+}
+
+/** Read a numeric `moved` count from a {moved} body; 0 when absent or not finite. */
+function movedCount(body: unknown): number {
+  if (typeof body === 'object' && body !== null) {
+    const moved = (body as { moved?: unknown }).moved;
+    if (typeof moved === 'number' && Number.isFinite(moved)) return moved;
+  }
+  return 0;
+}
+
 /** Roles allowed to rename assets; mirrors the worker's 403 as defense in depth. */
 export function canRenameAssets(role: string | null): boolean {
   return role === 'owner' || role === 'admin' || role === 'agency';

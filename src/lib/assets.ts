@@ -403,6 +403,27 @@ export function childFolders(folders: FolderItem[], parentId: string | null): Fo
 }
 
 /**
+ * Depth-first flatten of the whole folder tree from the root downward, each
+ * folder returned once with its depth (root children depth 0). Children at every
+ * level are name-sorted caselessly via childFolders, so the order is
+ * parent-before-children with siblings in name order. Powers the destination
+ * list in the move sheet, where the depth drives the left indent.
+ */
+export function flattenFolders(
+  folders: FolderItem[],
+): { id: string; name: string; depth: number }[] {
+  const out: { id: string; name: string; depth: number }[] = [];
+  function walk(parentId: string | null, depth: number): void {
+    for (const folder of childFolders(folders, parentId)) {
+      out.push({ id: folder.id, name: folder.name, depth });
+      walk(folder.id, depth + 1);
+    }
+  }
+  walk(null, 0);
+  return out;
+}
+
+/**
  * The root -> current trail for `folderId`, walking parent_id upward. Null (root)
  * or an unknown id returns []; a cycle stops as soon as an id repeats.
  */

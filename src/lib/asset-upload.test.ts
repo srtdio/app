@@ -9,6 +9,7 @@ import {
   createFolderRequest,
   deleteFolderRequest,
   isValidLinkUrl,
+  moveAssetsRequest,
   renameFolderRequest,
   linkErrorMessage,
   precheckFile,
@@ -21,6 +22,7 @@ import {
   type AddLinkConfig,
   type CreateFolderConfig,
   type DeleteFolderConfig,
+  type MoveAssetsConfig,
   type QueueItem,
   type RenameFolderConfig,
   type RenameConfig,
@@ -353,6 +355,66 @@ describe('createFolderRequest', () => {
     expect(out).toEqual({
       ok: false,
       message: "Couldn't create the folder. Check your connection and retry",
+    });
+  });
+});
+
+const moveConfig = (
+  fetcher: MoveAssetsConfig['fetcher'],
+  targetFolderId: string | null = 'f-1',
+): MoveAssetsConfig => ({
+  endpoint: 'https://upload.example.workers.dev',
+  token: 'tok',
+  workspaceId: 'ws-1',
+  assetIds: ['a-1', 'a-2'],
+  targetFolderId,
+  fetcher,
+});
+
+describe('moveAssetsRequest', () => {
+  it('posts {workspace_id, asset_ids, target_folder_id} to /folders/move and returns moved', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { moved: 2 }));
+
+    const out = await moveAssetsRequest(moveConfig(fetcher));
+
+    expect(out).toEqual({ ok: true, moved: 2 });
+    expect(fetcher).toHaveBeenCalledOnce();
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://upload.example.workers.dev/folders/move');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init.body as string)).toEqual({
+      workspace_id: 'ws-1',
+      asset_ids: ['a-1', 'a-2'],
+      target_folder_id: 'f-1',
+    });
+  });
+
+  it('moves to the root with a null target and defaults moved to 0 when absent', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, {}));
+    const out = await moveAssetsRequest(moveConfig(fetcher, null));
+    expect(out).toEqual({ ok: true, moved: 0 });
+    const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).target_folder_id).toBeNull();
+  });
+
+  it('maps a non-OK status to the move retry message', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(500, { error: { code: 'internal_error' } }));
+    const out = await moveAssetsRequest(moveConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      message: "Couldn't move the files. Check your connection and retry",
+    });
+  });
+
+  it('maps a thrown fetcher to the move retry message', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
+    const out = await moveAssetsRequest(moveConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      message: "Couldn't move the files. Check your connection and retry",
     });
   });
 });
