@@ -3,6 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
 import type { ActivityItem } from '@/components/pages/activity/data';
+import type { PresignCache } from '@/lib/asset-presign';
+
+// The same shim the pipeline board test uses: presignEnabled is false so the
+// tile renders its fallback and never touches the cache, so an empty stand-in is
+// safe (no presigning in the unit env).
+const cache = {} as unknown as PresignCache;
 
 // The card embeds ActivityRowMenu, which reads window.matchMedia at render. The
 // unit env is `node`, so stub a minimal matchMedia (no DOM, no listeners fire).
@@ -32,6 +38,8 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     actorAvatarUrl: null,
     body: null,
     format: null,
+    caption: null,
+    thumbnailAssetVersionId: null,
     ...over,
   };
 }
@@ -43,6 +51,8 @@ function renderCard(group: ActivityItem[]): string {
     <ActivityCard
       group={group}
       nowMs={NOW}
+      cache={cache}
+      presignEnabled={false}
       onOpenGroup={() => {}}
       onSnooze={() => {}}
       onMarkRead={() => {}}

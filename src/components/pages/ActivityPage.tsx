@@ -33,6 +33,9 @@ import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSort } from '@/lib/use-sort';
+import { PresignCache } from '@/lib/asset-presign';
+import { fetchWithTrace } from '@/lib/fetch';
+import { env } from '@/lib/env';
 
 const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'newest', label: 'Newest' },
@@ -72,6 +75,21 @@ export function ActivityPage() {
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const { toasts, push, dismiss } = useToasts();
+
+  // One presign cache for the whole feed: it bounds concurrency and caches URLs
+  // so every card thumbnail shares a single cap, mirroring PipelinePage. Cards
+  // lazy-resolve their own thumbnail via useInView; the page adds no fetches.
+  const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
+  const cache = useMemo(
+    () =>
+      new PresignCache({
+        endpoint: env.VITE_ASSET_READ_URL ?? null,
+        getAccessToken: async () =>
+          (await supabase.auth.getSession()).data.session?.access_token ?? null,
+        fetcher: (input, init) => fetchWithTrace(input, init),
+      }),
+    [],
+  );
 
   const loadActivity = useCallback(async () => {
     if (workspaceId === null) return;
@@ -280,6 +298,8 @@ export function ActivityPage() {
                       key={group[0]?.id ?? bucket.key}
                       group={group}
                       nowMs={nowMs}
+                      cache={cache}
+                      presignEnabled={presignEnabled}
                       onOpenGroup={handleOpenGroup}
                       onSnooze={handleSnooze}
                       onMarkRead={handleMarkRead}

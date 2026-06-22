@@ -77,6 +77,10 @@ export interface ActivityItem {
   body: string | null;
   /** The post format (text/single_image/carousel/video/link), posts only. */
   format: string | null;
+  /** The post caption, posts only (null otherwise). Feeds the thumbnail fallback body. */
+  caption: string | null;
+  /** The post's first-image asset_version_id, posts only; null for a text/imageless post. */
+  thumbnailAssetVersionId: string | null;
 }
 
 /** Map a raw inbox_entries row into an ActivityItem. Pure; actorName stays null. */
@@ -102,6 +106,8 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     actorAvatarUrl: null,
     body: null,
     format: null,
+    caption: null,
+    thumbnailAssetVersionId: null,
   };
 }
 
@@ -398,6 +404,17 @@ const COMMENT_EVENTS = ['comment', 'mention', 'decision_marked'];
 const SELECT_COLS =
   'id, workspace_id, event_type, entity_type, entity_id, scope, tier, created_at, read_at, snoozed_until, payload';
 
+// One row of the batched first-image lookup, mirroring the Pipeline loader's
+// firstImageByPost (packages/posts/src/reads.ts): an asset_attachments row with
+// its pinned version's mime_type embedded via an inner join (so only image-backed
+// attachments survive). The aliased select is wider than the generated row type
+// can express, so the result is cast through `unknown`.
+interface FirstImageRow {
+  entity_id: string;
+  asset_version_id: string;
+  asset_versions: { mime_type: string | null } | null;
+}
+
 /**
  * Read one page of the caller's inbox for a workspace and enrich each row with the
  * data the live (minimal) payloads omit: the actor's display name and the entity
@@ -442,15 +459,31 @@ export async function fetchActivityEntries(
 
   // WAVE 1: resolve comment authors and entity titles. Each sub-query is fired
   // only when it has ids; a failed one yields an empty map (never fails the feed).
-  const [commentsRes, postsRes, briefsRes] = await Promise.all([
+  // The first-image read mirrors the Pipeline loader's firstImageByPost exactly
+  // (asset_attachments, image-mime inner join, position then attached_at order),
+  // run once over the distinct post ids on the page (no N+1); a failure degrades
+  // every thumbnailAssetVersionId to null rather than failing the feed.
+  const [commentsRes, postsRes, briefsRes, firstImagesRes] = await Promise.all([
     commentIds.length > 0
       ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
       : Promise.resolve(null),
     postIds.length > 0
-      ? client.from('posts').select('id, title, format').in('id', postIds)
+      ? client.from('posts').select('id, title, format, caption').in('id', postIds)
       : Promise.resolve(null),
     briefIds.length > 0
       ? client.from('briefs').select('id, title').in('id', briefIds)
+      : Promise.resolve(null),
+    postIds.length > 0
+      ? client
+          .from('asset_attachments')
+          .select('entity_id, asset_version_id, asset_versions!inner(mime_type)')
+          .eq('entity_type', 'post')
+          .in('entity_id', postIds)
+          .is('deleted_at', null)
+          .like('asset_versions.mime_type', 'image/%')
+          .order('entity_id', { ascending: true })
+          .order('position', { ascending: true })
+          .order('attached_at', { ascending: true })
       : Promise.resolve(null),
   ]);
 
@@ -464,10 +497,21 @@ export async function fetchActivityEntries(
   }
   const postTitles = new Map<string, string>();
   const postFormats = new Map<string, string>();
+  const postCaptions = new Map<string, string>();
   if (postsRes !== null && postsRes.error === null) {
     for (const r of postsRes.data ?? []) {
       postTitles.set(r.id, r.title);
       if (typeof r.format === 'string') postFormats.set(r.id, r.format);
+      if (typeof r.caption === 'string') postCaptions.set(r.id, r.caption);
+    }
+  }
+  // The first-image asset_version_id per post: the lowest-position image-mime
+  // attachment, the first row seen per entity_id (rows arrive grouped + ordered).
+  const postThumbnails = new Map<string, string>();
+  if (firstImagesRes !== null && firstImagesRes.error === null) {
+    const imageRows = (firstImagesRes.data ?? []) as unknown as FirstImageRow[];
+    for (const r of imageRows) {
+      if (!postThumbnails.has(r.entity_id)) postThumbnails.set(r.entity_id, r.asset_version_id);
     }
   }
   const briefTitles = new Map<string, string>();
@@ -526,16 +570,25 @@ export async function fetchActivityEntries(
     if (item.entityType === 'post') {
       item.title = item.entityId !== null ? (postTitles.get(item.entityId) ?? null) : null;
       item.format = item.entityId !== null ? (postFormats.get(item.entityId) ?? null) : null;
+      item.caption = item.entityId !== null ? (postCaptions.get(item.entityId) ?? null) : null;
+      item.thumbnailAssetVersionId =
+        item.entityId !== null ? (postThumbnails.get(item.entityId) ?? null) : null;
     } else if (item.entityType === 'brief') {
       const fromJoin = item.entityId !== null ? briefTitles.get(item.entityId) : undefined;
       item.title = fromJoin ?? payloadStr(payload, 'title') ?? null;
       item.format = null;
+      item.caption = null;
+      item.thumbnailAssetVersionId = null;
     } else if (item.eventType === 'asset_uploaded') {
       item.title = payloadStr(payload, 'filename');
       item.format = null;
+      item.caption = null;
+      item.thumbnailAssetVersionId = null;
     } else {
       item.title = null;
       item.format = null;
+      item.caption = null;
+      item.thumbnailAssetVersionId = null;
     }
   });
 
