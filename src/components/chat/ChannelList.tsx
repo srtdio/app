@@ -118,7 +118,7 @@ function ChannelCard(props: {
       <Avatar
         name={channel.title}
         {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
-        size="lg"
+        size="xl"
       />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-baseline gap-2">
