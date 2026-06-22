@@ -7,7 +7,9 @@ import {
   allNamed,
   canRenameAssets,
   createFolderRequest,
+  deleteFolderRequest,
   isValidLinkUrl,
+  renameFolderRequest,
   linkErrorMessage,
   precheckFile,
   renameAsset,
@@ -18,7 +20,9 @@ import {
   uploadFilename,
   type AddLinkConfig,
   type CreateFolderConfig,
+  type DeleteFolderConfig,
   type QueueItem,
+  type RenameFolderConfig,
   type RenameConfig,
   type UploadConfig,
 } from '@/lib/asset-upload';
@@ -414,6 +418,108 @@ describe('renameAsset', () => {
     expect(out).toEqual({
       ok: false,
       message: "Couldn't rename this asset. Check your connection and retry",
+    });
+  });
+});
+
+const renameFolderConfig = (fetcher: RenameFolderConfig['fetcher']): RenameFolderConfig => ({
+  endpoint: 'https://upload.example.workers.dev',
+  token: 'tok',
+  workspaceId: 'ws-1',
+  folderId: 'f-1',
+  name: 'Campaigns',
+  fetcher,
+});
+
+describe('renameFolderRequest', () => {
+  it('posts {workspace_id, folder_id, name} to /folders/rename and returns the folder', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { folder: { id: 'f-1', name: 'Campaigns', parent_id: null } }),
+      );
+
+    const out = await renameFolderRequest(renameFolderConfig(fetcher));
+
+    expect(out).toEqual({ ok: true, folder: { id: 'f-1', name: 'Campaigns', parentId: null } });
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://upload.example.workers.dev/folders/rename');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init.body as string)).toEqual({
+      workspace_id: 'ws-1',
+      folder_id: 'f-1',
+      name: 'Campaigns',
+    });
+  });
+
+  it('surfaces a folder_name_taken collision inline (nameTaken:true)', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(409, { error: { code: 'folder_name_taken' } }));
+    const out = await renameFolderRequest(renameFolderConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      nameTaken: true,
+      message: 'A folder with this name already exists here',
+    });
+  });
+
+  it('maps a 403 to the agency-only message with nameTaken:false', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(403, { error: { code: 'forbidden' } }));
+    const out = await renameFolderRequest(renameFolderConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      nameTaken: false,
+      message: 'Only the agency team can rename folders',
+    });
+  });
+
+  it('maps a transport failure to the generic retry message', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
+    const out = await renameFolderRequest(renameFolderConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      nameTaken: false,
+      message: "Couldn't rename the folder. Check your connection and retry",
+    });
+  });
+});
+
+const deleteFolderConfig = (fetcher: DeleteFolderConfig['fetcher']): DeleteFolderConfig => ({
+  endpoint: 'https://upload.example.workers.dev',
+  token: 'tok',
+  workspaceId: 'ws-1',
+  folderId: 'f-1',
+  fetcher,
+});
+
+describe('deleteFolderRequest', () => {
+  it('posts {workspace_id, folder_id} to /folders/delete and succeeds on 200', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+
+    const out = await deleteFolderRequest(deleteFolderConfig(fetcher));
+
+    expect(out).toEqual({ ok: true });
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://upload.example.workers.dev/folders/delete');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init.body as string)).toEqual({ workspace_id: 'ws-1', folder_id: 'f-1' });
+  });
+
+  it('maps a 403 to the agency-only delete message', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(403, { error: { code: 'forbidden' } }));
+    const out = await deleteFolderRequest(deleteFolderConfig(fetcher));
+    expect(out).toEqual({ ok: false, message: 'Only the agency team can delete folders' });
+  });
+
+  it('maps a transport failure to the generic retry message', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
+    const out = await deleteFolderRequest(deleteFolderConfig(fetcher));
+    expect(out).toEqual({
+      ok: false,
+      message: "Couldn't delete the folder. Check your connection and retry",
     });
   });
 });

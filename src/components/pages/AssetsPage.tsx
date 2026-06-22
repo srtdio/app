@@ -12,6 +12,8 @@ import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { AddLinkSheet } from '@/components/pages/assets/AddLinkSheet';
 import { FolderCard } from '@/components/pages/assets/FolderCard';
+import { FolderActionSheet } from '@/components/pages/assets/FolderActionSheet';
+import { FolderRenameSheet } from '@/components/pages/assets/FolderRenameSheet';
 import { NewFolderSheet } from '@/components/pages/assets/NewFolderSheet';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
@@ -28,9 +30,13 @@ import {
   addAssetLink,
   canRenameAssets,
   createFolderRequest,
+  deleteFolderRequest,
   renameAsset,
+  renameFolderRequest,
   uploadAssetFile,
   type FolderCreateOutcome,
+  type FolderDeleteOutcome,
+  type FolderRenameOutcome,
   type LinkOutcome,
   type RenameOutcome,
   type UploadOutcome,
@@ -85,6 +91,8 @@ export function AssetsPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [folderAction, setFolderAction] = useState<FolderItem | null>(null);
+  const [renameTarget, setRenameTarget] = useState<FolderItem | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   const { toasts, push, dismiss } = useToasts();
@@ -141,6 +149,8 @@ export function AssetsPage() {
     setUploadOpen(false);
     setAddLinkOpen(false);
     setNewFolderOpen(false);
+    setFolderAction(null);
+    setRenameTarget(null);
   }, [workspaceId]);
 
   // Resolve the current member's workspace role with one RLS-scoped read (no
@@ -161,6 +171,8 @@ export function AssetsPage() {
   }, [workspaceId, userId]);
 
   const canRename = canRenameAssets(role);
+  // Folder rename/delete share the asset rename role gate (owner/admin/agency).
+  const canManageFolders = canRename;
 
   const searching = search.trim() !== '';
 
@@ -367,6 +379,73 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, folderId, newTrace],
   );
 
+  // Rename one folder via the worker's /folders/rename route. On success the
+  // folder list is reloaded so the new name shows; a sibling collision
+  // (folder_name_taken) and the 403 role guard are surfaced by the sheet.
+  const handleRenameFolder = useCallback(
+    async (folder: FolderItem, name: string): Promise<FolderRenameOutcome> => {
+      if (uploadEndpoint === undefined || uploadEndpoint === '') {
+        return {
+          ok: false,
+          nameTaken: false,
+          message: "Couldn't rename the folder. Check your connection and retry",
+        };
+      }
+      if (workspaceId === null) {
+        return { ok: false, nameTaken: false, message: 'No workspace selected.' };
+      }
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      if (token === null || token === '') {
+        return { ok: false, nameTaken: false, message: 'Your session expired. Sign in again.' };
+      }
+      const outcome = await renameFolderRequest({
+        endpoint: uploadEndpoint,
+        token,
+        workspaceId,
+        folderId: folder.id,
+        name,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+      if (outcome.ok) void loadFolders();
+      return outcome;
+    },
+    [uploadEndpoint, workspaceId, newTrace, loadFolders],
+  );
+
+  // Delete one folder via the worker's /folders/delete route. The worker
+  // soft-deletes the folder and detaches its child folders + assets to the root,
+  // so on success both the folder list and the asset list are reloaded.
+  const handleDeleteFolder = useCallback(
+    async (folder: FolderItem): Promise<FolderDeleteOutcome> => {
+      if (uploadEndpoint === undefined || uploadEndpoint === '') {
+        return {
+          ok: false,
+          message: "Couldn't delete the folder. Check your connection and retry",
+        };
+      }
+      if (workspaceId === null) {
+        return { ok: false, message: 'No workspace selected.' };
+      }
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      if (token === null || token === '') {
+        return { ok: false, message: 'Your session expired. Sign in again.' };
+      }
+      const outcome = await deleteFolderRequest({
+        endpoint: uploadEndpoint,
+        token,
+        workspaceId,
+        folderId: folder.id,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+      if (outcome.ok) {
+        void loadFolders();
+        void loadAssets();
+      }
+      return outcome;
+    },
+    [uploadEndpoint, workspaceId, newTrace, loadFolders, loadAssets],
+  );
+
   // Rename one asset via the worker's /rename route. On success the name is
   // updated in place (grid card + open lightbox) without a full reload; a 403
   // (defense in depth) surfaces the agency-only message.
@@ -471,6 +550,7 @@ export function AssetsPage() {
                 name={f.name}
                 count={folderChildCount(folders, items, f.id)}
                 onOpen={() => setFolderId(f.id)}
+                onManage={canManageFolders ? () => setFolderAction(f) : undefined}
               />
             ))}
           </div>
@@ -589,6 +669,29 @@ export function AssetsPage() {
         onSubmit={handleCreateFolder}
         onToast={push}
         onCreated={() => void loadFolders()}
+      />
+
+      {folderAction !== null ? (
+        <FolderActionSheet
+          name={folderAction.name}
+          onClose={() => setFolderAction(null)}
+          onRename={() => {
+            const f = folderAction;
+            setFolderAction(null);
+            setRenameTarget(f);
+          }}
+          onConfirmDelete={() => handleDeleteFolder(folderAction)}
+          onToast={push}
+        />
+      ) : null}
+
+      <FolderRenameSheet
+        open={renameTarget !== null}
+        initialName={renameTarget?.name ?? ''}
+        onClose={() => setRenameTarget(null)}
+        onSubmit={(name) => handleRenameFolder(renameTarget!, name)}
+        onToast={push}
+        onRenamed={() => void loadFolders()}
       />
 
       <Toasts toasts={toasts} onDismiss={dismiss} />

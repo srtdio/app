@@ -1,5 +1,6 @@
 import { cn } from '@/lib/cn';
 import { IconFolder } from '@/components/ui/icons';
+import { useLongPress } from '@/components/pages/assets/useLongPress';
 
 interface FolderCardProps {
   name: string;
@@ -7,20 +8,28 @@ interface FolderCardProps {
   count: number;
   /** Tap: open this folder (set it as the current level). */
   onOpen: () => void;
+  /**
+   * Long-press: open the folder action sheet (rename / delete). Omitted for
+   * members without manage rights, in which case a long-press just opens.
+   */
+  onManage?: (() => void) | undefined;
 }
 
 /**
  * A folder tile in the Assets grid, mirroring AssetCard's container so folders
- * and assets line up in the same grid. The whole card is the open button: there
- * is no long-press and no action menu (rename/delete/move land in a later PR).
+ * and assets line up in the same grid. A tap opens the folder; for owner/admin/
+ * agency a long-press opens the action sheet (rename/delete) via onManage. When
+ * onManage is undefined a long-press is identical to a tap (it just opens).
  * Themed with semantic tokens so light and dark match; the tile is >=44px tall.
  */
-export function FolderCard({ name, count, onOpen }: FolderCardProps) {
+export function FolderCard({ name, count, onOpen, onManage }: FolderCardProps) {
+  const longPress = useLongPress(onManage ?? onOpen, onOpen);
+
   return (
     <button
       type="button"
       aria-label={`Open folder ${name}`}
-      onClick={onOpen}
+      {...longPress}
       style={{ touchAction: 'manipulation' }}
       className={cn(
         'group relative flex flex-col overflow-hidden rounded-xl border border-border bg-panel text-left transition-colors',
