@@ -15,14 +15,21 @@ import { AcceptInvitePage } from '@/components/auth/AcceptInvitePage';
 import { RequireAuth, RequireGuest } from '@/components/auth/RouteGuards';
 import { SessionProvider } from '@/lib/session-context';
 import { WorkspaceProvider } from '@/lib/workspace-context';
+import { ChatProvider } from '@/lib/chat';
 
 // The active workspace resolves only for signed-in users, so WorkspaceProvider
 // is mounted inside RequireAuth (never around the auth routes), wrapping the
 // shell. AppLayout reads the active workspace name from useWorkspace().
+// ChatProvider sits inside both SessionProvider and WorkspaceProvider (its
+// connection hook reads useSession() and useWorkspace()) so the Agora chat
+// connection now lives at the shell: it opens once per session and persists
+// across route changes, tearing down only on signout or workspace switch.
 function WorkspaceLayout() {
   return (
     <WorkspaceProvider>
-      <AppLayout />
+      <ChatProvider>
+        <AppLayout />
+      </ChatProvider>
     </WorkspaceProvider>
   );
 }

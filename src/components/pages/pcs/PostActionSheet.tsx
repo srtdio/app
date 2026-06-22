@@ -13,7 +13,6 @@ import { useMemo, useState } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { IconChat, IconDownload, IconLink } from '@/components/ui/icons';
-import { ChatProvider } from '@/lib/chat';
 import { requestPresignedUrl, type PresignDeps } from '@/lib/asset-presign';
 import { postRoute } from '@/components/chat/post-card';
 import {
@@ -131,15 +130,13 @@ export function PostActionSheet({
   return (
     <Sheet open={open} onClose={close} title={title}>
       {view === 'chat' ? (
-        <ChatProvider>
-          <ConversationPicker
-            postId={postId}
-            workspaceId={workspaceId}
-            currentUserId={currentUserId}
-            onToast={onToast}
-            onSent={close}
-          />
-        </ChatProvider>
+        <ConversationPicker
+          postId={postId}
+          workspaceId={workspaceId}
+          currentUserId={currentUserId}
+          onToast={onToast}
+          onSent={close}
+        />
       ) : (
         <div className="flex flex-col gap-1">
           <ActionRow
