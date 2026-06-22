@@ -416,11 +416,7 @@ export default {
   // Worker cannot hold the Realtime subscription, so the every-minute schedule
   // drives reconcile(): create the Agora group for any not-yet-synced group
   // channel and stamp DM channels. waitUntil keeps the run alive past return.
-  scheduled(
-    _controller: ScheduledController,
-    env: ChatAgoraSyncEnv,
-    ctx: ExecutionContext,
-  ): void {
+  scheduled(_controller: ScheduledController, env: ChatAgoraSyncEnv, ctx: ExecutionContext): void {
     ctx.waitUntil(reconcile(buildDeps(env)));
   },
 };
