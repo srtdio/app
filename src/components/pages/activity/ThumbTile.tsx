@@ -26,24 +26,24 @@ interface ThumbTileProps {
  * introduces a new glyph.
  */
 function thumbGlyph(entityType: string | null, format: string | null): ReactElement {
-  if (entityType === 'brief') return <IconBriefs size={18} />;
+  if (entityType === 'brief') return <IconBriefs size={22} />;
   if (entityType === 'post') {
     switch (format) {
       case 'carousel':
-        return <IconCarousel size={18} />;
+        return <IconCarousel size={22} />;
       case 'single_image':
-        return <IconImage size={18} />;
+        return <IconImage size={22} />;
       case 'video':
-        return <IconVideo size={18} />;
+        return <IconVideo size={22} />;
       case 'link':
-        return <IconLink size={18} />;
+        return <IconLink size={22} />;
       case 'text':
-        return <IconText size={18} />;
+        return <IconText size={22} />;
       default:
-        return <IconImage size={18} />;
+        return <IconImage size={22} />;
     }
   }
-  return <IconActivity size={18} />;
+  return <IconActivity size={22} />;
 }
 
 /**
@@ -57,7 +57,7 @@ export function ThumbTile({ toneKey, entityType, format }: ThumbTileProps): Reac
     <span
       aria-hidden="true"
       style={{ backgroundColor: colorFor(toneKey) }}
-      className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white')}
+      className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-white')}
     >
       {thumbGlyph(entityType, format)}
     </span>
