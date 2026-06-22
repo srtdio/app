@@ -68,6 +68,14 @@ export function stageTransition(
   return callProc(client, 'stage_transition', args);
 }
 
+export type PostSoftDeleteArgs = ProcArgs<'post_soft_delete'>;
+export function postSoftDelete(
+  client: Client,
+  args: PostSoftDeleteArgs,
+): Promise<Result<ProcReturns<'post_soft_delete'>>> {
+  return callProc(client, 'post_soft_delete', args);
+}
+
 export type PostCreateArgs = ProcArgs<'post_create'>;
 export function postCreate(
   client: Client,

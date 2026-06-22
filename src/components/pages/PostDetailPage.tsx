@@ -28,7 +28,7 @@ import {
   toVersionViews,
 } from '@/lib/post-versions';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
-import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
+import { isAgencySide, isClient, isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { visibleStageActions } from '@/components/pages/pcs/stage-actions';
 import { IconPencil, IconMoreVertical } from '@/components/pages/pcs/post-icons';
 import { PostActionSheet } from '@/components/pages/pcs/PostActionSheet';
@@ -63,7 +63,8 @@ import {
 import type { DomainError, GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/posts';
 import { createComment } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
-import { stageTransition } from '@srtdio/rpc';
+import { postSoftDelete, stageTransition } from '@srtdio/rpc';
+import { formatLabel, platformLabel, postStatusLine } from '@/lib/post-detail-presentation';
 
 // Read a caption string out of a version snapshot defensively: the snapshot is
 // free-form Json, so a missing or non-string caption yields null (no quote)
@@ -89,15 +90,6 @@ function splitLastWord(title: string): { head: string; last: string } {
   return { head: words.join(' '), last };
 }
 
-// Title-case a snake_case enum value for display (e.g. single_image -> Single
-// Image). Mirrors the Create Post sheet so platform/format read the same way.
-function humanize(value: string): string {
-  return value
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
 // Soft-filled stage pill styling per stage, from existing theme tokens so
 // light/dark parity is automatic. draft/review resolve to soft fills
 // (panel-3 / accent-soft are concrete tokens). approved/parked/rejected fall
@@ -110,6 +102,17 @@ const STAGE_PILL: Record<Stage, string> = {
   approved: 'border border-good text-good',
   parked: 'border border-warn text-warn',
   rejected: 'border border-bad text-bad',
+};
+
+// The header status-dot fill per stage, reusing the SAME per-stage colour the
+// pill carries (draft dim, review accent, approved good, parked warn, rejected
+// bad) so no new colour is introduced.
+const STAGE_DOT: Record<Stage, string> = {
+  draft: 'bg-fg-3',
+  review: 'bg-accent',
+  approved: 'bg-good',
+  parked: 'bg-warn',
+  rejected: 'bg-bad',
 };
 
 // Display label per stage for the pill (distinct from stageLabel, which the
@@ -270,6 +273,7 @@ export function PostDetailPage() {
 
   const agencySide = isAgencySide(role);
   const clientRole = isClient(role);
+  const canDelete = isOwnerOrAdmin(role);
 
   // Resolve the post owner to a display name + avatar from the active members,
   // never a raw uuid: an owner who is no longer a current member reads "(ex-member)".
@@ -624,6 +628,19 @@ export function PostDetailPage() {
     setTransitioning(false);
   }
 
+  // Soft-delete the whole post (owner/admin only; the proc re-checks the
+  // capability). On success leave PCS for the pipeline; a failure stays put with
+  // a toast, mirroring handleTransition's friendly-error shape.
+  async function handleDeletePost(): Promise<void> {
+    if (postId === undefined) return;
+    const result = await postSoftDelete(supabase, { p_post_id: postId, p_trace_id: newTrace() });
+    if (!result.ok) {
+      push('Could not delete this post. Please try again.');
+      return;
+    }
+    navigate('/pipeline');
+  }
+
   // One field at a time through post_update; the proc bumps row_version itself
   // and load(true) refreshes the page. A failure surfaces as a toast.
   const applyPostUpdate = useCallback(
@@ -887,9 +904,15 @@ export function PostDetailPage() {
     <>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
         {backButton}
-        <h1 className="min-w-0 flex-1 truncate text-center text-[15px] font-semibold">
-          {post.title}
-        </h1>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span
+            aria-hidden
+            className={`h-[7px] w-[7px] shrink-0 rounded-full ${STAGE_DOT[currentStage]}`}
+          />
+          <span className="truncate text-[15px] font-semibold">
+            {postStatusLine(currentStage, post.updated_at, post.stage_entered_at, new Date())}
+          </span>
+        </div>
         {!readOnly ? (
           <button
             type="button"
@@ -937,7 +960,7 @@ export function PostDetailPage() {
             {STAGE_PILL_LABEL[currentStage]}
           </span>
           <span className="text-sm text-fg-2">
-            {humanize(post.platform)} · {humanize(post.format)}
+            {platformLabel(post.platform)} · {formatLabel(post.format)}
           </span>
         </div>
 
@@ -954,18 +977,22 @@ export function PostDetailPage() {
               className="w-full rounded-md border border-border bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
             />
           ) : (
-            <button
-              type="button"
-              aria-label="Edit title"
-              onClick={openTitleEditor}
-              className="block rounded-md text-left text-[28px] font-semibold leading-tight tracking-tight focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
+            <h2 className="text-[28px] font-semibold leading-tight tracking-tight">
               {titleHead !== '' ? `${titleHead} ` : ''}
               <span className="whitespace-nowrap">
                 {titleLast}
-                <IconPencil size={16} inline className="ml-1 text-fg-3" />
+                <button
+                  type="button"
+                  aria-label="Edit title"
+                  onClick={openTitleEditor}
+                  className="ml-1 inline-flex h-11 w-11 items-center justify-center align-top focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-panel-3 text-fg-3 transition-colors hover:text-fg-2">
+                    <IconPencil size={17} />
+                  </span>
+                </button>
               </span>
-            </button>
+            </h2>
           )
         ) : (
           <h1 className="text-[28px] font-semibold leading-tight tracking-tight">{post.title}</h1>
@@ -989,10 +1016,6 @@ export function PostDetailPage() {
           <span className="tabular-nums">
             {post.target_date !== null ? formatTargetDate(post.target_date) : 'No date'}
           </span>
-          <span aria-hidden className="text-fg-3">
-            ·
-          </span>
-          <span>{post.origin === 'brief' ? 'From brief' : 'Direct'}</span>
           {!readOnly ? (
             <span className="text-fg-3">
               <IconChevronRight size={16} />
@@ -1028,6 +1051,7 @@ export function PostDetailPage() {
                 onPlacePin={handlePlacePin}
                 pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
                 onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
+                onAddSlide={agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined}
               />
               {gallery.length > 0 ? (
                 <p className="mt-2.5 text-xs text-fg-3">
@@ -1176,7 +1200,7 @@ export function PostDetailPage() {
                 <span className="text-xs font-medium uppercase tracking-wide text-fg-3">
                   Comments
                 </span>
-                <span className="text-xs text-fg-3">Long-press for actions</span>
+                <span className="text-xs text-fg-3">Tap the menu for actions</span>
               </div>
               {workspaceId !== null && postId !== undefined ? (
                 <Comments
@@ -1294,6 +1318,8 @@ export function PostDetailPage() {
           gallery={gallery}
           deps={deps}
           onToast={push}
+          canDelete={canDelete}
+          onDeletePost={handleDeletePost}
         />
       ) : null}
 

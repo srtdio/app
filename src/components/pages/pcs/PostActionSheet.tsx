@@ -12,7 +12,8 @@
 import { useMemo, useState } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
-import { IconChat, IconDownload, IconLink } from '@/components/ui/icons';
+import { Button } from '@/components/ui/Button';
+import { IconDownload, IconLink, IconSend, IconTrash } from '@/components/ui/icons';
 import { requestPresignedUrl, type PresignDeps } from '@/lib/asset-presign';
 import { postRoute } from '@/components/chat/post-card';
 import {
@@ -37,6 +38,10 @@ interface PostActionSheetProps {
   deps: PresignDeps;
   /** Push a toast onto the page's stack. */
   onToast: (message: string) => void;
+  /** Owner/admin only: gates the destructive Delete post row + confirm view. */
+  canDelete: boolean;
+  /** Soft-delete the post; the page handles the proc call, toast, and navigation. */
+  onDeletePost: () => Promise<void>;
 }
 
 /** Save one resolved URL as a file via a throwaway download anchor. */
@@ -66,9 +71,12 @@ export function PostActionSheet({
   gallery,
   deps,
   onToast,
+  canDelete,
+  onDeletePost,
 }: PostActionSheetProps) {
-  const [view, setView] = useState<'actions' | 'chat'>('actions');
+  const [view, setView] = useState<'actions' | 'chat' | 'confirm-delete'>('actions');
   const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const images = useMemo(() => gallery.filter(isDownloadableImage), [gallery]);
   const showDownload = canDownloadAll(gallery);
@@ -125,7 +133,19 @@ export function PostActionSheet({
     }
   }
 
-  const title = view === 'chat' ? 'Send to chat' : 'Post actions';
+  async function handleConfirmDelete(): Promise<void> {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await onDeletePost();
+    } finally {
+      setDeleting(false);
+    }
+    close();
+  }
+
+  const title =
+    view === 'chat' ? 'Send to chat' : view === 'confirm-delete' ? 'Delete post' : 'Post actions';
 
   return (
     <Sheet open={open} onClose={close} title={title}>
@@ -137,10 +157,25 @@ export function PostActionSheet({
           onToast={onToast}
           onSent={close}
         />
+      ) : view === 'confirm-delete' ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-fg">Delete this post? This cannot be undone.</p>
+          <Button
+            variant="danger"
+            size="lg"
+            disabled={deleting}
+            onClick={() => void handleConfirmDelete()}
+          >
+            {deleting ? 'Deleting' : 'Delete post'}
+          </Button>
+          <Button variant="ghost" size="lg" disabled={deleting} onClick={() => setView('actions')}>
+            Cancel
+          </Button>
+        </div>
       ) : (
         <div className="flex flex-col gap-1">
           <ActionRow
-            icon={<IconChat size={18} />}
+            icon={<IconSend size={18} />}
             label="Send to chat"
             sub="Share this post in a conversation"
             chevron
@@ -162,6 +197,15 @@ export function PostActionSheet({
                   : `${images.length} image${images.length === 1 ? '' : 's'}`
               }
               onClick={() => void handleDownloadAll()}
+            />
+          ) : null}
+          {canDelete ? (
+            <ActionRow
+              danger
+              icon={<IconTrash size={18} />}
+              label="Delete post"
+              sub="This cannot be undone"
+              onClick={() => setView('confirm-delete')}
             />
           ) : null}
         </div>

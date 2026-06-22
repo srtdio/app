@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { IconMore } from '@/components/ui/icons';
+import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
+import { relativeLong } from '@/lib/relative-time';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
 import { supabase } from '@/lib/supabase';
@@ -360,6 +364,8 @@ export function Comments({
   const [editBody, setEditBody] = useState('');
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // The comment whose per-row actions popover is open (kebab); null when closed.
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   // The decision toggle is a post-only affordance; briefs never carry it.
   const showDecisionToggle = entityType === 'post';
@@ -635,9 +641,14 @@ export function Comments({
       comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
     const editing = editingId === comment.id;
 
+    // The per-row actions are collapsed behind a kebab; the gating is unchanged
+    // (canCopy on any live comment, canEdit/canDelete author-only). Every menu
+    // row closes the popover and calls the existing handler.
+    const closeMenu = (): void => setMenuOpenId(null);
+
     return (
       <>
-        <div className="flex items-center gap-2 mb-1.5">
+        <div className="mb-1 flex items-center gap-2">
           <Avatar
             name={authorName}
             size={isReply ? 'sm' : 'md'}
@@ -655,8 +666,58 @@ export function Comments({
             <span className="text-[11px] text-fg-3">edited</span>
           ) : null}
           <span className="ml-auto shrink-0 text-xs text-fg-3 tabular-nums">
-            {formatTimestamp(comment.created_at)}
+            {relativeLong(comment.created_at, new Date())}
           </span>
+          {!editing ? (
+            <div className="relative shrink-0">
+              <IconButton
+                label="Comment actions"
+                onClick={() =>
+                  setMenuOpenId((current) => (current === comment.id ? null : comment.id))
+                }
+              >
+                <IconMore size={20} />
+              </IconButton>
+              <MenuPopover open={menuOpenId === comment.id} onClose={closeMenu} align="right">
+                {actions.canCopy ? (
+                  <button
+                    type="button"
+                    className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    onClick={() => {
+                      closeMenu();
+                      void handleCopy(comment);
+                    }}
+                  >
+                    Copy text
+                  </button>
+                ) : null}
+                {actions.canEdit ? (
+                  <button
+                    type="button"
+                    className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    onClick={() => {
+                      closeMenu();
+                      startEdit(comment);
+                    }}
+                  >
+                    Edit
+                  </button>
+                ) : null}
+                {actions.canDelete ? (
+                  <button
+                    type="button"
+                    className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    onClick={() => {
+                      closeMenu();
+                      void handleDelete(comment.id);
+                    }}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </MenuPopover>
+            </div>
+          ) : null}
         </div>
 
         {editing ? (
@@ -678,48 +739,13 @@ export function Comments({
               annotationsByCommentId?.[comment.id],
               onAnnotationChipClick,
             )}
-          </>
-        )}
-
-        {!editing ? (
-          <div className="mt-2 flex items-center gap-1">
-            {actions.canCopy ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="min-h-[44px] min-w-[44px]"
-                onClick={() => void handleCopy(comment)}
-              >
-                Copy text
-              </Button>
-            ) : null}
-            {actions.canEdit ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="min-h-[44px] min-w-[44px]"
-                onClick={() => startEdit(comment)}
-              >
-                Edit
-              </Button>
-            ) : null}
-            {actions.canDelete ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="min-h-[44px] min-w-[44px] text-bad"
-                onClick={() => void handleDelete(comment.id)}
-              >
-                Delete
-              </Button>
-            ) : null}
             {copiedId === comment.id ? (
-              <span role="status" className="text-xs text-fg-3">
+              <span role="status" className="mt-1.5 block text-xs text-fg-3">
                 Comment copied
               </span>
             ) : null}
-          </div>
-        ) : null}
+          </>
+        )}
 
         {rowError !== null && rowError.id === comment.id ? (
           <div
@@ -786,7 +812,7 @@ export function Comments({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="min-h-[44px]"
+                      className="min-h-[44px] min-w-[44px]"
                       onClick={() => toggleReply(comment.id)}
                     >
                       {isReplyOpen ? 'Cancel' : 'Reply'}

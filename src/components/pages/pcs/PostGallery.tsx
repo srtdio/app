@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { IconAssets, IconPin, IconPlus } from '@/components/ui/icons';
+import { IconAssets, IconImagePlus, IconPin } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui/useLongPress';
 import { PostLightbox } from '@/components/pages/pcs/PostLightbox';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
@@ -133,22 +133,27 @@ export function galleryView({
   onAddSlide,
 }: GalleryViewProps): ReactElement {
   if (items.length === 0) {
+    // Agency-side (onAddSlide present): a full-width "Add images" upload zone in
+    // place of the empty text, wired to the append flow. Brief galleries omit
+    // onAddSlide and keep the calm, view-only empty line unchanged.
+    if (onAddSlide !== undefined) {
+      return (
+        <button
+          type="button"
+          onClick={onAddSlide}
+          className="flex min-h-[44px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 px-4 py-10 text-center transition-colors hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-panel-3 text-accent">
+            <IconImagePlus size={26} />
+          </span>
+          <span className="text-sm font-medium text-fg">Add images</span>
+          <span className="text-xs text-fg-3">Tap to upload</span>
+        </button>
+      );
+    }
     return (
       <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
         <p>No images on this post yet.</p>
-        {onAddSlide !== undefined ? (
-          <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              aria-label="Add image"
-              onClick={onAddSlide}
-              className="inline-flex min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border-strong bg-panel-2 px-4 py-3 text-fg-3 transition-colors hover:bg-panel-3 hover:text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <IconPlus size={22} />
-              <span className="text-xs font-medium">Add</span>
-            </button>
-          </div>
-        ) : null}
       </div>
     );
   }
