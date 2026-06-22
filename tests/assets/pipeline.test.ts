@@ -20,7 +20,28 @@ import { GPS_SENTINEL, makeJpeg, svgBytes } from './fixtures';
 const WORKSPACE_A = '11111111-1111-7111-8111-111111111111';
 const WORKSPACE_B = '22222222-2222-7222-8222-222222222222';
 const USER = '33333333-3333-7333-8333-333333333333';
+const FOLDER = '88888888-8888-7888-8888-888888888888';
 const TRACE = '0192f8a0-7d3e-7c4b-9a1f-2b3c4d5e6f70';
+
+/** Seed a live folder into the in-memory repository so an upload can target it. */
+function seedFolder(repo: InMemoryAssetRepository, name: string): void {
+  const now = new Date().toISOString();
+  repo.folders.set(FOLDER, {
+    id: FOLDER,
+    workspace_id: WORKSPACE_A,
+    name,
+    parent_id: null,
+    created_by: USER,
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+  });
+}
+
+/** The label the UI shows: display_name when set, else the original filename. */
+function displayLabel(asset: { display_name: string | null; filename: string }): string {
+  return asset.display_name ?? asset.filename;
+}
 
 function deps(scanner: VirusScanner = new NoOpScanner()): PipelineDeps & {
   storage: InMemoryStorageClient;
@@ -308,7 +329,7 @@ describe('renameAsset', () => {
     repo = new InMemoryAssetRepository();
   });
 
-  it('updates only the filename, leaving the version rows untouched', async () => {
+  it('updates only display_name, leaving filename and the version rows untouched', async () => {
     const created = await runUploadPipeline(
       { storage: new InMemoryStorageClient(), repository: repo, scanner: new NoOpScanner() },
       input(),
@@ -329,11 +350,56 @@ describe('renameAsset', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value.filename).toBe('Renamed file');
-    expect(repo.assets.get(created.value.assetId)?.filename).toBe('Renamed file');
+    // Rename writes display_name; filename (with its extension / type glyph) stays put.
+    expect(result.value.displayName).toBe('Renamed file');
+    expect(result.value.filename).toBe('photo.jpg');
+    expect(repo.assets.get(created.value.assetId)?.display_name).toBe('Renamed file');
+    expect(repo.assets.get(created.value.assetId)?.filename).toBe('photo.jpg');
     // Version rows are immutable: nothing added, nothing rewritten.
     expect(repo.versions).toHaveLength(versionCountBefore);
     expect(repo.versions[0]?.r2_key).toBe(r2KeyBefore);
+  });
+
+  it('audits display_name with the previous display_name', async () => {
+    const created = await runUploadPipeline(
+      { storage: new InMemoryStorageClient(), repository: repo, scanner: new NoOpScanner() },
+      input(),
+    );
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    await renameAsset(repo, {
+      workspaceId: WORKSPACE_A,
+      assetId: created.value.assetId,
+      name: 'Final',
+      actorUserId: USER,
+      traceId: TRACE,
+    });
+    const rename = repo.audits.find((a) => a.action === 'asset.rename');
+    expect(rename?.payload).toMatchObject({ display_name: 'Final', previous_display_name: null });
+  });
+
+  it('changes the resolved displayLabel of an auto-named folder asset', async () => {
+    const repository = new InMemoryAssetRepository();
+    seedFolder(repository, 'Photos');
+    const created = await runUploadPipeline(
+      { storage: new InMemoryStorageClient(), repository, scanner: new NoOpScanner() },
+      input({ folderId: FOLDER }),
+    );
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const asset = repository.assets.get(created.value.assetId);
+    expect(asset && displayLabel(asset)).toBe('Photos 1');
+
+    await renameAsset(repository, {
+      workspaceId: WORKSPACE_A,
+      assetId: created.value.assetId,
+      name: 'Beach trip',
+      actorUserId: USER,
+      traceId: TRACE,
+    });
+    const renamed = repository.assets.get(created.value.assetId);
+    expect(renamed && displayLabel(renamed)).toBe('Beach trip');
   });
 
   it('writes an asset.rename audit row with the authenticated actor', async () => {
@@ -369,6 +435,70 @@ describe('renameAsset', () => {
     if (result.ok) return;
     expect(result.error.code).toBe('not_found');
     expect(repo.audits).toHaveLength(0);
+  });
+});
+
+describe('upload display naming', () => {
+  /** Distinct content per upload so dedup never collapses them. */
+  function distinctJpeg(salt: number): Uint8Array {
+    return makeJpeg({ scan: new Uint8Array([salt, salt ^ 0xff, 0x10, 0x20]) });
+  }
+
+  it('auto-names folder uploads "<folder> 1"/"<folder> 2", monotonic past a deletion', async () => {
+    const d = deps();
+    seedFolder(d.repository, 'Photos');
+
+    const first = await runUploadPipeline(d, input({ folderId: FOLDER, bytes: distinctJpeg(1) }));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(d.repository.assets.get(first.value.assetId)?.display_name).toBe('Photos 1');
+    expect(d.repository.assets.get(first.value.assetId)?.folder_id).toBe(FOLDER);
+    // filename always stays the original upload name.
+    expect(d.repository.assets.get(first.value.assetId)?.filename).toBe('photo.jpg');
+
+    const second = await runUploadPipeline(d, input({ folderId: FOLDER, bytes: distinctJpeg(2) }));
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(d.repository.assets.get(second.value.assetId)?.display_name).toBe('Photos 2');
+
+    // Soft-delete "Photos 2"; its number must not be handed back out (monotonic).
+    const deleted = d.repository.assets.get(second.value.assetId);
+    if (deleted) {
+      d.repository.assets.set(deleted.id, { ...deleted, deleted_at: new Date().toISOString() });
+    }
+
+    const third = await runUploadPipeline(d, input({ folderId: FOLDER, bytes: distinctJpeg(3) }));
+    expect(third.ok).toBe(true);
+    if (!third.ok) return;
+    expect(d.repository.assets.get(third.value.assetId)?.display_name).toBe('Photos 3');
+  });
+
+  it('a supplied display_name is stored at root; filename stays the original', async () => {
+    const d = deps();
+    const res = await runUploadPipeline(d, input({ displayName: 'Quarterly deck' }));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const asset = d.repository.assets.get(res.value.assetId);
+    expect(asset?.display_name).toBe('Quarterly deck');
+    expect(asset?.filename).toBe('photo.jpg');
+    expect(asset?.folder_id).toBeNull();
+  });
+
+  it('a root upload with no display_name leaves display_name null', async () => {
+    const d = deps();
+    const res = await runUploadPipeline(d, input());
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(d.repository.assets.get(res.value.assetId)?.display_name).toBeNull();
+  });
+
+  it('a supplied display_name wins over folder auto-naming', async () => {
+    const d = deps();
+    seedFolder(d.repository, 'Photos');
+    const res = await runUploadPipeline(d, input({ folderId: FOLDER, displayName: 'Hand named' }));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(d.repository.assets.get(res.value.assetId)?.display_name).toBe('Hand named');
   });
 });
 
