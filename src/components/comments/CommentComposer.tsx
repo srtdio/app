@@ -12,7 +12,8 @@ import { useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { Textarea } from '@/components/ui/Textarea';
+import { MentionInput } from '@/components/comments/MentionInput';
+import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 import { IconFile, IconX } from '@/components/ui/icons';
 import { IconPaperclip } from '@/components/chat/AttachmentIcons';
 import { fileExtension } from '@/lib/assets';
@@ -34,6 +35,8 @@ export type CommentSubmitResult = { ok: true } | { ok: false; error: string };
 interface CommentComposerProps {
   /** Write the comment; resolves ok to clear the draft, or an error to keep it. */
   onSubmit: (body: string, options: CommentSubmitOptions) => Promise<CommentSubmitResult>;
+  /** Workspace members offered by the @-mention picker (avatar + name + role). */
+  members: MentionCandidate[];
   /** The decision toggle is a post-only affordance; briefs never carry it. */
   showDecisionToggle: boolean;
   /** Whether the attach affordance is shown (endpoint configured + a workspace). */
@@ -70,6 +73,7 @@ function doneVersionIds(pending: readonly Pending[]): string[] {
 
 export function CommentComposer({
   onSubmit,
+  members,
   showDecisionToggle,
   canAttach,
   uploadFile,
@@ -78,6 +82,9 @@ export function CommentComposer({
   autoFocus = false,
 }: CommentComposerProps): ReactElement {
   const [body, setBody] = useState('');
+  // The MentionInput is contentEditable and uncontrolled; clearing the draft
+  // after a successful submit remounts it via this incrementing key.
+  const [composerKey, setComposerKey] = useState(0);
   const [isDecision, setIsDecision] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -144,6 +151,7 @@ export function CommentComposer({
         if (item.previewUrl != null) URL.revokeObjectURL(item.previewUrl);
       }
       setBody('');
+      setComposerKey((key) => key + 1);
       setIsDecision(false);
       setPending([]);
       setSubmitting(false);
@@ -156,13 +164,12 @@ export function CommentComposer({
 
   return (
     <div className="flex flex-col gap-2">
-      <Textarea
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
+      <MentionInput
+        key={composerKey}
+        members={members}
         placeholder={placeholder}
-        aria-label="Comment body"
         autoFocus={autoFocus}
-        disabled={submitting}
+        onChange={setBody}
       />
 
       {tooLong ? (
