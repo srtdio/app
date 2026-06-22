@@ -66,33 +66,40 @@ export interface UploadConfig {
   token: string;
   workspaceId: string;
   /**
-   * The filename the multipart part is sent under. It carries the user's chosen
-   * display name (plus the original extension) so the worker persists it as
-   * assets.filename for newly stored content.
-   *
-   * NOTE on display-name persistence: there is no authenticated client write
-   * path for assets (no rename RPC, no member UPDATE policy: writes go through
-   * the service-role worker only). So the name is persisted ONLY via this upload
-   * filename, which the worker stores on first upload of given content. For a
-   * deduped response (reused=true) the existing asset keeps its original
-   * filename and is NOT renamed. Full display-name control (rename, and renaming
-   * on dedup) needs a backend write path and is left for a follow-up.
+   * The ORIGINAL device filename, sent as the multipart part name and stored by
+   * the worker as assets.filename. It keeps its extension so the type-icon /
+   * preview logic still works; the friendly shown name rides separately in
+   * displayName. The worker resolves the shown label as display_name ?? filename.
    */
   filename: string;
+  /**
+   * The friendly shown name, persisted as assets.display_name. Sent only when a
+   * non-empty value is provided; omitted at the request level otherwise (the
+   * worker then falls back to filename for the label).
+   */
+  displayName?: string | null;
+  /** Destination folder id; sent as folder_id, omitted at the library root (null). */
+  folderId?: string | null;
   /** Injected so tests pass a mock; the app passes fetchWithTrace. */
   fetcher: (input: string, init: RequestInit) => Promise<Response>;
 }
 
 /**
- * POST one file as multipart {file, workspace_id} with a Bearer token. Never
- * throws: a transport failure or a non-OK status becomes { ok: false } with
- * mapped copy. On success returns the asset id and whether the content was
- * deduped (reused).
+ * POST one file as multipart {file, workspace_id} (plus an optional display_name
+ * and folder_id) with a Bearer token. Never throws: a transport failure or a
+ * non-OK status becomes { ok: false } with mapped copy. On success returns the
+ * asset id and whether the content was deduped (reused).
  */
 export async function uploadAssetFile(file: File, config: UploadConfig): Promise<UploadOutcome> {
   const form = new FormData();
   form.append('file', file, config.filename);
   form.append('workspace_id', config.workspaceId);
+  if (config.displayName != null && config.displayName.trim() !== '') {
+    form.append('display_name', config.displayName);
+  }
+  if (config.folderId != null) {
+    form.append('folder_id', config.folderId);
+  }
 
   let response: Response;
   try {
@@ -162,21 +169,31 @@ function assetField(
 }
 
 /**
- * Compose the upload filename from the user's display name and the original
- * file name: trim the display name and append the original extension when the
- * name does not already carry it.
+ * Build `count` sequential display names "${base} N" continuing past the highest
+ * number already used among `existingLabels`. A label counts only when it matches
+ * ^<base> (\d+)$ case-insensitively with `base` taken literally (regex-escaped),
+ * so a metacharacter in the base never widens the match. `max` is the largest
+ * such N (0 when none), and the returned names are max+1 .. max+count: the
+ * increment is over the existing labels, never the batch count, so two files
+ * added at once become "<base> 1", "<base> 2" rather than colliding.
  */
-export function uploadFilename(displayName: string, originalName: string): string {
-  const trimmed = displayName.trim();
-  const dot = originalName.lastIndexOf('.');
-  const ext = dot > 0 ? originalName.slice(dot) : '';
-  if (ext === '' || trimmed.toLowerCase().endsWith(ext.toLowerCase())) return trimmed;
-  return `${trimmed}${ext}`;
-}
-
-/** Every queued file must carry a non-empty display name before upload enables. */
-export function allNamed(names: readonly string[]): boolean {
-  return names.length > 0 && names.every((name) => name.trim() !== '');
+export function nextUploadNames(
+  base: string,
+  existingLabels: readonly string[],
+  count: number,
+): string[] {
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^${escaped} (\\d+)$`, 'i');
+  let max = 0;
+  for (const label of existingLabels) {
+    const match = pattern.exec(label);
+    if (match === null) continue;
+    const n = Number.parseInt(match[1] ?? '', 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  const names: string[] = [];
+  for (let i = 1; i <= count; i += 1) names.push(`${base} ${max + i}`);
+  return names;
 }
 
 // ---------------------------------------------------------------------------
@@ -595,11 +612,16 @@ function assetIdOf(body: unknown): string {
   return '';
 }
 
-/** One item to upload: a stable id, the bytes, and the name to send it under. */
+/**
+ * One item to upload: a stable id, the bytes, the ORIGINAL filename to send the
+ * part under (stored as assets.filename), and the friendly display name to
+ * persist (display_name); displayName is null when none applies.
+ */
 export interface QueueItem {
   id: string;
   file: File;
   filename: string;
+  displayName?: string | null;
 }
 
 export interface RunResult {

@@ -4,12 +4,12 @@ import {
   MAX_UPLOAD_BYTES,
   UPLOAD_ACCEPT,
   addAssetLink,
-  allNamed,
   canRenameAssets,
   createFolderRequest,
   deleteFolderRequest,
   isValidLinkUrl,
   moveAssetsRequest,
+  nextUploadNames,
   renameFolderRequest,
   linkErrorMessage,
   precheckFile,
@@ -18,7 +18,6 @@ import {
   runUploads,
   uploadAssetFile,
   uploadErrorMessage,
-  uploadFilename,
   type AddLinkConfig,
   type CreateFolderConfig,
   type DeleteFolderConfig,
@@ -103,13 +102,13 @@ describe('uploadErrorMessage maps worker codes to plain English', () => {
 });
 
 describe('uploadAssetFile', () => {
-  it('posts multipart {file, workspace_id} with a Bearer token and returns the asset', async () => {
+  it('posts multipart {file, workspace_id} under the original filename and returns the asset', async () => {
     const fetcher = vi
       .fn()
       .mockResolvedValue(jsonResponse(201, { asset: { assetId: 'a-1', reused: false } }));
     const file = fakeFile('logo.png', 'image/png', 10);
 
-    const out = await uploadAssetFile(file, baseConfig(fetcher, 'My Logo.png'));
+    const out = await uploadAssetFile(file, baseConfig(fetcher, 'logo.png'));
 
     expect(out).toEqual({ ok: true, reused: false, assetId: 'a-1' });
     expect(fetcher).toHaveBeenCalledOnce();
@@ -120,7 +119,45 @@ describe('uploadAssetFile', () => {
     const body = init.body as FormData;
     expect(body.get('workspace_id')).toBe('ws-1');
     expect(body.get('file')).toBeInstanceOf(File);
-    expect((body.get('file') as File).name).toBe('My Logo.png');
+    // The part keeps the original device name (assets.filename), never a typed name.
+    expect((body.get('file') as File).name).toBe('logo.png');
+  });
+
+  it('includes display_name when provided and omits it when not', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(201, { asset: { assetId: 'a-1', reused: false } }));
+    const file = fakeFile('logo.png', 'image/png', 10);
+
+    await uploadAssetFile(file, { ...baseConfig(fetcher), displayName: 'Summer Trip 3' });
+    let body = (fetcher.mock.calls[0] as [string, RequestInit])[1].body as FormData;
+    expect(body.get('display_name')).toBe('Summer Trip 3');
+
+    fetcher.mockClear();
+    await uploadAssetFile(file, { ...baseConfig(fetcher), displayName: '   ' });
+    body = (fetcher.mock.calls[0] as [string, RequestInit])[1].body as FormData;
+    expect(body.has('display_name')).toBe(false);
+
+    fetcher.mockClear();
+    await uploadAssetFile(file, baseConfig(fetcher));
+    body = (fetcher.mock.calls[0] as [string, RequestInit])[1].body as FormData;
+    expect(body.has('display_name')).toBe(false);
+  });
+
+  it('includes folder_id when provided and omits it when not', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(201, { asset: { assetId: 'a-1', reused: false } }));
+    const file = fakeFile('logo.png', 'image/png', 10);
+
+    await uploadAssetFile(file, { ...baseConfig(fetcher), folderId: 'f-1' });
+    let body = (fetcher.mock.calls[0] as [string, RequestInit])[1].body as FormData;
+    expect(body.get('folder_id')).toBe('f-1');
+
+    fetcher.mockClear();
+    await uploadAssetFile(file, { ...baseConfig(fetcher), folderId: null });
+    body = (fetcher.mock.calls[0] as [string, RequestInit])[1].body as FormData;
+    expect(body.has('folder_id')).toBe(false);
   });
 
   it('treats a reused (200) response as success', async () => {
@@ -188,19 +225,23 @@ describe('runUploads success path clears the queue', () => {
   });
 });
 
-describe('mandatory display-name gate', () => {
-  it('blocks submit until every file has a non-empty name', () => {
-    expect(allNamed(['Logo', 'Banner'])).toBe(true);
-    expect(allNamed(['Logo', '   '])).toBe(false);
-    expect(allNamed([])).toBe(false);
+describe('nextUploadNames', () => {
+  it('numbers from 1 when no sibling matches the base', () => {
+    expect(nextUploadNames('Trip', [], 3)).toEqual(['Trip 1', 'Trip 2', 'Trip 3']);
   });
-});
 
-describe('uploadFilename', () => {
-  it('appends the original extension when the display name lacks it', () => {
-    expect(uploadFilename('My Logo', 'logo.png')).toBe('My Logo.png');
-    expect(uploadFilename('keep.png', 'logo.png')).toBe('keep.png');
-    expect(uploadFilename('noext', 'data')).toBe('noext');
+  it('continues past the highest existing number, never the count', () => {
+    // Max existing is 3, so a batch of 2 starts at 4 (a gap at 2 is not reused).
+    expect(nextUploadNames('Trip', ['Trip 1', 'Trip 3'], 2)).toEqual(['Trip 4', 'Trip 5']);
+  });
+
+  it('matches the base case-insensitively', () => {
+    expect(nextUploadNames('Trip', ['trip 2', 'TRIP 5'], 1)).toEqual(['Trip 6']);
+  });
+
+  it('treats a regex-metacharacter base literally', () => {
+    // 'A.B' must not match 'AXB 9'; only the literal 'A.B 2' counts.
+    expect(nextUploadNames('A.B', ['A.B 2', 'AXB 9'], 1)).toEqual(['A.B 3']);
   });
 });
 
