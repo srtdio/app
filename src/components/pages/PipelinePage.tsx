@@ -27,6 +27,7 @@ import {
   type PostSort,
 } from '@/lib/list-sort';
 import { groupByStage, stageColumns } from '@/lib/post-board';
+import { useWorkspaceMembers } from '@/components/chat/use-workspace-members';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, DomainErrorCode, PipelinePost, Stage } from '@srtdio/posts';
 import { PresignCache } from '@/lib/asset-presign';
@@ -341,7 +342,24 @@ export function PipelinePage() {
   ];
 
   const visibleSteps = steps.filter((step) => skipped[step.key] !== true);
-  const showCard = !cardDismissed && visibleSteps.length > 0;
+
+  // The onboarding card is for fresh workspaces only: once a workspace has real
+  // content it should auto-hide, computed live with no persistence. "Has content"
+  // means it carries posts AND more than a solo roster. Both signals reuse data
+  // already on this surface: counts.all (the same filtered total the header shows)
+  // for posts, and the RLS-scoped member roster the chat picker uses for members.
+  // Default to HIDDEN while either signal is still loading or the member read
+  // errored, so the card never flashes on a populated workspace. Manual dismiss
+  // (X) and per-row Skip stay local-only and are unaffected.
+  const members = useWorkspaceMembers(workspaceId ?? '');
+  const signalsReady =
+    workspaceId !== null && !postsLoading && !members.loading && members.error === null;
+  const hasPosts = (counts.all ?? 0) >= 1;
+  const activeMemberCount = members.options.length;
+  const workspacePopulated = hasPosts && activeMemberCount >= 2;
+  const workspaceEmptyEnough = signalsReady && !workspacePopulated;
+
+  const showCard = !cardDismissed && visibleSteps.length > 0 && workspaceEmptyEnough;
 
   const boardLoading = workspaceId === null || (postsLoading && posts.length === 0);
 
