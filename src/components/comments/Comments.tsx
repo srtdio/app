@@ -27,6 +27,7 @@ import type {
 } from '@srtdio/comments';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import { CommentComposer } from '@/components/comments/CommentComposer';
+import { useMentionCandidates } from '@/components/comments/useMentionCandidates';
 import { flashNode } from '@/components/comments/flash-node';
 import {
   EX_MEMBER_LABEL,
@@ -346,6 +347,8 @@ export function Comments({
 }: CommentsProps) {
   const newTrace = useNewTrace();
   const { canAttach, presignEnabled, presignCache, uploadFile } = useChatAttachments();
+  // Members for the @-mention picker; resolved once and shared by both composers.
+  const { candidates } = useMentionCandidates(workspaceId);
 
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -765,6 +768,7 @@ export function Comments({
     <div className="flex flex-col gap-4">
       <CommentComposer
         onSubmit={(body, options) => handleCreate(body, { ...options, parentCommentId: null })}
+        members={candidates}
         showDecisionToggle={showDecisionToggle}
         canAttach={canAttach}
         uploadFile={uploadFile}
@@ -838,6 +842,7 @@ export function Comments({
                       onSubmit={(body, options) =>
                         handleCreate(body, { ...options, parentCommentId: comment.id })
                       }
+                      members={candidates}
                       showDecisionToggle={false}
                       canAttach={canAttach}
                       uploadFile={uploadFile}
