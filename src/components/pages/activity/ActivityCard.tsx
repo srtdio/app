@@ -70,21 +70,21 @@ function leadIcon(item: ActivityItem): ReactElement {
   switch (item.eventType) {
     case 'comment':
     case 'mention':
-      return <IconChat size={14} />;
+      return <IconChat size={24} />;
     case 'decision_marked':
-      return <IconPin size={14} />;
+      return <IconPin size={24} />;
     case 'stage_change':
-      return <IconPipeline size={14} />;
+      return <IconPipeline size={24} />;
     case 'brief_created':
     case 'brief_closed':
-      return <IconBriefs size={14} />;
+      return <IconBriefs size={24} />;
     case 'asset_uploaded':
     case 'asset_version_added':
-      return <IconUpload size={14} />;
+      return <IconUpload size={24} />;
     case 'invite':
-      return <IconUser size={14} />;
+      return <IconUser size={24} />;
     default:
-      return <IconActivity size={14} />;
+      return <IconActivity size={24} />;
   }
 }
 
@@ -161,12 +161,12 @@ export function ActivityCard({
           <Avatar
             name={actorName}
             {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
-            size="md"
+            size="xl"
           />
         ) : (
           <span
             className={cn(
-              'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border',
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-full border',
               TONE_CIRCLE[leadTone(lead)],
             )}
           >
