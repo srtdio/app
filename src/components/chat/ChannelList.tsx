@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -8,6 +8,13 @@ import { IconChat, IconPlus } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { filterChannelsByName } from '@/lib/channel-filter';
 import type { ChannelSummary } from '@/lib/chat-reads';
+import { useChatStore } from '@/components/chat/ChatStoreProvider';
+import { selectConversation, type ConversationSummary } from '@/lib/chat/chat-store';
+import { sortChannelsByRecency } from '@/lib/chat/sort-conversations';
+import { formatRelativeTime } from '@/lib/chat/format-relative-time';
+
+/** Per-channel store lookup the cards read (preview, time, unread). */
+type SummaryLookup = (channelId: string) => ConversationSummary | undefined;
 
 interface ChannelListProps {
   channels: ChannelSummary[];
@@ -20,6 +27,10 @@ interface ChannelListProps {
 interface ChannelListBodyProps extends ChannelListProps {
   /** Whether any conversations exist before the search filter is applied. */
   hasChannels: boolean;
+  /** Read-only store summaries; absent in pure tests (every card reads empty). */
+  summaryFor?: SummaryLookup;
+  /** Clock for relative-time labels; defaults to 0 when no summary is supplied. */
+  nowMs?: number;
 }
 
 /**
@@ -51,13 +62,17 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
       </div>
     );
   }
+  const summaryFor: SummaryLookup = props.summaryFor ?? (() => undefined);
+  const nowMs = props.nowMs ?? 0;
   return (
-    <ul className="flex flex-col">
+    <ul className="flex flex-col gap-2 px-3 py-3">
       {props.channels.map((channel) => (
         <li key={channel.channelId}>
-          <ChannelRow
+          <ChannelCard
             channel={channel}
             selected={channel.channelId === props.selectedChannelId}
+            summary={summaryFor(channel.channelId)}
+            nowMs={nowMs}
             onSelect={props.onSelect}
           />
         </li>
@@ -66,19 +81,38 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   );
 }
 
-function ChannelRow(props: {
+/** Build the preview line: an optional sender prefix before the last message. */
+function previewLine(summary: ConversationSummary): string {
+  const prefix = summary.lastMessagePrefix !== undefined ? `${summary.lastMessagePrefix}: ` : '';
+  return `${prefix}${summary.lastMessageText}`;
+}
+
+/** A spaced conversation card: avatar, name + time, preview + unread pill. */
+function ChannelCard(props: {
   channel: ChannelSummary;
   selected: boolean;
+  summary: ConversationSummary | undefined;
+  nowMs: number;
   onSelect: (channel: ChannelSummary) => void;
 }): ReactElement {
-  const { channel } = props;
+  const { channel, summary } = props;
+  const hasMessage = summary !== undefined && summary.lastMessageTs > 0;
+  const unread = summary?.unread ?? 0;
+  const isUnread = unread > 0;
+  const preview = hasMessage ? previewLine(summary) : 'No messages yet';
+  const time = hasMessage ? formatRelativeTime(summary.lastMessageTs, props.nowMs) : '';
   return (
     <button
       type="button"
       onClick={() => props.onSelect(channel)}
+      aria-label={channel.title}
       className={cn(
-        'flex w-full items-center gap-3 px-4 min-h-[56px] text-left transition-colors',
-        props.selected ? 'bg-panel-2 text-fg' : 'text-fg-2 hover:bg-panel-2',
+        'flex w-full items-center gap-3 rounded-xl border border-l-[3px] px-3 py-3 min-h-[64px] text-left transition-colors',
+        isUnread
+          ? 'bg-accent-soft border-border border-l-accent'
+          : props.selected
+            ? 'bg-panel-2 border-border border-l-transparent'
+            : 'bg-panel border-border border-l-transparent hover:bg-panel-2',
       )}
     >
       <Avatar
@@ -86,7 +120,38 @@ function ChannelRow(props: {
         {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
         size="lg"
       />
-      <span className="truncate text-sm font-medium">{channel.title}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-baseline gap-2">
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-sm text-fg',
+              isUnread ? 'font-semibold' : 'font-medium',
+            )}
+          >
+            {channel.title}
+          </span>
+          {time !== '' ? (
+            <span className={cn('shrink-0 text-xs', isUnread ? 'text-accent' : 'text-fg-3')}>
+              {time}
+            </span>
+          ) : null}
+        </span>
+        <span className="flex items-center gap-2">
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-xs',
+              hasMessage ? 'text-fg-2' : 'italic text-fg-3',
+            )}
+          >
+            {preview}
+          </span>
+          {isUnread ? (
+            <span className="inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold leading-none text-accent-fg">
+              {unread > 99 ? '99+' : unread}
+            </span>
+          ) : null}
+        </span>
+      </span>
     </button>
   );
 }
@@ -94,6 +159,10 @@ function ChannelRow(props: {
 interface ChannelListContentProps extends ChannelListProps {
   search: string;
   onSearchChange: (value: string) => void;
+  /** Read-only store summaries; absent in pure tests (every card reads empty). */
+  summaryFor?: SummaryLookup;
+  /** Clock for relative-time labels, threaded to the cards. */
+  nowMs?: number;
 }
 
 /**
@@ -103,7 +172,9 @@ interface ChannelListContentProps extends ChannelListProps {
  * walking the returned tree; ChannelList owns the search state.
  */
 export function channelListContent(props: ChannelListContentProps): ReactElement {
-  const filtered = filterChannelsByName(props.channels, props.search);
+  const summaryFor: SummaryLookup = props.summaryFor ?? (() => undefined);
+  const ordered = sortChannelsByRecency(props.channels, summaryFor);
+  const filtered = filterChannelsByName(ordered, props.search);
   return (
     <div className="flex h-full flex-col">
       <SectionHeader
@@ -133,6 +204,8 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
           selectedChannelId: props.selectedChannelId,
           onSelect: props.onSelect,
           onNewChat: props.onNewChat,
+          summaryFor,
+          ...(props.nowMs !== undefined ? { nowMs: props.nowMs } : {}),
         })}
       </div>
     </div>
@@ -142,5 +215,16 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
 /** Scrollable channel list pane with the shared search/create header. */
 export function ChannelList(props: ChannelListProps): ReactElement {
   const [search, setSearch] = useState('');
-  return channelListContent({ ...props, search, onSearchChange: setSearch });
+  const { state } = useChatStore();
+  const summaryFor = useCallback<SummaryLookup>(
+    (channelId) => selectConversation(state, channelId),
+    [state],
+  );
+  return channelListContent({
+    ...props,
+    search,
+    onSearchChange: setSearch,
+    summaryFor,
+    nowMs: Date.now(),
+  });
 }

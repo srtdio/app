@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
+
+// ChannelList now consumes the chat store, whose provider import graph pulls the
+// real agora-chat browser SDK. Mock it so importing the (hookless) view helpers
+// in node never touches browser globals, mirroring ChatShell.test.tsx.
+vi.mock('agora-chat', () => ({
+  default: { connection: vi.fn(), message: { create: vi.fn() } },
+}));
+
 import { channelListContent, channelListView } from '@/components/chat/ChannelList';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
