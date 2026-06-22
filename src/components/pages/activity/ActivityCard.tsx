@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Avatar } from '@/components/ui/Avatar';
+import { ThumbTile } from '@/components/pages/activity/ThumbTile';
 import {
   IconActivity,
   IconBriefs,
@@ -15,10 +16,10 @@ import {
 import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
 import {
   activityLine,
+  cardBodyLine,
   cardTitle,
   isSnoozed,
   relativeTime,
-  shortLine,
   type ActivityItem,
   type SnoozeKind,
 } from '@/components/pages/activity/data';
@@ -115,6 +116,12 @@ export function ActivityCard({
   onMarkRead,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
+  // Mount-only entrance: fade + a small slide up the Y axis (translateY only).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const lead = group[0];
   if (lead === undefined) return null;
   const rest = group.slice(1);
@@ -124,7 +131,9 @@ export function ActivityCard({
   const hasEntity = lead.entityType === 'post' || lead.entityType === 'brief';
   const title = hasEntity ? cardTitle(lead) : activityLine(lead);
   const tag = SCOPE_TAG[lead.scope];
-  const actorName = group.find((entry) => entry.actorName !== null)?.actorName ?? null;
+  const actorEntry = group.find((entry) => entry.actorName !== null) ?? null;
+  const actorName = actorEntry?.actorName ?? null;
+  const actorAvatarUrl = actorEntry?.actorAvatarUrl ?? null;
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -136,7 +145,8 @@ export function ActivityCard({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl border bg-panel transition-colors',
+        'overflow-hidden rounded-xl border bg-panel transition duration-[250ms] ease-out',
+        mounted ? 'translate-y-0 opacity-100' : 'translate-y-[6px] opacity-0',
         unread ? 'border-accent-line' : 'border-border',
       )}
     >
@@ -148,7 +158,11 @@ export function ActivityCard({
         className="group flex min-h-[44px] cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-panel-2 md:px-5"
       >
         {actorName !== null ? (
-          <Avatar name={actorName} size="md" />
+          <Avatar
+            name={actorName}
+            {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
+            size="md"
+          />
         ) : (
           <span
             className={cn(
@@ -168,8 +182,8 @@ export function ActivityCard({
             {unread ? UNREAD_DOT : null}
           </div>
           {hasEntity ? (
-            <p className={cn('mt-0.5 truncate text-sm', unread ? 'text-fg-2' : 'text-fg-3')}>
-              {shortLine(lead)}
+            <p className={cn('mt-0.5 line-clamp-2 text-sm', unread ? 'text-fg-2' : 'text-fg-3')}>
+              {cardBodyLine(lead)}
             </p>
           ) : null}
           <p className="mt-0.5 flex items-center gap-2 text-xs text-fg-3">
@@ -187,6 +201,12 @@ export function ActivityCard({
             ) : null}
           </p>
         </div>
+
+        <ThumbTile
+          toneKey={lead.entityId ?? lead.id}
+          entityType={lead.entityType}
+          format={lead.format}
+        />
 
         <ActivityRowMenu
           snoozed={snoozed}
@@ -216,11 +236,11 @@ export function ActivityCard({
                   <div className="min-w-0 flex-1">
                     <p
                       className={cn(
-                        'truncate text-sm',
+                        'line-clamp-2 text-sm',
                         entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
                       )}
                     >
-                      {shortLine(entry)}
+                      {cardBodyLine(entry)}
                     </p>
                     <p className="mt-0.5 text-xs text-fg-3">
                       {relativeTime(entry.createdAt, nowMs)}
