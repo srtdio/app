@@ -678,11 +678,7 @@ export function Comments({
               >
                 <IconMore size={20} />
               </IconButton>
-              <MenuPopover
-                open={menuOpenId === comment.id}
-                onClose={closeMenu}
-                align="right"
-              >
+              <MenuPopover open={menuOpenId === comment.id} onClose={closeMenu} align="right">
                 {actions.canCopy ? (
                   <button
                     type="button"

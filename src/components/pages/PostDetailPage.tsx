@@ -1051,9 +1051,7 @@ export function PostDetailPage() {
                 onPlacePin={handlePlacePin}
                 pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
                 onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
-                onAddSlide={
-                  agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined
-                }
+                onAddSlide={agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined}
               />
               {gallery.length > 0 ? (
                 <p className="mt-2.5 text-xs text-fg-3">
