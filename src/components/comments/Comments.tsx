@@ -27,6 +27,7 @@ import type {
 } from '@srtdio/comments';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import { CommentComposer } from '@/components/comments/CommentComposer';
+import { CommentImageLightbox, commentImageNav } from '@/components/comments/CommentImageLightbox';
 import { useMentionCandidates } from '@/components/comments/useMentionCandidates';
 import { flashNode } from '@/components/comments/flash-node';
 import {
@@ -369,6 +370,11 @@ export function Comments({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // The comment whose per-row actions popover is open (kebab); null when closed.
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  // The open image lightbox: the clicked comment's image list + current index,
+  // or null when closed. Images reuse the same PresignCache (a cache hit).
+  const [lightbox, setLightbox] = useState<{ images: MessageAttachment[]; index: number } | null>(
+    null,
+  );
 
   // The decision toggle is a post-only affordance; briefs never carry it.
   const showDecisionToggle = entityType === 'post';
@@ -737,6 +743,10 @@ export function Comments({
                 attachments={attachments}
                 cache={presignCache}
                 presignEnabled={presignEnabled}
+                onImageClick={(attachment) => {
+                  const nav = commentImageNav(attachments, attachment.assetId);
+                  if (nav.images.length > 0) setLightbox(nav);
+                }}
               />
             ) : null}
             {annotationChip(
@@ -867,6 +877,19 @@ export function Comments({
         >
           {loadingMore ? 'Loading' : 'Load more'}
         </Button>
+      ) : null}
+
+      {lightbox !== null ? (
+        <CommentImageLightbox
+          images={lightbox.images}
+          index={lightbox.index}
+          cache={presignCache}
+          presignEnabled={presignEnabled}
+          onIndexChange={(index) =>
+            setLightbox((prev) => (prev !== null ? { ...prev, index } : prev))
+          }
+          onClose={() => setLightbox(null)}
+        />
       ) : null}
     </div>
   );
