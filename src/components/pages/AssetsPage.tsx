@@ -49,7 +49,9 @@ import { assetDelete, assetDeleteMany } from '@srtdio/rpc';
 import {
   ASSET_SORT_DEFAULT,
   ASSET_SORT_OPTIONS,
+  BULK_DELETE_MAX,
   buildKindCounts,
+  canBulkDelete,
   childFolders,
   displayLabel,
   fetchFolders,
@@ -70,18 +72,6 @@ import {
 } from '@/lib/assets';
 
 const SKELETON_COUNT = 12;
-
-/** The most ids a single asset_delete_many call may carry (matches the move cap). */
-export const BULK_DELETE_MAX = 200;
-
-/**
- * Pure boundary predicate for the bulk-delete affordance: a delete is allowed
- * only for 1..BULK_DELETE_MAX selected ids, so the RPC is never called with 0
- * or more than the cap. 200 is allowed, 201 is blocked.
- */
-export function canBulkDelete(count: number): boolean {
-  return count >= 1 && count <= BULK_DELETE_MAX;
-}
 
 /** A viewer target: the index into the navigable list, plus whether Info opens. */
 interface ViewerState {

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import {
+  BULK_DELETE_MAX,
   buildKindCounts,
+  canBulkDelete,
   childFolders,
   countAttachments,
   deleteAssetsBatch,
@@ -483,6 +485,15 @@ describe('removeAssetsById (optimistic remove + rollback)', () => {
     expect(optimistic.map((i) => i.id)).toEqual(['a', 'c']);
     // On failure the caller restores the untouched snapshot reference.
     expect(snapshot.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('canBulkDelete (200 cap boundary)', () => {
+  it('blocks an empty selection, allows 1, allows the cap, and blocks just over it', () => {
+    expect(canBulkDelete(0)).toBe(false);
+    expect(canBulkDelete(1)).toBe(true);
+    expect(canBulkDelete(BULK_DELETE_MAX)).toBe(true);
+    expect(canBulkDelete(BULK_DELETE_MAX + 1)).toBe(false);
   });
 });
 

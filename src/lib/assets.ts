@@ -230,6 +230,14 @@ export function removeAssetsById(
   return items.filter((item) => !set.has(item.id));
 }
 
+/** The most ids a single asset_delete_many call may carry (matches the move cap). */
+export const BULK_DELETE_MAX = 200;
+
+/** Pure boundary predicate: a bulk delete is allowed only for 1..BULK_DELETE_MAX ids, so the RPC is never called with 0 or over the cap. */
+export function canBulkDelete(count: number): boolean {
+  return count >= 1 && count <= BULK_DELETE_MAX;
+}
+
 /** Outcome of a bulk delete: the ids that succeeded and the ones that failed. */
 export interface BatchDeleteOutcome {
   succeeded: string[];
