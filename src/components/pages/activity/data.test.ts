@@ -3,6 +3,7 @@ import type { Database } from '@srtdio/schemas';
 import {
   activityLine,
   bucketActorNames,
+  cardBodyLine,
   cardTitle,
   entityHref,
   entityKey,
@@ -60,6 +61,9 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     title: null,
     actorId: null,
     actorName: null,
+    actorAvatarUrl: null,
+    body: null,
+    format: null,
     ...over,
   };
 }
@@ -204,6 +208,30 @@ describe('shortLine', () => {
       expect(line).not.toContain('undefined');
       expect(line).not.toContain('null');
     }
+  });
+});
+
+describe('cardBodyLine', () => {
+  it('uses the real comment body, trimmed to ~140 chars, for a comment event', () => {
+    const short = cardBodyLine(item({ eventType: 'comment', body: '  Looks great, ship it!  ' }));
+    expect(short).toBe('Looks great, ship it!');
+
+    const long = 'x'.repeat(200);
+    const trimmed = cardBodyLine(item({ eventType: 'comment', body: long }));
+    expect(trimmed.length).toBeLessThanOrEqual(141); // 140 chars + an ellipsis
+    expect(trimmed.endsWith('…')).toBe(true);
+  });
+
+  it('keeps the generic label for a non-comment event even when a body is set', () => {
+    expect(
+      cardBodyLine(item({ eventType: 'stage_change', toStage: 'approved', body: 'ignored' })),
+    ).toBe('Moved to approved');
+    expect(cardBodyLine(item({ eventType: 'mention', body: 'still generic' }))).toBe('New mention');
+  });
+
+  it('falls back to the generic label when a comment body is null or empty', () => {
+    expect(cardBodyLine(item({ eventType: 'comment', body: null }))).toBe('New comment');
+    expect(cardBodyLine(item({ eventType: 'comment', body: '   ' }))).toBe('New comment');
   });
 });
 
@@ -420,6 +448,31 @@ describe('fetchActivityEntries enrichment', () => {
     if (res.ok) {
       expect(res.data[0]?.actorName).toBe('Alice');
       expect(res.data[0]?.title).toBe('Q3 Launch');
+    }
+  });
+
+  it('maps the comment body, post format and actor avatar onto the item', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-comment',
+          event_type: 'comment',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { comment_id: 'c1' },
+        }),
+      ]),
+      comments: ok([{ id: 'c1', author_user_id: 'u-alice', body: 'Looks great, ship it!' }]),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch', format: 'carousel' }]),
+      users: ok([{ id: 'u-alice', display_name: 'Alice', avatar_url: 'https://cdn/x.png' }]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data[0]?.body).toBe('Looks great, ship it!');
+      expect(res.data[0]?.format).toBe('carousel');
+      expect(res.data[0]?.actorAvatarUrl).toBe('https://cdn/x.png');
+      expect(cardBodyLine(res.data[0] ?? item({}))).toBe('Looks great, ship it!');
     }
   });
 

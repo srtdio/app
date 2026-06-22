@@ -71,6 +71,12 @@ export interface ActivityItem {
   actorId: string | null;
   /** Resolved display name for actorId, filled in after a profile read. */
   actorName: string | null;
+  /** Resolved avatar image url for the actor, filled in after a profile read. */
+  actorAvatarUrl: string | null;
+  /** The comment text, resolved by the comments join (comment events only). */
+  body: string | null;
+  /** The post format (text/single_image/carousel/video/link), posts only. */
+  format: string | null;
 }
 
 /** Map a raw inbox_entries row into an ActivityItem. Pure; actorName stays null. */
@@ -93,6 +99,9 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     title: payloadStr(payload, 'title'),
     actorId: payloadStr(payload, 'created_by') ?? payloadStr(payload, 'invited_by'),
     actorName: null,
+    actorAvatarUrl: null,
+    body: null,
+    format: null,
   };
 }
 
@@ -199,6 +208,25 @@ export function shortLine(item: ActivityItem): string {
     default:
       return 'Activity';
   }
+}
+
+/** Trim a comment body to a single legible line of at most ~140 characters. */
+function trimBody(text: string): string {
+  const t = text.trim();
+  return t.length <= 140 ? t : `${t.slice(0, 140).trimEnd()}…`;
+}
+
+/**
+ * The body line shown inside a card. For a comment event it is the real comment
+ * text, trimmed to ~140 chars; for every other event type (and for a comment with
+ * an empty/missing body) it falls back to the existing generic short line. Never
+ * throws and never renders an empty string for a comment that has text.
+ */
+export function cardBodyLine(item: ActivityItem): string {
+  if (item.eventType === 'comment' && item.body !== null && item.body.trim().length > 0) {
+    return trimBody(item.body);
+  }
+  return shortLine(item);
 }
 
 /** Route to open when a row is clicked, or null when it has no detail surface. */
@@ -416,10 +444,10 @@ export async function fetchActivityEntries(
   // only when it has ids; a failed one yields an empty map (never fails the feed).
   const [commentsRes, postsRes, briefsRes] = await Promise.all([
     commentIds.length > 0
-      ? client.from('comments').select('id, author_user_id').in('id', commentIds)
+      ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
       : Promise.resolve(null),
     postIds.length > 0
-      ? client.from('posts').select('id, title').in('id', postIds)
+      ? client.from('posts').select('id, title, format').in('id', postIds)
       : Promise.resolve(null),
     briefIds.length > 0
       ? client.from('briefs').select('id, title').in('id', briefIds)
@@ -427,12 +455,20 @@ export async function fetchActivityEntries(
   ]);
 
   const commentAuthors = new Map<string, string>();
+  const commentBodies = new Map<string, string>();
   if (commentsRes !== null && commentsRes.error === null) {
-    for (const r of commentsRes.data ?? []) commentAuthors.set(r.id, r.author_user_id);
+    for (const r of commentsRes.data ?? []) {
+      commentAuthors.set(r.id, r.author_user_id);
+      if (typeof r.body === 'string') commentBodies.set(r.id, r.body);
+    }
   }
   const postTitles = new Map<string, string>();
+  const postFormats = new Map<string, string>();
   if (postsRes !== null && postsRes.error === null) {
-    for (const r of postsRes.data ?? []) postTitles.set(r.id, r.title);
+    for (const r of postsRes.data ?? []) {
+      postTitles.set(r.id, r.title);
+      if (typeof r.format === 'string') postFormats.set(r.id, r.format);
+    }
   }
   const briefTitles = new Map<string, string>();
   if (briefsRes !== null && briefsRes.error === null) {
@@ -452,36 +488,54 @@ export async function fetchActivityEntries(
     ...items.flatMap((item) => (item.actorId !== null ? [item.actorId] : [])),
   ]);
   const userNames = new Map<string, string>();
+  const userAvatars = new Map<string, string>();
   if (userIds.length > 0) {
     const profiles = await readProfiles(client, userIds);
-    if (profiles.ok) for (const p of profiles.data) userNames.set(p.userId, p.displayName);
+    if (profiles.ok) {
+      for (const p of profiles.data) {
+        userNames.set(p.userId, p.displayName);
+        if (p.avatarUrl !== null) userAvatars.set(p.userId, p.avatarUrl);
+      }
+    }
   }
 
   // STITCH: fill actorName and the resolved entity title from the joins above.
   items.forEach((item, idx) => {
     const payload: unknown = rows[idx]?.payload as Json | undefined;
+
+    // Resolve the actor id for this event, then map it to a name + avatar in one
+    // place so both stay in sync. Comment events take the comment author; brief and
+    // invite events take their payload-supplied id; everything else has no actor.
+    let actorUserId: string | null = null;
     if (COMMENT_EVENTS.includes(item.eventType)) {
-      const author = item.commentId !== null ? commentAuthors.get(item.commentId) : undefined;
-      item.actorName = author !== undefined ? (userNames.get(author) ?? null) : null;
+      actorUserId = item.commentId !== null ? (commentAuthors.get(item.commentId) ?? null) : null;
     } else if (item.eventType === 'brief_created' || item.eventType === 'brief_closed') {
-      const by = payloadStr(payload, 'created_by');
-      item.actorName = by !== null ? (userNames.get(by) ?? null) : null;
+      actorUserId = payloadStr(payload, 'created_by');
     } else if (item.eventType === 'invite') {
-      const by = payloadStr(payload, 'invited_by');
-      item.actorName = by !== null ? (userNames.get(by) ?? null) : null;
-    } else {
-      item.actorName = null;
+      actorUserId = payloadStr(payload, 'invited_by');
     }
+    item.actorName = actorUserId !== null ? (userNames.get(actorUserId) ?? null) : null;
+    item.actorAvatarUrl = actorUserId !== null ? (userAvatars.get(actorUserId) ?? null) : null;
+
+    // The comment text, for comment events only (other events have no body).
+    item.body =
+      item.eventType === 'comment' && item.commentId !== null
+        ? (commentBodies.get(item.commentId) ?? null)
+        : null;
 
     if (item.entityType === 'post') {
       item.title = item.entityId !== null ? (postTitles.get(item.entityId) ?? null) : null;
+      item.format = item.entityId !== null ? (postFormats.get(item.entityId) ?? null) : null;
     } else if (item.entityType === 'brief') {
       const fromJoin = item.entityId !== null ? briefTitles.get(item.entityId) : undefined;
       item.title = fromJoin ?? payloadStr(payload, 'title') ?? null;
+      item.format = null;
     } else if (item.eventType === 'asset_uploaded') {
       item.title = payloadStr(payload, 'filename');
+      item.format = null;
     } else {
       item.title = null;
+      item.format = null;
     }
   });
 

@@ -29,6 +29,9 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     title: null,
     actorId: null,
     actorName: null,
+    actorAvatarUrl: null,
+    body: null,
+    format: null,
     ...over,
   };
 }
