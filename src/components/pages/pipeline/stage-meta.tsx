@@ -6,8 +6,8 @@ import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import type { Stage } from '@srtdio/posts';
 
-/** Cards shown per stage before the "View all" affordance (All feed + kanban columns). */
-export const BOARD_CAP = 10;
+/** Cards shown before the Show more control (mobile feed) and per kanban column. */
+export const BOARD_CAP = 6;
 
 /** Title-case a single workflow stage for display. */
 export function stageLabel(stage: Stage): string {

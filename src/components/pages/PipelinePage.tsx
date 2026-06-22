@@ -4,12 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { Tabs } from '@/components/shell/Tabs';
-import type { TabItem } from '@/components/shell/Tabs';
 import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
+import { StageChips } from '@/components/pages/pipeline/StageChips';
+import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
 import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
 import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { Toasts } from '@/components/pages/assets/Toasts';
@@ -53,18 +53,19 @@ interface PipelineHeaderProps {
 
 /**
  * The Pipeline header chrome: the shared SectionHeader (search, sort, accent "+"
- * create) with the stage tabs in the filter-chips slot. Each tab carries its
- * post count as a trailing badge in the label (the Tabs primitive renders a
- * label, reused unchanged). Pure (no hooks) so the wiring is unit-tested by
+ * create) with the horizontal stage chip bar in the filter-chips slot. Each chip
+ * carries its label and post count as discrete fields (StageChips renders the
+ * count as a trailing badge). Pure (no hooks) so the wiring is unit-tested by
  * walking the returned tree, mirroring SectionHeader's own tests; the page owns
  * the state and re-fetch.
  */
 export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
-  const tabs: TabItem[] = [
-    { key: 'all', label: `All ${props.counts.all ?? 0}` },
+  const items: StageChipItem[] = [
+    { key: 'all', label: 'All', count: props.counts.all ?? 0 },
     ...STAGES.map((stage) => ({
       key: stage,
-      label: `${stageLabel(stage)} ${props.counts[stage] ?? 0}`,
+      label: stageLabel(stage),
+      count: props.counts[stage] ?? 0,
     })),
   ];
   return (
@@ -85,7 +86,7 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
         ),
       }}
     >
-      <Tabs items={tabs} active={props.stage} onChange={props.onStageChange} />
+      <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
     </SectionHeader>
   );
 }
@@ -274,17 +275,15 @@ export function PipelinePage() {
   // then order, then group into columns. groupByStage is generic over the element
   // type, so it preserves PipelinePost (thumbnailAssetVersionId and all) with no
   // assertion.
-  const grouped = useMemo(
+  const sorted = useMemo(
     () =>
-      groupByStage(
-        sortPosts(
-          filterByFields(posts, search, (post) => [post.title, post.caption, post.platform]),
-          sort,
-        ),
-        STAGES,
+      sortPosts(
+        filterByFields(posts, search, (post) => [post.title, post.caption, post.platform]),
+        sort,
       ),
     [posts, search, sort],
   );
+  const grouped = useMemo(() => groupByStage(sorted, STAGES), [sorted]);
 
   // Per-tab counts over the filtered list: each stage plus the 'all' total.
   const counts = useMemo(() => stageCounts(grouped, STAGES), [grouped]);
@@ -421,12 +420,10 @@ export function PipelinePage() {
         />
       ) : (
         <PipelineFeed
-          stages={STAGES}
-          grouped={grouped}
+          posts={sorted}
           activeStage={stage}
           cache={cache}
           presignEnabled={presignEnabled}
-          onViewAll={setStage}
           onLongPressPost={setMovePostTarget}
         />
       )}

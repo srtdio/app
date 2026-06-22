@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { IconFile, IconLink } from '@/components/ui/icons';
+import { formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
 import { imageTileState } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
 import { useThumbnail } from './use-thumbnail';
@@ -8,12 +9,20 @@ import { useThumbnail } from './use-thumbnail';
 /**
  * What the non-image tile should be. Unifies AssetCard's link/file Fallback with
  * PostCard's GlyphTile/CaptionTile into one discriminated description so callers
- * say what the fallback is, not how to render it.
+ * say what the fallback is, not how to render it. The 'post' kind is the
+ * format-aware premium tile the Pipeline card uses when a post has no image.
  */
 export type ThumbnailFallback =
   | { kind: 'link'; label: string }
   | { kind: 'file'; extension: string }
   | { kind: 'text'; caption: string }
+  | {
+      kind: 'post';
+      glyph: FormatGlyphToken;
+      label: string;
+      body: string | null;
+      layout: 'text' | 'media';
+    }
   | { kind: 'glyph' };
 
 export interface ThumbnailProps {
@@ -40,6 +49,33 @@ const ASPECT: Record<NonNullable<ThumbnailProps['aspect']>, string> = {
 
 /** The glyph/label/caption tile shown when there is no usable image preview. */
 function FallbackTile({ fallback }: { fallback: ThumbnailFallback }) {
+  if (fallback.kind === 'post') {
+    const eyebrow = (
+      <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-3">
+        {formatIcon(fallback.glyph, 13)}
+        {fallback.label}
+      </span>
+    );
+    if (fallback.layout === 'media') {
+      return (
+        <div className="relative flex h-full w-full flex-col items-center justify-center gap-2.5 bg-gradient-to-br from-panel-2 to-panel-3 p-3 text-center">
+          <span className="absolute left-3 top-3">{eyebrow}</span>
+          <span className="text-fg-3">{formatIcon(fallback.glyph, 26)}</span>
+          {fallback.body !== null ? (
+            <p className="line-clamp-2 text-xs leading-snug text-fg-2">{fallback.body}</p>
+          ) : null}
+        </div>
+      );
+    }
+    return (
+      <div className="flex h-full w-full flex-col bg-gradient-to-br from-panel-2 to-panel-3 p-3">
+        {eyebrow}
+        {fallback.body !== null ? (
+          <p className="mt-auto line-clamp-4 text-xs leading-snug text-fg-2">{fallback.body}</p>
+        ) : null}
+      </div>
+    );
+  }
   if (fallback.kind === 'text') {
     return (
       <div className="h-full w-full overflow-hidden p-3">

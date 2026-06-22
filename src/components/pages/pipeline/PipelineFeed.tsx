@@ -1,29 +1,22 @@
+import { useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui/useLongPress';
 import { PostCard } from '@/components/pages/PostCard';
-import {
-  BOARD_CAP,
-  StageDot,
-  emptyStageMessage,
-  stageLabel,
-} from '@/components/pages/pipeline/stage-meta';
+import { BOARD_CAP, emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
 export interface PipelineFeedProps {
-  /** Full STAGE order, used to lay out the All view's grouped sections. */
-  stages: Stage[];
-  grouped: Record<Stage, PipelinePost[]>;
-  /** 'all' shows grouped sections; a Stage key shows that one stage uncapped. */
+  /** The already filtered + sorted board list; the feed slices it by the cap. */
+  posts: PipelinePost[];
+  /** 'all' shows every post; a Stage key shows just that stage. */
   activeStage: string;
   /** One shared presign cache for the whole board; never per-section or per-card. */
   cache: PresignCache;
   presignEnabled: boolean;
-  /** "View all N" on a capped All-view section; the page switches the active tab. */
-  onViewAll: (stage: Stage) => void;
   /** A long-press on a card asks the page to open the move sheet for that post. */
   onLongPressPost: (post: PipelinePost) => void;
 }
@@ -88,71 +81,45 @@ function cardGrid(
 }
 
 /**
- * Mobile feed driven entirely by the stage tabs. The All tab renders one grouped
- * section per stage in the locked order, each capped at BOARD_CAP with a View all
- * affordance when it overflows; a single-stage tab renders that stage uncapped,
- * or the EmptyState when it holds nothing. Hookless at the top level (the only
- * hook lives in the per-card FeedCard) so the structure is unit-tested by walking
- * the returned tree.
+ * Mobile feed: one flat 2-column grid over the active stage's posts, capped at
+ * BOARD_CAP with an in-place Show more control that reveals another page rather
+ * than navigating away. The 'all' tab shows every post; a single-stage tab shows
+ * just that stage, or the EmptyState when it holds nothing. The shown count
+ * resets whenever the active stage changes, so switching tabs never strands a
+ * stale "expanded" depth on the new list.
  */
 export function PipelineFeed({
-  stages,
-  grouped,
+  posts,
   activeStage,
   cache,
   presignEnabled,
-  onViewAll,
   onLongPressPost,
 }: PipelineFeedProps): ReactElement {
-  if (activeStage !== 'all') {
-    const stage = activeStage as Stage;
-    const posts = grouped[stage] ?? [];
-    return (
-      <div data-feed-single data-stage={stage} className="px-4 py-4">
-        {posts.length === 0 ? (
-          <EmptyState icon={<IconPipeline size={22} />} title={emptyStageMessage(stage)} />
-        ) : (
-          cardGrid(posts, cache, presignEnabled, onLongPressPost)
-        )}
-      </div>
-    );
-  }
+  const [shown, setShown] = useState(BOARD_CAP);
+  useEffect(() => setShown(BOARD_CAP), [activeStage]);
+
+  const list = activeStage === 'all' ? posts : posts.filter((post) => post.stage === activeStage);
+  const view = list.slice(0, shown);
 
   return (
-    <div className="flex flex-col gap-6 px-4 py-4">
-      {stages.map((stage) => {
-        const all = grouped[stage];
-        const shown = all.slice(0, BOARD_CAP);
-        const overflow = all.length > BOARD_CAP;
-        return (
-          <section key={stage} data-feed-section data-stage={stage}>
-            <div className="mb-2 flex items-center gap-2">
-              <StageDot stage={stage} />
-              <span className="text-sm font-medium">{stageLabel(stage)}</span>
-              <span className="text-xs tabular-nums text-fg-3">{all.length}</span>
-              {overflow ? (
-                <span className="ml-auto">
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    aria-label={`View all ${all.length}`}
-                    onClick={() => onViewAll(stage)}
-                  >
-                    View all {all.length}
-                  </Button>
-                </span>
-              ) : null}
+    <div className="px-4 py-4">
+      {list.length === 0 ? (
+        <EmptyState
+          icon={<IconPipeline size={22} />}
+          title={activeStage === 'all' ? 'No posts yet' : emptyStageMessage(activeStage as Stage)}
+        />
+      ) : (
+        <>
+          {cardGrid(view, cache, presignEnabled, onLongPressPost)}
+          {list.length > shown ? (
+            <div className="mt-4 flex justify-center">
+              <Button variant="default" size="lg" onClick={() => setShown((s) => s + BOARD_CAP)}>
+                Show {Math.min(BOARD_CAP, list.length - shown)} more
+              </Button>
             </div>
-            {all.length === 0 ? (
-              <div className="rounded-lg border border-border bg-panel-2 px-3 py-6 text-center text-sm text-fg-3">
-                Empty
-              </div>
-            ) : (
-              cardGrid(shown, cache, presignEnabled, onLongPressPost)
-            )}
-          </section>
-        );
-      })}
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

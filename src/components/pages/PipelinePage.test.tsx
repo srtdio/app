@@ -25,7 +25,7 @@ import { groupByStage } from '@/lib/post-board';
 import { filterByTitle, sortByDate } from '@/lib/list-sort';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu } from '@/components/ui/SortMenu';
-import { Tabs } from '@/components/shell/Tabs';
+import { StageChips } from '@/components/pages/pipeline/StageChips';
 
 const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 const stMock = vi.mocked(stageTransition);
@@ -95,7 +95,7 @@ function isElement(node: ReactNode): node is ReactElement {
 
 // SectionHeader is hookless and holds search/sort/primaryAction in props, so it
 // is expanded by calling its render once (mirroring SectionHeader's own tests)
-// while leaving stateful children (SortMenu, Tabs) as unexpanded elements.
+// while leaving stateful children (SortMenu, StageChips) as unexpanded elements.
 function expandSectionHeader(el: ReactElement): ReactElement {
   return (el.type as unknown as (props: unknown) => ReactElement)(el.props);
 }
@@ -160,13 +160,16 @@ describe('pipelineHeader', () => {
     expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-post');
   });
 
-  it('keeps the stage tabs in the filter slot', () => {
-    const tabs = findAll(header(), (el) => el.type === Tabs);
-    expect(tabs).toHaveLength(1);
-    const items = (tabs[0]!.props as { items: { key: string; label: string }[] }).items;
+  it('keeps the stage chip bar in the filter slot', () => {
+    const chips = findAll(header(), (el) => el.type === StageChips);
+    expect(chips).toHaveLength(1);
+    const items = (chips[0]!.props as { items: { key: string; label: string; count: number }[] })
+      .items;
     expect(items.map((t) => t.key)).toContain('all');
-    // The label carries the count as a trailing badge, e.g. "All 3".
-    expect(items.find((t) => t.key === 'all')?.label).toBe('All 3');
+    // Label and count are discrete fields now, not a concatenated badge string.
+    const all = items.find((t) => t.key === 'all');
+    expect(all?.label).toBe('All');
+    expect(all?.count).toBe(3);
   });
 
   it('drops the dead Sort button and decorative add-chips', () => {

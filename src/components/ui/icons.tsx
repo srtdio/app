@@ -340,3 +340,47 @@ export function IconSend(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconText(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 7h14M5 12h14M5 17h9" />
+    </Svg>
+  );
+}
+
+export function IconImage(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x={3} y={5} width={18} height={14} rx={2} />
+      <circle cx={8.5} cy={10} r={1.5} />
+      <path d="M4 17l5-5 4 4 3-3 4 4" />
+    </Svg>
+  );
+}
+
+export function IconCarousel(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x={8} y={8} width={12} height={12} rx={2} />
+      <path d="M4 16V6a2 2 0 0 1 2-2h10" />
+    </Svg>
+  );
+}
+
+export function IconVideo(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x={3} y={6} width={18} height={12} rx={2} />
+      <path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconPlay(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 5v14l11-7z" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
