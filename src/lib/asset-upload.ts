@@ -344,6 +344,130 @@ function folderField(body: unknown): { id: string; name: string; parentId: strin
   return { id: f.id, name: f.name, parentId: typeof f.parent_id === 'string' ? f.parent_id : null };
 }
 
+export type FolderRenameOutcome =
+  | { ok: true; folder: { id: string; name: string; parentId: string | null } }
+  | { ok: false; nameTaken: boolean; message: string };
+
+export interface RenameFolderConfig {
+  /** The asset-upload worker base URL; the /folders/rename route is POSTed beneath it. */
+  endpoint: string;
+  token: string;
+  workspaceId: string;
+  folderId: string;
+  name: string;
+  /** Injected so tests pass a mock; the app passes fetchWithTrace. */
+  fetcher: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+/**
+ * POST {workspace_id, folder_id, name} to the worker's /folders/rename route with
+ * a Bearer token. Never throws. On success returns the (possibly normalized)
+ * folder. A sibling-name collision (folder_name_taken) is surfaced inline via
+ * nameTaken:true; a 403 is the role guard (defense in depth) so it gets the
+ * agency-only line; everything else falls back to the retry copy.
+ */
+export async function renameFolderRequest(
+  config: RenameFolderConfig,
+): Promise<FolderRenameOutcome> {
+  let response: Response;
+  try {
+    response = await config.fetcher(workerRoute(config.endpoint, '/folders/rename'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({
+        workspace_id: config.workspaceId,
+        folder_id: config.folderId,
+        name: config.name.trim(),
+      }),
+    });
+  } catch {
+    return {
+      ok: false,
+      nameTaken: false,
+      message: "Couldn't rename the folder. Check your connection and retry",
+    };
+  }
+
+  const body = await readJson(response);
+  if (!response.ok) {
+    if (errorCode(body) === 'folder_name_taken') {
+      return {
+        ok: false,
+        nameTaken: true,
+        message: 'A folder with this name already exists here',
+      };
+    }
+    if (response.status === 403) {
+      return { ok: false, nameTaken: false, message: 'Only the agency team can rename folders' };
+    }
+    return {
+      ok: false,
+      nameTaken: false,
+      message: "Couldn't rename the folder. Check your connection and retry",
+    };
+  }
+
+  const folder = folderField(body);
+  if (folder === null) {
+    return {
+      ok: false,
+      nameTaken: false,
+      message: "Couldn't rename the folder. Check your connection and retry",
+    };
+  }
+  return { ok: true, folder };
+}
+
+export type FolderDeleteOutcome = { ok: true } | { ok: false; message: string };
+
+export interface DeleteFolderConfig {
+  /** The asset-upload worker base URL; the /folders/delete route is POSTed beneath it. */
+  endpoint: string;
+  token: string;
+  workspaceId: string;
+  folderId: string;
+  /** Injected so tests pass a mock; the app passes fetchWithTrace. */
+  fetcher: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+/**
+ * POST {workspace_id, folder_id} to the worker's /folders/delete route with a
+ * Bearer token. Never throws. A 200 is success (the worker soft-deletes the
+ * folder and detaches its child folders + assets to the root); a 403 is the role
+ * guard; everything else falls back to the retry copy.
+ */
+export async function deleteFolderRequest(
+  config: DeleteFolderConfig,
+): Promise<FolderDeleteOutcome> {
+  let response: Response;
+  try {
+    response = await config.fetcher(workerRoute(config.endpoint, '/folders/delete'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({
+        workspace_id: config.workspaceId,
+        folder_id: config.folderId,
+      }),
+    });
+  } catch {
+    return { ok: false, message: "Couldn't delete the folder. Check your connection and retry" };
+  }
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      return { ok: false, message: 'Only the agency team can delete folders' };
+    }
+    return { ok: false, message: "Couldn't delete the folder. Check your connection and retry" };
+  }
+  return { ok: true };
+}
+
 /** Roles allowed to rename assets; mirrors the worker's 403 as defense in depth. */
 export function canRenameAssets(role: string | null): boolean {
   return role === 'owner' || role === 'admin' || role === 'agency';
