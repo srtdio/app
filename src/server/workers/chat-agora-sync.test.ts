@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   mapChangePayload,
   processEvent,
+  reconcile,
   type ChangePayload,
   type SyncDeps,
   type SyncReader,
@@ -42,6 +43,7 @@ function fakeReader(overrides: Partial<SyncReader> = {}): {
     getChannelByGroupId: () =>
       Promise.resolve({ channelId: CHANNEL, agoraGroupId: AGORA_GROUP_ID }),
     markSynced,
+    listUnsyncedChannels: () => Promise.resolve([]),
     ...overrides,
   };
   return { reader, markSynced };
@@ -252,6 +254,62 @@ describe('processEvent', () => {
       processEvent({ kind: 'member_insert', groupId: GROUP_ID, userId: MEMBER }, d),
     ).resolves.toBeUndefined();
     expect(d.log.error).toHaveBeenCalled();
+  });
+});
+
+describe('reconcile', () => {
+  const DM_CHANNEL = 'dm__22222222-2222-7222-8222-222222222222';
+
+  it('syncs an unsynced batch: creates the group, stamps the group and the dm', async () => {
+    const { reader, markSynced } = fakeReader({
+      listUnsyncedChannels: () =>
+        Promise.resolve([
+          {
+            channelId: DM_CHANNEL,
+            channelType: 'dm',
+            entityId: null,
+            agoraGroupId: null,
+          },
+          {
+            channelId: CHANNEL,
+            channelType: 'group',
+            entityId: GROUP_ID,
+            agoraGroupId: null,
+          },
+        ]),
+    });
+    const { agora, createGroup } = fakeAgora();
+    await reconcile(deps(reader, agora));
+
+    expect(createGroup).toHaveBeenCalledTimes(1);
+    expect(createGroup.mock.calls[0]![0]).toEqual({
+      name: 'Marketing',
+      ownerUsername: toAgoraUsername(CREATOR),
+      memberUsernames: [toAgoraUsername(CREATOR), toAgoraUsername(MEMBER)],
+    });
+    expect(markSynced).toHaveBeenCalledTimes(2);
+    expect(markSynced).toHaveBeenCalledWith(CHANNEL, AGORA_GROUP_ID, 'trace-1');
+    expect(markSynced).toHaveBeenCalledWith(DM_CHANNEL, null, 'trace-1');
+  });
+
+  it('skips an unsynced group whose creator is null: no create, no stamp', async () => {
+    const { reader, markSynced } = fakeReader({
+      getGroup: () => Promise.resolve({ name: 'Orphan', createdBy: null }),
+      listUnsyncedChannels: () =>
+        Promise.resolve([
+          {
+            channelId: CHANNEL,
+            channelType: 'group',
+            entityId: GROUP_ID,
+            agoraGroupId: null,
+          },
+        ]),
+    });
+    const { agora, createGroup } = fakeAgora();
+    await reconcile(deps(reader, agora));
+
+    expect(createGroup).not.toHaveBeenCalled();
+    expect(markSynced).not.toHaveBeenCalled();
   });
 });
 

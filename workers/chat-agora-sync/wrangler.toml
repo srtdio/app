@@ -3,6 +3,12 @@ main = "../../src/server/workers/chat-agora-sync.ts"
 compatibility_date = "2026-05-16"
 compatibility_flags = ["nodejs_compat"]
 
+# Every-minute cron drives the reconciliation pass (create Agora groups for
+# unsynced group channels, stamp DM channels) since a Worker can't hold the
+# Realtime subscription.
+[triggers]
+crons = ["* * * * *"]
+
 # Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
 # srtdio-logs (see docs/cloudflare-logpush-setup.md).
 [observability]
