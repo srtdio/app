@@ -724,9 +724,11 @@ export function Comments({
           renderEditor(comment.id)
         ) : (
           <>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">
-              {renderCommentBody(comment.body, nameOf)}
-            </p>
+            {comment.body.trim() !== '' ? (
+              <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">
+                {renderCommentBody(comment.body, nameOf)}
+              </p>
+            ) : null}
             {attachments.length > 0 ? (
               <MessageAttachments
                 attachments={attachments}

@@ -164,7 +164,7 @@ Two primitives: Comments (Postgres, here) and Chat (Agora, section 7).
 | entity_id | uuid | |
 | parent_comment_id | uuid | nullable, FK comments.id |
 | author_user_id | uuid | FK auth.users.id |
-| body | text | 1 to 10000 |
+| body | text | up to 10000 chars, NOT NULL; may be an empty string only when the comment carries at least one attachment (comments_body_or_attachment_check: char_length(body) >= 1 OR the comment has at least one attachment). comment_create applies the same rule, rejecting an empty or whitespace-only body when there are no attachments |
 | mentions | jsonb | nullable |
 | attachment_asset_ids | uuid[] | nullable |
 | is_decision | boolean | default false |
