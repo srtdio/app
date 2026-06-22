@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DragEvent, ReactElement, ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { BOARD_CAP, emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
-import { PostCard } from '@/components/pages/PostCard';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { groupByStage } from '@/lib/post-board';
 import { STAGE_TRANSITIONS } from '@srtdio/posts';
 import type { PipelinePost, Stage } from '@srtdio/posts';
@@ -12,8 +12,9 @@ import type { PresignCache } from '@/lib/asset-presign';
 
 const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 
-// PostCard is never invoked here (the tree is walked, not rendered), so the cache
-// is only carried as a prop and a stub satisfies the type without a real one.
+// The board tree is walked (PostCard never invoked) and the feed renders with
+// presign disabled, so the cache is never touched on either path: a bare stub
+// satisfies the type without a real one.
 const cache = {} as unknown as PresignCache;
 
 function makePost(id: string, stage: Stage): PipelinePost {
@@ -65,8 +66,26 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
   return all.filter(predicate);
 }
 
-function cardCount(tree: ReactNode): number {
-  return findAll(tree, (el) => el.type === PostCard).length;
+// The feed renders real PostCards (it owns hooks now), so it is exercised via SSR
+// markup rather than tree-walking. Cards carry a data-post-id, so counting those
+// attributes counts rendered cards. presignEnabled is false so the injected cache
+// is never touched and a bare stub satisfies the type.
+function renderFeed(props: { posts: PipelinePost[]; activeStage: string }): string {
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <PipelineFeed
+        posts={props.posts}
+        activeStage={props.activeStage}
+        cache={cache}
+        presignEnabled={false}
+        onLongPressPost={() => {}}
+      />
+    </MemoryRouter>,
+  );
+}
+
+function feedCardCount(markup: string): number {
+  return (markup.match(/data-post-id=/g) ?? []).length;
 }
 
 function dataStage(el: ReactElement): string | undefined {
@@ -83,83 +102,49 @@ function dropEvent(payload: string): DragEvent<HTMLDivElement> {
 }
 
 describe('PipelineFeed', () => {
-  it('All tab renders one grouped section per stage, capped at the board cap', () => {
+  it('the All tab renders one flat grid capped at the board cap, with a Show more control', () => {
     const first = STAGES[0]!;
-    const grouped = groupByStage(manyIn(first, BOARD_CAP + 2), STAGES);
-    const tree = PipelineFeed({
-      stages: STAGES,
-      grouped,
-      activeStage: 'all',
-      cache,
-      presignEnabled: false,
-      onViewAll: () => {},
-      onLongPressPost: () => {},
-    });
-
-    const sections = findAll(tree, (el) =>
-      Boolean((el.props as { 'data-feed-section'?: boolean })['data-feed-section']),
-    );
-    expect(sections.map(dataStage)).toEqual(STAGES);
-
-    const overflowing = sections.find((s) => dataStage(s) === first)!;
-    expect(cardCount(overflowing)).toBe(BOARD_CAP);
+    const markup = renderFeed({ posts: manyIn(first, BOARD_CAP + 2), activeStage: 'all' });
+    // The first page shows exactly the cap; the overflow is gated behind Show more.
+    expect(feedCardCount(markup)).toBe(BOARD_CAP);
+    // The remaining 2 are offered in place (min of the cap and the remainder).
+    expect(markup).toContain('Show 2 more');
   });
 
-  it('shows a View all affordance on a stage with more than the cap and wires it', () => {
+  it('caps the Show more label at the board cap when more than a page remains', () => {
     const first = STAGES[0]!;
-    const grouped = groupByStage(manyIn(first, BOARD_CAP + 5), STAGES);
-    let viewed: Stage | undefined;
-    const tree = PipelineFeed({
-      stages: STAGES,
-      grouped,
-      activeStage: 'all',
-      cache,
-      presignEnabled: false,
-      onViewAll: (s) => {
-        viewed = s;
-      },
-      onLongPressPost: () => {},
-    });
-
-    const viewAll = findAll(tree, (el) => {
-      const label = (el.props as { 'aria-label'?: string })['aria-label'];
-      return typeof label === 'string' && label.startsWith('View all');
-    });
-    expect(viewAll).toHaveLength(1);
-    (viewAll[0]!.props as { onClick: () => void }).onClick();
-    expect(viewed).toBe(first);
+    const markup = renderFeed({ posts: manyIn(first, BOARD_CAP * 3), activeStage: 'all' });
+    expect(feedCardCount(markup)).toBe(BOARD_CAP);
+    // A full next page remains, so the label offers exactly one cap's worth.
+    expect(markup).toContain(`Show ${BOARD_CAP} more`);
   });
 
-  it('a single-stage tab renders that stage uncapped', () => {
+  it('no Show more control when the list fits within the cap', () => {
     const first = STAGES[0]!;
-    const grouped = groupByStage(manyIn(first, BOARD_CAP + 7), STAGES);
-    const tree = PipelineFeed({
-      stages: STAGES,
-      grouped,
-      activeStage: first,
-      cache,
-      presignEnabled: false,
-      onViewAll: () => {},
-      onLongPressPost: () => {},
-    });
-    expect(cardCount(tree)).toBe(BOARD_CAP + 7);
+    const markup = renderFeed({ posts: manyIn(first, BOARD_CAP - 1), activeStage: 'all' });
+    expect(feedCardCount(markup)).toBe(BOARD_CAP - 1);
+    expect(markup).not.toContain('Show');
   });
 
-  it('an empty single-stage tab shows the EmptyState message', () => {
+  it('a single-stage tab shows only that stage, capped at the board cap', () => {
     const first = STAGES[0]!;
-    const grouped = groupByStage([], STAGES);
-    const tree = PipelineFeed({
-      stages: STAGES,
-      grouped,
-      activeStage: first,
-      cache,
-      presignEnabled: false,
-      onViewAll: () => {},
-      onLongPressPost: () => {},
-    });
-    const empties = findAll(tree, (el) => el.type === EmptyState);
-    expect(empties).toHaveLength(1);
-    expect((empties[0]!.props as { title?: string }).title).toBe(emptyStageMessage(first));
+    const second = STAGES[1]!;
+    const posts = [...manyIn(first, BOARD_CAP + 3), ...manyIn(second, 4)];
+    const markup = renderFeed({ posts, activeStage: first });
+    // Only the active stage's posts are listed, and they cap at the board cap.
+    expect(feedCardCount(markup)).toBe(BOARD_CAP);
+    expect(markup).toContain('Show 3 more');
+  });
+
+  it('an empty single-stage tab shows the stage EmptyState message', () => {
+    const first = STAGES[0]!;
+    const markup = renderFeed({ posts: [], activeStage: first });
+    expect(markup).toContain(emptyStageMessage(first));
+  });
+
+  it('an empty All tab shows the "No posts yet" EmptyState', () => {
+    const markup = renderFeed({ posts: [], activeStage: 'all' });
+    expect(markup).toContain('No posts yet');
   });
 });
 
