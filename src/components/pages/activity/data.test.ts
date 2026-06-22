@@ -64,6 +64,8 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     actorAvatarUrl: null,
     body: null,
     format: null,
+    caption: null,
+    thumbnailAssetVersionId: null,
     ...over,
   };
 }
@@ -394,6 +396,7 @@ describe('fetchActivityEntries enrichment', () => {
     order(col: string, opts?: unknown): FakeBuilder;
     limit(n: number): FakeBuilder;
     lt(col: string, val: unknown): FakeBuilder;
+    like(col: string, pattern: string): FakeBuilder;
     in(col: string, vals: readonly unknown[]): FakeBuilder;
   }
 
@@ -405,6 +408,7 @@ describe('fetchActivityEntries enrichment', () => {
       order: () => self,
       limit: () => self,
       lt: () => self,
+      like: () => self,
       in: () => self,
       then(onfulfilled, onrejected) {
         return Promise.resolve(result).then(onfulfilled, onrejected);
@@ -473,6 +477,54 @@ describe('fetchActivityEntries enrichment', () => {
       expect(res.data[0]?.format).toBe('carousel');
       expect(res.data[0]?.actorAvatarUrl).toBe('https://cdn/x.png');
       expect(cardBodyLine(res.data[0] ?? item({}))).toBe('Looks great, ship it!');
+    }
+  });
+
+  it('maps the post caption and the first-image asset_version_id onto a post item', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-post',
+          event_type: 'stage_change',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { to: 'approved' },
+        }),
+      ]),
+      posts: ok([
+        { id: 'p1', title: 'Q3 Launch', format: 'single_image', caption: 'Ship day copy' },
+      ]),
+      asset_attachments: ok([
+        { entity_id: 'p1', asset_version_id: 'av-9', asset_versions: { mime_type: 'image/png' } },
+      ]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data[0]?.caption).toBe('Ship day copy');
+      expect(res.data[0]?.thumbnailAssetVersionId).toBe('av-9');
+    }
+  });
+
+  it('degrades the thumbnail to null when the first-image sub-query errors', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-post',
+          event_type: 'stage_change',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { to: 'approved' },
+        }),
+      ]),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch', format: 'single_image', caption: null }]),
+      asset_attachments: err('attachments boom'),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data[0]?.thumbnailAssetVersionId).toBeNull();
+      expect(res.data[0]?.title).toBe('Q3 Launch');
     }
   });
 

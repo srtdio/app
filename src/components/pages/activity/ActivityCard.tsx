@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Avatar } from '@/components/ui/Avatar';
-import { ThumbTile } from '@/components/pages/activity/ThumbTile';
+import { Thumbnail, type ThumbnailFallback } from '@/components/media';
+import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
+import type { PresignCache } from '@/lib/asset-presign';
 import {
   IconActivity,
   IconBriefs,
@@ -28,6 +30,10 @@ interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (threaded). */
   group: ActivityItem[];
   nowMs: number;
+  /** The page-owned presign cache, threaded into the thumbnail tile. */
+  cache: PresignCache;
+  /** False when presigning is unconfigured: the tile shows the fallback. */
+  presignEnabled: boolean;
   /** Open the thread: mark every entry read and navigate from the lead. */
   onOpenGroup: (group: ActivityItem[]) => void;
   onSnooze: (item: ActivityItem, kind: SnoozeKind) => void;
@@ -88,6 +94,35 @@ function leadIcon(item: ActivityItem): ReactElement {
   }
 }
 
+/**
+ * Map the DB post format to a glyph token (single_image folds into 'image'),
+ * mirroring Pipeline's PostCard so the fallback tile speaks the same vocabulary.
+ */
+function formatToken(format: string): FormatGlyphToken {
+  return format === 'single_image' ? 'image' : (format as FormatGlyphToken);
+}
+
+/**
+ * The Thumbnail fallback for a lead. A post lead gets the format-aware premium
+ * tile (the same kind Pipeline's PostCard builds: format glyph + caption body,
+ * media layout for video/link), so an imageless post is never a flat colour
+ * square. Every non-post lead uses the simplest glyph fallback.
+ */
+function leadFallback(lead: ActivityItem): ThumbnailFallback {
+  if (lead.entityType === 'post' && lead.format !== null) {
+    const token = formatToken(lead.format);
+    const layout = token === 'video' || token === 'link' ? 'media' : 'text';
+    return {
+      kind: 'post',
+      glyph: token,
+      label: FORMAT_GLYPH_LABEL[token],
+      body: lead.caption ?? null,
+      layout,
+    };
+  }
+  return { kind: 'glyph' };
+}
+
 const SCOPE_TAG: Record<string, string> = {
   posts: 'Posts',
   briefs: 'Briefs',
@@ -111,16 +146,13 @@ const UNREAD_DOT = (
 export function ActivityCard({
   group,
   nowMs,
+  cache,
+  presignEnabled,
   onOpenGroup,
   onSnooze,
   onMarkRead,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
-  // Mount-only entrance: fade + a small slide up the Y axis (translateY only).
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const lead = group[0];
   if (lead === undefined) return null;
@@ -145,8 +177,7 @@ export function ActivityCard({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl border bg-panel transition duration-[250ms] ease-out',
-        mounted ? 'translate-y-0 opacity-100' : 'translate-y-[6px] opacity-0',
+        'overflow-hidden rounded-xl border bg-panel transition-colors',
         unread ? 'border-accent-line' : 'border-border',
       )}
     >
@@ -202,11 +233,16 @@ export function ActivityCard({
           </p>
         </div>
 
-        <ThumbTile
-          toneKey={lead.entityId ?? lead.id}
-          entityType={lead.entityType}
-          format={lead.format}
-        />
+        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg">
+          <Thumbnail
+            assetVersionId={lead.thumbnailAssetVersionId ?? null}
+            cache={cache}
+            presignEnabled={presignEnabled}
+            aspect="square"
+            fallback={leadFallback(lead)}
+            alt={title}
+          />
+        </div>
 
         <ActivityRowMenu
           snoozed={snoozed}
