@@ -19,31 +19,50 @@ const TEXT_NODE = 3;
 const ELEMENT_NODE = 1;
 
 /** Non-breaking spaces are normalised to plain spaces so the stored body matches
- *  what the user sees and the server's length / parse rules behave predictably. */
+ *  what the user sees and the server's length / parse rules behave predictably.
+ *  Newlines are preserved: the composer is multi-line and `\n` is significant. */
 function normalizeSpaces(text: string): string {
   return text.replace(/\u00a0/g, ' ');
 }
 
 /**
- * Serialize the composer to the body string the server stores: each immediate
- * text node contributes its text verbatim; each mention chip span contributes
- * `@[<uuid>]` (its data-mention-id); concatenation is in document order. Any
- * other element falls back to its text so stray markup never drops content.
+ * Serialize the composer to the body string the server stores by walking the FULL
+ * subtree depth-first in document order. Text nodes contribute their value (nbsp
+ * normalised, newlines preserved). A mention chip (non-empty data-mention-id)
+ * contributes `@[<uuid>]` and is not descended into. A `` becomes `\n`; a block
+ * element (`` / ``) inserts a `\n` boundary when one is not already present, then
+ * its children are walked; any other inline element is descended into. This way a
+ * chip the browser nests inside a block (e.g. on a second line) still emits its
+ * token rather than its plain display name, and line breaks survive.
  */
 export function serializeComposer(root: HTMLElement): string {
   let out = '';
-  root.childNodes.forEach((node) => {
+
+  function walk(node: Node): void {
     if (node.nodeType === TEXT_NODE) {
       out += normalizeSpaces(node.nodeValue ?? '');
       return;
     }
-    if (node.nodeType === ELEMENT_NODE) {
-      const el = node as HTMLElement;
-      const id = el.dataset?.mentionId;
-      if (id !== undefined && id !== '') out += `@[${id}]`;
-      else out += normalizeSpaces(el.textContent ?? '');
+    if (node.nodeType !== ELEMENT_NODE) return;
+
+    const el = node as HTMLElement;
+    const id = el.dataset?.mentionId;
+    if (id !== undefined && id !== '') {
+      out += `@[${id}]`;
+      return;
     }
-  });
+    const tag = el.tagName;
+    if (tag === 'BR') {
+      out += '\n';
+      return;
+    }
+    if (tag === 'DIV' || tag === 'P') {
+      if (out !== '' && !out.endsWith('\n')) out += '\n';
+    }
+    el.childNodes.forEach(walk);
+  }
+
+  root.childNodes.forEach(walk);
   return out;
 }
 

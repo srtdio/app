@@ -3,9 +3,10 @@ import { activeMentionQuery, serializeComposer } from '@/components/comments/Men
 
 // The repo's vitest runs in the node environment (no jsdom), and the prompt
 // scopes these tests to the two pure functions only: caret / selection behaviour
-// is never exercised here. serializeComposer walks childNodes, so a minimal
-// node-like shape (nodeType + nodeValue / dataset / textContent) is enough to
-// drive it without a real DOM.
+// is never exercised here. serializeComposer now walks the full subtree depth
+// first, so a minimal node-like shape (nodeType + nodeValue, or tagName / dataset
+// / nested childNodes for elements) is enough to drive it without a real DOM. A
+// chip is just an element carrying dataset.mentionId.
 
 const TEXT_NODE = 3;
 const ELEMENT_NODE = 1;
@@ -14,12 +15,25 @@ function text(value: string): unknown {
   return { nodeType: TEXT_NODE, nodeValue: value };
 }
 
-function mention(id: string, name: string): unknown {
-  return { nodeType: ELEMENT_NODE, dataset: { mentionId: id }, textContent: `@${name}` };
+function el(tagName: string, children: unknown[]): unknown {
+  return { nodeType: ELEMENT_NODE, tagName, dataset: {}, childNodes: children };
 }
 
+// A mention chip: an element carrying a non-empty dataset.mentionId. Its display
+// name lives only in the (omitted) child text; serializeComposer must never reach
+// it, emitting @[id] and not descending.
+function mention(id: string): unknown {
+  return { nodeType: ELEMENT_NODE, tagName: 'SPAN', dataset: { mentionId: id }, childNodes: [] };
+}
+
+function br(): unknown {
+  return { nodeType: ELEMENT_NODE, tagName: 'BR', dataset: {}, childNodes: [] };
+}
+
+// A plain inline element (a SPAN without a mention id) wrapping a single text run;
+// serializeComposer descends into it and so contributes that text verbatim.
 function plainElement(textContent: string): unknown {
-  return { nodeType: ELEMENT_NODE, dataset: {}, textContent };
+  return el('SPAN', [text(textContent)]);
 }
 
 function root(children: unknown[]): HTMLElement {
@@ -27,6 +41,7 @@ function root(children: unknown[]): HTMLElement {
 }
 
 const ID = '11111111-2222-3333-4444-555555555555';
+const ID2 = '66666666-7777-8888-9999-000000000000';
 
 describe('serializeComposer', () => {
   it('returns plain text verbatim', () => {
@@ -35,12 +50,12 @@ describe('serializeComposer', () => {
 
   it('emits @[uuid] for a mention chip in document order', () => {
     expect(
-      serializeComposer(root([text('hi '), mention(ID, 'Ann Lee'), text(' and others')])),
+      serializeComposer(root([text('hi '), mention(ID), text(' and others')])),
     ).toBe(`hi @[${ID}] and others`);
   });
 
   it('emits only the token for a chip, never the displayed name', () => {
-    const out = serializeComposer(root([mention(ID, 'Ann Lee')]));
+    const out = serializeComposer(root([mention(ID)]));
     expect(out).toBe(`@[${ID}]`);
     expect(out).not.toContain('Ann');
   });
@@ -55,6 +70,30 @@ describe('serializeComposer', () => {
 
   it('returns an empty string for an empty composer', () => {
     expect(serializeComposer(root([]))).toBe('');
+  });
+
+  it('emits @[uuid] for a mention chip nested inside a block element', () => {
+    const out = serializeComposer(root([el('DIV', [mention(ID)])]));
+    expect(out).toBe(`@[${ID}]`);
+    expect(out).not.toContain('Ann');
+  });
+
+  it('inserts a newline at a block boundary between two lines', () => {
+    expect(serializeComposer(root([text('line1'), el('DIV', [text('line2')])]))).toBe(
+      'line1\nline2',
+    );
+  });
+
+  it('serializes a <br> between text runs as a newline', () => {
+    expect(serializeComposer(root([text('a'), br(), text('b')]))).toBe('a\nb');
+  });
+
+  it('emits the token for a mention on a second block line', () => {
+    expect(
+      serializeComposer(
+        root([text('hi '), el('DIV', [text('see '), mention(ID2)])]),
+      ),
+    ).toBe(`hi \nsee @[${ID2}]`);
   });
 });
 
