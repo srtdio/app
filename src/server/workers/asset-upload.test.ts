@@ -311,6 +311,62 @@ describe('asset-upload worker.fetch', () => {
     // Validation happens before the pipeline runs.
     expect(state.capturedInput).toBeNull();
   });
+
+  it('returns 400 for a folder_id in another workspace (tenant isolation)', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const now = new Date().toISOString();
+    // A real folder, but owned by a different workspace: not a valid destination.
+    state.repo.folders.set(FOLDER, {
+      id: FOLDER,
+      workspace_id: OTHER_WORKSPACE,
+      name: 'Foreign',
+      parent_id: null,
+      created_by: USER,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    });
+    const res = await worker.fetch(
+      uploadRequest(token, { workspace_id: WORKSPACE, folder_id: FOLDER }),
+      env,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('bad_request');
+    expect(body.error.message).toBe('Folder not found in this workspace.');
+    // A cross-tenant folder never reaches the pipeline.
+    expect(state.capturedInput).toBeNull();
+  });
+
+  it('threads a valid folder_id and display_name into the pipeline', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const now = new Date().toISOString();
+    state.repo.folders.set(FOLDER, {
+      id: FOLDER,
+      workspace_id: WORKSPACE,
+      name: 'Campaigns',
+      parent_id: null,
+      created_by: USER,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    });
+    const res = await worker.fetch(
+      uploadRequest(token, {
+        workspace_id: WORKSPACE,
+        folder_id: FOLDER,
+        display_name: 'My picture',
+      }),
+      env,
+    );
+    expect(res.status).toBe(201);
+    expect(state.capturedInput?.folderId).toBe(FOLDER);
+    expect(state.capturedInput?.displayName).toBe('My picture');
+    // filename always stays the original upload name.
+    expect(state.capturedInput?.filename).toBe('doc.pdf');
+  });
 });
 
 describe('POST /links', () => {
@@ -408,9 +464,12 @@ describe('POST /rename', () => {
       env,
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { asset: { filename: string } };
-    expect(body.asset.filename).toBe('Renamed');
-    expect(state.repo.assets.get(ASSET)?.filename).toBe('Renamed');
+    const body = (await res.json()) as { asset: { filename: string; displayName: string } };
+    // Rename writes display_name; filename (and its extension/type glyph) is intact.
+    expect(body.asset.displayName).toBe('Renamed');
+    expect(body.asset.filename).toBe('original.png');
+    expect(state.repo.assets.get(ASSET)?.display_name).toBe('Renamed');
+    expect(state.repo.assets.get(ASSET)?.filename).toBe('original.png');
 
     // Versions are immutable: none added, r2_key unchanged.
     expect(state.repo.versions).toHaveLength(versionsBefore);

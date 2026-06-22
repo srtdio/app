@@ -86,6 +86,10 @@ export interface NewAsset {
   workspaceId: string;
   filename: string;
   uploadedBy: string;
+  /** Destination folder; null (default) files the asset at the All assets root. */
+  folderId?: string | null;
+  /** Friendly shown name; null (default) means the asset shows its filename. */
+  displayName?: string | null;
   folderPath?: string;
   tags?: string[];
 }
@@ -197,9 +201,13 @@ export interface AssetRepository {
   insertAsset(asset: NewAsset): Promise<void>;
   insertVersion(version: NewVersion): Promise<void>;
   setCurrentVersion(assetId: string, versionId: string): Promise<void>;
-  /** Update assets.filename only, scoped to the workspace. Touches no version
-   * rows and no attachments. */
-  renameAsset(workspaceId: string, assetId: string, filename: string): Promise<void>;
+  /** Update assets.display_name only (the shown name), scoped to the workspace.
+   * filename (and therefore its extension/type glyph) is never touched, and no
+   * version rows or attachments change. */
+  renameAsset(workspaceId: string, assetId: string, displayName: string): Promise<void>;
+  /** The next auto-name for an upload into a folder ("<folder> 1", "<folder> 2",
+   * ...), monotonic max+1 over the folder's asset display_names. */
+  nextFolderUploadName(workspaceId: string, folderId: string): Promise<string>;
   /** An active folder by id, scoped to a workspace (cross-tenant or soft-deleted
    * returns null). The route's parent/target/existence guard. */
   getFolder(workspaceId: string, folderId: string): Promise<FolderRow | null>;
@@ -281,6 +289,38 @@ function resolveFolderName(base: string, lowerNames: ReadonlySet<string>): strin
       return candidate;
     }
   }
+}
+
+/** Escape every RegExp metacharacter so a folder name matches literally. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The next folder upload auto-name. Scans the folder's existing asset
+ * display_names for ones shaped `<folderName> N` (case-insensitive, N a positive
+ * integer) and returns `${folderName} ${max + 1}`, or `${folderName} 1` when none
+ * match. Monotonic max+1, never count-based: a freed (deleted) number is never
+ * reused, which is why the caller passes every asset's display_name in the folder
+ * - including soft-deleted ones - so deleting the highest-numbered asset does not
+ * hand its number back out.
+ */
+function nextUploadName(folderName: string, displayNames: readonly (string | null)[]): string {
+  const pattern = new RegExp(`^${escapeRegExp(folderName)} (\\d+)$`, 'i');
+  let max = 0;
+  for (const name of displayNames) {
+    if (name === null) {
+      continue;
+    }
+    const match = pattern.exec(name);
+    if (match) {
+      const n = Number.parseInt(match[1] as string, 10);
+      if (n > max) {
+        max = n;
+      }
+    }
+  }
+  return `${folderName} ${max + 1}`;
 }
 
 function folderNameTaken(): { ok: false; error: FolderError } {
@@ -437,6 +477,8 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
         id: asset.id,
         workspace_id: asset.workspaceId,
         filename: asset.filename,
+        display_name: asset.displayName ?? null,
+        folder_id: asset.folderId ?? null,
         uploaded_by: asset.uploadedBy,
         folder_path: asset.folderPath ?? '/',
         tags: asset.tags ?? [],
@@ -444,6 +486,38 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
       if (error) {
         throw error;
       }
+    },
+
+    async nextFolderUploadName(workspaceId, folderId) {
+      const { data: folder, error: folderError } = await client
+        .from('folders')
+        .select('name')
+        .eq('id', folderId)
+        .eq('workspace_id', workspaceId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (folderError) {
+        throw folderError;
+      }
+      if (!folder) {
+        throw new Error(`folder ${folderId} not found in workspace ${workspaceId}`);
+      }
+      // No row lock / transaction / retry: display_name has no uniqueness
+      // constraint, so two simultaneous uploads may compute the same number (a
+      // cosmetic duplicate), which is accepted. Soft-deleted rows are intentionally
+      // included so a freed number is never reused (monotonic max+1).
+      const { data: rows, error } = await client
+        .from('assets')
+        .select('display_name')
+        .eq('workspace_id', workspaceId)
+        .eq('folder_id', folderId);
+      if (error) {
+        throw error;
+      }
+      return nextUploadName(
+        folder.name,
+        (rows ?? []).map((row) => row.display_name),
+      );
     },
 
     async getMembership(workspaceId, userId) {
@@ -486,10 +560,10 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
       }
     },
 
-    async renameAsset(workspaceId, assetId, filename) {
+    async renameAsset(workspaceId, assetId, displayName) {
       const { error } = await client
         .from('assets')
-        .update({ filename })
+        .update({ display_name: displayName })
         .eq('id', assetId)
         .eq('workspace_id', workspaceId);
       if (error) {
@@ -743,9 +817,9 @@ export class InMemoryAssetRepository implements AssetRepository {
       id: asset.id,
       workspace_id: asset.workspaceId,
       filename: asset.filename,
-      display_name: null,
+      display_name: asset.displayName ?? null,
       current_version_id: null,
-      folder_id: null,
+      folder_id: asset.folderId ?? null,
       folder_path: asset.folderPath ?? '/',
       tags: asset.tags ?? [],
       uploaded_by: asset.uploadedBy,
@@ -777,12 +851,28 @@ export class InMemoryAssetRepository implements AssetRepository {
     return Promise.resolve();
   }
 
-  renameAsset(workspaceId: string, assetId: string, filename: string): Promise<void> {
+  renameAsset(workspaceId: string, assetId: string, displayName: string): Promise<void> {
     const asset = this.assets.get(assetId);
     if (asset && asset.workspace_id === workspaceId && asset.deleted_at === null) {
-      this.assets.set(assetId, { ...asset, filename });
+      this.assets.set(assetId, { ...asset, display_name: displayName });
     }
     return Promise.resolve();
+  }
+
+  nextFolderUploadName(workspaceId: string, folderId: string): Promise<string> {
+    const folder = this.folders.get(folderId);
+    if (!folder || folder.workspace_id !== workspaceId || folder.deleted_at !== null) {
+      throw new Error(`folder ${folderId} not found in workspace ${workspaceId}`);
+    }
+    // Include soft-deleted rows (no deleted_at filter) so a freed number is never
+    // reused; no lock/transaction since display_name carries no uniqueness rule.
+    const names: (string | null)[] = [];
+    for (const asset of this.assets.values()) {
+      if (asset.workspace_id === workspaceId && asset.folder_id === folderId) {
+        names.push(asset.display_name);
+      }
+    }
+    return Promise.resolve(nextUploadName(folder.name, names));
   }
 
   getFolder(workspaceId: string, folderId: string): Promise<FolderRow | null> {

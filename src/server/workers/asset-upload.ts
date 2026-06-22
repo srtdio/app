@@ -141,6 +141,10 @@ export interface AuthorizedUploadInput {
   bytes: Uint8Array;
   traceId: string;
   assetId?: string;
+  /** Verified destination folder for a new upload (live + in this workspace). */
+  folderId?: string;
+  /** Caller-supplied friendly name; absent leaves folder auto-naming to the pipeline. */
+  displayName?: string;
 }
 
 export interface UploadResult {
@@ -174,6 +178,8 @@ export async function authorizeAndUpload(
     bytes: input.bytes,
     traceId: input.traceId,
     ...(input.assetId !== undefined ? { assetId: input.assetId } : {}),
+    ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
+    ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
   });
   if (!result.ok) {
     return err(result.error);
@@ -313,6 +319,8 @@ async function handlePost(
   const file = form.get('file');
   const workspaceId = form.get('workspace_id');
   const assetId = form.get('asset_id');
+  const folderIdField = form.get('folder_id');
+  const displayNameField = form.get('display_name');
 
   if (!(file instanceof File)) {
     return json(
@@ -339,6 +347,46 @@ async function handlePost(
     );
   }
 
+  // Optional destination folder: when present it must be a UUID and a live folder
+  // in this workspace (the cross-tenant guard); a valid id files the new asset there.
+  let folderId: string | undefined;
+  if (typeof folderIdField === 'string' && folderIdField !== '') {
+    if (!isUuid(folderIdField)) {
+      return json(
+        400,
+        { error: { code: 'bad_request', message: 'Invalid id format.' } },
+        traceId,
+        acao,
+      );
+    }
+    const folder = await buildRepository(env).getFolder(workspaceId, folderIdField);
+    if (folder === null) {
+      return json(
+        400,
+        { error: { code: 'bad_request', message: 'Folder not found in this workspace.' } },
+        traceId,
+        acao,
+      );
+    }
+    folderId = folderIdField;
+  }
+
+  // Optional friendly name: validated only when supplied (display_name is never
+  // required here; forcing a name is a later frontend concern).
+  let displayName: string | undefined;
+  if (typeof displayNameField === 'string' && displayNameField.trim() !== '') {
+    const valid = validName(displayNameField);
+    if (valid === null) {
+      return json(
+        400,
+        { error: { code: 'bad_request', message: 'display_name must be 1 to 500 characters.' } },
+        traceId,
+        acao,
+      );
+    }
+    displayName = valid;
+  }
+
   const bytes = new Uint8Array(await file.arrayBuffer());
   const outcome = await authorizeAndUpload(
     {
@@ -353,6 +401,8 @@ async function handlePost(
       bytes,
       traceId,
       ...(typeof assetId === 'string' && assetId !== '' ? { assetId } : {}),
+      ...(folderId !== undefined ? { folderId } : {}),
+      ...(displayName !== undefined ? { displayName } : {}),
     },
   );
 
