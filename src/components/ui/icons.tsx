@@ -320,3 +320,23 @@ export function IconMore(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconImagePlus(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8" />
+      <circle cx={8.5} cy={9} r={1.4} />
+      <path d="M4 16l4-4 3.5 3.5" />
+      <path d="M18 15v6M15 18h6" />
+    </Svg>
+  );
+}
+
+export function IconSend(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21 4L3 11l6 2 2 6 10-15z" />
+      <path d="M9 13l4-4" />
+    </Svg>
+  );
+}

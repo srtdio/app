@@ -12,3 +12,8 @@ export function isClient(role: string | null): boolean {
 export function isAgencySide(role: string | null): boolean {
   return role !== null && role !== 'client';
 }
+
+/** Owner or admin: the only roles that may delete a post. */
+export function isOwnerOrAdmin(role: string | null): boolean {
+  return role === 'owner' || role === 'admin';
+}
