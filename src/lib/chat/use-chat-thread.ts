@@ -41,8 +41,10 @@ export function useChatThread(params: {
   client: ChatConnection | null;
   target: ChannelTarget | null;
   currentUserId: string;
+  /** Called after a successful own send so the live store can show 'You: ...'. */
+  onOwnMessage?: (text: string, ts: number) => void;
 }): UseChatThread {
-  const { client, target, currentUserId } = params;
+  const { client, target, currentUserId, onOwnMessage } = params;
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -118,20 +120,22 @@ export function useChatThread(params: {
           sharedPostIds,
           createMessage: createTextMessage,
         });
+        const time = Date.now();
         const echo = echoMessage({
           result,
           text: trimmed,
           currentUserId,
-          time: Date.now(),
+          time,
           attachments: [...attachments],
           sharedPostIds: [...sharedPostIds],
         });
         setMessages((prev) => appendMessage(prev, echo));
+        onOwnMessage?.(trimmed, time);
       } finally {
         setSending(false);
       }
     },
-    [currentUserId],
+    [currentUserId, onOwnMessage],
   );
 
   return { messages, loading, sending, send };
