@@ -295,11 +295,26 @@ export async function runUploadPipeline(
     traceId: input.traceId,
   });
 
+  // Resolve the shown name. filename always stays the original upload name;
+  // display_name controls only what users see. Precedence: an explicit
+  // displayName, else a folder upload's auto-name ("<folder> 1", ...), else null.
+  const trimmedDisplay = input.displayName?.trim();
+  let displayName: string | null;
+  if (trimmedDisplay !== undefined && trimmedDisplay !== '') {
+    displayName = trimmedDisplay;
+  } else if (input.folderId != null) {
+    displayName = await repository.nextFolderUploadName(input.workspaceId, input.folderId);
+  } else {
+    displayName = null;
+  }
+
   await repository.insertAsset({
     id: assetId,
     workspaceId: input.workspaceId,
     filename: input.filename,
     uploadedBy: input.uploadedBy,
+    folderId: input.folderId ?? null,
+    displayName,
   });
   await repository.insertVersion({
     id: versionId,
@@ -400,10 +415,10 @@ export async function createLinkAsset(
 }
 
 /**
- * Rename an asset: update assets.filename only. Version rows and attachments are
- * never touched (annotations/attachments bind to immutable versions). Returns
- * not_found for an unknown id or one owned by another workspace, mirroring the
- * cross-tenant guard elsewhere in this module.
+ * Rename an asset: update assets.display_name only (the shown name). filename -
+ * and therefore the file's extension and type glyph - is left intact, as are the
+ * immutable version rows and attachments. Returns not_found for an unknown id or
+ * one owned by another workspace, mirroring the cross-tenant guard elsewhere.
  */
 export async function renameAsset(
   repository: AssetRepository,
@@ -427,13 +442,14 @@ export async function renameAsset(
     action: 'asset.rename',
     entityId: input.assetId,
     actorUserId: input.actorUserId,
-    payload: { filename: input.name, previous_filename: asset.filename },
+    payload: { display_name: input.name, previous_display_name: asset.display_name },
   });
 
   return ok({
     assetId: asset.id,
     workspaceId: asset.workspace_id,
-    filename: input.name,
+    filename: asset.filename,
+    displayName: input.name,
     currentVersionId: asset.current_version_id,
   });
 }

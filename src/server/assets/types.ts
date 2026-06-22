@@ -65,7 +65,10 @@ export interface AssetSummary {
 export interface AssetMetaSummary {
   assetId: string;
   workspaceId: string;
+  /** The immutable original filename (with extension); never changed by rename. */
   filename: string;
+  /** The friendly shown name (display_name); null when the asset shows its filename. */
+  displayName?: string | null;
   currentVersionId: string | null;
   externalUrl?: string;
 }
@@ -135,5 +138,9 @@ export interface UploadInput {
   bytes: Uint8Array;
   /** When set, the upload is treated as a new version of this existing asset. */
   assetId?: string;
+  /** Destination folder for a new asset (already verified live + in-workspace). */
+  folderId?: string | null;
+  /** Caller-supplied friendly name; when absent a folder upload is auto-named. */
+  displayName?: string | null;
   traceId: string;
 }
