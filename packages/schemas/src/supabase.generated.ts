@@ -495,6 +495,873 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_log_2026_08: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2026_09: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2026_10: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2026_11: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2026_12: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_01: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_02: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_03: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_04: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_05: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_06: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_07: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_08: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_09: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_10: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_11: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2027_12: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       briefs: {
         Row: {
           brand_requirements: string | null
@@ -766,6 +1633,720 @@ export type Database = {
         Relationships: []
       }
       chat_messages_2026_07: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2026_08: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2026_09: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2026_10: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2026_11: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2026_12: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_01: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_02: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_03: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_04: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_05: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_06: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_07: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_08: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_09: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_10: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_11: {
+        Row: {
+          agora_event_id: string
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          agora_event_id: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id: string
+          created_at: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          agora_event_id?: string
+          attachment_asset_ids?: string[] | null
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          mentions?: Json | null
+          sender_user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages_2027_12: {
         Row: {
           agora_event_id: string
           attachment_asset_ids: string[] | null
@@ -1507,6 +3088,924 @@ export type Database = {
         Relationships: []
       }
       inbox_entries_2026_07: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2026_08: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2026_09: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2026_10: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2026_11: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2026_12: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_01: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_02: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_03: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_04: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_05: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_06: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_07: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_08: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_09: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_10: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_11: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          scope?: string
+          scope_key?: string | null
+          snoozed_until?: string | null
+          tier?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      inbox_entries_2027_12: {
         Row: {
           created_at: string
           deleted_at: string | null
@@ -2369,6 +4868,10 @@ export type Database = {
       }
       asset_delete: {
         Args: { p_asset_id: string; p_trace_id: string }
+        Returns: undefined
+      }
+      asset_delete_many: {
+        Args: { p_asset_ids: string[]; p_trace_id: string }
         Returns: undefined
       }
       audit_log_write: {
