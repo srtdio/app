@@ -50,6 +50,7 @@ import {
   ASSET_SORT_OPTIONS,
   buildKindCounts,
   childFolders,
+  displayLabel,
   fetchFolders,
   fetchMemberRole,
   filterAssets,
@@ -217,6 +218,19 @@ export function AssetsPage() {
 
   const segments = useMemo(() => folderBreadcrumb(folders, folderId), [folders, folderId]);
 
+  // The open folder's name (null at the root), used to auto-name uploads into it.
+  const currentFolderName = useMemo(
+    () => (folderId === null ? null : (folders.find((f) => f.id === folderId)?.name ?? null)),
+    [folders, folderId],
+  );
+
+  // Display labels of the assets already in the current scope, so the upload sheet
+  // continues numbering past them (per-folder, or the root) when auto-naming.
+  const siblingLabels = useMemo(
+    () => items.filter((item) => item.folderId === folderId).map(displayLabel),
+    [items, folderId],
+  );
+
   // How many assets sit directly in the open folder. The "Select files to move"
   // option only appears when this is > 0 (there is nothing to select otherwise).
   const currentFolderAssetCount = useMemo(
@@ -329,14 +343,19 @@ export function AssetsPage() {
     [items, newTrace],
   );
 
-  // Commit one queued file to the asset-upload worker: the user's display name
-  // rides along as the multipart filename (the worker persists it as
-  // assets.filename for newly stored content). There is no authenticated client
-  // write path for assets, so the name cannot be re-applied after the fact (e.g.
-  // to a deduped/reused asset); see src/lib/asset-upload.ts for the gap note.
+  // Commit one queued file to the asset-upload worker: the file part keeps its
+  // ORIGINAL device name (stored as assets.filename, with its extension for type
+  // icons), the sheet's resolved friendly name rides along as display_name, and
+  // the destination folder rides along as folder_id. The worker resolves the
+  // shown label as display_name ?? filename and now persists display_name on
+  // upload (and supports rename), so there is no naming gap to work around.
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
   const handleUploadFile = useCallback(
-    async (file: File, filename: string): Promise<UploadOutcome> => {
+    async (
+      file: File,
+      displayName: string,
+      targetFolderId: string | null,
+    ): Promise<UploadOutcome> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
         return { ok: false, message: 'Upload failed. Check your connection and retry' };
       }
@@ -351,7 +370,9 @@ export function AssetsPage() {
         endpoint: uploadEndpoint,
         token,
         workspaceId,
-        filename,
+        filename: file.name,
+        displayName,
+        folderId: targetFolderId,
         fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
       });
     },
@@ -755,6 +776,9 @@ export function AssetsPage() {
         }
         onToast={push}
         onUploaded={() => void loadAssets()}
+        folderId={folderId}
+        folderName={currentFolderName}
+        siblingLabels={siblingLabels}
       />
 
       <AddLinkSheet
