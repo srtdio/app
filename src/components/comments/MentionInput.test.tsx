@@ -49,9 +49,9 @@ describe('serializeComposer', () => {
   });
 
   it('emits @[uuid] for a mention chip in document order', () => {
-    expect(
-      serializeComposer(root([text('hi '), mention(ID), text(' and others')])),
-    ).toBe(`hi @[${ID}] and others`);
+    expect(serializeComposer(root([text('hi '), mention(ID), text(' and others')]))).toBe(
+      `hi @[${ID}] and others`,
+    );
   });
 
   it('emits only the token for a chip, never the displayed name', () => {
@@ -89,11 +89,9 @@ describe('serializeComposer', () => {
   });
 
   it('emits the token for a mention on a second block line', () => {
-    expect(
-      serializeComposer(
-        root([text('hi '), el('DIV', [text('see '), mention(ID2)])]),
-      ),
-    ).toBe(`hi \nsee @[${ID2}]`);
+    expect(serializeComposer(root([text('hi '), el('DIV', [text('see '), mention(ID2)])]))).toBe(
+      `hi \nsee @[${ID2}]`,
+    );
   });
 });
 
