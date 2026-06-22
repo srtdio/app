@@ -15,6 +15,7 @@ import { FolderCard } from '@/components/pages/assets/FolderCard';
 import { FolderActionSheet } from '@/components/pages/assets/FolderActionSheet';
 import { FolderRenameSheet } from '@/components/pages/assets/FolderRenameSheet';
 import { NewFolderSheet } from '@/components/pages/assets/NewFolderSheet';
+import { MoveToFolderSheet } from '@/components/pages/assets/MoveToFolderSheet';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { openLinkInNewTab } from '@/components/pages/assets/openExternal';
@@ -31,6 +32,7 @@ import {
   canRenameAssets,
   createFolderRequest,
   deleteFolderRequest,
+  moveAssetsRequest,
   renameAsset,
   renameFolderRequest,
   uploadAssetFile,
@@ -38,6 +40,7 @@ import {
   type FolderDeleteOutcome,
   type FolderRenameOutcome,
   type LinkOutcome,
+  type MoveAssetsOutcome,
   type RenameOutcome,
   type UploadOutcome,
 } from '@/lib/asset-upload';
@@ -93,6 +96,9 @@ export function AssetsPage() {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [folderAction, setFolderAction] = useState<FolderItem | null>(null);
   const [renameTarget, setRenameTarget] = useState<FolderItem | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [moveOpen, setMoveOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   const { toasts, push, dismiss } = useToasts();
@@ -151,6 +157,9 @@ export function AssetsPage() {
     setNewFolderOpen(false);
     setFolderAction(null);
     setRenameTarget(null);
+    setSelectMode(false);
+    setSelected(new Set());
+    setMoveOpen(false);
   }, [workspaceId]);
 
   // Resolve the current member's workspace role with one RLS-scoped read (no
@@ -207,6 +216,34 @@ export function AssetsPage() {
   );
 
   const segments = useMemo(() => folderBreadcrumb(folders, folderId), [folders, folderId]);
+
+  // How many assets sit directly in the open folder. The "Select files to move"
+  // option only appears when this is > 0 (there is nothing to select otherwise).
+  const currentFolderAssetCount = useMemo(
+    () => items.filter((item) => item.folderId === folderId).length,
+    [items, folderId],
+  );
+
+  // Toggle one asset's selection, capping the set at 200 (the move batch limit);
+  // adding past the cap is ignored with a toast rather than silently dropped.
+  const toggleSelect = useCallback(
+    (item: AssetListItem): void => {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(item.id)) {
+          next.delete(item.id);
+          return next;
+        }
+        if (next.size >= 200) {
+          push('You can move up to 200 files at once');
+          return prev;
+        }
+        next.add(item.id);
+        return next;
+      });
+    },
+    [push],
+  );
 
   // Tap a card: open its external link in a new tab, or open the lightbox at
   // that asset. Opening a link never navigates the current Sorted tab.
@@ -379,6 +416,34 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, folderId, newTrace],
   );
 
+  // Move the current selection into a destination folder (or back to the root,
+  // target null) via the worker's /folders/move route. Guards mirror
+  // handleCreateFolder; the sheet refreshes the lists and exits select mode on a
+  // successful move. Allowed for every active member (no role gate).
+  const handleMoveAssets = useCallback(
+    async (targetFolderId: string | null): Promise<MoveAssetsOutcome> => {
+      if (uploadEndpoint === undefined || uploadEndpoint === '') {
+        return { ok: false, message: "Couldn't move the files. Check your connection and retry" };
+      }
+      if (workspaceId === null) {
+        return { ok: false, message: 'No workspace selected.' };
+      }
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      if (token === null || token === '') {
+        return { ok: false, message: 'Your session expired. Sign in again.' };
+      }
+      return moveAssetsRequest({
+        endpoint: uploadEndpoint,
+        token,
+        workspaceId,
+        assetIds: Array.from(selected),
+        targetFolderId,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+    },
+    [uploadEndpoint, workspaceId, selected, newTrace],
+  );
+
   // Rename one folder via the worker's /folders/rename route. On success the
   // folder list is reloaded so the new name shows; a sibling collision
   // (folder_name_taken) and the 403 role guard are surfaced by the sheet.
@@ -520,28 +585,62 @@ export function AssetsPage() {
               onNewFolder={() => setNewFolderOpen(true)}
               onUploadFiles={() => setUploadOpen(true)}
               onAddLink={() => setAddLinkOpen(true)}
+              onSelect={
+                currentFolderAssetCount > 0
+                  ? () => {
+                      setSelected(new Set());
+                      setSelectMode(true);
+                    }
+                  : undefined
+              }
             />
           ),
         }}
       >
-        <Chip
-          label={`All ${counts.all}`}
-          selected={kind === 'all'}
-          size="tap"
-          onClick={() => setKind('all')}
-        />
-        {kinds.map((k) => (
-          <Chip
-            key={k}
-            label={`${KIND_LABELS[k]} ${counts[k]}`}
-            selected={kind === k}
-            size="tap"
-            onClick={() => setKind(k)}
-          />
-        ))}
+        {selectMode ? (
+          <div className="flex w-full items-center gap-2">
+            <span className="text-sm font-medium text-fg-2">{selected.size} selected</span>
+            <span className="ml-auto flex gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSelectMode(false);
+                  setSelected(new Set());
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                disabled={selected.size === 0}
+                onClick={() => setMoveOpen(true)}
+              >
+                Move
+              </Button>
+            </span>
+          </div>
+        ) : (
+          <>
+            <Chip
+              label={`All ${counts.all}`}
+              selected={kind === 'all'}
+              size="tap"
+              onClick={() => setKind('all')}
+            />
+            {kinds.map((k) => (
+              <Chip
+                key={k}
+                label={`${KIND_LABELS[k]} ${counts[k]}`}
+                selected={kind === k}
+                size="tap"
+                onClick={() => setKind(k)}
+              />
+            ))}
+          </>
+        )}
       </SectionHeader>
 
-      {!searching && currentFolders.length > 0 ? (
+      {!searching && !selectMode && currentFolders.length > 0 ? (
         <div className="px-4 md:px-6 mt-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
             {currentFolders.map((f) => (
@@ -607,6 +706,9 @@ export function AssetsPage() {
             cache={cache}
             onOpen={(item) => openAsset(item)}
             onLongPress={setActionItem}
+            selectMode={selectMode}
+            selectedIds={selected}
+            onToggleSelect={toggleSelect}
           />
         </div>
       )}
@@ -669,6 +771,22 @@ export function AssetsPage() {
         onSubmit={handleCreateFolder}
         onToast={push}
         onCreated={() => void loadFolders()}
+      />
+
+      <MoveToFolderSheet
+        open={moveOpen}
+        count={selected.size}
+        folders={folders}
+        onClose={() => setMoveOpen(false)}
+        onMove={handleMoveAssets}
+        onToast={push}
+        onMoved={() => {
+          void loadAssets();
+          void loadFolders();
+          setSelectMode(false);
+          setSelected(new Set());
+          setMoveOpen(false);
+        }}
       />
 
       {folderAction !== null ? (

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
-import { IconFolder, IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
+import { IconCheck, IconFolder, IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
 
 interface AssetAddMenuProps {
   /** Open the New folder sheet (the "New folder" option). */
@@ -9,6 +9,8 @@ interface AssetAddMenuProps {
   onUploadFiles: () => void;
   /** Open the Add link sheet (the "Add link" option). */
   onAddLink: () => void;
+  /** Enter select-to-move mode. When undefined the option is hidden (empty folder). */
+  onSelect?: (() => void) | undefined;
 }
 
 /**
@@ -18,7 +20,12 @@ interface AssetAddMenuProps {
  * via MenuPopover. Themed with tokens so light and dark match; no hover-only
  * behaviour (tap toggles the menu).
  */
-export function AssetAddMenu({ onNewFolder, onUploadFiles, onAddLink }: AssetAddMenuProps) {
+export function AssetAddMenu({
+  onNewFolder,
+  onUploadFiles,
+  onAddLink,
+  onSelect,
+}: AssetAddMenuProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -79,6 +86,23 @@ export function AssetAddMenu({ onNewFolder, onUploadFiles, onAddLink }: AssetAdd
           </span>
           <span>Add link</span>
         </button>
+
+        {onSelect !== undefined ? (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onSelect();
+            }}
+            className="flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
+          >
+            <span className="shrink-0 text-fg-3">
+              <IconCheck size={18} />
+            </span>
+            <span>Select files to move</span>
+          </button>
+        ) : null}
       </MenuPopover>
     </div>
   );

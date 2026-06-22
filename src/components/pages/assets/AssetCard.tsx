@@ -1,6 +1,7 @@
 import { cn } from '@/lib/cn';
 import { useLongPress } from '@/components/pages/assets/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
+import { IconCheck } from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   displayLabel,
@@ -20,6 +21,12 @@ interface AssetCardProps {
   onOpen: () => void;
   /** Long-press: open the bottom action sheet. */
   onLongPress: () => void;
+  /** When true, a tap toggles selection instead of opening, and a tick is shown. */
+  selectMode?: boolean;
+  /** Whether this card is currently selected (only meaningful in select mode). */
+  selected?: boolean;
+  /** Toggle this card's selection (select mode only). */
+  onToggleSelect?: () => void;
 }
 
 /** The non-image tile for a card: a link domain, or a file extension glyph. */
@@ -28,21 +35,50 @@ function assetFallback(item: AssetListItem): ThumbnailFallback {
   return { kind: 'file', extension: fileExtension(item.filename) };
 }
 
-export function AssetCard({ item, presignEnabled, cache, onOpen, onLongPress }: AssetCardProps) {
+export function AssetCard({
+  item,
+  presignEnabled,
+  cache,
+  onOpen,
+  onLongPress,
+  selectMode = false,
+  selected = false,
+  onToggleSelect,
+}: AssetCardProps) {
   const name = displayLabel(item);
+  // Called unconditionally to satisfy the rules of hooks; its handlers are only
+  // spread onto the button when select mode is off.
   const longPress = useLongPress(onLongPress, onOpen);
+
+  // In select mode the card is a plain toggle: a tap selects/deselects and the
+  // long-press + lightbox/link wiring is bypassed (you pick files, not open them).
+  const interaction = selectMode
+    ? { onClick: onToggleSelect, 'aria-pressed': selected, 'aria-label': `Select ${name}` }
+    : { ...longPress, 'aria-label': item.kind === 'link' ? `Open ${name}` : `View ${name}` };
 
   return (
     <button
       type="button"
-      aria-label={item.kind === 'link' ? `Open ${name}` : `View ${name}`}
-      {...longPress}
+      {...interaction}
       style={{ touchAction: 'manipulation' }}
       className={cn(
-        'group relative flex flex-col overflow-hidden rounded-xl border border-border bg-panel text-left transition-colors',
+        'group relative flex flex-col overflow-hidden rounded-xl border bg-panel text-left transition-colors',
+        selectMode && selected ? 'border-accent' : 'border-border',
         'hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
     >
+      {selectMode ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full',
+            selected ? 'bg-accent text-white' : 'border-2 border-white bg-black/40',
+          )}
+        >
+          {selected ? <IconCheck size={14} /> : null}
+        </span>
+      ) : null}
+
       <Thumbnail
         assetVersionId={item.kind === 'image' ? item.currentVersionId : null}
         cache={cache}
