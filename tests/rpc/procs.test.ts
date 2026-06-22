@@ -179,24 +179,44 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
     return (res.data as AttachmentRow[] | null) ?? [];
   }
 
-  // An asset with a pinned current version, so it satisfies comment_create's
-  // attachment guard (current_version_id IS NOT NULL, same workspace, live).
+  // An asset with one version that satisfies comment_create's attachment guard:
+  // the version exists, its workspace_id matches the comment workspace, and its
+  // asset is not soft-deleted. The proc no longer checks current_version_id; we
+  // still pin it (harmless). `kind` lets a test prove different file types bind
+  // in one comment; it defaults to 'image' so other callers are unaffected.
   async function seedAssetWithVersion(
     workspaceId: string,
     uploadedBy: string,
+    kind:
+      | 'image'
+      | 'video'
+      | 'audio'
+      | 'pdf'
+      | 'document'
+      | 'spreadsheet'
+      | 'presentation' = 'image',
   ): Promise<{ assetId: string; versionId: string }> {
+    const mimeByKind = {
+      image: 'image/png',
+      video: 'video/mp4',
+      audio: 'audio/mpeg',
+      pdf: 'application/pdf',
+      document: 'application/msword',
+      spreadsheet: 'application/vnd.ms-excel',
+      presentation: 'application/vnd.ms-powerpoint',
+    } as const;
     const asset = await insertRow(asGeneric(admin), 'assets', {
       workspace_id: workspaceId,
-      filename: 'attach.png',
+      filename: `attach.${kind}`,
       uploaded_by: uploadedBy,
     });
     const version = await insertRow(asGeneric(admin), 'asset_versions', {
       asset_id: asset.id,
       workspace_id: workspaceId,
       version_number: 1,
-      kind: 'image',
+      kind,
       r2_key: `k/${crypto.randomUUID()}`,
-      mime_type: 'image/png',
+      mime_type: mimeByKind[kind],
       sha256: randomSha256(),
       size_bytes: 1,
       uploaded_by: uploadedBy,
@@ -526,9 +546,9 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
   // enforced, and comment / mention / stage_change Activity events fire inline.
   // -------------------------------------------------------------------------
   describe('comment attachments + activity side-effects', () => {
-    it('comment_create pins each attachment to the asset current version (entity_type=comment)', async () => {
-      const a1 = await seedAssetWithVersion(wsA.id, owner.id);
-      const a2 = await seedAssetWithVersion(wsA.id, owner.id);
+    it('binds each attachment to the exact asset version for any file kind', async () => {
+      const a1 = await seedAssetWithVersion(wsA.id, owner.id, 'image');
+      const a2 = await seedAssetWithVersion(wsA.id, owner.id, 'pdf');
       const commentId = expectOk(
         await commentCreate(ownerClient, {
           p_workspace_id: wsA.id,
@@ -537,7 +557,7 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
           p_parent_comment_id: null as unknown as string,
           p_body: 'see the attached refs',
           p_mentions: null,
-          p_attachment_asset_ids: [a1.assetId, a2.assetId],
+          p_attachment_asset_ids: [a1.versionId, a2.versionId],
           p_is_decision: false,
           p_trace_id: generateTraceId(),
         }),
@@ -554,24 +574,28 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
       expect(new Set(rows.map((r) => r.position))).toEqual(new Set([0, 1]));
     });
 
-    it('comment_create rejects an attachment with no current version (invalid_payload)', async () => {
-      const asset = await insertRow(asGeneric(admin), 'assets', {
-        workspace_id: wsA.id,
-        filename: 'no-version.png',
-        uploaded_by: owner.id,
-      });
+    it('rejects an asset id supplied where a version id is required (invalid_payload)', async () => {
+      // The composer must pass asset_VERSION ids. An asset id (even one with a
+      // live current version) is not a version id, so the proc rejects it.
+      const a = await seedAssetWithVersion(wsA.id, owner.id);
       const result = await commentCreate(ownerClient, {
         p_workspace_id: wsA.id,
         p_entity_type: 'post',
         p_entity_id: ctxA.postId,
         p_parent_comment_id: null as unknown as string,
-        p_body: 'attaching an asset with no version',
+        p_body: 'asset id where a version id is required',
         p_mentions: null,
-        p_attachment_asset_ids: [String(asset.id)],
+        p_attachment_asset_ids: [a.assetId],
         p_is_decision: false,
         p_trace_id: generateTraceId(),
       });
       expect(expectError(result).code).toBe('invalid_payload');
+      const leaked = await asGeneric(admin)
+        .from('asset_attachments')
+        .select('id')
+        .eq('entity_type', 'comment')
+        .eq('asset_id', a.assetId);
+      expect((leaked.data as unknown[] | null)?.length ?? 0).toBe(0);
     });
 
     it('comment_create rejects an attachment from another workspace (invalid_payload)', async () => {
@@ -583,7 +607,7 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
         p_parent_comment_id: null as unknown as string,
         p_body: 'cross-tenant attachment',
         p_mentions: null,
-        p_attachment_asset_ids: [foreign.assetId],
+        p_attachment_asset_ids: [foreign.versionId],
         p_is_decision: false,
         p_trace_id: generateTraceId(),
       });
