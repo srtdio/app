@@ -1,0 +1,32 @@
+name: Deploy chat-agora-sync Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/chat-agora-sync/**'
+      - 'src/server/workers/chat-agora-sync.ts'
+      - 'src/server/workers/chat-agora-rest.ts'
+      - 'src/server/workers/agora-identity.ts'
+      - '.github/workflows/chat-agora-sync-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/chat-agora-sync
+          wranglerVersion: '3.114.17'
+          packageManager: pnpm

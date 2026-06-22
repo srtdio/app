@@ -1,3 +1,4 @@
+/// <reference types="@cloudflare/workers-types" />
 // Cloudflare Worker: Agora-sync (A2b). A Supabase Realtime consumer that mirrors
 // our group/channel state into Agora Chat, following the inbox-writer precedent:
 // a bare service-role supabase-js client (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY),
@@ -106,6 +107,15 @@ export interface SyncReader {
     groupId: string,
   ): Promise<{ channelId: string; agoraGroupId: string | null } | null>;
   markSynced(channelId: string, agoraGroupId: string | null, traceId: string): Promise<void>;
+  /** Channels still awaiting their first Agora sync (last_synced_at is null). */
+  listUnsyncedChannels(): Promise<
+    Array<{
+      channelId: string;
+      channelType: string;
+      entityId: string | null;
+      agoraGroupId: string | null;
+    }>
+  >;
 }
 
 export interface SyncDeps {
@@ -162,6 +172,23 @@ export function createSyncReader(client: SupabaseClient<Database>): SyncReader {
         p_trace_id: traceId,
       } as never);
       if (error) throw new Error(error.message);
+    },
+    async listUnsyncedChannels() {
+      // Cap at 200 rows: bounds the per-run memory/Agora call fan-out and lets a
+      // larger backlog drain across successive cron runs rather than in one pass.
+      const { data, error } = await client
+        .from('chat_channels')
+        .select('channel_id, channel_type, entity_id, agora_group_id')
+        .is('last_synced_at', null)
+        .order('created_at', { ascending: true })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((row) => ({
+        channelId: row.channel_id,
+        channelType: row.channel_type,
+        entityId: asString(row.entity_id),
+        agoraGroupId: asString(row.agora_group_id),
+      }));
     },
   };
 }
@@ -312,6 +339,30 @@ export async function processEvent(event: SyncEvent, deps: SyncDeps): Promise<vo
 }
 
 /**
+ * Cron reconciliation pass: the durable backstop for the Realtime consumer that
+ * a stateless Cloudflare Worker cannot host. Reads the channels still awaiting
+ * their first sync and replays each through the same processEvent path used for
+ * a live INSERT, so the create-group / stamp-synced logic is never duplicated.
+ * processEvent mints one uuid_v7 trace id per channel and swallows per-channel
+ * failure, so one bad row never aborts the batch.
+ */
+export async function reconcile(deps: SyncDeps): Promise<void> {
+  const rows = await deps.reader.listUnsyncedChannels();
+  for (const row of rows) {
+    await processEvent(
+      {
+        kind: 'channel_insert',
+        channelId: row.channelId,
+        channelType: row.channelType,
+        groupId: row.entityId,
+        agoraGroupId: row.agoraGroupId,
+      },
+      deps,
+    );
+  }
+}
+
+/**
  * Subscribe to postgres_changes on the watched tables and invoke `onEvent` for
  * each payload that maps to a sync action. Returns an unsubscribe fn.
  */
@@ -359,5 +410,13 @@ export default {
       });
     }
     return new Response('chat-agora-sync', { status: 200 });
+  },
+
+  // Cron entrypoint (see workers/chat-agora-sync/wrangler.toml [triggers]). A
+  // Worker cannot hold the Realtime subscription, so the every-minute schedule
+  // drives reconcile(): create the Agora group for any not-yet-synced group
+  // channel and stamp DM channels. waitUntil keeps the run alive past return.
+  scheduled(_controller: ScheduledController, env: ChatAgoraSyncEnv, ctx: ExecutionContext): void {
+    ctx.waitUntil(reconcile(buildDeps(env)));
   },
 };
