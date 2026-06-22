@@ -13,6 +13,8 @@ export interface NavItem {
   Icon: ComponentType<{ size?: number; className?: string }>;
   /** When set, this item shows the chat unread badge (from the chat store). */
   showChatBadge?: boolean;
+  /** When set, this item shows the inbox unread badge (from the inbox store). */
+  showActivityBadge?: boolean;
 }
 
 /**
@@ -25,5 +27,5 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: '/briefs', label: 'Briefs', Icon: IconBriefs },
   { to: '/assets', label: 'Assets', Icon: IconAssets },
   { to: '/chat', label: 'Chat', Icon: IconChat, showChatBadge: true },
-  { to: '/activity', label: 'Activity', Icon: IconActivity },
+  { to: '/activity', label: 'Activity', Icon: IconActivity, showActivityBadge: true },
 ];

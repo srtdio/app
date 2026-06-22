@@ -3,6 +3,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { IconChevronDown } from '@/components/ui/icons';
 import { PRIMARY_NAV } from '@/components/shell/nav';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
+import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { dispatchSorted } from '@/lib/events';
 import { cn } from '@/lib/cn';
@@ -14,6 +15,7 @@ interface SidebarProps {
 export function Sidebar({ workspaceName }: SidebarProps) {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
+  const { unreadCount } = useInboxStore();
   return (
     <aside className="hidden md:flex md:flex-col w-[244px] shrink-0 border-r border-border bg-panel">
       <div className="p-2.5">
@@ -54,6 +56,11 @@ export function Sidebar({ workspaceName }: SidebarProps) {
               {item.showChatBadge && total > 0 ? (
                 <span className="absolute -right-2 -top-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-panel bg-accent px-1 text-[10px] font-semibold leading-none text-accent-fg">
                   {total > 99 ? '99+' : total}
+                </span>
+              ) : null}
+              {item.showActivityBadge && unreadCount > 0 ? (
+                <span className="absolute -right-2 -top-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-panel bg-accent px-1 text-[10px] font-semibold leading-none text-accent-fg">
+                  {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               ) : null}
             </span>

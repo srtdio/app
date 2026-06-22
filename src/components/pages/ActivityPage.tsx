@@ -161,7 +161,9 @@ export function ActivityPage() {
         if (!result.ok) {
           push('Could not mark as read');
           void loadActivity();
+          return;
         }
+        window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
       });
     },
     [workspaceId, newTrace, markReadLocal, push, loadActivity],
@@ -183,7 +185,9 @@ export function ActivityPage() {
       if (!result.ok) {
         push('Could not mark all as read');
         void loadActivity();
+        return;
       }
+      window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
     });
   }, [workspaceId, items, nowMs, newTrace, push, loadActivity]);
 
@@ -201,7 +205,9 @@ export function ActivityPage() {
             prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: previous } : i)),
           );
           push(result.error.message);
+          return;
         }
+        window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
       });
     },
     [workspaceId, newTrace, push],

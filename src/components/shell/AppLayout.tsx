@@ -8,6 +8,7 @@ import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ChatStoreProvider } from '@/components/chat/ChatStoreProvider';
+import { InboxStoreProvider } from '@/components/shell/InboxStoreProvider';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
 import { OnboardingProfileForm } from '@/components/onboarding/OnboardingProfileForm';
@@ -118,26 +119,28 @@ export function AppLayout() {
   return (
     <ToastProvider>
       <ChatStoreProvider>
-        <div className="flex h-full">
-          <Sidebar workspaceName={workspaceName} />
-          <div className="flex flex-1 min-w-0 flex-col h-full">
-            <Topbar
-              workspaceName={workspaceName}
-              {...(profile !== null ? { currentUserName: profile.display_name } : {})}
-              currentUserAvatarUrl={profile?.avatar_url ?? null}
-              onOpenPalette={() => setPaletteOpen(true)}
-              onOpenAvatar={() => setAvatarOpen(true)}
-            />
-            <main className="flex-1 overflow-y-auto pb-[56px] md:pb-0">
-              {switchPending ? null : <Outlet />}
-            </main>
+        <InboxStoreProvider>
+          <div className="flex h-full">
+            <Sidebar workspaceName={workspaceName} />
+            <div className="flex flex-1 min-w-0 flex-col h-full">
+              <Topbar
+                workspaceName={workspaceName}
+                {...(profile !== null ? { currentUserName: profile.display_name } : {})}
+                currentUserAvatarUrl={profile?.avatar_url ?? null}
+                onOpenPalette={() => setPaletteOpen(true)}
+                onOpenAvatar={() => setAvatarOpen(true)}
+              />
+              <main className="flex-1 overflow-y-auto pb-[56px] md:pb-0">
+                {switchPending ? null : <Outlet />}
+              </main>
+            </div>
+            <BottomTabs />
+            <ToastViewport />
+            <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+            <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+            <WorkspaceSwitcher />
           </div>
-          <BottomTabs />
-          <ToastViewport />
-          <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-          <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
-          <WorkspaceSwitcher />
-        </div>
+        </InboxStoreProvider>
       </ChatStoreProvider>
     </ToastProvider>
   );
