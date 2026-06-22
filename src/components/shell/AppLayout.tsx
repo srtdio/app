@@ -6,6 +6,7 @@ import { Topbar } from '@/components/shell/Topbar';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
 import { OnboardingProfileForm } from '@/components/onboarding/OnboardingProfileForm';
@@ -111,24 +112,27 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex h-full">
-      <Sidebar workspaceName={workspaceName} />
-      <div className="flex flex-1 min-w-0 flex-col h-full">
-        <Topbar
-          workspaceName={workspaceName}
-          {...(profile !== null ? { currentUserName: profile.display_name } : {})}
-          currentUserAvatarUrl={profile?.avatar_url ?? null}
-          onOpenPalette={() => setPaletteOpen(true)}
-          onOpenAvatar={() => setAvatarOpen(true)}
-        />
-        <main className="flex-1 overflow-y-auto pb-[56px] md:pb-0">
-          {switchPending ? null : <Outlet />}
-        </main>
+    <ToastProvider>
+      <div className="flex h-full">
+        <Sidebar workspaceName={workspaceName} />
+        <div className="flex flex-1 min-w-0 flex-col h-full">
+          <Topbar
+            workspaceName={workspaceName}
+            {...(profile !== null ? { currentUserName: profile.display_name } : {})}
+            currentUserAvatarUrl={profile?.avatar_url ?? null}
+            onOpenPalette={() => setPaletteOpen(true)}
+            onOpenAvatar={() => setAvatarOpen(true)}
+          />
+          <main className="flex-1 overflow-y-auto pb-[56px] md:pb-0">
+            {switchPending ? null : <Outlet />}
+          </main>
+        </div>
+        <BottomTabs />
+        <ToastViewport />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+        <WorkspaceSwitcher />
       </div>
-      <BottomTabs />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
-      <WorkspaceSwitcher />
-    </div>
+    </ToastProvider>
   );
 }
