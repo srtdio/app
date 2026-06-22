@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { assetDelete, userProfileUpdate, type Client } from './index';
+import { assetDelete, assetDeleteMany, userProfileUpdate, type Client } from './index';
 
 // A minimal client whose rpc() returns the configured PostgREST shape and
 // records how it was called. assetDelete must forward the proc name and the
@@ -45,6 +45,35 @@ describe('assetDelete', () => {
   it('maps an unexpected transport error to code "unknown"', async () => {
     const { client } = makeClient({ data: null, error: { message: 'network down' } });
     const result = await assetDelete(client, args);
+    expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
+  });
+});
+
+describe('assetDeleteMany', () => {
+  const args = {
+    p_asset_ids: ['11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222'],
+    p_trace_id: '33333333-3333-3333-3333-333333333333',
+  };
+
+  it('returns ok and forwards the proc name + args unchanged on success', async () => {
+    const { client, rpc } = makeClient({ data: null, error: null });
+    const result = await assetDeleteMany(client, args);
+    expect(result.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('asset_delete_many', args);
+  });
+
+  it('maps the invalid_payload exception to a domain error', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'invalid_payload' } });
+    const result = await assetDeleteMany(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'invalid_payload', message: 'invalid_payload' },
+    });
+  });
+
+  it('maps an unexpected transport error to code "unknown"', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'network down' } });
+    const result = await assetDeleteMany(client, args);
     expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
   });
 });

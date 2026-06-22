@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { IconAssets, IconChevronRight, IconUpload } from '@/components/ui/icons';
@@ -44,11 +45,13 @@ import {
   type RenameOutcome,
   type UploadOutcome,
 } from '@/lib/asset-upload';
-import { assetDelete } from '@srtdio/rpc';
+import { assetDelete, assetDeleteMany } from '@srtdio/rpc';
 import {
   ASSET_SORT_DEFAULT,
   ASSET_SORT_OPTIONS,
+  BULK_DELETE_MAX,
   buildKindCounts,
+  canBulkDelete,
   childFolders,
   displayLabel,
   fetchFolders,
@@ -100,6 +103,8 @@ export function AssetsPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [moveOpen, setMoveOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   const { toasts, push, dismiss } = useToasts();
@@ -161,6 +166,8 @@ export function AssetsPage() {
     setSelectMode(false);
     setSelected(new Set());
     setMoveOpen(false);
+    setBulkDeleteOpen(false);
+    setBulkDeleting(false);
   }, [workspaceId]);
 
   // Resolve the current member's workspace role with one RLS-scoped read (no
@@ -342,6 +349,32 @@ export function AssetsPage() {
     },
     [items, newTrace],
   );
+
+  // Soft-delete the whole selection in ONE atomic asset_delete_many call: remove
+  // every selected row optimistically, then on error roll back the full removal
+  // and toast, else clear selection, leave select mode, and toast the count.
+  // Mirrors deleteOne's optimistic+rollback shape. Only ids + trace cross the
+  // wire; the actor is auth.uid() server-side. Guarded by canBulkDelete so the
+  // RPC is never called with 0 or more than the cap.
+  const deleteSelected = useCallback(async (): Promise<void> => {
+    const ids = Array.from(selected);
+    if (!canBulkDelete(ids.length)) return;
+    setBulkDeleting(true);
+    const snapshot = items;
+    setItems((prev) => removeAssetsById(prev, ids));
+    const result = await assetDeleteMany(supabase, { p_asset_ids: ids, p_trace_id: newTrace() });
+    setBulkDeleting(false);
+    if (!result.ok) {
+      setItems(snapshot);
+      setBulkDeleteOpen(false);
+      push('Could not delete the files. Try again');
+      return;
+    }
+    setBulkDeleteOpen(false);
+    setSelectMode(false);
+    setSelected(new Set());
+    push(`Deleted ${ids.length} ${ids.length === 1 ? 'file' : 'files'}`);
+  }, [selected, items, newTrace, push]);
 
   // Commit one queued file to the asset-upload worker: the file part keeps its
   // ORIGINAL device name (stored as assets.filename, with its extension for type
@@ -617,10 +650,14 @@ export function AssetsPage() {
             />
           ),
         }}
+        stickyChildren={selectMode}
       >
         {selectMode ? (
           <div className="flex w-full items-center gap-2">
             <span className="text-sm font-medium text-fg-2">{selected.size} selected</span>
+            {selected.size > BULK_DELETE_MAX ? (
+              <span className="text-xs text-fg-3">Select 200 or fewer to delete at once.</span>
+            ) : null}
             <span className="ml-auto flex gap-2">
               <Button
                 variant="ghost"
@@ -630,6 +667,13 @@ export function AssetsPage() {
                 }}
               >
                 Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={!canBulkDelete(selected.size)}
+                onClick={() => setBulkDeleteOpen(true)}
+              >
+                Delete
               </Button>
               <Button
                 variant="primary"
@@ -812,6 +856,23 @@ export function AssetsPage() {
           setMoveOpen(false);
         }}
       />
+
+      {bulkDeleteOpen ? (
+        <ConfirmDialog
+          title="Delete files?"
+          message={
+            selected.size === 1
+              ? "Delete 1 file? It'll be removed from the library."
+              : `Delete ${selected.size} files? They'll be removed from the library.`
+          }
+          confirmLabel="Delete"
+          destructive
+          busy={bulkDeleting}
+          busyLabel="Deleting…"
+          onConfirm={() => void deleteSelected()}
+          onCancel={() => setBulkDeleteOpen(false)}
+        />
+      ) : null}
 
       {folderAction !== null ? (
         <FolderActionSheet

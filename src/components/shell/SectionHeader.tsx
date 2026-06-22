@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import { IconSearch, IconX } from '@/components/ui/icons';
@@ -38,6 +39,14 @@ interface SectionHeaderProps<S extends string = string> {
   primaryAction?: SectionHeaderPrimaryAction;
   /** Page-specific filter chips, rendered on the row below the controls. */
   children?: ReactNode;
+  /**
+   * Opt-in: pin ONLY the children action-bar to the top of the scroll area
+   * (below the app top bar, which lives outside the scroll container), with a
+   * solid token background so scrolled grid content does not show through. The
+   * title/search row is never sticky. Default false keeps every other caller
+   * rendering identically.
+   */
+  stickyChildren?: boolean;
 }
 
 function renderPrimaryAction(action: SectionHeaderPrimaryAction): ReactNode {
@@ -64,8 +73,15 @@ export function SectionHeader<S extends string = string>({
   sort,
   primaryAction,
   children,
+  stickyChildren = false,
 }: SectionHeaderProps<S>) {
   const searching = search !== undefined && search.value.trim() !== '';
+  // The scroll container is the shell <main>, so top-0 pins to just below the
+  // app top bar. z-20 sits above the grid (z-0) and below the top bar (z-30).
+  const childRowClass = cn(
+    'px-4 md:px-6 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+    stickyChildren ? 'sticky top-0 z-20 border-b border-border bg-bg py-3' : 'mt-3',
+  );
   return (
     <>
       <div className="px-4 md:px-6 mt-3 flex items-center gap-2">
@@ -106,11 +122,7 @@ export function SectionHeader<S extends string = string>({
         ) : null}
         {primaryAction !== undefined ? renderPrimaryAction(primaryAction) : null}
       </div>
-      {children !== undefined ? (
-        <div className="px-4 md:px-6 mt-3 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {children}
-        </div>
-      ) : null}
+      {children !== undefined ? <div className={childRowClass}>{children}</div> : null}
     </>
   );
 }

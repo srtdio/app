@@ -156,6 +156,14 @@ export function assetDelete(
   return callProc(client, 'asset_delete', args);
 }
 
+export type AssetDeleteManyArgs = ProcArgs<'asset_delete_many'>;
+export function assetDeleteMany(
+  client: Client,
+  args: AssetDeleteManyArgs,
+): Promise<Result<ProcReturns<'asset_delete_many'>>> {
+  return callProc(client, 'asset_delete_many', args);
+}
+
 export type CommentCreateArgs = ProcArgs<'comment_create'>;
 export function commentCreate(
   client: Client,
