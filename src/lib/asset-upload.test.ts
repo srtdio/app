@@ -4,7 +4,6 @@ import {
   MAX_UPLOAD_BYTES,
   UPLOAD_ACCEPT,
   addAssetLink,
-  allNamed,
   canRenameAssets,
   createFolderRequest,
   deleteFolderRequest,
@@ -223,14 +222,6 @@ describe('runUploads success path clears the queue', () => {
 
     expect(result.succeeded).toEqual(['2']);
     expect(result.failed).toEqual([{ id: '1', message: "This file type isn't supported" }]);
-  });
-});
-
-describe('mandatory display-name gate', () => {
-  it('blocks submit until every file has a non-empty name', () => {
-    expect(allNamed(['Logo', 'Banner'])).toBe(true);
-    expect(allNamed(['Logo', '   '])).toBe(false);
-    expect(allNamed([])).toBe(false);
   });
 });
 

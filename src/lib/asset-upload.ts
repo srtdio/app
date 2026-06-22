@@ -196,11 +196,6 @@ export function nextUploadNames(
   return names;
 }
 
-/** Every queued file must carry a non-empty display name before upload enables. */
-export function allNamed(names: readonly string[]): boolean {
-  return names.length > 0 && names.every((name) => name.trim() !== '');
-}
-
 // ---------------------------------------------------------------------------
 // Add link + rename. Both POST to sibling routes on the SAME asset-upload
 // worker (/links, /rename) behind the same Bearer auth + CORS as upload. The

@@ -752,7 +752,7 @@ export function PostDetailPage() {
   // version id of every success so the gallery add can pin them on close.
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
   const handleUploadFile = useCallback(
-    async (file: File, filename: string): Promise<UploadOutcome> => {
+    async (file: File, displayName: string, folderId: string | null): Promise<UploadOutcome> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
         return { ok: false, message: 'Upload failed. Check your connection and retry' };
       }
@@ -767,7 +767,9 @@ export function PostDetailPage() {
         endpoint: uploadEndpoint,
         token,
         workspaceId,
-        filename,
+        filename: file.name,
+        displayName,
+        folderId,
         fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
       });
       if (outcome.ok && outcome.assetVersionId !== undefined && outcome.assetVersionId !== '') {
