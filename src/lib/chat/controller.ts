@@ -8,6 +8,7 @@
 // removes the event handler, closes the connection, and drops the signout
 // listener, leaving nothing dangling.
 
+import type { AgoraChat } from 'agora-chat';
 import {
   CHAT_EVENT_HANDLER_ID,
   type ChatConnection,
@@ -15,6 +16,30 @@ import {
   type ChatTokenResult,
   type CreateConnection,
 } from '@/lib/chat/types';
+
+/** A subscriber to every incoming text message, regardless of the open thread. */
+export type GlobalMessageHandler = (message: AgoraChat.TextMsgBody) => void;
+
+// Always-on fan-out for incoming text. The foundation handler (added below on
+// every connection) feeds this registry so the live store can track unread for
+// all conversations without opening a per-thread handler. The set is
+// module-level so it survives reconnects; subscribers come and go with their
+// own teardown and the foundation handler simply reads whoever is registered.
+const globalMessageHandlers = new Set<GlobalMessageHandler>();
+
+/** Subscribe to every incoming text message; returns the unsubscribe. */
+export function subscribeGlobalMessages(handler: GlobalMessageHandler): () => void {
+  globalMessageHandlers.add(handler);
+  return () => {
+    globalMessageHandlers.delete(handler);
+  };
+}
+
+function dispatchGlobalMessage(message: AgoraChat.TextMsgBody): void {
+  for (const handler of globalMessageHandlers) {
+    handler(message);
+  }
+}
 
 export interface RunChatConnectionParams {
   /** Mints a fresh token; reused for the initial open and for renewal. */
@@ -87,6 +112,7 @@ export function runChatConnection(params: RunChatConnectionParams): () => void {
       onTokenWillExpire: () => {
         void renew(conn);
       },
+      onTextMessage: (message) => dispatchGlobalMessage(message),
       onError: () => {
         /* Errors are reported through onDisconnected; nothing to surface here. */
       },

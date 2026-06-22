@@ -12,6 +12,7 @@ import {
 } from '@/lib/chat-reads';
 import { targetFromSummary, type ChannelTarget } from '@/lib/chat/thread';
 import { useChatThread } from '@/lib/chat/use-chat-thread';
+import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import type { ChatConnection } from '@/lib/chat/types';
 import { ChannelList } from '@/components/chat/ChannelList';
 import { MessageThread } from '@/components/chat/MessageThread';
@@ -125,8 +126,46 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     void refreshChannels(null);
   }, [refreshChannels]);
 
+  const {
+    state: chatStore,
+    setActive,
+    markConversationRead,
+    updateOwnMessage,
+    clearPendingOpen,
+  } = useChatStore();
+
+  // Keep the live store's active conversation in step with the open channel:
+  // opening one marks it read (and acks Agora); leaving or unmounting clears it.
+  const selectedChannelId = selected?.channelId ?? null;
+  useEffect(() => {
+    if (selectedChannelId === null) {
+      setActive(null);
+      return;
+    }
+    setActive(selectedChannelId);
+    markConversationRead(selectedChannelId);
+    return () => setActive(null);
+  }, [selectedChannelId, setActive, markConversationRead]);
+
+  // A toast press asks the store to open a channel; consume it once the list is
+  // loaded by selecting that channel, then clear the request.
+  const pendingOpen = chatStore.pendingOpenConversationId;
+  useEffect(() => {
+    if (pendingOpen === null || channels.length === 0) return;
+    const found = channels.find((channel) => channel.channelId === pendingOpen);
+    if (found !== undefined) setSelected(found);
+    clearPendingOpen();
+  }, [pendingOpen, channels, clearPendingOpen]);
+
+  const onOwnMessage = useCallback(
+    (text: string) => {
+      if (selectedChannelId !== null) updateOwnMessage(selectedChannelId, text);
+    },
+    [selectedChannelId, updateOwnMessage],
+  );
+
   const target = useMemo(() => safeTarget(selected), [selected]);
-  const thread = useChatThread({ client, target, currentUserId });
+  const thread = useChatThread({ client, target, currentUserId, onOwnMessage });
 
   // Resolve sender display info in one batched read per set of new ids (no N+1).
   useEffect(() => {
