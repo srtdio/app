@@ -12,7 +12,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import { classifyAttachment, type MessageAttachment } from '@/lib/chat/attachments';
 
 /** Presign one attachment id once, refreshing shortly before expiry; never throws. */
-function useAttachmentUrl(
+export function useAttachmentUrl(
   assetId: string,
   cache: PresignCache,
   enabled: boolean,
@@ -111,10 +111,12 @@ function AttachmentItem({
   attachment,
   cache,
   presignEnabled,
+  onImageClick,
 }: {
   attachment: MessageAttachment;
   cache: PresignCache;
   presignEnabled: boolean;
+  onImageClick?: ((attachment: MessageAttachment) => void) | undefined;
 }): ReactElement {
   // The render layer presigns the attachment's VERSION id (assetId carries the
   // asset_versions.id) through the shared cache, which dedupes in-flight ids.
@@ -122,14 +124,29 @@ function AttachmentItem({
   const view = attachmentView({ attachment, presignEnabled, url, failed });
 
   switch (view.kind) {
-    case 'image':
-      return (
+    case 'image': {
+      const image = (
         <img
           src={view.src}
           alt={view.alt}
           className="max-h-48 max-w-[260px] rounded-lg border border-border object-cover"
         />
       );
+      // When the caller wants tap-to-open (comments), wrap the unchanged <img> in
+      // a button; chat passes no onImageClick so it renders exactly as before.
+      return onImageClick !== undefined ? (
+        <button
+          type="button"
+          aria-label="Open image"
+          onClick={() => onImageClick(attachment)}
+          className="cursor-zoom-in"
+        >
+          {image}
+        </button>
+      ) : (
+        image
+      );
+    }
     case 'image-pending':
       return <div className="h-32 w-44 animate-pulse rounded-lg border border-border bg-panel-2" />;
     case 'file':
@@ -141,10 +158,13 @@ export function MessageAttachments({
   attachments,
   cache,
   presignEnabled,
+  onImageClick,
 }: {
   attachments: readonly MessageAttachment[];
   cache: PresignCache;
   presignEnabled: boolean;
+  /** Optional: tap an image attachment to open it (comments). Chat omits it. */
+  onImageClick?: ((attachment: MessageAttachment) => void) | undefined;
 }): ReactElement | null {
   if (attachments.length === 0) return null;
   return (
@@ -155,6 +175,7 @@ export function MessageAttachments({
           attachment={attachment}
           cache={cache}
           presignEnabled={presignEnabled}
+          onImageClick={onImageClick}
         />
       ))}
     </div>
