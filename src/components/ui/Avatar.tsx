@@ -5,10 +5,10 @@ import { IconUser } from '@/components/ui/icons';
 interface AvatarProps {
   name?: string;
   src?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-const PX: Record<NonNullable<AvatarProps['size']>, number> = { sm: 24, md: 26, lg: 32 };
+const PX: Record<NonNullable<AvatarProps['size']>, number> = { sm: 24, md: 26, lg: 32, xl: 48 };
 
 const PALETTE = ['#5e6ad2', '#3e7d54', '#b8772b', '#c2392b', '#7a5ea8', '#2b8a9e'];
 
