@@ -112,7 +112,13 @@ function leadFallback(lead: ActivityItem): ThumbnailFallback {
   if (lead.entityType === 'post' && lead.format !== null) {
     const token = formatToken(lead.format);
     const layout = token === 'video' || token === 'link' ? 'media' : 'text';
-    return { kind: 'post', glyph: token, label: FORMAT_GLYPH_LABEL[token], body: lead.caption ?? null, layout };
+    return {
+      kind: 'post',
+      glyph: token,
+      label: FORMAT_GLYPH_LABEL[token],
+      body: lead.caption ?? null,
+      layout,
+    };
   }
   return { kind: 'glyph' };
 }

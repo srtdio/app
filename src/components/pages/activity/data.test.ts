@@ -491,7 +491,9 @@ describe('fetchActivityEntries enrichment', () => {
           payload: { to: 'approved' },
         }),
       ]),
-      posts: ok([{ id: 'p1', title: 'Q3 Launch', format: 'single_image', caption: 'Ship day copy' }]),
+      posts: ok([
+        { id: 'p1', title: 'Q3 Launch', format: 'single_image', caption: 'Ship day copy' },
+      ]),
       asset_attachments: ok([
         { entity_id: 'p1', asset_version_id: 'av-9', asset_versions: { mime_type: 'image/png' } },
       ]),
