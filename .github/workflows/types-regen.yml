@@ -34,8 +34,8 @@ jobs:
           branch: chore/regen-supabase-types
           delete-branch: true
           base: main
-          commit-message: "chore: regenerate Supabase types from live database"
-          title: "Regenerate Supabase types from live database"
+          commit-message: 'chore: regenerate Supabase types from live database'
+          title: 'Regenerate Supabase types from live database'
           body: |
             Machine-generated update of `packages/schemas/src/supabase.generated.ts`.
 
