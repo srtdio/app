@@ -250,7 +250,9 @@ describe('entityHref', () => {
 
   it('deep-links a post/brief comment to its exact comment via ?comment=', () => {
     expect(
-      entityHref(item({ eventType: 'comment', entityType: 'post', entityId: 'p9', commentId: 'c3' })),
+      entityHref(
+        item({ eventType: 'comment', entityType: 'post', entityId: 'p9', commentId: 'c3' }),
+      ),
     ).toBe('/posts/p9?comment=c3');
     expect(entityHref(item({ entityType: 'post', entityId: 'p9', commentId: null }))).toBe(
       '/posts/p9',
@@ -267,7 +269,9 @@ describe('entityHref', () => {
 
   it('deep-links asset events to the lightbox via ?asset=, ignoring the entity', () => {
     expect(
-      entityHref(item({ eventType: 'asset_uploaded', entityType: null, entityId: null, assetId: 'a7' })),
+      entityHref(
+        item({ eventType: 'asset_uploaded', entityType: null, entityId: null, assetId: 'a7' }),
+      ),
     ).toBe('/assets?asset=a7');
     expect(
       entityHref(
@@ -275,7 +279,9 @@ describe('entityHref', () => {
       ),
     ).toBe('/assets?asset=a8');
     expect(
-      entityHref(item({ eventType: 'asset_uploaded', entityType: null, entityId: null, assetId: null })),
+      entityHref(
+        item({ eventType: 'asset_uploaded', entityType: null, entityId: null, assetId: null }),
+      ),
     ).toBeNull();
     expect(
       entityHref(item({ eventType: 'stage_change', entityType: null, entityId: null })),
