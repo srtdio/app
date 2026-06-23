@@ -10,10 +10,7 @@ import { describe, expect, it } from 'vitest';
 // container can never drift sideways (the Activity filter-row bleed report). The
 // internal overflow-x-auto scrollers are their own elements and are not asserted
 // here.
-const source = readFileSync(
-  fileURLToPath(new URL('./AppLayout.tsx', import.meta.url)),
-  'utf8',
-);
+const source = readFileSync(fileURLToPath(new URL('./AppLayout.tsx', import.meta.url)), 'utf8');
 
 function mainClassName(src: string): string {
   const match = src.match(/<main className="([^"]*)"/);
