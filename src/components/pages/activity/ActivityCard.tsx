@@ -36,6 +36,8 @@ interface ActivityCardProps {
   presignEnabled: boolean;
   /** Open the thread: mark every entry read and navigate from the lead. */
   onOpenGroup: (group: ActivityItem[]) => void;
+  /** Open a single thread entry: mark it read and navigate from that entry. */
+  onOpenEntry: (entry: ActivityItem) => void;
   onSnooze: (item: ActivityItem, kind: SnoozeKind) => void;
   onMarkRead: (item: ActivityItem) => void;
 }
@@ -149,6 +151,7 @@ export function ActivityCard({
   cache,
   presignEnabled,
   onOpenGroup,
+  onOpenEntry,
   onSnooze,
   onMarkRead,
 }: ActivityCardProps) {
@@ -267,7 +270,16 @@ export function ActivityCard({
               {rest.map((entry) => (
                 <li
                   key={entry.id}
-                  className="flex min-h-[44px] items-center gap-2 py-2 pl-[3.25rem] pr-4 md:pr-5"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpenEntry(entry)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onOpenEntry(entry);
+                    }
+                  }}
+                  className="flex min-h-[44px] cursor-pointer items-center gap-2 py-2 pl-[3.25rem] pr-4 transition-colors hover:bg-panel-2 md:pr-5"
                 >
                   <div className="min-w-0 flex-1">
                     <p
