@@ -1,9 +1,44 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { isValidElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
 import type { ActivityItem } from '@/components/pages/activity/data';
 import type { PresignCache } from '@/lib/asset-presign';
+
+// The unit env is `node` with no DOM, so events cannot be dispatched. We mock
+// React's useState with a pure shim that reproduces the server-render initial
+// state (so every existing renderToStaticMarkup test is unchanged), but lets a
+// single test flip the lead card's expand flag on. With the thread expanded we
+// invoke ActivityCard as a plain function and walk the returned element tree:
+// child components stay unrendered nodes, so no DOM or matchMedia is touched.
+const hooks = vi.hoisted(() => ({ forceExpand: false }));
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>();
+  return {
+    ...actual,
+    useState: <S,>(initial: S | (() => S)): [S, (next: S) => void] => {
+      const value = typeof initial === 'function' ? (initial as () => S)() : initial;
+      if (hooks.forceExpand && (value as unknown) === false) {
+        return [true as unknown as S, () => {}];
+      }
+      return [value, () => {}];
+    },
+  };
+});
+
+/** Recursively collect every element of a given host type from a tree. */
+function collectByType(node: ReactNode, type: string, acc: ReactElement[]): void {
+  if (Array.isArray(node)) {
+    for (const child of node) collectByType(child, type, acc);
+    return;
+  }
+  if (!isValidElement(node)) return;
+  if (node.type === type) acc.push(node);
+  const props = node.props as { children?: ReactNode };
+  collectByType(props.children, type, acc);
+}
 
 // The same shim the pipeline board test uses: presignEnabled is false so the
 // tile renders its fallback and never touches the cache, so an empty stand-in is
@@ -55,6 +90,7 @@ function renderCard(group: ActivityItem[]): string {
       cache={cache}
       presignEnabled={false}
       onOpenGroup={() => {}}
+      onOpenEntry={() => {}}
       onSnooze={() => {}}
       onMarkRead={() => {}}
     />,
@@ -111,6 +147,46 @@ describe('ActivityCard', () => {
     ]);
     // approved -> good tone on the icon circle.
     expect(html).toContain('border-good');
+  });
+
+  it('marks each expanded thread row interactive in the collapsed markup contract', () => {
+    // Regression guard: a thread row is a button (role + cursor) so it is its own
+    // deep-link target, not a dead list item.
+    hooks.forceExpand = true;
+    try {
+      const onOpenEntry = vi.fn();
+      const entry = item({ id: 'b', eventType: 'comment' });
+      const group = [item({ id: 'a', eventType: 'comment' }), entry];
+      const tree = ActivityCard({
+        group,
+        nowMs: NOW,
+        cache,
+        presignEnabled: false,
+        onOpenGroup: () => {},
+        onOpenEntry,
+        onSnooze: () => {},
+        onMarkRead: () => {},
+      });
+      const rows: ReactElement[] = [];
+      collectByType(tree, 'li', rows);
+      // One thread row for the single rest entry, and it is keyboard/pointer ready.
+      expect(rows).toHaveLength(1);
+      const row = rows[0]?.props as {
+        role?: string;
+        tabIndex?: number;
+        onClick?: () => void;
+        className?: string;
+      };
+      expect(row.role).toBe('button');
+      expect(row.tabIndex).toBe(0);
+      expect(row.className).toContain('cursor-pointer');
+      // Clicking the thread row opens that exact entry once.
+      row.onClick?.();
+      expect(onOpenEntry).toHaveBeenCalledTimes(1);
+      expect(onOpenEntry).toHaveBeenCalledWith(entry);
+    } finally {
+      hooks.forceExpand = false;
+    }
   });
 });
 

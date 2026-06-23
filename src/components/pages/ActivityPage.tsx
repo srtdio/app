@@ -171,6 +171,21 @@ export function ActivityPage() {
     [workspaceId, newTrace, navigate, markReadLocal],
   );
 
+  // Open a single thread entry: mark just that entry read (optimistic) and
+  // navigate from it, mirroring handleOpenGroup for one entry.
+  const handleOpenEntry = useCallback(
+    (entry: ActivityItem) => {
+      if (workspaceId === null) return;
+      if (entry.readAt === null) {
+        markReadLocal(entry.id);
+        void markEntryRead(supabase, entry, workspaceId, newTrace());
+      }
+      const href = entityHref(entry);
+      if (href !== null) navigate(href);
+    },
+    [workspaceId, newTrace, navigate, markReadLocal],
+  );
+
   const handleMarkRead = useCallback(
     (item: ActivityItem) => {
       if (workspaceId === null || item.readAt !== null) return;
@@ -301,6 +316,7 @@ export function ActivityPage() {
                       cache={cache}
                       presignEnabled={presignEnabled}
                       onOpenGroup={handleOpenGroup}
+                      onOpenEntry={handleOpenEntry}
                       onSnooze={handleSnooze}
                       onMarkRead={handleMarkRead}
                     />
