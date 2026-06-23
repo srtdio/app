@@ -79,6 +79,7 @@
   body {
     background: var(--bg);
     color: var(--fg);
+    touch-action: manipulation;
     font-family:
       'Inter',
       -apple-system,

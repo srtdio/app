@@ -5,10 +5,12 @@ import App from '@/App';
 import { initSentry } from '@/lib/sentry';
 import { TraceProvider } from '@/lib/trace-context';
 import { initTheme } from '@/lib/theme';
+import { initViewportLock } from '@/lib/viewport-lock';
 import '@/index.css';
 
 initSentry();
 initTheme();
+initViewportLock();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
