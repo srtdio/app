@@ -130,7 +130,7 @@ export function AppLayout() {
                 onOpenPalette={() => setPaletteOpen(true)}
                 onOpenAvatar={() => setAvatarOpen(true)}
               />
-              <main className="flex-1 overflow-y-auto pb-[56px] md:pb-0">
+              <main className="flex-1 overflow-y-auto overflow-x-hidden pb-[56px] md:pb-0">
                 {switchPending ? null : <Outlet />}
               </main>
             </div>
