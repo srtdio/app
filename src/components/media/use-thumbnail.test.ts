@@ -19,16 +19,14 @@ const ONE_HOUR = 60 * 60 * 1000;
 /** A cache whose resolve rejects its first `failures` calls, then resolves `url`. */
 function makeCache(failures: number, url: string): { resolve: ReturnType<typeof vi.fn> } {
   let calls = 0;
-  const resolve = vi.fn(
-    (): Promise<PresignedUrl> => {
-      calls += 1;
-      if (calls <= failures) {
-        // The unauthenticated first presign the retry exists to recover from.
-        return Promise.reject(new Error('unauthenticated'));
-      }
-      return Promise.resolve({ url, expiresAt: Date.now() + ONE_HOUR });
-    },
-  );
+  const resolve = vi.fn((): Promise<PresignedUrl> => {
+    calls += 1;
+    if (calls <= failures) {
+      // The unauthenticated first presign the retry exists to recover from.
+      return Promise.reject(new Error('unauthenticated'));
+    }
+    return Promise.resolve({ url, expiresAt: Date.now() + ONE_HOUR });
+  });
   return { resolve };
 }
 
