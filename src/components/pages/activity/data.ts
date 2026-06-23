@@ -63,6 +63,8 @@ export interface ActivityItem {
   snoozedUntil: string | null;
   // Derived from the payload via payloadStr (never cast to any).
   commentId: string | null;
+  /** The asset id, asset events only (asset_uploaded / asset_version_added); null otherwise. */
+  assetId: string | null;
   toStage: string | null;
   fromStage: string | null;
   /** The entity title, when the writer recorded one (briefs). */
@@ -98,6 +100,7 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     readAt: row.read_at,
     snoozedUntil: row.snoozed_until,
     commentId: payloadStr(payload, 'comment_id'),
+    assetId: payloadStr(payload, 'asset_id'),
     toStage: payloadStr(payload, 'to_stage') ?? payloadStr(payload, 'to'),
     fromStage: payloadStr(payload, 'from_stage') ?? payloadStr(payload, 'from'),
     title: payloadStr(payload, 'title'),
@@ -235,11 +238,28 @@ export function cardBodyLine(item: ActivityItem): string {
   return shortLine(item);
 }
 
-/** Route to open when a row is clicked, or null when it has no detail surface. */
+/**
+ * Route to open when a row is clicked, or null when it has no detail surface.
+ * Asset events have no post/brief entity: they deep-link to the asset lightbox via
+ * the existing `?asset=` param. Post/brief comment events deep-link to the exact
+ * comment via the existing `?comment=` param (consumed by PostDetailPage /
+ * BriefDetailPage / AssetsPage already); a non-comment entry lands on the entity.
+ */
 export function entityHref(item: ActivityItem): string | null {
+  if (item.eventType === 'asset_uploaded' || item.eventType === 'asset_version_added') {
+    return item.assetId !== null ? `/assets?asset=${item.assetId}` : null;
+  }
   if (item.entityId === null) return null;
-  if (item.entityType === 'post') return `/posts/${item.entityId}`;
-  if (item.entityType === 'brief') return `/briefs/${item.entityId}`;
+  if (item.entityType === 'post') {
+    return item.commentId !== null
+      ? `/posts/${item.entityId}?comment=${item.commentId}`
+      : `/posts/${item.entityId}`;
+  }
+  if (item.entityType === 'brief') {
+    return item.commentId !== null
+      ? `/briefs/${item.entityId}?comment=${item.commentId}`
+      : `/briefs/${item.entityId}`;
+  }
   return null;
 }
 

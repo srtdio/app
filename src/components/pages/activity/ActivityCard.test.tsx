@@ -30,6 +30,7 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     readAt: null,
     snoozedUntil: null,
     commentId: null,
+    assetId: null,
     toStage: null,
     fromStage: null,
     title: null,

@@ -56,6 +56,7 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     readAt: null,
     snoozedUntil: null,
     commentId: null,
+    assetId: null,
     toStage: null,
     fromStage: null,
     title: null,
@@ -91,6 +92,7 @@ describe('mapEntry', () => {
         entity_type: 'brief',
         payload: {
           comment_id: 'c1',
+          asset_id: 'a1',
           to_stage: 'review',
           from_stage: 'draft',
           title: 'Launch brief',
@@ -99,6 +101,7 @@ describe('mapEntry', () => {
       }),
     );
     expect(mapped.commentId).toBe('c1');
+    expect(mapped.assetId).toBe('a1');
     expect(mapped.toStage).toBe('review');
     expect(mapped.fromStage).toBe('draft');
     expect(mapped.title).toBe('Launch brief');
@@ -243,6 +246,40 @@ describe('entityHref', () => {
     expect(entityHref(item({ entityType: 'brief', entityId: 'b9' }))).toBe('/briefs/b9');
     expect(entityHref(item({ entityType: 'workspace', entityId: 'w9' }))).toBeNull();
     expect(entityHref(item({ entityType: 'post', entityId: null }))).toBeNull();
+  });
+
+  it('deep-links a post/brief comment to its exact comment via ?comment=', () => {
+    expect(
+      entityHref(item({ eventType: 'comment', entityType: 'post', entityId: 'p9', commentId: 'c3' })),
+    ).toBe('/posts/p9?comment=c3');
+    expect(entityHref(item({ entityType: 'post', entityId: 'p9', commentId: null }))).toBe(
+      '/posts/p9',
+    );
+    expect(
+      entityHref(
+        item({ eventType: 'comment', entityType: 'brief', entityId: 'b9', commentId: 'c4' }),
+      ),
+    ).toBe('/briefs/b9?comment=c4');
+    expect(entityHref(item({ entityType: 'brief', entityId: 'b9', commentId: null }))).toBe(
+      '/briefs/b9',
+    );
+  });
+
+  it('deep-links asset events to the lightbox via ?asset=, ignoring the entity', () => {
+    expect(
+      entityHref(item({ eventType: 'asset_uploaded', entityType: null, entityId: null, assetId: 'a7' })),
+    ).toBe('/assets?asset=a7');
+    expect(
+      entityHref(
+        item({ eventType: 'asset_version_added', entityType: null, entityId: null, assetId: 'a8' }),
+      ),
+    ).toBe('/assets?asset=a8');
+    expect(
+      entityHref(item({ eventType: 'asset_uploaded', entityType: null, entityId: null, assetId: null })),
+    ).toBeNull();
+    expect(
+      entityHref(item({ eventType: 'stage_change', entityType: null, entityId: null })),
+    ).toBeNull();
   });
 });
 
