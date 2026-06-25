@@ -8,9 +8,27 @@
 import type { Client, Result } from '@srtdio/rpc';
 import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '@srtdio/rpc';
 import type { Database, Json } from '@srtdio/schemas';
+import { parseMentions } from '@srtdio/comments';
 import { readProfiles } from '@/lib/chat-reads';
+import { EX_MEMBER_LABEL } from '@/components/comments/commentProfiles';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
+
+/** Same token shape the comment thread resolves: the literal `@[<uuid>]`. */
+const MENTION_TOKEN = /@\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
+
+/**
+ * Resolve every `@[<uuid>]` mention token in a comment body to a plain `@Name`
+ * label, exactly as the comment thread does. An id `nameOf` does not resolve to
+ * a member falls back to EX_MEMBER_LABEL; all surrounding text is returned
+ * verbatim. Plain text only: no React nodes, no JSX, no styling.
+ */
+export function resolveBodyMentions(body: string, nameOf: (id: string) => string | null): string {
+  return body.replace(
+    MENTION_TOKEN,
+    (_match, id: string) => `@${nameOf(id.toLowerCase()) ?? EX_MEMBER_LABEL}`,
+  );
+}
 
 /**
  * Read one string field from an `unknown` jsonb payload. Returns null for a
@@ -550,6 +568,7 @@ export async function fetchActivityEntries(
       )
       .filter((id): id is string => typeof id === 'string'),
     ...items.flatMap((item) => (item.actorId !== null ? [item.actorId] : [])),
+    ...[...commentBodies.values()].flatMap((body) => parseMentions(body)),
   ]);
   const userNames = new Map<string, string>();
   const userAvatars = new Map<string, string>();
@@ -582,10 +601,14 @@ export async function fetchActivityEntries(
     item.actorAvatarUrl = actorUserId !== null ? (userAvatars.get(actorUserId) ?? null) : null;
 
     // The comment text, for comment events only (other events have no body).
-    item.body =
+    // Mention tokens are resolved to @Name here so the card never prints a raw
+    // @[uuid]; the same resolution the comment thread applies inline.
+    const rawBody =
       item.eventType === 'comment' && item.commentId !== null
         ? (commentBodies.get(item.commentId) ?? null)
         : null;
+    item.body =
+      rawBody !== null ? resolveBodyMentions(rawBody, (id) => userNames.get(id) ?? null) : null;
 
     if (item.entityType === 'post') {
       item.title = item.entityId !== null ? (postTitles.get(item.entityId) ?? null) : null;
