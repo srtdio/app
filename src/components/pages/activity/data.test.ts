@@ -15,10 +15,12 @@ import {
   mapEntry,
   payloadStr,
   relativeTime,
+  resolveBodyMentions,
   shortLine,
   unreadCount,
   type ActivityItem,
 } from '@/components/pages/activity/data';
+import { EX_MEMBER_LABEL } from '@/components/comments/commentProfiles';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -237,6 +239,31 @@ describe('cardBodyLine', () => {
   it('falls back to the generic label when a comment body is null or empty', () => {
     expect(cardBodyLine(item({ eventType: 'comment', body: null }))).toBe('New comment');
     expect(cardBodyLine(item({ eventType: 'comment', body: '   ' }))).toBe('New comment');
+  });
+});
+
+describe('resolveBodyMentions', () => {
+  const id1 = '11111111-1111-1111-1111-111111111111';
+  const id2 = '22222222-2222-2222-2222-222222222222';
+  const names: Record<string, string> = { [id1]: 'Alice', [id2]: 'Bo' };
+  const nameOf = (id: string): string | null => names[id] ?? null;
+
+  it('resolves a single @[uuid] token to @Name', () => {
+    expect(resolveBodyMentions(`hey @[${id1}] welcome`, nameOf)).toBe('hey @Alice welcome');
+  });
+
+  it('renders @(ex-member) when nameOf returns null', () => {
+    expect(resolveBodyMentions(`@[${id2}] ping`, () => null)).toBe(`@${EX_MEMBER_LABEL} ping`);
+  });
+
+  it('resolves multiple tokens and preserves surrounding text verbatim', () => {
+    expect(resolveBodyMentions(`cc @[${id1}] and @[${id2}] — done`, nameOf)).toBe(
+      'cc @Alice and @Bo — done',
+    );
+  });
+
+  it('returns a body with no tokens unchanged', () => {
+    expect(resolveBodyMentions('plain text, no mentions', nameOf)).toBe('plain text, no mentions');
   });
 });
 
