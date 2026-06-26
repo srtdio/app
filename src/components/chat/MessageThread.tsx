@@ -429,7 +429,8 @@ function ThreadBody(
 
 /** The thread pane: header (+ optional back), message list, and composer. */
 export function MessageThread(props: MessageThreadProps): ReactElement {
-  const { canAttach, presignEnabled, presignCache, uploadFile } = useChatAttachments();
+  const { canAttach, presignEnabled, presignCache, uploadFile, transcribe, canTranscribe } =
+    useChatAttachments();
   const [replyDraft, setReplyDraft] = useState<{ authorName: string; quote: ReplyQuote } | null>(
     null,
   );
@@ -501,6 +502,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         onCancelReply={() => setReplyDraft(null)}
         {...(replyDraft !== null ? { reply: replyDraft } : {})}
         {...(canAttach ? { uploadFile } : {})}
+        {...(canTranscribe ? { transcribe } : {})}
       />
     </div>
   );

@@ -25,6 +25,10 @@ export const envSchema = z.object({
   // signed-in workspace member. Optional - when unset, chat is unavailable and
   // the rest of the app keeps working.
   VITE_CHAT_TOKEN_URL: optionalUrl,
+  // Voice-note transcription Worker URL: POST raw audio bytes + Bearer JWT,
+  // returns { transcript }. Optional - when unset, voice notes still send
+  // without a transcript.
+  VITE_CHAT_TRANSCRIBE_URL: optionalUrl,
   VITE_SENTRY_DSN_FRONTEND: z.string().url().optional(),
   VITE_SENTRY_ENVIRONMENT: z.enum(['development', 'production']).default('development'),
   VITE_SENTRY_RELEASE: z.string().optional(),

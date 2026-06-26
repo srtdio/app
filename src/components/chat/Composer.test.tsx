@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSendKeydown } from '@/components/chat/Composer';
+import { isSendKeydown, shouldShowMic } from '@/components/chat/Composer';
 
 // The repo's vitest runs in the node environment with no @testing-library/react,
 // so caret/DOM behaviour is not exercised here. Following the codebase pattern
@@ -36,5 +36,49 @@ describe('isSendKeydown', () => {
     expect(
       isSendKeydown({ key: 'a', shiftKey: false, isComposing: false, coarsePointer: false }),
     ).toBe(false);
+  });
+});
+
+// The trailing composer control swaps between the record-voice-note mic and the
+// Send button. The mic shows only when attaching is possible and the composer is
+// empty and idle; any text, attachment, shared post, active recording, or
+// in-flight voice send falls back to Send.
+describe('shouldShowMic', () => {
+  const idle = {
+    hasUpload: true,
+    disabled: false,
+    text: '',
+    attachmentCount: 0,
+    sharedPostCount: 0,
+    recording: false,
+    voiceBusy: false,
+  };
+
+  it('shows the mic on an empty, idle composer that can upload', () => {
+    expect(shouldShowMic(idle)).toBe(true);
+  });
+
+  it('hides the mic when there is text', () => {
+    expect(shouldShowMic({ ...idle, text: 'hello' })).toBe(false);
+  });
+
+  it('hides the mic when an attachment is pending', () => {
+    expect(shouldShowMic({ ...idle, attachmentCount: 1 })).toBe(false);
+  });
+
+  it('hides the mic when a post is shared', () => {
+    expect(shouldShowMic({ ...idle, sharedPostCount: 1 })).toBe(false);
+  });
+
+  it('hides the mic while recording', () => {
+    expect(shouldShowMic({ ...idle, recording: true })).toBe(false);
+  });
+
+  it('hides the mic while a voice note is sending', () => {
+    expect(shouldShowMic({ ...idle, voiceBusy: true })).toBe(false);
+  });
+
+  it('hides the mic when uploads are unavailable', () => {
+    expect(shouldShowMic({ ...idle, hasUpload: false })).toBe(false);
   });
 });

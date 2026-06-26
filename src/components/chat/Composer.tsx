@@ -3,8 +3,11 @@ import type { FormEvent, KeyboardEvent, ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
-import { IconFile, IconX } from '@/components/ui/icons';
+import { IconFile, IconMic, IconSend, IconTrash, IconX } from '@/components/ui/icons';
+import { useToast } from '@/components/ui/toast';
 import { IconPaperclip } from '@/components/chat/AttachmentIcons';
+import { useAudioRecorder, recordingFileName } from '@/lib/chat/use-audio-recorder';
+import type { TranscribeResult } from '@/lib/chat/transcribe';
 import { AttachmentMenu } from '@/components/chat/AttachmentMenu';
 import { PostPicker } from '@/components/chat/PostPicker';
 import { SharedPostChip } from '@/components/chat/SharedPostChip';
@@ -33,6 +36,8 @@ interface ComposerProps {
   disabled: boolean;
   /** Upload one picked file via the asset pipeline; absent disables attaching. */
   uploadFile?: ((file: File) => Promise<ChatAttachmentUpload>) | undefined;
+  /** Transcribe a recorded voice note; absent sends the audio with no transcript. */
+  transcribe?: ((blob: Blob) => Promise<TranscribeResult>) | undefined;
   /** Called on each keystroke so the parent can broadcast a throttled typing signal. */
   onTyping?: (() => void) | undefined;
   /** The active reply draft; renders the preview bar above the chips when present. */
@@ -81,6 +86,40 @@ export function isSendKeydown(input: {
   return input.key === 'Enter' && !input.shiftKey && !input.isComposing && !input.coarsePointer;
 }
 
+/**
+ * Whether the composer's trailing control is the record-voice-note mic rather
+ * than Send: only when attaching is possible and the composer is otherwise idle
+ * and empty (no text, no pending attachments, no shared posts, not already
+ * recording or processing a voice note).
+ */
+export function shouldShowMic(input: {
+  hasUpload: boolean;
+  disabled: boolean;
+  text: string;
+  attachmentCount: number;
+  sharedPostCount: number;
+  recording: boolean;
+  voiceBusy: boolean;
+}): boolean {
+  return (
+    input.hasUpload &&
+    !input.disabled &&
+    input.text.trim() === '' &&
+    input.attachmentCount === 0 &&
+    input.sharedPostCount === 0 &&
+    !input.recording &&
+    !input.voiceBusy
+  );
+}
+
+/** Format a non-negative second count as mm:ss; 0 for non-finite input. */
+function formatMmSs(s: number): string {
+  const safe = Number.isFinite(s) && s > 0 ? Math.floor(s) : 0;
+  const mm = Math.floor(safe / 60);
+  const ss = safe % 60;
+  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+}
+
 function completedAttachments(pending: readonly Pending[]): MessageAttachment[] {
   const out: MessageAttachment[] = [];
   for (const item of pending) {
@@ -105,6 +144,9 @@ export function Composer(props: ComposerProps): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const recorder = useAudioRecorder();
+  const toast = useToast();
 
   const formRef = useRef<HTMLFormElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -217,6 +259,63 @@ export function Composer(props: ComposerProps): ReactElement {
     }
   }
 
+  async function start(): Promise<void> {
+    const ok = await recorder.start();
+    if (!ok) toast.show({ title: 'Microphone access is needed to record.' });
+  }
+
+  function cancel(): void {
+    recorder.cancel();
+  }
+
+  async function stopSend(): Promise<void> {
+    setVoiceBusy(true);
+    const rec = await recorder.stop();
+    if (rec === null) {
+      setVoiceBusy(false);
+      return;
+    }
+    const file = new File([rec.blob], recordingFileName(rec.mime), { type: rec.mime });
+    let transcript: string | undefined;
+    if (props.transcribe !== undefined) {
+      const t = await props.transcribe(rec.blob);
+      if (t.ok && t.transcript.trim() !== '') transcript = t.transcript;
+    }
+    const up =
+      props.uploadFile !== undefined
+        ? await props.uploadFile(file)
+        : ({ ok: false, message: 'Upload is unavailable.' } as const);
+    if (!up.ok) {
+      toast.show({ title: up.message });
+      setVoiceBusy(false);
+      return;
+    }
+    const attachment: MessageAttachment = {
+      assetId: up.versionId,
+      name: file.name,
+      mime: file.type,
+      ...(transcript !== undefined ? { transcript } : {}),
+    };
+    try {
+      await props.onSend('', [attachment], [], props.reply?.quote ?? null);
+      props.onCancelReply?.();
+    } catch {
+      toast.show({ title: 'Could not send the voice note.' });
+    } finally {
+      setVoiceBusy(false);
+    }
+  }
+
+  const showMic = shouldShowMic({
+    hasUpload: props.uploadFile !== undefined,
+    disabled: props.disabled,
+    text,
+    attachmentCount: ready.length,
+    sharedPostCount: sharedPosts.length,
+    recording: recorder.recording,
+    voiceBusy,
+  });
+
   return (
     <form
       ref={formRef}
@@ -248,34 +347,85 @@ export function Composer(props: ComposerProps): ReactElement {
       ) : null}
 
       <div className="flex items-end gap-2">
-        {canAttach ? (
-          <div className="relative">
-            <IconButton
-              label="Add attachment"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              <IconPaperclip size={20} />
+        {recorder.recording ? (
+          <>
+            <IconButton label="Cancel recording" className="text-bad" onClick={cancel}>
+              <IconTrash size={20} />
             </IconButton>
-            <AttachmentMenu open={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />
+            <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border bg-bg px-3">
+              <span
+                aria-hidden="true"
+                className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-bad"
+              />
+              <span className="text-sm text-fg-2">Recording</span>
+              <span className="ml-auto font-mono text-xs tabular-nums text-fg-2">
+                {formatMmSs(recorder.seconds)}
+              </span>
+            </div>
+            <button
+              type="button"
+              aria-label="Stop and send voice note"
+              onClick={() => void stopSend()}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg transition-opacity hover:opacity-90"
+            >
+              <IconSend size={18} />
+            </button>
+          </>
+        ) : voiceBusy ? (
+          <div className="flex h-11 flex-1 items-center gap-2 px-1">
+            <span
+              aria-hidden="true"
+              className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-accent"
+            />
+            <span className="text-sm text-fg-2">Sending voice note…</span>
           </div>
-        ) : null}
+        ) : (
+          <>
+            {canAttach ? (
+              <div className="relative">
+                <IconButton
+                  label="Add attachment"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((open) => !open)}
+                >
+                  <IconPaperclip size={20} />
+                </IconButton>
+                <AttachmentMenu
+                  open={menuOpen}
+                  items={menuItems}
+                  onClose={() => setMenuOpen(false)}
+                />
+              </div>
+            ) : null}
 
-        <Textarea
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-            props.onTyping?.();
-          }}
-          onKeyDown={handleKeyDown}
-          placeholder="Write a message"
-          rows={1}
-          className="min-h-[44px]"
-        />
-        <Button type="submit" variant="primary" size="lg" disabled={!canSend}>
-          Send
-        </Button>
+            <Textarea
+              value={text}
+              onChange={(event) => {
+                setText(event.target.value);
+                props.onTyping?.();
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder="Write a message"
+              rows={1}
+              className="min-h-[44px]"
+            />
+            {showMic ? (
+              <button
+                type="button"
+                aria-label="Record voice note"
+                onClick={() => void start()}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg transition-opacity hover:opacity-90"
+              >
+                <IconMic size={18} />
+              </button>
+            ) : (
+              <Button type="submit" variant="primary" size="lg" disabled={!canSend}>
+                Send
+              </Button>
+            )}
+          </>
+        )}
       </div>
 
       <input
