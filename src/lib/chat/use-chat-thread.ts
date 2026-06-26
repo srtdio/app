@@ -11,6 +11,8 @@ import {
   appendMessage,
   echoMessage,
   loadHistory,
+  markDelivered,
+  markReadUpTo,
   sendText,
   subscribeIncoming,
   type ChannelTarget,
@@ -84,6 +86,8 @@ export function useChatThread(params: {
       target,
       currentUserId,
       onMessage: (message) => setMessages((prev) => appendMessage(prev, message)),
+      onDelivered: (ackedId) => setMessages((prev) => markDelivered(prev, ackedId)),
+      onConversationRead: (readTimeMs) => setMessages((prev) => markReadUpTo(prev, readTimeMs)),
     });
 
     return () => {
