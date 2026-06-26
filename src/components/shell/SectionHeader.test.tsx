@@ -74,6 +74,15 @@ describe('SectionHeader', () => {
     expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(1);
   });
 
+  it('renders a custom sort node when the { node } form is provided', () => {
+    const node = <button type="button" aria-label="Consolidated sort" />;
+    const tree = SectionHeader({ sort: { node } });
+    // The provided node renders in the sort position; the declarative SortMenu
+    // is not used for this form.
+    expect(findAll(tree, (el) => ariaLabel(el) === 'Consolidated sort')).toHaveLength(1);
+    expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(0);
+  });
+
   it('renders the primary action button and calls onClick', () => {
     const onClick = vi.fn();
     const tree = SectionHeader({ primaryAction: { label: 'Add', onClick } });

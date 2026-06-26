@@ -238,6 +238,102 @@ describe('filterByWindow', () => {
       filterByWindow(items, 'week', { now, timeZone: 'UTC', weekStartDay: 1 }).map((r) => r.id),
     ).toEqual(['good']);
   });
+
+  describe("'custom' window", () => {
+    const range = { start: '2026-06-15', end: '2026-06-21' };
+
+    it('keeps items within the range, INCLUSIVE of both endpoints', () => {
+      const items = [
+        wrow('before', '2026-06-14T00:00:00Z'), // day before start, excluded
+        wrow('start', '2026-06-15T00:00:00Z'), // start, inclusive
+        wrow('mid', '2026-06-18T00:00:00Z'),
+        wrow('end', '2026-06-21T00:00:00Z'), // end, inclusive
+        wrow('after', '2026-06-22T00:00:00Z'), // day after end, excluded
+        wrow('null', null),
+      ];
+      const out = filterByWindow(items, 'custom', {
+        now,
+        timeZone: 'UTC',
+        weekStartDay: 1,
+        customRange: range,
+      });
+      expect(out.map((r) => r.id)).toEqual(['start', 'mid', 'end']);
+    });
+
+    it('keeps the single day for a one-day range (start === end)', () => {
+      const items = [
+        wrow('day', '2026-06-17T00:00:00Z'),
+        wrow('next', '2026-06-18T00:00:00Z'),
+        wrow('prev', '2026-06-16T00:00:00Z'),
+      ];
+      const out = filterByWindow(items, 'custom', {
+        now,
+        timeZone: 'UTC',
+        weekStartDay: 1,
+        customRange: { start: '2026-06-17', end: '2026-06-17' },
+      });
+      expect(out.map((r) => r.id)).toEqual(['day']);
+    });
+
+    it('returns the list unchanged when customRange is missing', () => {
+      const items = [wrow('a', '2026-06-17T00:00:00Z'), wrow('b', null)];
+      // No customRange key at all.
+      expect(
+        filterByWindow(items, 'custom', { now, timeZone: 'UTC', weekStartDay: 1 }).map((r) => r.id),
+      ).toEqual(['a', 'b']);
+      // Explicit null behaves identically.
+      expect(
+        filterByWindow(items, 'custom', {
+          now,
+          timeZone: 'UTC',
+          weekStartDay: 1,
+          customRange: null,
+        }).map((r) => r.id),
+      ).toEqual(['a', 'b']);
+    });
+
+    it('buckets by the workspace zone, not UTC', () => {
+      // 2026-06-21T20:00Z is 2026-06-21 in UTC but 2026-06-22 in Asia/Kolkata.
+      const item = [wrow('edge', '2026-06-21T20:00:00Z')];
+      // Under UTC the civil date is the inclusive end day: kept.
+      expect(
+        filterByWindow(item, 'custom', {
+          now,
+          timeZone: 'UTC',
+          weekStartDay: 1,
+          customRange: range,
+        }).map((r) => r.id),
+      ).toEqual(['edge']);
+      // Under Asia/Kolkata it rolls to 2026-06-22, one day past the end: dropped.
+      expect(
+        filterByWindow(item, 'custom', {
+          now,
+          timeZone: 'Asia/Kolkata',
+          weekStartDay: 1,
+          customRange: range,
+        }),
+      ).toHaveLength(0);
+    });
+
+    it('never throws for an unparseable target_date or a bad time zone', () => {
+      const items = [wrow('bad', 'not-a-date'), wrow('good', '2026-06-18T00:00:00Z')];
+      expect(() =>
+        filterByWindow(items, 'custom', {
+          now,
+          timeZone: 'Not/AZone',
+          weekStartDay: 1,
+          customRange: range,
+        }),
+      ).not.toThrow();
+      const out = filterByWindow(items, 'custom', {
+        now,
+        timeZone: 'Not/AZone',
+        weekStartDay: 1,
+        customRange: range,
+      });
+      expect(out.map((r) => r.id)).toEqual(['good']);
+    });
+  });
 });
 
 describe('filterByFields (Pipeline search scope)', () => {

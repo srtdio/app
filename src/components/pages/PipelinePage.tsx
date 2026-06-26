@@ -10,7 +10,7 @@ import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
-import { PipelineDateWindow } from '@/components/pages/pipeline/PipelineDateWindow';
+import { PipelineSortControl } from '@/components/pages/pipeline/PipelineSortControl';
 import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
 import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { Toasts } from '@/components/pages/assets/Toasts';
@@ -30,6 +30,11 @@ import {
   type DateWindow,
   type PostSort,
 } from '@/lib/list-sort';
+
+interface DateRange {
+  start: string;
+  end: string;
+}
 import { groupByStage, stageColumns } from '@/lib/post-board';
 import { useWorkspaceMembers } from '@/components/chat/use-workspace-members';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
@@ -50,6 +55,12 @@ interface PipelineHeaderProps {
   onSearchChange: (value: string) => void;
   sort: PostSort;
   onSortChange: (value: PostSort) => void;
+  /** Target-date window state, folded into the consolidated sort control. */
+  dateWindow: DateWindow;
+  onDateWindowChange: (value: DateWindow) => void;
+  customRange: DateRange | null;
+  onCustomRangeChange: (range: DateRange | null) => void;
+  weekStartDay: number;
   stage: string;
   onStageChange: (key: string) => void;
   /** Per-tab post counts keyed by tab ('all' plus each Stage), shown as badges. */
@@ -76,7 +87,19 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
   return (
     <SectionHeader<PostSort>
       search={{ value: props.search, onChange: props.onSearchChange, placeholder: 'Search posts' }}
-      sort={{ options: POST_SORT_OPTIONS, value: props.sort, onChange: props.onSortChange }}
+      sort={{
+        node: (
+          <PipelineSortControl
+            order={props.sort}
+            onOrderChange={props.onSortChange}
+            dateWindow={props.dateWindow}
+            onDateWindowChange={props.onDateWindowChange}
+            customRange={props.customRange}
+            onCustomRangeChange={props.onCustomRangeChange}
+            weekStartDay={props.weekStartDay}
+          />
+        ),
+      }}
       primaryAction={{
         node: (
           <Button
@@ -232,6 +255,9 @@ export function PipelinePage() {
   // Target-date window: not persisted, resets to 'any' on load (the global
   // `window` is used below for addEventListener, so this is named dateWindow).
   const [dateWindow, setDateWindow] = useState<DateWindow>(DATE_WINDOW_DEFAULT);
+  // The custom date range for the 'custom' window; in-memory only, defaults to
+  // null (no range yet picked, so filterByWindow passes the list through).
+  const [customRange, setCustomRange] = useState<DateRange | null>(null);
   // The active workspace's civil-date context for the window filter; the helper
   // re-validates the zone, so a bad stored value is still safe.
   const activeWorkspace = workspaces.find((w) => w.id === workspaceId);
@@ -309,11 +335,11 @@ export function PipelinePage() {
         filterByWindow(
           filterByFields(posts, search, (post) => [post.title, post.caption, post.platform]),
           dateWindow,
-          { now: new Date(), timeZone, weekStartDay },
+          { now: new Date(), timeZone, weekStartDay, customRange },
         ),
         activeSort,
       ),
-    [posts, search, dateWindow, activeSort, timeZone, weekStartDay],
+    [posts, search, dateWindow, customRange, activeSort, timeZone, weekStartDay],
   );
   const grouped = useMemo(() => groupByStage(sorted, STAGES), [sorted]);
 
@@ -401,18 +427,15 @@ export function PipelinePage() {
         onSearchChange: setSearch,
         sort: activeSort,
         onSortChange: setSort,
+        dateWindow,
+        onDateWindowChange: setDateWindow,
+        customRange,
+        onCustomRangeChange: setCustomRange,
+        weekStartDay,
         stage,
         onStageChange: setStage,
         counts,
       })}
-
-      {/* Target-date window filter: renders on BOTH breakpoints directly under the
-          stage chip bar (above the desktop kanban and the mobile feed), left-
-          aligned and compact, sharing the count row's horizontal padding. It feeds
-          the single `sorted` derivation, so it narrows every surface at once. */}
-      <div className="px-4 md:px-6 pt-3">
-        <PipelineDateWindow value={dateWindow} onChange={setDateWindow} />
-      </div>
 
       {/* Honest counter: the FILTERED total (counts.all, summed from the same
           grouped list the board/feed render), so it tracks the active search
