@@ -49,11 +49,30 @@ interface Pending {
 let pendingSeq = 0;
 
 /**
- * Whether a composer keydown should send rather than insert a newline: plain
- * Enter only. Shift+Enter (newline) and Enter mid-IME-composition are excluded.
+ * True when `window.matchMedia('(pointer: coarse)')` matches, i.e. the primary
+ * pointer is coarse (touch). Guarded so it returns false when `window` or
+ * `window.matchMedia` is unavailable (SSR / non-DOM test environments).
  */
-export function isSendKeydown(key: string, shiftKey: boolean, isComposing: boolean): boolean {
-  return key === 'Enter' && !shiftKey && !isComposing;
+export function isCoarsePointer(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
+/**
+ * Whether a composer keydown should send rather than insert a newline: plain
+ * Enter only. Shift+Enter (newline) and Enter mid-IME-composition are excluded,
+ * and a coarse (touch-primary) pointer never sends on Enter so phones and
+ * touch-only tablets keep the newline and tap Send instead.
+ */
+export function isSendKeydown(input: {
+  key: string;
+  shiftKey: boolean;
+  isComposing: boolean;
+  coarsePointer: boolean;
+}): boolean {
+  return (
+    input.key === 'Enter' && !input.shiftKey && !input.isComposing && !input.coarsePointer
+  );
 }
 
 function completedAttachments(pending: readonly Pending[]): MessageAttachment[] {
@@ -152,10 +171,19 @@ export function Composer(props: ComposerProps): ReactElement {
     setSharedPosts((prev) => togglePost(prev, post));
   }
 
-  // Enter sends; Shift+Enter and IME composition keep the default newline. Route
-  // through the form's submit so the Send button's exact handler and guard run.
+  // Enter sends on desktop; Shift+Enter, IME composition, and touch-primary
+  // devices keep the default newline. Route through the form's submit so the
+  // Send button's exact handler and guard run.
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (!isSendKeydown(event.key, event.shiftKey, event.nativeEvent.isComposing)) return;
+    if (
+      !isSendKeydown({
+        key: event.key,
+        shiftKey: event.shiftKey,
+        isComposing: event.nativeEvent.isComposing,
+        coarsePointer: isCoarsePointer(),
+      })
+    )
+      return;
     event.preventDefault();
     formRef.current?.requestSubmit();
   }
