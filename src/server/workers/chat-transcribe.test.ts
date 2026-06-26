@@ -83,7 +83,10 @@ describe('chat-transcribe worker.fetch', () => {
 
   it('returns 401 for an invalid token', async () => {
     const ai = aiReturning('should not run');
-    const res = await worker.fetch(audioRequest('not-a-real-jwt', new Uint8Array([9])), makeEnv(ai));
+    const res = await worker.fetch(
+      audioRequest('not-a-real-jwt', new Uint8Array([9])),
+      makeEnv(ai),
+    );
     expect(res.status).toBe(401);
     const body = (await res.json()) as { ok: boolean };
     expect(body.ok).toBe(false);
@@ -113,7 +116,10 @@ describe('chat-transcribe worker.fetch', () => {
 
   it('returns 405 for an unsupported verb', async () => {
     const ai = aiReturning('should not run');
-    const res = await worker.fetch(new Request('https://worker.test/', { method: 'GET' }), makeEnv(ai));
+    const res = await worker.fetch(
+      new Request('https://worker.test/', { method: 'GET' }),
+      makeEnv(ai),
+    );
     expect(res.status).toBe(405);
     expect(ai.run).not.toHaveBeenCalled();
   });

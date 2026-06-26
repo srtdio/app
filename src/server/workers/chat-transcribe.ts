@@ -149,11 +149,7 @@ function json(status: number, body: unknown, traceId: string, acao: string | nul
   return new Response(JSON.stringify(body), { status, headers });
 }
 
-function fail(
-  code: ChatTranscribeResponseCode,
-  traceId: string,
-  acao: string | null,
-): Response {
+function fail(code: ChatTranscribeResponseCode, traceId: string, acao: string | null): Response {
   return json(STATUS_BY_CODE[code], { ok: false, code }, traceId, acao);
 }
 
