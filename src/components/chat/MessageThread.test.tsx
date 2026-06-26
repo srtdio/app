@@ -44,17 +44,19 @@ function makeMessage(over: Partial<ThreadMessage>): ThreadMessage {
   };
 }
 
-function renderBubble(message: ThreadMessage): ReactElement {
+function renderBubble(
+  message: ThreadMessage,
+  opts?: { isGroup?: boolean; head?: boolean },
+): ReactElement {
   return MessageBubble({
     message,
     profiles: PROFILES,
     cache,
     presignEnabled: false,
     showTicks: false,
-    pickerOpen: false,
-    onTogglePicker: () => {},
-    onReact: () => {},
-    onReply: () => {},
+    isGroup: opts?.isGroup ?? false,
+    head: opts?.head ?? true,
+    onBadgeClick: () => {},
   });
 }
 
@@ -98,11 +100,21 @@ describe('MessageBubble WhatsApp-style layout', () => {
     expect(allText(root)).not.toContain('You');
   });
 
-  it('renders peer messages left-aligned with an avatar and the sender name', () => {
-    const root = renderBubble(makeMessage({ mine: false }));
-    expect(rootClass(root)).toContain('flex-row');
-    expect(rootClass(root)).not.toContain('flex-row-reverse');
+  it('renders a DM peer message with no avatar and no sender name', () => {
+    const root = renderBubble(makeMessage({ mine: false }), { isGroup: false });
+    expect(hasAvatar(root)).toBe(false);
+    expect(allText(root)).not.toContain('Alice');
+  });
+
+  it('renders a group run head with the avatar and sender name', () => {
+    const root = renderBubble(makeMessage({ mine: false }), { isGroup: true, head: true });
     expect(hasAvatar(root)).toBe(true);
     expect(allText(root)).toContain('Alice');
+  });
+
+  it('tucks a group non-head message with no avatar and no sender name', () => {
+    const root = renderBubble(makeMessage({ mine: false }), { isGroup: true, head: false });
+    expect(hasAvatar(root)).toBe(false);
+    expect(allText(root)).not.toContain('Alice');
   });
 });

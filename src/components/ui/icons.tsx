@@ -321,6 +321,15 @@ export function IconMore(props: IconProps) {
   );
 }
 
+export function IconReply(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9 7L4 12l5 5" />
+      <path d="M4 12h11a5 5 0 0 1 5 5v1" />
+    </Svg>
+  );
+}
+
 export function IconImagePlus(props: IconProps) {
   return (
     <Svg {...props}>

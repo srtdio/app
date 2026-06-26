@@ -221,6 +221,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
           {selected !== null ? (
             <MessageThread
               title={selected.title}
+              isGroup={isGroup}
               profiles={profiles}
               messages={thread.messages}
               loading={thread.loading}
