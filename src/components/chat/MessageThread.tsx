@@ -198,9 +198,7 @@ export function MessageBubble(props: {
   const name = senderName(message, profiles);
   return (
     <li className={cn('flex items-start gap-2 px-4 py-2', mine ? 'flex-row-reverse' : 'flex-row')}>
-      {mine ? null : (
-        <Avatar name={name} {...senderAvatarProps(message, profiles)} size="md" />
-      )}
+      {mine ? null : <Avatar name={name} {...senderAvatarProps(message, profiles)} size="md" />}
       <div className={cn('flex min-w-0 max-w-[75%] flex-col gap-1', mine && 'items-end')}>
         {mine ? null : <span className="text-sm font-medium text-fg">{name}</span>}
         <div
