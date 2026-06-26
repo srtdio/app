@@ -8,11 +8,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createTextMessage } from '@/lib/chat/message-factory';
 import {
+  addMessageReaction,
   appendMessage,
+  applyReactionChange,
   echoMessage,
+  fetchReactions,
   loadHistory,
   markDelivered,
   markReadUpTo,
+  mergeHistoryReactions,
+  removeMessageReaction,
   sendText,
   subscribeIncoming,
   type ChannelTarget,
@@ -21,6 +26,7 @@ import {
 } from '@/lib/chat/thread';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import type { ChatConnection } from '@/lib/chat/types';
+import { logger } from '@/lib/logger';
 
 export interface UseChatThread {
   messages: ThreadMessage[];
@@ -32,6 +38,8 @@ export interface UseChatThread {
     attachments?: readonly MessageAttachment[],
     sharedPostIds?: readonly string[],
   ) => Promise<void>;
+  /** Add or remove the current user's reaction; live state arrives via the event. */
+  toggleReaction: (messageId: string, emoji: string, currentlyMine: boolean) => void;
 }
 
 /** The Foundation client is the real connection; widen it to the messaging surface. */
@@ -71,8 +79,18 @@ export function useChatThread(params: {
     setMessages([]);
 
     void loadHistory({ connection, target, currentUserId })
-      .then((history) => {
-        if (!cancelled) setMessages(history);
+      .then(async (history) => {
+        if (cancelled) return;
+        setMessages(history);
+        // Reactions are not carried on history messages; fetch and merge them in
+        // a follow-up. fetchReactions never throws, so a disabled-reactions
+        // account degrades to no pills without breaking history load.
+        const map = await fetchReactions({
+          connection,
+          target,
+          messageIds: history.map((m) => m.id),
+        });
+        if (!cancelled) setMessages((prev) => mergeHistoryReactions(prev, map));
       })
       .catch(() => {
         if (!cancelled) setMessages([]);
@@ -88,6 +106,8 @@ export function useChatThread(params: {
       onMessage: (message) => setMessages((prev) => appendMessage(prev, message)),
       onDelivered: (ackedId) => setMessages((prev) => markDelivered(prev, ackedId)),
       onConversationRead: (readTimeMs) => setMessages((prev) => markReadUpTo(prev, readTimeMs)),
+      onReaction: (messageId, reactions) =>
+        setMessages((prev) => applyReactionChange(prev, messageId, reactions)),
     });
 
     return () => {
@@ -142,5 +162,19 @@ export function useChatThread(params: {
     [currentUserId, onOwnMessage],
   );
 
-  return { messages, loading, sending, send };
+  const toggleReaction = useCallback(
+    (messageId: string, emoji: string, currentlyMine: boolean): void => {
+      if (!client) return;
+      const conn = asThreadConnection(client);
+      // State updates arrive via the onReaction event; never optimistically mutate.
+      void (
+        currentlyMine
+          ? removeMessageReaction({ connection: conn, messageId, emoji })
+          : addMessageReaction({ connection: conn, messageId, emoji })
+      ).catch((error: unknown) => logger.warn('chat reaction failed', { error: String(error) }));
+    },
+    [client],
+  );
+
+  return { messages, loading, sending, send, toggleReaction };
 }

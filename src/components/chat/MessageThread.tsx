@@ -1,7 +1,7 @@
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconChat, IconChevronRight, IconSettings } from '@/components/ui/icons';
+import { IconChat, IconChevronRight, IconMore, IconSettings } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { MessageStatus, ThreadMessage } from '@/lib/chat/thread';
@@ -11,6 +11,9 @@ import type { PresignCache } from '@/lib/asset-presign';
 import { Composer } from '@/components/chat/Composer';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { SharedPostCards } from '@/components/chat/PostCard';
+
+/** Quick-react row offered when a message's actions trigger is tapped. */
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
 
 interface MessageThreadProps {
   title: string;
@@ -38,6 +41,8 @@ interface MessageThreadProps {
   presence?: { online: boolean; lastTimeMs: number | null; available: boolean };
   /** True only for DM threads; gates delivery/read ticks on own bubbles. */
   showTicks?: boolean;
+  /** Add or remove the current user's reaction on a message. */
+  onToggleReaction?: (messageId: string, emoji: string, currentlyMine: boolean) => void;
 }
 
 /**
@@ -163,8 +168,20 @@ function MessageBubble(props: {
   cache: PresignCache;
   presignEnabled: boolean;
   showTicks: boolean;
+  pickerOpen: boolean;
+  onTogglePicker: () => void;
+  onReact: (emoji: string, currentlyMine: boolean) => void;
 }): ReactElement {
-  const { message, profiles, cache, presignEnabled, showTicks } = props;
+  const {
+    message,
+    profiles,
+    cache,
+    presignEnabled,
+    showTicks,
+    pickerOpen,
+    onTogglePicker,
+    onReact,
+  } = props;
   const name = senderName(message, profiles);
   return (
     <li className="flex gap-3 px-4 py-2">
@@ -174,6 +191,13 @@ function MessageBubble(props: {
           <span className="text-sm font-medium text-fg">{name}</span>
           <span className="text-xs text-fg-3">{formatTime(message.time)}</span>
           {showTicks && message.mine ? <MessageTicks status={message.status} /> : null}
+          <IconButton
+            label="Message actions"
+            onClick={onTogglePicker}
+            className="ml-auto h-8 w-8 text-fg-3"
+          >
+            <IconMore size={16} />
+          </IconButton>
         </div>
         {message.body.trim() !== '' ? (
           <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
@@ -186,18 +210,55 @@ function MessageBubble(props: {
         {/* PR6 'post' extension point: shared posts resolve + render here,
             separate from the attachment branch above. */}
         <SharedPostCards postIds={message.sharedPostIds} />
+        {message.reactions.length > 0 ? (
+          <div className="mt-1 flex flex-wrap gap-1 transition-opacity duration-150">
+            {message.reactions.map((pill) => (
+              <button
+                key={pill.emoji}
+                type="button"
+                onClick={() => onReact(pill.emoji, pill.mine)}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-opacity',
+                  pill.mine ? 'border-accent bg-accent-soft' : 'border-border bg-panel',
+                )}
+              >
+                <span aria-hidden="true">{pill.emoji}</span>
+                <span className="text-fg-3">{pill.count}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {pickerOpen ? (
+          <div className="mt-1 flex flex-wrap gap-1 transition-opacity duration-150">
+            {QUICK_REACTIONS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                aria-label={`React ${emoji}`}
+                onClick={() =>
+                  onReact(emoji, message.reactions.find((r) => r.emoji === emoji)?.mine ?? false)
+                }
+                className="inline-flex h-11 w-11 items-center justify-center rounded-md text-lg hover:bg-panel-2"
+              >
+                <span aria-hidden="true">{emoji}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </li>
   );
 }
 
 function ThreadBody(
-  props: Pick<MessageThreadProps, 'messages' | 'loading' | 'profiles'> & {
+  props: Pick<MessageThreadProps, 'messages' | 'loading' | 'profiles' | 'onToggleReaction'> & {
     cache: PresignCache;
     presignEnabled: boolean;
     showTicks: boolean;
   },
 ): ReactElement {
+  // One open reaction picker at a time across the whole thread.
+  const [activeReactionMessageId, setActiveReactionMessageId] = useState<string | null>(null);
   if (props.loading) {
     return <div className="flex-1 px-4 py-6 text-sm text-fg-3">Loading messages</div>;
   }
@@ -219,6 +280,14 @@ function ThreadBody(
           cache={props.cache}
           presignEnabled={props.presignEnabled}
           showTicks={props.showTicks}
+          pickerOpen={activeReactionMessageId === message.id}
+          onTogglePicker={() =>
+            setActiveReactionMessageId((cur) => (cur === message.id ? null : message.id))
+          }
+          onReact={(emoji, mine) => {
+            props.onToggleReaction?.(message.id, emoji, mine);
+            setActiveReactionMessageId(null);
+          }}
         />
       ))}
     </ul>
@@ -265,6 +334,9 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         cache={presignCache}
         presignEnabled={presignEnabled}
         showTicks={props.showTicks ?? false}
+        {...(props.onToggleReaction !== undefined
+          ? { onToggleReaction: props.onToggleReaction }
+          : {})}
       />
       <TypingIndicator ids={props.typingUserIds} profiles={props.profiles} />
       <Composer
