@@ -1,7 +1,9 @@
-import { useState, type ReactElement } from 'react';
+import { useRef, useState, type MouseEvent, type Ref, type ReactElement } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconChat, IconChevronRight, IconMore, IconSettings } from '@/components/ui/icons';
+import { IconChat, IconChevronRight, IconSettings } from '@/components/ui/icons';
+import { useLongPress, type LongPressHandlers } from '@/components/ui';
+import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { MessageStatus, ThreadMessage } from '@/lib/chat/thread';
@@ -11,9 +13,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import { Composer } from '@/components/chat/Composer';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { SharedPostCards } from '@/components/chat/PostCard';
-
-/** Quick-react row offered when a message's actions trigger is tapped. */
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+import { MessageActionMenu } from '@/components/chat/MessageActionMenu';
 
 interface MessageThreadProps {
   title: string;
@@ -34,6 +34,8 @@ interface MessageThreadProps {
   onBack?: () => void;
   /** Present for group channels only; opens the group management panel. */
   onOpenInfo?: () => void;
+  /** True for group channels; drives per-run avatars and sender names. Absent = DM. */
+  isGroup?: boolean;
   /** Sorted user ids currently typing (peers only); drives the indicator row. */
   typingUserIds: string[];
   /** Forwarded to the composer so each keystroke broadcasts a typing signal. */
@@ -164,13 +166,14 @@ function MessageTicks({ status }: { status: MessageStatus }): ReactElement {
 }
 
 /**
- * One message row in the WhatsApp-style thread. Own messages
- * (`message.mine`) right-align with an accent-tinted bubble, no avatar and no
- * sender name; peer messages left-align with the avatar and sender name above
- * the bubble. The per-message actions trigger sits on the OUTER edge of the
- * bubble (peer: right, own: left) so it is reachable on either alignment, and
- * the tighter corner mirrors per side. All colours are design tokens, so light
- * and dark stay at parity; exported for the layout assertions in the unit test.
+ * One message row in the WhatsApp-style thread. Own messages (`message.mine`)
+ * right-align with an accent-tinted bubble, no avatar and no sender name. Peer
+ * messages left-align; in a group the run head carries the avatar + sender name
+ * above the bubble, while tucked replies reserve an aligned gutter. The
+ * timestamp (and own-DM ticks) sit inside the bubble, and reactions hang as one
+ * small badge over the tail edge. Pure and hook-free: long-press wiring is owned
+ * by the MessageRow wrapper and passed in via `press`, so the unit test can call
+ * this directly. All colours are design tokens, so light and dark stay at parity.
  */
 export function MessageBubble(props: {
   message: ThreadMessage;
@@ -178,32 +181,60 @@ export function MessageBubble(props: {
   cache: PresignCache;
   presignEnabled: boolean;
   showTicks: boolean;
-  pickerOpen: boolean;
-  onTogglePicker: () => void;
-  onReact: (emoji: string, currentlyMine: boolean) => void;
-  onReply: () => void;
+  isGroup: boolean;
+  head: boolean;
+  onBadgeClick: () => void;
+  bubbleRef?: Ref<HTMLDivElement>;
+  press?: {
+    handlers: LongPressHandlers;
+    onContextMenu: (event: MouseEvent) => void;
+    consumeClick: () => boolean;
+  };
 }): ReactElement {
-  const {
-    message,
-    profiles,
-    cache,
-    presignEnabled,
-    showTicks,
-    pickerOpen,
-    onTogglePicker,
-    onReact,
-    onReply,
-  } = props;
+  const { message, profiles, cache, presignEnabled, showTicks, isGroup, head, onBadgeClick } =
+    props;
+  const { bubbleRef, press } = props;
   const mine = message.mine;
   const name = senderName(message, profiles);
+  const showMeta = isGroup && !mine && head;
+  const gutter = isGroup && !mine && !head;
+  const hasReactions = message.reactions.length > 0;
+  const textOnly =
+    message.body.trim() !== '' &&
+    message.attachments.length === 0 &&
+    message.sharedPostIds.length === 0;
+  const totalReactions = message.reactions.reduce((sum, r) => sum + r.count, 0);
+  const distinctEmojis = message.reactions.map((r) => r.emoji).join('');
+  const time = (
+    <>
+      <span>{formatTime(message.time)}</span>
+      {showTicks && mine ? <MessageTicks status={message.status} /> : null}
+    </>
+  );
   return (
-    <li className={cn('flex items-start gap-2 px-4 py-2', mine ? 'flex-row-reverse' : 'flex-row')}>
-      {mine ? null : <Avatar name={name} {...senderAvatarProps(message, profiles)} size="md" />}
+    <li
+      className={cn(
+        'flex items-start gap-2 px-4 py-2',
+        mine ? 'flex-row-reverse' : 'flex-row',
+        hasReactions && 'mb-3',
+      )}
+    >
+      {showMeta ? <Avatar name={name} {...senderAvatarProps(message, profiles)} size="md" /> : null}
+      {gutter ? <span className="w-[26px] shrink-0" aria-hidden="true" /> : null}
       <div className={cn('flex min-w-0 max-w-[75%] flex-col gap-1', mine && 'items-end')}>
-        {mine ? null : <span className="text-sm font-medium text-fg">{name}</span>}
+        {showMeta ? <span className="text-sm font-medium text-fg">{name}</span> : null}
         <div
+          ref={bubbleRef}
+          {...press?.handlers}
+          onContextMenu={press?.onContextMenu}
+          onClickCapture={(e) => {
+            if (press?.consumeClick()) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
           className={cn(
-            'rounded-2xl border px-3 py-2',
+            'relative select-none [-webkit-touch-callout:none] rounded-2xl border px-3 py-2',
             mine
               ? 'rounded-br-sm border-accent-line bg-accent-soft'
               : 'rounded-bl-sm border-border bg-panel-2',
@@ -221,88 +252,104 @@ export function MessageBubble(props: {
               </span>
             </div>
           ) : null}
-          {message.body.trim() !== '' ? (
-            <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
-          ) : null}
-          <MessageAttachments
-            attachments={message.attachments}
-            cache={cache}
-            presignEnabled={presignEnabled}
-          />
-          {/* PR6 'post' extension point: shared posts resolve + render here,
-              separate from the attachment branch above. */}
-          <SharedPostCards postIds={message.sharedPostIds} />
-        </div>
-        <div
-          className={cn(
-            'flex items-center gap-2 text-xs text-fg-3',
-            mine ? 'justify-end' : 'justify-start',
+          {textOnly ? (
+            <>
+              <p className="whitespace-pre-wrap break-words text-sm text-fg-2">
+                {message.body}
+                <span
+                  className={cn('inline-block', mine ? 'w-[74px]' : 'w-[52px]')}
+                  aria-hidden="true"
+                />
+              </p>
+              <span className="absolute bottom-1.5 right-2.5 inline-flex items-center gap-1 text-[10px] text-fg-3">
+                {time}
+              </span>
+            </>
+          ) : (
+            <>
+              {message.body.trim() !== '' ? (
+                <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
+              ) : null}
+              <MessageAttachments
+                attachments={message.attachments}
+                cache={cache}
+                presignEnabled={presignEnabled}
+              />
+              {/* PR6 'post' extension point: shared posts resolve + render here,
+                  separate from the attachment branch above. */}
+              <SharedPostCards postIds={message.sharedPostIds} />
+              <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-3">
+                {time}
+              </div>
+            </>
           )}
-        >
-          <span>{formatTime(message.time)}</span>
-          {showTicks && mine ? <MessageTicks status={message.status} /> : null}
-        </div>
-        {message.reactions.length > 0 ? (
-          <div
-            className={cn(
-              'flex flex-wrap gap-1 transition-opacity duration-150',
-              mine && 'justify-end',
-            )}
-          >
-            {message.reactions.map((pill) => (
-              <button
-                key={pill.emoji}
-                type="button"
-                onClick={() => onReact(pill.emoji, pill.mine)}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-opacity',
-                  pill.mine ? 'border-accent bg-accent-soft' : 'border-border bg-panel',
-                )}
-              >
-                <span aria-hidden="true">{pill.emoji}</span>
-                <span className="text-fg-3">{pill.count}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {pickerOpen ? (
-          <div
-            className={cn(
-              'flex flex-wrap gap-1 transition-opacity duration-150',
-              mine && 'justify-end',
-            )}
-          >
-            {QUICK_REACTIONS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                aria-label={`React ${emoji}`}
-                onClick={() =>
-                  onReact(emoji, message.reactions.find((r) => r.emoji === emoji)?.mine ?? false)
-                }
-                className="inline-flex h-11 w-11 items-center justify-center rounded-md text-lg hover:bg-panel-2"
-              >
-                <span aria-hidden="true">{emoji}</span>
-              </button>
-            ))}
+          {hasReactions ? (
             <button
               type="button"
-              onClick={onReply}
-              className="inline-flex h-11 items-center rounded-md px-3 text-sm text-fg-2 hover:bg-panel-2"
+              onClick={onBadgeClick}
+              className={cn(
+                'absolute -bottom-2.5 inline-flex items-center gap-0.5 rounded-full border border-border bg-panel px-1.5 py-0.5 text-xs shadow-sm',
+                mine ? 'right-2' : 'left-2',
+              )}
             >
-              Reply
+              <span aria-hidden="true">{distinctEmojis}</span>
+              {totalReactions > 1 ? (
+                <span className="text-[11px] text-fg-3">{totalReactions}</span>
+              ) : null}
             </button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
-      <IconButton
-        label="Message actions"
-        onClick={onTogglePicker}
-        className="h-11 w-11 shrink-0 text-fg-3"
-      >
-        <IconMore size={16} />
-      </IconButton>
     </li>
+  );
+}
+
+/** First in a run, a switch between own/peer, or a different peer sender starts a head. */
+function isHead(prev: ThreadMessage | undefined, m: ThreadMessage): boolean {
+  if (prev === undefined) return true;
+  if (prev.mine !== m.mine) return true;
+  if (!prev.mine && !m.mine && prev.senderUserId !== m.senderUserId) return true;
+  return false;
+}
+
+/**
+ * Thin wrapper that owns the long-press / right-click wiring for one bubble and
+ * keeps MessageBubble pure. The bubble's rect is captured on open so the floating
+ * action menu can anchor to it.
+ */
+function MessageRow(props: {
+  message: ThreadMessage;
+  profiles: Map<string, ChatProfile>;
+  cache: PresignCache;
+  presignEnabled: boolean;
+  showTicks: boolean;
+  isGroup: boolean;
+  head: boolean;
+  onOpen: (message: ThreadMessage, rect: DOMRect | null) => void;
+}): ReactElement {
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const { handlers, consumeClickSuppression } = useLongPress(() =>
+    props.onOpen(props.message, bubbleRef.current?.getBoundingClientRect() ?? null),
+  );
+  const onContextMenu = (e: MouseEvent): void => {
+    e.preventDefault();
+    props.onOpen(props.message, bubbleRef.current?.getBoundingClientRect() ?? null);
+  };
+  return (
+    <MessageBubble
+      message={props.message}
+      profiles={props.profiles}
+      cache={props.cache}
+      presignEnabled={props.presignEnabled}
+      showTicks={props.showTicks}
+      isGroup={props.isGroup}
+      head={props.head}
+      bubbleRef={bubbleRef}
+      press={{ handlers, onContextMenu, consumeClick: consumeClickSuppression }}
+      onBadgeClick={() =>
+        props.onOpen(props.message, bubbleRef.current?.getBoundingClientRect() ?? null)
+      }
+    />
   );
 }
 
@@ -311,11 +358,12 @@ function ThreadBody(
     cache: PresignCache;
     presignEnabled: boolean;
     showTicks: boolean;
+    isGroup: boolean;
     onReply: (message: ThreadMessage) => void;
   },
 ): ReactElement {
-  // One open reaction picker at a time across the whole thread.
-  const [activeReactionMessageId, setActiveReactionMessageId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ message: ThreadMessage; rect: DOMRect | null } | null>(null);
+  const toast = useToast();
   if (props.loading) {
     return <div className="flex-1 px-4 py-6 text-sm text-fg-3">Loading messages</div>;
   }
@@ -328,30 +376,48 @@ function ThreadBody(
     );
   }
   return (
-    <ul className="flex-1 overflow-y-auto py-2">
-      {props.messages.map((message) => (
-        <MessageBubble
-          key={message.id}
-          message={message}
-          profiles={props.profiles}
-          cache={props.cache}
-          presignEnabled={props.presignEnabled}
-          showTicks={props.showTicks}
-          pickerOpen={activeReactionMessageId === message.id}
-          onTogglePicker={() =>
-            setActiveReactionMessageId((cur) => (cur === message.id ? null : message.id))
+    <>
+      <ul className="flex-1 overflow-y-auto py-2">
+        {props.messages.map((message, i) => (
+          <MessageRow
+            key={message.id}
+            message={message}
+            profiles={props.profiles}
+            cache={props.cache}
+            presignEnabled={props.presignEnabled}
+            showTicks={props.showTicks}
+            isGroup={props.isGroup}
+            head={isHead(props.messages[i - 1], message)}
+            onOpen={(m, rect) => setMenu({ message: m, rect })}
+          />
+        ))}
+      </ul>
+      <MessageActionMenu
+        open={menu !== null}
+        onClose={() => setMenu(null)}
+        anchor={menu?.rect ?? null}
+        mine={menu?.message.mine ?? false}
+        currentReaction={menu ? (menu.message.reactions.find((r) => r.mine)?.emoji ?? null) : null}
+        canCopy={menu ? menu.message.body.trim() !== '' : false}
+        onReact={(emoji) => {
+          if (menu)
+            props.onToggleReaction?.(
+              menu.message.id,
+              emoji,
+              menu.message.reactions.find((r) => r.mine)?.emoji === emoji,
+            );
+        }}
+        onReply={() => {
+          if (menu) props.onReply(menu.message);
+        }}
+        onCopy={() => {
+          if (menu) {
+            void navigator.clipboard?.writeText(menu.message.body);
+            toast.show({ title: 'Message copied' });
           }
-          onReact={(emoji, mine) => {
-            props.onToggleReaction?.(message.id, emoji, mine);
-            setActiveReactionMessageId(null);
-          }}
-          onReply={() => {
-            props.onReply(message);
-            setActiveReactionMessageId(null);
-          }}
-        />
-      ))}
-    </ul>
+        }}
+      />
+    </>
   );
 }
 
@@ -415,6 +481,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         cache={presignCache}
         presignEnabled={presignEnabled}
         showTicks={props.showTicks ?? false}
+        isGroup={props.isGroup ?? false}
         onReply={handleReply}
         {...(props.onToggleReaction !== undefined
           ? { onToggleReaction: props.onToggleReaction }
