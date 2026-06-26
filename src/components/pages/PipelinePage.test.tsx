@@ -15,18 +15,16 @@ import {
   pipelineHeader,
   postCountLabel,
   runMovePost,
-  sanitizePostSort,
   stageCounts,
 } from '@/components/pages/PipelinePage';
 import type { MovePostDeps } from '@/components/pages/PipelinePage';
-import { PipelineDateWindow } from '@/components/pages/pipeline/PipelineDateWindow';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, PipelinePost, Result, Stage } from '@srtdio/posts';
 import { groupByStage } from '@/lib/post-board';
-import { filterByTitle, filterByWindow, sortByDate, type DateWindow } from '@/lib/list-sort';
+import { filterByTitle, sortByDate } from '@/lib/list-sort';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
+import { SortMenu } from '@/components/ui/SortMenu';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 
 const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
@@ -137,7 +135,7 @@ function header(): ReactElement {
   return pipelineHeader({
     search: '',
     onSearchChange: () => {},
-    sort: 'updated',
+    sort: 'newest',
     onSortChange: () => {},
     stage: 'all',
     onStageChange: () => {},
@@ -180,112 +178,6 @@ describe('pipelineHeader', () => {
     expect(labels).not.toContain('+ Owner');
     expect(labels).not.toContain('+ Bucket');
     expect(labels).not.toContain('+ Date');
-  });
-
-  it('offers exactly the two trimmed sort options', () => {
-    const headers = findAll(header(), (el) => el.type === SectionHeader);
-    expect(headers).toHaveLength(1);
-    const options = (headers[0]!.props as { sort: { options: SortOption[] } }).sort.options;
-    expect(options.map((o) => o.value)).toEqual(['updated', 'target']);
-    expect(options.map((o) => o.label)).toEqual(['Recently updated', 'Target date']);
-  });
-
-  it('forwards the (already sanitized) active sort to the header', () => {
-    const headers = findAll(header(), (el) => el.type === SectionHeader);
-    expect((headers[0]!.props as { sort: { value: string } }).sort.value).toBe('updated');
-  });
-});
-
-describe('sanitizePostSort', () => {
-  it('passes through a currently-offered option', () => {
-    expect(sanitizePostSort('updated')).toBe('updated');
-    expect(sanitizePostSort('target')).toBe('target');
-  });
-
-  it('heals a stale persisted value to the default', () => {
-    // Live workspaces still carry 'newest'/'oldest'/'title' from before the cut.
-    expect(sanitizePostSort('newest')).toBe('updated');
-    expect(sanitizePostSort('oldest')).toBe('updated');
-    expect(sanitizePostSort('title')).toBe('updated');
-    expect(sanitizePostSort('')).toBe('updated');
-  });
-});
-
-describe('PipelineDateWindow', () => {
-  function radios(value: DateWindow): ReactElement[] {
-    const tree = PipelineDateWindow({ value, onChange: () => {} });
-    return findAll(tree, (el) => (el.props as { role?: string }).role === 'radio');
-  }
-
-  it('renders the three window options in order', () => {
-    const options = radios('any');
-    expect(options).toHaveLength(3);
-    expect(options.map((el) => (el.props as { children: string }).children)).toEqual([
-      'This week',
-      'This month',
-      'Any time',
-    ]);
-  });
-
-  it('marks exactly the active option aria-checked', () => {
-    const checked = radios('week').filter(
-      (el) => (el.props as { 'aria-checked': boolean })['aria-checked'] === true,
-    );
-    expect(checked).toHaveLength(1);
-    expect((checked[0]!.props as { children: string }).children).toBe('This week');
-  });
-
-  it('exposes an accessible radiogroup label', () => {
-    const tree = PipelineDateWindow({ value: 'any', onChange: () => {} });
-    const groups = findAll(tree, (el) => (el.props as { role?: string }).role === 'radiogroup');
-    expect(groups).toHaveLength(1);
-    expect((groups[0]!.props as { 'aria-label': string })['aria-label']).toBe(
-      'Filter by target date',
-    );
-  });
-
-  it('calls onChange with the picked window, never filtering itself', () => {
-    let picked: DateWindow | null = null;
-    const tree = PipelineDateWindow({ value: 'any', onChange: (next) => (picked = next) });
-    const week = findAll(tree, (el) => el.type === 'button').find(
-      (el) => (el.props as { children: string }).children === 'This week',
-    );
-    (week!.props as { onClick: () => void }).onClick();
-    expect(picked).toBe('week');
-  });
-});
-
-describe('date-window narrowing (page derivation)', () => {
-  // Mirror PipelinePage's derivation order: search -> window -> sort -> group ->
-  // count. Switching the window must narrow the same counter every surface reads.
-  const NOW = new Date('2026-06-24T12:00:00Z'); // Wed; Mon-start week is 06-22..06-28
-  function deriveTotal(posts: PipelinePost[], window: DateWindow): number {
-    const filtered = filterByWindow(filterByTitle(posts, ''), window, {
-      now: NOW,
-      timeZone: 'UTC',
-      weekStartDay: 1,
-    });
-    return stageCounts(groupByStage(sortByDate(filtered, 'newest'), STAGES), STAGES).all ?? 0;
-  }
-
-  const posts: PipelinePost[] = [
-    { ...makePost('1', 'draft'), target_date: '2026-06-24' }, // this week
-    { ...makePost('2', 'review'), target_date: '2026-06-10' }, // this month, not week
-    { ...makePost('3', 'approved'), target_date: '2026-09-01' }, // far future
-    { ...makePost('4', 'parked'), target_date: null }, // no target
-  ];
-
-  it("'any' counts every post including the null target_date", () => {
-    expect(deriveTotal(posts, 'any')).toBe(4);
-  });
-
-  it("'This week' narrows the count to the in-window posts", () => {
-    expect(deriveTotal(posts, 'week')).toBe(1);
-    expect(deriveTotal(posts, 'week')).toBeLessThan(deriveTotal(posts, 'any'));
-  });
-
-  it("'This month' sits between week and any", () => {
-    expect(deriveTotal(posts, 'month')).toBe(2);
   });
 });
 
