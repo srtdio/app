@@ -34,6 +34,23 @@ interface MessageThreadProps {
   typingUserIds: string[];
   /** Forwarded to the composer so each keystroke broadcasts a typing signal. */
   onTyping?: () => void;
+  /** DM peer presence; absent for groups. Renders a header status line when available. */
+  presence?: { online: boolean; lastTimeMs: number | null; available: boolean };
+}
+
+/**
+ * Coarse "last seen" label from a timestamp, bucketed minutes/hours/days. Null
+ * (no known last-seen) reads as a plain 'Offline'. Computed at render against a
+ * supplied now so there is no timer or interval driving the header.
+ */
+export function lastSeenLabel(lastTimeMs: number | null, nowMs: number): string {
+  if (lastTimeMs === null) return 'Offline';
+  const mins = Math.floor((nowMs - lastTimeMs) / 60000);
+  if (mins < 1) return 'last seen just now';
+  if (mins < 60) return `last seen ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `last seen ${hours}h ago`;
+  return `last seen ${Math.floor(hours / 24)}d ago`;
 }
 
 /**
@@ -172,14 +189,22 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
             <IconChevronRight size={20} className="rotate-180" />
           </IconButton>
         ) : null}
-        <span
-          className={cn(
-            'min-w-0 flex-1 truncate text-sm font-semibold text-fg',
-            props.onBack === undefined && 'px-2',
-          )}
-        >
-          {props.title}
-        </span>
+        <div className={cn('min-w-0 flex-1', props.onBack === undefined && 'px-2')}>
+          <span className="block truncate text-sm font-semibold text-fg">{props.title}</span>
+          {props.presence !== undefined && props.presence.available ? (
+            <span className="flex items-center gap-1.5 text-xs text-fg-3">
+              <span
+                className={cn(
+                  'h-2 w-2 rounded-full',
+                  props.presence.online ? 'bg-good' : 'bg-fg-3',
+                )}
+              />
+              {props.presence.online
+                ? 'Online'
+                : lastSeenLabel(props.presence.lastTimeMs, Date.now())}
+            </span>
+          ) : null}
+        </div>
         {props.onOpenInfo !== undefined ? (
           <IconButton label="Group info" onClick={props.onOpenInfo}>
             <IconSettings size={20} />
