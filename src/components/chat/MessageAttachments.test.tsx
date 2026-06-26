@@ -8,12 +8,19 @@ import type { MessageAttachment } from '@/lib/chat/attachments';
 // regression that carried the asset id would fail the cache assertions below.
 const IMG_VERSION = '11111111-1111-4111-8111-111111111111';
 const FILE_VERSION = '22222222-2222-4222-8222-222222222222';
+const AUDIO_VERSION = '33333333-3333-4333-8333-333333333333';
 
 const IMAGE: MessageAttachment = { assetId: IMG_VERSION, name: 'photo.png', mime: 'image/png' };
 const FILE: MessageAttachment = {
   assetId: FILE_VERSION,
   name: 'brief.pdf',
   mime: 'application/pdf',
+};
+const AUDIO: MessageAttachment = {
+  assetId: AUDIO_VERSION,
+  name: 'note.webm',
+  mime: 'audio/webm',
+  transcript: 'hello there',
 };
 
 describe('attachmentView render dispatch', () => {
@@ -56,6 +63,37 @@ describe('attachmentView render dispatch', () => {
         failed: false,
       }),
     ).toEqual({ kind: 'file', name: 'brief.pdf', url: 'https://signed/pdf' });
+  });
+
+  it('renders an audio attachment as a voice note with its transcript', () => {
+    expect(
+      attachmentView({
+        attachment: AUDIO,
+        presignEnabled: true,
+        url: 'https://signed/audio',
+        failed: false,
+      }),
+    ).toEqual({
+      kind: 'audio',
+      url: 'https://signed/audio',
+      name: 'note.webm',
+      transcript: 'hello there',
+    });
+  });
+
+  it('keeps the voice note while the presign is still in flight (url null)', () => {
+    expect(
+      attachmentView({ attachment: AUDIO, presignEnabled: true, url: null, failed: false }),
+    ).toEqual({ kind: 'audio', url: null, name: 'note.webm', transcript: 'hello there' });
+  });
+
+  it('falls back to a file chip for audio when presign failed or is disabled', () => {
+    expect(
+      attachmentView({ attachment: AUDIO, presignEnabled: true, url: null, failed: true }),
+    ).toEqual({ kind: 'file', name: 'note.webm', url: null });
+    expect(
+      attachmentView({ attachment: AUDIO, presignEnabled: false, url: null, failed: false }),
+    ).toEqual({ kind: 'file', name: 'note.webm', url: null });
   });
 });
 

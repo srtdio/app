@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { IconFile } from '@/components/ui/icons';
+import { VoiceNote } from '@/components/chat/VoiceNote';
 import { fileExtension } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
 import { classifyAttachment, type MessageAttachment } from '@/lib/chat/attachments';
@@ -90,6 +91,7 @@ function FileChip({ name, url }: { name: string; url: string | null }): ReactEle
 export type AttachmentView =
   | { kind: 'image'; src: string; alt: string }
   | { kind: 'image-pending'; alt: string }
+  | { kind: 'audio'; url: string | null; name: string; transcript: string | undefined }
   | { kind: 'file'; name: string; url: string | null };
 
 export function attachmentView(args: {
@@ -103,6 +105,9 @@ export function attachmentView(args: {
     return url !== null
       ? { kind: 'image', src: url, alt: attachment.name }
       : { kind: 'image-pending', alt: attachment.name };
+  }
+  if (classifyAttachment(attachment.mime) === 'audio' && presignEnabled && !failed) {
+    return { kind: 'audio', url, name: attachment.name, transcript: attachment.transcript };
   }
   return { kind: 'file', name: attachment.name, url };
 }
@@ -149,6 +154,8 @@ function AttachmentItem({
     }
     case 'image-pending':
       return <div className="h-32 w-44 animate-pulse rounded-lg border border-border bg-panel-2" />;
+    case 'audio':
+      return <VoiceNote url={view.url} name={view.name} transcript={view.transcript} />;
     case 'file':
       return <FileChip name={view.name} url={view.url} />;
   }
