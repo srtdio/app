@@ -12,6 +12,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { PresignCache } from '@/lib/asset-presign';
 import { uploadChatAttachment, type ChatAttachmentUpload } from '@/lib/chat/attachments';
+import { transcribeAudio, type TranscribeResult } from '@/lib/chat/transcribe';
 
 export interface ChatAttachments {
   /** Whether the composer can upload (endpoint configured + a workspace selected). */
@@ -22,12 +23,18 @@ export interface ChatAttachments {
   presignCache: PresignCache;
   /** Upload one picked file; never throws (asset-upload Result contract). */
   uploadFile: (file: File) => Promise<ChatAttachmentUpload>;
+  /** Transcribe a recorded voice note; never throws (Result contract). */
+  transcribe: (blob: Blob) => Promise<TranscribeResult>;
+  /** Whether transcription is configured (transcribe endpoint set). */
+  canTranscribe: boolean;
 }
 
 export function useChatAttachments(): ChatAttachments {
   const { workspaceId } = useWorkspace();
   const newTrace = useNewTrace();
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
+  const transcribeEndpoint = env.VITE_CHAT_TRANSCRIBE_URL;
+  const canTranscribe = transcribeEndpoint !== undefined && transcribeEndpoint !== '';
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined && env.VITE_ASSET_READ_URL !== '';
 
   const presignCache = useMemo(
@@ -64,6 +71,25 @@ export function useChatAttachments(): ChatAttachments {
     [uploadEndpoint, workspaceId, newTrace],
   );
 
+  const transcribe = useCallback(
+    async (blob: Blob): Promise<TranscribeResult> => {
+      if (transcribeEndpoint === undefined || transcribeEndpoint === '') {
+        return { ok: false, message: 'Transcription is unavailable.' };
+      }
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      if (token === null || token === '') {
+        return { ok: false, message: 'Your session expired. Sign in again.' };
+      }
+      return transcribeAudio({
+        blob,
+        endpoint: transcribeEndpoint,
+        token,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+    },
+    [transcribeEndpoint, newTrace],
+  );
+
   const canAttach = uploadEndpoint !== undefined && uploadEndpoint !== '' && workspaceId !== null;
-  return { canAttach, presignEnabled, presignCache, uploadFile };
+  return { canAttach, presignEnabled, presignCache, uploadFile, transcribe, canTranscribe };
 }
