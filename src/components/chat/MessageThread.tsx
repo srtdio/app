@@ -242,7 +242,10 @@ export function MessageBubble(props: {
         >
           {message.reply !== null ? (
             <div className="mb-1 flex min-w-0 gap-2 overflow-hidden rounded-md bg-panel-3">
-              <span className="w-[3.5px] shrink-0 self-stretch rounded-full bg-accent" aria-hidden="true" />
+              <span
+                className="w-[3.5px] shrink-0 self-stretch rounded-full bg-accent"
+                aria-hidden="true"
+              />
               <span className="flex min-w-0 flex-col py-1 pr-2">
                 <span className="truncate text-xs font-medium text-accent">
                   {message.reply.authorUserId !== null
@@ -269,7 +272,9 @@ export function MessageBubble(props: {
           ) : (
             <>
               {message.body.trim() !== '' ? (
-                <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm text-fg-2">{message.body}</p>
+                <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm text-fg-2">
+                  {message.body}
+                </p>
               ) : null}
               <MessageAttachments
                 attachments={message.attachments}
