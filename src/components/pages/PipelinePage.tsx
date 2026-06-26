@@ -8,6 +8,7 @@ import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
+import { PipelineDateWindow } from '@/components/pages/pipeline/PipelineDateWindow';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
 import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
@@ -20,10 +21,13 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useSort } from '@/lib/use-sort';
 import {
+  DATE_WINDOW_DEFAULT,
   POST_SORT_DEFAULT,
   POST_SORT_OPTIONS,
   filterByFields,
+  filterByWindow,
   sortPosts,
+  type DateWindow,
   type PostSort,
 } from '@/lib/list-sort';
 import { groupByStage, stageColumns } from '@/lib/post-board';
@@ -141,6 +145,19 @@ export function postCountLabel(count: number): string {
   return `${count} ${count === 1 ? 'post' : 'posts'}`;
 }
 
+/**
+ * Coerce a persisted sort into a currently-offered option. useSort can return a
+ * value that the trimmed menu no longer lists (live workspaces have 'newest' or
+ * 'title' stored from before the cut); anything not in {@link POST_SORT_OPTIONS}
+ * falls back to {@link POST_SORT_DEFAULT}. The page consumes this everywhere it
+ * reads the sort, while the raw setter still heals storage on the first pick.
+ */
+export function sanitizePostSort(sort: string): PostSort {
+  return POST_SORT_OPTIONS.some((option) => option.value === sort)
+    ? (sort as PostSort)
+    : POST_SORT_DEFAULT;
+}
+
 /** Everything {@link runMovePost} needs, so the page wires it and tests drive it directly. */
 export interface MovePostDeps {
   client: Client;
@@ -205,11 +222,25 @@ interface OnboardingStep {
 
 export function PipelinePage() {
   const navigate = useNavigate();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaces } = useWorkspace();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [stage, setStage] = useState('all');
   const [search, setSearch] = useState('');
   const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
+  // The persisted sort can be a value that is no longer an offered option (live
+  // workspaces have 'newest'/'title' stored from before the menu was trimmed).
+  // Sanitize on read so the page never consumes a stale order; the first user
+  // pick still writes through setSort and heals storage.
+  const activeSort = sanitizePostSort(sort);
+  // In-memory, transient target-date window (named dateWindow, not window, which
+  // the file uses as the addEventListener global). Not persisted: it resets to
+  // 'any' on load.
+  const [dateWindow, setDateWindow] = useState<DateWindow>(DATE_WINDOW_DEFAULT);
+  // The active workspace's civil-date context for filterByWindow. Read off the
+  // row with no context change; absent row or fields fall back to UTC / Monday.
+  const activeWorkspace = workspaces.find((w) => w.id === workspaceId) ?? null;
+  const timeZone = activeWorkspace?.timezone ?? 'UTC';
+  const weekStartDay = activeWorkspace?.week_start_day ?? 1;
   const [cardDismissed, setCardDismissed] = useState(false);
   const [skipped, setSkipped] = useState<Record<string, boolean>>({});
 
@@ -279,10 +310,14 @@ export function PipelinePage() {
   const sorted = useMemo(
     () =>
       sortPosts(
-        filterByFields(posts, search, (post) => [post.title, post.caption, post.platform]),
-        sort,
+        filterByWindow(
+          filterByFields(posts, search, (post) => [post.title, post.caption, post.platform]),
+          dateWindow,
+          { now: new Date(), timeZone, weekStartDay },
+        ),
+        activeSort,
       ),
-    [posts, search, sort],
+    [posts, search, dateWindow, activeSort, timeZone, weekStartDay],
   );
   const grouped = useMemo(() => groupByStage(sorted, STAGES), [sorted]);
 
@@ -368,12 +403,19 @@ export function PipelinePage() {
       {pipelineHeader({
         search,
         onSearchChange: setSearch,
-        sort,
+        sort: activeSort,
         onSortChange: setSort,
         stage,
         onStageChange: setStage,
         counts,
       })}
+
+      {/* The target-date window sits just under the stage chips, sharing the
+          count's horizontal padding. It narrows `sorted`, so every surface (board,
+          feed, counter, chip badges) tracks it through the single derivation. */}
+      <div className="px-4 md:px-6 pt-3">
+        <PipelineDateWindow value={dateWindow} onChange={setDateWindow} />
+      </div>
 
       {/* Honest counter: the FILTERED total (counts.all, summed from the same
           grouped list the board/feed render), so it tracks the active search
