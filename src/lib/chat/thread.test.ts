@@ -114,10 +114,20 @@ describe('mapTextMessage / belongsToTarget', () => {
       mine: false,
       attachments: [],
       sharedPostIds: [],
+      reply: null,
       status: 'sent',
       reactions: [],
     });
     expect(mapTextMessage(txt({ from: toAgoraUsername(ME) }), ME).mine).toBe(true);
+  });
+
+  it('parses a reply_to off the ext into a ReplyQuote, and is null without one', () => {
+    expect(mapTextMessage(txt({}), ME).reply).toBeNull();
+    const replied = mapTextMessage(
+      txt({ ext: { reply_to: { id: 'm0', author_user_id: PEER, preview: 'earlier' } } }),
+      ME,
+    );
+    expect(replied.reply).toEqual({ id: 'm0', authorUserId: PEER, preview: 'earlier' });
   });
 
   it('keeps a null sender for an unmappable username instead of throwing', () => {
@@ -282,6 +292,7 @@ describe('sendText', () => {
       text: 'hello team',
       attachments: [],
       sharedPostIds: [],
+      reply: null,
       createMessage,
     });
 
@@ -294,6 +305,30 @@ describe('sendText', () => {
     });
     expect(send).toHaveBeenCalledWith(created);
   });
+
+  it('carries the reply quote on `ext` for a reply send with no attachments', async () => {
+    const created = { id: 'created' } as unknown as AgoraChat.MessageBody;
+    const createMessage = vi.fn().mockReturnValue(created);
+    const send = vi.fn().mockResolvedValue({ serverMsgId: 's1', localMsgId: 'l1' });
+    const connection = fakeConnection({ send });
+
+    await sendText({
+      connection,
+      target: GROUP_TARGET,
+      text: 'on it',
+      attachments: [],
+      sharedPostIds: [],
+      reply: { id: 'm0', authorUserId: PEER, preview: 'earlier' },
+      createMessage,
+    });
+
+    const options = createMessage.mock.calls[0]?.[0] as { ext?: { reply_to?: unknown } };
+    expect(options.ext?.reply_to).toEqual({
+      id: 'm0',
+      author_user_id: PEER,
+      preview: 'earlier',
+    });
+  });
 });
 
 describe('echoMessage / appendMessage', () => {
@@ -305,6 +340,7 @@ describe('echoMessage / appendMessage', () => {
       time: 5000,
       attachments: [],
       sharedPostIds: [],
+      reply: null,
     });
     expect(echo).toEqual({
       id: 's1',
@@ -314,9 +350,24 @@ describe('echoMessage / appendMessage', () => {
       mine: true,
       attachments: [],
       sharedPostIds: [],
+      reply: null,
       status: 'sent',
       reactions: [],
     });
+  });
+
+  it('carries the reply quote through to the echoed message', () => {
+    const reply = { id: 'm0', authorUserId: PEER, preview: 'earlier' };
+    const echo = echoMessage({
+      result: { serverMsgId: 's1', localMsgId: 'l1' } as AgoraChat.SendMsgResult,
+      text: 'on it',
+      currentUserId: ME,
+      time: 5000,
+      attachments: [],
+      sharedPostIds: [],
+      reply,
+    });
+    expect(echo.reply).toEqual(reply);
   });
 
   it('does not append a duplicate id', () => {
@@ -335,6 +386,7 @@ function mine(over: Partial<ThreadMessage>): ThreadMessage {
     mine: true,
     attachments: [],
     sharedPostIds: [],
+    reply: null,
     status: 'sent',
     reactions: [],
     ...over,

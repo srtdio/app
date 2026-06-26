@@ -52,6 +52,7 @@ describe('sendText with attachments', () => {
       text: 'look',
       attachments: ATTACHMENTS,
       sharedPostIds: [],
+      reply: null,
       createMessage,
     });
 
@@ -83,6 +84,7 @@ describe('sendText with shared posts', () => {
       text: '',
       attachments: ATTACHMENTS,
       sharedPostIds: ['p1', 'p2'],
+      reply: null,
       createMessage,
     });
 
@@ -101,6 +103,7 @@ describe('sendText with shared posts', () => {
       text: '',
       attachments: [],
       sharedPostIds: ['p1'],
+      reply: null,
       createMessage,
     });
 
@@ -153,6 +156,7 @@ describe('echoMessage attachments', () => {
       time: 5000,
       attachments: ATTACHMENTS,
       sharedPostIds: [],
+      reply: null,
     });
     expect(echo.attachments).toEqual(ATTACHMENTS);
   });

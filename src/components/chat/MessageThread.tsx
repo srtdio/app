@@ -5,7 +5,7 @@ import { IconChat, IconChevronRight, IconMore, IconSettings } from '@/components
 import { cn } from '@/lib/cn';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { MessageStatus, ThreadMessage } from '@/lib/chat/thread';
-import type { MessageAttachment } from '@/lib/chat/attachments';
+import type { MessageAttachment, ReplyQuote } from '@/lib/chat/attachments';
 import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
 import type { PresignCache } from '@/lib/asset-presign';
 import { Composer } from '@/components/chat/Composer';
@@ -28,6 +28,7 @@ interface MessageThreadProps {
     text: string,
     attachments: MessageAttachment[],
     sharedPostIds: string[],
+    reply: ReplyQuote | null,
   ) => Promise<void>;
   /** Present on small screens only; renders a back affordance to the list. */
   onBack?: () => void;
@@ -171,6 +172,7 @@ function MessageBubble(props: {
   pickerOpen: boolean;
   onTogglePicker: () => void;
   onReact: (emoji: string, currentlyMine: boolean) => void;
+  onReply: () => void;
 }): ReactElement {
   const {
     message,
@@ -181,6 +183,7 @@ function MessageBubble(props: {
     pickerOpen,
     onTogglePicker,
     onReact,
+    onReply,
   } = props;
   const name = senderName(message, profiles);
   return (
@@ -194,11 +197,23 @@ function MessageBubble(props: {
           <IconButton
             label="Message actions"
             onClick={onTogglePicker}
-            className="ml-auto h-8 w-8 text-fg-3"
+            className="ml-auto h-11 w-11 text-fg-3"
           >
             <IconMore size={16} />
           </IconButton>
         </div>
+        {message.reply !== null ? (
+          <div className="mt-1 flex items-start gap-2 rounded-md border-l-2 border-accent bg-panel-2 px-2 py-1">
+            <span className="flex min-w-0 flex-col">
+              <span className="text-xs font-medium text-accent">
+                {message.reply.authorUserId !== null
+                  ? (profiles.get(message.reply.authorUserId)?.displayName ?? 'Member')
+                  : 'Member'}
+              </span>
+              <span className="truncate text-xs text-fg-3">{message.reply.preview}</span>
+            </span>
+          </div>
+        ) : null}
         {message.body.trim() !== '' ? (
           <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
         ) : null}
@@ -243,6 +258,13 @@ function MessageBubble(props: {
                 <span aria-hidden="true">{emoji}</span>
               </button>
             ))}
+            <button
+              type="button"
+              onClick={onReply}
+              className="inline-flex h-11 items-center rounded-md px-3 text-sm text-fg-2 hover:bg-panel-2"
+            >
+              Reply
+            </button>
           </div>
         ) : null}
       </div>
@@ -255,6 +277,7 @@ function ThreadBody(
     cache: PresignCache;
     presignEnabled: boolean;
     showTicks: boolean;
+    onReply: (message: ThreadMessage) => void;
   },
 ): ReactElement {
   // One open reaction picker at a time across the whole thread.
@@ -288,6 +311,10 @@ function ThreadBody(
             props.onToggleReaction?.(message.id, emoji, mine);
             setActiveReactionMessageId(null);
           }}
+          onReply={() => {
+            props.onReply(message);
+            setActiveReactionMessageId(null);
+          }}
         />
       ))}
     </ul>
@@ -297,6 +324,26 @@ function ThreadBody(
 /** The thread pane: header (+ optional back), message list, and composer. */
 export function MessageThread(props: MessageThreadProps): ReactElement {
   const { canAttach, presignEnabled, presignCache, uploadFile } = useChatAttachments();
+  const [replyDraft, setReplyDraft] = useState<{ authorName: string; quote: ReplyQuote } | null>(
+    null,
+  );
+  const handleReply = (message: ThreadMessage): void => {
+    const body = message.body.trim();
+    const preview =
+      body !== ''
+        ? body.length > 120
+          ? `${body.slice(0, 120)}…`
+          : body
+        : message.attachments.length > 0
+          ? 'Attachment'
+          : message.sharedPostIds.length > 0
+            ? 'Shared post'
+            : 'Message';
+    setReplyDraft({
+      authorName: senderName(message, props.profiles),
+      quote: { id: message.id, authorUserId: message.senderUserId, preview },
+    });
+  };
   return (
     <div className="flex h-full flex-col bg-panel">
       <div className="flex items-center gap-2 border-b border-border px-2 md:px-4 h-14">
@@ -334,6 +381,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         cache={presignCache}
         presignEnabled={presignEnabled}
         showTicks={props.showTicks ?? false}
+        onReply={handleReply}
         {...(props.onToggleReaction !== undefined
           ? { onToggleReaction: props.onToggleReaction }
           : {})}
@@ -343,6 +391,8 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         onSend={props.onSend}
         disabled={!props.canSend || props.sending}
         onTyping={props.onTyping}
+        onCancelReply={() => setReplyDraft(null)}
+        {...(replyDraft !== null ? { reply: replyDraft } : {})}
         {...(canAttach ? { uploadFile } : {})}
       />
     </div>

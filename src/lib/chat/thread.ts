@@ -17,9 +17,11 @@ import type { ChannelSummary } from '@/lib/chat-reads';
 import {
   buildMessageExt,
   parseAttachments,
+  parseReply,
   parseSharedPostIds,
   type MessageAttachment,
   type MessageExt,
+  type ReplyQuote,
 } from '@/lib/chat/attachments';
 
 /** Our own SDK event-handler id, separate from the Foundation's 'sorted-chat'. */
@@ -60,6 +62,8 @@ export interface ThreadMessage {
   attachments: MessageAttachment[];
   /** Shared post uuids read off the SDK message `ext`; empty when there are none. */
   sharedPostIds: string[];
+  /** The quoted message when this is a reply; null otherwise. */
+  reply: ReplyQuote | null;
   /** Delivery/read state; rendered as ticks for own DM messages only. */
   status: MessageStatus;
   /** Emoji reactions on this message; empty when there are none. */
@@ -138,6 +142,7 @@ export function mapTextMessage(raw: AgoraChat.TextMsgBody, currentUserId: string
     // sender wrote the attachment ids + render metadata and shared post ids there.
     attachments: parseAttachments(raw.ext),
     sharedPostIds: parseSharedPostIds(raw.ext),
+    reply: parseReply(raw.ext),
     // Incoming status is never rendered; ticks render for own messages only.
     status: 'sent',
     // Reactions arrive separately (history fetch + live onReactionChange event).
@@ -352,9 +357,11 @@ export function sendText(params: {
   text: string;
   attachments: readonly MessageAttachment[];
   sharedPostIds: readonly string[];
+  reply: ReplyQuote | null;
   createMessage: CreateTextMessage;
 }): Promise<AgoraChat.SendMsgResult> {
-  const hasExt = params.attachments.length > 0 || params.sharedPostIds.length > 0;
+  const hasExt =
+    params.attachments.length > 0 || params.sharedPostIds.length > 0 || params.reply !== null;
   const message = params.createMessage({
     chatType: params.target.chatType,
     type: 'txt',
@@ -365,6 +372,7 @@ export function sendText(params: {
           ext: buildMessageExt({
             attachments: params.attachments,
             sharedPostIds: params.sharedPostIds,
+            reply: params.reply,
           }),
         }
       : {}),
@@ -384,6 +392,7 @@ export function echoMessage(params: {
   time: number;
   attachments: MessageAttachment[];
   sharedPostIds: string[];
+  reply: ReplyQuote | null;
 }): ThreadMessage {
   return {
     id: params.result.serverMsgId,
@@ -393,6 +402,7 @@ export function echoMessage(params: {
     mine: true,
     attachments: params.attachments,
     sharedPostIds: params.sharedPostIds,
+    reply: params.reply,
     status: 'sent',
     reactions: [],
   };

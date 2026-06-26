@@ -18,6 +18,7 @@ import {
   toMessageAttachment,
   type ChatAttachmentUpload,
   type MessageAttachment,
+  type ReplyQuote,
 } from '@/lib/chat/attachments';
 import type { PostCardFields } from '@srtdio/posts';
 
@@ -27,12 +28,17 @@ interface ComposerProps {
     text: string,
     attachments: MessageAttachment[],
     sharedPostIds: string[],
+    reply: ReplyQuote | null,
   ) => Promise<void>;
   disabled: boolean;
   /** Upload one picked file via the asset pipeline; absent disables attaching. */
   uploadFile?: ((file: File) => Promise<ChatAttachmentUpload>) | undefined;
   /** Called on each keystroke so the parent can broadcast a throttled typing signal. */
   onTyping?: (() => void) | undefined;
+  /** The active reply draft; renders the preview bar above the chips when present. */
+  reply?: { authorName: string; quote: ReplyQuote } | undefined;
+  /** Clears the active reply draft (cancel button, and after a successful send). */
+  onCancelReply?: (() => void) | undefined;
 }
 
 type PendingStatus =
@@ -196,13 +202,14 @@ export function Composer(props: ComposerProps): ReactElement {
     const postIds = sharedPosts.map((post) => post.id);
     setSubmitting(true);
     try {
-      await props.onSend(pendingText, attachments, postIds);
+      await props.onSend(pendingText, attachments, postIds, props.reply?.quote ?? null);
       for (const item of pending) {
         if (item.previewUrl != null) URL.revokeObjectURL(item.previewUrl);
       }
       setText('');
       setPending([]);
       setSharedPosts([]);
+      props.onCancelReply?.();
     } catch {
       // Keep the draft (text + chips + shared posts) so a failed send is not lost.
     } finally {
@@ -216,6 +223,19 @@ export function Composer(props: ComposerProps): ReactElement {
       onSubmit={submit}
       className="flex flex-col gap-2 border-t border-border bg-panel px-4 py-3"
     >
+      {props.reply != null ? (
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2">
+          <span aria-hidden="true" className="w-1 shrink-0 self-stretch rounded-full bg-accent" />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-xs font-medium text-accent">{props.reply.authorName}</span>
+            <span className="truncate text-xs text-fg-3">{props.reply.quote.preview}</span>
+          </span>
+          <IconButton label="Cancel reply" onClick={() => props.onCancelReply?.()}>
+            <IconX size={16} />
+          </IconButton>
+        </div>
+      ) : null}
+
       {pending.length > 0 || sharedPosts.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {pending.map((item) => (

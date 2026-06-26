@@ -72,6 +72,21 @@ export function buildAttachmentExt(attachments: readonly MessageAttachment[]): A
 }
 
 /**
+ * A WhatsApp-style reply quote: a snapshot of another message carried on the
+ * sending message's `ext` (exactly like attachments and shared posts ride `ext`).
+ * No new Agora API or message type; a reply is a normal text message that points
+ * back at the quoted one.
+ */
+export interface ReplyQuote {
+  /** Server id of the quoted message. */
+  id: string;
+  /** Sorted user id of the quoted message's sender, or null when unmapped. */
+  authorUserId: string | null;
+  /** Short text snapshot of the quoted message, shown in the quote line. */
+  preview: string;
+}
+
+/**
  * The full custom-extension payload a chat message may carry: the attachment ids
  * (PR5, unchanged) plus PR6's `shared_post_ids`, the post uuids shared into the
  * message. Only post ids ride the wire; no post content is sent, each viewer
@@ -80,6 +95,8 @@ export function buildAttachmentExt(attachments: readonly MessageAttachment[]): A
  */
 export interface MessageExt extends AttachmentExt {
   shared_post_ids: string[];
+  /** Quoted message (snake_case on the wire); present only when this is a reply. */
+  reply_to?: { id: string; author_user_id: string | null; preview: string };
 }
 
 /**
@@ -90,10 +107,20 @@ export interface MessageExt extends AttachmentExt {
 export function buildMessageExt(input: {
   attachments: readonly MessageAttachment[];
   sharedPostIds: readonly string[];
+  reply: ReplyQuote | null;
 }): MessageExt {
   return {
     ...buildAttachmentExt(input.attachments),
     shared_post_ids: [...input.sharedPostIds],
+    ...(input.reply !== null
+      ? {
+          reply_to: {
+            id: input.reply.id,
+            author_user_id: input.reply.authorUserId,
+            preview: input.reply.preview,
+          },
+        }
+      : {}),
   };
 }
 
@@ -107,6 +134,22 @@ export function parseSharedPostIds(ext: unknown): string[] {
   const ids = (ext as Record<string, unknown>).shared_post_ids;
   if (!Array.isArray(ids)) return [];
   return ids.filter((value): value is string => typeof value === 'string');
+}
+
+/**
+ * Read the reply quote off a message's `ext`. Defensive, mirroring
+ * {@link parseSharedPostIds}: returns null for any message that is not a reply
+ * or whose `reply_to` is malformed, so the render path branches on a non-null
+ * result.
+ */
+export function parseReply(ext: unknown): ReplyQuote | null {
+  if (typeof ext !== 'object' || ext === null) return null;
+  const raw = (ext as { reply_to?: unknown }).reply_to;
+  if (typeof raw !== 'object' || raw === null) return null;
+  const q = raw as { id?: unknown; author_user_id?: unknown; preview?: unknown };
+  if (typeof q.id !== 'string' || typeof q.preview !== 'string') return null;
+  const authorUserId = typeof q.author_user_id === 'string' ? q.author_user_id : null;
+  return { id: q.id, authorUserId, preview: q.preview };
 }
 
 function isMessageAttachment(value: unknown): value is MessageAttachment {
