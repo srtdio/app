@@ -367,9 +367,7 @@ function MessageRow(props: {
       head={props.head}
       bubbleRef={bubbleRef}
       press={{ handlers, onContextMenu, consumeClick: consumeClickSuppression }}
-      {...(props.onJumpToMessage !== undefined
-        ? { onJumpToMessage: props.onJumpToMessage }
-        : {})}
+      {...(props.onJumpToMessage !== undefined ? { onJumpToMessage: props.onJumpToMessage } : {})}
       onBadgeClick={() =>
         props.onOpen(props.message, bubbleRef.current?.getBoundingClientRect() ?? null)
       }
