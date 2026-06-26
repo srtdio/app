@@ -45,17 +45,14 @@ export function sortByDate<T extends DateSortable>(items: T[], sort: DateSort): 
   }
 }
 
-/** The full Pipeline sort orders, in menu order. */
-export type PostSort = 'updated' | 'newest' | 'oldest' | 'target' | 'title';
+/** The Pipeline sort orders, in menu order. */
+export type PostSort = 'updated' | 'target';
 
-export const POST_SORT_DEFAULT: PostSort = 'newest';
+export const POST_SORT_DEFAULT: PostSort = 'updated';
 
 export const POST_SORT_OPTIONS: SortOption<PostSort>[] = [
   { value: 'updated', label: 'Recently updated' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'oldest', label: 'Oldest' },
   { value: 'target', label: 'Target date' },
-  { value: 'title', label: 'Title A-Z' },
 ];
 
 /** The minimal row shape the post comparators need (id is the stable tiebreaker). */
@@ -73,26 +70,127 @@ function byId(a: PostSortable, b: PostSortable): number {
 /**
  * Order a Pipeline post list by the chosen sort. Pure; returns a new array.
  * Every comparator falls back to {@link byId} so equal keys are deterministic.
- * Title is compared case-insensitively and locale-aware; target_date keeps
- * nulls last (see {@link compareTargetDate}).
+ * target_date keeps nulls last (see {@link compareTargetDate}); 'updated' is the
+ * default branch.
  */
 export function sortPosts<T extends PostSortable>(items: T[], sort: PostSort): T[] {
   const copy = [...items];
   switch (sort) {
-    case 'updated':
-      return copy.sort((a, b) => b.updated_at.localeCompare(a.updated_at) || byId(a, b));
-    case 'oldest':
-      return copy.sort((a, b) => a.created_at.localeCompare(b.created_at) || byId(a, b));
     case 'target':
       return copy.sort((a, b) => compareTargetDate(a, b) || byId(a, b));
-    case 'title':
-      return copy.sort(
-        (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }) || byId(a, b),
-      );
-    case 'newest':
+    case 'updated':
     default:
-      return copy.sort((a, b) => b.created_at.localeCompare(a.created_at) || byId(a, b));
+      return copy.sort((a, b) => b.updated_at.localeCompare(a.updated_at) || byId(a, b));
   }
+}
+
+/** The target-date window filter orders, in menu order. Pipeline-only. */
+export type DateWindow = 'week' | 'month' | 'any';
+
+export const DATE_WINDOW_DEFAULT: DateWindow = 'any';
+
+export const DATE_WINDOW_OPTIONS: { value: DateWindow; label: string }[] = [
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'This month' },
+  { value: 'any', label: 'Any time' },
+];
+
+/**
+ * Inputs to {@link filterByWindow}. Pure: the page supplies `now`, the workspace
+ * `timeZone`, and `weekStartDay` (0=Sun..6=Sat), so the filter never reads the
+ * browser clock or the browser's default zone.
+ */
+export interface WindowBounds {
+  now: Date;
+  timeZone: string;
+  weekStartDay: number;
+}
+
+/** Probe a zone once; a blank or non-IANA value degrades to UTC, never throws. */
+function safeZone(timeZone: string): string {
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone });
+    return timeZone;
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** The civil date 'YYYY-MM-DD' of an instant rendered in a (validated) zone. */
+function civilDate(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(instant);
+}
+
+/** Parse 'YYYY-MM-DD' into [year, month1to12, day]. */
+function parseCivil(civil: string): [number, number, number] {
+  const [y, m, d] = civil.split('-').map((part) => Number(part));
+  return [y!, m!, d!];
+}
+
+/** Re-pad a [year, month1to12, day] triple back to 'YYYY-MM-DD'. */
+function formatCivil(y: number, m: number, d: number): string {
+  const mm = String(m).padStart(2, '0');
+  const dd = String(d).padStart(2, '0');
+  return `${y}-${mm}-${dd}`;
+}
+
+/**
+ * Shift a civil date by whole days. All arithmetic runs in UTC (no DST), so a
+ * day add/subtract is exact; the result is read back as a naked civil date and
+ * never converted to a zoned instant.
+ */
+function addCivilDays(civil: string, days: number): string {
+  const [y, m, d] = parseCivil(civil);
+  const base = Date.UTC(y, m - 1, d) + days * 86400000;
+  const shifted = new Date(base);
+  return formatCivil(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
+}
+
+/**
+ * Keep items whose `target_date` civil date (in the workspace zone) falls in the
+ * chosen window. Pure and NON-THROWING for every input:
+ * - 'any' returns the list unchanged BEFORE any Intl/Date work, so the default
+ *   render never touches the timezone path.
+ * - A blank/non-IANA `bounds.timeZone` degrades to UTC (validated in try/catch).
+ * - An item with a null or unparseable `target_date` is excluded for week/month
+ *   (an Invalid Date is never handed to Intl.format, which would throw).
+ * Range is [start, end) of workspace-LOCAL civil date strings.
+ */
+export function filterByWindow<T extends { target_date: string | null }>(
+  items: T[],
+  window: DateWindow,
+  bounds: WindowBounds,
+): T[] {
+  if (window === 'any') return items;
+
+  const zone = safeZone(bounds.timeZone);
+  const todayCivil = civilDate(bounds.now, zone);
+  const [ty, tm, td] = parseCivil(todayCivil);
+
+  let start: string;
+  let end: string;
+  if (window === 'week') {
+    const weekday = new Date(Date.UTC(ty, tm - 1, td)).getUTCDay();
+    const offset = (weekday - bounds.weekStartDay + 7) % 7;
+    start = addCivilDays(todayCivil, -offset);
+    end = addCivilDays(start, 7);
+  } else {
+    start = formatCivil(ty, tm, 1);
+    end = tm === 12 ? formatCivil(ty + 1, 1, 1) : formatCivil(ty, tm + 1, 1);
+  }
+
+  return items.filter((item) => {
+    if (item.target_date === null) return false;
+    const instant = new Date(item.target_date);
+    if (Number.isNaN(instant.getTime())) return false;
+    const d = civilDate(instant, zone);
+    return start <= d && d < end;
+  });
 }
 
 /**

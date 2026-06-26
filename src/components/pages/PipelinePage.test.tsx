@@ -15,14 +15,23 @@ import {
   pipelineHeader,
   postCountLabel,
   runMovePost,
+  sanitizePostSort,
   stageCounts,
 } from '@/components/pages/PipelinePage';
 import type { MovePostDeps } from '@/components/pages/PipelinePage';
+import { PipelineDateWindow } from '@/components/pages/pipeline/PipelineDateWindow';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, PipelinePost, Result, Stage } from '@srtdio/posts';
 import { groupByStage } from '@/lib/post-board';
-import { filterByTitle, sortByDate } from '@/lib/list-sort';
+import {
+  POST_SORT_DEFAULT,
+  filterByFields,
+  filterByTitle,
+  filterByWindow,
+  sortByDate,
+  type DateWindow,
+} from '@/lib/list-sort';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
@@ -135,7 +144,7 @@ function header(): ReactElement {
   return pipelineHeader({
     search: '',
     onSearchChange: () => {},
-    sort: 'newest',
+    sort: 'updated',
     onSortChange: () => {},
     stage: 'all',
     onStageChange: () => {},
@@ -148,6 +157,14 @@ describe('pipelineHeader', () => {
     const tree = header();
     expect(findAll(tree, (el) => el.type === SectionHeader)).toHaveLength(1);
     expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(1);
+  });
+
+  it('offers exactly the two trimmed sort options', () => {
+    const menus = findAll(header(), (el) => el.type === SortMenu);
+    expect(menus).toHaveLength(1);
+    const options = (menus[0]!.props as { options: { value: string; label: string }[] }).options;
+    expect(options.map((o) => o.value)).toEqual(['updated', 'target']);
+    expect(options.map((o) => o.label)).toEqual(['Recently updated', 'Target date']);
   });
 
   it('dispatches sorted:create-post from the "+" action', () => {
@@ -304,5 +321,107 @@ describe('runMovePost', () => {
     resolve?.({ ok: true, data: 'ok' });
     await Promise.all([first, second]);
     expect(stMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('persisted sort sanitization (fix 1)', () => {
+  it('heals a stale stored value the trimmed menu no longer lists', () => {
+    // Live workspaces stored 'newest'/'oldest'/'title' before the trim.
+    expect(sanitizePostSort('newest')).toBe(POST_SORT_DEFAULT);
+    expect(sanitizePostSort('oldest')).toBe(POST_SORT_DEFAULT);
+    expect(sanitizePostSort('title')).toBe(POST_SORT_DEFAULT);
+  });
+
+  it('passes a still-listed value through untouched', () => {
+    expect(sanitizePostSort('updated')).toBe('updated');
+    expect(sanitizePostSort('target')).toBe('target');
+  });
+
+  it("the header's active sort is the sanitized default for a stale persisted value", () => {
+    // Mirror the page: a stale localStorage value (seed sorted:sort:pipeline =
+    // 'newest') is sanitized before it reaches the header's SortMenu.
+    const activeSort = sanitizePostSort('newest');
+    const tree = pipelineHeader({
+      search: '',
+      onSearchChange: () => {},
+      sort: activeSort,
+      onSortChange: () => {},
+      stage: 'all',
+      onStageChange: () => {},
+      counts: { all: 0 },
+    });
+    const menus = findAll(tree, (el) => el.type === SortMenu);
+    expect((menus[0]!.props as { value: string }).value).toBe(POST_SORT_DEFAULT);
+  });
+});
+
+describe('PipelineDateWindow (fix A)', () => {
+  function windowTree(value: DateWindow, onChange: (next: DateWindow) => void): ReactElement {
+    return (
+      PipelineDateWindow as unknown as (props: {
+        value: DateWindow;
+        onChange: (next: DateWindow) => void;
+      }) => ReactElement
+    )({ value, onChange });
+  }
+  function radios(tree: ReactElement): ReactElement[] {
+    return findAll(tree, (el) => (el.props as { role?: string }).role === 'radio');
+  }
+  function labelOf(el: ReactElement): string {
+    return (el.props as { children: string }).children;
+  }
+
+  it('renders the three target-date window options as radios', () => {
+    const opts = radios(windowTree('any', () => {}));
+    expect(opts).toHaveLength(3);
+    expect(opts.map(labelOf)).toEqual(['This week', 'This month', 'Any time']);
+  });
+
+  it('marks the active option checked and fires onChange on a pick', () => {
+    let picked: DateWindow | null = null;
+    const opts = radios(
+      windowTree('any', (next) => {
+        picked = next;
+      }),
+    );
+    const any = opts.find((o) => labelOf(o) === 'Any time')!;
+    const week = opts.find((o) => labelOf(o) === 'This week')!;
+    expect((any.props as { 'aria-checked': boolean })['aria-checked']).toBe(true);
+    expect((week.props as { 'aria-checked': boolean })['aria-checked']).toBe(false);
+    (week.props as { onClick: () => void }).onClick();
+    expect(picked).toBe('week');
+  });
+});
+
+describe('target-date window narrows every surface (fix A)', () => {
+  // Mirror PipelinePage's derivation: filterByFields -> filterByWindow -> count.
+  // Fixed now: Wed 2026-06-17 12:00 UTC, so the Mon-Sun week is 2026-06-15..21
+  // and the month is June 2026.
+  const now = new Date('2026-06-17T12:00:00Z');
+  function deriveCount(posts: PipelinePost[], dateWindow: DateWindow): number {
+    const filtered = filterByWindow(
+      filterByFields(posts, '', (p) => [p.title, p.caption, p.platform]),
+      dateWindow,
+      { now, timeZone: 'UTC', weekStartDay: 1 },
+    );
+    return stageCounts(groupByStage(filtered, STAGES), STAGES).all ?? 0;
+  }
+  const posts: PipelinePost[] = [
+    { ...makePost('a', 'draft'), target_date: '2026-06-16T00:00:00Z' }, // this week + month
+    { ...makePost('b', 'review'), target_date: '2026-06-28T00:00:00Z' }, // this month, not week
+    { ...makePost('c', 'approved'), target_date: '2026-08-01T00:00:00Z' }, // outside both
+    { ...makePost('d', 'parked'), target_date: null }, // no target
+  ];
+
+  it("'Any time' counts every post including a null target", () => {
+    expect(deriveCount(posts, 'any')).toBe(4);
+  });
+
+  it("'This week' narrows to posts dated inside the current week", () => {
+    expect(deriveCount(posts, 'week')).toBe(1);
+  });
+
+  it("'This month' narrows to posts dated inside the current month", () => {
+    expect(deriveCount(posts, 'month')).toBe(2);
   });
 });
