@@ -9,6 +9,42 @@ vi.mock('@srtdio/posts', async () => {
   return { ...actual, stageTransition: vi.fn() };
 });
 
+// The unit env is `node` with no DOM. PipelineSortControl is the only component
+// here invoked as a plain function (every other surface is a pure helper or an
+// unexpanded element node), so we mock the two hooks it touches: useMediaQuery is
+// stubbed to a fixed breakpoint, and useState is a pure shim that records its
+// setters per call index (0 = sheet/popover open, 1 = calendar open) so a test
+// can force initial state and observe a setter firing without a renderer.
+vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
+
+const hookState = vi.hoisted(() => ({
+  index: 0,
+  overrides: {} as Record<number, unknown>,
+  calls: [] as unknown[][],
+  reset(): void {
+    this.index = 0;
+    this.overrides = {};
+    this.calls = [];
+  },
+}));
+
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>();
+  return {
+    ...actual,
+    useState: (init: unknown) => {
+      const i = hookState.index;
+      const base = typeof init === 'function' ? (init as () => unknown)() : init;
+      const value = i in hookState.overrides ? hookState.overrides[i] : base;
+      const setter = (next: unknown): void => {
+        hookState.calls[i] = (hookState.calls[i] ?? []).concat([next]);
+      };
+      hookState.index += 1;
+      return [value, setter];
+    },
+  };
+});
+
 import {
   MOVE_FALLBACK_MESSAGE,
   moveErrorMessage,
@@ -19,7 +55,12 @@ import {
   stageCounts,
 } from '@/components/pages/PipelinePage';
 import type { MovePostDeps } from '@/components/pages/PipelinePage';
-import { PipelineDateWindow } from '@/components/pages/pipeline/PipelineDateWindow';
+import {
+  PipelineSortControl,
+  customRangeLabel,
+  sortControlBody,
+} from '@/components/pages/pipeline/PipelineSortControl';
+import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, PipelinePost, Result, Stage } from '@srtdio/posts';
@@ -146,6 +187,11 @@ function header(): ReactElement {
     onSearchChange: () => {},
     sort: 'updated',
     onSortChange: () => {},
+    dateWindow: 'any',
+    onDateWindowChange: () => {},
+    customRange: null,
+    onCustomRangeChange: () => {},
+    weekStartDay: 1,
     stage: 'all',
     onStageChange: () => {},
     counts: { all: 3, draft: 2, review: 1 },
@@ -153,18 +199,35 @@ function header(): ReactElement {
 }
 
 describe('pipelineHeader', () => {
-  it('uses the shared SectionHeader with a single real sort control', () => {
+  it('uses the shared SectionHeader with the consolidated sort node (no raw SortMenu)', () => {
     const tree = header();
     expect(findAll(tree, (el) => el.type === SectionHeader)).toHaveLength(1);
-    expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(1);
+    // The header now hands SectionHeader a node, not the declarative SortMenu.
+    expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(0);
+    expect(findAll(tree, (el) => el.type === PipelineSortControl)).toHaveLength(1);
   });
 
-  it('offers exactly the two trimmed sort options', () => {
-    const menus = findAll(header(), (el) => el.type === SortMenu);
-    expect(menus).toHaveLength(1);
-    const options = (menus[0]!.props as { options: { value: string; label: string }[] }).options;
-    expect(options.map((o) => o.value)).toEqual(['updated', 'target']);
-    expect(options.map((o) => o.label)).toEqual(['Recently updated', 'Target date']);
+  it('passes the sort to SectionHeader as a { node } (PipelineSortControl)', () => {
+    const headers = findAll(header(), (el) => el.type === SectionHeader);
+    expect(headers).toHaveLength(1);
+    const sort = (headers[0]!.props as { sort: { node?: ReactElement } }).sort;
+    expect(sort.node).toBeDefined();
+    expect((sort.node as ReactElement).type).toBe(PipelineSortControl);
+  });
+
+  it('wires the active order and date-window state through to the control', () => {
+    const controls = findAll(header(), (el) => el.type === PipelineSortControl);
+    expect(controls).toHaveLength(1);
+    const props = controls[0]!.props as {
+      order: string;
+      dateWindow: string;
+      customRange: unknown;
+      weekStartDay: number;
+    };
+    expect(props.order).toBe('updated');
+    expect(props.dateWindow).toBe('any');
+    expect(props.customRange).toBeNull();
+    expect(props.weekStartDay).toBe(1);
   });
 
   it('dispatches sorted:create-post from the "+" action', () => {
@@ -337,59 +400,155 @@ describe('persisted sort sanitization (fix 1)', () => {
     expect(sanitizePostSort('target')).toBe('target');
   });
 
-  it("the header's active sort is the sanitized default for a stale persisted value", () => {
+  it("the header's active order is the sanitized default for a stale persisted value", () => {
     // Mirror the page: a stale localStorage value (seed sorted:sort:pipeline =
-    // 'newest') is sanitized before it reaches the header's SortMenu.
+    // 'newest') is sanitized before it reaches the consolidated control's order.
     const activeSort = sanitizePostSort('newest');
     const tree = pipelineHeader({
       search: '',
       onSearchChange: () => {},
       sort: activeSort,
       onSortChange: () => {},
+      dateWindow: 'any',
+      onDateWindowChange: () => {},
+      customRange: null,
+      onCustomRangeChange: () => {},
+      weekStartDay: 1,
       stage: 'all',
       onStageChange: () => {},
       counts: { all: 0 },
     });
-    const menus = findAll(tree, (el) => el.type === SortMenu);
-    expect((menus[0]!.props as { value: string }).value).toBe(POST_SORT_DEFAULT);
+    const controls = findAll(tree, (el) => el.type === PipelineSortControl);
+    expect((controls[0]!.props as { order: string }).order).toBe(POST_SORT_DEFAULT);
   });
 });
 
-describe('PipelineDateWindow (fix A)', () => {
-  function windowTree(value: DateWindow, onChange: (next: DateWindow) => void): ReactElement {
-    return (
-      PipelineDateWindow as unknown as (props: {
-        value: DateWindow;
-        onChange: (next: DateWindow) => void;
-      }) => ReactElement
-    )({ value, onChange });
+describe('PipelineSortControl (consolidated sort + date window)', () => {
+  // The first string child of a radio row is its visible label (the check span
+  // and trailing icon carry no text).
+  function rowLabel(button: ReactElement): string {
+    const all: ReactElement[] = [];
+    collect(button, all);
+    for (const el of all) {
+      const child = (el.props as { children?: ReactNode }).children;
+      if (typeof child === 'string') return child;
+    }
+    return '';
   }
-  function radios(tree: ReactElement): ReactElement[] {
-    return findAll(tree, (el) => (el.props as { role?: string }).role === 'radio');
+  function groupRows(group: ReactElement): ReactElement[] {
+    return findAll(group, (el) => (el.props as { role?: string }).role === 'menuitemradio');
   }
-  function labelOf(el: ReactElement): string {
-    return (el.props as { children: string }).children;
+  function groupsByLabel(tree: ReactNode): Record<string, ReactElement> {
+    const found = findAll(tree, (el) => (el.props as { role?: string }).role === 'group');
+    const out: Record<string, ReactElement> = {};
+    for (const g of found) out[(g.props as { 'aria-label': string })['aria-label']] = g;
+    return out;
+  }
+  function body(over: Partial<Parameters<typeof sortControlBody>[0]> = {}): ReactElement {
+    return sortControlBody({
+      order: 'updated',
+      onOrderChange: () => {},
+      dateWindow: 'any',
+      onDateWindowChange: () => {},
+      customRange: null,
+      onCustomOpen: () => {},
+      ...over,
+    });
   }
 
-  it('renders the three target-date window options as radios', () => {
-    const opts = radios(windowTree('any', () => {}));
-    expect(opts).toHaveLength(3);
-    expect(opts.map(labelOf)).toEqual(['This week', 'This month', 'Any time']);
+  it('offers two labelled groups: Order and Target date', () => {
+    expect(Object.keys(groupsByLabel(body())).sort()).toEqual(['Order', 'Target date']);
   });
 
-  it('marks the active option checked and fires onChange on a pick', () => {
-    let picked: DateWindow | null = null;
-    const opts = radios(
-      windowTree('any', (next) => {
-        picked = next;
+  it('Order lists exactly Recently updated and Target date and fires onOrderChange', () => {
+    let picked: string | null = null;
+    const g = groupsByLabel(
+      body({
+        onOrderChange: (o) => {
+          picked = o;
+        },
       }),
     );
-    const any = opts.find((o) => labelOf(o) === 'Any time')!;
-    const week = opts.find((o) => labelOf(o) === 'This week')!;
-    expect((any.props as { 'aria-checked': boolean })['aria-checked']).toBe(true);
-    expect((week.props as { 'aria-checked': boolean })['aria-checked']).toBe(false);
+    const rows = groupRows(g.Order!);
+    expect(rows.map(rowLabel)).toEqual(['Recently updated', 'Target date']);
+    (rows[1]!.props as { onClick: () => void }).onClick();
+    expect(picked).toBe('target');
+  });
+
+  it('Target date lists Any time/This week/This month plus a Custom row', () => {
+    const rows = groupRows(groupsByLabel(body())['Target date']!);
+    expect(rows.map(rowLabel)).toEqual(['Any time', 'This week', 'This month', 'Custom…']);
+  });
+
+  it('fires onDateWindowChange from a preset row', () => {
+    let picked: string | null = null;
+    const g = groupsByLabel(
+      body({
+        onDateWindowChange: (w) => {
+          picked = w;
+        },
+      }),
+    );
+    const week = groupRows(g['Target date']!).find((r) => rowLabel(r) === 'This week')!;
     (week.props as { onClick: () => void }).onClick();
     expect(picked).toBe('week');
+  });
+
+  it('labels the Custom row from the active range', () => {
+    expect(customRangeLabel(null)).toBe('Custom…');
+    expect(customRangeLabel({ start: '2026-06-24', end: '2026-06-24' })).toBe('24 Jun');
+    expect(customRangeLabel({ start: '2026-06-24', end: '2026-06-27' })).toBe('24 Jun – 27 Jun');
+  });
+
+  it('tapping the Custom row opens the calendar (flips the calendar-open state)', () => {
+    hookState.reset();
+    hookState.overrides[0] = true; // force the popover open so the body renders
+    const tree = PipelineSortControl({
+      order: 'updated',
+      onOrderChange: () => {},
+      dateWindow: 'any',
+      onDateWindowChange: () => {},
+      customRange: null,
+      onCustomRangeChange: () => {},
+      weekStartDay: 1,
+    });
+    const custom = findAll(
+      tree,
+      (el) => (el.props as { role?: string }).role === 'menuitemradio',
+    ).find((r) => rowLabel(r) === 'Custom…')!;
+    (custom.props as { onClick: () => void }).onClick();
+    // index 1 is the calendar-open useState; tapping Custom sets it true.
+    expect(hookState.calls[1]).toEqual([true]);
+  });
+
+  it('applying a range fires onCustomRangeChange and switches the window to custom', () => {
+    hookState.reset();
+    hookState.overrides[1] = true; // calendar open
+    let range: { start: string; end: string } | null = null;
+    let chosen: string | null = null;
+    const tree = PipelineSortControl({
+      order: 'updated',
+      onOrderChange: () => {},
+      dateWindow: 'any',
+      onDateWindowChange: (w) => {
+        chosen = w;
+      },
+      customRange: null,
+      onCustomRangeChange: (r) => {
+        range = r;
+      },
+      weekStartDay: 1,
+    });
+    const calendars = findAll(tree, (el) => el.type === PipelineDateRangeCalendar);
+    expect(calendars).toHaveLength(1);
+    const cal = calendars[0]!.props as {
+      open: boolean;
+      onApply: (r: { start: string; end: string }) => void;
+    };
+    expect(cal.open).toBe(true);
+    cal.onApply({ start: '2026-06-24', end: '2026-06-27' });
+    expect(range).toEqual({ start: '2026-06-24', end: '2026-06-27' });
+    expect(chosen).toBe('custom');
   });
 });
 
@@ -423,5 +582,21 @@ describe('target-date window narrows every surface (fix A)', () => {
 
   it("'This month' narrows to posts dated inside the current month", () => {
     expect(deriveCount(posts, 'month')).toBe(2);
+  });
+
+  it("'custom' narrows the derivation to the inclusive picked range", () => {
+    // Mirror the page derivation with a custom range covering only post 'a'.
+    const filtered = filterByWindow(
+      filterByFields(posts, '', (p) => [p.title, p.caption, p.platform]),
+      'custom',
+      {
+        now,
+        timeZone: 'UTC',
+        weekStartDay: 1,
+        customRange: { start: '2026-06-16', end: '2026-06-16' },
+      },
+    );
+    const count = stageCounts(groupByStage(filtered, STAGES), STAGES).all ?? 0;
+    expect(count).toBe(1);
   });
 });

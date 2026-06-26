@@ -33,8 +33,13 @@ interface SectionHeaderProps<S extends string = string> {
   title?: string;
   /** Controlled search field. Presentational: it calls onChange, never filters. */
   search?: SectionHeaderSearch;
-  /** Reuses the canonical SortMenu primitive and its option typing. */
-  sort?: SectionHeaderSort<S>;
+  /**
+   * Either the declarative SortMenu form (the common case, e.g. Assets/Briefs)
+   * or a custom control node for pages whose sort needs more than a single
+   * option list (e.g. Pipeline's consolidated order + date-window control).
+   * Mirrors the primaryAction union.
+   */
+  sort?: SectionHeaderSort<S> | { node: ReactNode };
   /** Accent "+"/create action. */
   primaryAction?: SectionHeaderPrimaryAction;
   /** Page-specific filter chips, rendered on the row below the controls. */
@@ -56,6 +61,18 @@ function renderPrimaryAction(action: SectionHeaderPrimaryAction): ReactNode {
       {action.icon}
       {action.label}
     </Button>
+  );
+}
+
+function renderSort<S extends string>(sort: SectionHeaderSort<S> | { node: ReactNode }): ReactNode {
+  if ('node' in sort) return sort.node;
+  return (
+    <SortMenu
+      options={sort.options}
+      value={sort.value}
+      onChange={sort.onChange}
+      {...(sort.label !== undefined ? { label: sort.label } : {})}
+    />
   );
 }
 
@@ -112,14 +129,7 @@ export function SectionHeader<S extends string = string>({
             ) : null}
           </div>
         ) : null}
-        {sort !== undefined ? (
-          <SortMenu
-            options={sort.options}
-            value={sort.value}
-            onChange={sort.onChange}
-            {...(sort.label !== undefined ? { label: sort.label } : {})}
-          />
-        ) : null}
+        {sort !== undefined ? renderSort(sort) : null}
         {primaryAction !== undefined ? renderPrimaryAction(primaryAction) : null}
       </div>
       {children !== undefined ? <div className={childRowClass}>{children}</div> : null}

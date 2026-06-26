@@ -84,26 +84,37 @@ export function sortPosts<T extends PostSortable>(items: T[], sort: PostSort): T
   }
 }
 
-/** The target-date window filter orders, in menu order. Pipeline-only. */
-export type DateWindow = 'week' | 'month' | 'any';
+/**
+ * The target-date window filter orders. 'custom' is driven by an explicit civil
+ * date range (see {@link WindowBounds.customRange}); the control renders it as a
+ * separate "Custom" row, so it is intentionally NOT in {@link DATE_WINDOW_OPTIONS}.
+ */
+export type DateWindow = 'week' | 'month' | 'any' | 'custom';
 
 export const DATE_WINDOW_DEFAULT: DateWindow = 'any';
 
+/**
+ * The three preset windows, in menu order (Any time, This week, This month). The
+ * 'custom' window is rendered as its own row by the control, never from this list.
+ */
 export const DATE_WINDOW_OPTIONS: { value: DateWindow; label: string }[] = [
+  { value: 'any', label: 'Any time' },
   { value: 'week', label: 'This week' },
   { value: 'month', label: 'This month' },
-  { value: 'any', label: 'Any time' },
 ];
 
 /**
  * Inputs to {@link filterByWindow}. Pure: the page supplies `now`, the workspace
  * `timeZone`, and `weekStartDay` (0=Sun..6=Sat), so the filter never reads the
- * browser clock or the browser's default zone.
+ * browser clock or the browser's default zone. `customRange` carries the inclusive
+ * civil-date bounds for the 'custom' window (each 'YYYY-MM-DD'); null/undefined for
+ * the preset windows, or 'custom' with no range yet selected.
  */
 export interface WindowBounds {
   now: Date;
   timeZone: string;
   weekStartDay: number;
+  customRange?: { start: string; end: string } | null;
 }
 
 /** Probe a zone once; a blank or non-IANA value degrades to UTC, never throws. */
@@ -157,9 +168,13 @@ function addCivilDays(civil: string, days: number): string {
  * - 'any' returns the list unchanged BEFORE any Intl/Date work, so the default
  *   render never touches the timezone path.
  * - A blank/non-IANA `bounds.timeZone` degrades to UTC (validated in try/catch).
- * - An item with a null or unparseable `target_date` is excluded for week/month
- *   (an Invalid Date is never handed to Intl.format, which would throw).
- * Range is [start, end) of workspace-LOCAL civil date strings.
+ * - An item with a null or unparseable `target_date` is excluded for every
+ *   non-'any' window (an Invalid Date is never handed to Intl.format, which would
+ *   throw).
+ * - 'custom' with no `bounds.customRange` returns the list unchanged (a half-open
+ *   range cannot be built yet, so the filter is a passthrough rather than a break).
+ * Range is [start, end) of workspace-LOCAL civil date strings for week/month, and
+ * [start, end] INCLUSIVE for the 'custom' range.
  */
 export function filterByWindow<T extends { target_date: string | null }>(
   items: T[],
@@ -169,6 +184,20 @@ export function filterByWindow<T extends { target_date: string | null }>(
   if (window === 'any') return items;
 
   const zone = safeZone(bounds.timeZone);
+
+  if (window === 'custom') {
+    const range = bounds.customRange;
+    if (range === null || range === undefined) return items;
+    const { start, end } = range;
+    return items.filter((item) => {
+      if (item.target_date === null) return false;
+      const instant = new Date(item.target_date);
+      if (Number.isNaN(instant.getTime())) return false;
+      const d = civilDate(instant, zone);
+      return start <= d && d <= end;
+    });
+  }
+
   const todayCivil = civilDate(bounds.now, zone);
   const [ty, tm, td] = parseCivil(todayCivil);
 
