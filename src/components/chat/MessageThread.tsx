@@ -30,6 +30,53 @@ interface MessageThreadProps {
   onBack?: () => void;
   /** Present for group channels only; opens the group management panel. */
   onOpenInfo?: () => void;
+  /** Sorted user ids currently typing (peers only); drives the indicator row. */
+  typingUserIds: string[];
+  /** Forwarded to the composer so each keystroke broadcasts a typing signal. */
+  onTyping?: () => void;
+}
+
+/**
+ * Human label for who is typing, capped so the row never grows: one or two known
+ * names are spelled out, otherwise a count or a generic phrase. Returns null
+ * when nobody is typing so the indicator renders nothing.
+ */
+function typingLabel(ids: string[], profiles: Map<string, ChatProfile>): string | null {
+  if (ids.length === 0) return null;
+  if (ids.length === 1) {
+    const name = profiles.get(ids[0] as string)?.displayName;
+    return `${name ?? 'Someone'} is typing`;
+  }
+  if (ids.length === 2) {
+    const a = profiles.get(ids[0] as string)?.displayName;
+    const b = profiles.get(ids[1] as string)?.displayName;
+    return a !== undefined && b !== undefined ? `${a} and ${b} are typing` : '2 people are typing';
+  }
+  return 'Several people are typing';
+}
+
+/**
+ * Slim, non-scrolling typing row shown just above the composer. The three dots
+ * animate opacity-only via `animate-pulse` with staggered arbitrary delays (no
+ * translate/rotate, no custom keyframes), and all colours are design tokens so
+ * light and dark are at parity.
+ */
+function TypingIndicator(props: {
+  ids: string[];
+  profiles: Map<string, ChatProfile>;
+}): ReactElement | null {
+  const label = typingLabel(props.ids, props.profiles);
+  if (label === null) return null;
+  return (
+    <div className="flex shrink-0 items-center gap-2 px-4 py-1.5 text-xs text-fg-3">
+      <span className="flex items-center gap-1" aria-hidden="true">
+        <span className="h-1.5 w-1.5 rounded-full bg-fg-3 animate-pulse [animation-delay:0ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-fg-3 animate-pulse [animation-delay:150ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-fg-3 animate-pulse [animation-delay:300ms]" />
+      </span>
+      <span>{label}</span>
+    </div>
+  );
 }
 
 function senderName(message: ThreadMessage, profiles: Map<string, ChatProfile>): string {
@@ -146,9 +193,11 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         cache={presignCache}
         presignEnabled={presignEnabled}
       />
+      <TypingIndicator ids={props.typingUserIds} profiles={props.profiles} />
       <Composer
         onSend={props.onSend}
         disabled={!props.canSend || props.sending}
+        onTyping={props.onTyping}
         {...(canAttach ? { uploadFile } : {})}
       />
     </div>

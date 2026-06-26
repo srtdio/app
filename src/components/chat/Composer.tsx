@@ -31,6 +31,8 @@ interface ComposerProps {
   disabled: boolean;
   /** Upload one picked file via the asset pipeline; absent disables attaching. */
   uploadFile?: ((file: File) => Promise<ChatAttachmentUpload>) | undefined;
+  /** Called on each keystroke so the parent can broadcast a throttled typing signal. */
+  onTyping?: (() => void) | undefined;
 }
 
 type PendingStatus =
@@ -242,7 +244,10 @@ export function Composer(props: ComposerProps): ReactElement {
 
         <Textarea
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value);
+            props.onTyping?.();
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Write a message"
           rows={1}

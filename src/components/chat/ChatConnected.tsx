@@ -12,6 +12,7 @@ import {
 } from '@/lib/chat-reads';
 import { targetFromSummary, type ChannelTarget } from '@/lib/chat/thread';
 import { useChatThread } from '@/lib/chat/use-chat-thread';
+import { useChatTyping } from '@/lib/chat/use-chat-typing';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import type { ChatConnection } from '@/lib/chat/types';
 import { ChannelList } from '@/components/chat/ChannelList';
@@ -166,6 +167,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
 
   const target = useMemo(() => safeTarget(selected), [selected]);
   const thread = useChatThread({ client, target, currentUserId, onOwnMessage });
+  const typing = useChatTyping({ client, target, currentUserId });
 
   // Resolve sender display info in one batched read per set of new ids (no N+1).
   useEffect(() => {
@@ -223,6 +225,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
               sending={thread.sending}
               canSend={target !== null}
               onSend={thread.send}
+              typingUserIds={typing.typingUserIds}
+              onTyping={typing.notifyTyping}
               {...(isDesktop ? {} : { onBack })}
               {...(isGroup ? { onOpenInfo: () => setGroupInfoOpen(true) } : {})}
             />
