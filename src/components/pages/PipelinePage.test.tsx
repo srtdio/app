@@ -237,10 +237,7 @@ describe('PipelineDateWindow', () => {
 
   it('exposes an accessible radiogroup label', () => {
     const tree = PipelineDateWindow({ value: 'any', onChange: () => {} });
-    const groups = findAll(
-      tree,
-      (el) => (el.props as { role?: string }).role === 'radiogroup',
-    );
+    const groups = findAll(tree, (el) => (el.props as { role?: string }).role === 'radiogroup');
     expect(groups).toHaveLength(1);
     expect((groups[0]!.props as { 'aria-label': string })['aria-label']).toBe(
       'Filter by target date',

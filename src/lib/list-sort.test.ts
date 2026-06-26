@@ -149,9 +149,9 @@ describe('filterByWindow', () => {
 
   it("'any' returns all items unchanged, including a null target_date", () => {
     const rows = [item('a', '2026-06-24'), item('b', null), item('c', '2030-01-01')];
-    expect(ids(filterByWindow(rows, 'any', { now: NOW, timeZone: 'UTC', weekStartDay: 1 }))).toEqual(
-      ['a', 'b', 'c'],
-    );
+    expect(
+      ids(filterByWindow(rows, 'any', { now: NOW, timeZone: 'UTC', weekStartDay: 1 })),
+    ).toEqual(['a', 'b', 'c']);
   });
 
   it('week (weekStartDay=1) keeps the current Mon-Sun and excludes prior/next week', () => {
@@ -163,9 +163,9 @@ describe('filterByWindow', () => {
       item('nextMon', '2026-06-29'), // Monday after: excluded (end exclusive)
       item('null', null), // excluded for week
     ];
-    expect(ids(filterByWindow(rows, 'week', { now: NOW, timeZone: 'UTC', weekStartDay: 1 }))).toEqual(
-      ['start', 'mid', 'end'],
-    );
+    expect(
+      ids(filterByWindow(rows, 'week', { now: NOW, timeZone: 'UTC', weekStartDay: 1 })),
+    ).toEqual(['start', 'mid', 'end']);
   });
 
   it('week (weekStartDay=0) shifts the boundary to Sun-Sat', () => {
@@ -176,9 +176,9 @@ describe('filterByWindow', () => {
       item('end', '2026-06-27'), // Saturday: last included day
       item('nextSun', '2026-06-28'), // excluded (was inside the Mon-start window)
     ];
-    expect(ids(filterByWindow(rows, 'week', { now: NOW, timeZone: 'UTC', weekStartDay: 0 }))).toEqual(
-      ['start', 'end'],
-    );
+    expect(
+      ids(filterByWindow(rows, 'week', { now: NOW, timeZone: 'UTC', weekStartDay: 0 })),
+    ).toEqual(['start', 'end']);
   });
 
   it('month keeps same-month dates and excludes the prev-month last day and next-month first day', () => {
