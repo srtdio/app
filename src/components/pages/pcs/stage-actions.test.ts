@@ -3,7 +3,7 @@ import { visibleStageActions } from '@/components/pages/pcs/stage-actions';
 import type { Stage } from '@srtdio/posts';
 
 // The visibility matrix matches the server (stage_transition) exactly: the
-// client only sees approve / request-changes, the agency side only sees
+// client only sees approve / reject, the agency side only sees
 // park / move-to-review, and an unknown role sees nothing.
 
 function labels(stage: Stage, role: string | null): string[] {
@@ -11,9 +11,22 @@ function labels(stage: Stage, role: string | null): string[] {
 }
 
 describe('visibleStageActions', () => {
-  it('shows the client approve + request changes at review, request changes at approved', () => {
-    expect(labels('review', 'client')).toEqual(['Approve', 'Request changes']);
-    expect(labels('approved', 'client')).toEqual(['Request changes']);
+  it('shows the client approve + reject at review, reject at approved', () => {
+    expect(labels('review', 'client')).toEqual(['Approve', 'Reject']);
+    expect(labels('approved', 'client')).toEqual(['Reject']);
+  });
+
+  it('styles the client reject action as danger', () => {
+    expect(visibleStageActions('review', 'client')).toContainEqual({
+      to: 'rejected',
+      label: 'Reject',
+      variant: 'danger',
+    });
+    expect(visibleStageActions('approved', 'client')).toContainEqual({
+      to: 'rejected',
+      label: 'Reject',
+      variant: 'danger',
+    });
   });
 
   it('gives the client nothing to do in draft / parked / rejected', () => {
