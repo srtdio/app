@@ -84,8 +84,8 @@ function eventLabel(eventType: string): string {
       return 'New brief';
     case 'brief_closed':
       return 'Brief closed';
-    case 'decision_marked':
-      return 'Decision marked';
+    case 'comment_resolved':
+      return 'Comment resolved';
     case 'asset_uploaded':
     case 'asset_version_added':
       return 'New asset';

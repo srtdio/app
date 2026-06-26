@@ -141,8 +141,11 @@ describe('activityLine null-safe rendering', () => {
     expect(activityLine(item({ eventType: 'mention', actorName: null }))).toBe(
       'New mention in a post',
     );
-    expect(activityLine(item({ eventType: 'decision_marked', actorName: null }))).toBe(
-      'Decision flagged on a post',
+    expect(activityLine(item({ eventType: 'comment_resolved', actorName: null }))).toBe(
+      'A comment thread was resolved on a post',
+    );
+    expect(activityLine(item({ eventType: 'comment_resolved', actorName: 'Ada' }))).toBe(
+      'Ada resolved a thread on a post',
     );
     expect(activityLine(item({ eventType: 'stage_change', toStage: 'approved' }))).toBe(
       'Moved to approved',

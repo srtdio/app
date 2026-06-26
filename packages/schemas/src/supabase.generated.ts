@@ -2508,11 +2508,12 @@ export type Database = {
           entity_id: string
           entity_type: string
           id: string
-          is_decision: boolean
           legacy_author_email: string | null
           legacy_author_name: string | null
           mentions: Json | null
           parent_comment_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
           workspace_id: string
         }
         Insert: {
@@ -2525,11 +2526,12 @@ export type Database = {
           entity_id: string
           entity_type: string
           id?: string
-          is_decision?: boolean
           legacy_author_email?: string | null
           legacy_author_name?: string | null
           mentions?: Json | null
           parent_comment_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           workspace_id: string
         }
         Update: {
@@ -2542,11 +2544,12 @@ export type Database = {
           entity_id?: string
           entity_type?: string
           id?: string
-          is_decision?: boolean
           legacy_author_email?: string | null
           legacy_author_name?: string | null
           mentions?: Json | null
           parent_comment_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -2555,6 +2558,13 @@ export type Database = {
             columns: ["parent_comment_id"]
             isOneToOne: false
             referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -4930,7 +4940,6 @@ export type Database = {
           p_body: string
           p_entity_id: string
           p_entity_type: string
-          p_is_decision: boolean
           p_mentions: Json
           p_parent_comment_id: string
           p_trace_id: string
@@ -4941,6 +4950,10 @@ export type Database = {
       comment_edit: {
         Args: { p_body: string; p_comment_id: string; p_trace_id: string }
         Returns: string
+      }
+      comment_resolve: {
+        Args: { p_comment_id: string; p_resolved: boolean; p_trace_id: string }
+        Returns: undefined
       }
       comment_soft_delete: {
         Args: { p_comment_id: string; p_trace_id: string }

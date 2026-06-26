@@ -6,7 +6,7 @@
 // branch without a database.
 
 import { extractMentions } from './mentions';
-import { decisionFlipped, stageChanged, stageTier } from './transitions';
+import { resolvedFlipped, stageChanged, stageTier } from './transitions';
 import {
   ADMIN_ROLES,
   AGENCY_ROLES,
@@ -82,9 +82,9 @@ export async function computeRecipients(
       const entity_type = event.row.entity_type as 'post' | 'brief';
 
       if (event.type === 'UPDATE') {
-        if (!decisionFlipped(event)) return [];
+        if (!resolvedFlipped(event)) return [];
         const audience = await commentAudience(reader, workspace_id, entity_type, entity_id);
-        return build(audience, 'decision_marked', 'active', author_user_id);
+        return build(audience, 'comment_resolved', 'active', author_user_id);
       }
 
       // INSERT: validated mentions, the comment audience, plus mention entries.

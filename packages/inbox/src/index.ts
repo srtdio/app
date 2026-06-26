@@ -14,7 +14,7 @@ export { buildEnvelope } from './envelope';
 export { dedupeKey } from './idempotency';
 export { createSupabaseReader, resolveActingMember } from './reader';
 export { createActingClient, mintServiceRoleToken } from './acting';
-export { isActionable, stageChanged, decisionFlipped, briefClosed, stageTier } from './transitions';
+export { isActionable, stageChanged, resolvedFlipped, briefClosed, stageTier } from './transitions';
 
 // --- catch-up email core (pure render + helpers; no I/O) --------------------
 export {

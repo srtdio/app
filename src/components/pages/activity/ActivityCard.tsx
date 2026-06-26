@@ -9,8 +9,8 @@ import {
   IconActivity,
   IconBriefs,
   IconChat,
+  IconCheck,
   IconClock,
-  IconPin,
   IconPipeline,
   IconUpload,
   IconUser,
@@ -48,6 +48,7 @@ type LeadTone = 'good' | 'bad' | 'warn' | 'accent' | 'neutral';
 function leadTone(item: ActivityItem): LeadTone {
   if (item.eventType === 'mention') return 'accent';
   if (item.eventType === 'brief_closed') return 'good';
+  if (item.eventType === 'comment_resolved') return 'good';
   if (item.eventType === 'stage_change') {
     switch (item.toStage) {
       case 'approved':
@@ -79,8 +80,8 @@ function leadIcon(item: ActivityItem): ReactElement {
     case 'comment':
     case 'mention':
       return <IconChat size={24} />;
-    case 'decision_marked':
-      return <IconPin size={24} />;
+    case 'comment_resolved':
+      return <IconCheck size={24} />;
     case 'stage_change':
       return <IconPipeline size={24} />;
     case 'brief_created':

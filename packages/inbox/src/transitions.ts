@@ -11,11 +11,11 @@ export function stageChanged(
   return event.old.stage !== undefined && event.old.stage !== event.row.stage;
 }
 
-/** comments UPDATE: is_decision flipped from not-true to true. */
-export function decisionFlipped(
+/** comments UPDATE: a root thread flipped from open to resolved (resolved_at set). */
+export function resolvedFlipped(
   event: Extract<ChangeEvent, { table: 'comments'; type: 'UPDATE' }>,
 ): boolean {
-  return event.old.is_decision !== true && event.row.is_decision === true;
+  return event.old.resolved_at == null && event.row.resolved_at != null;
 }
 
 /** briefs UPDATE: status transitioned into 'closed'. */
@@ -34,7 +34,7 @@ export function stageTier(toStage: string): InboxTier {
 export function isActionable(event: ChangeEvent): boolean {
   switch (event.table) {
     case 'comments':
-      return event.type === 'INSERT' || decisionFlipped(event);
+      return event.type === 'INSERT' || resolvedFlipped(event);
     case 'posts':
       return stageChanged(event);
     case 'briefs':

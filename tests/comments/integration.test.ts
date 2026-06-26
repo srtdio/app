@@ -27,6 +27,7 @@ import type { Database } from '../../packages/schemas/src/supabase.generated';
 import {
   createComment,
   listComments,
+  resolveComment,
   searchComments,
   type Client,
   type CommentResult,
@@ -118,20 +119,44 @@ describe.runIf(COMMENTS_SUITE)('comments create + read layer (authenticated role
     expect(rows?.[0]?.mentions).toEqual([member.id]);
   });
 
-  it('createComment records a decision', async () => {
+  it('resolveComment resolves and reopens a root thread', async () => {
     const id = expectOk(
       await createComment(ownerClient, {
         workspace_id: wsA.id,
         entity_type: 'post',
         entity_id: ctxA.postId,
         body: 'approved direction: ship the carousel',
-        is_decision: true,
         trace_id: generateTraceId(),
       }),
     );
-    const res = await asGeneric(admin).from('comments').select('is_decision').eq('id', id);
-    const rows = res.data as Array<{ is_decision: boolean }> | null;
-    expect(rows?.[0]?.is_decision).toBe(true);
+
+    expectOk(
+      await resolveComment(ownerClient, { commentId: id, resolved: true }, generateTraceId()),
+    );
+    const resolved = await asGeneric(admin)
+      .from('comments')
+      .select('resolved_at, resolved_by')
+      .eq('id', id);
+    const resolvedRows = resolved.data as Array<{
+      resolved_at: string | null;
+      resolved_by: string | null;
+    }> | null;
+    expect(resolvedRows?.[0]?.resolved_at).not.toBeNull();
+    expect(resolvedRows?.[0]?.resolved_by).toBe(owner.id);
+
+    expectOk(
+      await resolveComment(ownerClient, { commentId: id, resolved: false }, generateTraceId()),
+    );
+    const reopened = await asGeneric(admin)
+      .from('comments')
+      .select('resolved_at, resolved_by')
+      .eq('id', id);
+    const reopenedRows = reopened.data as Array<{
+      resolved_at: string | null;
+      resolved_by: string | null;
+    }> | null;
+    expect(reopenedRows?.[0]?.resolved_at).toBeNull();
+    expect(reopenedRows?.[0]?.resolved_by).toBeNull();
   });
 
   it('listComments returns the entity thread newest-first', async () => {
@@ -152,17 +177,42 @@ describe.runIf(COMMENTS_SUITE)('comments create + read layer (authenticated role
     expect(times).toEqual(sorted);
   });
 
-  it('listComments filters by is_decision', async () => {
-    const rows = expectOk(
+  it('listComments filters by resolved', async () => {
+    const id = expectOk(
+      await createComment(ownerClient, {
+        workspace_id: wsA.id,
+        entity_type: 'post',
+        entity_id: ctxA.postId,
+        body: 'resolve me',
+        trace_id: generateTraceId(),
+      }),
+    );
+    expectOk(
+      await resolveComment(ownerClient, { commentId: id, resolved: true }, generateTraceId()),
+    );
+
+    const resolvedRows = expectOk(
       await listComments(ownerClient, {
         workspace_id: wsA.id,
         entity_type: 'post',
         entity_id: ctxA.postId,
-        is_decision: true,
+        resolved: true,
       }),
     );
-    expect(rows.length).toBeGreaterThanOrEqual(1);
-    for (const row of rows) expect(row.is_decision).toBe(true);
+    expect(resolvedRows.length).toBeGreaterThanOrEqual(1);
+    for (const row of resolvedRows) expect(row.resolved_at).not.toBeNull();
+    expect(resolvedRows.some((row) => row.id === id)).toBe(true);
+
+    const openRows = expectOk(
+      await listComments(ownerClient, {
+        workspace_id: wsA.id,
+        entity_type: 'post',
+        entity_id: ctxA.postId,
+        resolved: false,
+      }),
+    );
+    for (const row of openRows) expect(row.resolved_at).toBeNull();
+    expect(openRows.some((row) => row.id === id)).toBe(false);
   });
 
   it('listComments filters by author', async () => {

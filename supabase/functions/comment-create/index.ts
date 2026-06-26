@@ -22,7 +22,6 @@ interface CommentCreateRequestBody {
   body?: string;
   mentions?: string[];
   attachment_asset_ids?: string[];
-  is_decision?: boolean;
 }
 
 function jsonResponse(payload: unknown, status: number): Response {
@@ -87,7 +86,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     body: parsed.body,
     mentions: parsed.mentions ?? [],
     attachment_asset_ids: parsed.attachment_asset_ids ?? [],
-    is_decision: parsed.is_decision ?? false,
     trace_id: traceId,
   });
 

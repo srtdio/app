@@ -187,7 +187,6 @@ describe('createBrief', () => {
     expect(args.p_entity_id).toBe('brief-3');
     expect(args.p_parent_comment_id).toBeNull();
     expect(args.p_body).toBe('kick-off');
-    expect(args.p_is_decision).toBe(false);
     expect(args.p_trace_id).toBe('trace-1');
   });
 

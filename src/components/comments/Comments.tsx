@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconMore } from '@/components/ui/icons';
+import { IconCheck, IconMore } from '@/components/ui/icons';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
 import { relativeLong } from '@/lib/relative-time';
@@ -16,6 +16,7 @@ import {
   editComment,
   listComments,
   parseMentions,
+  resolveComment,
   PAGE_SIZE,
 } from '@srtdio/comments';
 import type {
@@ -294,7 +295,6 @@ export interface CreateCommentParams {
   entityId: string;
   body: string;
   attachmentVersionIds: string[];
-  isDecision: boolean;
   parentCommentId: string | null;
   traceId: string;
 }
@@ -307,7 +307,6 @@ export function buildCreateInput(params: CreateCommentParams): CreateCommentInpu
     entity_id: params.entityId,
     body: params.body,
     attachment_asset_ids: params.attachmentVersionIds,
-    is_decision: params.isDecision,
     parent_comment_id: params.parentCommentId,
     trace_id: params.traceId,
   };
@@ -390,6 +389,8 @@ export function Comments({
   const [editBody, setEditBody] = useState('');
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // The root thread whose resolve/reopen request is in flight; null when idle.
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   // The comment whose per-row actions popover is open (kebab); null when closed.
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   // The open image lightbox: the clicked comment's image list + current index,
@@ -533,7 +534,6 @@ export function Comments({
     body: string,
     options: {
       attachmentVersionIds: string[];
-      isDecision: boolean;
       parentCommentId: string | null;
     },
   ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -545,7 +545,6 @@ export function Comments({
         entityId,
         body,
         attachmentVersionIds: options.attachmentVersionIds,
-        isDecision: false,
         parentCommentId: options.parentCommentId,
         traceId: newTrace(),
       }),
@@ -583,6 +582,21 @@ export function Comments({
     const result = await runDeleteComment(supabase, commentId, newTrace());
     if (!result.ok) {
       setRowError({ id: commentId, message: result.error.message });
+      return;
+    }
+    await loadPage(0);
+  }
+
+  // Toggle the thread-level resolved state on a root comment. Open to any active
+  // member (the proc re-checks membership); a failed call surfaces as a row error
+  // on the root and leaves the prior state untouched.
+  async function handleResolve(comment: CommentRow, resolved: boolean): Promise<void> {
+    setRowError(null);
+    setResolvingId(comment.id);
+    const result = await resolveComment(supabase, { commentId: comment.id, resolved }, newTrace());
+    setResolvingId((current) => (current === comment.id ? null : current));
+    if (!result.ok) {
+      setRowError({ id: comment.id, message: result.error.message });
       return;
     }
     await loadPage(0);
@@ -812,12 +826,27 @@ export function Comments({
           {threads.map(({ comment, replies, tombstone }) => {
             const isExpanded = expanded.has(comment.id);
             const isReplyOpen = replyOpen.has(comment.id);
+            // Thread-level resolved state lives on the root comment. A tombstone
+            // root cannot be resolved/reopened (the proc rejects a deleted comment).
+            const isResolved = comment.resolved_at !== null;
+            const isResolving = resolvingId === comment.id;
             return (
               <li
                 key={comment.id}
                 id={commentDomId(comment.id)}
-                className="rounded-xl border border-border bg-panel-2 px-4 py-3 transition-shadow"
+                className={
+                  isResolved
+                    ? 'rounded-xl border border-good bg-panel-2 px-4 py-3 transition-shadow'
+                    : 'rounded-xl border border-border bg-panel-2 px-4 py-3 transition-shadow'
+                }
               >
+                {isResolved && !tombstone ? (
+                  <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-good">
+                    <IconCheck size={14} />
+                    Resolved
+                  </div>
+                ) : null}
+
                 {tombstone ? (
                   <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
                 ) : (
@@ -845,6 +874,17 @@ export function Comments({
                       onClick={() => toggleReply(comment.id)}
                     >
                       {isReplyOpen ? 'Cancel' : 'Reply'}
+                    </Button>
+                  ) : null}
+                  {!tombstone ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="ml-auto min-h-[44px] min-w-[44px]"
+                      disabled={isResolving}
+                      onClick={() => void handleResolve(comment, !isResolved)}
+                    >
+                      {isResolving ? 'Saving' : isResolved ? 'Reopen' : 'Resolve'}
                     </Button>
                   ) : null}
                 </div>

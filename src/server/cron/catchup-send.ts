@@ -39,7 +39,7 @@ export interface CatchupEnv {
 export const CATCHUP_EVENT_TYPES = [
   'comment',
   'mention',
-  'decision_marked',
+  'comment_resolved',
   'stage_change',
   'brief_created',
   'brief_closed',
@@ -135,14 +135,13 @@ function toStageKind(v: string | undefined): StageKind | undefined {
   return v !== undefined && STAGE_KINDS.has(v as StageKind) ? (v as StageKind) : undefined;
 }
 
-// Comment/mention/decision and brief_created carry their actor in the payload;
-// stage_change and brief_closed are actor-less; asset actors come from the
-// resolved assets.uploaded_by (handled at the call site).
+// Comment/mention and brief_created carry their actor in the payload;
+// stage_change, brief_closed and comment_resolved are actor-less; asset actors
+// come from the resolved assets.uploaded_by (handled at the call site).
 function payloadActorId(e: UnsentEntry): string | undefined {
   switch (e.eventType) {
     case 'comment':
     case 'mention':
-    case 'decision_marked':
       return pstr(e.payload, 'author_user_id');
     case 'brief_created':
       return pstr(e.payload, 'created_by');
@@ -163,7 +162,7 @@ function entityKind(e: UnsentEntry): 'post' | 'brief' | 'asset' | null {
       return 'asset';
     case 'comment':
     case 'mention':
-    case 'decision_marked':
+    case 'comment_resolved':
       return e.entityType === 'brief' ? 'brief' : 'post';
     default:
       return null;
@@ -316,7 +315,7 @@ export async function runCatchup(
       switch (e.eventType) {
         case 'comment':
         case 'mention':
-        case 'decision_marked': {
+        case 'comment_resolved': {
           const et: 'post' | 'brief' = e.entityType === 'brief' ? 'brief' : 'post';
           const title =
             (et === 'brief' ? briefs.get(e.entityId) : posts.get(e.entityId)) ?? 'Untitled';
@@ -325,7 +324,7 @@ export async function runCatchup(
               ? 'commented on'
               : e.eventType === 'mention'
                 ? 'mentioned you on'
-                : 'marked a decision on';
+                : 'resolved a comment thread on';
           comments.push({
             who: actorName(pstr(e.payload, 'author_user_id')),
             verb,

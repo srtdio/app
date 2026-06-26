@@ -167,13 +167,18 @@ Two primitives: Comments (Postgres, here) and Chat (Agora, section 7).
 | body | text | up to 10000 chars, NOT NULL; may be an empty string only when the comment carries at least one attachment (comments_body_or_attachment_check: char_length(body) >= 1 OR the comment has at least one attachment). comment_create applies the same rule, rejecting an empty or whitespace-only body when there are no attachments |
 | mentions | jsonb | nullable |
 | attachment_asset_ids | uuid[] | nullable |
-| is_decision | boolean | default false |
+| resolved_at | timestamptz | nullable, set on the root comment when its thread is resolved (null = open) |
+| resolved_by | uuid | nullable, FK users.id ON DELETE SET NULL, the member who resolved the thread |
 | legacy_author_name | text | nullable, 1 to 120, frozen original author name for migrated v1 comments |
 | legacy_author_email | text | nullable, 3 to 320, original author email, used to reclaim authorship when that person later joins with the same email |
 | edited_at / deleted_at | timestamptz | nullable |
 | created_at | timestamptz | default now() |
 
-Indexes: FTS on body, entity, parent, author, decision partial. All where deleted_at null.
+Indexes: FTS on body, entity, parent, author. All where deleted_at null.
+
+comment_create(p_workspace_id, p_entity_type, p_entity_id, p_parent_comment_id, p_body, p_mentions, p_attachment_asset_ids, p_trace_id) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): the only write path to the comments table. One-level threading (a reply to an already-threaded comment is invalid_payload), lands attachment_asset_ids as entity_type='comment' asset_attachments rows, and emits the Activity inbox_entries ('comment' for the audience, urgent 'mention' for mentioned members).
+
+comment_resolve(p_comment_id, p_resolved, p_trace_id) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): toggles the thread-level resolved state on a root comment (a reply is invalid_payload; a missing or soft-deleted comment is not_found). p_resolved=true stamps resolved_at=now()/resolved_by=auth.uid() only when currently open and emits one 'comment_resolved' active inbox entry per other thread author (role-gated like comment_create); p_resolved=false clears the state and is silent (no inbox write). Any active workspace member may resolve or reopen.
 
 ### comment_reactions
 
@@ -356,7 +361,7 @@ PK id. Fields: operator_user_id FK, flow_type (billing_override / sentry_inspect
 - workspace.subscription_state: trial, active, read_only, grace, soft_pause, full_pause, soft_delete
 - brief.status: open, closed
 - approval (table removed): n/a, approval is now a post.stage value
-- inbox_entries.event_type: comment, mention, stage_change, decision_marked, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system
+- inbox_entries.event_type: comment, mention, stage_change, comment_resolved, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system
 - inbox_entries.scope: everything, posts, briefs, people, groups, clients
 - inbox_entries.tier: urgent, active, ambient
 - chat_channels.channel_type: dm, group, plan_period

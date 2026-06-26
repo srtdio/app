@@ -27,7 +27,6 @@ const MAX_BODY = 10000;
 export interface CommentSubmitOptions {
   /** Asset VERSION ids of the completed uploads, passed to createComment. */
   attachmentVersionIds: string[];
-  isDecision: boolean;
 }
 
 export type CommentSubmitResult = { ok: true } | { ok: false; error: string };
@@ -144,7 +143,6 @@ export function CommentComposer({
     setError(null);
     const result = await onSubmit(body, {
       attachmentVersionIds: doneVersionIds(pending),
-      isDecision: false,
     });
     if (result.ok) {
       for (const item of pending) {

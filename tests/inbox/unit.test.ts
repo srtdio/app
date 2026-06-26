@@ -120,7 +120,7 @@ describe('computeRecipients - comments', () => {
     expect(ids(recs, 'mention').size).toBe(0);
   });
 
-  it('UPDATE flipping is_decision -> true emits decision_marked to the audience minus author', async () => {
+  it('UPDATE flipping resolved_at -> set emits comment_resolved to the audience minus author', async () => {
     const event: ChangeEvent = {
       table: 'comments',
       type: 'UPDATE',
@@ -130,19 +130,19 @@ describe('computeRecipients - comments', () => {
         entity_type: 'post',
         entity_id: 'post1',
         author_user_id: U.actor,
-        is_decision: true,
+        resolved_at: '2026-06-26T00:00:00Z',
       } as never,
-      old: { is_decision: false } as never,
+      old: { resolved_at: null } as never,
     };
     const recs = await computeRecipients(
       event,
       reader({ postOwner: async () => U.owner, commentAuthors: async () => [U.prior, U.actor] }),
     );
-    expect(ids(recs, 'decision_marked')).toEqual(new Set([U.owner, U.prior]));
-    expect(tierOf(recs, 'decision_marked')).toBe('active');
+    expect(ids(recs, 'comment_resolved')).toEqual(new Set([U.owner, U.prior]));
+    expect(tierOf(recs, 'comment_resolved')).toBe('active');
   });
 
-  it('UPDATE that does not flip is_decision emits nothing', async () => {
+  it('UPDATE that does not change resolved_at emits nothing', async () => {
     const event: ChangeEvent = {
       table: 'comments',
       type: 'UPDATE',
@@ -152,9 +152,9 @@ describe('computeRecipients - comments', () => {
         entity_type: 'post',
         entity_id: 'p',
         author_user_id: U.actor,
-        is_decision: true,
+        resolved_at: '2026-06-26T00:00:00Z',
       } as never,
-      old: { is_decision: true } as never,
+      old: { resolved_at: '2026-06-26T00:00:00Z' } as never,
     };
     expect(await computeRecipients(event, reader({}))).toEqual([]);
   });

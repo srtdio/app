@@ -8,7 +8,7 @@ export const InboxEntrySchema = z.object({
     'comment',
     'mention',
     'stage_change',
-    'decision_marked',
+    'comment_resolved',
     'brief_created',
     'brief_closed',
     'asset_uploaded',

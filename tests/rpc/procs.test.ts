@@ -326,7 +326,6 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
           p_body: 'looks good',
           p_mentions: null,
           p_attachment_asset_ids: [],
-          p_is_decision: false,
           p_trace_id: generateTraceId(),
         }),
       );
@@ -488,7 +487,6 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
         p_body: 'intruder',
         p_mentions: null,
         p_attachment_asset_ids: [],
-        p_is_decision: false,
         p_trace_id: generateTraceId(),
       });
       expect(expectError(result).code).toBe('workspace_member_only');
@@ -558,7 +556,6 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
           p_body: 'see the attached refs',
           p_mentions: null,
           p_attachment_asset_ids: [a1.versionId, a2.versionId],
-          p_is_decision: false,
           p_trace_id: generateTraceId(),
         }),
       );
@@ -586,7 +583,6 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
         p_body: 'asset id where a version id is required',
         p_mentions: null,
         p_attachment_asset_ids: [a.assetId],
-        p_is_decision: false,
         p_trace_id: generateTraceId(),
       });
       expect(expectError(result).code).toBe('invalid_payload');
@@ -608,7 +604,6 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
         p_body: 'cross-tenant attachment',
         p_mentions: null,
         p_attachment_asset_ids: [foreign.versionId],
-        p_is_decision: false,
         p_trace_id: generateTraceId(),
       });
       expect(expectError(result).code).toBe('invalid_payload');
@@ -624,7 +619,6 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
           p_body: 'first-level reply',
           p_mentions: null,
           p_attachment_asset_ids: [],
-          p_is_decision: false,
           p_trace_id: generateTraceId(),
         }),
       );
@@ -636,7 +630,6 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
         p_body: 'reply to a reply',
         p_mentions: null,
         p_attachment_asset_ids: [],
-        p_is_decision: false,
         p_trace_id: generateTraceId(),
       });
       expect(expectError(result).code).toBe('invalid_payload');
@@ -653,7 +646,6 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
           p_body: 'note on a draft',
           p_mentions: null,
           p_attachment_asset_ids: [],
-          p_is_decision: false,
           p_trace_id: generateTraceId(),
         }),
       );
@@ -674,7 +666,6 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
           p_body: 'pinging the team',
           p_mentions: [agencyUser.id],
           p_attachment_asset_ids: [],
-          p_is_decision: false,
           p_trace_id: generateTraceId(),
         }),
       );

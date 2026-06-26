@@ -28,7 +28,7 @@ export type InboxEventType =
   | 'comment'
   | 'mention'
   | 'stage_change'
-  | 'decision_marked'
+  | 'comment_resolved'
   | 'brief_created'
   | 'brief_closed'
   | 'asset_uploaded'
@@ -41,7 +41,7 @@ export type InboxTier = 'urgent' | 'active' | 'ambient';
 
 /**
  * A Realtime change as the worker observes it. `old` carries the pre-image used
- * to detect transitions (stage changed, is_decision flipped, status -> closed);
+ * to detect transitions (stage changed, thread resolved, status -> closed);
  * Supabase delivers it when the source table has REPLICA IDENTITY FULL.
  */
 export type ChangeEvent =
