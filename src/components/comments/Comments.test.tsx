@@ -24,6 +24,7 @@ import {
   commentCopyText,
   commentDomId,
   renderCommentBody,
+  replySeed,
   runDeleteComment,
   runEditComment,
   toCommentAttachments,
@@ -32,6 +33,7 @@ import {
 } from '@/components/comments/Comments';
 import { EX_MEMBER_LABEL, resolveName } from '@/components/comments/commentProfiles';
 import type { CommentProfile } from '@/components/comments/commentProfiles';
+import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 import { attachmentView } from '@/components/chat/MessageAttachments';
 
 // Node unit environment: walk the JSX returned by the hookless helpers and
@@ -256,6 +258,32 @@ describe('legacy author display (migrated v1 comments)', () => {
     const authorAvatarUrl = live.legacy_author_name !== null ? null : avatarOf(live.author_user_id);
     expect(authorName).toBe('Operator');
     expect(authorAvatarUrl).toBe('https://cdn/operator.png');
+  });
+});
+
+describe('replySeed (reply pre-tags the root author)', () => {
+  // Mirror how the reply CommentComposer derives its initialBody: the author is
+  // tagged only when they resolve to a mention candidate and are not the viewer.
+  const candidates: MentionCandidate[] = [{ id: UUID_A, name: 'Ada', role: '', avatarUrl: null }];
+
+  it('seeds @[author] when the root author resolves and differs from the current user', () => {
+    const comment = row({ id: 'c', author_user_id: UUID_A });
+    expect(replySeed(comment, UUID_B, candidates)).toBe(`@[${UUID_A}] `);
+  });
+
+  it('seeds nothing when the root author is the current user (never tag yourself)', () => {
+    const comment = row({ id: 'c', author_user_id: UUID_A });
+    expect(replySeed(comment, UUID_A, candidates)).toBe('');
+  });
+
+  it('seeds nothing for a legacy (ex-member) author', () => {
+    const comment = row({ id: 'c', author_user_id: UUID_A, legacy_author_name: 'Bob (v1)' });
+    expect(replySeed(comment, UUID_B, candidates)).toBe('');
+  });
+
+  it('seeds nothing when the author is not a mention candidate (cannot resolve)', () => {
+    const comment = row({ id: 'c', author_user_id: UUID_B });
+    expect(replySeed(comment, UUID_A, candidates)).toBe('');
   });
 });
 

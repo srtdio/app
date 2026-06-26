@@ -29,6 +29,7 @@ import type { MessageAttachment } from '@/lib/chat/attachments';
 import { CommentComposer } from '@/components/comments/CommentComposer';
 import { CommentImageLightbox, commentImageNav } from '@/components/comments/CommentImageLightbox';
 import { useMentionCandidates } from '@/components/comments/useMentionCandidates';
+import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 import { flashNode } from '@/components/comments/flash-node';
 import {
   EX_MEMBER_LABEL,
@@ -80,25 +81,27 @@ export function annotationChip(
   if (annotation === undefined) return null;
   if (annotation.stale) {
     return (
-      <div className="mt-2">
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-panel-3 px-2.5 py-1 text-xs text-fg-3">
-          <span className="font-medium">copy changed · v{annotation.versionNumber}</span>
+      <div className="mt-2 min-w-0">
+        <span className="flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-md border border-border bg-panel-3 px-2.5 py-1 text-xs text-fg-3">
+          <span className="font-medium shrink-0">copy changed · v{annotation.versionNumber}</span>
           {annotation.quote !== '' ? (
-            <span className="max-w-[18rem] truncate">{annotation.quote}</span>
+            <span className="min-w-0 truncate">{annotation.quote}</span>
           ) : null}
         </span>
       </div>
     );
   }
   return (
-    <div className="mt-2">
+    <div className="mt-2 min-w-0">
       <button
         type="button"
         onClick={() => onClick?.(commentId)}
-        className="inline-flex min-h-[44px] min-w-[44px] items-center gap-1.5 rounded-md border border-annotation-line bg-annotation-bg px-2.5 py-1 text-xs text-fg hover:opacity-90"
+        className="flex w-fit max-w-full min-w-0 min-h-[44px] items-center gap-1.5 rounded-md border border-annotation-line bg-annotation-bg px-2.5 py-1 text-xs text-fg hover:opacity-90"
       >
-        <sup className="text-[10px] font-semibold text-annotation-line">{annotation.n}</sup>
-        <span className="max-w-[18rem] truncate">{annotation.quote}</span>
+        <sup className="shrink-0 text-[10px] font-semibold text-annotation-line">
+          {annotation.n}
+        </sup>
+        <span className="min-w-0 truncate">{annotation.quote}</span>
       </button>
     </div>
   );
@@ -165,6 +168,25 @@ export function canModifyComment(
     comment.author_user_id === currentUserId &&
     comment.deleted_at === null
   );
+}
+
+/**
+ * The seed body for a reply composer: pre-tag the comment's author so the reply
+ * opens with "@Author ". Guards mean we never tag an ex-member (legacy) author,
+ * never tag yourself, and only seed when the author is in the mention candidate
+ * list so the @[uuid] token resolves to a name. Otherwise the seed is empty and
+ * the composer mounts blank exactly as before.
+ */
+export function replySeed(
+  comment: Pick<CommentRow, 'author_user_id' | 'legacy_author_name'>,
+  currentUserId: string | null,
+  candidates: readonly MentionCandidate[],
+): string {
+  return comment.legacy_author_name === null &&
+    comment.author_user_id !== currentUserId &&
+    candidates.some((c) => c.id === comment.author_user_id)
+    ? `@[${comment.author_user_id}] `
+    : '';
 }
 
 const MENTION_TOKEN = /@\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
@@ -859,6 +881,7 @@ export function Comments({
                       placeholder="Write a reply"
                       submitLabel="Reply"
                       autoFocus
+                      initialBody={replySeed(comment, currentUserId, candidates)}
                     />
                   </div>
                 ) : null}

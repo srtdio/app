@@ -46,6 +46,9 @@ interface CommentComposerProps {
   placeholder?: string;
   submitLabel?: string;
   autoFocus?: boolean;
+  /** Seed the editor on mount (e.g. a reply pre-tagging the author); forwarded
+   *  verbatim to MentionInput. Undefined leaves the composer blank as before. */
+  initialBody?: string;
 }
 
 type PendingStatus =
@@ -80,6 +83,7 @@ export function CommentComposer({
   placeholder = 'Add a comment',
   submitLabel = 'Post',
   autoFocus = false,
+  initialBody,
 }: CommentComposerProps): ReactElement {
   const [body, setBody] = useState('');
   // The MentionInput is contentEditable and uncontrolled; clearing the draft
@@ -170,6 +174,7 @@ export function CommentComposer({
         placeholder={placeholder}
         autoFocus={autoFocus}
         onChange={setBody}
+        initialBody={initialBody}
       />
 
       {tooLong ? (

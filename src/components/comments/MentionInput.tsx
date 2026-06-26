@@ -82,11 +82,60 @@ export function activeMentionQuery(textBeforeCaret: string): string | null {
   return query;
 }
 
+/** The stored mention token; the same shape parseMentions / renderCommentBody use. */
+const INITIAL_MENTION_TOKEN =
+  /@\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
+
+/** The slice of `document` needed to build seeded editor content; lets the builder
+ *  be exercised with a fake factory in the node test env (no jsdom). */
+interface NodeFactory {
+  createElement(tagName: 'span'): HTMLElement;
+  createTextNode(data: string): Text;
+}
+
+/**
+ * Build the seeded editor children from a stored body, in document order. Each
+ * @[uuid] token whose uuid resolves to a member becomes a mention chip IDENTICAL
+ * to the one selectMember builds (so it serializes back to the same token); a
+ * token with no matching member is kept as its literal text so nothing is ever
+ * dropped. Text between tokens is appended verbatim.
+ */
+export function buildInitialContent(
+  body: string,
+  members: MentionCandidate[],
+  factory: NodeFactory,
+): Node[] {
+  const nodes: Node[] = [];
+  let last = 0;
+  for (const match of body.matchAll(INITIAL_MENTION_TOKEN)) {
+    const start = match.index ?? 0;
+    if (start > last) nodes.push(factory.createTextNode(body.slice(last, start)));
+    const id = (match[1] ?? '').toLowerCase();
+    const candidate = members.find((m) => m.id === id);
+    if (candidate !== undefined) {
+      const chip = factory.createElement('span');
+      chip.setAttribute('contenteditable', 'false');
+      chip.dataset.mentionId = candidate.id;
+      chip.className = 'rounded px-1 font-medium text-accent bg-accent-soft';
+      chip.textContent = `@${candidate.name}`;
+      nodes.push(chip);
+    } else {
+      nodes.push(factory.createTextNode(match[0]));
+    }
+    last = start + match[0].length;
+  }
+  if (last < body.length) nodes.push(factory.createTextNode(body.slice(last)));
+  return nodes;
+}
+
 interface MentionInputProps {
   members: MentionCandidate[];
   placeholder: string;
   autoFocus?: boolean;
   onChange: (body: string) => void;
+  /** Seed the editor once on mount (e.g. a reply pre-tagging the author). When
+   *  empty / undefined the editor mounts blank and uncontrolled, exactly as before. */
+  initialBody?: string | undefined;
 }
 
 /** The text from the start of the editable to the caret, or null if unavailable. */
@@ -106,14 +155,45 @@ export function MentionInput({
   placeholder,
   autoFocus = false,
   onChange,
+  initialBody,
 }: MentionInputProps): ReactElement {
   const editorRef = useRef<HTMLDivElement>(null);
+  const seeded = useRef(false);
   const [query, setQuery] = useState<string | null>(null);
   const [highlight, setHighlight] = useState(0);
 
+  // Seed the editor once per mount when an initialBody is given: build its chips
+  // and text, drop the caret AFTER the inserted content, focus, and emit so the
+  // parent body state is primed. Guarded by a ref so it never re-runs.
   useEffect(() => {
+    if (seeded.current) return;
+    const root = editorRef.current;
+    if (root === null || initialBody === undefined || initialBody === '') return;
+    seeded.current = true;
+    for (const node of buildInitialContent(initialBody, members, document)) {
+      root.appendChild(node);
+    }
+    const range = document.createRange();
+    range.selectNodeContents(root);
+    range.collapse(false);
+    const sel = window.getSelection();
+    if (sel !== null) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    root.focus();
+    emit();
+    // members/initialBody are mount-stable for a given composer instance; the ref
+    // guard makes this run-once regardless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // When seeded, the effect above already focused with the caret at the end;
+    // do not re-focus here or the caret would jump back to the start.
+    if (initialBody !== undefined && initialBody !== '') return;
     if (autoFocus) editorRef.current?.focus();
-  }, [autoFocus]);
+  }, [autoFocus, initialBody]);
 
   const matches = useMemo(() => {
     if (query === null) return [];
