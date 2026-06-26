@@ -398,9 +398,6 @@ export function Comments({
     null,
   );
 
-  // The decision toggle is a post-only affordance; briefs never carry it.
-  const showDecisionToggle = entityType === 'post';
-
   // Current user id is server-trusted (the session), never a prop. It gates the
   // edit / delete affordances; the procs re-check auth.uid() regardless.
   useEffect(() => {
@@ -548,7 +545,7 @@ export function Comments({
         entityId,
         body,
         attachmentVersionIds: options.attachmentVersionIds,
-        isDecision: showDecisionToggle ? options.isDecision : false,
+        isDecision: false,
         parentCommentId: options.parentCommentId,
         traceId: newTrace(),
       }),
@@ -688,11 +685,6 @@ export function Comments({
               : {})}
           />
           <span className="text-xs font-medium text-fg-2">{authorName}</span>
-          {comment.is_decision ? (
-            <span className="inline-flex items-center rounded-full border border-accent-line px-2 h-5 text-[11px] font-medium text-accent">
-              Decision
-            </span>
-          ) : null}
           {comment.edited_at !== null ? (
             <span className="text-[11px] text-fg-3">edited</span>
           ) : null}
@@ -801,7 +793,6 @@ export function Comments({
       <CommentComposer
         onSubmit={(body, options) => handleCreate(body, { ...options, parentCommentId: null })}
         members={candidates}
-        showDecisionToggle={showDecisionToggle}
         canAttach={canAttach}
         uploadFile={uploadFile}
       />
@@ -875,7 +866,6 @@ export function Comments({
                         handleCreate(body, { ...options, parentCommentId: comment.id })
                       }
                       members={candidates}
-                      showDecisionToggle={false}
                       canAttach={canAttach}
                       uploadFile={uploadFile}
                       placeholder="Write a reply"

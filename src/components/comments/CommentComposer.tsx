@@ -1,4 +1,4 @@
-// The extracted comment composer: textarea + optional decision toggle + an
+// The extracted comment composer: textarea + an
 // attachment picker, used by both the root composer and the per-thread reply
 // composer (the reply passes a parentCommentId-bearing onSubmit). Attachments
 // reuse the existing chat upload path verbatim (uploadFile -> asset-upload
@@ -37,8 +37,6 @@ interface CommentComposerProps {
   onSubmit: (body: string, options: CommentSubmitOptions) => Promise<CommentSubmitResult>;
   /** Workspace members offered by the @-mention picker (avatar + name + role). */
   members: MentionCandidate[];
-  /** The decision toggle is a post-only affordance; briefs never carry it. */
-  showDecisionToggle: boolean;
   /** Whether the attach affordance is shown (endpoint configured + a workspace). */
   canAttach: boolean;
   /** Upload one picked file via the shared asset pipeline; never throws. */
@@ -77,7 +75,6 @@ function doneVersionIds(pending: readonly Pending[]): string[] {
 export function CommentComposer({
   onSubmit,
   members,
-  showDecisionToggle,
   canAttach,
   uploadFile,
   placeholder = 'Add a comment',
@@ -89,7 +86,6 @@ export function CommentComposer({
   // The MentionInput is contentEditable and uncontrolled; clearing the draft
   // after a successful submit remounts it via this incrementing key.
   const [composerKey, setComposerKey] = useState(0);
-  const [isDecision, setIsDecision] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +144,7 @@ export function CommentComposer({
     setError(null);
     const result = await onSubmit(body, {
       attachmentVersionIds: doneVersionIds(pending),
-      isDecision: showDecisionToggle ? isDecision : false,
+      isDecision: false,
     });
     if (result.ok) {
       for (const item of pending) {
@@ -156,7 +152,6 @@ export function CommentComposer({
       }
       setBody('');
       setComposerKey((key) => key + 1);
-      setIsDecision(false);
       setPending([]);
       setSubmitting(false);
       return;
@@ -200,19 +195,6 @@ export function CommentComposer({
           >
             <IconPaperclip size={20} />
           </IconButton>
-        ) : null}
-
-        {showDecisionToggle ? (
-          <label className="inline-flex items-center gap-2 min-h-[44px] cursor-pointer select-none text-sm text-fg-2">
-            <input
-              type="checkbox"
-              className="h-5 w-5 rounded border-border accent-accent"
-              checked={isDecision}
-              onChange={(event) => setIsDecision(event.target.checked)}
-              disabled={submitting}
-            />
-            Mark as decision
-          </label>
         ) : null}
 
         <Button
