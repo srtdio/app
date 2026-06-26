@@ -1,0 +1,24 @@
+name = "chat-transcribe"
+main = "../../src/server/workers/chat-transcribe.ts"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+# Workers AI binding; the worker calls env.AI.run(whisper-large-v3-turbo).
+[ai]
+binding = "AI"
+
+[vars]
+ALLOWED_ORIGINS = "https://srtd.io,https://srtdio-app.pages.dev"
+
+# Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
+# srtdio-logs (see docs/cloudflare-logpush-setup.md).
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# All values are supplied as Worker secrets (wrangler secret put / CI), never
+# committed. Only binding names live here. Caller JWTs are verified the same way
+# chat-token verifies its caller - against the project's published ES256 JWKS -
+# so no shared secret is held; the project URL is the only verification input:
+#   SUPABASE_URL    - project URL; its published JWKS verifies caller tokens
+#   ALLOWED_ORIGINS - optional CORS allowlist (comma-separated origins)
