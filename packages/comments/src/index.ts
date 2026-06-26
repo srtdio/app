@@ -11,9 +11,11 @@
 //   * editComment and deleteComment write through the author-only
 //     comment_edit / comment_soft_delete SECURITY DEFINER procs (via the
 //     @srtdio/rpc wrappers); see ./edit and ./delete.
+//   * resolveComment toggles the thread-level resolved state on a root comment
+//     through the comment_resolve SECURITY DEFINER proc; see ./resolve.
 //
-// trace_id is always an explicit parameter, never inferred. The is_decision
-// toggle, reactions and inbox fan-out are out of scope here.
+// trace_id is always an explicit parameter, never inferred. Reactions and the
+// Realtime inbox fan-out are out of scope here.
 
 import type { Database, Json } from '@srtdio/schemas';
 import {
@@ -30,6 +32,7 @@ export type { Client, DomainError, Result } from '@srtdio/rpc';
 
 export { editComment, EditCommentSchema, type EditCommentInput } from './edit';
 export { deleteComment, DeleteCommentSchema, type DeleteCommentInput } from './delete';
+export { resolveComment, ResolveCommentSchema, type ResolveCommentInput } from './resolve';
 
 /** A persisted comment row, exactly as stored. */
 export type CommentRow = Database['public']['Tables']['comments']['Row'];
@@ -75,7 +78,6 @@ export interface CreateCommentInput {
   /** Optional explicit mentions; unioned with those parsed from the body. */
   mentions?: string[];
   attachment_asset_ids?: string[];
-  is_decision?: boolean;
   trace_id: string;
 }
 
@@ -135,7 +137,6 @@ export async function createComment(
     p_body: input.body,
     p_mentions: (mentions.length > 0 ? mentions : null) as Json,
     p_attachment_asset_ids: input.attachment_asset_ids ?? [],
-    p_is_decision: input.is_decision ?? false,
     p_trace_id: input.trace_id,
   };
 
@@ -152,8 +153,8 @@ export interface ListCommentsInput {
   workspace_id: string;
   entity_type: CommentEntityType;
   entity_id: string;
-  /** Filter to decisions (true) or non-decisions (false); omit for all. */
-  is_decision?: boolean;
+  /** Filter to resolved (true) or open (false) threads; omit for all. */
+  resolved?: boolean;
   /** Filter to a single author_user_id. */
   author?: string;
   /** Zero-based page index; PAGE_SIZE rows per page. */
@@ -184,7 +185,9 @@ export async function listComments(
     .eq('entity_type', input.entity_type)
     .eq('entity_id', input.entity_id);
 
-  if (input.is_decision !== undefined) query = query.eq('is_decision', input.is_decision);
+  if (input.resolved !== undefined) {
+    query = input.resolved ? query.not('resolved_at', 'is', null) : query.is('resolved_at', null);
+  }
   if (input.author !== undefined) query = query.eq('author_user_id', input.author);
 
   const { data, error } = await query

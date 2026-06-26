@@ -196,6 +196,14 @@ export function commentSoftDelete(
   return callProc(client, 'comment_soft_delete', args);
 }
 
+export type CommentResolveArgs = ProcArgs<'comment_resolve'>;
+export function commentResolve(
+  client: Client,
+  args: CommentResolveArgs,
+): Promise<Result<ProcReturns<'comment_resolve'>>> {
+  return callProc(client, 'comment_resolve', args);
+}
+
 export type WorkspaceCreateArgs = ProcArgs<'workspace_create'>;
 export function workspaceCreate(
   client: Client,

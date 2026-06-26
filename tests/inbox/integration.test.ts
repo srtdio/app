@@ -152,22 +152,23 @@ describe.runIf(INBOX_SUITE)('inbox-writer processEvent (integration)', () => {
     expect(rows.every((r) => r.tier === 'active')).toBe(true);
   });
 
-  it('comment is_decision flip emits decision_marked to audience minus author', async () => {
+  it('comment resolved_at flip emits comment_resolved to audience minus author', async () => {
     const ws = await freshWorkspace();
     const post = await insertPost(ws);
     await insertComment(ws, { entity_id: post.id, author_user_id: ws.client.id });
-    const decided = await insertComment(ws, {
+    const resolved = await insertComment(ws, {
       entity_id: post.id,
       author_user_id: ws.agency.id,
-      is_decision: true,
+      resolved_at: new Date().toISOString(),
+      resolved_by: ws.agency.id,
     });
 
     await processEvent(
-      { table: 'comments', type: 'UPDATE', row: decided, old: { is_decision: false } },
+      { table: 'comments', type: 'UPDATE', row: resolved, old: { resolved_at: null } },
       deps(),
     );
 
-    expect(await recipientsFor(admin, ws.workspaceId, 'decision_marked')).toEqual(
+    expect(await recipientsFor(admin, ws.workspaceId, 'comment_resolved')).toEqual(
       new Set([ws.owner.id, ws.client.id]),
     );
   });

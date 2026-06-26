@@ -166,10 +166,10 @@ export function activityLine(item: ActivityItem): string {
       return who !== null ? `${who} commented on ${target}` : `New comment on ${target}`;
     case 'mention':
       return who !== null ? `${who} mentioned you in ${target}` : `New mention in ${target}`;
-    case 'decision_marked':
+    case 'comment_resolved':
       return who !== null
-        ? `${who} flagged a decision on ${target}`
-        : `Decision flagged on ${target}`;
+        ? `${who} resolved a thread on ${target}`
+        : `A comment thread was resolved on ${target}`;
     case 'stage_change':
       return `Moved to ${item.toStage ?? 'a new stage'}`;
     case 'brief_created':
@@ -218,8 +218,8 @@ export function shortLine(item: ActivityItem): string {
       return 'New comment';
     case 'mention':
       return 'New mention';
-    case 'decision_marked':
-      return 'Decision flagged';
+    case 'comment_resolved':
+      return 'Thread resolved';
     case 'stage_change':
       return `Moved to ${item.toStage ?? 'a new stage'}`;
     case 'brief_created':
@@ -436,8 +436,11 @@ export type LoadResult = { ok: true; data: ActivityItem[] } | { ok: false; error
  * title are resolved by join (see fetchActivityEntries), never read from payload. */
 export const ACTIVITY_PAGE_SIZE = 50;
 
-/** Event types whose actor is the comment author, resolved via the comments join. */
-const COMMENT_EVENTS = ['comment', 'mention', 'decision_marked'];
+/** Event types whose actor is the comment author, resolved via the comments join.
+ *  comment_resolved is intentionally absent: its actor is the resolver (not the
+ *  comment author) and is not carried in the minimal payload, so it renders
+ *  actor-less. The comment deep-link still works off the payload comment_id. */
+const COMMENT_EVENTS = ['comment', 'mention'];
 
 const SELECT_COLS =
   'id, workspace_id, event_type, entity_type, entity_id, scope, tier, created_at, read_at, snoozed_until, payload';

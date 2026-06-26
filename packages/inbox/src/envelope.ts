@@ -4,7 +4,7 @@
 // when the change is not a fan-out trigger, so the worker has a single place to
 // short-circuit non-events.
 
-import { briefClosed, decisionFlipped, isActionable, stageChanged } from './transitions';
+import { briefClosed, isActionable, resolvedFlipped, stageChanged } from './transitions';
 import type { ChangeEvent, Envelope } from './types';
 
 export function buildEnvelope(event: ChangeEvent): Envelope | null {
@@ -13,8 +13,8 @@ export function buildEnvelope(event: ChangeEvent): Envelope | null {
   switch (event.table) {
     case 'comments': {
       const c = event.row;
-      // INSERT and the is_decision flip share the same linked entity.
-      if (event.type === 'UPDATE' && !decisionFlipped(event)) return null;
+      // INSERT and the open->resolved flip share the same linked entity.
+      if (event.type === 'UPDATE' && !resolvedFlipped(event)) return null;
       // entity_type is generated as `string`; runtime values are 'post'|'brief'.
       const entityType = c.entity_type as 'post' | 'brief';
       return {
@@ -28,7 +28,7 @@ export function buildEnvelope(event: ChangeEvent): Envelope | null {
           entity_type: c.entity_type,
           entity_id: c.entity_id,
           author_user_id: c.author_user_id,
-          is_decision: event.type === 'UPDATE' ? true : c.is_decision,
+          resolved: event.type === 'UPDATE',
         },
         sourceTable: 'comments',
         sourceId: c.id,

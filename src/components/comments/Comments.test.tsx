@@ -81,11 +81,12 @@ function row(partial: Partial<CommentRow> & { id: string }): CommentRow {
     edited_at: null,
     entity_id: 'entity',
     entity_type: 'post',
-    is_decision: false,
     legacy_author_name: null,
     legacy_author_email: null,
     mentions: null,
     parent_comment_id: null,
+    resolved_at: null,
+    resolved_by: null,
     workspace_id: 'ws',
     ...partial,
   };
@@ -315,7 +316,6 @@ describe('write-action wiring', () => {
       entityId: 'e',
       body: 'reply body',
       attachmentVersionIds: ['v1', 'v2'],
-      isDecision: false,
       parentCommentId: 'parent-1',
       traceId: 'trace-xyz',
     });
@@ -331,7 +331,6 @@ describe('write-action wiring', () => {
       entityId: 'e',
       body: 'top',
       attachmentVersionIds: [],
-      isDecision: false,
       parentCommentId: null,
       traceId: 't',
     });

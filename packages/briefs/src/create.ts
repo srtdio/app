@@ -89,7 +89,6 @@ export async function createBrief(
       p_body: input.initialCommentBody,
       p_mentions: null,
       p_attachment_asset_ids: [],
-      p_is_decision: false,
       p_trace_id: traceId,
     };
     const comment = await commentCreate(client, args);
