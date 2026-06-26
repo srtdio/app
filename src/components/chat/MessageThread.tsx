@@ -163,7 +163,16 @@ function MessageTicks({ status }: { status: MessageStatus }): ReactElement {
   );
 }
 
-function MessageBubble(props: {
+/**
+ * One message row in the WhatsApp-style thread. Own messages
+ * (`message.mine`) right-align with an accent-tinted bubble, no avatar and no
+ * sender name; peer messages left-align with the avatar and sender name above
+ * the bubble. The per-message actions trigger sits on the OUTER edge of the
+ * bubble (peer: right, own: left) so it is reachable on either alignment, and
+ * the tighter corner mirrors per side. All colours are design tokens, so light
+ * and dark stay at parity; exported for the layout assertions in the unit test.
+ */
+export function MessageBubble(props: {
   message: ThreadMessage;
   profiles: Map<string, ChatProfile>;
   cache: PresignCache;
@@ -185,48 +194,61 @@ function MessageBubble(props: {
     onReact,
     onReply,
   } = props;
+  const mine = message.mine;
   const name = senderName(message, profiles);
   return (
-    <li className="flex gap-3 px-4 py-2">
-      <Avatar name={name} {...senderAvatarProps(message, profiles)} size="md" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-fg">{name}</span>
-          <span className="text-xs text-fg-3">{formatTime(message.time)}</span>
-          {showTicks && message.mine ? <MessageTicks status={message.status} /> : null}
-          <IconButton
-            label="Message actions"
-            onClick={onTogglePicker}
-            className="ml-auto h-11 w-11 text-fg-3"
-          >
-            <IconMore size={16} />
-          </IconButton>
-        </div>
-        {message.reply !== null ? (
-          <div className="mt-1 flex items-start gap-2 rounded-md border-l-2 border-accent bg-panel-2 px-2 py-1">
-            <span className="flex min-w-0 flex-col">
-              <span className="text-xs font-medium text-accent">
-                {message.reply.authorUserId !== null
-                  ? (profiles.get(message.reply.authorUserId)?.displayName ?? 'Member')
-                  : 'Member'}
+    <li className={cn('flex items-start gap-2 px-4 py-2', mine ? 'flex-row-reverse' : 'flex-row')}>
+      {mine ? null : <Avatar name={name} {...senderAvatarProps(message, profiles)} size="md" />}
+      <div className={cn('flex min-w-0 max-w-[75%] flex-col gap-1', mine && 'items-end')}>
+        {mine ? null : <span className="text-sm font-medium text-fg">{name}</span>}
+        <div
+          className={cn(
+            'rounded-2xl border px-3 py-2',
+            mine
+              ? 'rounded-br-sm border-accent-line bg-accent-soft'
+              : 'rounded-bl-sm border-border bg-panel-2',
+          )}
+        >
+          {message.reply !== null ? (
+            <div className="mb-1 flex items-start gap-2 rounded-md border-l-2 border-accent bg-panel px-2 py-1">
+              <span className="flex min-w-0 flex-col">
+                <span className="text-xs font-medium text-accent">
+                  {message.reply.authorUserId !== null
+                    ? (profiles.get(message.reply.authorUserId)?.displayName ?? 'Member')
+                    : 'Member'}
+                </span>
+                <span className="truncate text-xs text-fg-3">{message.reply.preview}</span>
               </span>
-              <span className="truncate text-xs text-fg-3">{message.reply.preview}</span>
-            </span>
-          </div>
-        ) : null}
-        {message.body.trim() !== '' ? (
-          <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
-        ) : null}
-        <MessageAttachments
-          attachments={message.attachments}
-          cache={cache}
-          presignEnabled={presignEnabled}
-        />
-        {/* PR6 'post' extension point: shared posts resolve + render here,
-            separate from the attachment branch above. */}
-        <SharedPostCards postIds={message.sharedPostIds} />
+            </div>
+          ) : null}
+          {message.body.trim() !== '' ? (
+            <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
+          ) : null}
+          <MessageAttachments
+            attachments={message.attachments}
+            cache={cache}
+            presignEnabled={presignEnabled}
+          />
+          {/* PR6 'post' extension point: shared posts resolve + render here,
+              separate from the attachment branch above. */}
+          <SharedPostCards postIds={message.sharedPostIds} />
+        </div>
+        <div
+          className={cn(
+            'flex items-center gap-2 text-xs text-fg-3',
+            mine ? 'justify-end' : 'justify-start',
+          )}
+        >
+          <span>{formatTime(message.time)}</span>
+          {showTicks && mine ? <MessageTicks status={message.status} /> : null}
+        </div>
         {message.reactions.length > 0 ? (
-          <div className="mt-1 flex flex-wrap gap-1 transition-opacity duration-150">
+          <div
+            className={cn(
+              'flex flex-wrap gap-1 transition-opacity duration-150',
+              mine && 'justify-end',
+            )}
+          >
             {message.reactions.map((pill) => (
               <button
                 key={pill.emoji}
@@ -244,7 +266,12 @@ function MessageBubble(props: {
           </div>
         ) : null}
         {pickerOpen ? (
-          <div className="mt-1 flex flex-wrap gap-1 transition-opacity duration-150">
+          <div
+            className={cn(
+              'flex flex-wrap gap-1 transition-opacity duration-150',
+              mine && 'justify-end',
+            )}
+          >
             {QUICK_REACTIONS.map((emoji) => (
               <button
                 key={emoji}
@@ -268,6 +295,13 @@ function MessageBubble(props: {
           </div>
         ) : null}
       </div>
+      <IconButton
+        label="Message actions"
+        onClick={onTogglePicker}
+        className="h-11 w-11 shrink-0 text-fg-3"
+      >
+        <IconMore size={16} />
+      </IconButton>
     </li>
   );
 }
