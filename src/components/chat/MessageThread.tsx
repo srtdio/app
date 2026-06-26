@@ -126,13 +126,29 @@ function MessageTicks({ status }: { status: MessageStatus }): ReactElement {
   return (
     <span className={cn('inline-flex items-center', color)} aria-hidden="true">
       {status === 'sent' ? (
-        <svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor"
-          strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="16"
+          height="12"
+          viewBox="0 0 16 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M2 7l3.5 3.5L14 2" />
         </svg>
       ) : (
-        <svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="currentColor"
-          strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="20"
+          height="12"
+          viewBox="0 0 20 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M2 7l3.5 3.5L11 2" />
           <path d="M8 7l3.5 3.5L18 2" />
         </svg>
