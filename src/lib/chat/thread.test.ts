@@ -1,19 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgoraChat } from 'agora-chat';
 import {
+  addMessageReaction,
   appendMessage,
+  applyReactionChange,
   belongsToTarget,
   deliveredMessageId,
   echoMessage,
+  fetchReactions,
   loadHistory,
   mapTextMessage,
   markDelivered,
   markReadUpTo,
+  mergeHistoryReactions,
+  parseEventReactions,
+  parseReactionListItems,
+  removeMessageReaction,
   sendText,
   subscribeIncoming,
   targetFromSummary,
   THREAD_EVENT_HANDLER_ID,
   type ChannelTarget,
+  type MessageReaction,
   type ThreadConnection,
   type ThreadMessage,
 } from '@/lib/chat/thread';
@@ -71,6 +79,9 @@ function fakeConnection(over: Partial<ThreadConnection> = {}): ThreadConnection 
     send: vi.fn(),
     addEventHandler: vi.fn(),
     removeEventHandler: vi.fn(),
+    addReaction: vi.fn(),
+    deleteReaction: vi.fn(),
+    getReactionlist: vi.fn(),
     ...over,
   } as unknown as ThreadConnection;
 }
@@ -104,6 +115,7 @@ describe('mapTextMessage / belongsToTarget', () => {
       attachments: [],
       sharedPostIds: [],
       status: 'sent',
+      reactions: [],
     });
     expect(mapTextMessage(txt({ from: toAgoraUsername(ME) }), ME).mine).toBe(true);
   });
@@ -165,6 +177,7 @@ describe('subscribeIncoming', () => {
     const onMessage = vi.fn();
     const onDelivered = vi.fn();
     const onConversationRead = vi.fn();
+    const onReaction = vi.fn();
 
     const teardown = subscribeIncoming({
       connection,
@@ -173,6 +186,7 @@ describe('subscribeIncoming', () => {
       onMessage,
       onDelivered,
       onConversationRead,
+      onReaction,
     });
 
     expect(connection.addEventHandler).toHaveBeenCalledWith(
@@ -205,6 +219,7 @@ describe('subscribeIncoming', () => {
       onMessage: vi.fn(),
       onDelivered,
       onConversationRead,
+      onReaction: vi.fn(),
     });
     const handler = handlers[THREAD_EVENT_HANDLER_ID];
 
@@ -243,6 +258,7 @@ describe('subscribeIncoming', () => {
       onMessage: vi.fn(),
       onDelivered: vi.fn(),
       onConversationRead,
+      onReaction: vi.fn(),
     });
 
     handlers[THREAD_EVENT_HANDLER_ID]?.onChannelMessage?.({
@@ -299,6 +315,7 @@ describe('echoMessage / appendMessage', () => {
       attachments: [],
       sharedPostIds: [],
       status: 'sent',
+      reactions: [],
     });
   });
 
@@ -319,6 +336,7 @@ function mine(over: Partial<ThreadMessage>): ThreadMessage {
     attachments: [],
     sharedPostIds: [],
     status: 'sent',
+    reactions: [],
     ...over,
   };
 }
@@ -359,5 +377,138 @@ describe('markReadUpTo', () => {
     ];
     const next = markReadUpTo(messages, 1000);
     expect(next.map((m) => m.status)).toEqual(['read', 'read', 'sent', 'read', 'sent']);
+  });
+});
+
+describe('parseEventReactions', () => {
+  it('maps reaction/count/isAddedBySelf and defaults a missing isAddedBySelf to false', () => {
+    const reactions = [
+      { reaction: '👍', count: 2, userList: ['a', 'b'], isAddedBySelf: true },
+      { reaction: '❤️', count: 1, userList: ['c'] },
+    ] as unknown as AgoraChat.Reaction[];
+    expect(parseEventReactions(reactions)).toEqual([
+      { emoji: '👍', count: 2, mine: true },
+      { emoji: '❤️', count: 1, mine: false },
+    ]);
+  });
+});
+
+describe('parseReactionListItems', () => {
+  it('maps reaction/userCount/isAddedBySelf to the rendered shape', () => {
+    const items = [
+      { reaction: '😂', userCount: 3, isAddedBySelf: false, userList: ['a', 'b', 'c'] },
+      { reaction: '🙏', userCount: 1, isAddedBySelf: true, userList: ['me'] },
+    ] as unknown as AgoraChat.ReactionListItem[];
+    expect(parseReactionListItems(items)).toEqual([
+      { emoji: '😂', count: 3, mine: false },
+      { emoji: '🙏', count: 1, mine: true },
+    ]);
+  });
+});
+
+describe('applyReactionChange', () => {
+  it('replaces the matching message reactions and leaves others unchanged', () => {
+    const messages = [mine({ id: 'a' }), mine({ id: 'b' })];
+    const next: MessageReaction[] = [{ emoji: '👍', count: 1, mine: true }];
+    const result = applyReactionChange(messages, 'a', next);
+    expect(result[0]?.reactions).toEqual(next);
+    expect(result[1]?.reactions).toEqual([]);
+    // A non-matching id leaves every message untouched.
+    expect(applyReactionChange(messages, 'missing', next)).toEqual(messages);
+  });
+});
+
+describe('mergeHistoryReactions', () => {
+  it('sets reactions for mapped messages and leaves absent ones unchanged', () => {
+    const messages = [mine({ id: 'a' }), mine({ id: 'b' })];
+    const byId = new Map<string, MessageReaction[]>([
+      ['a', [{ emoji: '❤️', count: 2, mine: false }]],
+    ]);
+    const result = mergeHistoryReactions(messages, byId);
+    expect(result[0]?.reactions).toEqual([{ emoji: '❤️', count: 2, mine: false }]);
+    expect(result[1]?.reactions).toEqual([]);
+  });
+});
+
+describe('fetchReactions', () => {
+  it('returns an empty Map without calling the SDK when there are no ids', async () => {
+    const getReactionlist = vi.fn();
+    const connection = fakeConnection({ getReactionlist });
+    const map = await fetchReactions({ connection, target: GROUP_TARGET, messageIds: [] });
+    expect(map.size).toBe(0);
+    expect(getReactionlist).not.toHaveBeenCalled();
+  });
+
+  it('keys parsed reactions by message id from the SDK result', async () => {
+    const getReactionlist = vi.fn().mockResolvedValue({
+      data: [
+        {
+          msgId: 'm1',
+          reactionList: [
+            { reaction: '👍', userCount: 2, isAddedBySelf: true, userList: ['a', 'b'] },
+          ],
+        },
+      ],
+    });
+    const connection = fakeConnection({ getReactionlist });
+    const map = await fetchReactions({ connection, target: GROUP_TARGET, messageIds: ['m1'] });
+    expect(getReactionlist).toHaveBeenCalledWith({
+      chatType: 'groupChat',
+      messageId: ['m1'],
+      groupId: 'agora-group-1',
+    });
+    expect(map.get('m1')).toEqual([{ emoji: '👍', count: 2, mine: true }]);
+  });
+
+  it('returns an empty Map when getReactionlist rejects, never throwing', async () => {
+    const getReactionlist = vi.fn().mockRejectedValue(new Error('reactions disabled'));
+    const connection = fakeConnection({ getReactionlist });
+    const map = await fetchReactions({
+      connection,
+      target: { targetId: toAgoraUsername(PEER), chatType: 'singleChat' },
+      messageIds: ['m1'],
+    });
+    expect(map.size).toBe(0);
+  });
+});
+
+describe('addMessageReaction / removeMessageReaction', () => {
+  it('adds and removes via the SDK with messageId and emoji as reaction', async () => {
+    const addReaction = vi.fn().mockResolvedValue(undefined);
+    const deleteReaction = vi.fn().mockResolvedValue(undefined);
+    const connection = fakeConnection({ addReaction, deleteReaction });
+    await addMessageReaction({ connection, messageId: 'm1', emoji: '👍' });
+    await removeMessageReaction({ connection, messageId: 'm1', emoji: '👍' });
+    expect(addReaction).toHaveBeenCalledWith({ messageId: 'm1', reaction: '👍' });
+    expect(deleteReaction).toHaveBeenCalledWith({ messageId: 'm1', reaction: '👍' });
+  });
+});
+
+describe('subscribeIncoming reactions', () => {
+  it('routes onReactionChange to onReaction with the message id and parsed reactions', () => {
+    const handlers: Record<string, AgoraChat.EventHandlerType> = {};
+    const connection = fakeConnection({
+      addEventHandler: vi.fn((id: string, handler: AgoraChat.EventHandlerType) => {
+        handlers[id] = handler;
+      }),
+    });
+    const onReaction = vi.fn();
+
+    subscribeIncoming({
+      connection,
+      target: { targetId: toAgoraUsername(PEER), chatType: 'singleChat' },
+      currentUserId: ME,
+      onMessage: vi.fn(),
+      onDelivered: vi.fn(),
+      onConversationRead: vi.fn(),
+      onReaction,
+    });
+
+    handlers[THREAD_EVENT_HANDLER_ID]?.onReactionChange?.({
+      messageId: 'm1',
+      reactions: [{ reaction: '👍', count: 1, userList: ['me'], isAddedBySelf: true }],
+    } as unknown as AgoraChat.ReactionMessage);
+
+    expect(onReaction).toHaveBeenCalledWith('m1', [{ emoji: '👍', count: 1, mine: true }]);
   });
 });

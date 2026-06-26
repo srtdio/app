@@ -39,6 +39,14 @@ export interface ChannelTarget {
   chatType: ThreadChatType;
 }
 
+/** One emoji reaction on a message, aggregated across users by the SDK. */
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  /** True when the current user is among the reactors (tap again to remove). */
+  mine: boolean;
+}
+
 /** A message as the thread UI renders it: sender mapped back to a Sorted id. */
 export interface ThreadMessage {
   id: string;
@@ -54,6 +62,8 @@ export interface ThreadMessage {
   sharedPostIds: string[];
   /** Delivery/read state; rendered as ticks for own DM messages only. */
   status: MessageStatus;
+  /** Emoji reactions on this message; empty when there are none. */
+  reactions: MessageReaction[];
 }
 
 /**
@@ -69,6 +79,13 @@ export interface ThreadConnection extends ChatConnection {
     pageSize?: number;
     searchDirection?: 'up' | 'down';
   }): Promise<AgoraChat.HistoryMessages>;
+  addReaction(params: { messageId: string; reaction: string }): Promise<void>;
+  deleteReaction(params: { messageId: string; reaction: string }): Promise<void>;
+  getReactionlist(params: {
+    chatType: 'singleChat' | 'groupChat';
+    messageId: string[];
+    groupId?: string;
+  }): Promise<AgoraChat.AsyncResult<AgoraChat.GetReactionListResult[]>>;
 }
 
 /** Injected `AgoraChat.message.create` for text; keeps the SDK out of this module. */
@@ -123,7 +140,93 @@ export function mapTextMessage(raw: AgoraChat.TextMsgBody, currentUserId: string
     sharedPostIds: parseSharedPostIds(raw.ext),
     // Incoming status is never rendered; ticks render for own messages only.
     status: 'sent',
+    // Reactions arrive separately (history fetch + live onReactionChange event).
+    reactions: [],
   };
+}
+
+/** Map the live onReactionChange payload's reactions to the rendered shape. */
+export function parseEventReactions(reactions: AgoraChat.Reaction[]): MessageReaction[] {
+  return reactions.map((r) => ({
+    emoji: r.reaction,
+    count: r.count,
+    mine: r.isAddedBySelf ?? false,
+  }));
+}
+
+/** Map a history getReactionlist result's items to the rendered shape. */
+export function parseReactionListItems(items: AgoraChat.ReactionListItem[]): MessageReaction[] {
+  return items.map((i) => ({
+    emoji: i.reaction,
+    count: i.userCount,
+    mine: i.isAddedBySelf,
+  }));
+}
+
+/** Replace the matching message's reactions with the new full list; others unchanged. */
+export function applyReactionChange(
+  messages: ThreadMessage[],
+  messageId: string,
+  reactions: MessageReaction[],
+): ThreadMessage[] {
+  return messages.map((m) => (m.id === messageId ? { ...m, reactions } : m));
+}
+
+/** Set reactions for messages present in the map; messages absent from it are unchanged. */
+export function mergeHistoryReactions(
+  messages: ThreadMessage[],
+  byId: Map<string, MessageReaction[]>,
+): ThreadMessage[] {
+  return messages.map((m) => {
+    const reactions = byId.get(m.id);
+    return reactions !== undefined ? { ...m, reactions } : m;
+  });
+}
+
+/**
+ * Fetch reactions for a batch of message ids and key them by message id. Returns
+ * an empty Map without calling the SDK when there are no ids, and swallows any
+ * SDK error (reactions disabled for the account) to an empty Map so history load
+ * always succeeds.
+ */
+export async function fetchReactions(params: {
+  connection: ThreadConnection;
+  target: ChannelTarget;
+  messageIds: string[];
+}): Promise<Map<string, MessageReaction[]>> {
+  const byId = new Map<string, MessageReaction[]>();
+  if (params.messageIds.length === 0) return byId;
+  try {
+    const res = await params.connection.getReactionlist({
+      chatType: params.target.chatType,
+      messageId: params.messageIds,
+      ...(params.target.chatType === 'groupChat' ? { groupId: params.target.targetId } : {}),
+    });
+    for (const result of res.data ?? []) {
+      byId.set(result.msgId, parseReactionListItems(result.reactionList));
+    }
+    return byId;
+  } catch {
+    return byId;
+  }
+}
+
+/** Add the current user's reaction to a message via the SDK. */
+export async function addMessageReaction(params: {
+  connection: ThreadConnection;
+  messageId: string;
+  emoji: string;
+}): Promise<void> {
+  await params.connection.addReaction({ messageId: params.messageId, reaction: params.emoji });
+}
+
+/** Remove the current user's reaction from a message via the SDK. */
+export async function removeMessageReaction(params: {
+  connection: ThreadConnection;
+  messageId: string;
+  emoji: string;
+}): Promise<void> {
+  await params.connection.deleteReaction({ messageId: params.messageId, reaction: params.emoji });
 }
 
 /** Monotonic ordering of statuses; a receipt can only advance, never downgrade. */
@@ -205,8 +308,18 @@ export function subscribeIncoming(params: {
   onDelivered: (ackedId: string) => void;
   /** The peer read the conversation up to this epoch-ms time (DM only). */
   onConversationRead: (readTimeMs: number) => void;
+  /** A message's reaction list changed; carries the full updated list. */
+  onReaction: (messageId: string, reactions: MessageReaction[]) => void;
 }): () => void {
-  const { connection, target, currentUserId, onMessage, onDelivered, onConversationRead } = params;
+  const {
+    connection,
+    target,
+    currentUserId,
+    onMessage,
+    onDelivered,
+    onConversationRead,
+    onReaction,
+  } = params;
   connection.addEventHandler(THREAD_EVENT_HANDLER_ID, {
     onTextMessage: (raw) => {
       if (belongsToTarget(raw, target)) {
@@ -222,6 +335,7 @@ export function subscribeIncoming(params: {
         onConversationRead(msg.time);
       }
     },
+    onReactionChange: (msg) => onReaction(msg.messageId, parseEventReactions(msg.reactions)),
   });
   return () => connection.removeEventHandler(THREAD_EVENT_HANDLER_ID);
 }
@@ -280,6 +394,7 @@ export function echoMessage(params: {
     attachments: params.attachments,
     sharedPostIds: params.sharedPostIds,
     status: 'sent',
+    reactions: [],
   };
 }
 

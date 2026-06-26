@@ -229,6 +229,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
               onSend={thread.send}
               typingUserIds={typing.typingUserIds}
               onTyping={typing.notifyTyping}
+              onToggleReaction={thread.toggleReaction}
               showTicks={target?.chatType === 'singleChat'}
               {...(selected?.peerUserId != null ? { presence } : {})}
               {...(isDesktop ? {} : { onBack })}
