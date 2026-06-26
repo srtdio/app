@@ -98,7 +98,9 @@ export function annotationChip(
         onClick={() => onClick?.(commentId)}
         className="flex w-fit max-w-full min-w-0 min-h-[44px] items-center gap-1.5 rounded-md border border-annotation-line bg-annotation-bg px-2.5 py-1 text-xs text-fg hover:opacity-90"
       >
-        <sup className="shrink-0 text-[10px] font-semibold text-annotation-line">{annotation.n}</sup>
+        <sup className="shrink-0 text-[10px] font-semibold text-annotation-line">
+          {annotation.n}
+        </sup>
         <span className="min-w-0 truncate">{annotation.quote}</span>
       </button>
     </div>
