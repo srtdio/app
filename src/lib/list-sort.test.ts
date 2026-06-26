@@ -191,7 +191,9 @@ describe('filterByWindow', () => {
 
   it('excludes a null target_date for week and month', () => {
     const items = [wrow('null', null)];
-    expect(filterByWindow(items, 'week', { now, timeZone: 'UTC', weekStartDay: 1 })).toHaveLength(0);
+    expect(filterByWindow(items, 'week', { now, timeZone: 'UTC', weekStartDay: 1 })).toHaveLength(
+      0,
+    );
     expect(filterByWindow(items, 'month', { now, timeZone: 'UTC', weekStartDay: 1 })).toHaveLength(
       0,
     );
