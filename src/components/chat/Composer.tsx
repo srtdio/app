@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import type { FormEvent, ReactElement } from 'react';
+import type { FormEvent, KeyboardEvent, ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
@@ -48,6 +48,14 @@ interface Pending {
 
 let pendingSeq = 0;
 
+/**
+ * Whether a composer keydown should send rather than insert a newline: plain
+ * Enter only. Shift+Enter (newline) and Enter mid-IME-composition are excluded.
+ */
+export function isSendKeydown(key: string, shiftKey: boolean, isComposing: boolean): boolean {
+  return key === 'Enter' && !shiftKey && !isComposing;
+}
+
 function completedAttachments(pending: readonly Pending[]): MessageAttachment[] {
   const out: MessageAttachment[] = [];
   for (const item of pending) {
@@ -73,6 +81,7 @@ export function Composer(props: ComposerProps): ReactElement {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const formRef = useRef<HTMLFormElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -143,6 +152,14 @@ export function Composer(props: ComposerProps): ReactElement {
     setSharedPosts((prev) => togglePost(prev, post));
   }
 
+  // Enter sends; Shift+Enter and IME composition keep the default newline. Route
+  // through the form's submit so the Send button's exact handler and guard run.
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (!isSendKeydown(event.key, event.shiftKey, event.nativeEvent.isComposing)) return;
+    event.preventDefault();
+    formRef.current?.requestSubmit();
+  }
+
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!canSend) return;
@@ -167,6 +184,7 @@ export function Composer(props: ComposerProps): ReactElement {
 
   return (
     <form
+      ref={formRef}
       onSubmit={submit}
       className="flex flex-col gap-2 border-t border-border bg-panel px-4 py-3"
     >
@@ -199,6 +217,7 @@ export function Composer(props: ComposerProps): ReactElement {
         <Textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Write a message"
           rows={1}
           className="min-h-[44px]"
