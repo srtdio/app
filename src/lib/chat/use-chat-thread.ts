@@ -24,7 +24,7 @@ import {
   type ThreadConnection,
   type ThreadMessage,
 } from '@/lib/chat/thread';
-import type { MessageAttachment } from '@/lib/chat/attachments';
+import type { MessageAttachment, ReplyQuote } from '@/lib/chat/attachments';
 import type { ChatConnection } from '@/lib/chat/types';
 import { logger } from '@/lib/logger';
 
@@ -37,6 +37,7 @@ export interface UseChatThread {
     text: string,
     attachments?: readonly MessageAttachment[],
     sharedPostIds?: readonly string[],
+    reply?: ReplyQuote | null,
   ) => Promise<void>;
   /** Add or remove the current user's reaction; live state arrives via the event. */
   toggleReaction: (messageId: string, emoji: string, currentlyMine: boolean) => void;
@@ -123,6 +124,7 @@ export function useChatThread(params: {
       text: string,
       attachments: readonly MessageAttachment[] = [],
       sharedPostIds: readonly string[] = [],
+      reply: ReplyQuote | null = null,
     ): Promise<void> => {
       const connection = connectionRef.current;
       const sendTarget = targetRef.current;
@@ -142,6 +144,7 @@ export function useChatThread(params: {
           text: trimmed,
           attachments,
           sharedPostIds,
+          reply,
           createMessage: createTextMessage,
         });
         const time = Date.now();
@@ -152,6 +155,7 @@ export function useChatThread(params: {
           time,
           attachments: [...attachments],
           sharedPostIds: [...sharedPostIds],
+          reply,
         });
         setMessages((prev) => appendMessage(prev, echo));
         onOwnMessage?.(trimmed, time);

@@ -7,11 +7,13 @@ import {
   canSendAttachmentMessage,
   classifyAttachment,
   parseAttachments,
+  parseReply,
   parseSharedPostIds,
   precheckImage,
   toMessageAttachment,
   uploadChatAttachment,
   type MessageAttachment,
+  type ReplyQuote,
 } from '@/lib/chat/attachments';
 
 function fakeFile(name: string, type: string): File {
@@ -152,7 +154,7 @@ describe('buildMessageExt', () => {
     const attachments: MessageAttachment[] = [
       { assetId: 'a1', name: 'one.png', mime: 'image/png' },
     ];
-    expect(buildMessageExt({ attachments, sharedPostIds: ['p1', 'p2'] })).toEqual({
+    expect(buildMessageExt({ attachments, sharedPostIds: ['p1', 'p2'], reply: null })).toEqual({
       attachment_asset_ids: ['a1'],
       attachment_meta: [{ assetId: 'a1', name: 'one.png', mime: 'image/png' }],
       shared_post_ids: ['p1', 'p2'],
@@ -160,11 +162,51 @@ describe('buildMessageExt', () => {
   });
 
   it('carries shared posts with no attachments (shared-posts-only send)', () => {
-    expect(buildMessageExt({ attachments: [], sharedPostIds: ['p1'] })).toEqual({
+    expect(buildMessageExt({ attachments: [], sharedPostIds: ['p1'], reply: null })).toEqual({
       attachment_asset_ids: [],
       attachment_meta: [],
       shared_post_ids: ['p1'],
     });
+  });
+
+  it('carries reply_to when a reply quote is supplied', () => {
+    const reply: ReplyQuote = { id: 'm9', authorUserId: 'u7', preview: 'see this' };
+    const result = buildMessageExt({ attachments: [], sharedPostIds: [], reply });
+    expect(result.reply_to).toEqual({ id: 'm9', author_user_id: 'u7', preview: 'see this' });
+  });
+
+  it('omits the reply_to key entirely when reply is null', () => {
+    const result = buildMessageExt({ attachments: [], sharedPostIds: [], reply: null });
+    expect('reply_to' in result).toBe(false);
+  });
+});
+
+describe('parseReply', () => {
+  it('reads a valid reply_to off the ext', () => {
+    expect(
+      parseReply({ reply_to: { id: 'm9', author_user_id: 'u7', preview: 'hello' } }),
+    ).toEqual({ id: 'm9', authorUserId: 'u7', preview: 'hello' });
+  });
+
+  it('maps an absent or non-string author_user_id to null', () => {
+    expect(parseReply({ reply_to: { id: 'm9', preview: 'hi' } })).toEqual({
+      id: 'm9',
+      authorUserId: null,
+      preview: 'hi',
+    });
+    expect(parseReply({ reply_to: { id: 'm9', author_user_id: 7, preview: 'hi' } })).toEqual({
+      id: 'm9',
+      authorUserId: null,
+      preview: 'hi',
+    });
+  });
+
+  it('returns null when reply_to is missing, the ext is not an object, or id/preview are absent', () => {
+    expect(parseReply({ shared_post_ids: ['p1'] })).toBeNull();
+    expect(parseReply(undefined)).toBeNull();
+    expect(parseReply(null)).toBeNull();
+    expect(parseReply({ reply_to: { author_user_id: 'u7', preview: 'hi' } })).toBeNull();
+    expect(parseReply({ reply_to: { id: 'm9', author_user_id: 'u7' } })).toBeNull();
   });
 });
 

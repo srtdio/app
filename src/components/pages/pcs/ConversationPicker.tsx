@@ -82,6 +82,7 @@ export function ConversationPicker({
         text: '',
         attachments: [],
         sharedPostIds: [postId],
+        reply: null,
         createMessage: createTextMessage,
       });
       onToast('Post sent to chat.');
