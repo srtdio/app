@@ -155,7 +155,7 @@ export function BriefCard({
           onOpen();
         }
       }}
-      className={`text-left cursor-pointer rounded-xl border border-border bg-panel p-4 flex gap-3 min-h-[44px] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+      className={`text-left cursor-pointer rounded-xl border border-border bg-panel p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
         closed ? 'opacity-70' : ''
       }`}
     >
@@ -174,7 +174,7 @@ export function BriefCard({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-        <div className="flex items-start gap-3">
+        <div className="flex min-w-0 items-start gap-3">
           <div className="text-sm font-medium leading-snug line-clamp-2 flex-1">{brief.title}</div>
           <span className="flex items-center gap-1.5 shrink-0 text-xs text-fg-3">
             <span
@@ -206,7 +206,7 @@ export function BriefCard({
 
         {!closed ? (
           <div
-            className="flex items-center gap-2 pt-0.5"
+            className="flex min-w-0 flex-wrap items-center gap-2 pt-0.5"
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
             role="presentation"
