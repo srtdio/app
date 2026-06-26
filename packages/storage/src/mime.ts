@@ -9,6 +9,11 @@ export const ALLOWED_MIME_TYPES = [
   'image/svg+xml',
   'video/mp4',
   'video/quicktime',
+  // Recorded voice-note audio. mp4 (AAC in ISO-BMFF), webm (Opus/Vorbis in
+  // Matroska), and mpeg (MP3) are the formats browsers emit from MediaRecorder.
+  'audio/mp4',
+  'audio/webm',
+  'audio/mpeg',
   'application/pdf',
   // Office documents. Macro-enabled types (docm, xlsm, pptm and their
   // application/vnd.ms-*.macroEnabled.12 MIME strings) are deliberately
