@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { activeMentionQuery, serializeComposer } from '@/components/comments/MentionInput';
+import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
+import {
+  activeMentionQuery,
+  buildInitialContent,
+  serializeComposer,
+} from '@/components/comments/MentionInput';
 
 // The repo's vitest runs in the node environment (no jsdom), and the prompt
 // scopes these tests to the two pure functions only: caret / selection behaviour
@@ -92,6 +97,57 @@ describe('serializeComposer', () => {
     expect(serializeComposer(root([text('hi '), el('DIV', [text('see '), mention(ID2)])]))).toBe(
       `hi \nsee @[${ID2}]`,
     );
+  });
+});
+
+// buildInitialContent builds real DOM nodes via document; the node test env has
+// no jsdom, so we drive it with a fake factory whose nodes share the minimal
+// shape serializeComposer reads (nodeType / nodeValue, or tagName / dataset /
+// childNodes). This exercises the seeding logic without mounting the component.
+function fakeFactory(): Parameters<typeof buildInitialContent>[2] {
+  return {
+    createElement(): HTMLElement {
+      return {
+        nodeType: ELEMENT_NODE,
+        tagName: 'SPAN',
+        dataset: {},
+        className: '',
+        textContent: '',
+        childNodes: [],
+        setAttribute() {},
+      } as unknown as HTMLElement;
+    },
+    createTextNode(value: string): Text {
+      return { nodeType: TEXT_NODE, nodeValue: value } as unknown as Text;
+    },
+  };
+}
+
+function mentionId(node: unknown): string | undefined {
+  return (node as { dataset?: { mentionId?: string } }).dataset?.mentionId;
+}
+
+describe('buildInitialContent (reply seed)', () => {
+  const members: MentionCandidate[] = [{ id: ID, name: 'Ann', role: '', avatarUrl: null }];
+
+  it('builds one mention chip for a seeded token and serializes back to the token', () => {
+    const nodes = buildInitialContent(`@[${ID}] `, members, fakeFactory());
+    const chips = nodes.filter((node) => mentionId(node) === ID);
+    expect(chips).toHaveLength(1);
+    expect(serializeComposer(root(nodes as unknown[]))).toBe(`@[${ID}] `);
+  });
+
+  it('seeds nothing for an empty body (editor mounts blank, no mention)', () => {
+    const nodes = buildInitialContent('', members, fakeFactory());
+    expect(nodes).toHaveLength(0);
+    expect(nodes.some((node) => mentionId(node) !== undefined)).toBe(false);
+    expect(serializeComposer(root([]))).toBe('');
+  });
+
+  it('keeps an unresolved token as literal text, never dropping it', () => {
+    const nodes = buildInitialContent(`@[${ID2}] hi`, members, fakeFactory());
+    expect(nodes.some((node) => mentionId(node) !== undefined)).toBe(false);
+    expect(serializeComposer(root(nodes as unknown[]))).toBe(`@[${ID2}] hi`);
   });
 });
 
