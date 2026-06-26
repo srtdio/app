@@ -255,6 +255,32 @@ describe('classifyAttachment', () => {
     expect(classifyAttachment('application/pdf')).toBe('file');
     expect(classifyAttachment('')).toBe('file');
   });
+
+  it('routes audio mimes to the voice-note branch', () => {
+    expect(classifyAttachment('audio/webm')).toBe('audio');
+    expect(classifyAttachment('audio/mp4')).toBe('audio');
+    expect(classifyAttachment('audio/mpeg')).toBe('audio');
+  });
+});
+
+describe('voice-note transcript round-trips through the ext', () => {
+  it('carries the transcript in attachment_meta and reads it back', () => {
+    const attachments: MessageAttachment[] = [
+      { assetId: 'v1', name: 'note.webm', mime: 'audio/webm', transcript: 'hello there' },
+    ];
+    const ext = buildAttachmentExt(attachments);
+    expect(ext.attachment_meta).toEqual([
+      { assetId: 'v1', name: 'note.webm', mime: 'audio/webm', transcript: 'hello there' },
+    ]);
+    expect(parseAttachments(ext)).toEqual([
+      { assetId: 'v1', name: 'note.webm', mime: 'audio/webm', transcript: 'hello there' },
+    ]);
+  });
+
+  it('omits the transcript key entirely for a non-audio attachment', () => {
+    const ext = buildAttachmentExt([{ assetId: 'a1', name: 'one.png', mime: 'image/png' }]);
+    expect('transcript' in ext.attachment_meta[0]!).toBe(false);
+  });
 });
 
 describe('canSendAttachmentMessage', () => {

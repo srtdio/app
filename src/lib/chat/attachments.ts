@@ -30,6 +30,8 @@ export interface MessageAttachment {
   assetId: string;
   name: string;
   mime: string;
+  /** Whisper transcript for a voice note; absent for non-audio attachments. */
+  transcript?: string;
 }
 
 /** The picker `accept` for the Photo item: the image subset of the shared allowlist. */
@@ -43,10 +45,10 @@ export const FILE_ACCEPT = UPLOAD_ACCEPT;
  * extend `classifyAttachment` and the MessageThread dispatch together, never the
  * chip components, so each branch stays self-contained.
  */
-export type AttachmentKind = 'image' | 'file';
+export type AttachmentKind = 'image' | 'audio' | 'file';
 
 export function classifyAttachment(mime: string): AttachmentKind {
-  return isImageMime(mime) ? 'image' : 'file';
+  return isImageMime(mime) ? 'image' : mime.startsWith('audio/') ? 'audio' : 'file';
 }
 
 /**
@@ -63,10 +65,11 @@ export interface AttachmentExt {
 export function buildAttachmentExt(attachments: readonly MessageAttachment[]): AttachmentExt {
   return {
     attachment_asset_ids: attachments.map((attachment) => attachment.assetId),
-    attachment_meta: attachments.map((attachment) => ({
-      assetId: attachment.assetId,
-      name: attachment.name,
-      mime: attachment.mime,
+    attachment_meta: attachments.map((a) => ({
+      assetId: a.assetId,
+      name: a.name,
+      mime: a.mime,
+      ...(a.transcript !== undefined ? { transcript: a.transcript } : {}),
     })),
   };
 }
@@ -158,7 +161,8 @@ function isMessageAttachment(value: unknown): value is MessageAttachment {
   return (
     typeof record.assetId === 'string' &&
     typeof record.name === 'string' &&
-    typeof record.mime === 'string'
+    typeof record.mime === 'string' &&
+    (record.transcript === undefined || typeof record.transcript === 'string')
   );
 }
 
