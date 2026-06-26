@@ -3,15 +3,19 @@ import type { AgoraChat } from 'agora-chat';
 import {
   appendMessage,
   belongsToTarget,
+  deliveredMessageId,
   echoMessage,
   loadHistory,
   mapTextMessage,
+  markDelivered,
+  markReadUpTo,
   sendText,
   subscribeIncoming,
   targetFromSummary,
   THREAD_EVENT_HANDLER_ID,
   type ChannelTarget,
   type ThreadConnection,
+  type ThreadMessage,
 } from '@/lib/chat/thread';
 import { toAgoraUsername } from '@/lib/chat/agora-identity';
 import type { ChannelSummary } from '@/lib/chat-reads';
@@ -99,6 +103,7 @@ describe('mapTextMessage / belongsToTarget', () => {
       mine: false,
       attachments: [],
       sharedPostIds: [],
+      status: 'sent',
     });
     expect(mapTextMessage(txt({ from: toAgoraUsername(ME) }), ME).mine).toBe(true);
   });
@@ -158,12 +163,16 @@ describe('subscribeIncoming', () => {
       removeEventHandler: vi.fn(),
     });
     const onMessage = vi.fn();
+    const onDelivered = vi.fn();
+    const onConversationRead = vi.fn();
 
     const teardown = subscribeIncoming({
       connection,
       target: { targetId: toAgoraUsername(PEER), chatType: 'singleChat' },
       currentUserId: ME,
       onMessage,
+      onDelivered,
+      onConversationRead,
     });
 
     expect(connection.addEventHandler).toHaveBeenCalledWith(
@@ -177,6 +186,70 @@ describe('subscribeIncoming', () => {
 
     teardown();
     expect(connection.removeEventHandler).toHaveBeenCalledWith(THREAD_EVENT_HANDLER_ID);
+  });
+
+  it('routes delivery and conversation-read receipts to their callbacks', () => {
+    const handlers: Record<string, AgoraChat.EventHandlerType> = {};
+    const connection = fakeConnection({
+      addEventHandler: vi.fn((id: string, handler: AgoraChat.EventHandlerType) => {
+        handlers[id] = handler;
+      }),
+    });
+    const onDelivered = vi.fn();
+    const onConversationRead = vi.fn();
+
+    subscribeIncoming({
+      connection,
+      target: { targetId: toAgoraUsername(PEER), chatType: 'singleChat' },
+      currentUserId: ME,
+      onMessage: vi.fn(),
+      onDelivered,
+      onConversationRead,
+    });
+    const handler = handlers[THREAD_EVENT_HANDLER_ID];
+
+    handler?.onDeliveredMessage?.({ mid: 'mid-1', ackId: 'ack-1' } as AgoraChat.DeliveryMsgBody);
+    handler?.onDeliveredMessage?.({ ackId: 'ack-2' } as AgoraChat.DeliveryMsgBody);
+    expect(onDelivered.mock.calls).toEqual([['mid-1'], ['ack-2']]);
+
+    handler?.onChannelMessage?.({
+      from: toAgoraUsername(PEER),
+      time: 9000,
+    } as AgoraChat.ChannelMsgBody);
+    expect(onConversationRead).toHaveBeenCalledTimes(1);
+    expect(onConversationRead).toHaveBeenCalledWith(9000);
+
+    // A channel ack from a different user is ignored for this DM target.
+    handler?.onChannelMessage?.({
+      from: 'u_someoneelse',
+      time: 9999,
+    } as AgoraChat.ChannelMsgBody);
+    expect(onConversationRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores conversation-read receipts for a group target', () => {
+    const handlers: Record<string, AgoraChat.EventHandlerType> = {};
+    const connection = fakeConnection({
+      addEventHandler: vi.fn((id: string, handler: AgoraChat.EventHandlerType) => {
+        handlers[id] = handler;
+      }),
+    });
+    const onConversationRead = vi.fn();
+
+    subscribeIncoming({
+      connection,
+      target: GROUP_TARGET,
+      currentUserId: ME,
+      onMessage: vi.fn(),
+      onDelivered: vi.fn(),
+      onConversationRead,
+    });
+
+    handlers[THREAD_EVENT_HANDLER_ID]?.onChannelMessage?.({
+      from: GROUP_TARGET.targetId,
+      time: 9000,
+    } as AgoraChat.ChannelMsgBody);
+    expect(onConversationRead).not.toHaveBeenCalled();
   });
 });
 
@@ -225,6 +298,7 @@ describe('echoMessage / appendMessage', () => {
       mine: true,
       attachments: [],
       sharedPostIds: [],
+      status: 'sent',
     });
   });
 
@@ -232,5 +306,58 @@ describe('echoMessage / appendMessage', () => {
     const base = mapTextMessage(txt({ id: 'dup' }), ME);
     expect(appendMessage([base], base)).toHaveLength(1);
     expect(appendMessage([base], mapTextMessage(txt({ id: 'new' }), ME))).toHaveLength(2);
+  });
+});
+
+function mine(over: Partial<ThreadMessage>): ThreadMessage {
+  return {
+    id: 'x',
+    senderUserId: ME,
+    body: 'yo',
+    time: 1000,
+    mine: true,
+    attachments: [],
+    sharedPostIds: [],
+    status: 'sent',
+    ...over,
+  };
+}
+
+describe('deliveredMessageId', () => {
+  it('prefers mid, falls back to ackId, and is undefined when both are absent', () => {
+    expect(deliveredMessageId({ mid: 'm', ackId: 'a' } as AgoraChat.DeliveryMsgBody)).toBe('m');
+    expect(deliveredMessageId({ ackId: 'a' } as AgoraChat.DeliveryMsgBody)).toBe('a');
+    expect(deliveredMessageId({} as AgoraChat.DeliveryMsgBody)).toBeUndefined();
+  });
+});
+
+describe('markDelivered', () => {
+  it('advances the matching own sent message and leaves everything else untouched', () => {
+    const messages = [
+      mine({ id: 'a', status: 'sent' }),
+      mine({ id: 'b', status: 'sent' }),
+      mine({ id: 'c', status: 'read' }),
+      mine({ id: 'd', status: 'sent', mine: false }),
+    ];
+    const next = markDelivered(messages, 'a');
+    expect(next.map((m) => m.status)).toEqual(['delivered', 'sent', 'read', 'sent']);
+    // No downgrade: an already-read own message stays read even if acked.
+    expect(markDelivered(messages, 'c')[2]?.status).toBe('read');
+    // A non-mine message with the matching id is never changed.
+    expect(markDelivered(messages, 'd')[3]?.status).toBe('sent');
+  });
+});
+
+describe('markReadUpTo', () => {
+  it('marks own messages at or before the read time as read, monotonically', () => {
+    const messages = [
+      mine({ id: 'a', time: 500, status: 'sent' }),
+      mine({ id: 'b', time: 1000, status: 'delivered' }),
+      mine({ id: 'c', time: 2000, status: 'sent' }),
+      mine({ id: 'd', time: 500, status: 'read' }),
+      mine({ id: 'e', time: 500, status: 'sent', mine: false }),
+    ];
+    const next = markReadUpTo(messages, 1000);
+    expect(next.map((m) => m.status)).toEqual(['read', 'read', 'sent', 'read', 'sent']);
   });
 });

@@ -4,7 +4,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { IconChat, IconChevronRight, IconSettings } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ChatProfile } from '@/lib/chat-reads';
-import type { ThreadMessage } from '@/lib/chat/thread';
+import type { MessageStatus, ThreadMessage } from '@/lib/chat/thread';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -36,6 +36,8 @@ interface MessageThreadProps {
   onTyping?: () => void;
   /** DM peer presence; absent for groups. Renders a header status line when available. */
   presence?: { online: boolean; lastTimeMs: number | null; available: boolean };
+  /** True only for DM threads; gates delivery/read ticks on own bubbles. */
+  showTicks?: boolean;
 }
 
 /**
@@ -114,13 +116,55 @@ function formatTime(time: number): string {
   return new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * WhatsApp-style delivery/read ticks for an own DM message. Single check = sent,
+ * double check = delivered, double check in the accent token = read. Inline SVG
+ * with token-class colour only, so light and dark stay at parity; no animation.
+ */
+function MessageTicks({ status }: { status: MessageStatus }): ReactElement {
+  const color = status === 'read' ? 'text-accent' : 'text-fg-3';
+  return (
+    <span className={cn('inline-flex items-center', color)} aria-hidden="true">
+      {status === 'sent' ? (
+        <svg
+          width="16"
+          height="12"
+          viewBox="0 0 16 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M2 7l3.5 3.5L14 2" />
+        </svg>
+      ) : (
+        <svg
+          width="20"
+          height="12"
+          viewBox="0 0 20 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M2 7l3.5 3.5L11 2" />
+          <path d="M8 7l3.5 3.5L18 2" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 function MessageBubble(props: {
   message: ThreadMessage;
   profiles: Map<string, ChatProfile>;
   cache: PresignCache;
   presignEnabled: boolean;
+  showTicks: boolean;
 }): ReactElement {
-  const { message, profiles, cache, presignEnabled } = props;
+  const { message, profiles, cache, presignEnabled, showTicks } = props;
   const name = senderName(message, profiles);
   return (
     <li className="flex gap-3 px-4 py-2">
@@ -129,6 +173,7 @@ function MessageBubble(props: {
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-medium text-fg">{name}</span>
           <span className="text-xs text-fg-3">{formatTime(message.time)}</span>
+          {showTicks && message.mine ? <MessageTicks status={message.status} /> : null}
         </div>
         {message.body.trim() !== '' ? (
           <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
@@ -150,6 +195,7 @@ function ThreadBody(
   props: Pick<MessageThreadProps, 'messages' | 'loading' | 'profiles'> & {
     cache: PresignCache;
     presignEnabled: boolean;
+    showTicks: boolean;
   },
 ): ReactElement {
   if (props.loading) {
@@ -172,6 +218,7 @@ function ThreadBody(
           profiles={props.profiles}
           cache={props.cache}
           presignEnabled={props.presignEnabled}
+          showTicks={props.showTicks}
         />
       ))}
     </ul>
@@ -217,6 +264,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         profiles={props.profiles}
         cache={presignCache}
         presignEnabled={presignEnabled}
+        showTicks={props.showTicks ?? false}
       />
       <TypingIndicator ids={props.typingUserIds} profiles={props.profiles} />
       <Composer

@@ -30,6 +30,9 @@ const HISTORY_PAGE_SIZE = 50;
 
 export type ThreadChatType = 'singleChat' | 'groupChat';
 
+/** Delivery/read state of an own message, advanced monotonically by live receipts. */
+export type MessageStatus = 'sent' | 'delivered' | 'read';
+
 /** Where a channel's messages live on the Agora side. */
 export interface ChannelTarget {
   targetId: string;
@@ -49,6 +52,8 @@ export interface ThreadMessage {
   attachments: MessageAttachment[];
   /** Shared post uuids read off the SDK message `ext`; empty when there are none. */
   sharedPostIds: string[];
+  /** Delivery/read state; rendered as ticks for own DM messages only. */
+  status: MessageStatus;
 }
 
 /**
@@ -116,7 +121,43 @@ export function mapTextMessage(raw: AgoraChat.TextMsgBody, currentUserId: string
     // sender wrote the attachment ids + render metadata and shared post ids there.
     attachments: parseAttachments(raw.ext),
     sharedPostIds: parseSharedPostIds(raw.ext),
+    // Incoming status is never rendered; ticks render for own messages only.
+    status: 'sent',
   };
+}
+
+/** Monotonic ordering of statuses; a receipt can only advance, never downgrade. */
+const STATUS_RANK: Record<MessageStatus, number> = { sent: 0, delivered: 1, read: 2 };
+
+/** The acked message id carried on a delivery receipt: `mid`, falling back to `ackId`. */
+export function deliveredMessageId(msg: AgoraChat.DeliveryMsgBody): string | undefined {
+  return msg.mid ?? msg.ackId;
+}
+
+/**
+ * Mark the own message whose id matches the delivery ack as 'delivered'. Pure and
+ * monotonic: only a mine message currently ranked below 'delivered' advances;
+ * non-mine and already-further messages are returned unchanged.
+ */
+export function markDelivered(messages: ThreadMessage[], ackedId: string): ThreadMessage[] {
+  return messages.map((m) =>
+    m.id === ackedId && m.mine && STATUS_RANK[m.status] < STATUS_RANK.delivered
+      ? { ...m, status: 'delivered' }
+      : m,
+  );
+}
+
+/**
+ * Mark every own message sent at or before the conversation read time as 'read'.
+ * Pure and monotonic: only mine messages ranked below 'read' advance; non-mine
+ * and later messages are unchanged.
+ */
+export function markReadUpTo(messages: ThreadMessage[], readTimeMs: number): ThreadMessage[] {
+  return messages.map((m) =>
+    m.mine && m.time <= readTimeMs && STATUS_RANK[m.status] < STATUS_RANK.read
+      ? { ...m, status: 'read' }
+      : m,
+  );
 }
 
 /** Whether a live text message belongs to the open channel. */
@@ -160,12 +201,25 @@ export function subscribeIncoming(params: {
   target: ChannelTarget;
   currentUserId: string;
   onMessage: (message: ThreadMessage) => void;
+  /** A delivery receipt arrived for one of our sent messages (DM only). */
+  onDelivered: (ackedId: string) => void;
+  /** The peer read the conversation up to this epoch-ms time (DM only). */
+  onConversationRead: (readTimeMs: number) => void;
 }): () => void {
-  const { connection, target, currentUserId, onMessage } = params;
+  const { connection, target, currentUserId, onMessage, onDelivered, onConversationRead } = params;
   connection.addEventHandler(THREAD_EVENT_HANDLER_ID, {
     onTextMessage: (raw) => {
       if (belongsToTarget(raw, target)) {
         onMessage(mapTextMessage(raw, currentUserId));
+      }
+    },
+    onDeliveredMessage: (msg) => {
+      const id = deliveredMessageId(msg);
+      if (id !== undefined) onDelivered(id);
+    },
+    onChannelMessage: (msg) => {
+      if (target.chatType === 'singleChat' && msg.from === target.targetId) {
+        onConversationRead(msg.time);
       }
     },
   });
@@ -225,6 +279,7 @@ export function echoMessage(params: {
     mine: true,
     attachments: params.attachments,
     sharedPostIds: params.sharedPostIds,
+    status: 'sent',
   };
 }
 

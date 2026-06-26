@@ -7,4 +7,4 @@ import type { ChatConnection, CreateConnection } from '@/lib/chat/types';
 
 /** Construct an agora-chat Connection bound to the worker-provided App Key. */
 export const createAgoraConnection: CreateConnection = (appKey): ChatConnection =>
-  new websdk.connection({ appKey });
+  new websdk.connection({ appKey, delivery: true });
