@@ -191,7 +191,8 @@ export function MessageBubble(props: {
     consumeClick: () => boolean;
   };
 }): ReactElement {
-  const { message, profiles, cache, presignEnabled, showTicks, isGroup, head, onBadgeClick } = props;
+  const { message, profiles, cache, presignEnabled, showTicks, isGroup, head, onBadgeClick } =
+    props;
   const { bubbleRef, press } = props;
   const mine = message.mine;
   const name = senderName(message, profiles);
