@@ -234,27 +234,28 @@ export function MessageBubble(props: {
             }
           }}
           className={cn(
-            'relative select-none [-webkit-touch-callout:none] rounded-2xl border px-3 py-2',
+            'relative min-w-0 select-none [-webkit-touch-callout:none] rounded-2xl border px-3 py-2',
             mine
               ? 'rounded-br-sm border-accent-line bg-accent-soft'
               : 'rounded-bl-sm border-border bg-panel-2',
           )}
         >
           {message.reply !== null ? (
-            <div className="mb-1 flex items-start gap-2 rounded-md border-l-2 border-accent bg-panel px-2 py-1">
-              <span className="flex min-w-0 flex-col">
-                <span className="text-xs font-medium text-accent">
+            <div className="mb-1 flex min-w-0 gap-2 overflow-hidden rounded-md bg-panel-3">
+              <span className="w-[3.5px] shrink-0 self-stretch rounded-full bg-accent" aria-hidden="true" />
+              <span className="flex min-w-0 flex-col py-1 pr-2">
+                <span className="truncate text-xs font-medium text-accent">
                   {message.reply.authorUserId !== null
                     ? (profiles.get(message.reply.authorUserId)?.displayName ?? 'Member')
                     : 'Member'}
                 </span>
-                <span className="truncate text-xs text-fg-3">{message.reply.preview}</span>
+                <span className="truncate text-xs text-fg-2">{message.reply.preview}</span>
               </span>
             </div>
           ) : null}
           {textOnly ? (
             <>
-              <p className="whitespace-pre-wrap break-words text-sm text-fg-2">
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm text-fg-2">
                 {message.body}
                 <span
                   className={cn('inline-block', mine ? 'w-[74px]' : 'w-[52px]')}
@@ -268,7 +269,7 @@ export function MessageBubble(props: {
           ) : (
             <>
               {message.body.trim() !== '' ? (
-                <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{message.body}</p>
+                <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm text-fg-2">{message.body}</p>
               ) : null}
               <MessageAttachments
                 attachments={message.attachments}
