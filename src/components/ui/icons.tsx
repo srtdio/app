@@ -384,3 +384,12 @@ export function IconPlay(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconCalendar(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x={4} y={5} width={16} height={16} rx={2} />
+      <path d="M4 9h16M8 3v4M16 3v4" />
+    </Svg>
+  );
+}

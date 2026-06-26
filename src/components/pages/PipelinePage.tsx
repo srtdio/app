@@ -10,6 +10,7 @@ import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
+import { PipelineDateWindow } from '@/components/pages/pipeline/PipelineDateWindow';
 import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
 import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { Toasts } from '@/components/pages/assets/Toasts';
@@ -20,10 +21,13 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useSort } from '@/lib/use-sort';
 import {
+  DATE_WINDOW_DEFAULT,
   POST_SORT_DEFAULT,
   POST_SORT_OPTIONS,
   filterByFields,
+  filterByWindow,
   sortPosts,
+  type DateWindow,
   type PostSort,
 } from '@/lib/list-sort';
 import { groupByStage, stageColumns } from '@/lib/post-board';
@@ -141,6 +145,16 @@ export function postCountLabel(count: number): string {
   return `${count} ${count === 1 ? 'post' : 'posts'}`;
 }
 
+/**
+ * Heal a persisted sort the trimmed menu no longer lists. Live workspaces stored
+ * 'newest'/'oldest'/'title' from the old five-option menu; those map back to the
+ * default. A value the menu still lists passes through. The store itself is left
+ * untouched, so the first user pick (onSortChange = setSort) overwrites it.
+ */
+export function sanitizePostSort(sort: string): PostSort {
+  return POST_SORT_OPTIONS.some((o) => o.value === sort) ? (sort as PostSort) : POST_SORT_DEFAULT;
+}
+
 /** Everything {@link runMovePost} needs, so the page wires it and tests drive it directly. */
 export interface MovePostDeps {
   client: Client;
@@ -205,11 +219,24 @@ interface OnboardingStep {
 
 export function PipelinePage() {
   const navigate = useNavigate();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaces } = useWorkspace();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [stage, setStage] = useState('all');
   const [search, setSearch] = useState('');
   const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
+  // Sanitize the persisted sort: a live workspace may hold a value the trimmed
+  // menu no longer lists ('newest'/'title'). Fall back to the default for the
+  // derivation and the header, but leave setSort untouched so the first user pick
+  // heals storage.
+  const activeSort = sanitizePostSort(sort);
+  // Target-date window: not persisted, resets to 'any' on load (the global
+  // `window` is used below for addEventListener, so this is named dateWindow).
+  const [dateWindow, setDateWindow] = useState<DateWindow>(DATE_WINDOW_DEFAULT);
+  // The active workspace's civil-date context for the window filter; the helper
+  // re-validates the zone, so a bad stored value is still safe.
+  const activeWorkspace = workspaces.find((w) => w.id === workspaceId);
+  const timeZone = activeWorkspace?.timezone ?? 'UTC';
+  const weekStartDay = activeWorkspace?.week_start_day ?? 1;
   const [cardDismissed, setCardDismissed] = useState(false);
   const [skipped, setSkipped] = useState<Record<string, boolean>>({});
 
@@ -279,10 +306,14 @@ export function PipelinePage() {
   const sorted = useMemo(
     () =>
       sortPosts(
-        filterByFields(posts, search, (post) => [post.title, post.caption, post.platform]),
-        sort,
+        filterByWindow(
+          filterByFields(posts, search, (post) => [post.title, post.caption, post.platform]),
+          dateWindow,
+          { now: new Date(), timeZone, weekStartDay },
+        ),
+        activeSort,
       ),
-    [posts, search, sort],
+    [posts, search, dateWindow, activeSort, timeZone, weekStartDay],
   );
   const grouped = useMemo(() => groupByStage(sorted, STAGES), [sorted]);
 
@@ -368,12 +399,20 @@ export function PipelinePage() {
       {pipelineHeader({
         search,
         onSearchChange: setSearch,
-        sort,
+        sort: activeSort,
         onSortChange: setSort,
         stage,
         onStageChange: setStage,
         counts,
       })}
+
+      {/* Target-date window filter: renders on BOTH breakpoints directly under the
+          stage chip bar (above the desktop kanban and the mobile feed), left-
+          aligned and compact, sharing the count row's horizontal padding. It feeds
+          the single `sorted` derivation, so it narrows every surface at once. */}
+      <div className="px-4 md:px-6 pt-3">
+        <PipelineDateWindow value={dateWindow} onChange={setDateWindow} />
+      </div>
 
       {/* Honest counter: the FILTERED total (counts.all, summed from the same
           grouped list the board/feed render), so it tracks the active search
