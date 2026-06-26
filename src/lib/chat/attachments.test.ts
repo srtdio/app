@@ -183,9 +183,11 @@ describe('buildMessageExt', () => {
 
 describe('parseReply', () => {
   it('reads a valid reply_to off the ext', () => {
-    expect(
-      parseReply({ reply_to: { id: 'm9', author_user_id: 'u7', preview: 'hello' } }),
-    ).toEqual({ id: 'm9', authorUserId: 'u7', preview: 'hello' });
+    expect(parseReply({ reply_to: { id: 'm9', author_user_id: 'u7', preview: 'hello' } })).toEqual({
+      id: 'm9',
+      authorUserId: 'u7',
+      preview: 'hello',
+    });
   });
 
   it('maps an absent or non-string author_user_id to null', () => {
