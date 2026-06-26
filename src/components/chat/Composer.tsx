@@ -70,9 +70,7 @@ export function isSendKeydown(input: {
   isComposing: boolean;
   coarsePointer: boolean;
 }): boolean {
-  return (
-    input.key === 'Enter' && !input.shiftKey && !input.isComposing && !input.coarsePointer
-  );
+  return input.key === 'Enter' && !input.shiftKey && !input.isComposing && !input.coarsePointer;
 }
 
 function completedAttachments(pending: readonly Pending[]): MessageAttachment[] {

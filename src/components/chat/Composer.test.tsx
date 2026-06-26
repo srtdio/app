@@ -9,32 +9,32 @@ import { isSendKeydown } from '@/components/chat/Composer';
 // default newline/compose behaviour.
 describe('isSendKeydown', () => {
   it('sends on plain Enter', () => {
-    expect(isSendKeydown({ key: 'Enter', shiftKey: false, isComposing: false, coarsePointer: false })).toBe(
-      true,
-    );
+    expect(
+      isSendKeydown({ key: 'Enter', shiftKey: false, isComposing: false, coarsePointer: false }),
+    ).toBe(true);
   });
 
   it('does not send on Shift+Enter (newline)', () => {
-    expect(isSendKeydown({ key: 'Enter', shiftKey: true, isComposing: false, coarsePointer: false })).toBe(
-      false,
-    );
+    expect(
+      isSendKeydown({ key: 'Enter', shiftKey: true, isComposing: false, coarsePointer: false }),
+    ).toBe(false);
   });
 
   it('does not send on Enter during IME composition', () => {
-    expect(isSendKeydown({ key: 'Enter', shiftKey: false, isComposing: true, coarsePointer: false })).toBe(
-      false,
-    );
+    expect(
+      isSendKeydown({ key: 'Enter', shiftKey: false, isComposing: true, coarsePointer: false }),
+    ).toBe(false);
   });
 
   it('does not send on Enter on a touch-primary (coarse pointer) device', () => {
-    expect(isSendKeydown({ key: 'Enter', shiftKey: false, isComposing: false, coarsePointer: true })).toBe(
-      false,
-    );
+    expect(
+      isSendKeydown({ key: 'Enter', shiftKey: false, isComposing: false, coarsePointer: true }),
+    ).toBe(false);
   });
 
   it('ignores other keys', () => {
-    expect(isSendKeydown({ key: 'a', shiftKey: false, isComposing: false, coarsePointer: false })).toBe(
-      false,
-    );
+    expect(
+      isSendKeydown({ key: 'a', shiftKey: false, isComposing: false, coarsePointer: false }),
+    ).toBe(false);
   });
 });
