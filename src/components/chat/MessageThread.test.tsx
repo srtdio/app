@@ -118,3 +118,70 @@ describe('MessageBubble WhatsApp-style layout', () => {
     expect(allText(root)).not.toContain('Alice');
   });
 });
+
+function findByChildren(root: ReactElement, text: string): ReactElement | null {
+  let found: ReactElement | null = null;
+  walk(root, (el) => {
+    const child = (el.props as { children?: ReactNode }).children;
+    if (child === text) found = el;
+  });
+  return found;
+}
+
+function findByAriaLabel(root: ReactElement, label: string): ReactElement | null {
+  let found: ReactElement | null = null;
+  walk(root, (el) => {
+    if ((el.props as { ['aria-label']?: string })['aria-label'] === label) found = el;
+  });
+  return found;
+}
+
+describe('MessageBubble reply quote', () => {
+  const preview = 'x'.repeat(300);
+  const replyMessage = makeMessage({
+    reply: { id: 'orig-7', authorUserId: 'peer-1', preview },
+  });
+
+  it('line-clamps the quote instead of truncating, and is a jump button', () => {
+    const root = renderBubble(replyMessage);
+
+    const previewSpan = findByChildren(root, preview);
+    expect(previewSpan).not.toBeNull();
+    const previewClass = (previewSpan?.props as { className?: string }).className ?? '';
+    expect(previewClass).toContain('line-clamp-2');
+    expect(previewClass).toContain('[overflow-wrap:anywhere]');
+    expect(previewClass).not.toContain('truncate');
+
+    const authorSpan = findByChildren(root, 'Alice');
+    expect(authorSpan).not.toBeNull();
+    const authorClass = (authorSpan?.props as { className?: string }).className ?? '';
+    expect(authorClass).toContain('line-clamp-1');
+
+    const jump = findByAriaLabel(root, 'Go to quoted message');
+    expect(jump).not.toBeNull();
+    expect((jump?.props as { type?: string }).type).toBe('button');
+  });
+
+  it('invokes onJumpToMessage with the quoted id on click', () => {
+    const onJumpToMessage = vi.fn();
+    const root = MessageBubble({
+      message: replyMessage,
+      profiles: PROFILES,
+      cache,
+      presignEnabled: false,
+      showTicks: false,
+      isGroup: false,
+      head: true,
+      onBadgeClick: () => {},
+      onJumpToMessage,
+    });
+
+    const jump = findByAriaLabel(root, 'Go to quoted message');
+    expect(jump).not.toBeNull();
+    const onClick = (jump?.props as { onClick?: (e: { stopPropagation: () => void }) => void })
+      .onClick;
+    onClick?.({ stopPropagation: () => {} });
+    expect(onJumpToMessage).toHaveBeenCalledTimes(1);
+    expect(onJumpToMessage).toHaveBeenCalledWith('orig-7');
+  });
+});

@@ -184,6 +184,7 @@ export function MessageBubble(props: {
   isGroup: boolean;
   head: boolean;
   onBadgeClick: () => void;
+  onJumpToMessage?: (messageId: string) => void;
   bubbleRef?: Ref<HTMLDivElement>;
   press?: {
     handlers: LongPressHandlers;
@@ -195,6 +196,7 @@ export function MessageBubble(props: {
     props;
   const { bubbleRef, press } = props;
   const mine = message.mine;
+  const reply = message.reply;
   const name = senderName(message, profiles);
   const showMeta = isGroup && !mine && head;
   const gutter = isGroup && !mine && !head;
@@ -213,6 +215,7 @@ export function MessageBubble(props: {
   );
   return (
     <li
+      data-msg-id={message.id}
       className={cn(
         'flex items-start gap-2 px-4 py-2',
         mine ? 'flex-row-reverse' : 'flex-row',
@@ -225,6 +228,7 @@ export function MessageBubble(props: {
         {showMeta ? <span className="text-sm font-medium text-fg">{name}</span> : null}
         <div
           ref={bubbleRef}
+          data-bubble=""
           {...press?.handlers}
           onContextMenu={press?.onContextMenu}
           onClickCapture={(e) => {
@@ -240,21 +244,31 @@ export function MessageBubble(props: {
               : 'rounded-bl-sm border-border bg-panel-2',
           )}
         >
-          {message.reply !== null ? (
-            <div className="mb-1 flex min-w-0 gap-2 overflow-hidden rounded-md bg-panel-3">
+          {reply !== null ? (
+            <button
+              type="button"
+              aria-label="Go to quoted message"
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onJumpToMessage?.(reply.id);
+              }}
+              className="mb-1 flex min-h-[44px] w-full min-w-0 gap-2 overflow-hidden rounded-md bg-panel-3 text-left"
+            >
               <span
                 className="w-[3.5px] shrink-0 self-stretch rounded-full bg-accent"
                 aria-hidden="true"
               />
               <span className="flex min-w-0 flex-col py-1 pr-2">
-                <span className="truncate text-xs font-medium text-accent">
-                  {message.reply.authorUserId !== null
-                    ? (profiles.get(message.reply.authorUserId)?.displayName ?? 'Member')
+                <span className="line-clamp-1 [overflow-wrap:anywhere] text-xs font-medium text-accent">
+                  {reply.authorUserId !== null
+                    ? (profiles.get(reply.authorUserId)?.displayName ?? 'Member')
                     : 'Member'}
                 </span>
-                <span className="truncate text-xs text-fg-2">{message.reply.preview}</span>
+                <span className="line-clamp-2 [overflow-wrap:anywhere] text-xs text-fg-2">
+                  {reply.preview}
+                </span>
               </span>
-            </div>
+            </button>
           ) : null}
           {textOnly ? (
             <>
@@ -332,6 +346,7 @@ function MessageRow(props: {
   isGroup: boolean;
   head: boolean;
   onOpen: (message: ThreadMessage, rect: DOMRect | null) => void;
+  onJumpToMessage?: (messageId: string) => void;
 }): ReactElement {
   const bubbleRef = useRef<HTMLDivElement>(null);
   const { handlers, consumeClickSuppression } = useLongPress(() =>
@@ -352,6 +367,7 @@ function MessageRow(props: {
       head={props.head}
       bubbleRef={bubbleRef}
       press={{ handlers, onContextMenu, consumeClick: consumeClickSuppression }}
+      {...(props.onJumpToMessage !== undefined ? { onJumpToMessage: props.onJumpToMessage } : {})}
       onBadgeClick={() =>
         props.onOpen(props.message, bubbleRef.current?.getBoundingClientRect() ?? null)
       }
@@ -370,6 +386,19 @@ function ThreadBody(
 ): ReactElement {
   const [menu, setMenu] = useState<{ message: ThreadMessage; rect: DOMRect | null } | null>(null);
   const toast = useToast();
+  const listRef = useRef<HTMLUListElement>(null);
+  const scrollToMessage = (id: string): void => {
+    const el = listRef.current?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
+    if (el == null) {
+      toast.show({ title: 'That message is not loaded here' });
+      return;
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const flash = el.querySelector('[data-bubble]') ?? el;
+    const ring = ['ring-2', 'ring-accent', 'ring-inset'];
+    flash.classList.add(...ring);
+    window.setTimeout(() => flash.classList.remove(...ring), 1200);
+  };
   if (props.loading) {
     return <div className="flex-1 px-4 py-6 text-sm text-fg-3">Loading messages</div>;
   }
@@ -383,7 +412,7 @@ function ThreadBody(
   }
   return (
     <>
-      <ul className="flex-1 overflow-y-auto py-2">
+      <ul ref={listRef} className="flex-1 overflow-y-auto py-2">
         {props.messages.map((message, i) => (
           <MessageRow
             key={message.id}
@@ -395,6 +424,7 @@ function ThreadBody(
             isGroup={props.isGroup}
             head={isHead(props.messages[i - 1], message)}
             onOpen={(m, rect) => setMenu({ message: m, rect })}
+            onJumpToMessage={scrollToMessage}
           />
         ))}
       </ul>
