@@ -333,9 +333,8 @@ describe('renderCommentBody (author + mention resolution)', () => {
   });
 
   it('renders both a mention span and a URL anchor in one body', () => {
-    const tree = renderCommentBody(
-      `hi @[${UUID_A}] see https://srtd.io/x`,
-      (id) => (id === UUID_A ? 'Ada' : null),
+    const tree = renderCommentBody(`hi @[${UUID_A}] see https://srtd.io/x`, (id) =>
+      id === UUID_A ? 'Ada' : null,
     );
     const span = elements(tree).find((el) => el.type === 'span')!;
     expect(text(span)).toContain('@Ada');
