@@ -191,6 +191,8 @@ export function replySeed(
 }
 
 const MENTION_TOKEN = /@\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
+const URL_TOKEN = /https?:\/\/[^\s<]+/gi;
+const URL_TRAILING = /[.,;:!?)\]}'"]+$/;
 
 /**
  * Render a comment body, replacing every @[uuid] mention token with an inline,
@@ -198,6 +200,34 @@ const MENTION_TOKEN = /@\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
  * resolves to a member renders "@(ex-member)". Surrounding text is returned
  * verbatim so the caller's whitespace-pre-wrap preserves the original layout.
  */
+function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
+  let last = 0;
+  let i = 0;
+  for (const m of text.matchAll(URL_TOKEN)) {
+    const start = m.index ?? 0;
+    let href = m[0];
+    const trail = href.match(URL_TRAILING);
+    const suffix = trail !== null ? trail[0] : '';
+    if (suffix !== '') href = href.slice(0, href.length - suffix.length);
+    if (start > last) nodes.push(text.slice(last, start));
+    nodes.push(
+      <a
+        key={`${keyBase}-u${i}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-accent underline underline-offset-2 [overflow-wrap:anywhere]"
+      >
+        {href}
+      </a>,
+    );
+    if (suffix !== '') nodes.push(suffix);
+    i += 1;
+    last = start + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+}
+
 export function renderCommentBody(
   body: string,
   nameOf: (id: string) => string | null,
@@ -207,7 +237,7 @@ export function renderCommentBody(
   let key = 0;
   for (const match of body.matchAll(MENTION_TOKEN)) {
     const start = match.index ?? 0;
-    if (start > last) nodes.push(body.slice(last, start));
+    if (start > last) pushBodyText(nodes, body.slice(last, start), `t${key}`);
     const id = (match[1] ?? '').toLowerCase();
     const name = nameOf(id);
     nodes.push(
@@ -218,7 +248,7 @@ export function renderCommentBody(
     key += 1;
     last = start + match[0].length;
   }
-  if (last < body.length) nodes.push(body.slice(last));
+  if (last < body.length) pushBodyText(nodes, body.slice(last), `t${key}`);
   return nodes;
 }
 
@@ -762,7 +792,7 @@ export function Comments({
         ) : (
           <>
             {comment.body.trim() !== '' ? (
-              <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
                 {renderCommentBody(comment.body, nameOf)}
               </p>
             ) : null}

@@ -306,6 +306,42 @@ describe('renderCommentBody (author + mention resolution)', () => {
     expect(resolveName(profiles, UUID_A)).toBe('Ada');
     expect(resolveName(profiles, UUID_B)).toBeNull();
   });
+
+  it('turns an http(s) URL into a safe new-tab anchor', () => {
+    const tree = renderCommentBody('go https://srtd.io/abc now', () => null);
+    const anchor = elements(tree).find((el) => el.type === 'a')!;
+    expect(anchor).toBeDefined();
+    const props = anchor.props as { href: string; target: string; rel: string };
+    expect(props.href).toBe('https://srtd.io/abc');
+    expect(props.target).toBe('_blank');
+    expect(props.rel).toBe('noopener noreferrer');
+    expect(text(tree)).toContain('https://srtd.io/abc');
+  });
+
+  it('trims trailing punctuation out of the anchor href but keeps it as text', () => {
+    const tree = renderCommentBody('see https://srtd.io.', () => null);
+    const anchor = elements(tree).find((el) => el.type === 'a')!;
+    expect((anchor.props as { href: string }).href).toBe('https://srtd.io');
+    expect(tree).toContain('.');
+  });
+
+  it('never links javascript: or scheme-less text', () => {
+    const js = renderCommentBody('run javascript:alert(1) please', () => null);
+    expect(elements(js).some((el) => el.type === 'a')).toBe(false);
+    const bare = renderCommentBody('visit www.foo.com today', () => null);
+    expect(elements(bare).some((el) => el.type === 'a')).toBe(false);
+  });
+
+  it('renders both a mention span and a URL anchor in one body', () => {
+    const tree = renderCommentBody(
+      `hi @[${UUID_A}] see https://srtd.io/x`,
+      (id) => (id === UUID_A ? 'Ada' : null),
+    );
+    const span = elements(tree).find((el) => el.type === 'span')!;
+    expect(text(span)).toContain('@Ada');
+    const anchor = elements(tree).find((el) => el.type === 'a')!;
+    expect((anchor.props as { href: string }).href).toBe('https://srtd.io/x');
+  });
 });
 
 describe('write-action wiring', () => {
