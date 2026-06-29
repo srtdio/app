@@ -208,7 +208,11 @@ export function SignInPage() {
 
   if (step === 'code') {
     return (
-      <AuthShell title="Check your email" subtitle={`Enter the 6-digit code sent to ${email}.`} footer={footer}>
+      <AuthShell
+        title="Check your email"
+        subtitle={`Enter the 6-digit code sent to ${email}.`}
+        footer={footer}
+      >
         <div className="flex flex-col gap-4">
           <Field label="Verification code" htmlFor="signin-code">
             <CodeInput value={code} onChange={setCode} disabled={submitting} />
