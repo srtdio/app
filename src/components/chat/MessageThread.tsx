@@ -1,4 +1,12 @@
-import { useRef, useState, type MouseEvent, type Ref, type ReactElement } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type Ref,
+  type ReactElement,
+} from 'react';
+import { isNearBottom } from '@/lib/chat/scroll';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconChat, IconChevronRight, IconSettings } from '@/components/ui/icons';
@@ -376,7 +384,10 @@ function MessageRow(props: {
 }
 
 function ThreadBody(
-  props: Pick<MessageThreadProps, 'messages' | 'loading' | 'profiles' | 'onToggleReaction'> & {
+  props: Pick<
+    MessageThreadProps,
+    'title' | 'messages' | 'loading' | 'profiles' | 'onToggleReaction'
+  > & {
     cache: PresignCache;
     presignEnabled: boolean;
     showTicks: boolean;
@@ -387,6 +398,34 @@ function ThreadBody(
   const [menu, setMenu] = useState<{ message: ThreadMessage; rect: DOMRect | null } | null>(null);
   const toast = useToast();
   const listRef = useRef<HTMLUListElement>(null);
+  // Tracks whether we have already snapped a freshly opened conversation to the
+  // latest message, and whether the reader is currently parked at the bottom.
+  const didInitialScrollRef = useRef(false);
+  const atBottomRef = useRef(true);
+  // Reset on conversation switch so a fresh thread always lands at the latest
+  // message even if the previous one was scrolled up. `title` is the only
+  // per-conversation identifier reaching this component (use-chat-thread keys
+  // its load on the Agora target, which never flows down here). Declared BEFORE
+  // the messages effect so the reset commits first on a switch.
+  useLayoutEffect(() => {
+    didInitialScrollRef.current = false;
+    atBottomRef.current = true;
+  }, [props.title]);
+  // Keep the latest message in view: instant pre-paint snap on first load (no
+  // top-flash), then a smooth follow for own sends or when already at bottom.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (el === null || props.messages.length === 0) return;
+    if (!didInitialScrollRef.current) {
+      el.scrollTop = el.scrollHeight;
+      didInitialScrollRef.current = true;
+      return;
+    }
+    const last = props.messages[props.messages.length - 1];
+    if (last !== undefined && (last.mine || atBottomRef.current)) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
+  }, [props.messages]);
   const scrollToMessage = (id: string): void => {
     const el = listRef.current?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
     if (el == null) {
@@ -412,7 +451,14 @@ function ThreadBody(
   }
   return (
     <>
-      <ul ref={listRef} className="flex-1 overflow-y-auto py-2">
+      <ul
+        ref={listRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          atBottomRef.current = isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight);
+        }}
+        className="flex-1 overflow-y-auto py-2"
+      >
         {props.messages.map((message, i) => (
           <MessageRow
             key={message.id}
@@ -512,6 +558,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         ) : null}
       </div>
       <ThreadBody
+        title={props.title}
         messages={props.messages}
         loading={props.loading}
         profiles={props.profiles}
