@@ -7,10 +7,28 @@ import type { Toast as ToastModel, ToastApi, ToastOptions } from '@/components/u
 export const DEFAULT_DURATION_MS = 5000;
 /** Newest-first cap; older toasts beyond this are dropped on show(). */
 export const MAX_VISIBLE = 3;
+/**
+ * Exit-animation length; mirrors --dur-base. A dismissed toast is marked
+ * `leaving` and removed this long afterwards so the fade-down can play. The
+ * timer fires even under prefers-reduced-motion (CSS collapses the visual to
+ * 1ms), so unmount always happens.
+ */
+export const EXIT_MS = 160;
 
-/** Slide-down enter for the cards, scoped to this surface (no color, no hex). */
+/**
+ * Enter/exit keyframes, scoped to this surface (no color, no hex). Durations and
+ * easings are applied on the card via motion tokens, not here. Axis: translateY
+ * only. Enter glides up from 16px; exit drops to 8px.
+ */
 const TOAST_KEYFRAMES =
-  '@keyframes sorted-toast-in{from{opacity:0;transform:translateY(-0.5rem)}to{opacity:1;transform:translateY(0)}}';
+  '@keyframes sorted-toast-in{from{opacity:0;transform:translateY(1rem)}to{opacity:1;transform:translateY(0)}}' +
+  '@keyframes sorted-toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(0.5rem)}}';
+
+/** A toast plus its closing-phase flag. Kept local so ToastModel stays minimal. */
+export interface ManagedToast extends ToastModel {
+  /** True once dismiss() starts the exit; the card unmounts after EXIT_MS. */
+  leaving: boolean;
+}
 
 /**
  * Framework-agnostic toast core. Owns the list and one timer per toast so the
@@ -19,16 +37,16 @@ const TOAST_KEYFRAMES =
  * nothing touches localStorage/sessionStorage.
  */
 export interface ToastStore extends ToastApi {
-  getSnapshot: () => ToastModel[];
-  subscribe: (listener: (toasts: ToastModel[]) => void) => () => void;
+  getSnapshot: () => ManagedToast[];
+  subscribe: (listener: (toasts: ManagedToast[]) => void) => () => void;
   /** Clear every pending timer and listener. Called on provider unmount. */
   dispose: () => void;
 }
 
 export function createToastStore(): ToastStore {
-  let toasts: ToastModel[] = [];
+  let toasts: ManagedToast[] = [];
   let seq = 0;
-  const listeners = new Set<(toasts: ToastModel[]) => void>();
+  const listeners = new Set<(toasts: ManagedToast[]) => void>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
   function emit(): void {
@@ -43,7 +61,7 @@ export function createToastStore(): ToastStore {
     }
   }
 
-  function dismiss(id: string): void {
+  function remove(id: string): void {
     clearTimer(id);
     const next = toasts.filter((toast) => toast.id !== id);
     if (next.length !== toasts.length) {
@@ -52,14 +70,30 @@ export function createToastStore(): ToastStore {
     }
   }
 
+  // Closing phase: flip the toast to `leaving` so its card plays the exit, then
+  // remove it after EXIT_MS. Idempotent; the auto-dismiss timer is replaced by
+  // the removal timer under the same id.
+  function dismiss(id: string): void {
+    const current = toasts.find((toast) => toast.id === id);
+    if (current === undefined || current.leaving) return;
+    clearTimer(id);
+    toasts = toasts.map((toast) => (toast.id === id ? { ...toast, leaving: true } : toast));
+    emit();
+    timers.set(
+      id,
+      setTimeout(() => remove(id), EXIT_MS),
+    );
+  }
+
   function show(options: ToastOptions): string {
     const id = String((seq += 1));
-    const toast: ToastModel = {
+    const toast: ManagedToast = {
       id,
       title: options.title,
       ...(options.description !== undefined ? { description: options.description } : {}),
       ...(options.icon !== undefined ? { icon: options.icon } : {}),
       ...(options.onPress !== undefined ? { onPress: options.onPress } : {}),
+      leaving: false,
     };
 
     const kept = [toast, ...toasts];
@@ -71,10 +105,7 @@ export function createToastStore(): ToastStore {
     if (ms !== null && ms > 0) {
       timers.set(
         id,
-        setTimeout(() => {
-          timers.delete(id);
-          dismiss(id);
-        }, ms),
+        setTimeout(() => dismiss(id), ms),
       );
     }
     return id;
@@ -102,7 +133,7 @@ export function createToastStore(): ToastStore {
 }
 
 interface ToastContextValue extends ToastApi {
-  toasts: ToastModel[];
+  toasts: ManagedToast[];
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -122,7 +153,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     storeRef.current = createToastStore();
   }
   const store = storeRef.current;
-  const [toasts, setToasts] = useState<ToastModel[]>(() => store.getSnapshot());
+  const [toasts, setToasts] = useState<ManagedToast[]>(() => store.getSnapshot());
 
   useEffect(() => {
     setToasts(store.getSnapshot());
@@ -142,8 +173,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 /**
- * Fixed toast container. Mobile: top, below the safe-area, slide-down enter.
- * Desktop (md+): top-right. Newest on top (the store keeps newest first).
+ * Fixed toast container. Mobile: top, below the safe-area. Desktop (md+):
+ * top-right. Newest on top (the store keeps newest first). Cards glide up on
+ * enter and fade down on exit via the keyframes below.
  */
 export function ToastViewport() {
   const ctx = useContext(ToastContext);
@@ -156,7 +188,7 @@ export function ToastViewport() {
     >
       <style>{TOAST_KEYFRAMES}</style>
       {ctx.toasts.map((toast) => (
-        <Toast key={toast.id} toast={toast} onDismiss={ctx.dismiss} />
+        <Toast key={toast.id} toast={toast} leaving={toast.leaving} onDismiss={ctx.dismiss} />
       ))}
     </div>
   );

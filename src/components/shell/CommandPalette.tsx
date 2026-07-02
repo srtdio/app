@@ -19,11 +19,31 @@ interface PaletteItem {
 
 const GROUPS: Array<PaletteItem['group']> = ['Go to', 'Actions'];
 
+// Exit transition length; mirrors --dur-base so the palette stays mounted for
+// the fade/scale-out, then unmounts. Fires even under prefers-reduced-motion
+// (CSS collapses to 1ms), so the closing phase always completes.
+const EXIT_MS = 160;
+
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  // `rendered` keeps the palette mounted through its exit; `entered` drives the
+  // enter/exit transition.
+  const [rendered, setRendered] = useState(open);
+  const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setRendered(true);
+      const raf = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setEntered(false);
+    const timer = setTimeout(() => setRendered(false), EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [open]);
 
   const items = useMemo<PaletteItem[]>(
     () => [
@@ -63,7 +83,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     setActive(0);
   }, [query]);
 
-  if (!open) {
+  if (!rendered) {
     return null;
   }
 
@@ -99,14 +119,24 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/45 flex items-start justify-center pt-[12vh] px-4"
+      className={cn(
+        'fixed inset-0 z-50 bg-black/45 flex items-start justify-center pt-[12vh] px-4 transition-opacity duration-fast',
+        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+      )}
       onClick={onOverlayClick}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="w-full max-w-[560px] rounded-xl border border-border-strong bg-panel shadow-2xl overflow-hidden"
+        className={cn(
+          // Axis: translateY (-8px) + scale from top center, crossfaded. No X,
+          // no rotate.
+          'w-full max-w-[560px] rounded-xl border border-border-strong bg-panel shadow-2xl overflow-hidden origin-top transition-[opacity,transform] duration-base will-change-transform',
+          entered
+            ? 'translate-y-0 scale-100 opacity-100 ease-enter'
+            : '-translate-y-2 scale-[0.985] opacity-0 ease-exit',
+        )}
       >
         <div className="flex items-center gap-2.5 px-4 border-b border-border">
           <IconSearch size={18} className="text-fg-3" />
