@@ -12,13 +12,7 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   autoGrow?: boolean;
 }
 
-export function Textarea({
-  className,
-  autoGrow = false,
-  style,
-  value,
-  ...props
-}: TextareaProps) {
+export function Textarea({ className, autoGrow = false, style, value, ...props }: TextareaProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const fit = useCallback((): void => {
