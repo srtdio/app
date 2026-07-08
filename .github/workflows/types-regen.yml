@@ -2,6 +2,11 @@ name: Regenerate Supabase Types
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '23 */6 * * *'
+  push:
+    branches:
+      - trigger/types-regen
 
 concurrency:
   group: types-regen
@@ -9,13 +14,14 @@ concurrency:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   types-regen:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -27,18 +33,17 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: pnpm types:supabase
-      - name: Open a PR with the regenerated types
-        uses: peter-evans/create-pull-request@v6
-        with:
-          add-paths: packages/schemas/src/supabase.generated.ts
-          branch: chore/regen-supabase-types
-          delete-branch: true
-          base: main
-          commit-message: 'chore: regenerate Supabase types from live database'
-          title: 'Regenerate Supabase types from live database'
-          body: |
-            Machine-generated update of `packages/schemas/src/supabase.generated.ts`.
-
-            This reflects the current live public schema (including any new
-            functions and partition tables) and is produced by `pnpm types:supabase`.
-            Do not hand-edit; rerun the Regenerate Supabase Types workflow instead.
+      - name: Sync regenerated types to main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/schemas/src/supabase.generated.ts
+          if git diff --cached --quiet -- packages/schemas/src/supabase.generated.ts; then
+            echo 'No type changes to sync.'
+            exit 0
+          fi
+          git commit -m 'chore: sync Supabase types from live database'
+          git push origin HEAD:main
+      - name: Clean up trigger branch
+        if: github.event_name == 'push'
+        run: git push origin --delete trigger/types-regen || true
