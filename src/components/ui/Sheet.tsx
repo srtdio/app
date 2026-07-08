@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { DUR_BASE_MS } from '@/lib/motion';
 
 interface SheetProps {
   open: boolean;
@@ -17,7 +18,7 @@ interface SheetProps {
 // exactly as long as the fade/slide-out takes, then unmounts. Under
 // prefers-reduced-motion the CSS collapses to 1ms but this timer still fires,
 // so unmount always happens.
-const EXIT_MS = 160;
+const EXIT_MS = DUR_BASE_MS;
 
 export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
   // `rendered` keeps the panel mounted through its exit; `entered` drives the

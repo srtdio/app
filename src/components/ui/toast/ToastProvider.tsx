@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { ReactNode } from 'react';
 import { Toast } from '@/components/ui/toast/Toast';
 import type { Toast as ToastModel, ToastApi, ToastOptions } from '@/components/ui/toast/types';
+import { DUR_BASE_MS } from '@/lib/motion';
 
 /** Default auto-dismiss delay when `durationMs` is omitted. */
 export const DEFAULT_DURATION_MS = 5000;
@@ -13,7 +14,7 @@ export const MAX_VISIBLE = 3;
  * timer fires even under prefers-reduced-motion (CSS collapses the visual to
  * 1ms), so unmount always happens.
  */
-export const EXIT_MS = 160;
+export const EXIT_MS = DUR_BASE_MS;
 
 /**
  * Enter/exit keyframes, scoped to this surface (no color, no hex). Durations and

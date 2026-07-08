@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { IconSearch } from '@/components/ui/icons';
 import { dispatchSorted } from '@/lib/events';
 import { cn } from '@/lib/cn';
+import { DUR_BASE_MS } from '@/lib/motion';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -22,7 +23,7 @@ const GROUPS: Array<PaletteItem['group']> = ['Go to', 'Actions'];
 // Exit transition length; mirrors --dur-base so the palette stays mounted for
 // the fade/scale-out, then unmounts. Fires even under prefers-reduced-motion
 // (CSS collapses to 1ms), so the closing phase always completes.
-const EXIT_MS = 160;
+const EXIT_MS = DUR_BASE_MS;
 
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
