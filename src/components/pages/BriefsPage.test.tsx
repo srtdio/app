@@ -279,10 +279,10 @@ describe('briefSections', () => {
       { label: 'June', count: '1 brief', cards: 1 },
     ]);
     const firstCard = (
-      ((sections[0]!.props as { children: ReactElement[] }).children[1]!.props as {
+      (sections[0]!.props as { children: ReactElement[] }).children[1]!.props as {
         children: ReactElement[];
-      }).children
-    )[0]!;
+      }
+    ).children[0]!;
     expect(firstCard.type).toBe(BriefCard);
   });
 });

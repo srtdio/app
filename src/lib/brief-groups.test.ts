@@ -69,7 +69,7 @@ describe('groupBriefsByTime', () => {
     expect(groups.map((g) => g.key)).toEqual(['w0', 'm-2026-06', 'm-2026-05', 'm-2026-04']);
   });
 
-  it('appends the year only when a month is not in now\'s year', () => {
+  it("appends the year only when a month is not in now's year", () => {
     const items = [
       at(2026, 5, 10), // June 2026 (same year, no suffix)
       at(2025, 11, 15), // December 2025 (prior year, suffix)
