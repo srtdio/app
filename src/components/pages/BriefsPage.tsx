@@ -15,15 +15,10 @@ import { PresignCache } from '@/lib/asset-presign';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
-import { useSort } from '@/lib/use-sort';
-import {
-  DATE_SORT_DEFAULT,
-  DATE_SORT_OPTIONS,
-  filterByTitle,
-  sortByDate,
-  type DateSort,
-} from '@/lib/list-sort';
+import { filterByTitle } from '@/lib/list-sort';
 import { filterBriefsByStatus, type BriefFilter } from '@/lib/brief-list';
+import { groupBriefsByTime, type BriefGroup } from '@/lib/brief-groups';
+import { cn } from '@/lib/cn';
 import { briefClose } from '@srtdio/rpc';
 import { listBriefs } from '@srtdio/briefs';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
@@ -39,26 +34,25 @@ const FILTERS: { key: BriefFilter; label: string }[] = [
 interface BriefsHeaderProps {
   search: string;
   onSearchChange: (value: string) => void;
-  sort: DateSort;
-  onSortChange: (value: DateSort) => void;
   filter: BriefFilter;
   onFilterChange: (filter: BriefFilter) => void;
 }
 
 /**
- * The Briefs header chrome: the shared SectionHeader (search, sort, accent "+"
- * create) with the All / Open / Closed chips in the filter slot. Pure (no hooks)
- * so the wiring is unit-tested by walking the returned tree.
+ * The Briefs header chrome: the shared SectionHeader (search, accent "+" create)
+ * with the All / Open / Closed chips in the filter slot. Sorting is gone: the
+ * list is grouped inline by time (see {@link groupBriefsByTime}), so the header
+ * carries no sort control. Pure (no hooks) so the wiring is unit-tested by
+ * walking the returned tree.
  */
 export function briefsHeader(props: BriefsHeaderProps): ReactElement {
   return (
-    <SectionHeader<DateSort>
+    <SectionHeader
       search={{
         value: props.search,
         onChange: props.onSearchChange,
         placeholder: 'Search briefs',
       }}
-      sort={{ options: DATE_SORT_OPTIONS, value: props.sort, onChange: props.onSortChange }}
       primaryAction={{
         node: (
           <Button
@@ -118,13 +112,82 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
   ));
 }
 
+/** "{n} brief" / "{n} briefs" with correct singular. */
+function briefUnit(count: number): string {
+  return count === 1 ? 'brief' : 'briefs';
+}
+
+/** The summary line under the header: total briefs and how many are open. */
+export function briefsCountLine(total: number, open: number): string {
+  return `${total} ${briefUnit(total)} · ${open} open`;
+}
+
+/**
+ * Derive the rendered time sections from the loaded list: status chip, then
+ * title search, then time grouping (newest-first, Monday weeks, month buckets).
+ * Section counts therefore reflect the active chip + search. filterBriefsByStatus
+ * is typed over the bare Brief, so re-narrow each surviving row back to its
+ * BriefWithThumbnail (same object reference) via an id map; the cards need
+ * thumbnailAssetVersionId. Pure so the wiring is unit-tested without rendering.
+ */
+export function deriveBriefGroups(
+  briefs: BriefWithThumbnail[],
+  filter: BriefFilter,
+  search: string,
+  now: Date,
+): BriefGroup<BriefWithThumbnail>[] {
+  const byId = new Map(briefs.map((brief) => [brief.id, brief]));
+  const filtered = filterByTitle(filterBriefsByStatus(briefs, filter), search);
+  const narrowed = filtered.flatMap((brief) => {
+    const full = byId.get(brief.id);
+    return full !== undefined ? [full] : [];
+  });
+  return groupBriefsByTime(narrowed, now);
+}
+
+interface BriefSectionsDeps extends Omit<BriefCardListDeps, 'briefs'> {
+  groups: BriefGroup<BriefWithThumbnail>[];
+}
+
+// Sticky per-section header: pinned to the top of the scroll area (below the app
+// top bar) with a translucent token background + blur so cards scroll under it.
+// var(--bg) flips with the theme, so light/dark parity is automatic; z-20 sits
+// above the card grid, matching SectionHeader's sticky choice. Positioning only:
+// no transforms, no transitions.
+const SECTION_HEADER_CLASS = cn(
+  'sticky top-0 z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-2 flex items-center justify-between',
+  'bg-[color-mix(in_srgb,var(--bg)_80%,transparent)] backdrop-blur',
+);
+
+/**
+ * One section per time group: a sticky label + count header followed by the
+ * existing card grid for that group's briefs. Pure (no hooks) so the section
+ * labels, counts and per-group card wiring are unit-tested by walking the tree,
+ * mirroring briefCardList.
+ */
+export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
+  const { groups, ...cardDeps } = deps;
+  return groups.map((group) => (
+    <section key={group.key}>
+      <div className={SECTION_HEADER_CLASS}>
+        <h3 className="text-sm font-semibold text-fg">{group.label}</h3>
+        <span className="text-sm text-fg-3">
+          {group.items.length} {briefUnit(group.items.length)}
+        </span>
+      </div>
+      <div className="pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {briefCardList({ ...cardDeps, briefs: group.items })}
+      </div>
+    </section>
+  ));
+}
+
 export function BriefsPage() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
   const newTrace = useNewTrace();
   const [filter, setFilter] = useState<BriefFilter>('all');
   const [search, setSearch] = useState('');
-  const { value: sort, setValue: setSort } = useSort<DateSort>('briefs', DATE_SORT_DEFAULT);
 
   const [briefs, setBriefs] = useState<BriefWithThumbnail[]>([]);
   const [loading, setLoading] = useState(false);
@@ -187,24 +250,13 @@ export function BriefsPage() {
     [briefs, workspaceId],
   );
 
-  // Search + sort are pure, derived over the loaded list (no refetch, no N+1):
-  // status chip, then title search, then date order. filterBriefsByStatus is typed
-  // over the bare Brief, so re-narrow each ordered row back to its BriefWithThumbnail
-  // (same object reference) via this id map; the cards need thumbnailAssetVersionId.
-  const byId = useMemo(
-    () => new Map(workspaceBriefs.map((brief) => [brief.id, brief])),
-    [workspaceBriefs],
+  // Search + grouping are pure, derived over the loaded list (no refetch, no
+  // N+1): status chip, then title search, then time grouping. Section counts
+  // therefore reflect the active chip + search.
+  const groups = useMemo(
+    () => deriveBriefGroups(workspaceBriefs, filter, search, new Date()),
+    [workspaceBriefs, filter, search],
   );
-  const visibleBriefs = useMemo<BriefWithThumbnail[]>(() => {
-    const ordered = sortByDate(
-      filterByTitle(filterBriefsByStatus(workspaceBriefs, filter), search),
-      sort,
-    );
-    return ordered.flatMap((brief) => {
-      const full = byId.get(brief.id);
-      return full !== undefined ? [full] : [];
-    });
-  }, [workspaceBriefs, byId, filter, search, sort]);
 
   const openCount = useMemo(
     () => workspaceBriefs.filter((brief) => !isBriefClosed(brief)).length,
@@ -231,13 +283,13 @@ export function BriefsPage() {
       {briefsHeader({
         search,
         onSearchChange: setSearch,
-        sort,
-        onSortChange: setSort,
         filter,
         onFilterChange: setFilter,
       })}
 
-      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">{openCount} open</div>
+      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">
+        {briefsCountLine(workspaceBriefs.length, openCount)}
+      </div>
 
       {error !== null ? (
         <div className="px-4 md:px-6 mt-4">
@@ -247,16 +299,16 @@ export function BriefsPage() {
         </div>
       ) : listLoading ? (
         <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading briefs</div>
-      ) : visibleBriefs.length === 0 ? (
+      ) : groups.length === 0 ? (
         <EmptyState
           icon={<IconBriefs size={24} />}
           title="No briefs yet"
           description="Briefs from clients will show up here."
         />
       ) : (
-        <div className="px-4 md:px-6 py-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {briefCardList({
-            briefs: visibleBriefs,
+        <div className="px-4 md:px-6 py-4 flex flex-col gap-6">
+          {briefSections({
+            groups,
             cache,
             presignEnabled,
             closingId,
