@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { DUR_FAST_MS } from '@/lib/motion';
 
 interface MenuPopoverProps {
   open: boolean;
@@ -12,7 +13,7 @@ interface MenuPopoverProps {
 // Exit transition length; mirrors --dur-fast so the menu stays mounted for its
 // fade/scale-out, then unmounts. Fires under prefers-reduced-motion too (CSS
 // collapses to 1ms), so the closing phase always completes.
-const EXIT_MS = 120;
+const EXIT_MS = DUR_FAST_MS;
 
 /**
  * A lightweight anchored dropdown. Render it inside a `relative` wrapper next to

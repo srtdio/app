@@ -3,6 +3,7 @@ import type { MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
+import { DUR_BASE_MS } from '@/lib/motion';
 
 interface ConfirmDialogProps {
   title: string;
@@ -20,7 +21,7 @@ interface ConfirmDialogProps {
 // Exit transition length; mirrors --dur-base so the dialog stays mounted for the
 // full fade-out before its parent unmounts it. Timer still fires under
 // prefers-reduced-motion (CSS collapses to 1ms), so onCancel always runs.
-const EXIT_MS = 160;
+const EXIT_MS = DUR_BASE_MS;
 
 // A small, reusable confirm modal. The repo has no dialog primitive (only Sheet,
 // which is a side panel), so this is the shared confirm surface. Colours come
