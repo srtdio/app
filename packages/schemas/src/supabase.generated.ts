@@ -4916,6 +4916,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      chat_message_save: {
+        Args: {
+          p_agora_message_id: string
+          p_attachment_asset_ids?: string[]
+          p_body?: string
+          p_channel_id: string
+          p_created_at: string
+          p_mentions?: Json
+          p_trace_id?: string
+        }
+        Returns: undefined
+      }
       chat_webhook_ingest: {
         Args: {
           p_agora_event_id: string
@@ -4966,6 +4978,10 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: string
+      }
+      ensure_future_partitions: {
+        Args: { p_months?: number }
+        Returns: undefined
       }
       gallery_set: {
         Args: {
