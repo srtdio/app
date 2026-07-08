@@ -88,9 +88,20 @@
   body,
   #root {
     height: 100%;
+    /* Each root layer paints the theme canvas so any band Safari exposes
+       (toolbar collapse, rubber-band overscroll) shows var(--bg), not white,
+       in both light and dark. */
+    background-color: var(--bg);
+  }
+  /* color-scheme follows the same .dark class initTheme drives, so form
+     controls, scrollbars and the overscroll gloss track the active theme. */
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
   }
   body {
-    background: var(--bg);
     color: var(--fg);
     touch-action: manipulation;
     font-family:

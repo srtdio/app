@@ -2,10 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Critical paint: set the html canvas before the built stylesheet loads to
+         kill the pre-CSS white flash on iOS Safari. Hex mirrors the --bg token in
+         src/index.css; once loaded, that sheet's html { background: var(--bg) }
+         takes over. -->
+    <style>
+      html {
+        background-color: #f7f8f9; /* --bg light, src/index.css :root */
+      }
+      @media (prefers-color-scheme: dark) {
+        html {
+          background-color: #0c0d10; /* --bg dark, src/index.css .dark */
+        }
+      }
+    </style>
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
+    <!-- Tint the Safari toolbar to match the canvas so a collapsing toolbar never
+         exposes a mismatched band. Hex mirrors --bg in src/index.css; manual theme
+         toggles override this via src/lib/theme.ts. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f8f9" />
+    <!-- content = --bg light, src/index.css :root -->
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c0d10" />
+    <!-- content = --bg dark, src/index.css .dark -->
     <title>Sorted v2</title>
   </head>
   <body>
