@@ -1102,11 +1102,11 @@ export function PostDetailPage() {
                 <div className="mt-3 flex flex-col gap-2">
                   <Textarea
                     autoFocus
+                    autoGrow
                     aria-label="Caption"
                     value={captionDraft}
                     disabled={captionSaving}
                     onChange={(event) => setCaptionDraft(event.target.value)}
-                    className="min-h-[140px]"
                   />
                   {captionError !== null ? (
                     <div role="alert" className="text-sm text-bad">
