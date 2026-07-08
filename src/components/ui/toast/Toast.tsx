@@ -3,6 +3,8 @@ import type { Toast as ToastModel } from '@/components/ui/toast/types';
 
 interface ToastProps {
   toast: ToastModel;
+  /** True while the card plays its exit before the provider unmounts it. */
+  leaving?: boolean;
   onDismiss: (id: string) => void;
 }
 
@@ -10,10 +12,17 @@ interface ToastProps {
  * One presentational toast card. Hookless so it can be unit-tested by walking
  * its element tree (the codebase convention for pure components). The whole
  * content area is the press target when `onPress` is set; the dismiss control
- * is always a separate 44x44 button so the two never nest.
+ * is always a separate 44x44 button so the two never nest. Enter glides up and
+ * fades in (--dur-slow); exit fades down (--dur-base); axis is translateY only.
  */
-export function Toast({ toast, onDismiss }: ToastProps) {
+export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
   const { id, title, description, icon, onPress } = toast;
+
+  // Motion via keyframes (defined once in the viewport) so the card stays
+  // hookless. Durations/easings read from the motion tokens, never hardcoded.
+  const animation = leaving
+    ? 'sorted-toast-out var(--dur-base) var(--ease-exit) forwards'
+    : 'sorted-toast-in var(--dur-slow) var(--ease-enter)';
 
   const body = (
     <>
@@ -31,7 +40,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
 
   return (
     <div
-      style={{ animation: 'sorted-toast-in 180ms ease-out' }}
+      style={{ animation }}
       className="pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border border-border bg-panel pr-1 shadow-lg"
     >
       {onPress !== undefined ? (

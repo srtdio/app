@@ -36,6 +36,14 @@
   --overlay-surface: rgba(244, 245, 246, 0.12);
   --overlay-line: rgba(244, 245, 246, 0.14);
   --overlay-dot: rgba(244, 245, 246, 0.4);
+  /* Motion token scale. Theme-invariant, so it lives only on :root and both
+     light and dark inherit it (parity for free). Durations pair with the two
+     easing curves below: ease-enter for entrances, ease-exit for every exit. */
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
+  --dur-slow: 200ms;
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
 }
 .dark {
   --bg: #0c0d10;
@@ -91,5 +99,16 @@
   }
   ::selection {
     background: var(--accent-soft);
+  }
+}
+/* Accessibility: collapse motion for users who ask for it. Durations drop to
+   1ms (not 0) so transitionend/animationend still fire and JS timers that gate
+   unmount keep working, while the motion itself is imperceptible. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
   }
 }

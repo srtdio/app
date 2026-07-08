@@ -76,4 +76,13 @@ describe('Toast', () => {
     expect(buttons).toHaveLength(1);
     expect(ariaLabel(buttons[0]!)).toBe('Dismiss notification');
   });
+
+  it('plays the enter animation by default and the exit animation while leaving', () => {
+    const animationOf = (tree: ReactElement): string =>
+      (tree.props as { style: { animation: string } }).style.animation;
+    expect(animationOf(Toast({ toast: base, onDismiss: () => {} }))).toContain('sorted-toast-in');
+    expect(animationOf(Toast({ toast: base, leaving: true, onDismiss: () => {} }))).toContain(
+      'sorted-toast-out',
+    );
+  });
 });

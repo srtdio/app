@@ -39,6 +39,15 @@ export default {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
+      transitionDuration: {
+        fast: 'var(--dur-fast)',
+        base: 'var(--dur-base)',
+        slow: 'var(--dur-slow)',
+      },
+      transitionTimingFunction: {
+        enter: 'var(--ease-enter)',
+        exit: 'var(--ease-exit)',
+      },
     },
   },
   plugins: [],

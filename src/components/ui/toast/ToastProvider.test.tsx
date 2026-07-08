@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createToastStore,
   DEFAULT_DURATION_MS,
+  EXIT_MS,
   MAX_VISIBLE,
 } from '@/components/ui/toast/ToastProvider';
 
@@ -23,13 +24,18 @@ describe('createToastStore', () => {
     store.dispose();
   });
 
-  it('auto-dismisses after durationMs', () => {
+  it('auto-dismisses after durationMs, then unmounts after the exit', () => {
     const store = createToastStore();
     store.show({ title: 'Bye', durationMs: 1000 });
     expect(store.getSnapshot()).toHaveLength(1);
     vi.advanceTimersByTime(999);
-    expect(store.getSnapshot()).toHaveLength(1);
+    expect(store.getSnapshot()[0]!.leaving).toBe(false);
+    // The auto-dismiss trigger timing is unchanged: at durationMs the card
+    // enters its closing phase (still mounted) and unmounts EXIT_MS later.
     vi.advanceTimersByTime(1);
+    expect(store.getSnapshot()).toHaveLength(1);
+    expect(store.getSnapshot()[0]!.leaving).toBe(true);
+    vi.advanceTimersByTime(EXIT_MS);
     expect(store.getSnapshot()).toHaveLength(0);
     store.dispose();
   });
@@ -40,6 +46,32 @@ describe('createToastStore', () => {
     vi.advanceTimersByTime(DEFAULT_DURATION_MS - 1);
     expect(store.getSnapshot()).toHaveLength(1);
     vi.advanceTimersByTime(1);
+    expect(store.getSnapshot()[0]!.leaving).toBe(true);
+    vi.advanceTimersByTime(EXIT_MS);
+    expect(store.getSnapshot()).toHaveLength(0);
+    store.dispose();
+  });
+
+  it('marks a toast leaving on dismiss and removes it after the exit', () => {
+    const store = createToastStore();
+    const id = store.show({ title: 'Bye', durationMs: 0 });
+    store.dismiss(id);
+    // Closing phase: still mounted, flagged leaving so the card plays its exit.
+    expect(store.getSnapshot()).toHaveLength(1);
+    expect(store.getSnapshot()[0]!.leaving).toBe(true);
+    vi.advanceTimersByTime(EXIT_MS - 1);
+    expect(store.getSnapshot()).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(store.getSnapshot()).toHaveLength(0);
+    store.dispose();
+  });
+
+  it('ignores a second dismiss while a toast is already leaving', () => {
+    const store = createToastStore();
+    const id = store.show({ title: 'Bye', durationMs: 0 });
+    store.dismiss(id);
+    store.dismiss(id);
+    vi.advanceTimersByTime(EXIT_MS);
     expect(store.getSnapshot()).toHaveLength(0);
     store.dispose();
   });
@@ -53,12 +85,14 @@ describe('createToastStore', () => {
     store.dispose();
   });
 
-  it('dismiss() removes a toast and clears its timer', () => {
+  it('dismiss() cancels the auto-dismiss timer and removes after the exit', () => {
     const store = createToastStore();
     const id = store.show({ title: 'Removable', durationMs: 1000 });
     store.dismiss(id);
+    // The pending auto-dismiss timer is replaced by the removal timer, so the
+    // toast is gone after EXIT_MS and nothing double-fires afterwards.
+    vi.advanceTimersByTime(EXIT_MS);
     expect(store.getSnapshot()).toHaveLength(0);
-    // The pending timer must not fire after manual dismiss.
     expect(() => vi.advanceTimersByTime(2000)).not.toThrow();
     expect(store.getSnapshot()).toHaveLength(0);
     store.dispose();
@@ -90,7 +124,9 @@ describe('createToastStore', () => {
   it('omits optional fields rather than storing undefined', () => {
     const store = createToastStore();
     store.show({ title: 'Bare', durationMs: 0 });
-    expect(Object.keys(store.getSnapshot()[0]!)).toEqual(['id', 'title']);
+    // Optional inputs (description/icon/onPress) are absent; `leaving` is the
+    // one always-present closing-phase flag.
+    expect(Object.keys(store.getSnapshot()[0]!)).toEqual(['id', 'title', 'leaving']);
     store.dispose();
   });
 });

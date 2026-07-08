@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconX } from '@/components/ui/icons';
+import { cn } from '@/lib/cn';
 
 interface SheetProps {
   open: boolean;
@@ -12,7 +13,29 @@ interface SheetProps {
   footer?: ReactNode;
 }
 
+// Exit transition length; mirrors --dur-base so the closing phase stays mounted
+// exactly as long as the fade/slide-out takes, then unmounts. Under
+// prefers-reduced-motion the CSS collapses to 1ms but this timer still fires,
+// so unmount always happens.
+const EXIT_MS = 160;
+
 export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
+  // `rendered` keeps the panel mounted through its exit; `entered` drives the
+  // enter/exit transition (false = offscreen/faded, true = resting).
+  const [rendered, setRendered] = useState(open);
+  const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setRendered(true);
+      const raf = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setEntered(false);
+    const timer = setTimeout(() => setRendered(false), EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [open]);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if (event.key === 'Escape') {
@@ -25,7 +48,7 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
     };
   }, [onClose]);
 
-  if (!open) {
+  if (!rendered) {
     return null;
   }
 
@@ -37,14 +60,24 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/45 flex items-end sm:items-center sm:justify-center"
+      className={cn(
+        'fixed inset-0 z-50 flex items-end bg-black/45 transition-opacity duration-base sm:items-center sm:justify-center',
+        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+      )}
       onClick={onOverlayClick}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-h-[90vh] rounded-t-2xl bg-panel border border-border-strong shadow-2xl flex flex-col overflow-hidden sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl"
+        className={cn(
+          // Axis: translateY only. Mobile slides from 100%; desktop rises 8px
+          // and crossfades. No X, no rotate.
+          'flex w-full max-h-[90vh] flex-col overflow-hidden rounded-t-2xl border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          entered
+            ? 'translate-y-0 opacity-100 duration-slow ease-enter sm:duration-base'
+            : 'translate-y-full opacity-100 duration-base ease-exit sm:translate-y-2 sm:opacity-0',
+        )}
       >
         <div className="flex items-center gap-2.5 px-[18px] py-[15px] border-b border-border">
           <h2 className="font-semibold text-[15px]">{title}</h2>
