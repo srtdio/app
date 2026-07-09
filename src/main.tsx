@@ -19,7 +19,7 @@ if (!rootElement) {
 
 function ErrorFallback() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50">
+    <main className="min-h-screen flex items-center justify-center bg-bg text-fg">
       <span className="text-sm">Something went wrong. Refresh to try again.</span>
     </main>
   );
