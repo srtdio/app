@@ -110,7 +110,7 @@ function isInviteRole(value: string): value is InviteRole {
   return value === 'admin' || value === 'agency' || value === 'client';
 }
 
-export function MembersInviteForm() {
+export function MembersInviteForm({ onInvited }: { onInvited?: () => void } = {}) {
   const { workspaceId } = useWorkspace();
   const newTrace = useNewTrace();
   const [email, setEmail] = useState('');
@@ -148,6 +148,7 @@ export function MembersInviteForm() {
         setEmail('');
         setSentTo(target);
         setSubmitting(false);
+        onInvited?.();
       },
       onError: (detail) => {
         // Keep the email so the user can retry. Prefer the function's real

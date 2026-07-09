@@ -140,6 +140,14 @@ export function memberAccept(
   return callProc(client, 'member_accept', args);
 }
 
+export type MemberRemoveArgs = ProcArgs<'member_remove'>;
+export function memberRemove(
+  client: Client,
+  args: MemberRemoveArgs,
+): Promise<Result<ProcReturns<'member_remove'>>> {
+  return callProc(client, 'member_remove', args);
+}
+
 export type BriefCreateArgs = ProcArgs<'brief_create'>;
 export function briefCreate(
   client: Client,
