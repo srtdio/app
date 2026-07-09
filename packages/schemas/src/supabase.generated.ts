@@ -5072,6 +5072,10 @@ export type Database = {
         }
         Returns: string
       }
+      member_remove: {
+        Args: { p_member_id: string; p_trace_id: string }
+        Returns: string
+      }
       post_caption_update: {
         Args: { p_caption: string; p_post_id: string; p_trace_id: string }
         Returns: string
