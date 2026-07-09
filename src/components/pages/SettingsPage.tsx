@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { PageHead } from '@/components/shell/PageHead';
 import { Tabs } from '@/components/shell/Tabs';
 import type { TabItem } from '@/components/shell/Tabs';
-import { MembersInviteForm } from '@/components/pages/settings/MembersInviteForm';
+import { MembersPanel } from '@/components/pages/settings/MembersPanel';
 import { ProfileSettingsPanel } from '@/components/settings/ProfileSettingsPanel';
 
 const PANELS: TabItem[] = [
@@ -37,10 +37,6 @@ function WorkspacePanel() {
       </div>
     </div>
   );
-}
-
-function MembersPanel() {
-  return <MembersInviteForm />;
 }
 
 function BillingPanel() {

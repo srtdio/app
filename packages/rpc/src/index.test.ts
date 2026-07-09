@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   assetDelete,
   assetDeleteMany,
+  memberRemove,
   postSoftDelete,
   userProfileUpdate,
   type Client,
@@ -109,6 +110,47 @@ describe('postSoftDelete', () => {
   it('maps an unexpected transport error to code "unknown"', async () => {
     const { client } = makeClient({ data: null, error: { message: 'network down' } });
     const result = await postSoftDelete(client, args);
+    expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
+  });
+});
+
+describe('memberRemove', () => {
+  const args = {
+    p_member_id: '11111111-1111-1111-1111-111111111111',
+    p_trace_id: '22222222-2222-2222-2222-222222222222',
+  };
+
+  it('returns ok and forwards the proc name + args on success', async () => {
+    const { client, rpc } = makeClient({
+      data: '11111111-1111-1111-1111-111111111111',
+      error: null,
+    });
+    const result = await memberRemove(client, args);
+    expect(result.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('member_remove', args);
+  });
+
+  it('maps the forbidden_role exception to a domain error', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'forbidden_role' } });
+    const result = await memberRemove(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'forbidden_role', message: 'forbidden_role' },
+    });
+  });
+
+  it('maps the workspace_member_only exception to a domain error', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'workspace_member_only' } });
+    const result = await memberRemove(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'workspace_member_only', message: 'workspace_member_only' },
+    });
+  });
+
+  it('maps an unexpected transport error to code "unknown"', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'network down' } });
+    const result = await memberRemove(client, args);
     expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
   });
 });
