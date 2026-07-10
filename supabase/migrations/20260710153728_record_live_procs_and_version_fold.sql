@@ -196,7 +196,9 @@ GRANT EXECUTE ON FUNCTION public.post_version_create(uuid, jsonb, uuid) TO authe
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'ensure-future-partitions') THEN
-    PERFORM cron.schedule('ensure-future-partitions', '0 3 1 * *', 'SELECT public.ensure_future_partitions(3)');
+  IF to_regclass('cron.job') IS NOT NULL THEN
+    IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'ensure-future-partitions') THEN
+      PERFORM cron.schedule('ensure-future-partitions', '0 3 1 * *', 'SELECT public.ensure_future_partitions(3)');
+    END IF;
   END IF;
 END $$;
