@@ -22,6 +22,7 @@ import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
 import { VersionPill } from '@/components/pages/pcs/VersionPill';
 import { VersionHistorySheet } from '@/components/pages/pcs/VersionHistorySheet';
 import { ReadOnlyVersionView } from '@/components/pages/pcs/ReadOnlyVersionView';
+import { CompareVersionsView } from '@/components/pages/pcs/CompareVersionsView';
 import {
   currentVersionNumber as currentVersionNumberOf,
   parseSnapshot,
@@ -235,12 +236,16 @@ export function PostDetailPage() {
   // when set to a non-current version, puts the whole PCS into read-only mode.
   const [historyOpen, setHistoryOpen] = useState(false);
   const [viewingVersionId, setViewingVersionId] = useState<string | null>(null);
+  // Compare mode (F7.6): the picked (earlier, later) version id pair, or null.
+  // Mutually exclusive with viewingVersionId below.
+  const [compareIds, setCompareIds] = useState<{ fromId: string; toId: string } | null>(null);
 
-  // Switching posts leaves read-only mode and closes the sheet so a stale version
-  // never bleeds across navigations.
+  // Switching posts leaves read-only / compare mode and closes the sheet so a
+  // stale version never bleeds across navigations.
   useEffect(() => {
     setHistoryOpen(false);
     setViewingVersionId(null);
+    setCompareIds(null);
   }, [postId]);
 
   useEffect(() => {
@@ -393,11 +398,29 @@ export function PostDetailPage() {
     () => versionViews.find((v) => v.id === viewingVersionId) ?? null,
     [versionViews, viewingVersionId],
   );
-  const readOnly = viewingVersion !== null;
   const viewingSnapshot = useMemo(
     () => (viewingVersion === null ? null : parseSnapshot(viewingVersion.snapshot)),
     [viewingVersion],
   );
+
+  // Compare mode resolves its two version snapshots the same defensive way the
+  // read-only path does. An id that no longer resolves drops the mode; captions
+  // come straight from parseSnapshot (never diffed against undefined).
+  const compareFrom = useMemo(
+    () =>
+      compareIds === null ? null : (versionViews.find((v) => v.id === compareIds.fromId) ?? null),
+    [compareIds, versionViews],
+  );
+  const compareTo = useMemo(
+    () =>
+      compareIds === null ? null : (versionViews.find((v) => v.id === compareIds.toId) ?? null),
+    [compareIds, versionViews],
+  );
+  const comparing = compareFrom !== null && compareTo !== null;
+
+  // Both history surfaces suppress every write affordance below; they are
+  // mutually exclusive, enforced by the handlers that enter each mode.
+  const readOnly = viewingVersion !== null || comparing;
 
   // Resolve a version's createdBy to a display name via the same members read PCS
   // already uses; a null author or one who is no longer a current member reads
@@ -1024,7 +1047,17 @@ export function PostDetailPage() {
         </button>
       </div>
 
-      {readOnly && viewingVersion !== null && currentVersionNumber !== null ? (
+      {comparing && compareFrom !== null && compareTo !== null ? (
+        <CompareVersionsView
+          fromVersionNumber={compareFrom.versionNumber}
+          toVersionNumber={compareTo.versionNumber}
+          fromCreatedAt={compareFrom.createdAt}
+          toCreatedAt={compareTo.createdAt}
+          fromCaption={parseSnapshot(compareFrom.snapshot).caption}
+          toCaption={parseSnapshot(compareTo.snapshot).caption}
+          onBack={() => setCompareIds(null)}
+        />
+      ) : readOnly && viewingVersion !== null && currentVersionNumber !== null ? (
         <ReadOnlyVersionView
           versionNumber={viewingVersion.versionNumber}
           currentVersionNumber={currentVersionNumber}
@@ -1303,7 +1336,13 @@ export function PostDetailPage() {
         currentVersionNumber={currentVersionNumber}
         resolveAuthor={resolveAuthorName}
         onSelectVersion={(id) => {
+          setCompareIds(null);
           setViewingVersionId(id);
+          setHistoryOpen(false);
+        }}
+        onCompare={(fromId, toId) => {
+          setViewingVersionId(null);
+          setCompareIds({ fromId, toId });
           setHistoryOpen(false);
         }}
       />

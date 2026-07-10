@@ -26,6 +26,11 @@
   --good: #3e7d54;
   --warn: #b8772b;
   --bad: #c2392b;
+  /* Soft tints behind added / removed words in the version-compare diff. The
+     good/bad tokens are bare hex, so Tailwind's /opacity modifier cannot mint a
+     tint from them; these explicit low-alpha fills give light/dark parity. */
+  --good-soft: rgba(62, 125, 84, 0.12);
+  --bad-soft: rgba(194, 57, 43, 0.1);
   --annotation-bg: #ffe9b8;
   --annotation-line: #d9a93c;
   --stage-review: #b45309;
@@ -68,6 +73,8 @@
   --good: #5fb07d;
   --warn: #d59a4a;
   --bad: #e0685a;
+  --good-soft: rgba(95, 176, 125, 0.16);
+  --bad-soft: rgba(224, 104, 90, 0.14);
   --annotation-bg: #4a3a14;
   --annotation-line: #d9a93c;
   --stage-review: #e0954a;
