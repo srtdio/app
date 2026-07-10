@@ -148,7 +148,10 @@ describe('VersionHistorySheet compare selection', () => {
   ];
 
   it('shows no select controls and no footer for a single-version post', () => {
-    const tree = render({ versions: [version({ id: 'a', versionNumber: 1 })], currentVersionNumber: 1 });
+    const tree = render({
+      versions: [version({ id: 'a', versionNumber: 1 })],
+      currentVersionNumber: 1,
+    });
     const selects = elements(sheetProps(tree).children).filter(
       (el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] !== undefined,
     );

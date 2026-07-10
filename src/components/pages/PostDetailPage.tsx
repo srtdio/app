@@ -407,11 +407,13 @@ export function PostDetailPage() {
   // read-only path does. An id that no longer resolves drops the mode; captions
   // come straight from parseSnapshot (never diffed against undefined).
   const compareFrom = useMemo(
-    () => (compareIds === null ? null : (versionViews.find((v) => v.id === compareIds.fromId) ?? null)),
+    () =>
+      compareIds === null ? null : (versionViews.find((v) => v.id === compareIds.fromId) ?? null),
     [compareIds, versionViews],
   );
   const compareTo = useMemo(
-    () => (compareIds === null ? null : (versionViews.find((v) => v.id === compareIds.toId) ?? null)),
+    () =>
+      compareIds === null ? null : (versionViews.find((v) => v.id === compareIds.toId) ?? null),
     [compareIds, versionViews],
   );
   const comparing = compareFrom !== null && compareTo !== null;

@@ -65,7 +65,10 @@ const NO_CAPTION = <span className="text-fg-3">No caption in this version.</span
 
 // Render the segments a side keeps, marking add (green) and del (red-strikethrough)
 // runs; eq runs paint plain. `include` selects which kinds this side shows.
-function renderMarked(segs: readonly DiffSegment[], include: (kind: DiffKind) => boolean): ReactNode[] {
+function renderMarked(
+  segs: readonly DiffSegment[],
+  include: (kind: DiffKind) => boolean,
+): ReactNode[] {
   const out: ReactNode[] = [];
   segs.forEach((seg, i) => {
     if (!include(seg.kind)) return;
@@ -129,11 +132,7 @@ export function compareVersionsView({
       </div>
     );
   } else if (resolved === 'inline') {
-    body = (
-      <Panel>
-        {fromEmpty && toEmpty ? NO_CAPTION : renderMarked(segs, () => true)}
-      </Panel>
-    );
+    body = <Panel>{fromEmpty && toEmpty ? NO_CAPTION : renderMarked(segs, () => true)}</Panel>;
   } else {
     body = (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -196,8 +195,8 @@ export function compareVersionsView({
             </div>
             {mode === 'auto' ? (
               <span className="text-xs text-fg-3">
-                Auto chose {resolved === 'side' ? 'side by side' : 'inline'} for a{' '}
-                {diff.changedPct}% change.
+                Auto chose {resolved === 'side' ? 'side by side' : 'inline'} for a {diff.changedPct}
+                % change.
               </span>
             ) : null}
           </div>

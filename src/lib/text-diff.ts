@@ -70,8 +70,7 @@ function alignTokens(a: readonly string[], b: readonly string[]): Op[] {
   for (let i = m - 1; i >= 0; i -= 1) {
     const ai = a[i];
     for (let j = n - 1; j >= 0; j -= 1) {
-      dp[i * width + j] =
-        ai === b[j] ? at(i + 1, j + 1) + 1 : Math.max(at(i + 1, j), at(i, j + 1));
+      dp[i * width + j] = ai === b[j] ? at(i + 1, j + 1) + 1 : Math.max(at(i + 1, j), at(i, j + 1));
     }
   }
 
