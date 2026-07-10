@@ -4277,6 +4277,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          last_edited_at: string | null
           legacy_author_name: string | null
           post_id: string
           snapshot: Json
@@ -4287,6 +4288,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          last_edited_at?: string | null
           legacy_author_name?: string | null
           post_id: string
           snapshot: Json
@@ -4297,6 +4299,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          last_edited_at?: string | null
           legacy_author_name?: string | null
           post_id?: string
           snapshot?: Json
