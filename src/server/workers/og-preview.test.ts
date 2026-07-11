@@ -216,7 +216,12 @@ describe('renderShortLinkCard', () => {
   });
 
   it('serves the generic card when the ref resolves to no live post', async () => {
-    const store = new FakeStore({ postTitle: null, firstImage: null, bound: null, refTarget: null });
+    const store = new FakeStore({
+      postTitle: null,
+      firstImage: null,
+      bound: null,
+      refTarget: null,
+    });
     const res = await renderShortLinkCard('gbl-142', store);
     expect(res.status).toBe(200);
     const html = await res.text();
