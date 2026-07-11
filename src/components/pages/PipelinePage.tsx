@@ -244,7 +244,7 @@ export function PipelinePage() {
   const navigate = useNavigate();
   const { workspaceId, workspaces } = useWorkspace();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
-  const [stage, setStage] = useState('all');
+  const [stage, setStage] = useState('review');
   const [search, setSearch] = useState('');
   const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
   // Sanitize the persisted sort: a live workspace may hold a value the trimmed
