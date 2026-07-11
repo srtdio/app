@@ -7,9 +7,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../packages/schemas/src/supabase.generated';
 import {
+  asGeneric,
   cleanupWorkspaces,
   createAdminClient,
   loadRlsEnv,
+  nextEntityNumber,
   seedUser,
   type RlsEnv,
   type SeededUser,
@@ -56,6 +58,7 @@ describe.runIf(INBOX_SUITE)('inbox-writer processEvent (integration)', () => {
   async function insertPost(ws: InboxWorkspace, stage = 'review'): Promise<PostRow> {
     return insertFull<PostRow>(admin, 'posts', {
       workspace_id: ws.workspaceId,
+      number: await nextEntityNumber(asGeneric(admin), ws.workspaceId),
       title: 'Post',
       bucket_id: ws.bucketId,
       owner_user_id: ws.owner.id,
@@ -111,6 +114,7 @@ describe.runIf(INBOX_SUITE)('inbox-writer processEvent (integration)', () => {
     const ws = await freshWorkspace();
     const brief = await insertFull<BriefRow>(admin, 'briefs', {
       workspace_id: ws.workspaceId,
+      number: await nextEntityNumber(asGeneric(admin), ws.workspaceId),
       title: 'B',
       objective: 'O',
       created_by: ws.owner.id,
@@ -177,6 +181,7 @@ describe.runIf(INBOX_SUITE)('inbox-writer processEvent (integration)', () => {
     const ws = await freshWorkspace();
     const brief = await insertFull<BriefRow>(admin, 'briefs', {
       workspace_id: ws.workspaceId,
+      number: await nextEntityNumber(asGeneric(admin), ws.workspaceId),
       title: 'B',
       objective: 'O',
       created_by: ws.client.id,
@@ -193,6 +198,7 @@ describe.runIf(INBOX_SUITE)('inbox-writer processEvent (integration)', () => {
     const ws = await freshWorkspace();
     const brief = await insertFull<BriefRow>(admin, 'briefs', {
       workspace_id: ws.workspaceId,
+      number: await nextEntityNumber(asGeneric(admin), ws.workspaceId),
       title: 'B',
       objective: 'O',
       created_by: ws.client.id,

@@ -18,6 +18,7 @@ import {
   generateTraceId,
   insertRow,
   loadRlsEnv,
+  nextEntityNumber,
   randomSha256,
   seedScaffold,
   seedUser,
@@ -106,6 +107,7 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
   async function insertPost(ctx: Ctx, stage: string): Promise<string> {
     const row = await insertRow(asGeneric(admin), 'posts', {
       workspace_id: ctx.workspaceId,
+      number: await nextEntityNumber(asGeneric(admin), ctx.workspaceId),
       title: 'Matrix post',
       bucket_id: ctx.bucketId,
       owner_user_id: ctx.userId,
@@ -120,6 +122,7 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
   async function insertOpenBrief(ctx: Ctx, createdBy: string): Promise<string> {
     const row = await insertRow(asGeneric(admin), 'briefs', {
       workspace_id: ctx.workspaceId,
+      number: await nextEntityNumber(asGeneric(admin), ctx.workspaceId),
       title: 'Brief',
       objective: 'Objective',
       created_by: createdBy,

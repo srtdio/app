@@ -16,6 +16,7 @@ import {
   createAdminClient,
   insertRow,
   loadRlsEnv,
+  nextEntityNumber,
   randomSha256,
   seedUser,
   seedWorkspace,
@@ -100,6 +101,7 @@ describe.runIf(RPC_SUITE)('asset_attachments display-name trigger', () => {
 
     const post = await insertRow(asGeneric(admin), 'posts', {
       workspace_id: ws.id,
+      number: await nextEntityNumber(asGeneric(admin), ws.id),
       title: 'Launch Post',
       owner_user_id: owner.id,
       platform: 'linkedin',
@@ -110,6 +112,7 @@ describe.runIf(RPC_SUITE)('asset_attachments display-name trigger', () => {
 
     const brief = await insertRow(asGeneric(admin), 'briefs', {
       workspace_id: ws.id,
+      number: await nextEntityNumber(asGeneric(admin), ws.id),
       title: 'Spring Brief',
       objective: 'Objective',
       created_by: owner.id,
