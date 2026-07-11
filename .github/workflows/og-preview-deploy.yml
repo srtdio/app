@@ -1,0 +1,39 @@
+name: Deploy og-preview Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/og-preview/**'
+      - 'src/server/**'
+      - 'packages/storage/**'
+      - '.github/workflows/og-preview-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/og-preview
+          wranglerVersion: '3.114.17'
+          packageManager: pnpm
+          secrets: |
+            CLOUDFLARE_ACCOUNT_ID
+            CLOUDFLARE_R2_ACCESS_KEY_ID
+            CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
