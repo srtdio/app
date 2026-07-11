@@ -33,6 +33,7 @@ import { R2StorageClient } from '@srtdio/storage';
 import { tracedFetch } from '@/server/traced-fetch';
 import { extractTraceId } from '@/server/trace';
 import { logger } from '@/server/logger';
+import { parseEntityRef, type EntityRef } from '@/lib/entityRef';
 
 export interface OgPreviewEnv {
   CLOUDFLARE_ACCOUNT_ID: string;
@@ -129,6 +130,13 @@ export interface ImageLocator {
 export interface OgPreviewStore {
   /** Post title iff a live (deleted_at IS NULL) post exists, else null. */
   findPostTitle(postId: string): Promise<string | null>;
+  /**
+   * Resolve a pretty ref (workspace key + entity number) to a live post's id and
+   * title. Two lookups only: workspaces.id by the uppercase key, then posts by
+   * (workspace_id, number) with deleted_at null. Null on unknown key or a
+   * missing/deleted post.
+   */
+  findPostByRef(ref: EntityRef): Promise<{ postId: string; title: string } | null>;
   /** First image attachment of a live post, ordered position, attached_at, id. */
   findFirstPostImage(postId: string): Promise<PostImage | null>;
   /**
@@ -226,24 +234,27 @@ function cardResponse(html: string): Response {
   });
 }
 
+/** The generic "Sorted" card: no post url, no image. Always HTTP 200. */
+function genericCard(): Response {
+  return cardResponse(renderCard({ title: 'Sorted', url: null, image: null }));
+}
+
 /**
- * The crawler card for a post id: the generic "Sorted" card for an invalid uuid
- * or unknown post, otherwise the post's title plus its first image (if any).
- * Always HTTP 200 so the crawler always gets a usable card.
+ * Render the card for a known live post: its title, the given canonical og:url,
+ * and its first image (if any). One lookup (the first image); the caller has
+ * already resolved id and title.
  */
-export async function renderPostCard(postId: string, store: OgPreviewStore): Promise<Response> {
-  if (!isUuid(postId)) {
-    return cardResponse(renderCard({ title: 'Sorted', url: null, image: null }));
-  }
-  const title = await store.findPostTitle(postId);
-  if (title === null) {
-    return cardResponse(renderCard({ title: 'Sorted', url: null, image: null }));
-  }
+async function renderResolvedPostCard(
+  postId: string,
+  title: string,
+  ogUrl: string,
+  store: OgPreviewStore,
+): Promise<Response> {
   const image = await store.findFirstPostImage(postId);
   return cardResponse(
     renderCard({
       title,
-      url: `${SITE_ORIGIN}/posts/${postId}`,
+      url: ogUrl,
       image:
         image === null
           ? null
@@ -254,6 +265,41 @@ export async function renderPostCard(postId: string, store: OgPreviewStore): Pro
             },
     }),
   );
+}
+
+/**
+ * The crawler card for a post id: the generic "Sorted" card for an invalid uuid
+ * or unknown post, otherwise the post's title plus its first image (if any).
+ * Always HTTP 200 so the crawler always gets a usable card.
+ */
+export async function renderPostCard(postId: string, store: OgPreviewStore): Promise<Response> {
+  if (!isUuid(postId)) {
+    return genericCard();
+  }
+  const title = await store.findPostTitle(postId);
+  if (title === null) {
+    return genericCard();
+  }
+  return renderResolvedPostCard(postId, title, `${SITE_ORIGIN}/posts/${postId}`, store);
+}
+
+/**
+ * The crawler card for a pretty short link /p/<key>-<number>. Resolves the ref
+ * to a live post via two lookups, then renders the same card as /posts/:postId
+ * but with og:url pointing at the short link. An unparseable ref, unknown key,
+ * or missing/deleted post yields the generic card, matching a missing post on
+ * /posts/*. Always HTTP 200.
+ */
+export async function renderShortLinkCard(ref: string, store: OgPreviewStore): Promise<Response> {
+  const parsed = parseEntityRef(ref);
+  if (parsed === null) {
+    return genericCard();
+  }
+  const target = await store.findPostByRef(parsed);
+  if (target === null) {
+    return genericCard();
+  }
+  return renderResolvedPostCard(target.postId, target.title, `${SITE_ORIGIN}/p/${ref}`, store);
 }
 
 function imageMiss(): Response {
@@ -345,6 +391,37 @@ export function createSupabaseOgPreviewStore(env: {
       return data?.title ?? null;
     },
 
+    async findPostByRef({ key, number }) {
+      // Two lookups, no join, no N+1: the active workspace by its key, then the
+      // live post by (workspace_id, number). entity numbers are per-workspace.
+      const { data: workspace, error: workspaceError } = await client
+        .from('workspaces')
+        .select('id')
+        .eq('key', key)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (workspaceError) {
+        throw workspaceError;
+      }
+      if (!workspace) {
+        return null;
+      }
+      const { data: post, error: postError } = await client
+        .from('posts')
+        .select('id, title')
+        .eq('workspace_id', workspace.id)
+        .eq('number', number)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (postError) {
+        throw postError;
+      }
+      if (!post) {
+        return null;
+      }
+      return { postId: post.id, title: post.title };
+    },
+
     async findFirstPostImage(postId) {
       // asset_versions carries no soft-delete column, so nothing to filter there;
       // width/height are the only real dimensions, emitted only when non-null.
@@ -416,9 +493,10 @@ export function createSupabaseOgPreviewStore(env: {
 }
 
 /**
- * Route the request. /posts/:postId serves the crawler card to known crawlers
- * and passes everything else through; /og/p/:postId/:assetVersionId.jpg serves
- * transformed image bytes. Any other /og/* path is a 404.
+ * Route the request. /posts/:postId and /p/<key>-<number> serve the crawler card
+ * to known crawlers and pass everything else through;
+ * /og/p/:postId/:assetVersionId.jpg serves transformed image bytes. Any other
+ * /og/* path is a 404.
  */
 async function route(request: Request, env: OgPreviewEnv): Promise<Response> {
   const url = new URL(request.url);
@@ -430,6 +508,15 @@ async function route(request: Request, env: OgPreviewEnv): Promise<Response> {
     // deeper path, non-read method, or human is transparently passed through.
     if (isRead && segments.length === 2 && isCrawler(request.headers.get('User-Agent'))) {
       return renderPostCard(segments[1] ?? '', createSupabaseOgPreviewStore(env));
+    }
+    return passthrough(request, env);
+  }
+
+  if (segments[0] === 'p') {
+    // Only a bare /p/<ref> read from a known crawler gets the card; any deeper
+    // path, non-read method, or human is transparently passed through.
+    if (isRead && segments.length === 2 && isCrawler(request.headers.get('User-Agent'))) {
+      return renderShortLinkCard(segments[1] ?? '', createSupabaseOgPreviewStore(env));
     }
     return passthrough(request, env);
   }

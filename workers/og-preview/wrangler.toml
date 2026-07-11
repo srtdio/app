@@ -9,6 +9,7 @@ compatibility_flags = ["nodejs_compat"]
 routes = [
   { pattern = "srtd.io/posts/*", zone_name = "srtd.io" },
   { pattern = "srtd.io/og/*", zone_name = "srtd.io" },
+  { pattern = "srtd.io/p/*", zone_name = "srtd.io" },
 ]
 
 [vars]
