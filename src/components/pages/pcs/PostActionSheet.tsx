@@ -3,7 +3,9 @@
 // Postgres write, no new RPC. Each action reuses an existing path:
 //   - Send to chat -> the existing Agora sendText via ConversationPicker.
 //   - Copy link    -> an in-app authenticated deep link built from
-//                     window.location.origin + the existing post route (no domain
+//                     window.location.origin + the pretty short route
+//                     (/p/<key>-<number>) when the workspace key is known, falling
+//                     back to the classic /posts/<uuid> route otherwise (no domain
 //                     hardcoded, no share token: there is no public-share concept).
 //   - Download all -> the same attachment-disposition presigned URL the PCS
 //                     lightbox already uses per image, looped over the gallery.
@@ -16,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { IconDownload, IconLink, IconSend, IconTrash } from '@/components/ui/icons';
 import { requestPresignedUrl, type PresignDeps } from '@/lib/asset-presign';
 import { postRoute } from '@/components/chat/post-card';
+import { entityUrlPath } from '@/lib/entityRef';
 import {
   buildPostLink,
   canDownloadAll,
@@ -36,6 +39,14 @@ interface PostActionSheetProps {
   gallery: GalleryItem[];
   /** The presign deps PCS already builds for the lightbox download. */
   deps: PresignDeps;
+  /**
+   * The active workspace key, or null when it has not resolved yet. When present,
+   * Copy link uses the pretty /p/<key>-<number> short link; when null it falls back
+   * to the classic /posts/<uuid> deep link.
+   */
+  workspaceKey: string | null;
+  /** The post's per-workspace entity number, used to build the short link. */
+  postNumber: number;
   /** Push a toast onto the page's stack. */
   onToast: (message: string) => void;
   /** Owner/admin only: gates the destructive Delete post row + confirm view. */
@@ -62,6 +73,24 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+/**
+ * The absolute link the Copy link action puts on the clipboard: the pretty short
+ * link (/p/<key>-<number>) when the workspace key is known, else the classic
+ * /posts/<uuid> deep link. The origin is always the caller's
+ * window.location.origin; no domain is ever hardcoded. Pure so the copy behaviour
+ * is unit-testable without a DOM.
+ */
+export function postCopyLink(
+  origin: string,
+  workspaceKey: string | null,
+  postNumber: number,
+  postId: string,
+): string {
+  const path =
+    workspaceKey !== null ? entityUrlPath('post', workspaceKey, postNumber) : postRoute(postId);
+  return buildPostLink(origin, path);
+}
+
 export function PostActionSheet({
   open,
   onClose,
@@ -70,6 +99,8 @@ export function PostActionSheet({
   currentUserId,
   gallery,
   deps,
+  workspaceKey,
+  postNumber,
   onToast,
   canDelete,
   onDeletePost,
@@ -87,7 +118,7 @@ export function PostActionSheet({
   }
 
   async function handleCopyLink(): Promise<void> {
-    const link = buildPostLink(window.location.origin, postRoute(postId));
+    const link = postCopyLink(window.location.origin, workspaceKey, postNumber, postId);
     try {
       await navigator.clipboard.writeText(link);
       onToast('Link copied.');
