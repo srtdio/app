@@ -12,6 +12,8 @@ import { DeletedPage } from '@/components/pages/DeletedPage';
 import { SignInPage } from '@/components/auth/SignInPage';
 import { SignUpPage } from '@/components/auth/SignUpPage';
 import { AcceptInvitePage } from '@/components/auth/AcceptInvitePage';
+import { PostRefResolver } from '@/components/refs/PostRefResolver';
+import { BriefRefResolver } from '@/components/refs/BriefRefResolver';
 import { RequireAuth, RequireGuest } from '@/components/auth/RouteGuards';
 import { SessionProvider } from '@/lib/session-context';
 import { WorkspaceProvider } from '@/lib/workspace-context';
@@ -50,8 +52,10 @@ export default function App() {
               <Route path="/" element={<Navigate to="/pipeline" replace />} />
               <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/posts/:postId" element={<PostDetailPage />} />
+              <Route path="/p/:ref" element={<PostRefResolver />} />
               <Route path="/briefs" element={<BriefsPage />} />
               <Route path="/briefs/:briefId" element={<BriefDetailPage />} />
+              <Route path="/b/:ref" element={<BriefRefResolver />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/activity" element={<ActivityPage />} />
               <Route path="/assets" element={<AssetsPage />} />

@@ -18,6 +18,7 @@ import {
   generateTraceId,
   insertRow,
   loadRlsEnv,
+  nextEntityNumber,
   partitionTimestamp,
   seedScaffold,
   seedUser,
@@ -77,6 +78,7 @@ describe.runIf(BRIEFS_SUITE)('briefs read/write layer (authenticated role)', () 
   async function linkPost(briefId: string, deleted: boolean): Promise<string> {
     const row = await insertRow(asGeneric(admin), 'posts', {
       workspace_id: ctxA.workspaceId,
+      number: await nextEntityNumber(asGeneric(admin), ctxA.workspaceId),
       title: 'Linked post',
       bucket_id: ctxA.bucketId,
       owner_user_id: ctxA.userId,

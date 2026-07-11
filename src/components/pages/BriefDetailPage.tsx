@@ -7,6 +7,9 @@ import { IconBriefs } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
+import { EntityRefChip } from '@/components/refs/EntityRefChip';
+import { Toasts } from '@/components/pages/assets/Toasts';
+import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
@@ -73,11 +76,16 @@ export function briefAuthorLabel(
   return member ?? legacyAuthorName ?? '(ex-member)';
 }
 
-export function BriefDetailPage() {
-  const { briefId } = useParams();
+export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } = {}) {
+  const params = useParams();
+  // The pretty-link resolver (/b/:ref) passes the resolved id as a prop; the
+  // classic /briefs/:briefId route supplies it via the URL. The prop wins so the
+  // address bar can stay on the pretty URL without a redirect.
+  const briefId = briefIdProp ?? params.briefId;
   const navigate = useNavigate();
   const newTrace = useNewTrace();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaceKey } = useWorkspace();
+  const { toasts, push, dismiss } = useToasts();
 
   // Resolve created_by to a current member's display name, never a raw uuid.
   // Reuses the post detail page's member hook unchanged; the map is the resolver
@@ -258,9 +266,17 @@ export function BriefDetailPage() {
     <>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
         {backButton}
-        <h1 className="text-[15px] font-semibold truncate">{brief.title}</h1>
+        <h1 className="min-w-0 flex-1 text-[15px] font-semibold truncate">{brief.title}</h1>
+        {workspaceKey !== null ? (
+          <EntityRefChip
+            kind="brief"
+            entityKey={workspaceKey}
+            number={brief.number}
+            onCopied={() => push('Link copied')}
+          />
+        ) : null}
         <span
-          className={`ml-auto shrink-0 inline-flex items-center rounded-full border px-3 h-7 text-xs font-medium ${
+          className={`shrink-0 inline-flex items-center rounded-full border px-3 h-7 text-xs font-medium ${
             STATUS_BADGE[brief.status] ?? 'border-border text-fg-3'
           }`}
         >
@@ -421,6 +437,7 @@ export function BriefDetailPage() {
           </section>
         </aside>
       </div>
+      <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

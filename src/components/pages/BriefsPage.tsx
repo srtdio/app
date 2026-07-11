@@ -14,6 +14,7 @@ import { fetchWithTrace } from '@/lib/fetch';
 import { PresignCache } from '@/lib/asset-presign';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
+import { entityUrlPath } from '@/lib/entityRef';
 import { useNewTrace } from '@/lib/trace-context';
 import { filterByTitle } from '@/lib/list-sort';
 import { filterBriefsByStatus, type BriefFilter } from '@/lib/brief-list';
@@ -184,7 +185,7 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
 
 export function BriefsPage() {
   const navigate = useNavigate();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaceKey } = useWorkspace();
   const newTrace = useNewTrace();
   const [filter, setFilter] = useState<BriefFilter>('all');
   const [search, setSearch] = useState('');
@@ -314,7 +315,16 @@ export function BriefsPage() {
             closingId,
             closeError,
             onClose: (briefId) => void handleClose(briefId),
-            onOpen: (briefId) => navigate(`/briefs/${briefId}`),
+            onOpen: (briefId) => {
+              // Prefer the pretty link (/b/KEY-N); the classic /briefs/:id route
+              // stays a working fallback when the number or key is unavailable.
+              const target = briefs.find((b) => b.id === briefId);
+              navigate(
+                target !== undefined && workspaceKey !== null
+                  ? entityUrlPath('brief', workspaceKey, target.number)
+                  : `/briefs/${briefId}`,
+              );
+            },
           })}
         </div>
       )}

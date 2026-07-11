@@ -9,6 +9,7 @@ function post(over: Partial<Post>): Post {
   return {
     id: 'p',
     workspace_id: 'w',
+    number: 1,
     title: 'Untitled',
     stage: STAGES[0]!,
     platform: 'instagram',

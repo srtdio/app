@@ -14,6 +14,7 @@ function makeBrief(overrides: Partial<BriefWithThumbnail>): BriefWithThumbnail {
   return {
     id: 'b1',
     workspace_id: 'w1',
+    number: 1,
     title: 'Spring launch',
     objective: 'Tease the spring drop across feed and stories.',
     legacy_author_name: null,

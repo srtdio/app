@@ -238,6 +238,45 @@ export function randomSuffix(): string {
   return crypto.randomUUID().slice(0, 8);
 }
 
+/**
+ * A random workspace key satisfying the workspaces_key_format check
+ * (^[A-Z][A-Z0-9]{1,4}$): a leading 'T' plus four crypto-random base36 chars, so
+ * it is unique across parallel test runs without a shared counter. Retries at the
+ * insert site are unnecessary at this cardinality (36^4 ≈ 1.7M).
+ */
+export function randomWorkspaceKey(): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  let suffix = '';
+  for (const b of bytes) suffix += alphabet[b % 36];
+  return `T${suffix}`;
+}
+
+/**
+ * Allocate the next per-workspace entity number the way post_create/brief_create
+ * do in production: read the workspace_counters row (seeded by the
+ * workspaces_seed_counter trigger), return its current value, and advance it by
+ * one. Service-role access bypasses RLS; the counter is never hardcoded.
+ */
+export async function nextEntityNumber(g: GenericClient, workspaceId: string): Promise<number> {
+  const read = await g
+    .from('workspace_counters')
+    .select('next_entity_number')
+    .eq('workspace_id', workspaceId);
+  if (read.error) throw new Error(`workspace_counters read failed: ${read.error.message}`);
+  const rows = read.data as { next_entity_number: number }[] | null;
+  const current = rows?.[0]?.next_entity_number;
+  if (typeof current !== 'number') {
+    throw new Error(`workspace_counters row missing for ${workspaceId}`);
+  }
+  const upd = await g
+    .from('workspace_counters')
+    .update({ next_entity_number: current + 1 })
+    .eq('workspace_id', workspaceId);
+  if (upd.error) throw new Error(`workspace_counters update failed: ${upd.error.message}`);
+  return current;
+}
+
 export function randomSha256(): string {
   let out = '';
   for (let i = 0; i < 64; i += 1) out += HEX[Math.floor(Math.random() * 16)];
@@ -304,6 +343,7 @@ export async function seedWorkspace(
     name,
     owner_user_id: owner.id,
     timezone: 'UTC',
+    key: randomWorkspaceKey(),
   });
   const id = String(ws.id);
   await insertRow(generic, 'workspace_members', {
@@ -355,12 +395,14 @@ export async function seedScaffold(
   });
   const brief = await insertRow(g, 'briefs', {
     workspace_id: workspaceId,
+    number: await nextEntityNumber(g, workspaceId),
     title: 'Brief',
     objective: 'Objective',
     created_by: userId,
   });
   const post = await insertRow(g, 'posts', {
     workspace_id: workspaceId,
+    number: await nextEntityNumber(g, workspaceId),
     title: 'Post',
     bucket_id: bucket.id,
     owner_user_id: userId,

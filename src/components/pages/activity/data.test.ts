@@ -69,6 +69,7 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     format: null,
     caption: null,
     thumbnailAssetVersionId: null,
+    number: null,
     ...over,
   };
 }

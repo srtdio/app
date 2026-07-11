@@ -4,12 +4,16 @@ import { PlatformMark } from '@/components/ui/PlatformMark';
 import { IconPlay } from '@/components/ui/icons';
 import { FORMAT_GLYPH_LABEL, formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
+import { entityUrlPath } from '@/lib/entityRef';
 import type { PipelinePost } from '@srtdio/posts';
 
 export interface PostCardProps {
   post: PipelinePost;
   cache: PresignCache;
   presignEnabled: boolean;
+  /** The active workspace's key, used to build the pretty /p/KEY-N link. When
+   *  absent the card falls back to the classic /posts/:id route. */
+  workspaceKey?: string | null;
 }
 
 /** Format an ISO date as a date only (no time), matching the board reference. */
@@ -87,16 +91,20 @@ function PlayBadge() {
  * happen only there, never on the board. Navigation is a full-bleed overlay button
  * laid behind the card content.
  */
-export function PostCard({ post, cache, presignEnabled }: PostCardProps) {
+export function PostCard({ post, cache, presignEnabled, workspaceKey = null }: PostCardProps) {
   const navigate = useNavigate();
   const hasPoster = post.thumbnailAssetVersionId !== null;
+  // Prefer the pretty link (/p/KEY-N); the classic /posts/:id route remains a
+  // working fallback when the key has not resolved yet.
+  const href =
+    workspaceKey !== null ? entityUrlPath('post', workspaceKey, post.number) : `/posts/${post.id}`;
 
   return (
     <div className="relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2">
       <button
         type="button"
         aria-label={`Open post ${post.title}`}
-        onClick={() => navigate(`/posts/${post.id}`)}
+        onClick={() => navigate(href)}
         className="absolute inset-0 rounded-lg"
       />
       <Thumbnail

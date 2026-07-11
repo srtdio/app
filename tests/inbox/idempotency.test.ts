@@ -7,9 +7,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../packages/schemas/src/supabase.generated';
 import {
+  asGeneric,
   cleanupWorkspaces,
   createAdminClient,
   loadRlsEnv,
+  nextEntityNumber,
   type RlsEnv,
   type SeededUser,
   type SeededWorkspace,
@@ -42,6 +44,7 @@ describe.runIf(INBOX_SUITE)('inbox-writer idempotency', () => {
 
     const post = await insertFull<PostRow>(admin, 'posts', {
       workspace_id: ws.workspaceId,
+      number: await nextEntityNumber(asGeneric(admin), ws.workspaceId),
       title: 'Post',
       bucket_id: ws.bucketId,
       owner_user_id: ws.owner.id,

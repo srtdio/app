@@ -11,7 +11,8 @@ import { loadRlsEnv } from '../../packages/test-utils/rls';
 
 const RLS_SUITE = process.env.RLS_SUITE === '1';
 
-const EXPECTED_RELATION_COUNT = 45;
+// Bumped 45 -> 46 for public.workspace_counters (added with RLS enabled in this PR's migration).
+const EXPECTED_RELATION_COUNT = 46;
 
 interface Relation {
   relname: string;

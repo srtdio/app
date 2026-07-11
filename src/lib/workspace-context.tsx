@@ -86,6 +86,8 @@ export async function bootstrapWorkspaces(
 interface WorkspaceContextValue {
   workspaceId: string | null;
   workspaceName: string | null;
+  /** The active workspace's short key (e.g. "GBL"), or null before it resolves. */
+  workspaceKey: string | null;
   workspaces: WorkspaceRow[];
   loading: boolean;
   error: string | null;
@@ -189,6 +191,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     () => ({
       workspaceId: activeWorkspace?.id ?? null,
       workspaceName: activeWorkspace?.name ?? null,
+      workspaceKey: activeWorkspace?.key ?? null,
       workspaces,
       loading,
       error,

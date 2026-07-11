@@ -56,6 +56,7 @@ function item(over: Partial<ActivityItem>): ActivityItem {
   return {
     id: 'e1',
     workspaceId: 'w1',
+    number: null,
     eventType: 'comment',
     entityType: 'post',
     entityId: 'p1',

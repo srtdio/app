@@ -66,6 +66,7 @@ import { createComment } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
 import { postSoftDelete, stageTransition } from '@srtdio/rpc';
 import { formatLabel, platformLabel, postStatusLine } from '@/lib/post-detail-presentation';
+import { EntityRefChip } from '@/components/refs/EntityRefChip';
 
 // Read a caption string out of a version snapshot defensively: the snapshot is
 // free-form Json, so a missing or non-string caption yields null (no quote)
@@ -148,11 +149,15 @@ function formatTargetDate(value: string): string {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export function PostDetailPage() {
-  const { postId } = useParams();
+export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {}) {
+  const params = useParams();
+  // The pretty-link resolver (/p/:ref) passes the resolved id as a prop; the
+  // classic /posts/:postId route supplies it via the URL. The prop wins so the
+  // address bar can stay on the pretty URL without a redirect.
+  const postId = postIdProp ?? params.postId;
   const navigate = useNavigate();
   const newTrace = useNewTrace();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaceKey } = useWorkspace();
 
   // Email deep-link: ?comment={commentId} focuses that comment row. Captured into
   // state so it survives the immediate strip below, then handed to Comments which
@@ -985,6 +990,14 @@ export function PostDetailPage() {
           <span className="text-sm text-fg-2">
             {platformLabel(post.platform)} · {formatLabel(post.format)}
           </span>
+          {workspaceKey !== null ? (
+            <EntityRefChip
+              kind="post"
+              entityKey={workspaceKey}
+              number={post.number}
+              onCopied={() => push('Link copied')}
+            />
+          ) : null}
         </div>
 
         {agencySide && !readOnly ? (
