@@ -164,15 +164,18 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
     snapshot: { caption?: string | null; gallery?: string[] };
   }
 
+  // asGeneric's builder has no .order()/.limit(), so pull every version for the
+  // post and pick the highest version_number in JS.
   async function latestVersion(postId: string): Promise<VersionRow> {
     const res = await asGeneric(admin)
       .from('post_versions')
       .select('id,version_number,snapshot')
-      .eq('post_id', postId)
-      .order('version_number', { ascending: false })
-      .limit(1);
-    const rows = res.data as VersionRow[] | null;
-    const row = rows?.[0];
+      .eq('post_id', postId);
+    const rows = (res.data as VersionRow[] | null) ?? [];
+    const row = rows.reduce<VersionRow | undefined>(
+      (best, r) => (best === undefined || r.version_number > best.version_number ? r : best),
+      undefined,
+    );
     if (!row) throw new Error(`no versions for post ${postId}`);
     return row;
   }
