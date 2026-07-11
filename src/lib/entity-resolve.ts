@@ -20,11 +20,7 @@ export async function resolveWorkspaceIdByKey(
   client: Client,
   key: string,
 ): Promise<Result<string | null>> {
-  const { data, error } = await client
-    .from('workspaces')
-    .select('id')
-    .eq('key', key)
-    .maybeSingle();
+  const { data, error } = await client.from('workspaces').select('id').eq('key', key).maybeSingle();
   if (error) return { ok: false, error: transportError(error.message) };
   return { ok: true, data: data?.id ?? null };
 }
