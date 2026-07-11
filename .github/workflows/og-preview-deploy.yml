@@ -21,6 +21,17 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify Supabase secrets are present
+        # The Worker does service-role row lookups; without these it 500s on
+        # every crawler request. Fail loudly rather than ship a broken deploy.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SECRET_KEY" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_SECRET_KEY must be set as GitHub secrets; the og-preview Worker 500s on every crawler request without them."
+            exit 1
+          fi
       - name: Deploy
         uses: cloudflare/wrangler-action@v3.14.1
         with:
@@ -33,7 +44,11 @@ jobs:
             CLOUDFLARE_ACCOUNT_ID
             CLOUDFLARE_R2_ACCESS_KEY_ID
             CLOUDFLARE_R2_SECRET_ACCESS_KEY
+            SUPABASE_URL
+            SUPABASE_SECRET_KEY
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
           CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}

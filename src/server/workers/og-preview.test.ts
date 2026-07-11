@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker, {
   isCrawler,
   renderPostCard,
+  renderShortLinkCard,
   serveOgImage,
   type ImageLocator,
   type OgPreviewEnv,
@@ -33,12 +34,24 @@ interface Fixture {
   firstImage: PostImage | null;
   /** The pair the store considers bound (live post, live attachment, image). */
   bound: { postId: string; assetVersionId: string; locator: ImageLocator } | null;
+  /** The ref the store resolves to a live post (uppercase key, entity number). */
+  refTarget?: { key: string; number: number; postId: string; title: string } | null;
 }
 
 class FakeStore implements OgPreviewStore {
   constructor(private readonly fx: Fixture) {}
   findPostTitle(): Promise<string | null> {
     return Promise.resolve(this.fx.postTitle);
+  }
+  findPostByRef(ref: {
+    key: string;
+    number: number;
+  }): Promise<{ postId: string; title: string } | null> {
+    const t = this.fx.refTarget ?? null;
+    if (t === null || t.key !== ref.key || t.number !== ref.number) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve({ postId: t.postId, title: t.title });
   }
   findFirstPostImage(): Promise<PostImage | null> {
     return Promise.resolve(this.fx.firstImage);
@@ -165,6 +178,86 @@ describe('renderPostCard', () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('<meta property="og:title" content="Sorted">');
+  });
+});
+
+describe('renderShortLinkCard', () => {
+  it('renders a card whose og:url is the short link for a known ref', async () => {
+    const store = new FakeStore({
+      postTitle: 'never read via ref',
+      firstImage: { assetVersionId: VERSION_ID, width: 1200, height: 630 },
+      bound: null,
+      refTarget: { key: 'GBL', number: 142, postId: POST_ID, title: 'Launch day' },
+    });
+    const res = await renderShortLinkCard('gbl-142', store);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('<meta property="og:url" content="https://srtd.io/p/gbl-142">');
+    expect(html).toContain('<meta property="og:title" content="Launch day">');
+    expect(html).toContain(
+      `<meta property="og:image" content="https://srtd.io/og/p/${POST_ID}/${VERSION_ID}.jpg">`,
+    );
+    // The short link never points a crawler at the /posts/:postId form.
+    expect(html).not.toContain('/posts/');
+  });
+
+  it('serves the generic card for an unparseable ref without touching the store', async () => {
+    const store = new FakeStore({
+      postTitle: 'never read',
+      firstImage: null,
+      bound: null,
+      refTarget: { key: 'GBL', number: 142, postId: POST_ID, title: 'Launch day' },
+    });
+    const res = await renderShortLinkCard('garbage', store);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('<meta property="og:title" content="Sorted">');
+    expect(html).not.toContain('og:url');
+  });
+
+  it('serves the generic card when the ref resolves to no live post', async () => {
+    const store = new FakeStore({
+      postTitle: null,
+      firstImage: null,
+      bound: null,
+      refTarget: null,
+    });
+    const res = await renderShortLinkCard('gbl-142', store);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('<meta property="og:title" content="Sorted">');
+    expect(html).not.toContain('og:url');
+  });
+});
+
+describe('worker.fetch short-link routing', () => {
+  it('passes a human /p/ request through to PAGES_ORIGIN', async () => {
+    const spy = vi.fn(() => Promise.resolve(new Response('spa', { status: 200 })));
+    vi.stubGlobal('fetch', spy);
+    const req = new Request('https://srtd.io/p/gbl-142', {
+      headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0' },
+    });
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledWith(
+      'https://srtdio-app.pages.dev/p/gbl-142',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('passes a deeper /p/ path through even for a crawler', async () => {
+    const spy = vi.fn(() => Promise.resolve(new Response('spa', { status: 200 })));
+    vi.stubGlobal('fetch', spy);
+    const req = new Request('https://srtd.io/p/gbl-142/extra', {
+      headers: { 'User-Agent': 'WhatsApp/2.23.20.0' },
+    });
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(
+      'https://srtdio-app.pages.dev/p/gbl-142/extra',
+      expect.objectContaining({ method: 'GET' }),
+    );
   });
 });
 
