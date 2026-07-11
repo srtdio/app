@@ -21,10 +21,15 @@ const hookState = vi.hoisted(() => ({
   index: 0,
   overrides: {} as Record<number, unknown>,
   calls: [] as unknown[][],
+  // The resolved initializer of each useState call, by call index. Lets a test
+  // observe a component's default state without a renderer (see the Review-chip
+  // default guard below).
+  inits: [] as unknown[],
   reset(): void {
     this.index = 0;
     this.overrides = {};
     this.calls = [];
+    this.inits = [];
   },
 }));
 
@@ -35,6 +40,7 @@ vi.mock('react', async (importOriginal) => {
     useState: (init: unknown) => {
       const i = hookState.index;
       const base = typeof init === 'function' ? (init as () => unknown)() : init;
+      hookState.inits[i] = base;
       const value = i in hookState.overrides ? hookState.overrides[i] : base;
       const setter = (next: unknown): void => {
         hookState.calls[i] = (hookState.calls[i] ?? []).concat([next]);
@@ -45,10 +51,18 @@ vi.mock('react', async (importOriginal) => {
   };
 });
 
+// The page reads workspace + navigation on render; both are stubbed so the page
+// body can be invoked far enough to run its first useState (the stage filter).
+vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }));
+vi.mock('@/lib/workspace-context', () => ({
+  useWorkspace: () => ({ workspaceId: null, workspaces: [] }),
+}));
+
 import {
   MOVE_FALLBACK_MESSAGE,
   moveErrorMessage,
   pipelineHeader,
+  PipelinePage,
   postCountLabel,
   runMovePost,
   sanitizePostSort,
@@ -258,6 +272,49 @@ describe('pipelineHeader', () => {
     expect(labels).not.toContain('+ Owner');
     expect(labels).not.toContain('+ Bucket');
     expect(labels).not.toContain('+ Date');
+  });
+});
+
+describe('opens on the Review chip by default', () => {
+  it('initializes the stage filter to review, not all, and keeps All the first chip', () => {
+    hookState.reset();
+    try {
+      // Invoke the page body far enough to run its first useState (the stage
+      // filter, index 0). Later hooks (useSort's real useCallback) bail out
+      // without a renderer, but the initial stage is already recorded by then.
+      PipelinePage();
+    } catch {
+      // Expected: the real hooks past the shimmed useState calls throw outside a
+      // renderer. The stage default we assert below is captured before that.
+    }
+    // (a) On first render the stage passed down (StageChips.active) is 'review'.
+    expect(hookState.inits[0]).toBe('review');
+
+    // (b) The chip order is unchanged: 'All' is still the first chip, followed by
+    // the stages in transition-map order; the review default only shifts which
+    // chip is selected, never the list.
+    const chips = findAll(
+      pipelineHeader({
+        search: '',
+        onSearchChange: () => {},
+        sort: 'updated',
+        onSortChange: () => {},
+        dateWindow: 'any',
+        onDateWindowChange: () => {},
+        customRange: null,
+        onCustomRangeChange: () => {},
+        weekStartDay: 1,
+        stage: hookState.inits[0] as string,
+        onStageChange: () => {},
+        counts: { all: 3, draft: 2, review: 1 },
+      }),
+      (el) => el.type === StageChips,
+    );
+    expect(chips).toHaveLength(1);
+    const props = chips[0]!.props as { active: string; items: { key: string }[] };
+    expect(props.active).toBe('review');
+    expect(props.items[0]!.key).toBe('all');
+    expect(props.items.map((t) => t.key)).toEqual(['all', ...STAGES]);
   });
 });
 
