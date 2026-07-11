@@ -33,8 +33,10 @@ import {
   briefClose,
   briefCreate,
   commentCreate,
+  gallerySet,
   memberAccept,
   memberInvite,
+  postCaptionUpdate,
   postVersionCreate,
   stageTransition,
   workspaceCreate,
@@ -129,6 +131,50 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
     const res = await asGeneric(admin).from('posts').select('stage').eq('id', postId);
     const rows = res.data as Array<{ stage: string }> | null;
     return rows?.[0]?.stage;
+  }
+
+  interface PostMeta {
+    row_version: number;
+    updated_at: string;
+    caption: string | null;
+  }
+
+  // Ground-truth for the no-op guards: an identical save must leave row_version
+  // and updated_at exactly as they were, so we read them back via the admin
+  // client and compare byte-for-byte.
+  async function readPostMeta(postId: string): Promise<PostMeta> {
+    const res = await asGeneric(admin)
+      .from('posts')
+      .select('row_version,updated_at,caption')
+      .eq('id', postId);
+    const rows = res.data as PostMeta[] | null;
+    const row = rows?.[0];
+    if (!row) throw new Error(`post ${postId} not found`);
+    return row;
+  }
+
+  async function countPostVersions(postId: string): Promise<number> {
+    const res = await asGeneric(admin).from('post_versions').select('id').eq('post_id', postId);
+    return (res.data as unknown[] | null)?.length ?? 0;
+  }
+
+  interface VersionRow {
+    id: string;
+    version_number: number;
+    snapshot: { caption?: string | null; gallery?: string[] };
+  }
+
+  async function latestVersion(postId: string): Promise<VersionRow> {
+    const res = await asGeneric(admin)
+      .from('post_versions')
+      .select('id,version_number,snapshot')
+      .eq('post_id', postId)
+      .order('version_number', { ascending: false })
+      .limit(1);
+    const rows = res.data as VersionRow[] | null;
+    const row = rows?.[0];
+    if (!row) throw new Error(`no versions for post ${postId}`);
+    return row;
   }
 
   // Activity (inbox) events are now emitted inline by the procs. Each proc-driven
@@ -686,6 +732,152 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
       expect(recipients.has(owner.id)).toBe(false); // the actor never notifies itself
       expect(recipients.has(agencyUser.id)).toBe(true);
       expect(recipients.has(clientUser.id)).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // No-op edit guards: an identical caption / gallery order / snapshot must not
+  // spawn a new version. A genuine change still must. These guards short-circuit
+  // before touching posts, so row_version and updated_at are frozen on a no-op.
+  //
+  // post_version_create folds successive same-stage edits by the same author into
+  // one version for 15 minutes, so every "a real change versions" control case
+  // first advances the stage: that pushes stage_entered_at past the prior
+  // version's created_at, defeating the fold and forcing a fresh row.
+  // -------------------------------------------------------------------------
+  describe('no-op edit guards', () => {
+    it('caption no-op: an identical caption returns the same version and mutates nothing', async () => {
+      const postId = await insertPost(ctxA, 'draft');
+      const v1 = expectOk(
+        await postCaptionUpdate(ownerClient, {
+          p_post_id: postId,
+          p_caption: 'Stable caption',
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      const before = await readPostMeta(postId);
+      const countBefore = await countPostVersions(postId);
+
+      const v2 = expectOk(
+        await postCaptionUpdate(ownerClient, {
+          p_post_id: postId,
+          p_caption: 'Stable caption',
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(v2).toBe(v1);
+      expect(await countPostVersions(postId)).toBe(countBefore);
+      const after = await readPostMeta(postId);
+      expect(after.row_version).toBe(before.row_version);
+      expect(after.updated_at).toBe(before.updated_at);
+    });
+
+    it('a genuinely different caption creates a new version', async () => {
+      const postId = await insertPost(ctxA, 'draft');
+      const v1 = expectOk(
+        await postCaptionUpdate(ownerClient, {
+          p_post_id: postId,
+          p_caption: 'First caption',
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expectOk(
+        await stageTransition(ownerClient, {
+          p_post_id: postId,
+          p_to_stage: 'review',
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      const countBefore = await countPostVersions(postId);
+
+      const v2 = expectOk(
+        await postCaptionUpdate(ownerClient, {
+          p_post_id: postId,
+          p_caption: 'Second caption',
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(v2).not.toBe(v1);
+      expect(await countPostVersions(postId)).toBe(countBefore + 1);
+      expect((await latestVersion(postId)).snapshot.caption).toBe('Second caption');
+    });
+
+    it('gallery no-op: the identical slide order returns the same version and adds none', async () => {
+      const postId = await insertPost(ctxA, 'draft');
+      const a1 = await seedAssetWithVersion(wsA.id, owner.id, 'image');
+      const a2 = await seedAssetWithVersion(wsA.id, owner.id, 'image');
+      const v1 = expectOk(
+        await gallerySet(ownerClient, {
+          p_post_id: postId,
+          p_asset_version_ids: [a1.versionId, a2.versionId],
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      const countBefore = await countPostVersions(postId);
+
+      const v2 = expectOk(
+        await gallerySet(ownerClient, {
+          p_post_id: postId,
+          p_asset_version_ids: [a1.versionId, a2.versionId],
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(v2).toBe(v1);
+      expect(await countPostVersions(postId)).toBe(countBefore);
+    });
+
+    it('gallery reorder is not a no-op: reversing the order creates a new version', async () => {
+      const postId = await insertPost(ctxA, 'draft');
+      const a1 = await seedAssetWithVersion(wsA.id, owner.id, 'image');
+      const a2 = await seedAssetWithVersion(wsA.id, owner.id, 'image');
+      expectOk(
+        await gallerySet(ownerClient, {
+          p_post_id: postId,
+          p_asset_version_ids: [a1.versionId, a2.versionId],
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expectOk(
+        await stageTransition(ownerClient, {
+          p_post_id: postId,
+          p_to_stage: 'review',
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      const countBefore = await countPostVersions(postId);
+
+      expectOk(
+        await gallerySet(ownerClient, {
+          p_post_id: postId,
+          p_asset_version_ids: [a2.versionId, a1.versionId],
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(await countPostVersions(postId)).toBe(countBefore + 1);
+      expect((await latestVersion(postId)).snapshot.gallery).toEqual([a2.versionId, a1.versionId]);
+    });
+
+    it('duplicate-snapshot backstop: post_version_create with the latest snapshot is a no-op', async () => {
+      const postId = await insertPost(ctxA, 'draft');
+      const snapshot = { caption: 'Snapshot body', gallery: [] as string[] };
+      const v1 = expectOk(
+        await postVersionCreate(ownerClient, {
+          p_post_id: postId,
+          p_snapshot: snapshot,
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      const countBefore = await countPostVersions(postId);
+
+      const v2 = expectOk(
+        await postVersionCreate(ownerClient, {
+          p_post_id: postId,
+          p_snapshot: snapshot,
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(v2).toBe(v1);
+      expect(await countPostVersions(postId)).toBe(countBefore);
     });
   });
 });
