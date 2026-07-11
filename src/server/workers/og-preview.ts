@@ -140,11 +140,7 @@ export interface OgPreviewStore {
 
 /** Mints a presigned GET URL for an object. Implemented by R2StorageClient. */
 export interface PresignedUrlSigner {
-  presignGetUrl(input: {
-    bucket: string;
-    key: string;
-    expiresInSeconds: number;
-  }): Promise<string>;
+  presignGetUrl(input: { bucket: string; key: string; expiresInSeconds: number }): Promise<string>;
 }
 
 /**

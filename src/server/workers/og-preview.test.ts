@@ -69,16 +69,16 @@ describe('isCrawler', () => {
     expect(isCrawler('WhatsApp/2.23.20.0')).toBe(true);
   });
   it('matches facebookexternalhit', () => {
-    expect(isCrawler('facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)')).toBe(
-      true,
-    );
+    expect(
+      isCrawler('facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'),
+    ).toBe(true);
   });
   it('does not match Chrome, Safari, or Googlebot', () => {
     expect(isCrawler('Mozilla/5.0 (Windows NT 10.0) Chrome/120.0')).toBe(false);
     expect(isCrawler('Mozilla/5.0 (Macintosh) Version/17.0 Safari/605.1')).toBe(false);
-    expect(isCrawler('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')).toBe(
-      false,
-    );
+    expect(
+      isCrawler('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'),
+    ).toBe(false);
   });
   it('does not match an absent User-Agent', () => {
     expect(isCrawler(null)).toBe(false);
@@ -170,13 +170,19 @@ describe('renderPostCard', () => {
 
 describe('serveOgImage', () => {
   const okImage = () =>
-    Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } }));
+    Promise.resolve(
+      new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } }),
+    );
 
   function boundFixture(): Fixture {
     return {
       postTitle: 'Launch day',
       firstImage: null,
-      bound: { postId: POST_ID, assetVersionId: VERSION_ID, locator: { bucket: BUCKET, r2Key: R2_KEY } },
+      bound: {
+        postId: POST_ID,
+        assetVersionId: VERSION_ID,
+        locator: { bucket: BUCKET, r2Key: R2_KEY },
+      },
     };
   }
 
