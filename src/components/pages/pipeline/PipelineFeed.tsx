@@ -17,6 +17,8 @@ export interface PipelineFeedProps {
   /** One shared presign cache for the whole board; never per-section or per-card. */
   cache: PresignCache;
   presignEnabled: boolean;
+  /** The active workspace key, threaded into every card for its pretty /p link. */
+  workspaceKey?: string | null;
   /** A long-press on a card asks the page to open the move sheet for that post. */
   onLongPressPost: (post: PipelinePost) => void;
 }
@@ -68,12 +70,18 @@ function cardGrid(
   cache: PresignCache,
   presignEnabled: boolean,
   onLongPressPost: (post: PipelinePost) => void,
+  workspaceKey: string | null,
 ): ReactElement {
   return (
     <div className="grid grid-cols-2 gap-2">
       {posts.map((post) => (
         <FeedCard key={post.id} post={post} onLongPressPost={onLongPressPost}>
-          <PostCard post={post} cache={cache} presignEnabled={presignEnabled} />
+          <PostCard
+            post={post}
+            cache={cache}
+            presignEnabled={presignEnabled}
+            workspaceKey={workspaceKey}
+          />
         </FeedCard>
       ))}
     </div>
@@ -93,6 +101,7 @@ export function PipelineFeed({
   activeStage,
   cache,
   presignEnabled,
+  workspaceKey = null,
   onLongPressPost,
 }: PipelineFeedProps): ReactElement {
   const [shown, setShown] = useState(BOARD_CAP);
@@ -110,7 +119,7 @@ export function PipelineFeed({
         />
       ) : (
         <>
-          {cardGrid(view, cache, presignEnabled, onLongPressPost)}
+          {cardGrid(view, cache, presignEnabled, onLongPressPost, workspaceKey)}
           {list.length > shown ? (
             <div className="mt-4 flex justify-center">
               <Button variant="default" size="lg" onClick={() => setShown((s) => s + BOARD_CAP)}>

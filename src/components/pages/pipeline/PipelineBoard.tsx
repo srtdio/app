@@ -15,6 +15,8 @@ export interface PipelineBoardProps {
   /** One shared presign cache for the whole board; never per-column or per-card. */
   cache: PresignCache;
   presignEnabled: boolean;
+  /** The active workspace key, threaded into every card for its pretty /p link. */
+  workspaceKey?: string | null;
   /** Foot control on an overflowing column; the page decides what it switches to. */
   onViewAll: (stage: Stage) => void;
   /** A confirmed, legal drop calls up to the page's single move handler. */
@@ -91,6 +93,7 @@ export function PipelineBoard({
   cap,
   cache,
   presignEnabled,
+  workspaceKey = null,
   onViewAll,
   onMovePost,
 }: PipelineBoardProps): ReactElement {
@@ -137,7 +140,12 @@ export function PipelineBoard({
                     onDragEnd={onCardDragEnd}
                     className="rounded-lg"
                   >
-                    <PostCard post={post} cache={cache} presignEnabled={presignEnabled} />
+                    <PostCard
+                      post={post}
+                      cache={cache}
+                      presignEnabled={presignEnabled}
+                      workspaceKey={workspaceKey}
+                    />
                   </div>
                 ))}
               </div>

@@ -61,7 +61,7 @@ function optimisticSnoozeUntil(kind: SnoozeKind, nowMs: number): string | null {
 
 export function ActivityPage() {
   const navigate = useNavigate();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaceKey } = useWorkspace();
   const newTrace = useNewTrace();
 
   const [state, setState] = useState<ActivityState>('all');
@@ -165,10 +165,10 @@ export function ActivityPage() {
           void markEntryRead(supabase, entry, workspaceId, newTrace());
         }
       }
-      const href = entityHref(lead);
+      const href = entityHref(lead, workspaceKey);
       if (href !== null) navigate(href);
     },
-    [workspaceId, newTrace, navigate, markReadLocal],
+    [workspaceId, workspaceKey, newTrace, navigate, markReadLocal],
   );
 
   // Open a single thread entry: mark just that entry read (optimistic) and
@@ -180,10 +180,10 @@ export function ActivityPage() {
         markReadLocal(entry.id);
         void markEntryRead(supabase, entry, workspaceId, newTrace());
       }
-      const href = entityHref(entry);
+      const href = entityHref(entry, workspaceKey);
       if (href !== null) navigate(href);
     },
-    [workspaceId, newTrace, navigate, markReadLocal],
+    [workspaceId, workspaceKey, newTrace, navigate, markReadLocal],
   );
 
   const handleMarkRead = useCallback(

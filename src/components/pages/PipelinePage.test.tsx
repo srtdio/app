@@ -98,6 +98,7 @@ function makePost(id: string, stage: Stage): PipelinePost {
   return {
     id,
     workspace_id: 'w',
+    number: 1,
     title: `Post ${id}`,
     stage,
     platform: 'instagram',

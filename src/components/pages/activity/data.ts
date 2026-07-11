@@ -10,6 +10,7 @@ import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '@srtdio/rpc';
 import type { Database, Json } from '@srtdio/schemas';
 import { parseMentions } from '@srtdio/comments';
 import { readProfiles } from '@/lib/chat-reads';
+import { entityUrlPath } from '@/lib/entityRef';
 import { EX_MEMBER_LABEL } from '@/components/comments/commentProfiles';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
@@ -101,6 +102,9 @@ export interface ActivityItem {
   caption: string | null;
   /** The post's first-image asset_version_id, posts only; null for a text/imageless post. */
   thumbnailAssetVersionId: string | null;
+  /** The entity's per-workspace number (post/brief), resolved by the batched join;
+   *  null until resolved, so pretty links degrade to the classic id route. */
+  number: number | null;
 }
 
 /** Map a raw inbox_entries row into an ActivityItem. Pure; actorName stays null. */
@@ -129,6 +133,7 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     format: null,
     caption: null,
     thumbnailAssetVersionId: null,
+    number: null,
   };
 }
 
@@ -263,20 +268,27 @@ export function cardBodyLine(item: ActivityItem): string {
  * comment via the existing `?comment=` param (consumed by PostDetailPage /
  * BriefDetailPage / AssetsPage already); a non-comment entry lands on the entity.
  */
-export function entityHref(item: ActivityItem): string | null {
+export function entityHref(item: ActivityItem, workspaceKey: string | null = null): string | null {
   if (item.eventType === 'asset_uploaded' || item.eventType === 'asset_version_added') {
     return item.assetId !== null ? `/assets?asset=${item.assetId}` : null;
   }
   if (item.entityId === null) return null;
   if (item.entityType === 'post') {
-    return item.commentId !== null
-      ? `/posts/${item.entityId}?comment=${item.commentId}`
-      : `/posts/${item.entityId}`;
+    // Prefer the pretty link (/p/KEY-N) when the number and key are known; the
+    // classic /posts/:id route stays a working fallback otherwise. The ?comment=
+    // deep link is preserved on both forms (PostDetailPage reads it either way).
+    const base =
+      workspaceKey !== null && item.number !== null
+        ? entityUrlPath('post', workspaceKey, item.number)
+        : `/posts/${item.entityId}`;
+    return item.commentId !== null ? `${base}?comment=${item.commentId}` : base;
   }
   if (item.entityType === 'brief') {
-    return item.commentId !== null
-      ? `/briefs/${item.entityId}?comment=${item.commentId}`
-      : `/briefs/${item.entityId}`;
+    const base =
+      workspaceKey !== null && item.number !== null
+        ? entityUrlPath('brief', workspaceKey, item.number)
+        : `/briefs/${item.entityId}`;
+    return item.commentId !== null ? `${base}?comment=${item.commentId}` : base;
   }
   return null;
 }
@@ -509,10 +521,10 @@ export async function fetchActivityEntries(
       ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
       : Promise.resolve(null),
     postIds.length > 0
-      ? client.from('posts').select('id, title, format, caption').in('id', postIds)
+      ? client.from('posts').select('id, title, format, caption, number').in('id', postIds)
       : Promise.resolve(null),
     briefIds.length > 0
-      ? client.from('briefs').select('id, title').in('id', briefIds)
+      ? client.from('briefs').select('id, title, number').in('id', briefIds)
       : Promise.resolve(null),
     postIds.length > 0
       ? client
@@ -539,11 +551,13 @@ export async function fetchActivityEntries(
   const postTitles = new Map<string, string>();
   const postFormats = new Map<string, string>();
   const postCaptions = new Map<string, string>();
+  const postNumbers = new Map<string, number>();
   if (postsRes !== null && postsRes.error === null) {
     for (const r of postsRes.data ?? []) {
       postTitles.set(r.id, r.title);
       if (typeof r.format === 'string') postFormats.set(r.id, r.format);
       if (typeof r.caption === 'string') postCaptions.set(r.id, r.caption);
+      if (typeof r.number === 'number') postNumbers.set(r.id, r.number);
     }
   }
   // The first-image asset_version_id per post: the lowest-position image-mime
@@ -556,8 +570,12 @@ export async function fetchActivityEntries(
     }
   }
   const briefTitles = new Map<string, string>();
+  const briefNumbers = new Map<string, number>();
   if (briefsRes !== null && briefsRes.error === null) {
-    for (const r of briefsRes.data ?? []) briefTitles.set(r.id, r.title);
+    for (const r of briefsRes.data ?? []) {
+      briefTitles.set(r.id, r.title);
+      if (typeof r.number === 'number') briefNumbers.set(r.id, r.number);
+    }
   }
 
   // WAVE 2: resolve the display names for every actor id we now know about: the
@@ -619,22 +637,26 @@ export async function fetchActivityEntries(
       item.caption = item.entityId !== null ? (postCaptions.get(item.entityId) ?? null) : null;
       item.thumbnailAssetVersionId =
         item.entityId !== null ? (postThumbnails.get(item.entityId) ?? null) : null;
+      item.number = item.entityId !== null ? (postNumbers.get(item.entityId) ?? null) : null;
     } else if (item.entityType === 'brief') {
       const fromJoin = item.entityId !== null ? briefTitles.get(item.entityId) : undefined;
       item.title = fromJoin ?? payloadStr(payload, 'title') ?? null;
       item.format = null;
       item.caption = null;
       item.thumbnailAssetVersionId = null;
+      item.number = item.entityId !== null ? (briefNumbers.get(item.entityId) ?? null) : null;
     } else if (item.eventType === 'asset_uploaded') {
       item.title = payloadStr(payload, 'filename');
       item.format = null;
       item.caption = null;
       item.thumbnailAssetVersionId = null;
+      item.number = null;
     } else {
       item.title = null;
       item.format = null;
       item.caption = null;
       item.thumbnailAssetVersionId = null;
+      item.number = null;
     }
   });
 

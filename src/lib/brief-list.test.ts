@@ -7,6 +7,7 @@ function brief(over: Partial<Brief>): Brief {
   return {
     id: 'b',
     workspace_id: 'w',
+    number: 1,
     title: 'Untitled',
     objective: 'o',
     legacy_author_name: null,

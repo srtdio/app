@@ -242,7 +242,7 @@ interface OnboardingStep {
 
 export function PipelinePage() {
   const navigate = useNavigate();
-  const { workspaceId, workspaces } = useWorkspace();
+  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [stage, setStage] = useState('review');
   const [search, setSearch] = useState('');
@@ -495,6 +495,7 @@ export function PipelinePage() {
           cap={stage === 'all' ? BOARD_CAP : null}
           cache={cache}
           presignEnabled={presignEnabled}
+          workspaceKey={workspaceKey}
           onViewAll={setStage}
           onMovePost={movePost}
         />
@@ -504,6 +505,7 @@ export function PipelinePage() {
           activeStage={stage}
           cache={cache}
           presignEnabled={presignEnabled}
+          workspaceKey={workspaceKey}
           onLongPressPost={setMovePostTarget}
         />
       )}

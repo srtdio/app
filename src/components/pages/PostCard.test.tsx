@@ -14,6 +14,7 @@ import type { PipelinePost } from '@srtdio/posts';
 function makePost(overrides: Partial<PipelinePost>): PipelinePost {
   return {
     id: 'p1',
+    number: 1,
     title: 'Post title',
     platform: 'instagram',
     format: 'text',
