@@ -1374,6 +1374,7 @@ export type Database = {
           format_requested: string | null
           id: string
           legacy_author_name: string | null
+          number: number
           objective: string
           reference_links: Json | null
           row_version: number
@@ -1394,6 +1395,7 @@ export type Database = {
           format_requested?: string | null
           id?: string
           legacy_author_name?: string | null
+          number: number
           objective: string
           reference_links?: Json | null
           row_version?: number
@@ -1414,6 +1416,7 @@ export type Database = {
           format_requested?: string | null
           id?: string
           legacy_author_name?: string | null
+          number?: number
           objective?: string
           reference_links?: Json | null
           row_version?: number
@@ -4341,6 +4344,7 @@ export type Database = {
           format: string
           id: string
           legacy_author_name: string | null
+          number: number
           origin: string
           owner_user_id: string | null
           platform: string
@@ -4362,6 +4366,7 @@ export type Database = {
           format: string
           id?: string
           legacy_author_name?: string | null
+          number: number
           origin?: string
           owner_user_id?: string | null
           platform: string
@@ -4383,6 +4388,7 @@ export type Database = {
           format?: string
           id?: string
           legacy_author_name?: string | null
+          number?: number
           origin?: string
           owner_user_id?: string | null
           platform?: string
@@ -4627,6 +4633,29 @@ export type Database = {
           },
         ]
       }
+      workspace_counters: {
+        Row: {
+          next_entity_number: number
+          workspace_id: string
+        }
+        Insert: {
+          next_entity_number?: number
+          workspace_id: string
+        }
+        Update: {
+          next_entity_number?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_counters_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_members: {
         Row: {
           accepted_at: string | null
@@ -4792,6 +4821,7 @@ export type Database = {
           deleted_at: string | null
           digest_default_time: string
           id: string
+          key: string
           name: string
           owner_user_id: string
           plan_tier: string
@@ -4813,6 +4843,7 @@ export type Database = {
           deleted_at?: string | null
           digest_default_time?: string
           id?: string
+          key: string
           name: string
           owner_user_id: string
           plan_tier?: string
@@ -4834,6 +4865,7 @@ export type Database = {
           deleted_at?: string | null
           digest_default_time?: string
           id?: string
+          key?: string
           name?: string
           owner_user_id?: string
           plan_tier?: string
