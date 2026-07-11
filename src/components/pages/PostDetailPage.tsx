@@ -66,7 +66,6 @@ import { createComment } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
 import { postSoftDelete, stageTransition } from '@srtdio/rpc';
 import { formatLabel, platformLabel, postStatusLine } from '@/lib/post-detail-presentation';
-import { EntityRefChip } from '@/components/refs/EntityRefChip';
 
 // Read a caption string out of a version snapshot defensively: the snapshot is
 // free-form Json, so a missing or non-string caption yields null (no quote)
@@ -990,14 +989,6 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
           <span className="text-sm text-fg-2">
             {platformLabel(post.platform)} · {formatLabel(post.format)}
           </span>
-          {workspaceKey !== null ? (
-            <EntityRefChip
-              kind="post"
-              entityKey={workspaceKey}
-              number={post.number}
-              onCopied={() => push('Link copied')}
-            />
-          ) : null}
         </div>
 
         {agencySide && !readOnly ? (
@@ -1369,6 +1360,8 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
           currentUserId={userId ?? ''}
           gallery={gallery}
           deps={deps}
+          workspaceKey={workspaceKey}
+          postNumber={post.number}
           onToast={push}
           canDelete={canDelete}
           onDeletePost={handleDeletePost}
