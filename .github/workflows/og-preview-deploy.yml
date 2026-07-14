@@ -32,6 +32,63 @@ jobs:
             echo "::error::SUPABASE_URL and SUPABASE_SECRET_KEY must be set as GitHub secrets; the og-preview Worker 500s on every crawler request without them."
             exit 1
           fi
+      - name: Remove stale conflicting routes
+        # A stale Worker (code no longer in this repo) can hold the zone routes
+        # this Worker claims, which makes wrangler deploy fail with a route
+        # conflict. Delete any route on our patterns owned by another script
+        # before deploying. Idempotent: nothing to delete is a success.
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4"
+          workdir="$(mktemp -d)"
+
+          # Call the Cloudflare API; fail the job on non-2xx or success:false.
+          # $1=method $2=path $3=response file. The token stays in the header
+          # and is never echoed.
+          cf_api() {
+            local http
+            http="$(curl -sS -o "$3" -w '%{http_code}' -X "$1" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              "${api}$2")" || http="000"
+            if [ "$http" -lt 200 ] || [ "$http" -ge 300 ] \
+              || [ "$(jq -r '.success // false' "$3" 2>/dev/null)" != "true" ]; then
+              echo "::error::Cloudflare API $1 $2 failed (HTTP ${http}). The CLOUDFLARE_API_TOKEN likely lacks Zone Read or Workers Routes Edit permission."
+              exit 1
+            fi
+          }
+
+          cf_api GET "/zones?name=srtd.io" "${workdir}/zones.json"
+          zone_id="$(jq -r '.result[0].id // empty' "${workdir}/zones.json")"
+          if [ -z "$zone_id" ]; then
+            echo "::error::Cloudflare API GET /zones?name=srtd.io returned no zone. The CLOUDFLARE_API_TOKEN likely lacks Zone Read or Workers Routes Edit permission."
+            exit 1
+          fi
+          echo "Resolved zone srtd.io -> ${zone_id}"
+
+          cf_api GET "/zones/${zone_id}/workers/routes" "${workdir}/routes.json"
+
+          our_patterns='["srtd.io/p/*","srtd.io/posts/*","srtd.io/og/*"]'
+          our_script="srtdio-og-preview"
+          deleted=0
+
+          while IFS=$'\t' read -r route_id pattern script; do
+            if jq -ne --argjson ps "$our_patterns" --arg p "$pattern" '$ps | index($p) != null' >/dev/null \
+              && [ "$script" != "$our_script" ]; then
+              echo "DELETE stale route id=${route_id} pattern=${pattern} script=${script:-<unassigned>}"
+              cf_api DELETE "/zones/${zone_id}/workers/routes/${route_id}" "${workdir}/delete-${route_id}.json"
+              deleted=$((deleted + 1))
+            else
+              echo "KEEP route id=${route_id} pattern=${pattern} script=${script:-<unassigned>}"
+            fi
+          done < <(jq -r '.result[] | [.id, .pattern, (.script // "")] | @tsv' "${workdir}/routes.json")
+
+          if [ "$deleted" -eq 0 ]; then
+            echo "No stale conflicting routes found; nothing to remove."
+          else
+            echo "Removed ${deleted} stale conflicting route(s)."
+          fi
       - name: Deploy
         uses: cloudflare/wrangler-action@v3.14.1
         with:
@@ -52,3 +109,47 @@ jobs:
           CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      - name: Verify live route
+        # Prove the deployed Worker owns srtd.io/p/*. With a crawler User-Agent
+        # on an unparseable ref, the Worker deterministically serves its generic
+        # OG card (no DB, no Pages dependency): HTTP 200, text/html,
+        # x-robots-tag: noindex, og:site_name "Sorted". The stale Worker's
+        # fingerprint (404 + access-control-allow-headers with X-Preview-Secret)
+        # must be gone. Poll for edge propagation.
+        run: |
+          set -euo pipefail
+          url="https://srtd.io/p/health-check-nonexistent"
+          headers="$(mktemp)"
+          body="$(mktemp)"
+          last="unknown"
+
+          for attempt in 1 2 3 4 5 6; do
+            status="$(curl -sS -o "$body" -D "$headers" -w '%{http_code}' \
+              -H 'User-Agent: WhatsApp/2.0' "$url")" || status="000"
+            acah="$(grep -i '^access-control-allow-headers:' "$headers" || true)"
+
+            if [ "$status" = "404" ] && printf '%s' "$acah" | grep -qi 'X-Preview-Secret'; then
+              last="stale"
+              echo "Attempt ${attempt}/6: stale fingerprint still present (404 + access-control-allow-headers: X-Preview-Secret)."
+            elif [ "$status" = "200" ] \
+              && grep -qiE '^content-type: *text/html' "$headers" \
+              && grep -qiE '^x-robots-tag: *noindex' "$headers" \
+              && grep -q 'property="og:site_name" content="Sorted"' "$body"; then
+              echo "Attempt ${attempt}/6: og-preview Worker confirmed live on ${url} (200 text/html generic OG card, noindex)."
+              exit 0
+            else
+              last="unexpected"
+              echo "Attempt ${attempt}/6: not the stale fingerprint, but not the expected OG card yet (status=${status}); waiting for propagation."
+            fi
+
+            if [ "$attempt" -lt 6 ]; then
+              sleep 10
+            fi
+          done
+
+          if [ "$last" = "stale" ]; then
+            echo "::error::Verification failed: the stale worker still owns srtd.io/p/* (404 + access-control-allow-headers: X-Preview-Secret) after 6 attempts."
+          else
+            echo "::error::Verification failed: ${url} never returned the og-preview Worker's generic OG card (200 text/html, x-robots-tag: noindex, og:site_name Sorted) after 6 attempts."
+          fi
+          exit 1
