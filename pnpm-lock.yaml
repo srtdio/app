@@ -60,9 +60,6 @@ importers:
       '@srtdio/comments':
         specifier: workspace:*
         version: link:packages/comments
-      '@srtdio/etl':
-        specifier: workspace:*
-        version: link:packages/etl
       '@srtdio/inbox':
         specifier: workspace:*
         version: link:packages/inbox
@@ -120,9 +117,6 @@ importers:
       tailwindcss:
         specifier: ^3.4.17
         version: 3.4.19(tsx@4.22.4)
-      tsx:
-        specifier: ^4.19.2
-        version: 4.22.4
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

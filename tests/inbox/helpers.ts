@@ -94,8 +94,6 @@ export async function seedInboxWorkspace(
   };
 }
 
-export { addMember };
-
 /** Insert a row through the service role and return the full row, typed. */
 export async function insertFull<T>(
   admin: SupabaseClient<Database>,

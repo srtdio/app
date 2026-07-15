@@ -52,7 +52,7 @@ const MONTHS_SHORT = [
 ];
 
 /** Format an ISO 'YYYY-MM-DD' as "24 Jun"; an unparseable value yields ''. */
-export function formatRangeDay(iso: string): string {
+function formatRangeDay(iso: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (match === null) return '';
   const month = Number(match[2]);

@@ -5,14 +5,14 @@
 // `as const` tuple, means the runtime validators in setFlag and the static
 // types used across the module can never drift apart.
 
-export const FLAG_CATEGORIES = ['killswitch', 'rollout', 'experiment', 'tier_gated'] as const;
+const FLAG_CATEGORIES = ['killswitch', 'rollout', 'experiment', 'tier_gated'] as const;
 export type FlagCategory = (typeof FLAG_CATEGORIES)[number];
 
-export const PLAN_TIERS = ['solo', 'studio', 'agency', 'enterprise'] as const;
+const PLAN_TIERS = ['solo', 'studio', 'agency', 'enterprise'] as const;
 export type PlanTier = (typeof PLAN_TIERS)[number];
 
 // Mirrors feature_flags_rollout_percentage_check.
-export const ROLLOUT_PERCENTAGES = [0, 10, 25, 50, 100] as const;
+const ROLLOUT_PERCENTAGES = [0, 10, 25, 50, 100] as const;
 export type RolloutPercentage = (typeof ROLLOUT_PERCENTAGES)[number];
 
 // Mirrors feature_flags_flag_name_check.
@@ -27,7 +27,7 @@ export const TIER_RANK: Record<PlanTier, number> = {
 };
 
 /** Which row supplied an effective flag: the workspace override or the global default. */
-export type FlagSource = 'workspace' | 'global';
+type FlagSource = 'workspace' | 'global';
 
 /** Result of evaluating a single flag for a principal. */
 export interface EvalResult {

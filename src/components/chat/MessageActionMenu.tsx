@@ -6,7 +6,7 @@ import { IconCopy, IconReply } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 
 /** Quick-react row offered when a message's action menu is opened. */
-export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
 
 interface MessageActionMenuProps {
   open: boolean;

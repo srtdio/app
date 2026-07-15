@@ -23,8 +23,6 @@ export class NoOpScanner implements VirusScanner {
   }
 }
 
-export type VirusScanProvider = 'noop';
-
 /**
  * Resolve a scanner from the env value. Unknown/empty values fall back to the
  * NoOpScanner so a misconfiguration fails open to "scanned clean" rather than

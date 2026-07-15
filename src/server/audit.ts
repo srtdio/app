@@ -13,7 +13,7 @@
 
 import { supabase } from '@/lib/supabase';
 
-export type AuditOutcome = 'success' | 'failure';
+type AuditOutcome = 'success' | 'failure';
 
 export type AuditWrite = {
   /** uuid_v7, required. Written as the audit row's trace_id column. */

@@ -67,7 +67,7 @@ const DEFAULT_ALLOWED_ORIGINS = ['https://srtd.io'] as const;
 const CORS_MAX_AGE_SECONDS = 86_400;
 
 /** Every code the worker can return. */
-export type ChatTranscribeResponseCode =
+type ChatTranscribeResponseCode =
   | 'bad_request'
   | 'unauthorized'
   | 'method_not_allowed'
@@ -84,7 +84,7 @@ const STATUS_BY_CODE: Record<ChatTranscribeResponseCode, number> = {
  * Render any thrown value into a stable log string. Never returned to the
  * client - logging only.
  */
-export function serializeError(error: unknown): string {
+function serializeError(error: unknown): string {
   if (error instanceof Error) {
     return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ''}`;
   }

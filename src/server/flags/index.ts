@@ -6,24 +6,7 @@
 //   - listFlags: merged effective set (workspace overrides over global).
 //   - createFlagsServiceClient: build the service-role client from env config.
 
-export { evalFlag, type EvalFlagInput } from './evalFlag';
-export { setFlag, FlagValidationError, type SetFlagInput } from './setFlag';
-export { listFlags, type ListFlagsInput } from './listFlags';
-export { createFlagsServiceClient, type FlagsServiceEnv } from './client';
-export { bucketFor } from './bucket';
-export {
-  FLAG_CATEGORIES,
-  PLAN_TIERS,
-  ROLLOUT_PERCENTAGES,
-  FLAG_NAME_PATTERN,
-  TIER_RANK,
-  isFlagCategory,
-  isPlanTier,
-  isRolloutPercentage,
-  type FlagCategory,
-  type PlanTier,
-  type RolloutPercentage,
-  type FlagSource,
-  type EvalResult,
-  type EffectiveFlag,
-} from './types';
+export { evalFlag } from './evalFlag';
+export { setFlag, FlagValidationError } from './setFlag';
+export { listFlags } from './listFlags';
+export { createFlagsServiceClient } from './client';

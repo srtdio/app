@@ -22,7 +22,7 @@ function syncThemeColorMeta(): void {
   });
 }
 
-export function setTheme(theme: Theme): void {
+function setTheme(theme: Theme): void {
   localStorage.setItem(STORAGE_KEY, theme);
   document.documentElement.classList.toggle('dark', theme === 'dark');
   syncThemeColorMeta();

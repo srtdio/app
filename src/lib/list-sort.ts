@@ -9,14 +9,6 @@ import type { SortOption } from '@/components/ui/SortMenu';
 /** The date-keyed sort orders, in menu order. Used by Briefs. */
 export type DateSort = 'newest' | 'oldest' | 'target';
 
-export const DATE_SORT_DEFAULT: DateSort = 'newest';
-
-export const DATE_SORT_OPTIONS: SortOption<DateSort>[] = [
-  { value: 'newest', label: 'Newest' },
-  { value: 'oldest', label: 'Oldest' },
-  { value: 'target', label: 'Target date' },
-];
-
 /** The minimal row shape the date comparators need. */
 export interface DateSortable {
   created_at: string;

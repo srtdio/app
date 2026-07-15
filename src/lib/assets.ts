@@ -20,7 +20,7 @@ export const KIND_LABELS: Record<AssetKind, string> = {
   file: 'Docs',
 };
 
-export const KIND_ORDER: AssetKind[] = ['image', 'link', 'file'];
+const KIND_ORDER: AssetKind[] = ['image', 'link', 'file'];
 
 /** A filter selection: a concrete kind, or `all` for no kind restriction. */
 export type KindFilter = AssetKind | 'all';

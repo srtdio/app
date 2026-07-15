@@ -24,12 +24,12 @@ import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
 // disables and a friendly message shows before the request runs.
 const MAX_BODY = 10000;
 
-export interface CommentSubmitOptions {
+interface CommentSubmitOptions {
   /** Asset VERSION ids of the completed uploads, passed to createComment. */
   attachmentVersionIds: string[];
 }
 
-export type CommentSubmitResult = { ok: true } | { ok: false; error: string };
+type CommentSubmitResult = { ok: true } | { ok: false; error: string };
 
 interface CommentComposerProps {
   /** Write the comment; resolves ok to clear the draft, or an error to keep it. */

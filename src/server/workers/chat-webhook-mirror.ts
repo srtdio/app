@@ -68,7 +68,7 @@ export interface ChatWebhookIngestResult {
 }
 
 /** The chat_channels lookup chain used to resolve a group's channel_id. */
-export interface ChatChannelsQuery {
+interface ChatChannelsQuery {
   select(columns: 'channel_id'): {
     eq(
       column: 'agora_group_id',
@@ -104,7 +104,7 @@ const defaultCreateClient: CreateChatIngestClient = (env) =>
  * Render any thrown value into a stable log string. PostgREST surfaces failures
  * as plain objects (not Error instances). Logging only; never returned.
  */
-export function serializeError(error: unknown): string {
+function serializeError(error: unknown): string {
   if (error instanceof Error) {
     return `${error.name}: ${error.message}`;
   }

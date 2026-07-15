@@ -20,7 +20,7 @@ export function stageLabel(stage: Stage): string {
  * has no stage token, so it reuses the neutral fg-3 token rather than minting a
  * new hardcoded hex.
  */
-export const STAGE_DOT: Record<Stage, string> = {
+const STAGE_DOT: Record<Stage, string> = {
   draft: 'bg-fg-3',
   review: 'bg-stage-review',
   approved: 'bg-stage-approved',

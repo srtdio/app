@@ -17,7 +17,7 @@ const PALETTE = ['#5e6ad2', '#3e7d54', '#b8772b', '#c2392b', '#7a5ea8', '#2b8a9e
  * so other tinted surfaces (e.g. the activity thumbnail tile) reuse the exact same
  * hash + palette instead of duplicating raw colors.
  */
-export function colorFor(name: string): string {
+function colorFor(name: string): string {
   let sum = 0;
   for (let i = 0; i < name.length; i += 1) {
     sum += name.charCodeAt(i);

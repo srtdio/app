@@ -65,18 +65,18 @@ export function createAnonClient(env: RlsEnv): SupabaseClient<Database> {
 // the suite: it narrows the real client to the subset of methods we use, all of
 // which exist at runtime. No `any`, no `@ts-ignore`.
 
-export interface GenericResult {
+interface GenericResult {
   data: unknown;
   error: { message: string } | null;
   count: number | null;
 }
 
-export interface GenericFilter extends PromiseLike<GenericResult> {
+interface GenericFilter extends PromiseLike<GenericResult> {
   eq(column: string, value: string | number | boolean): GenericFilter;
   select(columns?: string): GenericFilter;
 }
 
-export interface GenericTable {
+interface GenericTable {
   select(columns?: string, opts?: { count?: 'exact'; head?: boolean }): GenericFilter;
   insert(values: Record<string, unknown>, opts?: { count?: 'exact' }): GenericFilter;
   update(values: Record<string, unknown>, opts?: { count?: 'exact' }): GenericFilter;
@@ -244,7 +244,7 @@ export function randomSuffix(): string {
  * it is unique across parallel test runs without a shared counter. Retries at the
  * insert site are unnecessary at this cardinality (36^4 ≈ 1.7M).
  */
-export function randomWorkspaceKey(): string {
+function randomWorkspaceKey(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const bytes = crypto.getRandomValues(new Uint8Array(4));
   let suffix = '';
@@ -481,7 +481,7 @@ export async function seedScaffold(
 // Tenant-scoped table probes
 // ---------------------------------------------------------------------------
 
-export interface SeededTarget {
+interface SeededTarget {
   /** Identity of the seeded workspace-A row(s). */
   match: MatchSpec;
   /** A valid mutation an attacker would attempt; empty when no column is safe. */

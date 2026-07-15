@@ -11,7 +11,7 @@ import { mapAuthError } from './errors';
 import { toAuthSession } from './session';
 import { fail, ok, type AuthSession, type Result } from './types';
 
-export const PASSWORD_MIN = 8;
+const PASSWORD_MIN = 8;
 
 const emailSchema = z.string().email();
 

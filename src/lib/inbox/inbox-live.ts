@@ -17,7 +17,7 @@ export interface NewSummary {
 }
 
 /** The enriched lead (newest new row) the toast renders from. */
-export interface EnrichedLead {
+interface EnrichedLead {
   eventType: string;
   actorName: string | null;
   actorAvatarUrl: string | null;

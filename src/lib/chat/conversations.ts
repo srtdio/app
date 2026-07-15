@@ -42,7 +42,7 @@ function isTextBody(message: unknown): message is AgoraChat.TextMsgBody {
  * workspace are small, so this bounded loop fully replaces an N+1 over channels;
  * it stops when the SDK returns an empty cursor (the documented last page).
  */
-export async function fetchServerConversations(
+async function fetchServerConversations(
   connection: ConversationsConnection,
 ): Promise<AgoraChat.ConversationItem[]> {
   const all: AgoraChat.ConversationItem[] = [];

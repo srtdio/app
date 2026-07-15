@@ -14,8 +14,8 @@ import { mapAuthError } from './errors';
 import { toAuthSession } from './session';
 import { fail, ok, type AuthSession, type Result } from './types';
 
-export const DISPLAY_NAME_MIN = 1;
-export const DISPLAY_NAME_MAX = 80;
+const DISPLAY_NAME_MIN = 1;
+const DISPLAY_NAME_MAX = 80;
 
 const emailSchema = z.string().email();
 

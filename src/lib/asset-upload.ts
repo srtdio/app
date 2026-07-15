@@ -290,7 +290,7 @@ export async function addAssetLink(config: AddLinkConfig): Promise<LinkOutcome> 
  * collision), so there is no collision line; everything falls back to the
  * generic retry copy. No em-dashes in any string (CLAUDE.md).
  */
-export function folderErrorMessage(code: string): string {
+function folderErrorMessage(code: string): string {
   switch (code) {
     default:
       return "Couldn't create the folder. Check your connection and retry";

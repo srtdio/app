@@ -98,7 +98,7 @@ function objectiveCaption(brief: Brief): string | null {
  * else a plain glyph. The image path itself is owned by Thumbnail (it shows this
  * fallback whenever thumbnailAssetVersionId is null).
  */
-export function briefFallback(brief: BriefWithThumbnail): ThumbnailFallback {
+function briefFallback(brief: BriefWithThumbnail): ThumbnailFallback {
   const url = firstReferenceUrl(brief.reference_links);
   if (url !== null) return { kind: 'link', label: domainOf(url) };
   const caption = objectiveCaption(brief);
