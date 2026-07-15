@@ -44,7 +44,7 @@ export interface ValidateDeps {
   assetBucket: string;
 }
 
-export interface ValidationCheck {
+interface ValidationCheck {
   name: string;
   ok: boolean;
   detail: string;

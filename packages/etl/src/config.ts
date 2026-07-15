@@ -5,7 +5,7 @@
 // unit-tested: same-database refusal, target project-ref pinning, and the
 // cutover confirmation flag all live here.
 
-export type Mode = 'dev-seed' | 'cutover';
+type Mode = 'dev-seed' | 'cutover';
 
 export interface Cli {
   mode: Mode;

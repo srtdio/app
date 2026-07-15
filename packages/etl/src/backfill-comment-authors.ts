@@ -28,7 +28,7 @@ export type BackfillMode = 'dry-run' | 'apply';
 // limit used elsewhere in the migration (120); legacy_author_email is bounded to
 // a standard address length.
 export const LEGACY_NAME_MAX = 120;
-export const LEGACY_EMAIL_MAX = 320;
+const LEGACY_EMAIL_MAX = 320;
 
 // A page of the v1 read. Kept in the 500-1000 band like the rest of the ETL.
 const PAGE_SIZE = 1000;
@@ -99,14 +99,14 @@ export function parseBackfillMode(argv: readonly string[]): BackfillMode {
 // connections, the target-ref pin, and the target workspace name. The names and
 // safety guards are the SAME as the migration's (config.ts): same env vars, same
 // same-database refusal and target-ref pinning.
-export interface BackfillConfig {
+interface BackfillConfig {
   sourceUrl: string;
   targetUrl: string;
   expectedTargetRef: string;
   workspaceName: string;
 }
 
-export function loadBackfillConfig(env: Record<string, string | undefined>): BackfillConfig {
+function loadBackfillConfig(env: Record<string, string | undefined>): BackfillConfig {
   const missing: string[] = [];
   const get = (name: string): string => {
     const raw = env[name];
