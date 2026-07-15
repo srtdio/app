@@ -11,7 +11,7 @@ export type WorkspaceMemberRow = Database['public']['Tables']['workspace_members
 
 // One role -> label map, defined once and reused by every badge. Unknown roles
 // fall back to the raw value so a new server role never renders blank.
-export const ROLE_LABEL: Record<string, string> = {
+const ROLE_LABEL: Record<string, string> = {
   owner: 'Owner',
   admin: 'Admin',
   agency: 'Agency',

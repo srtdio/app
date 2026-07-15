@@ -6,7 +6,7 @@ export const LONG_PRESS_MS = 450;
 export const MOVE_CANCEL_PX = 10;
 
 /** The only pointer fields the controller reads; React's PointerEvent satisfies it. */
-export interface PointerSample {
+interface PointerSample {
   clientX: number;
   clientY: number;
 }

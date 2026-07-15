@@ -71,7 +71,7 @@ function subtreeTextLength(node: Node): number {
  * inside a marker), so a selection touching a marker is ignored rather than
  * mis-sliced.
  */
-export function captionOffset(root: Node, target: Node, targetOffset: number): number | null {
+function captionOffset(root: Node, target: Node, targetOffset: number): number | null {
   let acc = 0;
   let found = false;
   function walk(node: Node): boolean {

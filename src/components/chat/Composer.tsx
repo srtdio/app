@@ -66,7 +66,7 @@ let pendingSeq = 0;
  * pointer is coarse (touch). Guarded so it returns false when `window` or
  * `window.matchMedia` is unavailable (SSR / non-DOM test environments).
  */
-export function isCoarsePointer(): boolean {
+function isCoarsePointer(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
   return window.matchMedia('(pointer: coarse)').matches;
 }

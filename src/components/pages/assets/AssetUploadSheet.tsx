@@ -23,7 +23,7 @@ export interface PendingUpload {
 }
 
 /** display_name is capped at 500 chars (mirrors the worker's validName ceiling). */
-export const DISPLAY_NAME_MAX = 500;
+const DISPLAY_NAME_MAX = 500;
 
 /** The three naming modes, derived from the scope and the selected file count. */
 export type UploadMode = 'folder' | 'root-single' | 'root-bulk';

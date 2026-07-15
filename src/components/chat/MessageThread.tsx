@@ -61,7 +61,7 @@ interface MessageThreadProps {
  * (no known last-seen) reads as a plain 'Offline'. Computed at render against a
  * supplied now so there is no timer or interval driving the header.
  */
-export function lastSeenLabel(lastTimeMs: number | null, nowMs: number): string {
+function lastSeenLabel(lastTimeMs: number | null, nowMs: number): string {
   if (lastTimeMs === null) return 'Offline';
   const mins = Math.floor((nowMs - lastTimeMs) / 60000);
   if (mins < 1) return 'last seen just now';
