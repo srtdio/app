@@ -32,7 +32,7 @@ function metadataString(session: Session, key: string): string | null {
  * The workspace_name a self-serve signup stashed in user_metadata, or null for
  * invited / existing users (who must never auto-create a workspace).
  */
-export function workspaceNameFromMetadata(session: Session): string | null {
+function workspaceNameFromMetadata(session: Session): string | null {
   return metadataString(session, 'workspace_name');
 }
 

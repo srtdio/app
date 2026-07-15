@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session-context';
 import { logger } from '@/lib/logger';
 
-export interface CurrentProfile {
+interface CurrentProfile {
   display_name: string;
   designation: string | null;
   avatar_url: string | null;

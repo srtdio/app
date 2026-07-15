@@ -6,7 +6,7 @@
 import type { Stage } from '@srtdio/posts';
 import { relativeShort, shortDate } from './relative-time';
 
-export const PLATFORM_LABELS = {
+const PLATFORM_LABELS = {
   linkedin: 'LinkedIn',
   x: 'X',
   instagram: 'Instagram',
@@ -14,7 +14,7 @@ export const PLATFORM_LABELS = {
   threads: 'Threads',
 } as Record<string, string>;
 
-export const FORMAT_LABELS = {
+const FORMAT_LABELS = {
   text: 'Text',
   single_image: 'Single Image',
   carousel: 'Carousel',

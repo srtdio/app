@@ -41,14 +41,6 @@ export function TraceProvider({ children }: { children: ReactNode }) {
   return <TraceContext.Provider value={value}>{children}</TraceContext.Provider>;
 }
 
-export function useTraceId(): string {
-  const ctx = useContext(TraceContext);
-  if (!ctx) {
-    throw new Error('useTraceId must be used within a TraceProvider');
-  }
-  return ctx.traceId;
-}
-
 export function useNewTrace(): () => string {
   const ctx = useContext(TraceContext);
   if (!ctx) {
