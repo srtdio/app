@@ -5,3 +5,4 @@ packages/schemas/src/supabase.generated.ts
 docs/pr-list.md
 docs/prd.md
 docs/schema.md
+supabase/templates/
