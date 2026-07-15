@@ -62,7 +62,7 @@ export interface FileVersionRef {
 }
 
 /** A link version: no bytes, only an external URL. */
-export interface LinkVersionRef {
+interface LinkVersionRef {
   id: string;
   assetId: string;
   versionNumber: number;
@@ -95,7 +95,7 @@ export interface NewAsset {
 }
 
 /** A new stored-file version: bytes live in R2, so the byte columns are set. */
-export interface NewFileVersion {
+interface NewFileVersion {
   id: string;
   assetId: string;
   workspaceId: string;
@@ -112,7 +112,7 @@ export interface NewFileVersion {
 }
 
 /** A new link version: only an external URL, every byte column null. */
-export interface NewLinkVersion {
+interface NewLinkVersion {
   id: string;
   assetId: string;
   workspaceId: string;

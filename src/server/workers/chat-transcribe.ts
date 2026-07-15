@@ -67,7 +67,7 @@ const DEFAULT_ALLOWED_ORIGINS = ['https://srtd.io'] as const;
 const CORS_MAX_AGE_SECONDS = 86_400;
 
 /** Every code the worker can return. */
-export type ChatTranscribeResponseCode =
+type ChatTranscribeResponseCode =
   | 'bad_request'
   | 'unauthorized'
   | 'method_not_allowed'
