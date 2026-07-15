@@ -10,10 +10,6 @@
 // without editing root package.json / tsconfig.base.json, which are off-limits
 // for this PR. The round-trip parity test in agora-identity.test.ts asserts the
 // two stay in lockstep against the documented scheme.
-//
-// TODO(2026-06-13): extract toAgoraUsername / fromAgoraUsername into a shared
-// package consumed by both the worker and the frontend so this copy can be
-// deleted.
 
 /** Canonical UUID shape (any version), case-insensitive. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

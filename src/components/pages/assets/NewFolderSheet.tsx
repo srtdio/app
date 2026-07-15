@@ -4,9 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconFolder } from '@/components/ui/icons';
 import type { FolderCreateOutcome } from '@/lib/asset-upload';
-
-/** The longest a folder name may be; mirrors the folders.name column limit. */
-const MAX_FOLDER_NAME = 80;
+import { MAX_FOLDER_NAME } from './folder-name';
 
 interface NewFolderSheetProps {
   open: boolean;

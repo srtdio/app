@@ -362,45 +362,6 @@ export async function reconcile(deps: SyncDeps): Promise<void> {
   }
 }
 
-/**
- * Subscribe to postgres_changes on the watched tables and invoke `onEvent` for
- * each payload that maps to a sync action. Returns an unsubscribe fn.
- */
-export function subscribeRealtime(
-  client: SupabaseClient<Database>,
-  onEvent: (event: SyncEvent) => void | Promise<void>,
-): () => void {
-  const channel = client.channel('chat-agora-sync');
-  const bindings: Array<{ event: 'INSERT' | 'UPDATE' | 'DELETE'; table: string }> = [
-    { event: 'INSERT', table: 'chat_channels' },
-    { event: 'INSERT', table: 'group_members' },
-    { event: 'DELETE', table: 'group_members' },
-    { event: 'UPDATE', table: 'groups' },
-  ];
-  for (const binding of bindings) {
-    channel.on(
-      // The realtime types are loose here; the payload shape is asserted in map.
-      'postgres_changes' as never,
-      { event: binding.event, schema: 'public', table: binding.table } as never,
-      (payload: ChangePayload) => {
-        const event = mapChangePayload(payload);
-        if (event) void onEvent(event);
-      },
-    );
-  }
-  channel.subscribe();
-  return () => {
-    void client.removeChannel(channel);
-  };
-}
-
-/** Start the Realtime consumer. Returns an unsubscribe function. */
-export function startConsumer(env: ChatAgoraSyncEnv): () => void {
-  const client = createServiceClient(env);
-  const deps = buildDeps(env);
-  return subscribeRealtime(client, (event) => processEvent(event, deps));
-}
-
 export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
