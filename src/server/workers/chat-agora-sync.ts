@@ -26,7 +26,7 @@ import { logger } from '@/server/logger';
 import { toAgoraUsername } from './agora-identity';
 import { createAgoraGroupApi, serializeError, type AgoraGroupApi } from './chat-agora-rest';
 
-export interface ChatAgoraSyncEnv {
+interface ChatAgoraSyncEnv {
   SUPABASE_URL: string;
   /** Service role: bare client, no minted member JWT. Reads + mark-synced rpc. */
   SUPABASE_SERVICE_ROLE_KEY: string;
@@ -127,14 +127,14 @@ export interface SyncDeps {
 }
 
 /** Bare service-role client (no acting member), per the inbox-writer precedent. */
-export function createServiceClient(env: ChatAgoraSyncEnv): SupabaseClient<Database> {
+function createServiceClient(env: ChatAgoraSyncEnv): SupabaseClient<Database> {
   return createClient<Database>(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
 
 /** The live SyncReader backed by a service-role supabase-js client. */
-export function createSyncReader(client: SupabaseClient<Database>): SyncReader {
+function createSyncReader(client: SupabaseClient<Database>): SyncReader {
   return {
     async getGroup(groupId) {
       const { data, error } = await client
@@ -194,7 +194,7 @@ export function createSyncReader(client: SupabaseClient<Database>): SyncReader {
 }
 
 /** Build the consumer dependencies from a single service-role client. */
-export function buildDeps(env: ChatAgoraSyncEnv): SyncDeps {
+function buildDeps(env: ChatAgoraSyncEnv): SyncDeps {
   const client = createServiceClient(env);
   return {
     reader: createSyncReader(client),

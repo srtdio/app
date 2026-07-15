@@ -91,7 +91,7 @@ export function isCrawler(userAgent: string | null): boolean {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** True iff the string is a canonical (hyphenated) UUID. */
-export function isUuid(value: string): boolean {
+function isUuid(value: string): boolean {
   return UUID_RE.test(value);
 }
 
@@ -104,7 +104,7 @@ const HTML_ESCAPES: Readonly<Record<string, string>> = {
 };
 
 /** Escape every character that is special inside HTML text or an attribute. */
-export function escapeHtml(input: string): string {
+function escapeHtml(input: string): string {
   return input.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
 }
 
@@ -157,7 +157,7 @@ export interface PresignedUrlSigner {
  * lacks image transformations Cloudflare passes the original through, so no code
  * branch is needed.
  */
-export type FetchTransformedImage = (presignedUrl: string) => Promise<Response>;
+type FetchTransformedImage = (presignedUrl: string) => Promise<Response>;
 
 /** The `cf` request extension carrying Cloudflare image-resize options. */
 interface CfImageRequestInit extends RequestInit {
@@ -180,7 +180,7 @@ const fetchTransformedImage: FetchTransformedImage = (presignedUrl) => {
 };
 
 /** The Open Graph card model: what to render, already resolved from the store. */
-export interface CardModel {
+interface CardModel {
   /** og:title text. */
   title: string;
   /** og:url; null for the generic (unknown-post) card. */
@@ -202,7 +202,7 @@ function nameMeta(name: string, content: string): string {
  * No caption, no description. Every interpolated value is HTML-escaped. Always
  * carries a noindex robots meta so search engines never index post pages.
  */
-export function renderCard(model: CardModel): string {
+function renderCard(model: CardModel): string {
   const tags: string[] = [ogMeta('og:title', model.title), ogMeta('og:site_name', 'Sorted')];
   if (model.url !== null) {
     tags.push(ogMeta('og:type', 'article'), ogMeta('og:url', model.url));
@@ -367,7 +367,7 @@ function passthrough(request: Request, env: OgPreviewEnv): Promise<Response> {
  * (no pooled connection to close); it is built per request and discarded when
  * this function returns.
  */
-export function createSupabaseOgPreviewStore(env: {
+function createSupabaseOgPreviewStore(env: {
   SUPABASE_URL: string;
   SUPABASE_SECRET_KEY: string;
 }): OgPreviewStore {

@@ -14,7 +14,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@srtdio/schemas';
 
-export interface FlagsServiceEnv {
+interface FlagsServiceEnv {
   SUPABASE_URL?: string | undefined;
   SUPABASE_SECRET_KEY?: string | undefined;
 }

@@ -84,7 +84,7 @@ const STATUS_BY_CODE: Record<ChatTranscribeResponseCode, number> = {
  * Render any thrown value into a stable log string. Never returned to the
  * client - logging only.
  */
-export function serializeError(error: unknown): string {
+function serializeError(error: unknown): string {
   if (error instanceof Error) {
     return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ''}`;
   }

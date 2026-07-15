@@ -31,7 +31,7 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Request-scoped context handed to the wrapped handler. */
-export interface IdempotencyContext {
+interface IdempotencyContext {
   traceId: string;
 }
 

@@ -25,7 +25,7 @@ import { withTraceLogger } from '@/server/trace';
 
 // --- (A) env ----------------------------------------------------------------
 
-export interface CatchupEnv {
+interface CatchupEnv {
   SUPABASE_URL: string;
   SUPABASE_SECRET_KEY: string;
   RESEND_API_KEY: string;
@@ -36,7 +36,7 @@ export interface CatchupEnv {
 // --- constants --------------------------------------------------------------
 
 // inbox_entries event types that turn into catch-up rows.
-export const CATCHUP_EVENT_TYPES = [
+const CATCHUP_EVENT_TYPES = [
   'comment',
   'mention',
   'comment_resolved',
@@ -46,12 +46,12 @@ export const CATCHUP_EVENT_TYPES = [
   'asset_uploaded',
   'asset_version_added',
 ] as const;
-export type CatchupEventType = (typeof CATCHUP_EVENT_TYPES)[number];
+type CatchupEventType = (typeof CATCHUP_EVENT_TYPES)[number];
 
 // delivery_attempts.template_key for catch-up sends. Doubles as the chat dedupe
 // floor: chat has no inbox rows to stamp, so the per-recipient last catch-up
 // sent_at is what bounds the next slot's DM counts.
-export const CATCHUP_TEMPLATE_KEY = 'catchup';
+const CATCHUP_TEMPLATE_KEY = 'catchup';
 
 const SLOT_MS = 30 * 60 * 1000;
 const INACTIVITY_MS = 5 * 60 * 1000;
@@ -60,15 +60,15 @@ const READ_BATCH = 1000;
 
 // --- (B) gateway boundary ---------------------------------------------------
 
-export interface UserInfo {
+interface UserInfo {
   displayName: string;
   timezone: string | null;
 }
-export interface WorkspaceInfo {
+interface WorkspaceInfo {
   name: string;
   timezone: string | null;
 }
-export interface AssetInfo {
+interface AssetInfo {
   filename: string;
   uploadedBy: string | null;
 }
@@ -528,7 +528,7 @@ interface DmMessageRow {
  * send-then-stamp ordering (see runCatchup) accepts at most one duplicate on a
  * mid-flight crash.
  */
-export function createCatchupGateways(
+function createCatchupGateways(
   client: SupabaseClient,
   sender: EmailSender,
   env: CatchupEnv,

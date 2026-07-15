@@ -11,8 +11,6 @@ import type { Database } from '@srtdio/schemas';
 export type AssetRow = Database['public']['Tables']['assets']['Row'];
 export type AssetVersionRow = Database['public']['Tables']['asset_versions']['Row'];
 export type FolderRow = Database['public']['Tables']['folders']['Row'];
-export type AssetInsert = Database['public']['Tables']['assets']['Insert'];
-export type AssetVersionInsert = Database['public']['Tables']['asset_versions']['Insert'];
 
 /** Every expected, caller-handled failure in the pipeline. */
 export type UploadErrorCode =
@@ -80,7 +78,7 @@ export interface AssetMetaSummary {
  * a bad parent/target by a 400, so neither needs a code here. Routed through the
  * worker's status map the same way {@link UploadError} is.
  */
-export type FolderErrorCode = 'folder_name_taken';
+type FolderErrorCode = 'folder_name_taken';
 
 export interface FolderError {
   code: FolderErrorCode;
