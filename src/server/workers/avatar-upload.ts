@@ -34,6 +34,7 @@ import { type Result } from '@/server/assets/types';
 // drift: same ES256 JWKS verification. This cross-worker import is the precedent
 // set by asset-upload.ts.
 import { getSupabaseJwks, verifyCaller, type ReadError } from './asset-read';
+import { serializeError } from './lib/serialize-error';
 
 /** Largest avatar accepted: 5 MiB. The cropper emits a small canvas PNG. */
 export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
@@ -159,14 +160,6 @@ function fail(
   acao: string | null,
 ): Response {
   return json(STATUS_BY_CODE[code], { error: { code, message } }, traceId, acao);
-}
-
-/** Render any thrown value into a stable log string. Never returned to the client. */
-function serializeError(error: unknown): string {
-  if (error instanceof Error) {
-    return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ''}`;
-  }
-  return String(error);
 }
 
 /** Join the CDN base and key with exactly one slash so the path equals the key. */

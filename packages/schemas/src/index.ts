@@ -21,6 +21,7 @@ export * from './zod/email_threads';
 export * from './zod/feature_flags';
 export * from './zod/group_members';
 export * from './zod/groups';
+export * from './zod/idempotency_keys';
 export * from './zod/inbox_entries';
 export * from './zod/intent_ledger';
 export * from './zod/pending_flows';

@@ -24,6 +24,7 @@ import { logger } from '@/server/logger';
 // Reuse asset-read's verified-token primitives verbatim, exactly as chat-token
 // does, so the auth surface cannot drift: same ES256 JWKS verification.
 import { getSupabaseJwks, verifyCaller } from './asset-read';
+import { serializeError } from './lib/serialize-error';
 
 /** The Whisper model id. Multilingual; handles mixed Hindi/English voice notes. */
 const WHISPER_MODEL = '@cf/openai/whisper-large-v3-turbo';
@@ -79,20 +80,6 @@ const STATUS_BY_CODE: Record<ChatTranscribeResponseCode, number> = {
   method_not_allowed: 405,
   internal_error: 500,
 };
-
-/**
- * Render any thrown value into a stable log string. Never returned to the
- * client - logging only.
- */
-function serializeError(error: unknown): string {
-  if (error instanceof Error) {
-    return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ''}`;
-  }
-  if (typeof error === 'object' && error !== null) {
-    return JSON.stringify(error);
-  }
-  return String(error);
-}
 
 /** The configured allowlist, falling back to the known site origins. */
 function allowedOrigins(env: ChatTranscribeEnv): readonly string[] {

@@ -34,6 +34,7 @@ import { logger } from '@/server/logger';
 // Reverse-map the Agora sender username back to the Supabase user id. Reused
 // verbatim from the chat-token worker so the two cannot drift.
 import { fromAgoraUsername } from './agora-identity';
+import { serializeError } from './lib/serialize-error';
 
 export interface ChatWebhookMirrorEnv {
   SUPABASE_URL: string;
@@ -99,21 +100,6 @@ const defaultCreateClient: CreateChatIngestClient = (env) =>
   createClient<Database>(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   }) as unknown as ChatIngestClient;
-
-/**
- * Render any thrown value into a stable log string. PostgREST surfaces failures
- * as plain objects (not Error instances). Logging only; never returned.
- */
-function serializeError(error: unknown): string {
-  if (error instanceof Error) {
-    return `${error.name}: ${error.message}`;
-  }
-  if (typeof error === 'object' && error !== null) {
-    const e = error as Record<string, unknown>;
-    return JSON.stringify({ code: e.code, message: e.message, details: e.details, hint: e.hint });
-  }
-  return String(error);
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
