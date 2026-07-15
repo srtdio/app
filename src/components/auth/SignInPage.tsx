@@ -210,7 +210,7 @@ export function SignInPage() {
     return (
       <AuthShell
         title="Check your email"
-        subtitle={`Enter the 6-digit code sent to ${email}.`}
+        subtitle={`We emailed a 6-digit code to ${email}. Type it here, or tap the sign-in button in that email.`}
         footer={footer}
       >
         <div className="flex flex-col gap-4">

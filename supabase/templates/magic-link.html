@@ -1,0 +1,87 @@
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<style>
+  body { margin:0; padding:0; }
+  @media (prefers-color-scheme: dark) {
+    .bg      { background-color:#0b0b0f !important; }
+    .panel   { background-color:#16161d !important; border-color:#262630 !important; }
+    .codebox { background-color:#1d1d27 !important; border-color:#30303a !important; color:#e9e9ef !important; }
+    .t-fg    { color:#e9e9ef !important; }
+    .t-fg2   { color:#a0a0ac !important; }
+    .t-fg3   { color:#6e6e79 !important; }
+    .rule    { background-color:#262630 !important; border-color:#262630 !important; }
+    .btn     { background-color:#6f79e3 !important; }
+    .lnk     { color:#6f79e3 !important; }
+  }
+</style>
+</head>
+<body class="bg" style="margin:0;padding:0;background-color:#f5f6f8;">
+<table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f6f8;">
+  <tr>
+    <td align="center" style="padding:36px 12px;">
+      <table role="presentation" class="panel" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border:1px solid #e6e6e9;border-radius:14px;">
+        <tr>
+          <td style="padding:36px 28px 28px;">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td class="btn" style="width:18px;height:18px;background-color:#5e6ad2;border-radius:5px;font-size:0;line-height:0;">&nbsp;</td>
+                <td class="t-fg" style="padding-left:9px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:15px;font-weight:600;color:#17171c;">Sorted</td>
+              </tr>
+            </table>
+            <div class="t-fg" style="padding-top:26px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:20px;font-weight:600;color:#17171c;">Sign in to Sorted</div>
+            <div class="t-fg2" style="padding-top:8px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.55;color:#5d5d68;">Here&rsquo;s your 6-digit code. Type it on the screen that&rsquo;s waiting for it.</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding-top:24px;">
+                  <div class="codebox" style="display:inline-block;padding:16px 14px 16px 24px;background-color:#f4f5f8;border:1px solid #d9dade;border-radius:12px;font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-size:30px;font-weight:500;letter-spacing:10px;color:#17171c;">{{ .Token }}</div>
+                </td>
+              </tr>
+              <tr>
+                <td class="t-fg3" align="center" style="padding-top:10px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px;color:#8f8f99;">Code expires in 1 hour</td>
+              </tr>
+            </table>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding-top:24px;">
+              <tr>
+                <td width="46%" valign="middle"><div class="rule" style="height:1px;background-color:#e6e6e9;font-size:0;line-height:1px;">&nbsp;</div></td>
+                <td class="t-fg3" align="center" valign="middle" style="padding:0 10px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:11px;font-weight:600;letter-spacing:2px;color:#8f8f99;white-space:nowrap;">OR</td>
+                <td width="46%" valign="middle"><div class="rule" style="height:1px;background-color:#e6e6e9;font-size:0;line-height:1px;">&nbsp;</div></td>
+              </tr>
+            </table>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding-top:22px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td class="btn" align="center" style="background-color:#5e6ad2;border-radius:10px;">
+                        <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:13px 26px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">Click to sign in</a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td class="t-fg3" align="center" style="padding-top:10px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px;color:#8f8f99;">The button signs in the device it&rsquo;s opened on.</td>
+              </tr>
+            </table>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding-top:26px;"><div class="rule" style="height:1px;background-color:#e6e6e9;font-size:0;line-height:1px;">&nbsp;</div></td>
+              </tr>
+              <tr>
+                <td class="t-fg3" style="padding-top:16px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px;line-height:1.6;color:#8f8f99;">Requested for <span class="t-fg2" style="color:#5d5d68;">{{ .Email }}</span>. Didn&rsquo;t ask for this? Ignore this email &mdash; nothing happens without the code.</td>
+              </tr>
+              <tr>
+                <td class="t-fg3" style="padding-top:12px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px;color:#8f8f99;">Sorted &middot; <a class="lnk" href="https://srtd.io" style="color:#5e6ad2;text-decoration:none;">srtd.io</a></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
