@@ -155,79 +155,59 @@ describe.runIf(DB_AVAILABLE)('post_ready_notify (authenticated role)', () => {
     if (SELF_MANAGED) await tearDownStack();
   }, 120_000);
 
-  it(
-    'agency happy path: one urgent entry per client member, none to the caller',
-    async () => {
-      const postId = await insertPost('review');
-      const checkpoints = await batchCheckpoints(postId, ['tighten the hook', 'logo too small']);
-      for (const id of checkpoints) await resolveCheckpoint(id);
+  it('agency happy path: one urgent entry per client member, none to the caller', async () => {
+    const postId = await insertPost('review');
+    const checkpoints = await batchCheckpoints(postId, ['tighten the hook', 'logo too small']);
+    for (const id of checkpoints) await resolveCheckpoint(id);
 
-      const { error } = await readyNotify(agencyClient, postId);
-      expect(error).toBeNull();
+    const { error } = await readyNotify(agencyClient, postId);
+    expect(error).toBeNull();
 
-      const entries = await readyEntries(postId);
-      const byUser = new Map(entries.map((row) => [row.user_id, row]));
-      expect(entries).toHaveLength(2);
-      expect(byUser.get(clientUser1.id)?.tier).toBe('urgent');
-      expect(byUser.get(clientUser2.id)?.tier).toBe('urgent');
-      expect(byUser.get(clientUser1.id)?.payload?.['checkpoints']).toBe(2);
-      expect(byUser.get(clientUser2.id)?.payload?.['checkpoints']).toBe(2);
-      expect(byUser.has(agencyUser.id)).toBe(false);
-      expect(byUser.has(owner.id)).toBe(false);
-    },
-    30_000,
-  );
+    const entries = await readyEntries(postId);
+    const byUser = new Map(entries.map((row) => [row.user_id, row]));
+    expect(entries).toHaveLength(2);
+    expect(byUser.get(clientUser1.id)?.tier).toBe('urgent');
+    expect(byUser.get(clientUser2.id)?.tier).toBe('urgent');
+    expect(byUser.get(clientUser1.id)?.payload?.['checkpoints']).toBe(2);
+    expect(byUser.get(clientUser2.id)?.payload?.['checkpoints']).toBe(2);
+    expect(byUser.has(agencyUser.id)).toBe(false);
+    expect(byUser.has(owner.id)).toBe(false);
+  }, 30_000);
 
-  it(
-    'an open checkpoint raises checkpoints_open and writes nothing',
-    async () => {
-      const postId = await insertPost('review');
-      await batchCheckpoints(postId, ['unresolved point']);
+  it('an open checkpoint raises checkpoints_open and writes nothing', async () => {
+    const postId = await insertPost('review');
+    await batchCheckpoints(postId, ['unresolved point']);
 
-      const { error } = await readyNotify(agencyClient, postId);
-      expect(error?.message).toBe('checkpoints_open');
-      expect(await readyEntries(postId)).toHaveLength(0);
-    },
-    30_000,
-  );
+    const { error } = await readyNotify(agencyClient, postId);
+    expect(error?.message).toBe('checkpoints_open');
+    expect(await readyEntries(postId)).toHaveLength(0);
+  }, 30_000);
 
-  it(
-    'a client caller is rejected with forbidden_role',
-    async () => {
-      const postId = await insertPost('review');
-      const { error } = await readyNotify(client1, postId);
-      expect(error?.message).toBe('forbidden_role');
-      expect(await readyEntries(postId)).toHaveLength(0);
-    },
-    30_000,
-  );
+  it('a client caller is rejected with forbidden_role', async () => {
+    const postId = await insertPost('review');
+    const { error } = await readyNotify(client1, postId);
+    expect(error?.message).toBe('forbidden_role');
+    expect(await readyEntries(postId)).toHaveLength(0);
+  }, 30_000);
 
-  it(
-    'a non-review stage is rejected with invalid_stage',
-    async () => {
-      const postId = await insertPost('draft');
-      const { error } = await readyNotify(agencyClient, postId);
-      expect(error?.message).toBe('invalid_stage');
-      expect(await readyEntries(postId)).toHaveLength(0);
-    },
-    30_000,
-  );
+  it('a non-review stage is rejected with invalid_stage', async () => {
+    const postId = await insertPost('draft');
+    const { error } = await readyNotify(agencyClient, postId);
+    expect(error?.message).toBe('invalid_stage');
+    expect(await readyEntries(postId)).toHaveLength(0);
+  }, 30_000);
 
-  it(
-    'a zero-checkpoint ping succeeds with checkpoints=0',
-    async () => {
-      const postId = await insertPost('review');
-      const { error } = await readyNotify(agencyClient, postId);
-      expect(error).toBeNull();
+  it('a zero-checkpoint ping succeeds with checkpoints=0', async () => {
+    const postId = await insertPost('review');
+    const { error } = await readyNotify(agencyClient, postId);
+    expect(error).toBeNull();
 
-      const entries = await readyEntries(postId);
-      expect(entries).toHaveLength(2);
-      for (const row of entries) {
-        expect(row.tier).toBe('urgent');
-        expect(row.payload?.['checkpoints']).toBe(0);
-        expect([clientUser1.id, clientUser2.id]).toContain(row.user_id);
-      }
-    },
-    30_000,
-  );
+    const entries = await readyEntries(postId);
+    expect(entries).toHaveLength(2);
+    for (const row of entries) {
+      expect(row.tier).toBe('urgent');
+      expect(row.payload?.['checkpoints']).toBe(0);
+      expect([clientUser1.id, clientUser2.id]).toContain(row.user_id);
+    }
+  }, 30_000);
 });

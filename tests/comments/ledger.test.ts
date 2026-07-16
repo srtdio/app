@@ -335,7 +335,11 @@ describe.runIf(COMMENTS_SUITE)('comment_batch_create (feedback ledger)', () => {
       const { data, error } = await batchCreate(clientClient, {
         p_workspace_id: wsA.id,
         p_post_id: postId,
-        p_points: [{ body: 'note target' }, { body: 'blank note target' }, { body: 'long note target' }],
+        p_points: [
+          { body: 'note target' },
+          { body: 'blank note target' },
+          { body: 'long note target' },
+        ],
         p_trace_id: generateTraceId(),
       });
       expect(error).toBeNull();
