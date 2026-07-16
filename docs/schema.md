@@ -169,16 +169,31 @@ Two primitives: Comments (Postgres, here) and Chat (Agora, section 7).
 | attachment_asset_ids | uuid[] | nullable |
 | resolved_at | timestamptz | nullable, set on the root comment when its thread is resolved (null = open) |
 | resolved_by | uuid | nullable, FK users.id ON DELETE SET NULL, the member who resolved the thread |
+| ledger_seq | integer | nullable; non-null marks the comment as a feedback-ledger checkpoint. Must be > 0, top-level (parent_comment_id null) and entity_type='post' (comments_ledger_shape_check); trimmed body must split to 1 to 50 whitespace-separated words (comments_ledger_word_cap_check); unique per post via the partial unique index comments_entity_ledger_seq_key on (entity_id, ledger_seq) where ledger_seq is not null |
+| ledger_batch_id | uuid | nullable, groups the checkpoints written by one comment_batch_create call |
+| resolution_note | text | nullable, 1 to 500 chars (comments_resolution_note_len_check); trimmed note stored by comment_resolve on a real open-to-resolved transition, cleared on reopen |
 | legacy_author_name | text | nullable, 1 to 120, frozen original author name for migrated v1 comments |
 | legacy_author_email | text | nullable, 3 to 320, original author email, used to reclaim authorship when that person later joins with the same email |
 | edited_at / deleted_at | timestamptz | nullable |
 | created_at | timestamptz | default now() |
 
-Indexes: FTS on body, entity, parent, author. All where deleted_at null.
+Indexes: FTS on body, entity, parent, author. All where deleted_at null. Plus the ledger indexes: comments_entity_ledger_seq_key (unique (entity_id, ledger_seq) where ledger_seq is not null) and comments_open_checkpoints_idx ((entity_id) where ledger_seq is not null and resolved_at is null and deleted_at is null).
 
 comment_create(p_workspace_id, p_entity_type, p_entity_id, p_parent_comment_id, p_body, p_mentions, p_attachment_asset_ids, p_trace_id) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): the only write path to the comments table. One-level threading (a reply to an already-threaded comment is invalid_payload), lands attachment_asset_ids as entity_type='comment' asset_attachments rows, and emits the Activity inbox_entries ('comment' for the audience, urgent 'mention' for mentioned members).
 
-comment_resolve(p_comment_id, p_resolved, p_trace_id) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): toggles the thread-level resolved state on a root comment (a reply is invalid_payload; a missing or soft-deleted comment is not_found). p_resolved=true stamps resolved_at=now()/resolved_by=auth.uid() only when currently open and emits one 'comment_resolved' active inbox entry per other thread author (role-gated like comment_create); p_resolved=false clears the state and is silent (no inbox write). Any active workspace member may resolve or reopen.
+comment_resolve(p_comment_id, p_resolved, p_trace_id, p_resolution_note default null) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): toggles the thread-level resolved state on a root comment (a reply is invalid_payload; a missing or soft-deleted comment is not_found). p_resolved=true stamps resolved_at=now()/resolved_by=auth.uid() only when currently open and emits one 'comment_resolved' active inbox entry per other thread author (role-gated like comment_create); p_resolved=false clears the state (including resolution_note) and is silent (no inbox write). p_resolution_note is trimmed, a blank note becomes null, over 500 chars raises invalid_payload; the note is stored only on a real open-to-resolved transition. Any active workspace member may resolve or reopen.
+
+#### Feedback ledger
+
+Doctrine for client feedback on posts, layered on the comments table (applied via MCP 2026-07-16; recorded in migration 20260716120000_feedback_ledger.sql, history only):
+
+- A checkpoint is a top-level ('post') comment with ledger_seq set. Replies are never checkpoints, and only members with role 'client' can create them (comment_batch_create is client-only), so agency comments are never checkpoints.
+- 50-word cap: a checkpoint body is 1 to 50 words (whitespace split on the trimmed body), enforced by the check constraint, by comment_batch_create, and by comment_edit on checkpoints.
+- Per-post permanent numbering: seq is assigned under a posts-row FOR UPDATE lock, continuing from the post's max ledger_seq, and is unique per post (partial unique index). Numbers are never reused or renumbered.
+- Batch = one notification: comment_batch_create(p_workspace_id, p_post_id, p_points jsonb, p_trace_id) returns jsonb [{id,seq}]. Caller must be an active 'client' member (else forbidden_role); the post must exist in the workspace (else not_found) and not be in 'draft' (else invalid_stage); 1 to 20 points (else invalid_payload). Each point is {body, attachment_version_ids?}; attachment version ids are validated against the workspace and non-deleted assets, then written as entity_type='comment' asset_attachments rows. One 'checkpoints_added' inbox entry (tier 'active', payload batch_id/count/seqs) per active member except the author, plus one audit_log_write.
+- Edit clears the tick: comment_edit on a checkpoint enforces the word cap and clears resolved_at, resolved_by and resolution_note in the same statement. Normal comments are unchanged.
+- Ready ping is gated on a clean ledger: post_ready_notify(p_post_id, p_trace_id) requires an active owner/admin/agency caller (else forbidden_role) and stage 'review' (else invalid_stage); any unresolved checkpoint raises checkpoints_open. On success it writes one 'post_ready' inbox entry (tier 'urgent', payload checkpoints=total) per active client member except the caller. A zero-checkpoint ping is allowed.
+- KNOWN GAP (live, as of 2026-07-16): inbox_entries_event_type_check on the live DB still lists only the section 8 enum values; it was never widened to include 'checkpoints_added' and 'post_ready', so both procs currently fail on live at the inbox insert whenever there is a recipient. Pending Shubham-approved fix: re-create the constraint with the two new values. The test suites widen the constraint on the local ephemeral stack only (tests/comments/setup.ts) to validate the intended behavior.
 
 ### comment_reactions
 
