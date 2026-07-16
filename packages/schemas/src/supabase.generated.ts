@@ -2511,10 +2511,13 @@ export type Database = {
           entity_id: string
           entity_type: string
           id: string
+          ledger_batch_id: string | null
+          ledger_seq: number | null
           legacy_author_email: string | null
           legacy_author_name: string | null
           mentions: Json | null
           parent_comment_id: string | null
+          resolution_note: string | null
           resolved_at: string | null
           resolved_by: string | null
           workspace_id: string
@@ -2529,10 +2532,13 @@ export type Database = {
           entity_id: string
           entity_type: string
           id?: string
+          ledger_batch_id?: string | null
+          ledger_seq?: number | null
           legacy_author_email?: string | null
           legacy_author_name?: string | null
           mentions?: Json | null
           parent_comment_id?: string | null
+          resolution_note?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           workspace_id: string
@@ -2547,10 +2553,13 @@ export type Database = {
           entity_id?: string
           entity_type?: string
           id?: string
+          ledger_batch_id?: string | null
+          ledger_seq?: number | null
           legacy_author_email?: string | null
           legacy_author_name?: string | null
           mentions?: Json | null
           parent_comment_id?: string | null
+          resolution_note?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           workspace_id?: string
@@ -4981,6 +4990,15 @@ export type Database = {
         }
         Returns: Json
       }
+      comment_batch_create: {
+        Args: {
+          p_points: Json
+          p_post_id: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       comment_create: {
         Args: {
           p_attachment_asset_ids: string[]
@@ -4999,7 +5017,12 @@ export type Database = {
         Returns: string
       }
       comment_resolve: {
-        Args: { p_comment_id: string; p_resolved: boolean; p_trace_id: string }
+        Args: {
+          p_comment_id: string
+          p_resolution_note?: string
+          p_resolved: boolean
+          p_trace_id: string
+        }
         Returns: undefined
       }
       comment_soft_delete: {
@@ -5118,6 +5141,10 @@ export type Database = {
       post_create: {
         Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
         Returns: string
+      }
+      post_ready_notify: {
+        Args: { p_post_id: string; p_trace_id: string }
+        Returns: undefined
       }
       post_soft_delete: {
         Args: { p_post_id: string; p_trace_id: string }
