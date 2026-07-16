@@ -1,13 +1,16 @@
 // Cross-tenant isolation for the comments read + create layer. A user who is an
 // active member of workspace B must not be able to read or write comments in
 // workspace A: RLS yields zero rows on reads, and the comment_create proc raises
-// workspace_member_only on writes.
+// workspace_member_only on writes. The feedback-ledger procs (comment_batch_create,
+// post_ready_notify) reject the outsider with forbidden_role, and the ledger
+// columns are not directly writable by the authenticated role at all.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   asGeneric,
   cleanupWorkspaces,
   clientFor,
+  countWhere,
   createAdminClient,
   generateTraceId,
   insertRow,
@@ -15,6 +18,7 @@ import {
   seedScaffold,
   seedUser,
   seedWorkspace,
+  updateRowCount,
   type Ctx,
   type SeededUser,
   type SeededWorkspace,
@@ -92,5 +96,65 @@ describe.runIf(COMMENTS_SUITE)('comments cross-tenant isolation', () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('workspace_member_only');
+  });
+
+  it('comment_batch_create into another workspace is rejected as forbidden_role', async () => {
+    const args = {
+      p_workspace_id: wsA.id,
+      p_post_id: ctxA.postId,
+      p_points: [{ body: 'intruder checkpoint' }],
+      p_trace_id: generateTraceId(),
+    };
+    const { error } = await intruder.rpc('comment_batch_create', args);
+    expect(error?.message).toBe('forbidden_role');
+    expect(
+      await countWhere(asGeneric(admin), 'inbox_entries', [
+        ['event_type', 'checkpoints_added'],
+        ['entity_id', ctxA.postId],
+      ]),
+    ).toBe(0);
+  });
+
+  it('post_ready_notify on another workspace post is rejected as forbidden_role', async () => {
+    const args = { p_post_id: ctxA.postId, p_trace_id: generateTraceId() };
+    const { error } = await intruder.rpc('post_ready_notify', args);
+    expect(error?.message).toBe('forbidden_role');
+    expect(
+      await countWhere(asGeneric(admin), 'inbox_entries', [
+        ['event_type', 'post_ready'],
+        ['entity_id', ctxA.postId],
+      ]),
+    ).toBe(0);
+  });
+
+  it('direct UPDATE of ledger_seq / resolution_note as authenticated affects 0 rows', async () => {
+    // Seed a checkpoint through the service role; the proc is the only
+    // authenticated write path, so even the same-workspace member (never mind
+    // the intruder) must be denied a direct ledger-column update.
+    const checkpoint = await insertRow(asGeneric(admin), 'comments', {
+      workspace_id: wsA.id,
+      entity_type: 'post',
+      entity_id: ctxA.postId,
+      author_user_id: ownerA.id,
+      body: 'seeded checkpoint',
+      ledger_seq: 1,
+      ledger_batch_id: crypto.randomUUID(),
+    });
+    const match = [['id', String(checkpoint.id)]] as const;
+
+    for (const attacker of [clientFor(ownerA.id), clientFor(ownerB.id)]) {
+      const g = asGeneric(attacker);
+      expect(await updateRowCount(g, 'comments', match, { ledger_seq: 99 })).toBe(0);
+      expect(await updateRowCount(g, 'comments', match, { resolution_note: 'tampered' })).toBe(0);
+    }
+
+    // Ground truth: the seeded row is untouched.
+    const res = await asGeneric(admin)
+      .from('comments')
+      .select('ledger_seq, resolution_note')
+      .eq('id', String(checkpoint.id));
+    const rows = res.data as Array<{ ledger_seq: number | null; resolution_note: string | null }>;
+    expect(rows[0]?.ledger_seq).toBe(1);
+    expect(rows[0]?.resolution_note).toBeNull();
   });
 });
