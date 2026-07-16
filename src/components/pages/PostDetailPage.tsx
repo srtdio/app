@@ -7,6 +7,17 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Comments, writeClipboard } from '@/components/comments/Comments';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
+import {
+  PcsTabs,
+  PCS_TAB_PARAM,
+  parsePcsTab,
+  pcsTabPanelClass,
+  pcsTabPanelId,
+  withPcsTab,
+} from '@/components/pages/pcs/PcsTabs';
+import type { PcsTab } from '@/components/pages/pcs/PcsTabs';
+import { cn } from '@/lib/cn';
+import { useMediaQuery } from '@/lib/use-media-query';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconChevronLeft, IconChevronRight, IconCopy, IconPipeline } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
@@ -171,10 +182,37 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     if (handledCommentParam.current === comment) return;
     handledCommentParam.current = comment;
     setFocusCommentId(comment);
-    const next = new URLSearchParams(searchParams);
+    // The focused comment lives in the Feedback tab, so the same replace that
+    // strips 'comment' lands the mobile layout on that tab (desktop shows both
+    // columns regardless).
+    const next = withPcsTab(searchParams, 'feedback');
     next.delete('comment');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  // Mobile PCS tab (F-layout): below md the post/comment split becomes two
+  // tabs whose active value lives in ?tab= so the back button restores the
+  // previous tab. Desktop keeps both columns and never touches the param.
+  const activeTab = parsePcsTab(searchParams.get(PCS_TAB_PARAM));
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  // enteredTab trails activeTab by one frame so the freshly shown panel starts
+  // at opacity-0/translate-y-1 and transitions to rest (the Sheet enter
+  // pattern). Equal values mean the swap motion has settled.
+  const [enteredTab, setEnteredTab] = useState<PcsTab>(activeTab);
+  useEffect(() => {
+    if (enteredTab === activeTab) return;
+    const raf = requestAnimationFrame(() => setEnteredTab(activeTab));
+    return () => cancelAnimationFrame(raf);
+  }, [activeTab, enteredTab]);
+
+  // A cross-link whose target sat in the hidden tab: the flash is parked here
+  // until the tab switch has rendered, then fired by the effect below.
+  const [pendingFlash, setPendingFlash] = useState<{ tab: PcsTab; elementId: string } | null>(null);
+  useEffect(() => {
+    if (pendingFlash === null || activeTab !== pendingFlash.tab) return;
+    flashNode(pendingFlash.elementId);
+    setPendingFlash(null);
+  }, [pendingFlash, activeTab]);
 
   const [detail, setDetail] = useState<PostDetail | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
@@ -524,9 +562,15 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     setComposer({ start, end, quote });
   }, []);
 
-  // Scroll to (and briefly flash) a DOM node by id; best-effort, never throws if
-  // the target is not currently rendered (e.g. on an unloaded comments page).
-  function flashTo(elementId: string): void {
+  // Scroll to (and briefly flash) a DOM node by id, switching to the tab that
+  // hosts it first when the mobile layout has it hidden. Desktop flashes
+  // directly (both columns visible) so cross-links never touch the URL there.
+  function flashTo(tab: PcsTab, elementId: string): void {
+    if (!isDesktop && activeTab !== tab) {
+      setSearchParams(withPcsTab(searchParams, tab));
+      setPendingFlash({ tab, elementId });
+      return;
+    }
     flashNode(elementId);
   }
 
@@ -927,6 +971,39 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     </div>
   );
 
+  // The stage-actions card. Rendered twice, one instance per breakpoint: in the
+  // desktop aside (hidden md:block) and at the bottom of the mobile Post tab
+  // (md:hidden), so stage moves stay reachable without leaving the post. Only
+  // buttons and copy live here, so no flashNode target id is ever duplicated.
+  const stageSection = (
+    <section className="rounded-xl border border-border bg-panel-2 p-4">
+      {currentStage === 'review' && clientRole ? (
+        <>
+          <p className="mb-3 text-sm text-fg-2">
+            Commenting keeps the post in review. Approval is deliberate, one post at a time.
+          </p>
+          {stageButtons}
+        </>
+      ) : currentStage === 'review' && agencySide ? (
+        <>
+          <p className="mb-3 text-sm text-fg-2">
+            Waiting on the client. Content edits create a new version.
+          </p>
+          {stageButtons}
+        </>
+      ) : stageActions.length > 0 ? (
+        stageButtons
+      ) : (
+        <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
+      )}
+      {actionError !== null ? (
+        <div role="alert" className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad">
+          {actionError}
+        </div>
+      ) : null}
+    </section>
+  );
+
   return (
     <>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
@@ -1071,7 +1148,19 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
         />
       ) : (
         <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 flex flex-col gap-6">
+          <div className="md:hidden">
+            <PcsTabs
+              active={activeTab}
+              onSelect={(tab) => setSearchParams(withPcsTab(searchParams, tab))}
+            />
+          </div>
+          <div
+            id={pcsTabPanelId('post')}
+            className={cn(
+              'md:col-span-2',
+              pcsTabPanelClass(activeTab === 'post', enteredTab === activeTab),
+            )}
+          >
             <section>
               <PostGallery
                 items={gallery}
@@ -1081,7 +1170,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                 pinOverlay={(item) => (
                   <PinOverlay
                     pins={pinsByAttachment[item.assetAttachmentId] ?? []}
-                    onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
+                    onPinClick={(commentId) => flashTo('feedback', `comment-${commentId}`)}
                   />
                 )}
                 onRequestPin={handleRequestPin}
@@ -1181,7 +1270,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                     <CaptionView
                       caption={post.caption ?? ''}
                       annotations={highlights}
-                      onHighlightClick={(commentId) => flashTo(`comment-${commentId}`)}
+                      onHighlightClick={(commentId) => flashTo('feedback', `comment-${commentId}`)}
                       onAnnotate={handleAnnotate}
                     />
                   </div>
@@ -1199,38 +1288,18 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                 </div>
               ) : null}
             </section>
+
+            <div className="md:hidden">{stageSection}</div>
           </div>
 
-          <aside className="flex flex-col gap-6">
-            <section className="rounded-xl border border-border bg-panel-2 p-4">
-              {currentStage === 'review' && clientRole ? (
-                <>
-                  <p className="mb-3 text-sm text-fg-2">
-                    Commenting keeps the post in review. Approval is deliberate, one post at a time.
-                  </p>
-                  {stageButtons}
-                </>
-              ) : currentStage === 'review' && agencySide ? (
-                <>
-                  <p className="mb-3 text-sm text-fg-2">
-                    Waiting on the client. Content edits create a new version.
-                  </p>
-                  {stageButtons}
-                </>
-              ) : stageActions.length > 0 ? (
-                stageButtons
-              ) : (
-                <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
-              )}
-              {actionError !== null ? (
-                <div
-                  role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-                >
-                  {actionError}
-                </div>
-              ) : null}
-            </section>
+          <aside
+            id={pcsTabPanelId('feedback')}
+            className={cn(
+              'md:sticky md:top-14 md:max-h-[calc(100vh-3.5rem)] md:self-start md:overflow-y-auto',
+              pcsTabPanelClass(activeTab === 'feedback', enteredTab === activeTab),
+            )}
+          >
+            <div className="hidden md:block">{stageSection}</div>
 
             <section className="rounded-xl border border-border bg-panel-2 p-4">
               <div className="mb-3 flex items-center gap-2">
@@ -1245,7 +1314,9 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                   entityType="post"
                   entityId={postId}
                   annotationsByCommentId={annotationsByCommentId}
-                  onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
+                  onAnnotationChipClick={(commentId) =>
+                    flashTo('post', `caption-mark-${commentId}`)
+                  }
                   refreshSignal={commentsRefresh}
                   focusCommentId={focusCommentId}
                 />
