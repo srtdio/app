@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
-import { galleryView } from '@/components/pages/pcs/PostGallery';
+import { activeSlideIndex, galleryView } from '@/components/pages/pcs/PostGallery';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
@@ -112,18 +112,106 @@ describe('galleryView', () => {
     expect(all.some((el) => className(el).includes('text-overlay-fg'))).toBe(false);
   });
 
-  it('defaults preserve the original post layout (4-up, 4/5, indexed)', () => {
+  it('defaults render the scroll-snap carousel: native x scroller, full-width 4/5 slides', () => {
     const items = [item(0), item(1)];
     const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
     const all = elements(tree);
 
-    const grid = all.find((el) => className(el).startsWith('grid '))!;
-    expect(className(grid)).toBe('grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4');
+    // No grid container; a native overflow-x scroller with mandatory x snapping.
+    expect(all.some((el) => className(el).startsWith('grid '))).toBe(false);
+    const scroller = all.find((el) => className(el).includes('snap-x'))!;
+    expect(className(scroller)).toContain('snap-mandatory');
+    expect(className(scroller)).toContain('overflow-x-auto');
 
-    const tiles = all.filter((el) => label(el)?.startsWith('View image'));
-    expect(tiles.every((el) => className(el).includes('aspect-[4/5]'))).toBe(true);
+    // One full-width snapping slide per image, at the post 4/5 aspect.
+    const slides = all.filter((el) => label(el)?.startsWith('View image'));
+    expect(slides.length).toBe(2);
+    for (const slide of slides) {
+      expect(className(slide)).toContain('w-full');
+      expect(className(slide)).toContain('shrink-0');
+      expect(className(slide)).toContain('snap-center');
+      expect(className(slide)).toContain('aspect-[4/5]');
+    }
+  });
 
-    // The index badge is present by default.
-    expect(all.some((el) => className(el).includes('text-overlay-fg'))).toBe(true);
+  it('shows an n/N counter for the active slide (clamped into range)', () => {
+    const items = [item(0), item(1), item(2)];
+    const counterText = (activeIndex?: number): string | undefined => {
+      const tree = galleryView({
+        items,
+        cache,
+        presignEnabled: true,
+        onOpen: () => {},
+        ...(activeIndex !== undefined ? { activeIndex } : {}),
+      });
+      return elements(tree)
+        .filter((el) => className(el).includes('text-overlay-fg'))
+        .map((el) => (el.props as { children?: ReactNode }).children)
+        .find((child): child is string => typeof child === 'string' && child.includes('/'));
+    };
+    expect(counterText()).toBe('1/3');
+    expect(counterText(1)).toBe('2/3');
+    // A shrunken gallery never points past the end.
+    expect(counterText(9)).toBe('3/3');
+  });
+
+  it('renders one 44px dot per slide, marks the active one, and taps through', () => {
+    const onDotClick = vi.fn();
+    const items = [item(0), item(1), item(2)];
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      activeIndex: 1,
+      onDotClick,
+    });
+    const dots = elements(tree).filter((el) => label(el)?.startsWith('Go to slide'));
+    expect(dots.map((el) => label(el))).toEqual([
+      'Go to slide 1',
+      'Go to slide 2',
+      'Go to slide 3',
+    ]);
+
+    // Every dot is a 44px touch target; only the active slide's dot is current.
+    for (const dot of dots) {
+      expect(className(dot)).toContain('min-h-[44px]');
+      expect(className(dot)).toContain('min-w-[44px]');
+    }
+    const current = dots.map((el) => (el.props as { 'aria-current'?: boolean })['aria-current']);
+    expect(current).toEqual([false, true, false]);
+
+    (dots[2]!.props as { onClick: () => void }).onClick();
+    expect(onDotClick).toHaveBeenCalledWith(2);
+  });
+
+  it('omits the dots for a single slide and wires the native scroll listener', () => {
+    const onScroll = vi.fn();
+    const tree = galleryView({
+      items: [item(0)],
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      onScroll,
+    });
+    const all = elements(tree);
+    expect(all.some((el) => label(el)?.startsWith('Go to slide'))).toBe(false);
+    const scroller = all.find((el) => className(el).includes('snap-x'))!;
+    expect((scroller.props as { onScroll?: unknown }).onScroll).toBe(onScroll);
+  });
+});
+
+describe('activeSlideIndex', () => {
+  it('rounds the scroll offset to the nearest slide', () => {
+    expect(activeSlideIndex(0, 400, 3)).toBe(0);
+    expect(activeSlideIndex(390, 400, 3)).toBe(1);
+    expect(activeSlideIndex(810, 400, 3)).toBe(2);
+  });
+
+  it('clamps into range and tolerates a zero-width scroller', () => {
+    expect(activeSlideIndex(9999, 400, 3)).toBe(2);
+    expect(activeSlideIndex(-10, 400, 3)).toBe(0);
+    expect(activeSlideIndex(120, 0, 3)).toBe(0);
+    expect(activeSlideIndex(120, 400, 0)).toBe(0);
   });
 });
