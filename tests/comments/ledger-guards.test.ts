@@ -87,7 +87,12 @@ function asRefs(data: unknown): CheckpointRef[] {
 }
 
 /** A single-point batch as this client, returning the new checkpoint id. */
-async function seedCheckpoint(client: Db, wsId: string, postId: string, body = 'checkpoint'): Promise<string> {
+async function seedCheckpoint(
+  client: Db,
+  wsId: string,
+  postId: string,
+  body = 'checkpoint',
+): Promise<string> {
   const { data, error } = await batchCreate(client, {
     p_workspace_id: wsId,
     p_post_id: postId,
@@ -220,7 +225,9 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
     const { error } = await batchCreate(clientAClient, {
       p_workspace_id: wsA.id,
       p_post_id: postId,
-      p_points: [{ body: 'ping the agency', mentions: [agency.id] }] as unknown as BatchCreateArgs['p_points'],
+      p_points: [
+        { body: 'ping the agency', mentions: [agency.id] },
+      ] as unknown as BatchCreateArgs['p_points'],
       p_trace_id: generateTraceId(),
     });
     expect(error).toBeNull();
