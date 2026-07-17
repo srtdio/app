@@ -111,9 +111,7 @@ function readGif(bytes: Uint8Array): ImageDimensionsResult {
 /** A JPEG start-of-frame marker (SOF0..SOF15) carries the frame dimensions.
  * 0xC4 (DHT), 0xC8 (JPG) and 0xCC (DAC) share the range but are not frames. */
 function isSofMarker(marker: number): boolean {
-  return (
-    marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
-  );
+  return marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
 }
 
 /** JPEG: walk the marker stream from SOI to the first real SOF, whose segment

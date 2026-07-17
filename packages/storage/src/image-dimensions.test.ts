@@ -18,11 +18,30 @@ function expectSize(result: ImageDimensionsResult, width: number, height: number
 /** An 8-byte signature + a 13-byte IHDR chunk carrying width/height (BE u32). */
 function png(width: number, height: number): Uint8Array {
   return b(
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // signature
-    0x00, 0x00, 0x00, 0x0d, // chunk length 13
-    0x49, 0x48, 0x44, 0x52, // "IHDR"
-    (width >>> 24) & 0xff, (width >>> 16) & 0xff, (width >>> 8) & 0xff, width & 0xff,
-    (height >>> 24) & 0xff, (height >>> 16) & 0xff, (height >>> 8) & 0xff, height & 0xff,
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a, // signature
+    0x00,
+    0x00,
+    0x00,
+    0x0d, // chunk length 13
+    0x49,
+    0x48,
+    0x44,
+    0x52, // "IHDR"
+    (width >>> 24) & 0xff,
+    (width >>> 16) & 0xff,
+    (width >>> 8) & 0xff,
+    width & 0xff,
+    (height >>> 24) & 0xff,
+    (height >>> 16) & 0xff,
+    (height >>> 8) & 0xff,
+    height & 0xff,
   );
 }
 
@@ -49,10 +68,18 @@ describe('readImageDimensions PNG', () => {
 /** "GIF89a" + a logical screen descriptor width/height (LE u16). */
 function gif(width: number, height: number): Uint8Array {
   return b(
-    0x47, 0x49, 0x46, 0x38, 0x39, 0x61, // "GIF89a"
-    width & 0xff, (width >> 8) & 0xff,
-    height & 0xff, (height >> 8) & 0xff,
-    0x00, 0x00,
+    0x47,
+    0x49,
+    0x46,
+    0x38,
+    0x39,
+    0x61, // "GIF89a"
+    width & 0xff,
+    (width >> 8) & 0xff,
+    height & 0xff,
+    (height >> 8) & 0xff,
+    0x00,
+    0x00,
   );
 }
 
@@ -81,10 +108,25 @@ const SOI = [0xff, 0xd8];
 /** A minimal SOF0 segment: marker, length, precision, height (BE), width (BE). */
 function sof0(width: number, height: number): number[] {
   return [
-    0xff, 0xc0, 0x00, 0x11, 0x08,
-    (height >> 8) & 0xff, height & 0xff,
-    (width >> 8) & 0xff, width & 0xff,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0xff,
+    0xc0,
+    0x00,
+    0x11,
+    0x08,
+    (height >> 8) & 0xff,
+    height & 0xff,
+    (width >> 8) & 0xff,
+    width & 0xff,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
   ];
 }
 
@@ -96,8 +138,18 @@ describe('readImageDimensions JPEG', () => {
   it('walks past non-frame segments (APP0, DHT/SOF4) to the real SOF', () => {
     const bytes = b(
       ...SOI,
-      0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, // APP0, length 4
-      0xff, 0xc4, 0x00, 0x04, 0x00, 0x00, // DHT (0xC4, not a frame), length 4
+      0xff,
+      0xe0,
+      0x00,
+      0x04,
+      0x00,
+      0x00, // APP0, length 4
+      0xff,
+      0xc4,
+      0x00,
+      0x04,
+      0x00,
+      0x00, // DHT (0xC4, not a frame), length 4
       ...sof0(320, 240),
     );
     expectSize(readImageDimensions(bytes, 'image/jpeg'), 320, 240);
@@ -128,11 +180,26 @@ describe('readImageDimensions JPEG', () => {
 /** Wrap a chunk payload in a RIFF/WEBP container with the given FourCC. */
 function webp(fourcc: string, payload: number[]): Uint8Array {
   const out: number[] = [
-    0x52, 0x49, 0x46, 0x46, // "RIFF"
-    0x00, 0x00, 0x00, 0x00, // file size (LE, unvalidated)
-    0x57, 0x45, 0x42, 0x50, // "WEBP"
-    fourcc.charCodeAt(0), fourcc.charCodeAt(1), fourcc.charCodeAt(2), fourcc.charCodeAt(3),
-    0x00, 0x00, 0x00, 0x00, // chunk size (LE, unvalidated)
+    0x52,
+    0x49,
+    0x46,
+    0x46, // "RIFF"
+    0x00,
+    0x00,
+    0x00,
+    0x00, // file size (LE, unvalidated)
+    0x57,
+    0x45,
+    0x42,
+    0x50, // "WEBP"
+    fourcc.charCodeAt(0),
+    fourcc.charCodeAt(1),
+    fourcc.charCodeAt(2),
+    fourcc.charCodeAt(3),
+    0x00,
+    0x00,
+    0x00,
+    0x00, // chunk size (LE, unvalidated)
     ...payload,
   ];
   return Uint8Array.from(out);
@@ -140,10 +207,16 @@ function webp(fourcc: string, payload: number[]): Uint8Array {
 
 function vp8(width: number, height: number): Uint8Array {
   return webp('VP8 ', [
-    0x00, 0x00, 0x00, // frame tag
-    0x9d, 0x01, 0x2a, // start code
-    width & 0xff, (width >> 8) & 0x3f,
-    height & 0xff, (height >> 8) & 0x3f,
+    0x00,
+    0x00,
+    0x00, // frame tag
+    0x9d,
+    0x01,
+    0x2a, // start code
+    width & 0xff,
+    (width >> 8) & 0x3f,
+    height & 0xff,
+    (height >> 8) & 0x3f,
   ]);
 }
 
@@ -151,7 +224,10 @@ function vp8l(width: number, height: number): Uint8Array {
   const bits = (((width - 1) & 0x3fff) | (((height - 1) & 0x3fff) << 14)) >>> 0;
   return webp('VP8L', [
     0x2f,
-    bits & 0xff, (bits >>> 8) & 0xff, (bits >>> 16) & 0xff, (bits >>> 24) & 0xff,
+    bits & 0xff,
+    (bits >>> 8) & 0xff,
+    (bits >>> 16) & 0xff,
+    (bits >>> 24) & 0xff,
   ]);
 }
 
@@ -159,9 +235,16 @@ function vp8x(width: number, height: number): Uint8Array {
   const w1 = width - 1;
   const h1 = height - 1;
   return webp('VP8X', [
-    0x00, 0x00, 0x00, 0x00, // flags + reserved
-    w1 & 0xff, (w1 >> 8) & 0xff, (w1 >> 16) & 0xff,
-    h1 & 0xff, (h1 >> 8) & 0xff, (h1 >> 16) & 0xff,
+    0x00,
+    0x00,
+    0x00,
+    0x00, // flags + reserved
+    w1 & 0xff,
+    (w1 >> 8) & 0xff,
+    (w1 >> 16) & 0xff,
+    h1 & 0xff,
+    (h1 >> 8) & 0xff,
+    (h1 >> 16) & 0xff,
   ]);
 }
 
@@ -199,7 +282,11 @@ function svg(markup: string): Uint8Array {
 
 describe('readImageDimensions SVG', () => {
   it('reads absolute pixel width/height', () => {
-    expectSize(readImageDimensions(svg('<svg width="120" height="60"></svg>'), 'image/svg+xml'), 120, 60);
+    expectSize(
+      readImageDimensions(svg('<svg width="120" height="60"></svg>'), 'image/svg+xml'),
+      120,
+      60,
+    );
   });
 
   it('accepts an explicit px unit', () => {
@@ -227,9 +314,9 @@ describe('readImageDimensions SVG', () => {
   });
 
   it('fails when neither absolute size nor viewBox is present', () => {
-    expect(readImageDimensions(svg('<svg width="100%" height="100%"></svg>'), 'image/svg+xml').ok).toBe(
-      false,
-    );
+    expect(
+      readImageDimensions(svg('<svg width="100%" height="100%"></svg>'), 'image/svg+xml').ok,
+    ).toBe(false);
   });
 
   it('fails on a zero dimension', () => {

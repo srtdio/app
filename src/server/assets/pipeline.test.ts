@@ -35,23 +35,59 @@ function input(overrides: Partial<UploadInput> = {}): UploadInput {
 /** A PNG whose IHDR declares the given size (magic bytes + dimensions). */
 function pngBytes(width: number, height: number): Uint8Array {
   return Uint8Array.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    0x00, 0x00, 0x00, 0x0d,
-    0x49, 0x48, 0x44, 0x52,
-    (width >>> 24) & 0xff, (width >>> 16) & 0xff, (width >>> 8) & 0xff, width & 0xff,
-    (height >>> 24) & 0xff, (height >>> 16) & 0xff, (height >>> 8) & 0xff, height & 0xff,
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    0x00,
+    0x00,
+    0x00,
+    0x0d,
+    0x49,
+    0x48,
+    0x44,
+    0x52,
+    (width >>> 24) & 0xff,
+    (width >>> 16) & 0xff,
+    (width >>> 8) & 0xff,
+    width & 0xff,
+    (height >>> 24) & 0xff,
+    (height >>> 16) & 0xff,
+    (height >>> 8) & 0xff,
+    height & 0xff,
   ]);
 }
 
 /** A JPEG with an SOF0 frame header that survives EXIF stripping. */
 function jpegBytes(width: number, height: number): Uint8Array {
   return Uint8Array.from([
-    0xff, 0xd8,
-    0xff, 0xc0, 0x00, 0x11, 0x08,
-    (height >> 8) & 0xff, height & 0xff,
-    (width >> 8) & 0xff, width & 0xff,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0xff, 0xd9,
+    0xff,
+    0xd8,
+    0xff,
+    0xc0,
+    0x00,
+    0x11,
+    0x08,
+    (height >> 8) & 0xff,
+    height & 0xff,
+    (width >> 8) & 0xff,
+    width & 0xff,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0xff,
+    0xd9,
   ]);
 }
 
@@ -105,9 +141,7 @@ describe('runUploadPipeline image dimensions', () => {
     // A valid JPEG signature (FF D8 FF) with no SOF frame header: an APP0
     // segment then EOI. Passes the allowlist and magic-byte check, but the
     // dimension probe finds no frame and stores nulls without failing.
-    const noFrame = Uint8Array.from([
-      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xd9,
-    ]);
+    const noFrame = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xd9]);
     const res = await runUploadPipeline(
       d,
       input({ filename: 'broken.jpg', contentType: 'image/jpeg', bytes: noFrame }),
