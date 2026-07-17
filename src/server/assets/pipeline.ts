@@ -24,9 +24,11 @@ import {
   isJpegMime,
   isSvgMime,
   normalizeMime,
+  readImageDimensions,
   verifyMagicBytes,
   type StorageClient,
 } from '@srtdio/storage';
+import { logger } from '../logger';
 import { isFileVersionRef, type AssetRepository, type FileVersionKind } from './repository';
 import {
   err,
@@ -167,6 +169,26 @@ export async function runUploadPipeline(
   const sha256 = await computeSha256(sanitized);
   const sizeBytes = sanitized.byteLength;
   const kind = fileKindForMime(mimeType);
+  // Intrinsic pixel dimensions for images, probed on the sanitized bytes (what
+  // the browser actually decodes; the JPEG path has already stripped EXIF). A
+  // miss is expected for a corrupt/truncated image and never blocks the upload:
+  // width/height stay null and the outcome is logged as a structured warning.
+  let width: number | null = null;
+  let height: number | null = null;
+  if (kind === 'image') {
+    const dims = readImageDimensions(sanitized, mimeType);
+    if (dims.ok) {
+      width = dims.width;
+      height = dims.height;
+    } else {
+      logger.warn('asset image dimension probe failed', {
+        trace_id: input.traceId,
+        workspace_id: input.workspaceId,
+        mime_type: mimeType,
+        reason: dims.reason,
+      });
+    }
+  }
   // The bucket is the workspace's stored, permanent name, never derived here.
   const bucket = await repository.getAssetBucket(input.workspaceId);
 
@@ -224,6 +246,8 @@ export async function runUploadPipeline(
       mimeType,
       sha256,
       sizeBytes,
+      width,
+      height,
       uploadedBy: input.uploadedBy,
     });
     await repository.setCurrentVersion(existingAssetId, versionId);
@@ -326,6 +350,8 @@ export async function runUploadPipeline(
     mimeType,
     sha256,
     sizeBytes,
+    width,
+    height,
     uploadedBy: input.uploadedBy,
   });
   await repository.setCurrentVersion(assetId, versionId);
