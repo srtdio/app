@@ -29,18 +29,39 @@ function isImage(item: GalleryItem): boolean {
   return item.kind === 'image' || (item.mimeType ?? '').startsWith('image/');
 }
 
+/**
+ * The usable intrinsic size from a decoded image's naturalWidth/naturalHeight,
+ * or null when either is zero, negative, or NaN (an undecoded or broken image
+ * reports zeros). Pure, so the ribbon never reports a size that would poison the
+ * measured-dimensions state. Exported for unit coverage.
+ */
+export function intrinsicSize(
+  naturalWidth: number,
+  naturalHeight: number,
+): { width: number; height: number } | null {
+  if (naturalWidth > 0 && naturalHeight > 0) return { width: naturalWidth, height: naturalHeight };
+  return null;
+}
+
 /** Lazily resolve and render one tile's inline thumbnail, falling back to a glyph. */
 function GalleryThumb({
   item,
   cache,
   presignEnabled,
   fit = 'cover',
+  onMeasure,
 }: {
   item: GalleryItem;
   cache: PresignCache;
   presignEnabled: boolean;
   /** 'cover' crops to fill (the brief grid); 'contain' shows the whole image (the ribbon). */
   fit?: 'cover' | 'contain';
+  /**
+   * Ribbon only: report the image's intrinsic size once it decodes, so a tile
+   * whose stored dimensions are null can still hug its true ratio. Never fires
+   * with a zero or NaN dimension, and never on a load error.
+   */
+  onMeasure?: ((width: number, height: number) => void) | undefined;
 }) {
   const versionId = item.assetVersionId;
   const renderable = presignEnabled && isImage(item) && versionId !== '';
@@ -72,6 +93,14 @@ function GalleryThumb({
         alt={item.filename}
         loading="lazy"
         onError={() => setFailed(true)}
+        onLoad={(event) => {
+          if (onMeasure === undefined) return;
+          const size = intrinsicSize(
+            event.currentTarget.naturalWidth,
+            event.currentTarget.naturalHeight,
+          );
+          if (size !== null) onMeasure(size.width, size.height);
+        }}
         className={
           fit === 'contain' ? 'max-h-full max-w-full object-contain' : 'h-full w-full object-cover'
         }
@@ -147,6 +176,27 @@ export function ribbonTileStyle(width: number | null, height: number | null): CS
   };
 }
 
+/** A tile's intrinsic size measured from the decoded image, keyed by attachment id. */
+export type MeasuredDimensions = Record<string, { width: number; height: number }>;
+
+/**
+ * The reserved box for one ribbon tile, resolving size by precedence: stored
+ * intrinsic dimensions first, then the pair measured from the decoded image,
+ * then the stable 4/5 fallback (until that image loads). Both usable paths feed
+ * {@link ribbonTileStyle} unchanged. Pure.
+ */
+export function resolveRibbonTileStyle(
+  item: GalleryItem,
+  measured: MeasuredDimensions,
+): CSSProperties {
+  if (item.width !== null && item.height !== null && item.width > 0 && item.height > 0) {
+    return ribbonTileStyle(item.width, item.height);
+  }
+  const seen = measured[item.assetAttachmentId];
+  if (seen !== undefined) return ribbonTileStyle(seen.width, seen.height);
+  return ribbonTileStyle(null, null);
+}
+
 /**
  * What a slide tap does given the pin-arming state: the click trailing the
  * arming long-press is swallowed, a tap on the armed slide places the pin, a
@@ -202,6 +252,10 @@ interface GalleryViewProps {
   pinArmedIndex?: number | null;
   /** F5 relocation: an armed tap on a slide, with the click event for the rect. */
   onSlideTap?: ((index: number, event: ReactMouseEvent<HTMLButtonElement>) => void) | undefined;
+  /** Ribbon: dimensions measured from decoded images, keyed by attachment id. */
+  measuredDimensions?: MeasuredDimensions;
+  /** Ribbon: report a tile's intrinsic size once its image decodes. */
+  onMeasure?: ((assetAttachmentId: string, width: number, height: number) => void) | undefined;
 }
 
 /**
@@ -235,6 +289,8 @@ export function galleryView({
   onDotClick,
   pinArmedIndex = null,
   onSlideTap,
+  measuredDimensions = {},
+  onMeasure,
 }: GalleryViewProps): ReactElement {
   if (items.length === 0) {
     // Agency-side (onAddSlide present): a full-width "Add images" upload zone in
@@ -328,7 +384,7 @@ export function galleryView({
                 key={item.assetAttachmentId}
                 type="button"
                 aria-label={`View image ${index + 1}`}
-                style={ribbonTileStyle(item.width, item.height)}
+                style={resolveRibbonTileStyle(item, measuredDimensions)}
                 {...(slideGestures !== undefined ? slideGestures(index) : {})}
                 onClick={(event) => {
                   if (onSlideTap !== undefined) {
@@ -348,6 +404,11 @@ export function galleryView({
                   cache={cache}
                   presignEnabled={presignEnabled}
                   fit="contain"
+                  onMeasure={
+                    onMeasure !== undefined
+                      ? (width, height) => onMeasure(item.assetAttachmentId, width, height)
+                      : undefined
+                  }
                 />
                 {pinCount > 0 ? (
                   <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
@@ -502,6 +563,20 @@ export function PostGallery({
     }
   };
 
+  // Ribbon: intrinsic sizes recovered from decoded images, keyed by attachment
+  // id, for tiles whose stored asset_versions.width/height are still null. Set
+  // once per tile on first load so the tile snaps to its true ratio and never
+  // resizes again; a zero/NaN natural dimension is filtered upstream in
+  // GalleryThumb and never reaches here.
+  const [measuredDimensions, setMeasuredDimensions] = useState<MeasuredDimensions>({});
+  const handleMeasure = (assetAttachmentId: string, width: number, height: number): void => {
+    setMeasuredDimensions((prev) =>
+      prev[assetAttachmentId] !== undefined
+        ? prev
+        : { ...prev, [assetAttachmentId]: { width, height } },
+    );
+  };
+
   // F5 relocation: the slide currently armed for pin placement, or null.
   const [pinArmedIndex, setPinArmedIndex] = useState<number | null>(null);
   const canPlacePins = columns === 4 && onPlacePin !== undefined;
@@ -594,6 +669,8 @@ export function PostGallery({
         onDotClick: scrollToSlide,
         pinArmedIndex: canPlacePins ? pinArmedIndex : null,
         onSlideTap: columns === 4 ? handleSlideTap : undefined,
+        measuredDimensions,
+        onMeasure: columns === 4 ? handleMeasure : undefined,
       })}
       {openIndex !== null ? (
         <PostLightbox

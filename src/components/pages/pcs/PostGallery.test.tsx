@@ -3,10 +3,13 @@ import type { ReactElement, ReactNode } from 'react';
 import {
   PIN_ARM_PRESS_MS,
   galleryView,
+  intrinsicSize,
   nearestTileIndex,
+  resolveRibbonTileStyle,
   ribbonTileStyle,
   slideTapAction,
 } from '@/components/pages/pcs/PostGallery';
+import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
 import { createLongPressController } from '@/components/ui/useLongPress';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -64,6 +67,19 @@ function item(n: number): GalleryItem {
     r2Key: `r2/${n}`,
     externalUrl: null,
   };
+}
+
+// A tile whose stored asset_versions.width/height are still null (the common
+// case this PR fixes): its ribbon size must come from the measured pair, or the
+// 4/5 fallback until the image decodes.
+function nullDimItem(n: number): GalleryItem {
+  return { ...item(n), width: null, height: null };
+}
+
+// The tile <button>'s reserved style box, pulled from the ribbon tree.
+function tileStyle(tree: ReactNode, index: number): unknown {
+  const tile = elements(tree).find((el) => label(el) === `View image ${index + 1}`)!;
+  return (tile.props as { style?: unknown }).style;
 }
 
 describe('galleryView', () => {
@@ -362,6 +378,105 @@ describe('pin placement on the inline slide (relocated F5 flow)', () => {
     expect(elements(tree).some((el) => (el.props as { role?: string }).role === 'status')).toBe(
       false,
     );
+  });
+});
+
+describe('ribbon tile sizing hugs the true aspect ratio', () => {
+  // A tile whose stored dimensions are present sizes straight from them, so its
+  // reserved box carries the image's own ratio and nothing letterboxes.
+  it('sizes a wide panorama short: width cap bites, height follows the ratio', () => {
+    const style = resolveRibbonTileStyle({ ...item(0), width: 3000, height: 750 }, {});
+    expect(style).toEqual(ribbonTileStyle(3000, 750));
+    expect(style).toMatchObject({
+      aspectRatio: '3000 / 750',
+      maxWidth: 'calc(100vw - 2rem)',
+      maxHeight: 'clamp(200px, 38vh, 320px)',
+    });
+  });
+
+  it('sizes a tall portrait tall: height cap bites, width follows the ratio', () => {
+    const style = resolveRibbonTileStyle({ ...item(0), width: 1080, height: 1350 }, {});
+    expect(style).toEqual(ribbonTileStyle(1080, 1350));
+    expect(style).toMatchObject({ aspectRatio: '1080 / 1350' });
+  });
+
+  it('sizes a square tile square', () => {
+    const style = resolveRibbonTileStyle({ ...item(0), width: 1000, height: 1000 }, {});
+    expect(style).toEqual(ribbonTileStyle(1000, 1000));
+    expect(style).toMatchObject({ aspectRatio: '1000 / 1000' });
+  });
+
+  it('uses the 4/5 fallback when stored dimensions are null and nothing is measured yet', () => {
+    const style = resolveRibbonTileStyle(nullDimItem(0), {});
+    expect(style).toEqual(ribbonTileStyle(null, null));
+    expect(style).toMatchObject({ aspectRatio: '4 / 5' });
+  });
+
+  it('uses the measured ratio once a null-dimension tile has loaded', () => {
+    const measured: MeasuredDimensions = { 'aa-0': { width: 3000, height: 750 } };
+    expect(resolveRibbonTileStyle(nullDimItem(0), measured)).toEqual(ribbonTileStyle(3000, 750));
+  });
+
+  it('prefers stored dimensions over any measured pair', () => {
+    const measured: MeasuredDimensions = { 'aa-0': { width: 3000, height: 750 } };
+    // item(0) carries stored 800x1000; the measured pair must not win.
+    expect(resolveRibbonTileStyle(item(0), measured)).toEqual(ribbonTileStyle(800, 1000));
+  });
+
+  it('threads measured dimensions through the ribbon tree onto the tile box', () => {
+    const items = [nullDimItem(0), nullDimItem(1)];
+    const measured: MeasuredDimensions = { 'aa-0': { width: 3000, height: 750 } };
+
+    // Before any load: both tiles fall back to the stable 4/5 box.
+    const cold = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
+    expect(tileStyle(cold, 0)).toEqual(ribbonTileStyle(null, null));
+    expect(tileStyle(cold, 1)).toEqual(ribbonTileStyle(null, null));
+
+    // After aa-0 measures: its tile snaps to the measured ratio; aa-1 still falls back.
+    const warm = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      measuredDimensions: measured,
+    });
+    expect(tileStyle(warm, 0)).toEqual(ribbonTileStyle(3000, 750));
+    expect(tileStyle(warm, 1)).toEqual(ribbonTileStyle(null, null));
+  });
+
+  it('wires onMeasure into the ribbon thumbnail, keyed by attachment id', () => {
+    const onMeasure = vi.fn();
+    const items = [nullDimItem(0), nullDimItem(1)];
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      onMeasure,
+    });
+    // Each ribbon tile wraps a GalleryThumb element carrying an onMeasure that
+    // binds the tile's attachment id; invoking the second one reports for aa-1.
+    const thumbs = elements(tree).filter(
+      (el) => typeof el.type === 'function' && 'onMeasure' in (el.props as object),
+    );
+    expect(thumbs.length).toBe(2);
+    (thumbs[1]!.props as { onMeasure: (w: number, h: number) => void }).onMeasure(1080, 1350);
+    expect(onMeasure).toHaveBeenCalledWith('aa-1', 1080, 1350);
+  });
+});
+
+describe('intrinsicSize ignores unusable natural dimensions', () => {
+  it('returns the pair for a decoded image', () => {
+    expect(intrinsicSize(3000, 750)).toEqual({ width: 3000, height: 750 });
+  });
+
+  it('returns null for zero, negative, or NaN, so state is never poisoned', () => {
+    expect(intrinsicSize(0, 1000)).toBeNull();
+    expect(intrinsicSize(800, 0)).toBeNull();
+    expect(intrinsicSize(0, 0)).toBeNull();
+    expect(intrinsicSize(-1, 1000)).toBeNull();
+    expect(intrinsicSize(Number.NaN, 1000)).toBeNull();
+    expect(intrinsicSize(800, Number.NaN)).toBeNull();
   });
 });
 
