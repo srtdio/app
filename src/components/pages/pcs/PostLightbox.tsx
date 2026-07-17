@@ -15,6 +15,7 @@ import {
   IconChevronRight,
   IconDownload,
   IconPlus,
+  IconText,
   IconX,
 } from '@/components/ui/icons';
 import type { IconProps } from '@/components/ui/icons';
@@ -215,6 +216,16 @@ export interface LightboxViewProps {
   manage?: LightboxManage | undefined;
   /** F5 seam: overlay rendered over the sharp image; nothing when omitted. */
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
+  /** Read-only post caption; nothing renders (toggle included) when null/empty. */
+  caption?: string | null;
+  /** Whether the caption block is shown (the top-chrome toggle's state). */
+  captionVisible?: boolean;
+  /** Whether the caption is expanded to its scrollable panel. */
+  captionExpanded?: boolean;
+  /** The top-chrome caption toggle. */
+  onToggleCaption?: (() => void) | undefined;
+  /** A tap on the caption text, flipping clamp and panel. */
+  onToggleCaptionExpand?: (() => void) | undefined;
 }
 
 /** One slide's stage: blurred cover backdrop + fully-visible sharp image. */
@@ -307,6 +318,10 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const { items, index, chrome, busy, zoom, manage } = props;
   const count = items.length;
   const chromeVisible = chrome;
+  const caption = props.caption ?? null;
+  const hasCaption = caption !== null && caption.trim() !== '';
+  const captionShown = hasCaption && props.captionVisible === true;
+  const captionExpanded = props.captionExpanded === true;
 
   const chromeMotion = (visible: boolean, hiddenShift: string): string =>
     cn(
@@ -367,6 +382,17 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             {lightboxCounter(index, count)}
           </span>
           <div className="flex-1" />
+          {hasCaption ? (
+            <button
+              type="button"
+              aria-label="Toggle caption"
+              aria-pressed={props.captionVisible === true}
+              onClick={props.onToggleCaption}
+              className={TOOLBAR_BUTTON}
+            >
+              <IconText size={20} />
+            </button>
+          ) : null}
           <button
             type="button"
             aria-label="Download"
@@ -390,7 +416,23 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           aria-hidden
           className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-overlay to-transparent"
         />
-        <div className="relative flex flex-col items-center gap-1 pb-3 pt-2">
+        <div className="relative flex flex-col items-center gap-1 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
+          {captionShown ? (
+            <button
+              type="button"
+              aria-label={captionExpanded ? 'Collapse caption' : 'Expand caption'}
+              aria-expanded={captionExpanded}
+              onClick={props.onToggleCaptionExpand}
+              className={cn(
+                'min-h-[44px] w-full max-w-xl px-4 py-2 text-left text-sm leading-relaxed text-overlay-fg',
+                captionExpanded && 'max-h-[34vh] overflow-y-auto',
+              )}
+            >
+              <span className={cn('whitespace-pre-wrap', !captionExpanded && 'line-clamp-2')}>
+                {caption}
+              </span>
+            </button>
+          ) : null}
           {count > 1 ? (
             <div className="flex flex-wrap items-center justify-center">
               {items.map((slide, dot) => (
@@ -507,6 +549,11 @@ interface PostLightboxProps {
   /** F5 seam: overlay rendered over the image area; nothing renders when omitted. */
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
   /**
+   * The post's caption, rendered read-only under the slide track. Null or empty
+   * renders nothing and hides the top-chrome caption toggle.
+   */
+  caption?: string | null;
+  /**
    * Agency manage-row callbacks, each taking the slide index. They MUST be wired
    * to the existing slide-mutation paths (gallery-transforms + gallery_set commit
    * and the existing add/upload flow); this component creates no write path.
@@ -537,6 +584,7 @@ export function PostLightbox({
   onIndexChange,
   onClose,
   pinOverlay,
+  caption = null,
   manage,
 }: PostLightboxProps) {
   const [srcs, setSrcs] = useState<Record<string, string>>({});
@@ -545,6 +593,9 @@ export function PostLightbox({
   const [chrome, setChrome] = useState(true);
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
+  // The caption is per-post, so its visibility and expansion survive slide changes.
+  const [captionVisible, setCaptionVisible] = useState(true);
+  const [captionExpanded, setCaptionExpanded] = useState(false);
 
   const trackRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(index);
@@ -849,5 +900,10 @@ export function PostLightbox({
     trackRef,
     manage: manageView,
     pinOverlay,
+    caption,
+    captionVisible,
+    captionExpanded,
+    onToggleCaption: () => setCaptionVisible((v) => !v),
+    onToggleCaptionExpand: () => setCaptionExpanded((e) => !e),
   });
 }
