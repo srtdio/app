@@ -347,8 +347,6 @@ interface PostGalleryProps {
   cache: PresignCache;
   deps: PresignDeps;
   presignEnabled: boolean;
-  /** workspaces.platform for this workspace; drives the lightbox Feed lens. */
-  platform?: string | null;
   /** Grid columns. Defaults to the post gallery's responsive 4-up grid. */
   columns?: number;
   /** Tile aspect ratio token. Defaults to the post gallery's 4/5. */
@@ -395,7 +393,6 @@ export function PostGallery({
   cache,
   deps,
   presignEnabled,
-  platform = null,
   columns = 4,
   aspect = '4/5',
   showIndex = true,
@@ -532,7 +529,6 @@ export function PostGallery({
           presignEnabled={presignEnabled}
           cache={cache}
           deps={deps}
-          platform={platform}
           onIndexChange={setOpenIndex}
           onClose={() => setOpenIndex(null)}
           pinOverlay={pinOverlay}

@@ -14,15 +14,12 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconDownload,
-  IconPlay,
   IconPlus,
   IconX,
 } from '@/components/ui/icons';
 import type { IconProps } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
-import { specFor, verdictForSpec, formatRatio } from '@/components/pages/pcs/platform-specs';
-import type { PlatformFeedSpec, FeedVerdict } from '@/components/pages/pcs/platform-specs';
 import type { GalleryItem } from '@srtdio/posts';
 
 /** Continuous zoom bounds: pinch/wheel scale between 1x and 5x. */
@@ -127,64 +124,12 @@ export function intrinsicSize(
 }
 
 /**
- * The Fit-mode frame style: an aspect-ratio box constrained by the fixed stage
+ * The frame style: an aspect-ratio box constrained by the fixed stage
  * (w-full + max-h-full transfer through aspect-ratio), so the WHOLE image is
  * always visible with no scrolling regardless of ratio. Pure.
  */
 export function fitFrameStyle(width: number, height: number): CSSProperties {
   return { aspectRatio: `${width} / ${height}` };
-}
-
-/**
- * Feed-lens geometry as percentages of the full image box: the live (clamped)
- * frame rect plus the dimmed bands outside it. A fitting image has a full-bleed
- * frame and no dim bands. Pure.
- */
-export function feedCropLayout(v: FeedVerdict): {
-  frame: { left: number; top: number; width: number; height: number };
-  dims: Array<{ left: number; top: number; width: number; height: number }>;
-} {
-  if (v.fit === 'fits' || v.cropAxis === null) {
-    return { frame: { left: 0, top: 0, width: 100, height: 100 }, dims: [] };
-  }
-  if (v.cropAxis === 'y') {
-    const visible = 100 - v.percentLost;
-    const off = (100 - visible) / 2;
-    return {
-      frame: { left: 0, top: off, width: 100, height: visible },
-      dims: [
-        { left: 0, top: 0, width: 100, height: off },
-        { left: 0, top: off + visible, width: 100, height: off },
-      ],
-    };
-  }
-  const visible = 100 - v.percentLost;
-  const off = (100 - visible) / 2;
-  return {
-    frame: { left: off, top: 0, width: visible, height: 100 },
-    dims: [
-      { left: 0, top: 0, width: off, height: 100 },
-      { left: off + visible, top: 0, width: off, height: 100 },
-    ],
-  };
-}
-
-/** The verdict-chip text: "{w}×{h} · ratio · fits X" or "... · crops to Y". Pure. */
-export function verdictChipText(
-  width: number,
-  height: number,
-  v: FeedVerdict,
-  spec: PlatformFeedSpec,
-): string {
-  const base = `${width}×${height} · ${formatRatio(width, height)}`;
-  return v.fit === 'fits' ? `${base} · fits ${spec.label}` : `${base} · crops to ${v.ratioLabel}`;
-}
-
-/** The Feed-card caption line under the framed image. Pure. */
-export function feedCaption(v: FeedVerdict, spec: PlatformFeedSpec): string {
-  return v.fit === 'fits'
-    ? `Fits the ${spec.label} feed`
-    : `Crops to ${v.ratioLabel} · ${Math.round(v.percentLost)}% lost`;
 }
 
 // Double-chevron glyphs for make-first / make-last; local because the shared icon
@@ -253,10 +198,6 @@ export interface LightboxViewProps {
   items: GalleryItem[];
   index: number;
   presignEnabled: boolean;
-  /** The workspace platform's feed spec; null hides Feed mode and the chip. */
-  spec: PlatformFeedSpec | null;
-  mode: 'fit' | 'feed';
-  present: boolean;
   chrome: boolean;
   busy: boolean;
   zoom: { scale: number; x: number; y: number };
@@ -265,23 +206,20 @@ export interface LightboxViewProps {
   dimsFor: (item: GalleryItem) => { width: number; height: number } | null;
   onClose: () => void;
   onDownload: () => void;
-  onEnterPresent: () => void;
-  onSetMode: (mode: 'fit' | 'feed') => void;
   onDotClick: (index: number) => void;
   onTrackScroll: (event: ReactUIEvent<HTMLDivElement>) => void;
   onImageLoad: (item: GalleryItem, event: SyntheticEvent<HTMLImageElement>) => void;
   stageGestures: StageGestures;
   trackRef?: Ref<HTMLDivElement> | undefined;
-  /** Agency-only manage row; absent for clients, hidden while presenting. */
+  /** Agency-only manage row; absent for clients. */
   manage?: LightboxManage | undefined;
   /** F5 seam: overlay rendered over the sharp image; nothing when omitted. */
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
 }
 
-/** One slide's Fit-mode stage: blurred cover backdrop + fully-visible sharp image. */
+/** One slide's stage: blurred cover backdrop + fully-visible sharp image. */
 function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): ReactElement {
-  const { present, zoom, srcFor, failedFor, dimsFor, presignEnabled, onImageLoad, pinOverlay } =
-    props;
+  const { zoom, srcFor, failedFor, dimsFor, presignEnabled, onImageLoad, pinOverlay } = props;
   const src = srcFor(item);
   const failed = failedFor(item);
   const dims = dimsFor(item);
@@ -295,9 +233,8 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
 
   return (
     <>
-      {/* Letterbox filler: a blurred, darkened cover copy of the same slide. Hidden
-          in Present, which is a plain black backdrop. */}
-      {showImage && !present ? (
+      {/* Letterbox filler: a blurred, darkened cover copy of the same slide. */}
+      {showImage ? (
         <>
           <img
             src={src}
@@ -329,7 +266,7 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
               onLoad={(event) => onImageLoad(item, event)}
               className="h-full w-full object-contain"
             />
-            {pinOverlay !== undefined && !present && !zoomed ? (
+            {pinOverlay !== undefined && !zoomed ? (
               <div className="pointer-events-none absolute inset-0">{pinOverlay(item, i)}</div>
             ) : null}
           </div>
@@ -360,91 +297,6 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
   );
 }
 
-/** One slide's Feed-mode stage: neutral skeleton feed card with the crop lens. */
-function feedSlide(props: LightboxViewProps, item: GalleryItem, i: number): ReactElement {
-  const { spec, srcFor, dimsFor, onImageLoad } = props;
-  const src = srcFor(item);
-  const dims = dimsFor(item);
-  const specVerdict =
-    spec !== null && dims !== null ? verdictForSpec(dims.width, dims.height, spec) : null;
-  const layout = specVerdict !== null ? feedCropLayout(specVerdict) : null;
-  const crops = specVerdict !== null && specVerdict.fit === 'crops-to';
-
-  return (
-    <div className="absolute inset-0 flex items-center justify-center p-4" {...props.stageGestures}>
-      <div className="flex max-h-full w-full max-w-sm flex-col gap-2 overflow-hidden rounded-xl border border-overlay-line bg-overlay-surface p-3">
-        {/* Neutral skeleton header: no brand assets, just placeholder shapes. */}
-        <div aria-hidden className="flex items-center gap-2">
-          <span className="h-8 w-8 shrink-0 rounded-full bg-overlay-line" />
-          <span className="flex min-w-0 flex-col gap-1.5">
-            <span className="h-2 w-24 rounded-full bg-overlay-line" />
-            <span className="h-2 w-16 rounded-full bg-overlay-dot" />
-          </span>
-        </div>
-        <p className="text-[11px] text-overlay-fg-dim">
-          {spec !== null ? `${spec.label} feed · mobile` : 'feed · mobile'}
-        </p>
-        {src !== null && dims !== null && layout !== null ? (
-          <div
-            className="relative mx-auto min-h-0 w-full"
-            style={fitFrameStyle(dims.width, dims.height)}
-          >
-            {/* The FULL image; the area outside the clamped frame is dimmed. */}
-            <img
-              src={src}
-              alt={`Slide ${i + 1}`}
-              draggable={false}
-              onLoad={(event) => onImageLoad(item, event)}
-              className="h-full w-full"
-            />
-            {layout.dims.map((band, n) => (
-              <div
-                key={n}
-                aria-hidden
-                data-feed-dim
-                className="absolute bg-overlay/70"
-                style={{
-                  left: `${band.left}%`,
-                  top: `${band.top}%`,
-                  width: `${band.width}%`,
-                  height: `${band.height}%`,
-                }}
-              />
-            ))}
-            {/* The live feed frame; warn-bordered while cropping. */}
-            <div
-              data-feed-frame
-              className={cn('absolute', crops && 'border-[1.5px] border-warn')}
-              style={{
-                left: `${layout.frame.left}%`,
-                top: `${layout.frame.top}%`,
-                width: `${layout.frame.width}%`,
-                height: `${layout.frame.height}%`,
-              }}
-            >
-              {/* Centre-80% safe zone. */}
-              <div
-                aria-hidden
-                data-feed-safe
-                className="absolute inset-[10%] border border-dashed border-overlay-fg/40"
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-40 items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
-          </div>
-        )}
-        {specVerdict !== null && spec !== null ? (
-          <p className={cn('text-xs', crops ? 'text-warn' : 'text-overlay-fg-dim')}>
-            {feedCaption(specVerdict, spec)}
-          </p>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 /**
  * The lightbox's presentational tree, kept hookless so it can be exercised by the
  * tree-walking unit tests (the node test environment has no DOM renderer). All
@@ -452,13 +304,9 @@ function feedSlide(props: LightboxViewProps, item: GalleryItem, i: number): Reac
  * No filename ever renders on this surface.
  */
 export function lightboxView(props: LightboxViewProps): ReactElement {
-  const { items, index, spec, mode, present, chrome, busy, zoom, manage } = props;
+  const { items, index, chrome, busy, zoom, manage } = props;
   const count = items.length;
-  const chromeVisible = chrome && !present;
-  const item = items[index];
-  const dims = item !== undefined ? props.dimsFor(item) : null;
-  const chipVerdict =
-    spec !== null && dims !== null ? verdictForSpec(dims.width, dims.height, spec) : null;
+  const chromeVisible = chrome;
 
   const chromeMotion = (visible: boolean, hiddenShift: string): string =>
     cn(
@@ -471,7 +319,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
       role="dialog"
       aria-modal="true"
       aria-label="Image viewer"
-      className={cn('fixed inset-0 z-50', present ? 'bg-black' : 'bg-overlay')}
+      className="fixed inset-0 z-50 bg-overlay"
     >
       {/* Slide track: declared motion axis X, native scroll-snap only. While
           zoomed (scale > 1) swiping is disabled so the gesture never fights. */}
@@ -490,14 +338,12 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             key={slide.assetAttachmentId}
             className="relative h-full w-full shrink-0 snap-center overflow-hidden"
           >
-            {mode === 'feed' && spec !== null && isImage(slide)
-              ? feedSlide(props, slide, i)
-              : fitSlide(props, slide, i)}
+            {fitSlide(props, slide, i)}
           </div>
         ))}
       </div>
 
-      {/* Top chrome: close · mono counter · Present · Download. Nothing else. */}
+      {/* Top chrome: close · mono counter · Download. Nothing else. */}
       <div
         className={cn(
           'absolute inset-x-0 top-0 z-20',
@@ -523,14 +369,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           <div className="flex-1" />
           <button
             type="button"
-            aria-label="Present"
-            onClick={props.onEnterPresent}
-            className={TOOLBAR_BUTTON}
-          >
-            <IconPlay size={20} />
-          </button>
-          <button
-            type="button"
             aria-label="Download"
             disabled={busy}
             onClick={props.onDownload}
@@ -541,7 +379,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
         </div>
       </div>
 
-      {/* Bottom chrome: verdict chip · dots · Fit|Feed · agency manage row. */}
+      {/* Bottom chrome: dots · agency manage row. */}
       <div
         className={cn(
           'absolute inset-x-0 bottom-0 z-20',
@@ -553,22 +391,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-overlay to-transparent"
         />
         <div className="relative flex flex-col items-center gap-1 pb-3 pt-2">
-          {chipVerdict !== null && spec !== null && dims !== null ? (
-            <span
-              data-verdict-chip
-              className="inline-flex h-7 items-center gap-1.5 rounded-full bg-overlay-surface px-3 font-mono text-[11px] tabular-nums text-overlay-fg"
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  chipVerdict.fit === 'fits' ? 'bg-good' : 'bg-warn',
-                )}
-              />
-              {verdictChipText(dims.width, dims.height, chipVerdict, spec)}
-            </span>
-          ) : null}
-
           {count > 1 ? (
             <div className="flex flex-wrap items-center justify-center">
               {items.map((slide, dot) => (
@@ -586,29 +408,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
                       dot === index ? 'bg-overlay-fg' : 'bg-overlay-dot',
                     )}
                   />
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {spec !== null ? (
-            <div
-              role="group"
-              aria-label="View mode"
-              className="flex rounded-full bg-overlay-surface p-1"
-            >
-              {(['fit', 'feed'] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={mode === m}
-                  onClick={() => props.onSetMode(m)}
-                  className={cn(
-                    'inline-flex h-11 min-w-[64px] items-center justify-center rounded-full px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70',
-                    mode === m ? 'bg-overlay-line text-overlay-fg' : 'text-overlay-fg-dim',
-                  )}
-                >
-                  {m === 'fit' ? 'Fit' : 'Feed'}
                 </button>
               ))}
             </div>
@@ -703,8 +502,6 @@ interface PostLightboxProps {
   cache: PresignCache;
   /** Presign deps, used to mint an attachment URL for the download action. */
   deps: PresignDeps;
-  /** workspaces.platform for this workspace; null hides Feed mode and the chip. */
-  platform: string | null;
   onIndexChange: (index: number) => void;
   onClose: () => void;
   /** F5 seam: overlay rendered over the image area; nothing renders when omitted. */
@@ -727,9 +524,9 @@ interface PostLightboxProps {
 
 /**
  * Fullscreen post-gallery viewer: a fixed inset-0 stage with a native horizontal
- * scroll-snap track (one slide per viewport), tap-toggled chrome, Fit/Feed lens,
- * pinch/wheel/double-tap zoom, a Present mode, and the agency manage row. Pins
- * are placed from the inline gallery now, never here.
+ * scroll-snap track (one slide per viewport), tap-toggled chrome, pinch/wheel/
+ * double-tap zoom, and the agency manage row. Pins are placed from the inline
+ * gallery now, never here.
  */
 export function PostLightbox({
   items,
@@ -737,18 +534,14 @@ export function PostLightbox({
   presignEnabled,
   cache,
   deps,
-  platform,
   onIndexChange,
   onClose,
   pinOverlay,
   manage,
 }: PostLightboxProps) {
-  const spec = useMemo(() => specFor(platform), [platform]);
   const [srcs, setSrcs] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState<Record<string, boolean>>({});
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
-  const [mode, setMode] = useState<'fit' | 'feed'>('fit');
-  const [present, setPresent] = useState(false);
   const [chrome, setChrome] = useState(true);
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
@@ -800,20 +593,16 @@ export function PostLightbox({
     mounted.current = true;
   }, []);
 
-  // Zoom resets whenever the slide, lens or Present state changes.
+  // Zoom resets whenever the slide changes.
   useEffect(() => {
     setZoom({ scale: 1, x: 0, y: 0 });
-  }, [index, mode, present]);
+  }, [index]);
 
-  // Esc exits Present first, then closes; arrows nudge the native scroller.
-  // Body scroll is locked while open.
-  const presentRef = useRef(present);
-  presentRef.current = present;
+  // Esc closes; arrows nudge the native scroller. Body scroll is locked while open.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        if (presentRef.current) setPresent(false);
-        else onClose();
+        onClose();
       } else if (event.key === 'ArrowLeft') {
         onIndexChange(Math.max(0, indexRef.current - 1));
       } else if (event.key === 'ArrowRight') {
@@ -970,9 +759,8 @@ export function PostLightbox({
         if (singleTapTimer.current !== null) clearTimeout(singleTapTimer.current);
         singleTapTimer.current = setTimeout(() => {
           singleTapTimer.current = null;
-          // Single tap: exit Present, else toggle the chrome.
-          if (presentRef.current) setPresent(false);
-          else setChrome((c) => !c);
+          // Single tap: toggle the chrome.
+          setChrome((c) => !c);
         }, DOUBLE_TAP_MS);
       },
     }),
@@ -1036,9 +824,6 @@ export function PostLightbox({
     items,
     index,
     presignEnabled,
-    spec,
-    mode: spec !== null ? mode : 'fit',
-    present,
     chrome,
     busy,
     zoom,
@@ -1047,8 +832,6 @@ export function PostLightbox({
     dimsFor: (it) => intrinsicSize(it, measured),
     onClose,
     onDownload: handleDownload,
-    onEnterPresent: () => setPresent(true),
-    onSetMode: setMode,
     onDotClick: onIndexChange,
     onTrackScroll: handleTrackScroll,
     onImageLoad: (it, event) => {
