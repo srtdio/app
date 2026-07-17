@@ -2520,6 +2520,7 @@ export type Database = {
           resolution_note: string | null
           resolved_at: string | null
           resolved_by: string | null
+          resolved_version_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -2541,6 +2542,7 @@ export type Database = {
           resolution_note?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          resolved_version_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -2562,6 +2564,7 @@ export type Database = {
           resolution_note?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          resolved_version_id?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -2577,6 +2580,13 @@ export type Database = {
             columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_resolved_version_id_fkey"
+            columns: ["resolved_version_id"]
+            isOneToOne: false
+            referencedRelation: "post_versions"
             referencedColumns: ["id"]
           },
           {
