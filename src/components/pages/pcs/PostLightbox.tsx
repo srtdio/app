@@ -371,10 +371,7 @@ function feedSlide(props: LightboxViewProps, item: GalleryItem, i: number): Reac
   const crops = specVerdict !== null && specVerdict.fit === 'crops-to';
 
   return (
-    <div
-      className="absolute inset-0 flex items-center justify-center p-4"
-      {...props.stageGestures}
-    >
+    <div className="absolute inset-0 flex items-center justify-center p-4" {...props.stageGestures}>
       <div className="flex max-h-full w-full max-w-sm flex-col gap-2 overflow-hidden rounded-xl border border-overlay-line bg-overlay-surface p-3">
         {/* Neutral skeleton header: no brand assets, just placeholder shapes. */}
         <div aria-hidden className="flex items-center gap-2">
@@ -502,9 +499,15 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
 
       {/* Top chrome: close · mono counter · Present · Download. Nothing else. */}
       <div
-        className={cn('absolute inset-x-0 top-0 z-20', chromeMotion(chromeVisible, '-translate-y-2'))}
+        className={cn(
+          'absolute inset-x-0 top-0 z-20',
+          chromeMotion(chromeVisible, '-translate-y-2'),
+        )}
       >
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-overlay to-transparent" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-overlay to-transparent"
+        />
         <div className="relative flex h-14 items-center gap-1 px-3">
           <button
             type="button"
@@ -545,7 +548,10 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           chromeMotion(chromeVisible, 'translate-y-2'),
         )}
       >
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-overlay to-transparent" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-overlay to-transparent"
+        />
         <div className="relative flex flex-col items-center gap-1 pb-3 pt-2">
           {chipVerdict !== null && spec !== null && dims !== null ? (
             <span
@@ -586,7 +592,11 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           ) : null}
 
           {spec !== null ? (
-            <div role="group" aria-label="View mode" className="flex rounded-full bg-overlay-surface p-1">
+            <div
+              role="group"
+              aria-label="View mode"
+              className="flex rounded-full bg-overlay-surface p-1"
+            >
               {(['fit', 'feed'] as const).map((m) => (
                 <button
                   key={m}
@@ -758,10 +768,14 @@ export function PostLightbox({
       cache
         .resolve(versionId)
         .then((presigned) => {
-          if (live) setSrcs((prev) => (prev[versionId] === presigned.url ? prev : { ...prev, [versionId]: presigned.url }));
+          if (live)
+            setSrcs((prev) =>
+              prev[versionId] === presigned.url ? prev : { ...prev, [versionId]: presigned.url },
+            );
         })
         .catch(() => {
-          if (live) setFailed((prev) => (prev[versionId] === true ? prev : { ...prev, [versionId]: true }));
+          if (live)
+            setFailed((prev) => (prev[versionId] === true ? prev : { ...prev, [versionId]: true }));
         });
     }
     return () => {
@@ -870,7 +884,12 @@ export function PostLightbox({
         const pts = [...pointers.current.values()];
         if (pts.length === 2) {
           const [a, b] = pts as [{ x: number; y: number }, { x: number; y: number }];
-          pinchStart.current = { d: Math.hypot(a.x - b.x, a.y - b.y), scale: zoom.scale, x: zoom.x, y: zoom.y };
+          pinchStart.current = {
+            d: Math.hypot(a.x - b.x, a.y - b.y),
+            scale: zoom.scale,
+            x: zoom.x,
+            y: zoom.y,
+          };
           panStart.current = null;
           event.currentTarget.setPointerCapture(event.pointerId);
         } else if (pts.length === 1 && zoom.scale > 1) {
@@ -898,7 +917,10 @@ export function PostLightbox({
           const dx = event.clientX - start.px;
           const dy = event.clientY - start.py;
           if (Math.abs(dx) + Math.abs(dy) > 2) movedRef.current = true;
-          setZoom((z) => ({ scale: z.scale, ...clampPan(z.scale, start.x + dx, start.y + dy, rect) }));
+          setZoom((z) => ({
+            scale: z.scale,
+            ...clampPan(z.scale, start.x + dx, start.y + dy, rect),
+          }));
         }
       },
       onPointerUp: (event) => {

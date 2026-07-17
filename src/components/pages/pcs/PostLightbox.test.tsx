@@ -397,9 +397,7 @@ describe('lightboxView', () => {
     expect(className(track)).toContain('snap-mandatory');
 
     const zoomed = lightboxView(props({ zoom: { scale: 2.5, x: 10, y: -5 } }));
-    const zTrack = elements(zoomed).find((el) =>
-      className(el).includes('overscroll-x-contain'),
-    )!;
+    const zTrack = elements(zoomed).find((el) => className(el).includes('overscroll-x-contain'))!;
     expect(className(zTrack)).toContain('overflow-x-hidden');
     expect(className(zTrack)).not.toContain('snap-mandatory');
   });

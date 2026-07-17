@@ -242,9 +242,7 @@ describe('pin placement on the inline slide (relocated F5 flow)', () => {
 
     // The next tap on the armed slide converts to percentage coordinates and
     // calls the existing onPlacePin path.
-    expect(slideTapAction(armed, pressedIndex, controller.consumeClickSuppression())).toBe(
-      'place',
-    );
+    expect(slideTapAction(armed, pressedIndex, controller.consumeClickSuppression())).toBe('place');
     const slideRect = { left: 100, top: 50, width: 200, height: 100 };
     const target = { getBoundingClientRect: () => slideRect };
     const point = placePinFromEvent(target, 150, 75)!;
