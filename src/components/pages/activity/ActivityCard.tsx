@@ -47,6 +47,7 @@ type LeadTone = 'good' | 'bad' | 'warn' | 'accent' | 'neutral';
 /** The tone of the lead event's icon circle, mirroring the stage / event colours. */
 function leadTone(item: ActivityItem): LeadTone {
   if (item.eventType === 'mention') return 'accent';
+  if (item.eventType === 'post_ready') return 'accent';
   if (item.eventType === 'brief_closed') return 'good';
   if (item.eventType === 'comment_resolved') return 'good';
   if (item.eventType === 'stage_change') {
@@ -92,6 +93,10 @@ function leadIcon(item: ActivityItem): ReactElement {
       return <IconUpload size={24} />;
     case 'invite':
       return <IconUser size={24} />;
+    case 'checkpoints_added':
+      return <IconChat size={24} />;
+    case 'post_ready':
+      return <IconCheck size={24} />;
     default:
       return <IconActivity size={24} />;
   }
