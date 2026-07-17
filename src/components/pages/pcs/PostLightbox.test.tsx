@@ -301,6 +301,80 @@ describe('lightboxView', () => {
     expect(className(zTrack)).not.toContain('snap-mandatory');
   });
 
+  it('renders the caption toggle and the clamped caption when a caption exists and is shown', () => {
+    const onToggleCaption = vi.fn();
+    const onToggleCaptionExpand = vi.fn();
+    const tree = lightboxView(
+      props({
+        caption: 'Launch day walkthrough.',
+        captionVisible: true,
+        captionExpanded: false,
+        onToggleCaption,
+        onToggleCaptionExpand,
+      }),
+    );
+
+    // 44x44 toggle in the top chrome, pressed while the caption is shown.
+    const toggle = byLabel(tree, 'Toggle caption')!;
+    expect(toggle).toBeDefined();
+    expect(className(toggle)).toContain('h-11');
+    expect(className(toggle)).toContain('w-11');
+    expect((toggle.props as { 'aria-pressed': boolean })['aria-pressed']).toBe(true);
+    (toggle.props as { onClick: () => void }).onClick();
+    expect(onToggleCaption).toHaveBeenCalledOnce();
+
+    // The caption text renders read-only, clamped to two lines, a 44px target.
+    expect(strings(tree)).toContain('Launch day walkthrough.');
+    const captionButton = byLabel(tree, 'Expand caption')!;
+    expect(captionButton).toBeDefined();
+    expect(className(captionButton)).toContain('min-h-[44px]');
+    expect((captionButton.props as { 'aria-expanded': boolean })['aria-expanded']).toBe(false);
+    const clamp = elements(tree).find((el) => className(el).includes('line-clamp-2'));
+    expect(clamp).toBeDefined();
+    (captionButton.props as { onClick: () => void }).onClick();
+    expect(onToggleCaptionExpand).toHaveBeenCalledOnce();
+
+    // It lives inside the bottom chrome layer, so it hides with the chrome.
+    const bottomChrome = elements(tree).find(
+      (el) => className(el).includes('bottom-0') && className(el).includes('inset-x-0'),
+    )!;
+    const inBottomChrome = elements((bottomChrome.props as { children?: ReactNode }).children);
+    expect(
+      inBottomChrome.some(
+        (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Expand caption',
+      ),
+    ).toBe(true);
+  });
+
+  it('expands the caption to a scrollable panel capped at 34vh, collapsible again', () => {
+    const tree = lightboxView(
+      props({ caption: 'Long caption body.', captionVisible: true, captionExpanded: true }),
+    );
+    const captionButton = byLabel(tree, 'Collapse caption')!;
+    expect(captionButton).toBeDefined();
+    expect((captionButton.props as { 'aria-expanded': boolean })['aria-expanded']).toBe(true);
+    expect(className(captionButton)).toContain('max-h-[34vh]');
+    expect(className(captionButton)).toContain('overflow-y-auto');
+    expect(elements(tree).some((el) => className(el).includes('line-clamp-2'))).toBe(false);
+  });
+
+  it('hides the caption block while toggled off but keeps the unpressed toggle', () => {
+    const tree = lightboxView(props({ caption: 'Hidden for now.', captionVisible: false }));
+    const toggle = byLabel(tree, 'Toggle caption')!;
+    expect(toggle).toBeDefined();
+    expect((toggle.props as { 'aria-pressed': boolean })['aria-pressed']).toBe(false);
+    expect(byLabel(tree, 'Expand caption')).toBeUndefined();
+    expect(strings(tree)).not.toContain('Hidden for now.');
+  });
+
+  it('renders no caption and no toggle when the caption is null or blank', () => {
+    for (const caption of [null, '', '   ']) {
+      const tree = lightboxView(props({ caption, captionVisible: true }));
+      expect(byLabel(tree, 'Toggle caption')).toBeUndefined();
+      expect(byLabel(tree, 'Expand caption')).toBeUndefined();
+    }
+  });
+
   it('renders the pin overlay over the sharp image only when provided', () => {
     const without = lightboxView(props());
     expect(

@@ -4,7 +4,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   UIEvent as ReactUIEvent,
 } from 'react';
-import type { ReactElement, ReactNode, Ref } from 'react';
+import type { CSSProperties, ReactElement, ReactNode, Ref } from 'react';
 import { IconAssets, IconImagePlus, IconPin } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui/useLongPress';
 import { PostLightbox, placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
@@ -34,10 +34,13 @@ function GalleryThumb({
   item,
   cache,
   presignEnabled,
+  fit = 'cover',
 }: {
   item: GalleryItem;
   cache: PresignCache;
   presignEnabled: boolean;
+  /** 'cover' crops to fill (the brief grid); 'contain' shows the whole image (the ribbon). */
+  fit?: 'cover' | 'contain';
 }) {
   const versionId = item.assetVersionId;
   const renderable = presignEnabled && isImage(item) && versionId !== '';
@@ -69,7 +72,9 @@ function GalleryThumb({
         alt={item.filename}
         loading="lazy"
         onError={() => setFailed(true)}
-        className="h-full w-full object-cover"
+        className={
+          fit === 'contain' ? 'max-h-full max-w-full object-contain' : 'h-full w-full object-cover'
+        }
       />
     );
   }
@@ -95,14 +100,51 @@ function gridClass(columns: number): string {
 }
 
 /**
- * The slide the native scroller currently rests on, from its scroll offset.
- * Slides are one scroller-width wide, so round(scrollLeft / width) is the
- * nearest snap point; the result is clamped into [0, count). Pure so the
- * scroll math is unit-testable without a DOM.
+ * The ribbon tile whose left edge is nearest the scroller's scrollLeft, given
+ * each tile's measured left offset within the scroller. Tiles hug their images
+ * so their widths vary by aspect ratio; the offsets are measured, never assumed
+ * uniform. Pure so the scroll math is unit-testable without a DOM.
  */
-export function activeSlideIndex(scrollLeft: number, slideWidth: number, count: number): number {
-  if (count <= 0 || slideWidth <= 0) return 0;
-  return Math.min(count - 1, Math.max(0, Math.round(scrollLeft / slideWidth)));
+export function nearestTileIndex(scrollLeft: number, tileOffsets: readonly number[]): number {
+  let nearest = 0;
+  let nearestDistance = Infinity;
+  for (let i = 0; i < tileOffsets.length; i += 1) {
+    const distance = Math.abs((tileOffsets[i] ?? 0) - scrollLeft);
+    if (distance < nearestDistance) {
+      nearest = i;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
+// The ribbon's shared tile caps: never taller than the clamp, never wider than
+// the viewport (minus the page's 1rem side paddings).
+const RIBBON_TILE_MAX_HEIGHT = 'clamp(200px, 38vh, 320px)';
+const RIBBON_TILE_MAX_WIDTH = 'calc(100vw - 2rem)';
+
+/**
+ * The reserved box for one ribbon tile. With both intrinsic dimensions known
+ * the box is fixed up front (width from the height cap times the aspect ratio;
+ * when the viewport cap bites, aspect-ratio pulls the auto height down), so
+ * nothing shifts when the image loads and wide images render shorter, never
+ * wider than the viewport. Unknown dimensions degrade to a stable 4/5 box the
+ * contained image letterboxes inside. Pure.
+ */
+export function ribbonTileStyle(width: number | null, height: number | null): CSSProperties {
+  if (width !== null && height !== null && width > 0 && height > 0) {
+    return {
+      width: `calc(${RIBBON_TILE_MAX_HEIGHT} * ${width / height})`,
+      aspectRatio: `${width} / ${height}`,
+      maxWidth: RIBBON_TILE_MAX_WIDTH,
+      maxHeight: RIBBON_TILE_MAX_HEIGHT,
+    };
+  }
+  return {
+    height: RIBBON_TILE_MAX_HEIGHT,
+    aspectRatio: '4 / 5',
+    maxWidth: RIBBON_TILE_MAX_WIDTH,
+  };
 }
 
 /**
@@ -146,7 +188,7 @@ interface GalleryViewProps {
   consumeClickSuppression?: (() => boolean) | undefined;
   /** F7: pin-count badge per tile; the badge renders only when this returns > 0. */
   pinCountFor?: ((item: GalleryItem) => number) | undefined;
-  /** F7: agency-only dashed Add tile at the end of the grid (append flow). */
+  /** F7: agency-only dashed Add tile at the ribbon's end (append flow). */
   onAddSlide?: (() => void) | undefined;
   /** Carousel: the slide the counter and dots highlight. Defaults to the first. */
   activeIndex?: number;
@@ -165,13 +207,15 @@ interface GalleryViewProps {
 /**
  * The gallery's presentational tree, kept hookless so the tree-walking unit tests
  * can exercise it without a DOM renderer. The post gallery default (columns
- * omitted) renders a one-slide-visible horizontal scroll-snap carousel: a native
- * overflow-x scroller with x-mandatory snapping, an n/N counter, and 44px dot
- * indicators. No JS-driven animation; all motion is native scrolling on the X
+ * omitted) renders an uncropped horizontal snap ribbon: a native overflow-x
+ * scroller with x-mandatory snapping and snap-start tiles that hug their images
+ * at true aspect ratio (heights vary by ratio inside the shared caps), an n/N
+ * counter, 44px dot indicators, and a trailing dashed Add tile when onAddSlide
+ * is provided. No JS-driven animation; all motion is native scrolling on the X
  * axis. The brief gallery overrides columns / aspect / showIndex and keeps its
- * overview grid; the empty and upload states are unchanged. Pin placement is
- * armed by a long-press on a carousel slide (pinArmedIndex shows the hint pill)
- * and the next tap routes through onSlideTap.
+ * cropped overview grid; the empty and upload states are unchanged. Pin
+ * placement is armed by a long-press on a ribbon tile (pinArmedIndex shows the
+ * hint pill) and the next tap routes through onSlideTap.
  */
 export function galleryView({
   items,
@@ -254,9 +298,11 @@ export function galleryView({
     );
   }
 
-  // Post gallery default: the one-slide scroll-snap carousel. The counter and
-  // dots reflect activeIndex, clamped so a shrinking gallery never points past
-  // the end while the scroll listener catches up.
+  // Post gallery default: the uncropped horizontal snap ribbon. Each tile hugs
+  // its image at true aspect ratio inside the shared caps, so tile widths and
+  // heights vary; motion stays native scrolling on the X axis only. The counter
+  // and dots reflect activeIndex, clamped so a shrinking gallery never points
+  // past the end while the scroll listener catches up.
   const active = Math.min(Math.max(activeIndex, 0), items.length - 1);
   return (
     <div>
@@ -273,7 +319,7 @@ export function galleryView({
           ref={scrollerRef}
           onScroll={onScroll}
           aria-roledescription="carousel"
-          className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain rounded-xl"
+          className="flex snap-x snap-mandatory items-center gap-3 overflow-x-auto overscroll-x-contain rounded-xl"
         >
           {items.map((item, index) => {
             const pinCount = pinCountFor !== undefined ? pinCountFor(item) : 0;
@@ -282,6 +328,7 @@ export function galleryView({
                 key={item.assetAttachmentId}
                 type="button"
                 aria-label={`View image ${index + 1}`}
+                style={ribbonTileStyle(item.width, item.height)}
                 {...(slideGestures !== undefined ? slideGestures(index) : {})}
                 onClick={(event) => {
                   if (onSlideTap !== undefined) {
@@ -292,11 +339,16 @@ export function galleryView({
                   onOpen(index);
                 }}
                 className={cn(
-                  `group relative ${aspectClass(aspect)} w-full shrink-0 snap-center overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`,
+                  'group relative flex shrink-0 snap-start items-center justify-center overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                   pinArmedIndex === index && 'cursor-crosshair',
                 )}
               >
-                <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
+                <GalleryThumb
+                  item={item}
+                  cache={cache}
+                  presignEnabled={presignEnabled}
+                  fit="contain"
+                />
                 {pinCount > 0 ? (
                   <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
                     <IconPin size={11} />
@@ -306,6 +358,17 @@ export function galleryView({
               </button>
             );
           })}
+          {onAddSlide !== undefined ? (
+            <button
+              type="button"
+              aria-label="Add image"
+              onClick={onAddSlide}
+              style={{ height: RIBBON_TILE_MAX_HEIGHT }}
+              className="flex w-20 shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 text-accent transition-colors hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <IconImagePlus size={22} />
+            </button>
+          ) : null}
         </div>
         {showIndex ? (
           <span
@@ -366,8 +429,10 @@ interface PostGalleryProps {
    * slide. Reached by right-click on a slide; the lightbox no longer links here.
    */
   onSlideActions?: ((index: number) => void) | undefined;
-  /** F7 (agency-side): the dashed Add tile at the grid's end (append flow). */
+  /** F7 (agency-side): the dashed Add tile at the ribbon's end (append flow). */
   onAddSlide?: (() => void) | undefined;
+  /** The post's caption, shown read-only in the lightbox; hidden when null/empty. */
+  caption?: string | null;
   /** Lightbox manage row: make-first over the existing gallery_set commit path. */
   onMakeFirst?: ((index: number) => void) | undefined;
   /** Lightbox manage row: the existing move-left path. */
@@ -381,12 +446,12 @@ interface PostGalleryProps {
 }
 
 /**
- * A post's images as a one-slide horizontal scroll-snap carousel (or a brief's as
- * its overview grid, via the columns override). Tapping a slide opens the PCS
+ * A post's images as an uncropped horizontal snap ribbon (or a brief's as its
+ * overview grid, via the columns override). Tapping a tile opens the PCS
  * {@link PostLightbox} at that index. Pin placement lives here now: a ~500ms
- * long-press on a slide arms it (hint pill), and the next tap on that slide
+ * long-press on a tile arms it (hint pill), and the next tap on that tile
  * converts to percentage coordinates and calls the existing onPlacePin path.
- * The slide-actions sheet stays reachable by right-click on a slide.
+ * The slide-actions sheet stays reachable by right-click on a tile.
  */
 export function PostGallery({
   items,
@@ -402,6 +467,7 @@ export function PostGallery({
   pinCountFor,
   onSlideActions,
   onAddSlide,
+  caption = null,
   onMakeFirst,
   onMoveLeft,
   onMoveRight,
@@ -417,7 +483,14 @@ export function PostGallery({
   const [activeIndex, setActiveIndex] = useState(0);
   const handleScroll = (event: ReactUIEvent<HTMLDivElement>): void => {
     const el = event.currentTarget;
-    const next = activeSlideIndex(el.scrollLeft, el.clientWidth, items.length);
+    // Measure each image tile's left edge (the trailing Add tile is excluded);
+    // tile widths vary with aspect ratio, so offsets are never assumed uniform.
+    const offsets: number[] = [];
+    for (let i = 0; i < items.length; i += 1) {
+      const tile = el.children.item(i);
+      offsets.push(tile instanceof HTMLElement ? tile.offsetLeft - el.offsetLeft : 0);
+    }
+    const next = nearestTileIndex(el.scrollLeft, offsets);
     setActiveIndex((prev) => (prev === next ? prev : next));
   };
   const scrollToSlide = (index: number): void => {
@@ -532,6 +605,7 @@ export function PostGallery({
           onIndexChange={setOpenIndex}
           onClose={() => setOpenIndex(null)}
           pinOverlay={pinOverlay}
+          caption={caption}
           manage={manage}
         />
       ) : null}

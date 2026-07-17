@@ -1203,6 +1203,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                 onRequestPin={handleRequestPin}
                 onPlacePin={handlePlacePin}
                 pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
+                caption={post.caption}
                 onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
                 onAddSlide={agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined}
                 onMakeFirst={agencySide && !readOnly ? handleMakeFirst : undefined}

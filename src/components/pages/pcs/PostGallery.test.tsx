@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import {
   PIN_ARM_PRESS_MS,
-  activeSlideIndex,
   galleryView,
+  nearestTileIndex,
+  ribbonTileStyle,
   slideTapAction,
 } from '@/components/pages/pcs/PostGallery';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
@@ -119,26 +120,89 @@ describe('galleryView', () => {
     expect(all.some((el) => className(el).includes('text-overlay-fg'))).toBe(false);
   });
 
-  it('defaults render the scroll-snap carousel: native x scroller, full-width 4/5 slides', () => {
+  it('defaults render the uncropped snap ribbon: native x scroller, snap-start tiles, no aspect crop', () => {
     const items = [item(0), item(1)];
     const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
     const all = elements(tree);
 
-    // No grid container; a native overflow-x scroller with mandatory x snapping.
+    // No grid container; a native overflow-x scroller with mandatory x snapping
+    // and centre cross-axis alignment.
     expect(all.some((el) => className(el).startsWith('grid '))).toBe(false);
     const scroller = all.find((el) => className(el).includes('snap-x'))!;
     expect(className(scroller)).toContain('snap-mandatory');
     expect(className(scroller)).toContain('overflow-x-auto');
+    expect(className(scroller)).toContain('items-center');
 
-    // One full-width snapping slide per image, at the post 4/5 aspect.
-    const slides = all.filter((el) => label(el)?.startsWith('View image'));
-    expect(slides.length).toBe(2);
-    for (const slide of slides) {
-      expect(className(slide)).toContain('w-full');
-      expect(className(slide)).toContain('shrink-0');
-      expect(className(slide)).toContain('snap-center');
-      expect(className(slide)).toContain('aspect-[4/5]');
+    // One snapping tile per image, hugging its image via a reserved style box:
+    // no full-width slides, no aspect crop classes, snap-align start.
+    const tiles = all.filter((el) => label(el)?.startsWith('View image'));
+    expect(tiles.length).toBe(2);
+    for (const tile of tiles) {
+      expect(className(tile)).not.toContain('w-full');
+      expect(className(tile)).not.toContain('aspect-[4/5]');
+      expect(className(tile)).not.toContain('aspect-[3/2]');
+      expect(className(tile)).toContain('shrink-0');
+      expect(className(tile)).toContain('snap-start');
+      expect((tile.props as { style?: unknown }).style).toEqual(ribbonTileStyle(800, 1000));
     }
+  });
+
+  it('reserves each ribbon tile box from the intrinsic dimensions, capped to the clamp and viewport', () => {
+    // Portrait 800x1000: width derived from the height cap times the ratio, the
+    // aspect ratio carried on the box, both caps applied.
+    expect(ribbonTileStyle(800, 1000)).toEqual({
+      width: 'calc(clamp(200px, 38vh, 320px) * 0.8)',
+      aspectRatio: '800 / 1000',
+      maxWidth: 'calc(100vw - 2rem)',
+      maxHeight: 'clamp(200px, 38vh, 320px)',
+    });
+    // Wide 2000x1000: twice as wide as tall, still viewport-capped so it renders
+    // shorter (via aspect-ratio) rather than wider.
+    expect(ribbonTileStyle(2000, 1000)).toEqual({
+      width: 'calc(clamp(200px, 38vh, 320px) * 2)',
+      aspectRatio: '2000 / 1000',
+      maxWidth: 'calc(100vw - 2rem)',
+      maxHeight: 'clamp(200px, 38vh, 320px)',
+    });
+    // Either dimension missing or unusable degrades to a stable fallback box.
+    const fallback = {
+      height: 'clamp(200px, 38vh, 320px)',
+      aspectRatio: '4 / 5',
+      maxWidth: 'calc(100vw - 2rem)',
+    };
+    expect(ribbonTileStyle(null, 1000)).toEqual(fallback);
+    expect(ribbonTileStyle(800, null)).toEqual(fallback);
+    expect(ribbonTileStyle(0, 1000)).toEqual(fallback);
+  });
+
+  it('appends the dashed Add tile only when onAddSlide is provided', () => {
+    const onAddSlide = vi.fn();
+    const items = [item(0), item(1)];
+    const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {}, onAddSlide });
+    const all = elements(tree);
+    const addTile = all.find((el) => label(el) === 'Add image')!;
+    expect(addTile).toBeDefined();
+
+    // Fixed narrow width, dashed border, the shared height cap, snapping like a tile.
+    expect(className(addTile)).toContain('w-20');
+    expect(className(addTile)).toContain('border-dashed');
+    expect(className(addTile)).toContain('shrink-0');
+    expect(className(addTile)).toContain('snap-start');
+    expect((addTile.props as { style?: unknown }).style).toEqual({
+      height: 'clamp(200px, 38vh, 320px)',
+    });
+
+    // It trails the image tiles inside the scroller and calls the append flow.
+    const scroller = all.find((el) => className(el).includes('snap-x'))!;
+    const inScroller = elements((scroller.props as { children?: ReactNode }).children);
+    const labels = inScroller.map((el) => label(el)).filter((l) => l !== undefined);
+    expect(labels).toEqual(['View image 1', 'View image 2', 'Add image']);
+    (addTile.props as { onClick: () => void }).onClick();
+    expect(onAddSlide).toHaveBeenCalledOnce();
+
+    // Without onAddSlide the ribbon has no Add tile.
+    const viewOnly = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
+    expect(elements(viewOnly).some((el) => label(el) === 'Add image')).toBe(false);
   });
 
   it('shows an n/N counter for the active slide (clamped into range)', () => {
@@ -301,17 +365,22 @@ describe('pin placement on the inline slide (relocated F5 flow)', () => {
   });
 });
 
-describe('activeSlideIndex', () => {
-  it('rounds the scroll offset to the nearest slide', () => {
-    expect(activeSlideIndex(0, 400, 3)).toBe(0);
-    expect(activeSlideIndex(390, 400, 3)).toBe(1);
-    expect(activeSlideIndex(810, 400, 3)).toBe(2);
+describe('nearestTileIndex', () => {
+  it('returns the tile whose left edge is nearest the scroll offset, for varying widths', () => {
+    // Tiles 0/250/650: a wide middle tile does not skew the result.
+    const offsets = [0, 250, 650];
+    expect(nearestTileIndex(0, offsets)).toBe(0);
+    expect(nearestTileIndex(120, offsets)).toBe(0);
+    expect(nearestTileIndex(130, offsets)).toBe(1);
+    expect(nearestTileIndex(400, offsets)).toBe(1);
+    expect(nearestTileIndex(460, offsets)).toBe(2);
+    expect(nearestTileIndex(9999, offsets)).toBe(2);
   });
 
-  it('clamps into range and tolerates a zero-width scroller', () => {
-    expect(activeSlideIndex(9999, 400, 3)).toBe(2);
-    expect(activeSlideIndex(-10, 400, 3)).toBe(0);
-    expect(activeSlideIndex(120, 0, 3)).toBe(0);
-    expect(activeSlideIndex(120, 400, 0)).toBe(0);
+  it('is stable at boundaries and tolerates empty and negative input', () => {
+    expect(nearestTileIndex(0, [])).toBe(0);
+    expect(nearestTileIndex(-40, [0, 300])).toBe(0);
+    // An exact tie keeps the earlier tile.
+    expect(nearestTileIndex(150, [0, 300])).toBe(0);
   });
 });
