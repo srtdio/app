@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconChat } from '@/components/ui/icons';
+import { cn } from '@/lib/cn';
 
 // F4 caption-highlight annotations: render a post caption with its caption_span
 // annotations as amber highlights, and let a fresh text selection start a new
@@ -201,11 +202,64 @@ export function captionView({
   return out;
 }
 
+/** The clamp class for the caption body; collapsed hides everything past 3 lines. */
+export function captionClampClass(expanded: boolean): string {
+  return expanded ? '' : 'line-clamp-3';
+}
+
+/** The shape of a flashed DOM node the auto-expand check reads from. */
+export interface FlashTargetLike {
+  tagName: string;
+  id: string;
+  classList: { contains(token: string): boolean };
+  getBoundingClientRect(): { bottom: number };
+}
+
 /**
- * Caption with live highlights and selection-to-comment. Selecting caption text
- * surfaces a Comment affordance that calls onAnnotate with the captured span;
- * clicking a highlight calls onHighlightClick. readOnly (empty caption) disables
- * the selection affordance.
+ * The mark id to re-scroll after auto-expanding, or null when the flashed node
+ * is not a caption highlight or is already fully visible inside the clamp.
+ * flashNode rings its target with ring-annotation-line; a ringed <mark> whose
+ * box ends below the clamped container's box sits in the region the 3-line
+ * clamp hides, so the caption must expand before the flash can be seen.
+ */
+export function hiddenFlashTargetId(
+  containerBottom: number,
+  target: FlashTargetLike,
+): string | null {
+  if (target.tagName !== 'MARK') return null;
+  if (!target.classList.contains('ring-annotation-line')) return null;
+  if (target.getBoundingClientRect().bottom <= containerBottom + 1) return null;
+  return target.id === '' ? null : target.id;
+}
+
+/** Hookless More/Less toggle: a 44px target that flips the caption clamp. */
+export function captionToggleView({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      onClick={onToggle}
+      className="inline-flex min-h-[44px] min-w-[44px] items-center rounded text-sm font-medium text-accent hover:text-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      {expanded ? 'Less' : 'More'}
+    </button>
+  );
+}
+
+/**
+ * Caption with live highlights and selection-to-comment, clamped to 3 lines with
+ * a More/Less toggle when it overflows. Selecting caption text surfaces a
+ * Comment affordance that calls onAnnotate with the captured span; clicking a
+ * highlight calls onHighlightClick. readOnly (empty caption) disables the
+ * selection affordance. When a highlight hidden by the clamp becomes the
+ * flash/scroll target (flashNode rings it), the caption auto-expands and
+ * re-scrolls so the flash is visible.
  */
 export function CaptionView({
   caption,
@@ -218,6 +272,64 @@ export function CaptionView({
   const [pending, setPending] = useState<{ start: number; end: number; quote: string } | null>(
     null,
   );
+
+  // 3-line clamp: expanded flips it off; overflowing tracks whether the
+  // collapsed caption actually hides anything, which is what gates the More
+  // toggle (a short caption never shows one).
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const rescrollMarkId = useRef<string | null>(null);
+
+  // Measure overflow while collapsed, re-measuring when the container resizes
+  // (line wraps move with width). Expanded keeps the toggle via `expanded`.
+  useLayoutEffect(() => {
+    if (expanded) return;
+    const el = containerRef.current;
+    if (el === null) return;
+    const measure = (): void => setOverflowing(el.scrollHeight - el.clientHeight > 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [expanded, caption]);
+
+  // Auto-expand for a flash target hidden by the clamp. flashNode scrolls its
+  // target then rings it with ring-annotation-line; watching class mutations on
+  // the caption's marks catches that ring, and a ringed mark below the clamp's
+  // visible box expands the caption before the flash can be seen.
+  useEffect(() => {
+    if (expanded) return;
+    const root = containerRef.current;
+    if (root === null || typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        const target = mutation.target;
+        if (target.nodeType !== ELEMENT_NODE) continue;
+        const id = hiddenFlashTargetId(
+          root.getBoundingClientRect().bottom,
+          target as unknown as FlashTargetLike,
+        );
+        if (id !== null) {
+          rescrollMarkId.current = id;
+          setExpanded(true);
+          return;
+        }
+      }
+    });
+    observer.observe(root, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [expanded]);
+
+  // After an auto-expand, re-run the native scroll so the now-visible mark
+  // (still ringed by flashNode's timeout) lands centered like every flash.
+  useLayoutEffect(() => {
+    if (!expanded) return;
+    const id = rescrollMarkId.current;
+    if (id === null) return;
+    rescrollMarkId.current = null;
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [expanded]);
 
   const captureSelection = useCallback((): void => {
     if (readOnly) return;
@@ -237,10 +349,16 @@ export function CaptionView({
         ref={containerRef}
         onMouseUp={captureSelection}
         onTouchEnd={captureSelection}
-        className="text-sm leading-relaxed whitespace-pre-wrap text-fg"
+        className={cn(
+          'text-sm leading-relaxed whitespace-pre-wrap text-fg',
+          captionClampClass(expanded),
+        )}
       >
         {captionView({ caption, annotations, onHighlightClick })}
       </div>
+      {overflowing || expanded
+        ? captionToggleView({ expanded, onToggle: () => setExpanded((v) => !v) })
+        : null}
       {!readOnly && pending !== null ? (
         <div className="mt-2">
           <Button

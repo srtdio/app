@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import {
   captionView,
+  captionClampClass,
+  captionToggleView,
   captionSpanFromSelection,
+  hiddenFlashTargetId,
   selectionToAnnotation,
   CAPTION_MARKER_ATTR,
+  type FlashTargetLike,
   type SelectionLike,
 } from '@/components/pages/pcs/CaptionView';
 
@@ -136,5 +140,63 @@ describe('caption selection offsets', () => {
         6,
       ),
     ).toBeNull();
+  });
+});
+
+describe('caption clamp', () => {
+  it('clamps to 3 lines while collapsed and removes the clamp when expanded', () => {
+    expect(captionClampClass(false)).toBe('line-clamp-3');
+    expect(captionClampClass(true)).toBe('');
+  });
+
+  it('renders a 44px More/Less toggle that flips the clamp', () => {
+    const onToggle = vi.fn();
+
+    const more = captionToggleView({ expanded: false, onToggle });
+    const moreProps = more.props as Record<string, unknown>;
+    expect(moreProps['children']).toBe('More');
+    expect(moreProps['aria-expanded']).toBe(false);
+    expect(moreProps['className']).toContain('min-h-[44px]');
+    expect(moreProps['className']).toContain('min-w-[44px]');
+    (moreProps['onClick'] as () => void)();
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    const less = captionToggleView({ expanded: true, onToggle });
+    const lessProps = less.props as Record<string, unknown>;
+    expect(lessProps['children']).toBe('Less');
+    expect(lessProps['aria-expanded']).toBe(true);
+  });
+});
+
+describe('hiddenFlashTargetId', () => {
+  // Stub shaped like a flashNode-ringed caption <mark>: flashNode adds
+  // ring-annotation-line to its target, and the auto-expand check compares the
+  // mark's box bottom against the clamped container's visible bottom.
+  function flashTarget(overrides: Partial<FlashTargetLike> = {}): FlashTargetLike {
+    return {
+      tagName: 'MARK',
+      id: 'caption-mark-c1',
+      classList: { contains: (token: string) => token === 'ring-annotation-line' },
+      getBoundingClientRect: () => ({ bottom: 200 }),
+      ...overrides,
+    };
+  }
+
+  it('returns the mark id for a ringed mark hidden below the clamp', () => {
+    expect(hiddenFlashTargetId(100, flashTarget())).toBe('caption-mark-c1');
+  });
+
+  it('ignores a ringed mark that is already fully visible', () => {
+    expect(
+      hiddenFlashTargetId(100, flashTarget({ getBoundingClientRect: () => ({ bottom: 90 }) })),
+    ).toBeNull();
+  });
+
+  it('ignores non-mark nodes and class changes that are not the flash ring', () => {
+    expect(hiddenFlashTargetId(100, flashTarget({ tagName: 'SPAN' }))).toBeNull();
+    expect(
+      hiddenFlashTargetId(100, flashTarget({ classList: { contains: () => false } })),
+    ).toBeNull();
+    expect(hiddenFlashTargetId(100, flashTarget({ id: '' }))).toBeNull();
   });
 });
