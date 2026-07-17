@@ -1,19 +1,38 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+  MouseEvent as ReactMouseEvent,
+  UIEvent as ReactUIEvent,
+  WheelEvent as ReactWheelEvent,
+  ReactElement,
+  ReactNode,
+  Ref,
+  SyntheticEvent,
+} from 'react';
 import {
   IconChevronLeft,
   IconChevronRight,
   IconDownload,
-  IconPin,
+  IconPlay,
+  IconPlus,
   IconX,
-  IconZoomIn,
-  IconZoomOut,
 } from '@/components/ui/icons';
-import { IconMoreVertical } from '@/components/pages/pcs/post-icons';
+import type { IconProps } from '@/components/ui/icons';
+import { cn } from '@/lib/cn';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
+import { specFor, verdictForSpec, formatRatio } from '@/components/pages/pcs/platform-specs';
+import type { PlatformFeedSpec, FeedVerdict } from '@/components/pages/pcs/platform-specs';
 import type { GalleryItem } from '@srtdio/posts';
 
-const SWIPE_THRESHOLD = 48;
+/** Continuous zoom bounds: pinch/wheel scale between 1x and 5x. */
+export const ZOOM_MIN = 1;
+export const ZOOM_MAX = 5;
+/** Double-tap toggles to this scale, centred on the tap point. */
+export const DOUBLE_TAP_SCALE = 2;
+/** Two taps within this window and radius read as one double-tap. */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_RADIUS_PX = 32;
 
 /** True when this item renders as an inline <img> (vs a <video> or a download). */
 function isImage(item: GalleryItem): boolean {
@@ -30,15 +49,19 @@ function isInlineRenderable(item: GalleryItem): boolean {
   return isImage(item) || isVideo(item);
 }
 
-/** Wrap an index by `delta` over `n` items, cycling past either end. Pure. */
+/** The mono top-bar counter: "n / N". Pure. */
+export function lightboxCounter(index: number, count: number): string {
+  return `${index + 1} / ${count}`;
+}
+
+/**
+ * Wrap an index by `delta` over `n` items, cycling past either end. Pure. No
+ * longer used by this viewer (its track clamps), but the comment-image lightbox
+ * still navigates with it.
+ */
 export function wrapIndex(index: number, delta: number, n: number): number {
   if (n <= 0) return 0;
   return (((index + delta) % n) + n) % n;
-}
-
-/** The "{i} of {n}" counter the top bar shows beside the filename. Pure. */
-export function lightboxCounter(index: number, count: number): string {
-  return `${index + 1} of ${count}`;
 }
 
 /** The minimal rect shape the pin math reads off the rendered image. */
@@ -51,6 +74,10 @@ interface RectLike {
 
 function clamp01(value: number): number {
   return value < 0 ? 0 : value > 1 ? 1 : value;
+}
+
+function clamp(value: number, lo: number, hi: number): number {
+  return value < lo ? lo : value > hi ? hi : value;
 }
 
 /**
@@ -80,50 +107,122 @@ export function placePinFromEvent(
 }
 
 /**
- * What the [pin] button does given the current zoom/arm state. Placement is
- * disabled while zoomed (object-contain vs the zoom scroller skews coordinates),
- * so a zoomed click first exits zoom rather than arming. Pure. (F5 placement.)
+ * The slide the native scroller currently rests on, from its scroll offset;
+ * clamped into [0, count). Pure so the snap math is unit-testable without a DOM.
  */
-export function pinButtonAction(zoomed: boolean, armed: boolean): 'exit-zoom' | 'arm' | 'disarm' {
-  if (zoomed) return 'exit-zoom';
-  return armed ? 'disarm' : 'arm';
+export function slideFromScroll(scrollLeft: number, slideWidth: number, count: number): number {
+  if (count <= 0 || slideWidth <= 0) return 0;
+  return Math.min(count - 1, Math.max(0, Math.round(scrollLeft / slideWidth)));
 }
 
-/** The image's className for the current zoom/arm state (crosshair while armed). */
-function imageClass(zoomed: boolean, armed: boolean): string {
-  if (armed) return 'max-h-full max-w-full cursor-crosshair object-contain';
-  return zoomed
-    ? 'max-w-none cursor-zoom-out'
-    : 'max-h-full max-w-full cursor-zoom-in object-contain';
+/** An item's intrinsic size: stored asset dimensions, else the measured fallback. */
+export function intrinsicSize(
+  item: GalleryItem,
+  measured: Readonly<Record<string, { width: number; height: number }>>,
+): { width: number; height: number } | null {
+  if (item.width !== null && item.height !== null && item.width > 0 && item.height > 0) {
+    return { width: item.width, height: item.height };
+  }
+  return measured[item.assetVersionId] ?? null;
 }
 
-interface LightboxViewProps {
-  item: GalleryItem;
-  index: number;
-  count: number;
-  presignEnabled: boolean;
-  mediaSrc: string | null;
-  mediaFailed: boolean;
-  zoomed: boolean;
-  busy: boolean;
-  onPrev: () => void;
-  onNext: () => void;
-  onJump: (index: number) => void;
-  onClose: () => void;
-  onToggleZoom: () => void;
-  onDownload: () => void;
-  onScrimTouchStart: (event: React.TouchEvent) => void;
-  onScrimTouchEnd: (event: React.TouchEvent) => void;
-  /** Overlay slot for future pins (F5); nothing renders when undefined. */
-  pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
-  /** Pin request (F5); the [pin] button is disabled/no-op when undefined. */
-  onRequestPin?: ((index: number) => void) | undefined;
-  /** Placement-armed (F5): a tap on the image drops a pin instead of zooming. */
-  armed?: boolean;
-  /** Image tap while armed (F5): captures the pin point from the rendered image. */
-  onPlace?: ((event: React.MouseEvent<HTMLImageElement>) => void) | undefined;
-  /** F7 (agency-side): the kebab opens the slide actions for the current slide. */
-  onSlideActions?: ((index: number) => void) | undefined;
+/**
+ * The Fit-mode frame style: an aspect-ratio box constrained by the fixed stage
+ * (w-full + max-h-full transfer through aspect-ratio), so the WHOLE image is
+ * always visible with no scrolling regardless of ratio. Pure.
+ */
+export function fitFrameStyle(width: number, height: number): CSSProperties {
+  return { aspectRatio: `${width} / ${height}` };
+}
+
+/**
+ * Feed-lens geometry as percentages of the full image box: the live (clamped)
+ * frame rect plus the dimmed bands outside it. A fitting image has a full-bleed
+ * frame and no dim bands. Pure.
+ */
+export function feedCropLayout(v: FeedVerdict): {
+  frame: { left: number; top: number; width: number; height: number };
+  dims: Array<{ left: number; top: number; width: number; height: number }>;
+} {
+  if (v.fit === 'fits' || v.cropAxis === null) {
+    return { frame: { left: 0, top: 0, width: 100, height: 100 }, dims: [] };
+  }
+  if (v.cropAxis === 'y') {
+    const visible = 100 - v.percentLost;
+    const off = (100 - visible) / 2;
+    return {
+      frame: { left: 0, top: off, width: 100, height: visible },
+      dims: [
+        { left: 0, top: 0, width: 100, height: off },
+        { left: 0, top: off + visible, width: 100, height: off },
+      ],
+    };
+  }
+  const visible = 100 - v.percentLost;
+  const off = (100 - visible) / 2;
+  return {
+    frame: { left: off, top: 0, width: visible, height: 100 },
+    dims: [
+      { left: 0, top: 0, width: off, height: 100 },
+      { left: off + visible, top: 0, width: off, height: 100 },
+    ],
+  };
+}
+
+/** The verdict-chip text: "{w}×{h} · ratio · fits X" or "... · crops to Y". Pure. */
+export function verdictChipText(
+  width: number,
+  height: number,
+  v: FeedVerdict,
+  spec: PlatformFeedSpec,
+): string {
+  const base = `${width}×${height} · ${formatRatio(width, height)}`;
+  return v.fit === 'fits' ? `${base} · fits ${spec.label}` : `${base} · crops to ${v.ratioLabel}`;
+}
+
+/** The Feed-card caption line under the framed image. Pure. */
+export function feedCaption(v: FeedVerdict, spec: PlatformFeedSpec): string {
+  return v.fit === 'fits'
+    ? `Fits the ${spec.label} feed`
+    : `Crops to ${v.ratioLabel} · ${Math.round(v.percentLost)}% lost`;
+}
+
+// Double-chevron glyphs for make-first / make-last; local because the shared icon
+// set has no Chevrons* pair and this surface is the only consumer.
+function IconChevronsLeft({ className, size = 18 }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 6l-6 6 6 6M19 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
+function IconChevronsRight({ className, size = 18 }: IconProps) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 6l6 6-6 6M13 6l6 6-6 6" />
+    </svg>
+  );
 }
 
 const TOOLBAR_BUTTON =
@@ -131,217 +230,445 @@ const TOOLBAR_BUTTON =
   'hover:bg-overlay-surface disabled:opacity-40 focus-visible:outline-none ' +
   'focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
 
-const ARROW_BUTTON =
-  'absolute top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center ' +
-  'rounded-full bg-overlay-surface text-overlay-fg hover:bg-overlay-line ' +
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
+/** The five 44px agency manage actions, prewired to the current slide. */
+export interface LightboxManage {
+  onMakeFirst: () => void;
+  onMoveLeft: () => void;
+  onMoveRight: () => void;
+  onMakeLast: () => void;
+  onAddAfter: () => void;
+}
+
+/** Pointer/wheel gesture handlers the zoom layer spreads onto each slide stage. */
+export interface StageGestures {
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerCancel: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onWheel: (event: ReactWheelEvent<HTMLDivElement>) => void;
+  onClick: (event: ReactMouseEvent<HTMLDivElement>) => void;
+}
+
+export interface LightboxViewProps {
+  items: GalleryItem[];
+  index: number;
+  presignEnabled: boolean;
+  /** The workspace platform's feed spec; null hides Feed mode and the chip. */
+  spec: PlatformFeedSpec | null;
+  mode: 'fit' | 'feed';
+  present: boolean;
+  chrome: boolean;
+  busy: boolean;
+  zoom: { scale: number; x: number; y: number };
+  srcFor: (item: GalleryItem) => string | null;
+  failedFor: (item: GalleryItem) => boolean;
+  dimsFor: (item: GalleryItem) => { width: number; height: number } | null;
+  onClose: () => void;
+  onDownload: () => void;
+  onEnterPresent: () => void;
+  onSetMode: (mode: 'fit' | 'feed') => void;
+  onDotClick: (index: number) => void;
+  onTrackScroll: (event: ReactUIEvent<HTMLDivElement>) => void;
+  onImageLoad: (item: GalleryItem, event: SyntheticEvent<HTMLImageElement>) => void;
+  stageGestures: StageGestures;
+  trackRef?: Ref<HTMLDivElement> | undefined;
+  /** Agency-only manage row; absent for clients, hidden while presenting. */
+  manage?: LightboxManage | undefined;
+  /** F5 seam: overlay rendered over the sharp image; nothing when omitted. */
+  pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
+}
+
+/** One slide's Fit-mode stage: blurred cover backdrop + fully-visible sharp image. */
+function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): ReactElement {
+  const { present, zoom, srcFor, failedFor, dimsFor, presignEnabled, onImageLoad, pinOverlay } =
+    props;
+  const src = srcFor(item);
+  const failed = failedFor(item);
+  const dims = dimsFor(item);
+  const active = i === props.index;
+  const zoomed = active && zoom.scale > 1;
+  const zoomStyle: CSSProperties | undefined = zoomed
+    ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` }
+    : undefined;
+  const showImage = presignEnabled && isImage(item) && src !== null && !failed;
+  const showVideo = presignEnabled && isVideo(item) && src !== null && !failed;
+
+  return (
+    <>
+      {/* Letterbox filler: a blurred, darkened cover copy of the same slide. Hidden
+          in Present, which is a plain black backdrop. */}
+      {showImage && !present ? (
+        <>
+          <img
+            src={src}
+            alt=""
+            aria-hidden
+            draggable={false}
+            className="absolute inset-0 h-full w-full scale-110 object-cover blur-[48px]"
+          />
+          <div aria-hidden className="absolute inset-0 bg-black/30" />
+        </>
+      ) : null}
+      <div
+        className="absolute inset-0 flex items-center justify-center"
+        {...props.stageGestures}
+        style={zoomed ? { touchAction: 'none' } : undefined}
+      >
+        {showImage && dims !== null ? (
+          // The frame is an aspect-ratio box constrained directly by this fixed
+          // stage (never an auto-height wrapper), so max-h/max-w always resolve
+          // and the whole image stays visible at every ratio.
+          <div
+            className="relative w-full max-h-full max-w-full"
+            style={{ ...fitFrameStyle(dims.width, dims.height), ...zoomStyle }}
+          >
+            <img
+              src={src}
+              alt={`Slide ${i + 1}`}
+              draggable={false}
+              onLoad={(event) => onImageLoad(item, event)}
+              className="h-full w-full object-contain"
+            />
+            {pinOverlay !== undefined && !present && !zoomed ? (
+              <div className="pointer-events-none absolute inset-0">{pinOverlay(item, i)}</div>
+            ) : null}
+          </div>
+        ) : showImage ? (
+          <img
+            src={src}
+            alt={`Slide ${i + 1}`}
+            draggable={false}
+            onLoad={(event) => onImageLoad(item, event)}
+            style={zoomStyle}
+            className="max-h-full max-w-full object-contain"
+          />
+        ) : showVideo ? (
+          <video src={src} controls className="max-h-full max-w-full" />
+        ) : !presignEnabled ? (
+          <GracefulPanel message="Image previews are unavailable in this environment." />
+        ) : isInlineRenderable(item) && !failed ? (
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+        ) : (
+          <GracefulPanel
+            message={failed ? 'This image could not be loaded.' : 'Preview unavailable.'}
+            onDownload={props.onDownload}
+            busy={props.busy}
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
+/** One slide's Feed-mode stage: neutral skeleton feed card with the crop lens. */
+function feedSlide(props: LightboxViewProps, item: GalleryItem, i: number): ReactElement {
+  const { spec, srcFor, dimsFor, onImageLoad } = props;
+  const src = srcFor(item);
+  const dims = dimsFor(item);
+  const specVerdict =
+    spec !== null && dims !== null ? verdictForSpec(dims.width, dims.height, spec) : null;
+  const layout = specVerdict !== null ? feedCropLayout(specVerdict) : null;
+  const crops = specVerdict !== null && specVerdict.fit === 'crops-to';
+
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center p-4"
+      {...props.stageGestures}
+    >
+      <div className="flex max-h-full w-full max-w-sm flex-col gap-2 overflow-hidden rounded-xl border border-overlay-line bg-overlay-surface p-3">
+        {/* Neutral skeleton header: no brand assets, just placeholder shapes. */}
+        <div aria-hidden className="flex items-center gap-2">
+          <span className="h-8 w-8 shrink-0 rounded-full bg-overlay-line" />
+          <span className="flex min-w-0 flex-col gap-1.5">
+            <span className="h-2 w-24 rounded-full bg-overlay-line" />
+            <span className="h-2 w-16 rounded-full bg-overlay-dot" />
+          </span>
+        </div>
+        <p className="text-[11px] text-overlay-fg-dim">
+          {spec !== null ? `${spec.label} feed · mobile` : 'feed · mobile'}
+        </p>
+        {src !== null && dims !== null && layout !== null ? (
+          <div
+            className="relative mx-auto min-h-0 w-full"
+            style={fitFrameStyle(dims.width, dims.height)}
+          >
+            {/* The FULL image; the area outside the clamped frame is dimmed. */}
+            <img
+              src={src}
+              alt={`Slide ${i + 1}`}
+              draggable={false}
+              onLoad={(event) => onImageLoad(item, event)}
+              className="h-full w-full"
+            />
+            {layout.dims.map((band, n) => (
+              <div
+                key={n}
+                aria-hidden
+                data-feed-dim
+                className="absolute bg-overlay/70"
+                style={{
+                  left: `${band.left}%`,
+                  top: `${band.top}%`,
+                  width: `${band.width}%`,
+                  height: `${band.height}%`,
+                }}
+              />
+            ))}
+            {/* The live feed frame; warn-bordered while cropping. */}
+            <div
+              data-feed-frame
+              className={cn('absolute', crops && 'border-[1.5px] border-warn')}
+              style={{
+                left: `${layout.frame.left}%`,
+                top: `${layout.frame.top}%`,
+                width: `${layout.frame.width}%`,
+                height: `${layout.frame.height}%`,
+              }}
+            >
+              {/* Centre-80% safe zone. */}
+              <div
+                aria-hidden
+                data-feed-safe
+                className="absolute inset-[10%] border border-dashed border-overlay-fg/40"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-40 items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+          </div>
+        )}
+        {specVerdict !== null && spec !== null ? (
+          <p className={cn('text-xs', crops ? 'text-warn' : 'text-overlay-fg-dim')}>
+            {feedCaption(specVerdict, spec)}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 /**
  * The lightbox's presentational tree, kept hookless so it can be exercised by the
  * tree-walking unit tests (the node test environment has no DOM renderer). All
- * state and side effects live in {@link PostLightbox}; this only maps props to JSX.
+ * state and gestures live in {@link PostLightbox}; this only maps props to JSX.
+ * No filename ever renders on this surface.
  */
-export function lightboxView({
-  item,
-  index,
-  count,
-  presignEnabled,
-  mediaSrc,
-  mediaFailed,
-  zoomed,
-  busy,
-  onPrev,
-  onNext,
-  onJump,
-  onClose,
-  onToggleZoom,
-  onDownload,
-  onScrimTouchStart,
-  onScrimTouchEnd,
-  pinOverlay,
-  onRequestPin,
-  armed = false,
-  onPlace,
-  onSlideActions,
-}: LightboxViewProps): ReactElement {
-  const canPin = onRequestPin !== undefined;
-  const canEditSlides = onSlideActions !== undefined;
-  const showInline =
-    presignEnabled && isInlineRenderable(item) && mediaSrc !== null && !mediaFailed;
+export function lightboxView(props: LightboxViewProps): ReactElement {
+  const { items, index, spec, mode, present, chrome, busy, zoom, manage } = props;
+  const count = items.length;
+  const chromeVisible = chrome && !present;
+  const item = items[index];
+  const dims = item !== undefined ? props.dimsFor(item) : null;
+  const chipVerdict =
+    spec !== null && dims !== null ? verdictForSpec(dims.width, dims.height, spec) : null;
+
+  const chromeMotion = (visible: boolean, hiddenShift: string): string =>
+    cn(
+      'transition-[opacity,transform] duration-base',
+      visible ? 'opacity-100 translate-y-0' : `pointer-events-none opacity-0 ${hiddenShift}`,
+    );
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`Viewing ${item.filename}`}
-      className="fixed inset-0 z-50 flex flex-col bg-overlay"
+      aria-label="Image viewer"
+      className={cn('fixed inset-0 z-50', present ? 'bg-black' : 'bg-overlay')}
     >
-      {/* Top bar: filename + counter on the left, the 44x44 toolbar on the right. */}
-      <div className="flex h-14 shrink-0 items-center gap-3 px-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-          <span className="min-w-0 truncate font-medium text-overlay-fg">{item.filename}</span>
-          <span aria-hidden className="text-overlay-fg-dim">
-            ·
-          </span>
-          <span className="shrink-0 tabular-nums text-overlay-fg-dim">
+      {/* Slide track: declared motion axis X, native scroll-snap only. While
+          zoomed (scale > 1) swiping is disabled so the gesture never fights. */}
+      <div
+        ref={props.trackRef}
+        onScroll={props.onTrackScroll}
+        aria-roledescription="carousel"
+        data-motion-axis="x"
+        className={cn(
+          'absolute inset-0 flex overscroll-x-contain',
+          zoom.scale > 1 ? 'overflow-x-hidden' : 'snap-x snap-mandatory overflow-x-auto',
+        )}
+      >
+        {items.map((slide, i) => (
+          <div
+            key={slide.assetAttachmentId}
+            className="relative h-full w-full shrink-0 snap-center overflow-hidden"
+          >
+            {mode === 'feed' && spec !== null && isImage(slide)
+              ? feedSlide(props, slide, i)
+              : fitSlide(props, slide, i)}
+          </div>
+        ))}
+      </div>
+
+      {/* Top chrome: close · mono counter · Present · Download. Nothing else. */}
+      <div
+        className={cn('absolute inset-x-0 top-0 z-20', chromeMotion(chromeVisible, '-translate-y-2'))}
+      >
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-overlay to-transparent" />
+        <div className="relative flex h-14 items-center gap-1 px-3">
+          <button
+            type="button"
+            aria-label="Close viewer"
+            onClick={props.onClose}
+            className={TOOLBAR_BUTTON}
+          >
+            <IconX size={20} />
+          </button>
+          <span className="px-1 font-mono text-sm tabular-nums text-overlay-fg-dim">
             {lightboxCounter(index, count)}
           </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {canEditSlides ? (
-            <button
-              type="button"
-              aria-label="Slide actions"
-              onClick={() => onSlideActions(index)}
-              className={TOOLBAR_BUTTON}
-            >
-              <IconMoreVertical size={20} />
-            </button>
-          ) : null}
+          <div className="flex-1" />
           <button
             type="button"
-            aria-label="Add pin"
-            disabled={!canPin}
-            onClick={canPin ? () => onRequestPin(index) : undefined}
+            aria-label="Present"
+            onClick={props.onEnterPresent}
             className={TOOLBAR_BUTTON}
           >
-            <IconPin size={20} />
-          </button>
-          <button
-            type="button"
-            aria-label={zoomed ? 'Zoom out' : 'Zoom in'}
-            onClick={onToggleZoom}
-            className={TOOLBAR_BUTTON}
-          >
-            {zoomed ? <IconZoomOut size={20} /> : <IconZoomIn size={20} />}
+            <IconPlay size={20} />
           </button>
           <button
             type="button"
             aria-label="Download"
             disabled={busy}
-            onClick={onDownload}
+            onClick={props.onDownload}
             className={TOOLBAR_BUTTON}
           >
             <IconDownload size={20} />
           </button>
-          <button
-            type="button"
-            aria-label="Close viewer"
-            onClick={onClose}
-            className={TOOLBAR_BUTTON}
-          >
-            <IconX size={20} />
-          </button>
         </div>
       </div>
 
-      {/* Media stage. A tap on the empty scrim (not the media) closes. */}
+      {/* Bottom chrome: verdict chip · dots · Fit|Feed · agency manage row. */}
       <div
-        className="relative flex flex-1 items-center justify-center overflow-auto p-4"
-        onClick={(event) => {
-          if (event.target === event.currentTarget) onClose();
-        }}
-        onTouchStart={onScrimTouchStart}
-        onTouchEnd={onScrimTouchEnd}
+        className={cn(
+          'absolute inset-x-0 bottom-0 z-20',
+          chromeMotion(chromeVisible, 'translate-y-2'),
+        )}
       >
-        {armed ? (
-          <div
-            role="status"
-            className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-xs font-medium text-overlay-fg"
-          >
-            Tap the image to place a pin
-          </div>
-        ) : null}
-        {count > 1 ? (
-          <>
-            <button
-              type="button"
-              aria-label="Previous image"
-              onClick={onPrev}
-              className={`${ARROW_BUTTON} left-2`}
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-overlay to-transparent" />
+        <div className="relative flex flex-col items-center gap-1 pb-3 pt-2">
+          {chipVerdict !== null && spec !== null && dims !== null ? (
+            <span
+              data-verdict-chip
+              className="inline-flex h-7 items-center gap-1.5 rounded-full bg-overlay-surface px-3 font-mono text-[11px] tabular-nums text-overlay-fg"
             >
-              <IconChevronLeft size={20} />
-            </button>
-            <button
-              type="button"
-              aria-label="Next image"
-              onClick={onNext}
-              className={`${ARROW_BUTTON} right-2`}
-            >
-              <IconChevronRight size={20} />
-            </button>
-          </>
-        ) : null}
+              <span
+                aria-hidden
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  chipVerdict.fit === 'fits' ? 'bg-good' : 'bg-warn',
+                )}
+              />
+              {verdictChipText(dims.width, dims.height, chipVerdict, spec)}
+            </span>
+          ) : null}
 
-        {/* The image area, with the future-pins overlay layered on top of it. */}
-        <div className="relative inline-flex max-h-full max-w-full items-center justify-center">
-          {showInline && isImage(item) ? (
-            <img
-              src={mediaSrc}
-              alt={item.filename}
-              className={imageClass(zoomed, armed)}
-              onClick={armed && onPlace !== undefined ? onPlace : onToggleZoom}
-            />
-          ) : showInline && isVideo(item) ? (
-            <video src={mediaSrc} controls className="max-h-full max-w-full" />
-          ) : !presignEnabled ? (
-            <GracefulPanel
-              title={item.filename}
-              message="Image previews are unavailable in this environment."
-            />
-          ) : isInlineRenderable(item) && !mediaFailed ? (
-            <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
-          ) : (
-            <GracefulPanel
-              title={item.filename}
-              message={mediaFailed ? 'This image could not be loaded.' : 'Preview unavailable.'}
-              onDownload={onDownload}
-              busy={busy}
-            />
-          )}
-          {pinOverlay !== undefined ? (
-            <div className="pointer-events-none absolute inset-0">{pinOverlay(item, index)}</div>
+          {count > 1 ? (
+            <div className="flex flex-wrap items-center justify-center">
+              {items.map((slide, dot) => (
+                <button
+                  key={slide.assetAttachmentId}
+                  type="button"
+                  aria-label={`Go to image ${dot + 1}`}
+                  aria-current={dot === index}
+                  onClick={() => props.onDotClick(dot)}
+                  className="inline-flex h-11 w-11 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
+                >
+                  <span
+                    className={cn(
+                      'h-2 w-2 rounded-full transition-colors',
+                      dot === index ? 'bg-overlay-fg' : 'bg-overlay-dot',
+                    )}
+                  />
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {spec !== null ? (
+            <div role="group" aria-label="View mode" className="flex rounded-full bg-overlay-surface p-1">
+              {(['fit', 'feed'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={mode === m}
+                  onClick={() => props.onSetMode(m)}
+                  className={cn(
+                    'inline-flex h-11 min-w-[64px] items-center justify-center rounded-full px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70',
+                    mode === m ? 'bg-overlay-line text-overlay-fg' : 'text-overlay-fg-dim',
+                  )}
+                >
+                  {m === 'fit' ? 'Fit' : 'Feed'}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {manage !== undefined ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Make first"
+                disabled={index === 0}
+                onClick={manage.onMakeFirst}
+                className={TOOLBAR_BUTTON}
+              >
+                <IconChevronsLeft size={20} />
+              </button>
+              <button
+                type="button"
+                aria-label="Move left"
+                disabled={index === 0}
+                onClick={manage.onMoveLeft}
+                className={TOOLBAR_BUTTON}
+              >
+                <IconChevronLeft size={20} />
+              </button>
+              <button
+                type="button"
+                aria-label="Add image"
+                onClick={manage.onAddAfter}
+                className={cn(TOOLBAR_BUTTON, 'text-accent')}
+              >
+                <IconPlus size={20} />
+              </button>
+              <button
+                type="button"
+                aria-label="Move right"
+                disabled={index === count - 1}
+                onClick={manage.onMoveRight}
+                className={TOOLBAR_BUTTON}
+              >
+                <IconChevronRight size={20} />
+              </button>
+              <button
+                type="button"
+                aria-label="Make last"
+                disabled={index === count - 1}
+                onClick={manage.onMakeLast}
+                className={TOOLBAR_BUTTON}
+              >
+                <IconChevronsRight size={20} />
+              </button>
+            </div>
           ) : null}
         </div>
       </div>
-
-      {/* Bottom dot indicators, one per image; tap to jump. */}
-      {count > 1 ? (
-        <div className="flex shrink-0 items-center justify-center gap-2 py-3">
-          {Array.from({ length: count }).map((_, dot) => (
-            <button
-              key={dot}
-              type="button"
-              aria-label={`Go to image ${dot + 1}`}
-              aria-current={dot === index}
-              onClick={() => onJump(dot)}
-              className="inline-flex h-11 w-11 items-center justify-center"
-            >
-              <span
-                className={`h-2 w-2 rounded-full ${dot === index ? 'bg-overlay-fg' : 'bg-overlay-dot'}`}
-              />
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
 
 function GracefulPanel({
-  title,
   message,
   onDownload,
   busy,
 }: {
-  title: string;
   message: string;
   onDownload?: () => void;
   busy?: boolean;
 }) {
   return (
     <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-xl">
-      <p className="min-w-0 truncate text-sm font-medium">{title}</p>
       <p className="text-xs text-fg-3">{message}</p>
       {onDownload !== undefined ? (
         <button
@@ -359,32 +686,40 @@ function GracefulPanel({
 }
 
 interface PostLightboxProps {
-  /** The ordered gallery; navigation wraps over it. */
+  /** The ordered gallery. */
   items: GalleryItem[];
   index: number;
   presignEnabled: boolean;
   cache: PresignCache;
   /** Presign deps, used to mint an attachment URL for the download action. */
   deps: PresignDeps;
+  /** workspaces.platform for this workspace; null hides Feed mode and the chip. */
+  platform: string | null;
   onIndexChange: (index: number) => void;
   onClose: () => void;
   /** F5 seam: overlay rendered over the image area; nothing renders when omitted. */
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
-  /** F5 seam: the [pin] button calls this; the button is inert when omitted. */
-  onRequestPin?: ((index: number) => void) | undefined;
-  /** F5: a valid tap while armed reports the slide index + normalised point. */
-  onPlacePin?: ((index: number, x: number, y: number) => void) | undefined;
-  /** F7 (agency-side): the toolbar kebab opens the slide actions for this slide. */
-  onSlideActions?: ((index: number) => void) | undefined;
+  /**
+   * Agency manage-row callbacks, each taking the slide index. They MUST be wired
+   * to the existing slide-mutation paths (gallery-transforms + gallery_set commit
+   * and the existing add/upload flow); this component creates no write path.
+   */
+  manage?:
+    | {
+        onMakeFirst: (index: number) => void;
+        onMoveLeft: (index: number) => void;
+        onMoveRight: (index: number) => void;
+        onMakeLast: (index: number) => void;
+        onAddAfter: (index: number) => void;
+      }
+    | undefined;
 }
 
 /**
- * Fullscreen, view-only post-gallery lightbox replicating the locked PCS
- * prototype: a dark backdrop, a top bar (filename + counter, and a 44x44
- * [pin][zoom][download][close] toolbar), the inline image/video, on-screen
- * arrows + swipe + ArrowLeft/Right (wrapping) + Esc, and bottom dot indicators.
- * The pin button and a pin overlay are real F5 seams wired to optional props with
- * safe defaults. No add/reorder/remove and no annotations live here.
+ * Fullscreen post-gallery viewer: a fixed inset-0 stage with a native horizontal
+ * scroll-snap track (one slide per viewport), tap-toggled chrome, Fit/Feed lens,
+ * pinch/wheel/double-tap zoom, a Present mode, and the agency manage row. Pins
+ * are placed from the inline gallery now, never here.
  */
 export function PostLightbox({
   items,
@@ -392,55 +727,84 @@ export function PostLightbox({
   presignEnabled,
   cache,
   deps,
+  platform,
   onIndexChange,
   onClose,
   pinOverlay,
-  onRequestPin,
-  onPlacePin,
-  onSlideActions,
+  manage,
 }: PostLightboxProps) {
-  const item = items[index];
-  const [mediaSrc, setMediaSrc] = useState<string | null>(null);
-  const [mediaFailed, setMediaFailed] = useState(false);
-  const [zoomed, setZoomed] = useState(false);
-  const [armed, setArmed] = useState(false);
+  const spec = useMemo(() => specFor(platform), [platform]);
+  const [srcs, setSrcs] = useState<Record<string, string>>({});
+  const [failed, setFailed] = useState<Record<string, boolean>>({});
+  const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
+  const [mode, setMode] = useState<'fit' | 'feed'>('fit');
+  const [present, setPresent] = useState(false);
+  const [chrome, setChrome] = useState(true);
   const [busy, setBusy] = useState(false);
-  const touchStartX = useRef<number | null>(null);
+  const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
 
-  const go = useCallback(
-    (delta: number): void => {
-      onIndexChange(wrapIndex(index, delta, items.length));
-    },
-    [index, items.length, onIndexChange],
-  );
+  const trackRef = useRef<HTMLDivElement>(null);
+  const indexRef = useRef(index);
+  indexRef.current = index;
 
-  // Resolve the inline URL for the viewed item only, through the shared cache.
+  // Resolve every slide's inline URL through the shared cache (it bounds
+  // concurrency and dedupes), so swiping never waits on a cold presign.
   useEffect(() => {
-    setMediaSrc(null);
-    setMediaFailed(false);
-    setZoomed(false);
-    setArmed(false);
-    if (item === undefined || !presignEnabled || !isInlineRenderable(item)) return;
+    if (!presignEnabled) return;
     let live = true;
-    cache
-      .resolve(item.assetVersionId)
-      .then((presigned) => {
-        if (live) setMediaSrc(presigned.url);
-      })
-      .catch(() => {
-        if (live) setMediaFailed(true);
-      });
+    for (const item of items) {
+      if (!isInlineRenderable(item)) continue;
+      const versionId = item.assetVersionId;
+      cache
+        .resolve(versionId)
+        .then((presigned) => {
+          if (live) setSrcs((prev) => (prev[versionId] === presigned.url ? prev : { ...prev, [versionId]: presigned.url }));
+        })
+        .catch(() => {
+          if (live) setFailed((prev) => (prev[versionId] === true ? prev : { ...prev, [versionId]: true }));
+        });
+    }
     return () => {
       live = false;
     };
-  }, [item, presignEnabled, cache]);
+  }, [items, presignEnabled, cache]);
 
-  // Esc closes; arrows navigate. Lock body scroll while open.
+  // Keep the native scroller on the viewed slide: instantly on mount, smoothly
+  // when the index is changed from outside the scroll itself (dots, keyboard,
+  // a manage move). All slide motion stays native scrolling on the X axis.
+  const mounted = useRef(false);
+  useEffect(() => {
+    const el = trackRef.current;
+    if (el === null) return;
+    const width = el.clientWidth;
+    if (width <= 0) return;
+    const resting = slideFromScroll(el.scrollLeft, width, items.length);
+    if (resting === index) return;
+    el.scrollTo({ left: index * width, behavior: mounted.current ? 'smooth' : 'auto' });
+  }, [index, items.length]);
+  useEffect(() => {
+    mounted.current = true;
+  }, []);
+
+  // Zoom resets whenever the slide, lens or Present state changes.
+  useEffect(() => {
+    setZoom({ scale: 1, x: 0, y: 0 });
+  }, [index, mode, present]);
+
+  // Esc exits Present first, then closes; arrows nudge the native scroller.
+  // Body scroll is locked while open.
+  const presentRef = useRef(present);
+  presentRef.current = present;
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose();
-      else if (event.key === 'ArrowLeft') go(-1);
-      else if (event.key === 'ArrowRight') go(1);
+      if (event.key === 'Escape') {
+        if (presentRef.current) setPresent(false);
+        else onClose();
+      } else if (event.key === 'ArrowLeft') {
+        onIndexChange(Math.max(0, indexRef.current - 1));
+      } else if (event.key === 'ArrowRight') {
+        onIndexChange(Math.min(items.length - 1, indexRef.current + 1));
+      }
     };
     window.addEventListener('keydown', onKey);
     const previousOverflow = document.body.style.overflow;
@@ -449,8 +813,151 @@ export function PostLightbox({
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = previousOverflow;
     };
-  }, [go, onClose]);
+  }, [onClose, onIndexChange, items.length]);
 
+  const handleTrackScroll = useCallback(
+    (event: ReactUIEvent<HTMLDivElement>): void => {
+      const el = event.currentTarget;
+      const next = slideFromScroll(el.scrollLeft, el.clientWidth, items.length);
+      if (next !== indexRef.current) onIndexChange(next);
+    },
+    [items.length, onIndexChange],
+  );
+
+  // --- Zoom gestures. The transform is driven only by the user's gesture:
+  // pinch (two pointers) 1..5x with pan, wheel zoom + drag pan on desktop,
+  // double-tap toggling 2x at the tap point. No animation, no rotation.
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinchStart = useRef<{ d: number; scale: number; x: number; y: number } | null>(null);
+  const panStart = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
+  const movedRef = useRef(false);
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (singleTapTimer.current !== null) clearTimeout(singleTapTimer.current);
+    },
+    [],
+  );
+
+  const clampPan = useCallback((scale: number, x: number, y: number, rect: RectLike) => {
+    const maxX = ((scale - 1) * rect.width) / 2;
+    const maxY = ((scale - 1) * rect.height) / 2;
+    return { x: clamp(x, -maxX, maxX), y: clamp(y, -maxY, maxY) };
+  }, []);
+
+  const applyZoomAt = useCallback(
+    (nextScale: number, clientX: number, clientY: number, rect: RectLike): void => {
+      setZoom((z) => {
+        const scale = clamp(nextScale, ZOOM_MIN, ZOOM_MAX);
+        if (scale <= 1) return { scale: 1, x: 0, y: 0 };
+        // Keep the focal point stationary: p' = p - (p - t) * (s'/s).
+        const px = clientX - rect.left - rect.width / 2;
+        const py = clientY - rect.top - rect.height / 2;
+        const k = scale / z.scale;
+        const pan = clampPan(scale, px - (px - z.x) * k, py - (py - z.y) * k, rect);
+        return { scale, ...pan };
+      });
+    },
+    [clampPan],
+  );
+
+  const stageGestures = useMemo<StageGestures>(
+    () => ({
+      onPointerDown: (event) => {
+        pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        movedRef.current = false;
+        const pts = [...pointers.current.values()];
+        if (pts.length === 2) {
+          const [a, b] = pts as [{ x: number; y: number }, { x: number; y: number }];
+          pinchStart.current = { d: Math.hypot(a.x - b.x, a.y - b.y), scale: zoom.scale, x: zoom.x, y: zoom.y };
+          panStart.current = null;
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } else if (pts.length === 1 && zoom.scale > 1) {
+          panStart.current = { px: event.clientX, py: event.clientY, x: zoom.x, y: zoom.y };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+      },
+      onPointerMove: (event) => {
+        if (!pointers.current.has(event.pointerId)) return;
+        pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        const rect = event.currentTarget.getBoundingClientRect();
+        const pts = [...pointers.current.values()];
+        if (pts.length === 2 && pinchStart.current !== null) {
+          const [a, b] = pts as [{ x: number; y: number }, { x: number; y: number }];
+          const d = Math.hypot(a.x - b.x, a.y - b.y);
+          if (d <= 0 || pinchStart.current.d <= 0) return;
+          movedRef.current = true;
+          const start = pinchStart.current;
+          const scale = clamp(start.scale * (d / start.d), ZOOM_MIN, ZOOM_MAX);
+          const cx = (a.x + b.x) / 2;
+          const cy = (a.y + b.y) / 2;
+          applyZoomAt(scale, cx, cy, rect);
+        } else if (pts.length === 1 && panStart.current !== null) {
+          const start = panStart.current;
+          const dx = event.clientX - start.px;
+          const dy = event.clientY - start.py;
+          if (Math.abs(dx) + Math.abs(dy) > 2) movedRef.current = true;
+          setZoom((z) => ({ scale: z.scale, ...clampPan(z.scale, start.x + dx, start.y + dy, rect) }));
+        }
+      },
+      onPointerUp: (event) => {
+        pointers.current.delete(event.pointerId);
+        if (pointers.current.size < 2) pinchStart.current = null;
+        if (pointers.current.size === 0) {
+          panStart.current = null;
+          // A pinch released near 1x snaps fully out.
+          setZoom((z) => (z.scale <= 1.05 ? { scale: 1, x: 0, y: 0 } : z));
+        }
+      },
+      onPointerCancel: (event) => {
+        pointers.current.delete(event.pointerId);
+        if (pointers.current.size < 2) pinchStart.current = null;
+        if (pointers.current.size === 0) panStart.current = null;
+      },
+      onWheel: (event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const factor = Math.exp(-event.deltaY * 0.0022);
+        applyZoomAt(zoom.scale * factor, event.clientX, event.clientY, rect);
+      },
+      onClick: (event) => {
+        if (movedRef.current) {
+          movedRef.current = false;
+          return;
+        }
+        const now = Date.now();
+        const rect = event.currentTarget.getBoundingClientRect();
+        const tap = { t: now, x: event.clientX, y: event.clientY };
+        const prev = lastTap.current;
+        const isDouble =
+          prev !== null &&
+          now - prev.t < DOUBLE_TAP_MS &&
+          Math.hypot(tap.x - prev.x, tap.y - prev.y) < DOUBLE_TAP_RADIUS_PX;
+        if (isDouble) {
+          lastTap.current = null;
+          if (singleTapTimer.current !== null) {
+            clearTimeout(singleTapTimer.current);
+            singleTapTimer.current = null;
+          }
+          // Double-tap: 2x at the tap point, or fully out.
+          if (zoom.scale > 1) setZoom({ scale: 1, x: 0, y: 0 });
+          else applyZoomAt(DOUBLE_TAP_SCALE, tap.x, tap.y, rect);
+          return;
+        }
+        lastTap.current = tap;
+        if (singleTapTimer.current !== null) clearTimeout(singleTapTimer.current);
+        singleTapTimer.current = setTimeout(() => {
+          singleTapTimer.current = null;
+          // Single tap: exit Present, else toggle the chrome.
+          if (presentRef.current) setPresent(false);
+          else setChrome((c) => !c);
+        }, DOUBLE_TAP_MS);
+      },
+    }),
+    [zoom, applyZoomAt, clampPan],
+  );
+
+  const item = items[index];
   if (item === undefined) return null;
   const current: GalleryItem = item;
 
@@ -472,63 +979,70 @@ export function PostLightbox({
       .finally(() => setBusy(false));
   };
 
-  // The [pin] button: exit zoom first if zoomed (coords are only meaningful at
-  // object-contain scale), otherwise toggle the placement-armed state. Arming
-  // also fires the optional onRequestPin seam with the current index.
-  const handleRequestPin = (i: number): void => {
-    const action = pinButtonAction(zoomed, armed);
-    if (action === 'exit-zoom') {
-      setZoomed(false);
-      return;
-    }
-    if (action === 'arm') {
-      setArmed(true);
-      onRequestPin?.(i);
-      return;
-    }
-    setArmed(false);
-  };
-
-  // A tap on the image while armed: capture the normalised point and disarm.
-  // Outside-rect taps are ignored (placePinFromEvent returns null).
-  const handlePlace = (event: React.MouseEvent<HTMLImageElement>): void => {
-    const point = placePinFromEvent(event.currentTarget, event.clientX, event.clientY);
-    setArmed(false);
-    if (point !== null) onPlacePin?.(index, point.x, point.y);
-  };
-
-  const onScrimTouchStart = (event: React.TouchEvent): void => {
-    touchStartX.current = event.touches[0]?.clientX ?? null;
-  };
-  const onScrimTouchEnd = (event: React.TouchEvent): void => {
-    const start = touchStartX.current;
-    touchStartX.current = null;
-    if (start === null) return;
-    const delta = (event.changedTouches[0]?.clientX ?? start) - start;
-    if (Math.abs(delta) > SWIPE_THRESHOLD) go(delta < 0 ? 1 : -1);
-  };
+  // After a manage move the viewed slide keeps being viewed: the index follows
+  // the slide and the scroll effect above brings the track along.
+  const manageView: LightboxManage | undefined =
+    manage !== undefined
+      ? {
+          onMakeFirst: () => {
+            if (index <= 0) return;
+            manage.onMakeFirst(index);
+            onIndexChange(0);
+          },
+          onMoveLeft: () => {
+            if (index <= 0) return;
+            manage.onMoveLeft(index);
+            onIndexChange(index - 1);
+          },
+          onMoveRight: () => {
+            if (index >= items.length - 1) return;
+            manage.onMoveRight(index);
+            onIndexChange(index + 1);
+          },
+          onMakeLast: () => {
+            if (index >= items.length - 1) return;
+            manage.onMakeLast(index);
+            onIndexChange(items.length - 1);
+          },
+          onAddAfter: () => {
+            manage.onAddAfter(index);
+          },
+        }
+      : undefined;
 
   return lightboxView({
-    item: current,
+    items,
     index,
-    count: items.length,
     presignEnabled,
-    mediaSrc,
-    mediaFailed,
-    zoomed,
+    spec,
+    mode: spec !== null ? mode : 'fit',
+    present,
+    chrome,
     busy,
-    onPrev: () => go(-1),
-    onNext: () => go(1),
-    onJump: onIndexChange,
+    zoom,
+    srcFor: (it) => srcs[it.assetVersionId] ?? null,
+    failedFor: (it) => failed[it.assetVersionId] === true,
+    dimsFor: (it) => intrinsicSize(it, measured),
     onClose,
-    onToggleZoom: () => setZoomed((z) => !z),
     onDownload: handleDownload,
-    onScrimTouchStart,
-    onScrimTouchEnd,
+    onEnterPresent: () => setPresent(true),
+    onSetMode: setMode,
+    onDotClick: onIndexChange,
+    onTrackScroll: handleTrackScroll,
+    onImageLoad: (it, event) => {
+      const img = event.currentTarget;
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        const versionId = it.assetVersionId;
+        setMeasured((prev) =>
+          prev[versionId] !== undefined
+            ? prev
+            : { ...prev, [versionId]: { width: img.naturalWidth, height: img.naturalHeight } },
+        );
+      }
+    },
+    stageGestures,
+    trackRef,
+    manage: manageView,
     pinOverlay,
-    onRequestPin: onRequestPin !== undefined ? handleRequestPin : undefined,
-    armed,
-    onPlace: handlePlace,
-    onSlideActions,
   });
 }

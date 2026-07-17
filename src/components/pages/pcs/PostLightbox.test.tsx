@@ -3,11 +3,17 @@ import type { ReactElement, ReactNode } from 'react';
 import {
   lightboxView,
   lightboxCounter,
-  wrapIndex,
+  slideFromScroll,
+  intrinsicSize,
+  fitFrameStyle,
+  feedCropLayout,
+  verdictChipText,
+  feedCaption,
   pinPointFromRect,
   placePinFromEvent,
-  pinButtonAction,
 } from '@/components/pages/pcs/PostLightbox';
+import type { LightboxViewProps, StageGestures } from '@/components/pages/pcs/PostLightbox';
+import { specFor, verdictForSpec } from '@/components/pages/pcs/platform-specs';
 import type { GalleryItem } from '@srtdio/posts';
 
 // node test environment (no DOM renderer): walk the hookless lightboxView tree.
@@ -29,162 +35,382 @@ function elements(tree: ReactNode): ReactElement[] {
   return out;
 }
 
+// Every string that would render as text anywhere in the tree.
+function collectStrings(node: ReactNode, out: string[]): void {
+  if (typeof node === 'string') {
+    out.push(node);
+    return;
+  }
+  if (Array.isArray(node)) {
+    node.forEach((child) => collectStrings(child, out));
+    return;
+  }
+  if (node === null || typeof node !== 'object' || !('props' in node)) return;
+  collectStrings(((node as ReactElement).props as { children?: ReactNode }).children, out);
+}
+
+function strings(tree: ReactNode): string[] {
+  const out: string[] = [];
+  collectStrings(tree, out);
+  return out;
+}
+
 function byLabel(tree: ReactNode, value: string): ReactElement | undefined {
   return elements(tree).find(
     (el) => (el.props as { 'aria-label'?: string })['aria-label'] === value,
   );
 }
 
-const ITEM: GalleryItem = {
-  assetAttachmentId: 'aa',
-  assetVersionId: 'ver',
-  assetId: 'as',
-  position: 0,
-  filename: 'photo.png',
-  mimeType: 'image/png',
-  kind: 'image',
-  width: 800,
-  height: 1000,
-  durationMs: null,
-  r2Key: 'r2/x',
-  externalUrl: null,
+function className(el: ReactElement): string {
+  return (el.props as { className?: string }).className ?? '';
+}
+
+function item(n: number, width: number | null = 1080, height: number | null = 1350): GalleryItem {
+  return {
+    assetAttachmentId: `aa-${n}`,
+    assetVersionId: `ver-${n}`,
+    assetId: `as-${n}`,
+    position: n,
+    filename: `secret-filename-${n}.png`,
+    mimeType: 'image/png',
+    kind: 'image',
+    width,
+    height,
+    durationMs: null,
+    r2Key: `r2/${n}`,
+    externalUrl: null,
+  };
+}
+
+const GESTURES: StageGestures = {
+  onPointerDown: () => {},
+  onPointerMove: () => {},
+  onPointerUp: () => {},
+  onPointerCancel: () => {},
+  onWheel: () => {},
+  onClick: () => {},
 };
 
-function props(overrides: Partial<Parameters<typeof lightboxView>[0]> = {}) {
+function props(overrides: Partial<LightboxViewProps> = {}): LightboxViewProps {
   return {
-    item: ITEM,
+    items: [item(0), item(1), item(2)],
     index: 0,
-    count: 3,
     presignEnabled: true,
-    mediaSrc: 'https://signed/photo' as string | null,
-    mediaFailed: false,
-    zoomed: false,
+    spec: specFor('linkedin'),
+    mode: 'fit',
+    present: false,
+    chrome: true,
     busy: false,
-    onPrev: () => {},
-    onNext: () => {},
-    onJump: () => {},
+    zoom: { scale: 1, x: 0, y: 0 },
+    srcFor: (it) => `https://signed/${it.assetVersionId}`,
+    failedFor: () => false,
+    dimsFor: (it) =>
+      it.width !== null && it.height !== null ? { width: it.width, height: it.height } : null,
     onClose: () => {},
-    onToggleZoom: () => {},
     onDownload: () => {},
-    onScrimTouchStart: () => {},
-    onScrimTouchEnd: () => {},
+    onEnterPresent: () => {},
+    onSetMode: () => {},
+    onDotClick: () => {},
+    onTrackScroll: () => {},
+    onImageLoad: () => {},
+    stageGestures: GESTURES,
     ...overrides,
   };
 }
 
-describe('wrapIndex', () => {
-  it('wraps past both ends', () => {
-    expect(wrapIndex(0, -1, 3)).toBe(2);
-    expect(wrapIndex(2, 1, 3)).toBe(0);
-    expect(wrapIndex(1, 1, 3)).toBe(2);
+describe('pure helpers', () => {
+  it('formats the mono counter as "n / N"', () => {
+    expect(lightboxCounter(0, 3)).toBe('1 / 3');
+    expect(lightboxCounter(2, 3)).toBe('3 / 3');
   });
-  it('is safe for an empty list', () => {
-    expect(wrapIndex(0, 1, 0)).toBe(0);
+
+  it('derives the resting slide from scroll offset, clamped', () => {
+    expect(slideFromScroll(0, 400, 3)).toBe(0);
+    expect(slideFromScroll(390, 400, 3)).toBe(1);
+    expect(slideFromScroll(9999, 400, 3)).toBe(2);
+    expect(slideFromScroll(100, 0, 3)).toBe(0);
   });
-});
 
-describe('pin placement helpers', () => {
-  const rect = { left: 100, top: 50, width: 200, height: 100 };
+  it('prefers stored asset dimensions, then the measured fallback', () => {
+    expect(intrinsicSize(item(0, 800, 1000), {})).toEqual({ width: 800, height: 1000 });
+    expect(intrinsicSize(item(0, null, null), {})).toBeNull();
+    expect(intrinsicSize(item(0, null, null), { 'ver-0': { width: 3, height: 4 } })).toEqual({
+      width: 3,
+      height: 4,
+    });
+    // A zero stored dimension is unusable; the measured value wins.
+    expect(intrinsicSize(item(0, 0, 100), { 'ver-0': { width: 3, height: 4 } })).toEqual({
+      width: 3,
+      height: 4,
+    });
+  });
 
-  it('normalizes an in-rect tap and clamps to [0,1]', () => {
+  it('builds the fit frame as an aspect-ratio box', () => {
+    expect(fitFrameStyle(1080, 1920)).toEqual({ aspectRatio: '1080 / 1920' });
+  });
+
+  it('lays out the feed crop lens for tall, wide, and fitting images', () => {
+    const spec = specFor('linkedin')!;
+    const tall = feedCropLayout(verdictForSpec(1080, 1920, spec)!);
+    // 29.6875% lost vertically, split evenly above and below the frame.
+    expect(tall.frame.top).toBeCloseTo(29.6875 / 2, 4);
+    expect(tall.frame.height).toBeCloseTo(100 - 29.6875, 4);
+    expect(tall.frame.left).toBe(0);
+    expect(tall.dims).toHaveLength(2);
+
+    const wide = feedCropLayout(verdictForSpec(3000, 1000, spec)!);
+    expect(wide.frame.top).toBe(0);
+    expect(wide.frame.height).toBe(100);
+    expect(wide.frame.left).toBeGreaterThan(0);
+    expect(wide.dims).toHaveLength(2);
+
+    const fits = feedCropLayout(verdictForSpec(1080, 1350, spec)!);
+    expect(fits.frame).toEqual({ left: 0, top: 0, width: 100, height: 100 });
+    expect(fits.dims).toHaveLength(0);
+  });
+
+  it('writes the chip and caption lines from the verdict', () => {
+    const spec = specFor('linkedin')!;
+    const fits = verdictForSpec(1080, 1350, spec)!;
+    expect(verdictChipText(1080, 1350, fits, spec)).toBe('1080×1350 · 4:5 · fits LinkedIn');
+    expect(feedCaption(fits, spec)).toBe('Fits the LinkedIn feed');
+    const crops = verdictForSpec(1080, 1920, spec)!;
+    expect(verdictChipText(1080, 1920, crops, spec)).toBe('1080×1920 · 9:16 · crops to 4:5');
+    expect(feedCaption(crops, spec)).toBe('Crops to 4:5 · 30% lost');
+  });
+
+  it('keeps the pin geometry helpers pure and clamped (used by the gallery now)', () => {
+    const rect = { left: 100, top: 50, width: 200, height: 100 };
     expect(pinPointFromRect(rect, 200, 100)).toEqual({ x: 0.5, y: 0.5 });
-    // The far corner clamps to the unit bound rather than overshooting.
-    expect(pinPointFromRect(rect, 300, 150)).toEqual({ x: 1, y: 1 });
-  });
-
-  it('ignores a tap outside the rect', () => {
     expect(pinPointFromRect(rect, 50, 100)).toBeNull();
-    expect(pinPointFromRect(rect, 200, 200)).toBeNull();
-  });
-
-  it('reads the rect off the tapped element (mocked getBoundingClientRect)', () => {
     const target = { getBoundingClientRect: vi.fn(() => rect) };
     expect(placePinFromEvent(target, 150, 75)).toEqual({ x: 0.25, y: 0.25 });
-    expect(target.getBoundingClientRect).toHaveBeenCalledOnce();
-  });
-
-  it('disables placement while zoomed (exit zoom first)', () => {
-    expect(pinButtonAction(true, false)).toBe('exit-zoom');
-    expect(pinButtonAction(true, true)).toBe('exit-zoom');
-    expect(pinButtonAction(false, false)).toBe('arm');
-    expect(pinButtonAction(false, true)).toBe('disarm');
   });
 });
 
 describe('lightboxView', () => {
-  it('shows the "i of n" counter', () => {
-    const tree = lightboxView(props({ index: 0, count: 3 }));
-    const strings = elements(tree)
-      .map((el) => (el.props as { children?: ReactNode }).children)
-      .filter((child): child is string => typeof child === 'string');
-    expect(strings).toContain(lightboxCounter(0, 3));
-    expect(strings).toContain('1 of 3');
-  });
-
-  it('wires the prev/next arrows to their handlers', () => {
-    const onPrev = vi.fn();
-    const onNext = vi.fn();
-    const tree = lightboxView(props({ onPrev, onNext }));
-    (byLabel(tree, 'Previous image')!.props as { onClick: () => void }).onClick();
-    (byLabel(tree, 'Next image')!.props as { onClick: () => void }).onClick();
-    expect(onPrev).toHaveBeenCalledOnce();
-    expect(onNext).toHaveBeenCalledOnce();
-  });
-
-  it('keeps the pin button inert when onRequestPin is undefined', () => {
+  it('never renders a filename anywhere on the surface', () => {
     const tree = lightboxView(props());
-    const pin = byLabel(tree, 'Add pin');
-    expect(pin).toBeDefined();
-    expect((pin!.props as { disabled?: boolean }).disabled).toBe(true);
-    expect((pin!.props as { onClick?: unknown }).onClick).toBeUndefined();
+    const all = elements(tree);
+    const text = strings(tree).join(' ');
+    expect(text).not.toContain('secret-filename');
+    for (const el of all) {
+      const p = el.props as { alt?: string; 'aria-label'?: string; title?: string };
+      expect(p.alt ?? '').not.toContain('secret-filename');
+      expect(p['aria-label'] ?? '').not.toContain('secret-filename');
+      expect(p.title ?? '').not.toContain('secret-filename');
+    }
   });
 
-  it('arms the pin button from onRequestPin and passes the index', () => {
-    const onRequestPin = vi.fn();
-    const tree = lightboxView(props({ index: 2, onRequestPin }));
-    const pin = byLabel(tree, 'Add pin');
-    expect((pin!.props as { disabled?: boolean }).disabled).toBe(false);
-    (pin!.props as { onClick: () => void }).onClick();
-    expect(onRequestPin).toHaveBeenCalledWith(2);
-  });
-
-  it('arming shows placement mode and routes an image tap to onPlace, not zoom', () => {
-    const onPlace = vi.fn();
-    const onToggleZoom = vi.fn();
-    const tree = lightboxView(props({ armed: true, onPlace, onToggleZoom }));
-    // A placement hint is shown while armed.
-    const hint = elements(tree).find((el) => (el.props as { role?: string }).role === 'status');
-    expect(hint).toBeDefined();
-    // The image tap places a pin and does not toggle zoom.
-    const img = elements(tree).find((el) => el.type === 'img');
-    (img!.props as { onClick: () => void }).onClick();
-    expect(onPlace).toHaveBeenCalledOnce();
-    expect(onToggleZoom).not.toHaveBeenCalled();
-    // The crosshair cursor signals placement mode.
-    expect((img!.props as { className: string }).className).toContain('cursor-crosshair');
-  });
-
-  it('an unarmed image tap still toggles zoom', () => {
-    const onPlace = vi.fn();
-    const onToggleZoom = vi.fn();
-    const tree = lightboxView(props({ armed: false, onPlace, onToggleZoom }));
-    expect(elements(tree).some((el) => (el.props as { role?: string }).role === 'status')).toBe(
-      false,
+  it('shows only close, mono counter, Present and Download in the top bar', () => {
+    const tree = lightboxView(props({ index: 1 }));
+    expect(byLabel(tree, 'Close viewer')).toBeDefined();
+    expect(byLabel(tree, 'Present')).toBeDefined();
+    expect(byLabel(tree, 'Download')).toBeDefined();
+    expect(byLabel(tree, 'Add pin')).toBeUndefined();
+    expect(byLabel(tree, 'Slide actions')).toBeUndefined();
+    expect(byLabel(tree, 'Zoom in')).toBeUndefined();
+    const counter = elements(tree).find(
+      (el) => (el.props as { children?: ReactNode }).children === '2 / 3',
     );
-    const img = elements(tree).find((el) => el.type === 'img');
-    (img!.props as { onClick: () => void }).onClick();
-    expect(onToggleZoom).toHaveBeenCalledOnce();
-    expect(onPlace).not.toHaveBeenCalled();
+    expect(counter).toBeDefined();
+    expect(className(counter!)).toContain('font-mono');
   });
 
-  it('renders the pin overlay only when provided', () => {
-    const withoutOverlay = lightboxView(props());
+  it('constrains the fit image against the fixed stage so it is fully visible', () => {
+    const tree = lightboxView(props());
+    const all = elements(tree);
+    // The slide track and each stage are fixed/absolute boxes, never auto-height.
+    const track = all.find((el) => className(el).includes('snap-x'))!;
+    expect(className(track)).toContain('absolute inset-0');
+    const frames = all.filter(
+      (el) => (el.props as { style?: { aspectRatio?: string } }).style?.aspectRatio !== undefined,
+    );
+    expect(frames.length).toBeGreaterThan(0);
+    for (const frame of frames) {
+      expect(className(frame)).toContain('max-h-full');
+      expect(className(frame)).toContain('max-w-full');
+    }
+    // Nothing in fit mode scrolls: the whole image is always in view.
+    expect(all.some((el) => className(el).includes('overflow-auto'))).toBe(false);
+  });
+
+  it('renders the blurred cover backdrop behind each fit slide', () => {
+    const tree = lightboxView(props());
+    const backdrops = elements(tree).filter((el) => className(el).includes('blur-[48px]'));
+    expect(backdrops).toHaveLength(3);
+    for (const b of backdrops) {
+      expect(className(b)).toContain('object-cover');
+    }
+  });
+
+  it('switches modes through the Fit | Feed segmented control', () => {
+    const onSetMode = vi.fn();
+    const fitTree = lightboxView(props({ onSetMode }));
+    const seg = elements(fitTree).filter(
+      (el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] !== undefined,
+    );
+    expect(seg).toHaveLength(2);
+    (seg[1]!.props as { onClick: () => void }).onClick();
+    expect(onSetMode).toHaveBeenCalledWith('feed');
+
+    // Feed mode renders the skeleton card, the live frame, the safe zone and
+    // the crop caption; fit mode renders none of them.
+    const feedTree = lightboxView(props({ mode: 'feed', items: [item(0, 1080, 1920)] }));
+    const all = elements(feedTree);
+    expect(all.some((el) => 'data-feed-frame' in (el.props as object))).toBe(true);
+    expect(all.some((el) => 'data-feed-safe' in (el.props as object))).toBe(true);
+    expect(all.some((el) => 'data-feed-dim' in (el.props as object))).toBe(true);
+    expect(strings(feedTree)).toContain('LinkedIn feed · mobile');
+    expect(strings(feedTree)).toContain('Crops to 4:5 · 30% lost');
+    const frame = all.find((el) => 'data-feed-frame' in (el.props as object))!;
+    expect(className(frame)).toContain('border-warn');
+
+    expect(elements(fitTree).some((el) => 'data-feed-frame' in (el.props as object))).toBe(false);
+  });
+
+  it('shows the verdict chip with a good dot when fitting and warn when cropping', () => {
+    const fits = lightboxView(props({ items: [item(0, 1080, 1350)] }));
+    const chip = elements(fits).find((el) => 'data-verdict-chip' in (el.props as object))!;
+    expect(chip).toBeDefined();
+    expect(className(chip)).toContain('font-mono');
+    expect(strings(fits)).toContain('1080×1350 · 4:5 · fits LinkedIn');
+    const dot = elements(fits).find((el) => className(el).includes('bg-good'));
+    expect(dot).toBeDefined();
+
+    const crops = lightboxView(props({ items: [item(0, 1080, 1920)] }));
+    expect(strings(crops)).toContain('1080×1920 · 9:16 · crops to 4:5');
+    expect(elements(crops).some((el) => className(el).includes('bg-warn'))).toBe(true);
+  });
+
+  it('hides Feed mode and the chip entirely when the workspace platform is null', () => {
+    const tree = lightboxView(props({ spec: null }));
+    const all = elements(tree);
+    expect(all.some((el) => 'data-verdict-chip' in (el.props as object))).toBe(false);
     expect(
-      elements(withoutOverlay).some(
+      all.some((el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] !== undefined),
+    ).toBe(false);
+    expect(strings(tree)).not.toContain('Fit');
+    expect(strings(tree)).not.toContain('Feed');
+  });
+
+  it('Present hides all chrome and the manage row on a plain black backdrop', () => {
+    const manage = {
+      onMakeFirst: vi.fn(),
+      onMoveLeft: vi.fn(),
+      onMoveRight: vi.fn(),
+      onMakeLast: vi.fn(),
+      onAddAfter: vi.fn(),
+    };
+    const tree = lightboxView(props({ present: true, manage }));
+    const all = elements(tree);
+    // Plain black backdrop, and no blurred letterbox filler.
+    const dialog = all.find((el) => (el.props as { role?: string }).role === 'dialog')!;
+    expect(className(dialog)).toContain('bg-black');
+    expect(all.some((el) => className(el).includes('blur-[48px]'))).toBe(false);
+    // Both chrome layers fade out and stop taking pointer events.
+    const hidden = all.filter(
+      (el) => className(el).includes('opacity-0') && className(el).includes('pointer-events-none'),
+    );
+    expect(hidden.length).toBeGreaterThanOrEqual(2);
+    // Normal chrome returns when present is off.
+    const normal = lightboxView(props({ manage }));
+    expect(
+      elements(normal).some(
+        (el) =>
+          className(el).includes('opacity-100') && !className(el).includes('pointer-events-none'),
+      ),
+    ).toBe(true);
+  });
+
+  it('manage row invokes the prewired existing mutation paths', () => {
+    const manage = {
+      onMakeFirst: vi.fn(),
+      onMoveLeft: vi.fn(),
+      onMoveRight: vi.fn(),
+      onMakeLast: vi.fn(),
+      onAddAfter: vi.fn(),
+    };
+    const tree = lightboxView(props({ index: 1, manage }));
+    for (const [label, fn] of [
+      ['Make first', manage.onMakeFirst],
+      ['Move left', manage.onMoveLeft],
+      ['Add image', manage.onAddAfter],
+      ['Move right', manage.onMoveRight],
+      ['Make last', manage.onMakeLast],
+    ] as const) {
+      const button = byLabel(tree, label)!;
+      expect(button).toBeDefined();
+      expect((button.props as { disabled?: boolean }).disabled ?? false).toBe(false);
+      (button.props as { onClick: () => void }).onClick();
+      expect(fn).toHaveBeenCalledOnce();
+    }
+    // Clients (no manage prop) never see the row.
+    const clientTree = lightboxView(props({ index: 1 }));
+    expect(byLabel(clientTree, 'Make first')).toBeUndefined();
+    expect(byLabel(clientTree, 'Add image')).toBeUndefined();
+  });
+
+  it('disables left/first at position 1 and right/last at the end', () => {
+    const manage = {
+      onMakeFirst: () => {},
+      onMoveLeft: () => {},
+      onMoveRight: () => {},
+      onMakeLast: () => {},
+      onAddAfter: () => {},
+    };
+    const first = lightboxView(props({ index: 0, manage }));
+    expect((byLabel(first, 'Make first')!.props as { disabled: boolean }).disabled).toBe(true);
+    expect((byLabel(first, 'Move left')!.props as { disabled: boolean }).disabled).toBe(true);
+    expect((byLabel(first, 'Move right')!.props as { disabled: boolean }).disabled).toBe(false);
+    expect((byLabel(first, 'Make last')!.props as { disabled: boolean }).disabled).toBe(false);
+
+    const last = lightboxView(props({ index: 2, manage }));
+    expect((byLabel(last, 'Make first')!.props as { disabled: boolean }).disabled).toBe(false);
+    expect((byLabel(last, 'Move left')!.props as { disabled: boolean }).disabled).toBe(false);
+    expect((byLabel(last, 'Move right')!.props as { disabled: boolean }).disabled).toBe(true);
+    expect((byLabel(last, 'Make last')!.props as { disabled: boolean }).disabled).toBe(true);
+  });
+
+  it('renders one snapping slide per item and 44px dots that jump', () => {
+    const onDotClick = vi.fn();
+    const tree = lightboxView(props({ onDotClick }));
+    const all = elements(tree);
+    const slides = all.filter((el) => className(el).includes('snap-center'));
+    expect(slides).toHaveLength(3);
+    const dots = all.filter((el) =>
+      ((el.props as { 'aria-label'?: string })['aria-label'] ?? '').startsWith('Go to image'),
+    );
+    expect(dots).toHaveLength(3);
+    for (const dot of dots) {
+      expect(className(dot)).toContain('h-11');
+      expect(className(dot)).toContain('w-11');
+    }
+    (dots[2]!.props as { onClick: () => void }).onClick();
+    expect(onDotClick).toHaveBeenCalledWith(2);
+  });
+
+  it('disables slide swiping while zoomed past 1x', () => {
+    const rest = lightboxView(props());
+    const track = elements(rest).find((el) => className(el).includes('overscroll-x-contain'))!;
+    expect(className(track)).toContain('overflow-x-auto');
+    expect(className(track)).toContain('snap-mandatory');
+
+    const zoomed = lightboxView(props({ zoom: { scale: 2.5, x: 10, y: -5 } }));
+    const zTrack = elements(zoomed).find((el) =>
+      className(el).includes('overscroll-x-contain'),
+    )!;
+    expect(className(zTrack)).toContain('overflow-x-hidden');
+    expect(className(zTrack)).not.toContain('snap-mandatory');
+  });
+
+  it('renders the pin overlay over the sharp image only when provided', () => {
+    const without = lightboxView(props());
+    expect(
+      elements(without).some(
         (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'pins',
       ),
     ).toBe(false);
-
     const withOverlay = lightboxView(
       props({ pinOverlay: () => <span data-testid="pins">overlay</span> }),
     );

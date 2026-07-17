@@ -332,6 +332,29 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     };
   }, [workspaceId]);
 
+  // The workspace's platform, fetched once per workspace (one small RLS-scoped
+  // select). It drives the lightbox's Feed lens and verdict chip; a null value
+  // (or a failed read) simply hides both.
+  const [workspacePlatform, setWorkspacePlatform] = useState<string | null>(null);
+  useEffect(() => {
+    if (workspaceId === null) {
+      setWorkspacePlatform(null);
+      return;
+    }
+    let cancelled = false;
+    void supabase
+      .from('workspaces')
+      .select('platform')
+      .eq('id', workspaceId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setWorkspacePlatform(data?.platform ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
+
   const agencySide = isAgencySide(role);
   const clientRole = isClient(role);
   const canDelete = isOwnerOrAdmin(role);
@@ -838,6 +861,18 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
   function handleMoveRight(index: number): void {
     void commitGallery(moveRight(orderedIds, index));
   }
+  // Make-first / make-last compose the existing single-step transforms and land
+  // in the same one-shot gallery_set commit; no new write path.
+  function handleMakeFirst(index: number): void {
+    let ids = orderedIds;
+    for (let i = index; i > 0; i -= 1) ids = moveLeft(ids, i);
+    void commitGallery(ids);
+  }
+  function handleMakeLast(index: number): void {
+    let ids = orderedIds;
+    for (let i = index; i < ids.length - 1; i += 1) ids = moveRight(ids, i);
+    void commitGallery(ids);
+  }
   function handleRemove(index: number): void {
     if (orderedIds.length <= 1) {
       push('A post needs at least one image.');
@@ -1182,6 +1217,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                 cache={cache}
                 deps={deps}
                 presignEnabled={presignEnabled}
+                platform={workspacePlatform}
                 pinOverlay={(item) => (
                   <PinOverlay
                     pins={pinsByAttachment[item.assetAttachmentId] ?? []}
@@ -1193,12 +1229,19 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                 pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
                 onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
                 onAddSlide={agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined}
+                onMakeFirst={agencySide && !readOnly ? handleMakeFirst : undefined}
+                onMoveLeft={agencySide && !readOnly ? handleMoveLeft : undefined}
+                onMoveRight={agencySide && !readOnly ? handleMoveRight : undefined}
+                onMakeLast={agencySide && !readOnly ? handleMakeLast : undefined}
+                onAddAfter={
+                  agencySide && !readOnly
+                    ? (index: number) => openAdd({ mode: 'insertAfter', index })
+                    : undefined
+                }
               />
               {gallery.length > 0 ? (
                 <p className="mt-2.5 text-xs text-fg-3">
-                  {agencySide
-                    ? 'Tap a slide for full screen. Long-press to reorder or remove.'
-                    : 'Tap a slide for full screen, pins, and download.'}
+                  Tap a slide for full screen. Long-press to place a pin.
                 </p>
               ) : null}
               {pinError !== null ? (

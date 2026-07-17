@@ -1,6 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
-import { activeSlideIndex, galleryView } from '@/components/pages/pcs/PostGallery';
+import {
+  PIN_ARM_PRESS_MS,
+  activeSlideIndex,
+  galleryView,
+  slideTapAction,
+} from '@/components/pages/pcs/PostGallery';
+import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
+import { createLongPressController } from '@/components/ui/useLongPress';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
@@ -198,6 +205,101 @@ describe('galleryView', () => {
     expect(all.some((el) => label(el)?.startsWith('Go to slide'))).toBe(false);
     const scroller = all.find((el) => className(el).includes('snap-x'))!;
     expect((scroller.props as { onScroll?: unknown }).onScroll).toBe(onScroll);
+  });
+});
+
+describe('pin placement on the inline slide (relocated F5 flow)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('long-press arms placement, then the next tap places via the existing onPlacePin path', () => {
+    vi.useFakeTimers();
+    const onPlacePin = vi.fn();
+    const onRequestPin = vi.fn();
+    // The component wires the shared long-press controller to arm the pressed
+    // slide at ~500ms; replicate that wiring exactly.
+    let armed: number | null = null;
+    const pressedIndex = 1;
+    const controller = createLongPressController({
+      onLongPress: () => {
+        armed = pressedIndex;
+        onRequestPin(pressedIndex);
+      },
+      thresholdMs: PIN_ARM_PRESS_MS,
+    });
+
+    controller.handlers.onPointerDown({ clientX: 40, clientY: 40 });
+    vi.advanceTimersByTime(PIN_ARM_PRESS_MS);
+    controller.handlers.onPointerUp();
+    expect(armed).toBe(pressedIndex);
+    expect(onRequestPin).toHaveBeenCalledWith(pressedIndex);
+
+    // The click trailing the arming long-press is swallowed, not placed.
+    expect(slideTapAction(armed, pressedIndex, controller.consumeClickSuppression())).toBe(
+      'suppress',
+    );
+
+    // The next tap on the armed slide converts to percentage coordinates and
+    // calls the existing onPlacePin path.
+    expect(slideTapAction(armed, pressedIndex, controller.consumeClickSuppression())).toBe(
+      'place',
+    );
+    const slideRect = { left: 100, top: 50, width: 200, height: 100 };
+    const target = { getBoundingClientRect: () => slideRect };
+    const point = placePinFromEvent(target, 150, 75)!;
+    onPlacePin(pressedIndex, point.x, point.y);
+    expect(onPlacePin).toHaveBeenCalledWith(pressedIndex, 0.25, 0.25);
+  });
+
+  it('routes taps by arming state: place on the armed slide, disarm elsewhere, open otherwise', () => {
+    expect(slideTapAction(null, 0, false)).toBe('open');
+    expect(slideTapAction(2, 2, false)).toBe('place');
+    expect(slideTapAction(2, 0, false)).toBe('disarm');
+    expect(slideTapAction(2, 2, true)).toBe('suppress');
+  });
+
+  it('shows the hint pill and crosshair on the armed carousel slide, and taps route through onSlideTap', () => {
+    const onSlideTap = vi.fn();
+    const items = [item(0), item(1), item(2)];
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      pinArmedIndex: 1,
+      onSlideTap,
+    });
+    const all = elements(tree);
+
+    const pill = all.find((el) => (el.props as { role?: string }).role === 'status');
+    expect(pill).toBeDefined();
+    const pillText = all
+      .map((el) => (el.props as { children?: ReactNode }).children)
+      .filter((child): child is string => typeof child === 'string');
+    expect(pillText).toContain('Tap the image to place a pin');
+
+    const armedSlide = all.find((el) => label(el) === 'View image 2')!;
+    expect(className(armedSlide)).toContain('cursor-crosshair');
+    const otherSlide = all.find((el) => label(el) === 'View image 1')!;
+    expect(className(otherSlide)).not.toContain('cursor-crosshair');
+
+    const event = { currentTarget: {}, clientX: 5, clientY: 5 };
+    (armedSlide.props as { onClick: (e: unknown) => void }).onClick(event);
+    expect(onSlideTap).toHaveBeenCalledWith(1, event);
+  });
+
+  it('renders no hint pill while unarmed', () => {
+    const tree = galleryView({
+      items: [item(0), item(1)],
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      pinArmedIndex: null,
+    });
+    expect(elements(tree).some((el) => (el.props as { role?: string }).role === 'status')).toBe(
+      false,
+    );
   });
 });
 
