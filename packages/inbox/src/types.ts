@@ -23,17 +23,28 @@ export const AGENCY_ROLES: readonly Role[] = ['owner', 'admin', 'agency'];
 /** Members notified for a post stage change (admins + owner only). */
 export const ADMIN_ROLES: readonly Role[] = ['owner', 'admin'];
 
-/** The inbox_entries.event_type values this worker can emit. */
-export type InboxEventType =
-  | 'comment'
-  | 'mention'
-  | 'stage_change'
-  | 'comment_resolved'
-  | 'brief_created'
-  | 'brief_closed'
-  | 'asset_uploaded'
-  | 'asset_version_added'
-  | 'invite';
+/**
+ * The inbox_entries.event_type values THIS worker emits. A deliberate SUBSET of
+ * the canonical INBOX_EVENT_TYPES (@srtdio/schemas): the worker never emits
+ * trial_warning / billing_failure / system, nor the DB-proc-only checkpoints_added
+ * / post_ready (those are written by comment_batch_create / post_ready_notify, not
+ * here). Kept as a runtime array so event-types.test.ts can assert it stays a
+ * subset of the canonical list; the union type is derived from it so the two
+ * cannot drift.
+ */
+export const WORKER_INBOX_EVENT_TYPES = [
+  'comment',
+  'mention',
+  'stage_change',
+  'comment_resolved',
+  'brief_created',
+  'brief_closed',
+  'asset_uploaded',
+  'asset_version_added',
+  'invite',
+] as const;
+
+export type InboxEventType = (typeof WORKER_INBOX_EVENT_TYPES)[number];
 
 export type InboxEntityType = 'post' | 'brief' | 'chat_channel' | 'workspace';
 export type InboxScope = 'everything' | 'posts' | 'briefs' | 'people' | 'groups' | 'clients';

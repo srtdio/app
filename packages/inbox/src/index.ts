@@ -47,7 +47,7 @@ export type {
   AssetVersionRow,
   WorkspaceMemberRow,
 } from './types';
-export { AGENCY_ROLES, ADMIN_ROLES } from './types';
+export { AGENCY_ROLES, ADMIN_ROLES, WORKER_INBOX_EVENT_TYPES } from './types';
 
 export type {
   CatchupRow,

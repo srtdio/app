@@ -223,6 +223,69 @@ describe.runIf(COMMENTS_SUITE)('comment_batch_create (feedback ledger)', () => {
     expect(row.ledger_batch_id).not.toBe(firstBatchId);
   });
 
+  it('commits a single-point batch and returns its seq', async () => {
+    const postId = await insertPost('review');
+    const { data, error } = await batchCreate(clientClient, {
+      p_workspace_id: wsA.id,
+      p_post_id: postId,
+      p_points: [{ body: 'one and only point' }],
+      p_trace_id: generateTraceId(),
+    });
+    expect(error).toBeNull();
+    const refs = asRefs(data);
+    expect(refs.map((r) => r.seq)).toEqual([1]);
+    const row = await readLedgerRow(refs[0]!.id);
+    expect(row.ledger_seq).toBe(1);
+    expect(row.ledger_batch_id).not.toBeNull();
+    // A fresh post numbers from 1: ledger_seq is per-post, not global.
+    expect(await countWhere(asGeneric(admin), 'comments', [['entity_id', postId]])).toBe(1);
+  });
+
+  it('commits a full 20-point batch and returns seqs 1..20', async () => {
+    const postId = await insertPost('review');
+    const points = Array.from({ length: 20 }, (_, i) => ({ body: `point ${i + 1}` }));
+    const { data, error } = await batchCreate(clientClient, {
+      p_workspace_id: wsA.id,
+      p_post_id: postId,
+      p_points: points,
+      p_trace_id: generateTraceId(),
+    });
+    expect(error).toBeNull();
+    const refs = asRefs(data);
+    expect(refs.map((r) => r.seq)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+    // All 20 committed under one batch id (the transaction was not rolled back).
+    const rows = await Promise.all(refs.map((r) => readLedgerRow(r.id)));
+    expect(new Set(rows.map((row) => row.ledger_batch_id)).size).toBe(1);
+    expect(await countWhere(asGeneric(admin), 'comments', [['entity_id', postId]])).toBe(20);
+  });
+
+  it('continues ledger_seq from the post max across batches, not per batch', async () => {
+    const postId = await insertPost('review');
+    const first = await batchCreate(clientClient, {
+      p_workspace_id: wsA.id,
+      p_post_id: postId,
+      p_points: [{ body: 'first' }, { body: 'second' }],
+      p_trace_id: generateTraceId(),
+    });
+    expect(first.error).toBeNull();
+    const firstRefs = asRefs(first.data);
+    expect(firstRefs.map((r) => r.seq)).toEqual([1, 2]);
+
+    const second = await batchCreate(clientClient, {
+      p_workspace_id: wsA.id,
+      p_post_id: postId,
+      p_points: [{ body: 'third' }],
+      p_trace_id: generateTraceId(),
+    });
+    expect(second.error).toBeNull();
+    const secondRefs = asRefs(second.data);
+    // A new batch, but the seq keeps climbing from the post's max (2 -> 3).
+    expect(secondRefs.map((r) => r.seq)).toEqual([3]);
+    const firstRow = await readLedgerRow(firstRefs[0]!.id);
+    const secondRow = await readLedgerRow(secondRefs[0]!.id);
+    expect(secondRow.ledger_batch_id).not.toBe(firstRow.ledger_batch_id);
+  });
+
   it('rejects a non-client caller with forbidden_role', async () => {
     const { error } = await batchCreate(ownerClient, {
       p_workspace_id: wsA.id,

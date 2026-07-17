@@ -89,6 +89,10 @@ function eventLabel(eventType: string): string {
     case 'asset_uploaded':
     case 'asset_version_added':
       return 'New asset';
+    case 'checkpoints_added':
+      return 'Points sent';
+    case 'post_ready':
+      return 'Ready for review';
     default:
       return 'New activity';
   }

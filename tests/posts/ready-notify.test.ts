@@ -35,7 +35,6 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../packages/schemas/src/supabase.generated';
 import { setup as bringUpStack, teardown as tearDownStack } from '../rls/setup';
-import { widenLocalInboxEventTypes } from '../comments/setup';
 
 const stackAlreadyUp = existsSync(rlsEnvFile);
 const SELF_MANAGED = process.env.POSTS_DB_SUITE === '1' && !stackAlreadyUp;
@@ -130,9 +129,9 @@ describe.runIf(DB_AVAILABLE)('post_ready_notify (authenticated role)', () => {
   beforeAll(async () => {
     if (SELF_MANAGED) await bringUpStack();
     const env = loadRlsEnv();
-    // Local-only inbox event-type widening; see tests/comments/setup.ts. Needed
-    // here too because the rls suite's bring-up does not apply it.
-    widenLocalInboxEventTypes(env.dbUrl);
+    // The 'post_ready' event_type is admitted by migration
+    // 20260717120000_widen_inbox_event_type_check.sql, applied by the stack
+    // bring-up; no local constraint patch is needed here anymore.
     admin = createAdminClient(env);
 
     owner = await seedUser(env, admin);

@@ -13,6 +13,7 @@ import {
   groupDigest,
   isSnoozed,
   mapEntry,
+  payloadNum,
   payloadStr,
   relativeTime,
   resolveBodyMentions,
@@ -70,6 +71,8 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     caption: null,
     thumbnailAssetVersionId: null,
     number: null,
+    pointsAdded: null,
+    checkpointTotal: null,
     ...over,
   };
 }
@@ -219,6 +222,67 @@ describe('shortLine', () => {
       expect(line).not.toContain('undefined');
       expect(line).not.toContain('null');
     }
+  });
+});
+
+describe('payloadNum', () => {
+  it('reads a finite-number field, null otherwise', () => {
+    expect(payloadNum({ count: 3 }, 'count')).toBe(3);
+    expect(payloadNum({ count: 0 }, 'count')).toBe(0);
+    expect(payloadNum({ count: '3' }, 'count')).toBeNull();
+    expect(payloadNum({ count: Number.NaN }, 'count')).toBeNull();
+    expect(payloadNum({}, 'count')).toBeNull();
+    expect(payloadNum(null, 'count')).toBeNull();
+  });
+});
+
+describe('feedback ledger event lines (checkpoints_added / post_ready)', () => {
+  it('renders the points count with singular / plural, falling back when absent', () => {
+    expect(
+      activityLine(item({ eventType: 'checkpoints_added', title: 'Q3 post', pointsAdded: 3 })),
+    ).toBe('3 points sent on Q3 post');
+    expect(
+      activityLine(item({ eventType: 'checkpoints_added', title: 'Q3 post', pointsAdded: 1 })),
+    ).toBe('1 point sent on Q3 post');
+    expect(
+      activityLine(item({ eventType: 'checkpoints_added', title: null, pointsAdded: null })),
+    ).toBe('Points sent on a post');
+    expect(shortLine(item({ eventType: 'checkpoints_added', pointsAdded: 2 }))).toBe('2 points sent');
+    expect(shortLine(item({ eventType: 'checkpoints_added', pointsAdded: null }))).toBe('Points sent');
+  });
+
+  it('renders the ready ping line', () => {
+    expect(activityLine(item({ eventType: 'post_ready', title: 'Q3 post' }))).toBe(
+      'Q3 post is ready for review',
+    );
+    expect(activityLine(item({ eventType: 'post_ready', title: null }))).toBe(
+      'a post is ready for review',
+    );
+    expect(shortLine(item({ eventType: 'post_ready' }))).toBe('Ready for review');
+  });
+
+  it('never prints undefined or null', () => {
+    for (const type of ['checkpoints_added', 'post_ready']) {
+      const line = activityLine(item({ eventType: type }));
+      expect(line).not.toContain('undefined');
+      expect(line).not.toContain('null');
+    }
+  });
+});
+
+describe('mapEntry ledger counts', () => {
+  it('reads checkpoints_added count and post_ready checkpoints as numbers', () => {
+    const added = mapEntry(
+      row({
+        event_type: 'checkpoints_added',
+        payload: { batch_id: 'b1', count: 4, seqs: [1, 2, 3, 4] },
+      }),
+    );
+    expect(added.pointsAdded).toBe(4);
+    expect(added.checkpointTotal).toBeNull();
+    const ready = mapEntry(row({ event_type: 'post_ready', payload: { checkpoints: 7 } }));
+    expect(ready.checkpointTotal).toBe(7);
+    expect(ready.pointsAdded).toBeNull();
   });
 });
 

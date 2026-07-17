@@ -35,8 +35,13 @@ interface CatchupEnv {
 
 // --- constants --------------------------------------------------------------
 
-// inbox_entries event types that turn into catch-up rows.
-const CATCHUP_EVENT_TYPES = [
+// inbox_entries event types that turn into catch-up rows. A deliberate SUBSET of
+// the canonical INBOX_EVENT_TYPES (@srtdio/schemas): points/ready (checkpoints_
+// added / post_ready) and the account events (invite / trial_warning /
+// billing_failure / system) intentionally do not generate a catch-up digest.
+// event-types.test.ts asserts this stays a subset so a value the DB rejects can
+// never be read here.
+export const CATCHUP_EVENT_TYPES = [
   'comment',
   'mention',
   'comment_resolved',

@@ -8,9 +8,11 @@
 import type { Client, Result } from '@srtdio/rpc';
 import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '@srtdio/rpc';
 import type { Database, Json } from '@srtdio/schemas';
+import { INBOX_EVENT_TYPES } from '@srtdio/schemas';
 import { parseMentions } from '@srtdio/comments';
 import { readProfiles } from '@/lib/chat-reads';
 import { entityUrlPath } from '@/lib/entityRef';
+import { logger } from '@/lib/logger';
 import { EX_MEMBER_LABEL } from '@/components/comments/commentProfiles';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
@@ -41,6 +43,33 @@ export function payloadStr(p: unknown, key: string): string | null {
   if (typeof p !== 'object' || p === null) return null;
   const val = (p as Record<string, unknown>)[key];
   return typeof val === 'string' ? val : null;
+}
+
+/**
+ * Read one finite-number field from an `unknown` jsonb payload. Returns null for
+ * a missing key or a non-number value, so a malformed payload never crashes the
+ * row. Used for the ledger counts (checkpoints_added.count, post_ready.checkpoints).
+ */
+export function payloadNum(p: unknown, key: string): number | null {
+  if (typeof p !== 'object' || p === null) return null;
+  const val = (p as Record<string, unknown>)[key];
+  return typeof val === 'number' && Number.isFinite(val) ? val : null;
+}
+
+/**
+ * The event_type values the app knows (the canonical DB list). A row whose
+ * event_type is outside this set still renders a generic line (never blank), but
+ * we log it loudly once so app<->DB drift is visible instead of silent. This is
+ * the runtime companion to the DB<->app parity test.
+ */
+const KNOWN_EVENT_TYPES = new Set<string>(INBOX_EVENT_TYPES);
+const warnedUnknownEventTypes = new Set<string>();
+
+/** Log (once per value) any event_type the canonical app list does not know. */
+export function warnUnknownEventType(eventType: string): void {
+  if (KNOWN_EVENT_TYPES.has(eventType) || warnedUnknownEventTypes.has(eventType)) return;
+  warnedUnknownEventTypes.add(eventType);
+  logger.warn('activity: unknown inbox event_type (app/DB drift)', { eventType });
 }
 
 /** The state chips: which slice of the inbox is shown. */
@@ -105,6 +134,10 @@ export interface ActivityItem {
   /** The entity's per-workspace number (post/brief), resolved by the batched join;
    *  null until resolved, so pretty links degrade to the classic id route. */
   number: number | null;
+  /** Points sent in a checkpoints_added batch (payload.count); null otherwise. */
+  pointsAdded: number | null;
+  /** Total checkpoints on a post_ready ping (payload.checkpoints); null otherwise. */
+  checkpointTotal: number | null;
 }
 
 /** Map a raw inbox_entries row into an ActivityItem. Pure; actorName stays null. */
@@ -134,6 +167,8 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     caption: null,
     thumbnailAssetVersionId: null,
     number: null,
+    pointsAdded: payloadNum(payload, 'count'),
+    checkpointTotal: payloadNum(payload, 'checkpoints'),
   };
 }
 
@@ -156,6 +191,11 @@ function entityTarget(item: ActivityItem): string {
   if (item.entityType === 'post') return 'a post';
   if (item.entityType === 'brief') return 'a brief';
   return 'Activity';
+}
+
+/** "1 point" / "N points". UI vocabulary: the DB stores these as checkpoints. */
+function pointsLabel(n: number): string {
+  return `${n} ${n === 1 ? 'point' : 'points'}`;
 }
 
 /**
@@ -195,6 +235,12 @@ export function activityLine(item: ActivityItem): string {
       return who !== null ? `${who} added an asset version` : 'New asset version';
     case 'invite':
       return who !== null ? `${who} invited a new member` : 'New workspace invite';
+    case 'checkpoints_added':
+      return item.pointsAdded !== null
+        ? `${pointsLabel(item.pointsAdded)} sent on ${target}`
+        : `Points sent on ${target}`;
+    case 'post_ready':
+      return `${target} is ready for review`;
     default:
       return target;
   }
@@ -237,6 +283,10 @@ export function shortLine(item: ActivityItem): string {
       return 'New asset version';
     case 'invite':
       return 'New member invited';
+    case 'checkpoints_added':
+      return item.pointsAdded !== null ? `${pointsLabel(item.pointsAdded)} sent` : 'Points sent';
+    case 'post_ready':
+      return 'Ready for review';
     default:
       return 'Activity';
   }
@@ -493,6 +543,8 @@ export async function fetchActivityEntries(
 
   const rows = (res.data ?? []).map((row) => row as InboxEntryRow);
   const items = rows.map(mapEntry);
+  // Loudly surface any event_type the app does not know (never blank-renders it).
+  for (const et of unique(items.map((item) => item.eventType))) warnUnknownEventType(et);
 
   const commentIds = unique(
     items.flatMap((item) =>
