@@ -28,6 +28,8 @@ import { PinAnnotationComposer } from '@/components/pages/pcs/PinAnnotationCompo
 import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
 import { buildPinData } from '@/components/pages/pcs/pin-annotations';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
+import { FeedbackLedger } from '@/components/pages/pcs/FeedbackLedger';
+import type { LedgerCounts } from '@/components/pages/pcs/FeedbackLedger';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
 import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
 import { VersionPill } from '@/components/pages/pcs/VersionPill';
@@ -232,6 +234,15 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
   const [annotateError, setAnnotateError] = useState<string | null>(null);
   const [commentsRefresh, setCommentsRefresh] = useState(0);
 
+  // Checkpoint counts lifted from FeedbackLedger's one fetch (no duplicate
+  // read): they drive the header "X of N" chip and the Feedback tab badge.
+  const [checkpointCounts, setCheckpointCounts] = useState<LedgerCounts>({
+    resolved: 0,
+    total: 0,
+  });
+  const handleLedgerCounts = useCallback((counts: LedgerCounts) => setCheckpointCounts(counts), []);
+  const bumpCommentsRefresh = useCallback(() => setCommentsRefresh((n) => n + 1), []);
+
   // Pin annotation state (F5): the placed point drives the pin composer, sibling
   // to the caption composer above. Posting mirrors the caption write path.
   const [pinComposer, setPinComposer] = useState<{ index: number; x: number; y: number } | null>(
@@ -288,6 +299,9 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     setHistoryOpen(false);
     setViewingVersionId(null);
     setCompareIds(null);
+    // A stale checkpoint chip never bleeds across posts; the ledger re-lifts
+    // the real counts once its fetch for the new post lands.
+    setCheckpointCounts({ resolved: 0, total: 0 });
   }, [postId]);
 
   useEffect(() => {
@@ -1152,6 +1166,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
             <PcsTabs
               active={activeTab}
               onSelect={(tab) => setSearchParams(withPcsTab(searchParams, tab))}
+              feedbackCount={checkpointCounts.total - checkpointCounts.resolved}
             />
           </div>
           <div
@@ -1206,6 +1221,14 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                     versionNumber={currentVersionNumber}
                     onClick={() => setHistoryOpen(true)}
                   />
+                ) : null}
+                {checkpointCounts.total > 0 ? (
+                  <span
+                    title="Checkpoints resolved"
+                    className="inline-flex h-7 items-center rounded-full border border-border px-2.5 text-xs font-medium tabular-nums text-fg-2"
+                  >
+                    {checkpointCounts.resolved} of {checkpointCounts.total}
+                  </span>
                 ) : null}
                 <div className="flex-1" />
                 {hasCaption && !editingCaption ? (
@@ -1299,6 +1322,18 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
               pcsTabPanelClass(activeTab === 'feedback', enteredTab === activeTab),
             )}
           >
+            {workspaceId !== null && postId !== undefined ? (
+              <FeedbackLedger
+                workspaceId={workspaceId}
+                postId={postId}
+                postStage={currentStage}
+                viewerIsClient={clientRole}
+                refreshSignal={commentsRefresh}
+                onMutated={bumpCommentsRefresh}
+                onCounts={handleLedgerCounts}
+              />
+            ) : null}
+
             <div className="hidden md:block">{stageSection}</div>
 
             <section className="rounded-xl border border-border bg-panel-2 p-4">

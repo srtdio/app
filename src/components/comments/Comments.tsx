@@ -5,6 +5,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { IconCheck, IconMore } from '@/components/ui/icons';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
+import { cn } from '@/lib/cn';
 import { relativeLong } from '@/lib/relative-time';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
@@ -287,6 +288,54 @@ export function toCommentAttachments(
   }));
 }
 
+// ---------------------------------------------------------------------------
+// Checkpoint batches in the thread (feedback ledger)
+// ---------------------------------------------------------------------------
+
+/** One rendered item of the thread list: a plain one-level thread, or a run of
+ *  consecutive checkpoint threads that share a ledger_batch_id (one send). */
+export type ThreadGroup =
+  | { kind: 'single'; thread: ThreadRoot }
+  | { kind: 'batch'; batchId: string; threads: ThreadRoot[] };
+
+/**
+ * Group consecutive TOP-LEVEL checkpoint threads (ledger_seq not null) sharing a
+ * ledger_batch_id into one batch; every other thread passes through unchanged.
+ * Only adjacency in the newest-first list groups, so two runs of the same batch
+ * separated by an ordinary comment stay separate. Points inside a batch are
+ * re-ordered by ledger_seq ascending so they read in checkpoint order.
+ */
+export function groupThreads(threads: readonly ThreadRoot[]): ThreadGroup[] {
+  const groups: ThreadGroup[] = [];
+  for (const thread of threads) {
+    const batchId = thread.comment.ledger_seq !== null ? thread.comment.ledger_batch_id : null;
+    const last = groups[groups.length - 1];
+    if (
+      batchId !== null &&
+      last !== undefined &&
+      last.kind === 'batch' &&
+      last.batchId === batchId
+    ) {
+      last.threads.push(thread);
+    } else if (batchId !== null) {
+      groups.push({ kind: 'batch', batchId, threads: [thread] });
+    } else {
+      groups.push({ kind: 'single', thread });
+    }
+  }
+  for (const group of groups) {
+    if (group.kind === 'batch') {
+      group.threads.sort((a, b) => (a.comment.ledger_seq ?? 0) - (b.comment.ledger_seq ?? 0));
+    }
+  }
+  return groups;
+}
+
+/** The batch group header line. */
+export function batchHeaderLabel(count: number): string {
+  return `added ${count} ${count === 1 ? 'checkpoint' : 'checkpoints'}`;
+}
+
 /** Which row actions a comment offers. Copy is harmless and shown on every live
  *  comment; edit / delete stay author-only; a tombstone offers nothing. */
 export interface CommentActions {
@@ -435,8 +484,9 @@ export async function runCreateCommentBatch(
   return { ok: true, data: parseBatchRows(data) };
 }
 
-/** Batched mime read so the renderer can dispatch image vs file (no N+1). */
-async function fetchAttachmentMime(
+/** Batched mime read so the renderer can dispatch image vs file (no N+1).
+ *  Exported for the FeedbackLedger, which renders the same attachments. */
+export async function fetchAttachmentMime(
   client: Client,
   versionIds: readonly string[],
 ): Promise<Map<string, string>> {
@@ -759,6 +809,7 @@ export function Comments({
   }
 
   const threads = buildThreads(comments);
+  const groups = groupThreads(threads);
 
   function renderEditor(commentId: string): ReactNode {
     return (
@@ -925,6 +976,209 @@ export function Comments({
     );
   }
 
+  // The shared tail of a top-level item: replies expander, Reply, (optionally)
+  // the thread Resolve toggle, the expanded replies, and the reply composer.
+  // Batch checkpoint points reuse it with showResolve=false: their tick state is
+  // owned by the feedback ledger, but replies stay normal child comments.
+  function renderThreadTail(
+    comment: CommentRow,
+    replies: CommentRow[],
+    tombstone: boolean,
+    showResolve: boolean,
+  ): ReactNode {
+    const isExpanded = expanded.has(comment.id);
+    const isReplyOpen = replyOpen.has(comment.id);
+    const isResolved = comment.resolved_at !== null;
+    const isResolving = resolvingId === comment.id;
+    return (
+      <>
+        <div className="mt-2 flex items-center gap-2">
+          {replies.length > 0 ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="min-h-[44px]"
+              onClick={() => toggleExpanded(comment.id)}
+            >
+              {isExpanded
+                ? 'Hide replies'
+                : `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}
+            </Button>
+          ) : null}
+          {!tombstone ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="min-h-[44px] min-w-[44px]"
+              onClick={() => toggleReply(comment.id)}
+            >
+              {isReplyOpen ? 'Cancel' : 'Reply'}
+            </Button>
+          ) : null}
+          {showResolve && !tombstone ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto min-h-[44px] min-w-[44px]"
+              disabled={isResolving}
+              onClick={() => void handleResolve(comment, !isResolved)}
+            >
+              {isResolving ? 'Saving' : isResolved ? 'Reopen' : 'Resolve'}
+            </Button>
+          ) : null}
+        </div>
+
+        {isExpanded && replies.length > 0 ? (
+          <ul className="mt-3 flex flex-col gap-3 border-l border-border pl-4">
+            {replies.map((reply) => (
+              <li key={reply.id} id={commentDomId(reply.id)}>
+                {renderCommentCard(reply, true)}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {isReplyOpen ? (
+          <div className="mt-3 border-l border-border pl-4">
+            <CommentComposer
+              onSubmit={(body, options) =>
+                handleCreate(body, { ...options, parentCommentId: comment.id })
+              }
+              members={candidates}
+              canAttach={canAttach}
+              uploadFile={uploadFile}
+              placeholder="Write a reply"
+              submitLabel="Reply"
+              autoFocus
+              initialBody={replySeed(comment, currentUserId, candidates)}
+            />
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  // One plain one-level thread, exactly as before the ledger batches landed.
+  function renderThreadItem({ comment, replies, tombstone }: ThreadRoot): ReactNode {
+    // Thread-level resolved state lives on the root comment. A tombstone
+    // root cannot be resolved/reopened (the proc rejects a deleted comment).
+    const isResolved = comment.resolved_at !== null;
+    return (
+      <li
+        key={comment.id}
+        id={commentDomId(comment.id)}
+        className={
+          isResolved
+            ? 'rounded-xl border border-good bg-panel-2 px-4 py-3 transition-shadow'
+            : 'rounded-xl border border-border bg-panel-2 px-4 py-3 transition-shadow'
+        }
+      >
+        {isResolved && !tombstone ? (
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-good">
+            <IconCheck size={14} />
+            Resolved
+          </div>
+        ) : null}
+
+        {tombstone ? (
+          <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
+        ) : (
+          renderCommentCard(comment, false)
+        )}
+
+        {renderThreadTail(comment, replies, tombstone, true)}
+      </li>
+    );
+  }
+
+  // One checkpoint batch: a group card headed "added N checkpoints", then each
+  // point with its seq number (mono), verbatim body, attachments, and tick
+  // state. Ticks are toggled in the feedback ledger, not here; the per-point
+  // reply affordance is the existing thread tail (replies stay child comments).
+  function renderBatchItem(group: { batchId: string; threads: ThreadRoot[] }): ReactNode {
+    const first = group.threads[0]?.comment;
+    if (first === undefined) return null;
+    const authorName = first.legacy_author_name ?? nameOf(first.author_user_id) ?? EX_MEMBER_LABEL;
+    const authorAvatarUrl =
+      first.legacy_author_name !== null ? null : avatarOf(first.author_user_id);
+    return (
+      <li
+        key={`batch-${group.batchId}`}
+        className="rounded-xl border border-border bg-panel-2 px-4 py-3 transition-shadow"
+      >
+        <div className="mb-2 flex items-center gap-2">
+          <Avatar
+            name={authorName}
+            size="md"
+            {...(authorAvatarUrl !== null && authorAvatarUrl !== undefined
+              ? { src: authorAvatarUrl }
+              : {})}
+          />
+          <span className="text-xs font-medium text-fg-2">{authorName}</span>
+          <span className="text-xs text-fg-3">{batchHeaderLabel(group.threads.length)}</span>
+          <span className="ml-auto shrink-0 text-xs text-fg-3 tabular-nums">
+            {relativeLong(first.created_at, new Date())}
+          </span>
+        </div>
+        <ol className="flex flex-col gap-3">
+          {group.threads.map(({ comment, replies, tombstone }) => {
+            const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
+            const done = comment.resolved_at !== null;
+            return (
+              <li key={comment.id} id={commentDomId(comment.id)}>
+                <div className="flex items-start gap-2">
+                  <span
+                    aria-hidden
+                    className="w-5 shrink-0 pt-0.5 text-right font-mono text-xs font-medium tabular-nums text-fg-3"
+                  >
+                    {comment.ledger_seq}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    {tombstone ? (
+                      <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
+                    ) : (
+                      <>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
+                          {renderCommentBody(comment.body, nameOf)}
+                          {comment.edited_at !== null ? (
+                            <span className="ml-1.5 text-[11px] text-fg-3">edited</span>
+                          ) : null}
+                        </p>
+                        {attachments.length > 0 ? (
+                          <MessageAttachments
+                            attachments={attachments}
+                            cache={presignCache}
+                            presignEnabled={presignEnabled}
+                            onImageClick={(attachment) => {
+                              const nav = commentImageNav(attachments, attachment.assetId);
+                              if (nav.images.length > 0) setLightbox(nav);
+                            }}
+                          />
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                  {/* The tick enters/leaves via opacity/translateY only. */}
+                  <span
+                    aria-hidden={!done}
+                    className={cn(
+                      'flex shrink-0 items-center gap-1 pt-0.5 text-xs font-medium text-good transition-[opacity,transform] duration-fast ease-enter',
+                      done ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
+                    )}
+                  >
+                    <IconCheck size={14} />
+                    Done
+                  </span>
+                </div>
+                <div className="pl-7">{renderThreadTail(comment, replies, tombstone, false)}</div>
+              </li>
+            );
+          })}
+        </ol>
+      </li>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {viewerIsClient === true && entityType === 'post' ? (
@@ -950,101 +1204,9 @@ export function Comments({
         </div>
       ) : (
         <ul className="flex flex-col gap-3">
-          {threads.map(({ comment, replies, tombstone }) => {
-            const isExpanded = expanded.has(comment.id);
-            const isReplyOpen = replyOpen.has(comment.id);
-            // Thread-level resolved state lives on the root comment. A tombstone
-            // root cannot be resolved/reopened (the proc rejects a deleted comment).
-            const isResolved = comment.resolved_at !== null;
-            const isResolving = resolvingId === comment.id;
-            return (
-              <li
-                key={comment.id}
-                id={commentDomId(comment.id)}
-                className={
-                  isResolved
-                    ? 'rounded-xl border border-good bg-panel-2 px-4 py-3 transition-shadow'
-                    : 'rounded-xl border border-border bg-panel-2 px-4 py-3 transition-shadow'
-                }
-              >
-                {isResolved && !tombstone ? (
-                  <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-good">
-                    <IconCheck size={14} />
-                    Resolved
-                  </div>
-                ) : null}
-
-                {tombstone ? (
-                  <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
-                ) : (
-                  renderCommentCard(comment, false)
-                )}
-
-                <div className="mt-2 flex items-center gap-2">
-                  {replies.length > 0 ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="min-h-[44px]"
-                      onClick={() => toggleExpanded(comment.id)}
-                    >
-                      {isExpanded
-                        ? 'Hide replies'
-                        : `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}
-                    </Button>
-                  ) : null}
-                  {!tombstone ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="min-h-[44px] min-w-[44px]"
-                      onClick={() => toggleReply(comment.id)}
-                    >
-                      {isReplyOpen ? 'Cancel' : 'Reply'}
-                    </Button>
-                  ) : null}
-                  {!tombstone ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="ml-auto min-h-[44px] min-w-[44px]"
-                      disabled={isResolving}
-                      onClick={() => void handleResolve(comment, !isResolved)}
-                    >
-                      {isResolving ? 'Saving' : isResolved ? 'Reopen' : 'Resolve'}
-                    </Button>
-                  ) : null}
-                </div>
-
-                {isExpanded && replies.length > 0 ? (
-                  <ul className="mt-3 flex flex-col gap-3 border-l border-border pl-4">
-                    {replies.map((reply) => (
-                      <li key={reply.id} id={commentDomId(reply.id)}>
-                        {renderCommentCard(reply, true)}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-
-                {isReplyOpen ? (
-                  <div className="mt-3 border-l border-border pl-4">
-                    <CommentComposer
-                      onSubmit={(body, options) =>
-                        handleCreate(body, { ...options, parentCommentId: comment.id })
-                      }
-                      members={candidates}
-                      canAttach={canAttach}
-                      uploadFile={uploadFile}
-                      placeholder="Write a reply"
-                      submitLabel="Reply"
-                      autoFocus
-                      initialBody={replySeed(comment, currentUserId, candidates)}
-                    />
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
+          {groups.map((group) =>
+            group.kind === 'batch' ? renderBatchItem(group) : renderThreadItem(group.thread),
+          )}
         </ul>
       )}
 

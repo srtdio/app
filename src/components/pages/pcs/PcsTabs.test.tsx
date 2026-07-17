@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import {
   PCS_TAB_PARAM,
+  PcsTabs,
   parsePcsTab,
+  pcsTabBadge,
   pcsTabButtons,
   pcsTabPanelClass,
   pcsTabPanelId,
@@ -34,6 +36,26 @@ type Props = Record<string, unknown>;
 
 function tabs(tree: ReactNode): ReactElement[] {
   return elements(tree).filter((el) => (el.props as Props).role === 'tab');
+}
+
+/** All string/number children under a node, concatenated (badge-aware label text). */
+function text(node: ReactNode): string {
+  const parts: string[] = [];
+  const walk = (child: ReactNode): void => {
+    if (Array.isArray(child)) {
+      child.forEach(walk);
+      return;
+    }
+    if (typeof child === 'string' || typeof child === 'number') {
+      parts.push(String(child));
+      return;
+    }
+    if (child !== null && typeof child === 'object' && 'props' in child) {
+      walk((child.props as { children?: ReactNode }).children);
+    }
+  };
+  walk(node);
+  return parts.join('');
 }
 
 describe('parsePcsTab', () => {
@@ -92,10 +114,7 @@ describe('pcsTabButtons', () => {
       expect((button.props as Props).type).toBe('button');
       expect((button.props as { className: string }).className).toContain('min-h-[44px]');
     }
-    expect(buttons.map((b) => (b.props as { children: string }).children)).toEqual([
-      'Post',
-      'Feedback',
-    ]);
+    expect(buttons.map((b) => text(b))).toEqual(['Post', 'Feedback']);
   });
 
   it('marks only the active tab selected and wires aria-controls to its panel id', () => {
@@ -114,6 +133,53 @@ describe('pcsTabButtons', () => {
     expect(onSelect).toHaveBeenCalledWith('feedback');
     (post.props as { onClick: () => void }).onClick();
     expect(onSelect).toHaveBeenCalledWith('post');
+  });
+});
+
+describe('feedback count badge', () => {
+  it('renders nothing when the count is absent or zero (backward compatible)', () => {
+    expect(pcsTabBadge(undefined, false)).toBeNull();
+    expect(pcsTabBadge(0, false)).toBeNull();
+    const [post, feedback] = tabs(pcsTabButtons('post', () => {})) as [ReactElement, ReactElement];
+    expect(text(post)).toBe('Post');
+    expect(text(feedback)).toBe('Feedback');
+    // The PcsTabs wrapper accepts the old two-prop shape unchanged.
+    const [, wrapped] = tabs(PcsTabs({ active: 'post', onSelect: () => {} })) as [
+      ReactElement,
+      ReactElement,
+    ];
+    expect(text(wrapped)).toBe('Feedback');
+  });
+
+  it('shows the count on the Feedback label only, never on Post', () => {
+    const [post, feedback] = tabs(pcsTabButtons('post', () => {}, 3)) as [
+      ReactElement,
+      ReactElement,
+    ];
+    expect(text(post)).toBe('Post');
+    expect(text(feedback)).toBe('Feedback3');
+    const badge = elements(feedback).find((el) =>
+      String((el.props as Props).className ?? '').includes('rounded-full'),
+    )!;
+    expect(badge).toBeDefined();
+    expect((badge.props as { className: string }).className).toContain('tabular-nums');
+  });
+
+  it('inverts the badge fill on the selected (accent) segment for legibility', () => {
+    const [, selected] = tabs(pcsTabButtons('feedback', () => {}, 2)) as [
+      ReactElement,
+      ReactElement,
+    ];
+    const badge = elements(selected).find((el) =>
+      String((el.props as Props).className ?? '').includes('rounded-full'),
+    )!;
+    expect((badge.props as { className: string }).className).toContain('bg-accent-fg');
+
+    const [, unselected] = tabs(pcsTabButtons('post', () => {}, 2)) as [ReactElement, ReactElement];
+    const idle = elements(unselected).find((el) =>
+      String((el.props as Props).className ?? '').includes('rounded-full'),
+    )!;
+    expect((idle.props as { className: string }).className).toContain('bg-accent-soft');
   });
 });
 

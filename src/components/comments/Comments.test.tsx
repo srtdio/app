@@ -17,9 +17,11 @@ import { editComment, deleteComment } from '@srtdio/comments';
 import type { CommentRow } from '@srtdio/comments';
 import {
   annotationChip,
+  batchHeaderLabel,
   buildBatchArgs,
   buildCreateInput,
   buildThreads,
+  groupThreads,
   canModifyComment,
   commentActions,
   commentCopyText,
@@ -188,6 +190,73 @@ describe('buildThreads', () => {
     const threads = buildThreads(rows);
     expect(threads.map((t) => t.comment.id)).toEqual(['x', 'y']);
     expect(threads.every((t) => t.replies.length === 0 && !t.tombstone)).toBe(true);
+  });
+});
+
+describe('groupThreads (feedback ledger batches in the thread)', () => {
+  const BATCH_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const BATCH_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  function checkpoint(id: string, seq: number, batchId: string, created: string) {
+    return row({ id, ledger_seq: seq, ledger_batch_id: batchId, created_at: created });
+  }
+
+  it('groups consecutive top-level checkpoints sharing a batch id, sorted by seq', () => {
+    const threads = buildThreads([
+      // Newest-first list order (seq desc inside one batch, as created together).
+      checkpoint('c2', 2, BATCH_A, '2026-01-02T00:00:02.000Z'),
+      checkpoint('c1', 1, BATCH_A, '2026-01-02T00:00:01.000Z'),
+      row({ id: 'plain', created_at: '2026-01-01T00:00:00.000Z' }),
+    ]);
+    const groups = groupThreads(threads);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ kind: 'batch', batchId: BATCH_A });
+    if (groups[0]!.kind !== 'batch') throw new Error('expected a batch');
+    expect(groups[0]!.threads.map((t) => t.comment.ledger_seq)).toEqual([1, 2]);
+    expect(groups[1]).toMatchObject({ kind: 'single' });
+  });
+
+  it('splits distinct batch ids into distinct groups', () => {
+    const threads = buildThreads([
+      checkpoint('b1', 4, BATCH_B, '2026-01-03T00:00:00.000Z'),
+      checkpoint('a2', 2, BATCH_A, '2026-01-02T00:00:02.000Z'),
+      checkpoint('a1', 1, BATCH_A, '2026-01-02T00:00:01.000Z'),
+    ]);
+    const groups = groupThreads(threads);
+    expect(groups.map((g) => g.kind)).toEqual(['batch', 'batch']);
+    if (groups[0]!.kind !== 'batch' || groups[1]!.kind !== 'batch') throw new Error('batches');
+    expect(groups[0]!.batchId).toBe(BATCH_B);
+    expect(groups[1]!.batchId).toBe(BATCH_A);
+  });
+
+  it('only adjacency groups: an ordinary comment between runs keeps them apart', () => {
+    const threads = buildThreads([
+      checkpoint('a2', 2, BATCH_A, '2026-01-04T00:00:00.000Z'),
+      row({ id: 'between', created_at: '2026-01-03T00:00:00.000Z' }),
+      checkpoint('a1', 1, BATCH_A, '2026-01-02T00:00:00.000Z'),
+    ]);
+    const groups = groupThreads(threads);
+    expect(groups.map((g) => g.kind)).toEqual(['batch', 'single', 'batch']);
+  });
+
+  it('a non-checkpoint comment stays single even if a batch id somehow rides along', () => {
+    const threads = buildThreads([row({ id: 'odd', ledger_seq: null, ledger_batch_id: BATCH_A })]);
+    expect(groupThreads(threads).map((g) => g.kind)).toEqual(['single']);
+  });
+
+  it('carries each checkpoint thread whole, replies included (replies stay children)', () => {
+    const threads = buildThreads([
+      checkpoint('cp', 1, BATCH_A, '2026-01-02T00:00:00.000Z'),
+      row({ id: 'r1', parent_comment_id: 'cp', created_at: '2026-01-02T01:00:00.000Z' }),
+    ]);
+    const groups = groupThreads(threads);
+    if (groups[0]!.kind !== 'batch') throw new Error('expected a batch');
+    expect(groups[0]!.threads[0]!.replies.map((r) => r.id)).toEqual(['r1']);
+  });
+
+  it('labels the header "added N checkpoints" (singular at one)', () => {
+    expect(batchHeaderLabel(1)).toBe('added 1 checkpoint');
+    expect(batchHeaderLabel(4)).toBe('added 4 checkpoints');
   });
 });
 
