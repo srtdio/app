@@ -22,7 +22,7 @@ const COMMENTS_SUITE = process.env.COMMENTS_SUITE === '1';
 /** The value set the live CHECK constraint on public.inbox_entries admits. */
 function readConstraintValues(dbUrl: string): string[] {
   const sql =
-    "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c " +
+    'SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c ' +
     "WHERE c.conname = 'inbox_entries_event_type_check' " +
     "AND c.conrelid = 'public.inbox_entries'::regclass;";
   const def = execFileSync('psql', [dbUrl, '-At', '-c', sql], {

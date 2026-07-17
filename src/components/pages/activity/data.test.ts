@@ -247,8 +247,12 @@ describe('feedback ledger event lines (checkpoints_added / post_ready)', () => {
     expect(
       activityLine(item({ eventType: 'checkpoints_added', title: null, pointsAdded: null })),
     ).toBe('Points sent on a post');
-    expect(shortLine(item({ eventType: 'checkpoints_added', pointsAdded: 2 }))).toBe('2 points sent');
-    expect(shortLine(item({ eventType: 'checkpoints_added', pointsAdded: null }))).toBe('Points sent');
+    expect(shortLine(item({ eventType: 'checkpoints_added', pointsAdded: 2 }))).toBe(
+      '2 points sent',
+    );
+    expect(shortLine(item({ eventType: 'checkpoints_added', pointsAdded: null }))).toBe(
+      'Points sent',
+    );
   });
 
   it('renders the ready ping line', () => {
