@@ -6,14 +6,10 @@ import {
   slideFromScroll,
   intrinsicSize,
   fitFrameStyle,
-  feedCropLayout,
-  verdictChipText,
-  feedCaption,
   pinPointFromRect,
   placePinFromEvent,
 } from '@/components/pages/pcs/PostLightbox';
 import type { LightboxViewProps, StageGestures } from '@/components/pages/pcs/PostLightbox';
-import { specFor, verdictForSpec } from '@/components/pages/pcs/platform-specs';
 import type { GalleryItem } from '@srtdio/posts';
 
 // node test environment (no DOM renderer): walk the hookless lightboxView tree.
@@ -96,9 +92,6 @@ function props(overrides: Partial<LightboxViewProps> = {}): LightboxViewProps {
     items: [item(0), item(1), item(2)],
     index: 0,
     presignEnabled: true,
-    spec: specFor('linkedin'),
-    mode: 'fit',
-    present: false,
     chrome: true,
     busy: false,
     zoom: { scale: 1, x: 0, y: 0 },
@@ -108,8 +101,6 @@ function props(overrides: Partial<LightboxViewProps> = {}): LightboxViewProps {
       it.width !== null && it.height !== null ? { width: it.width, height: it.height } : null,
     onClose: () => {},
     onDownload: () => {},
-    onEnterPresent: () => {},
-    onSetMode: () => {},
     onDotClick: () => {},
     onTrackScroll: () => {},
     onImageLoad: () => {},
@@ -149,36 +140,6 @@ describe('pure helpers', () => {
     expect(fitFrameStyle(1080, 1920)).toEqual({ aspectRatio: '1080 / 1920' });
   });
 
-  it('lays out the feed crop lens for tall, wide, and fitting images', () => {
-    const spec = specFor('linkedin')!;
-    const tall = feedCropLayout(verdictForSpec(1080, 1920, spec)!);
-    // 29.6875% lost vertically, split evenly above and below the frame.
-    expect(tall.frame.top).toBeCloseTo(29.6875 / 2, 4);
-    expect(tall.frame.height).toBeCloseTo(100 - 29.6875, 4);
-    expect(tall.frame.left).toBe(0);
-    expect(tall.dims).toHaveLength(2);
-
-    const wide = feedCropLayout(verdictForSpec(3000, 1000, spec)!);
-    expect(wide.frame.top).toBe(0);
-    expect(wide.frame.height).toBe(100);
-    expect(wide.frame.left).toBeGreaterThan(0);
-    expect(wide.dims).toHaveLength(2);
-
-    const fits = feedCropLayout(verdictForSpec(1080, 1350, spec)!);
-    expect(fits.frame).toEqual({ left: 0, top: 0, width: 100, height: 100 });
-    expect(fits.dims).toHaveLength(0);
-  });
-
-  it('writes the chip and caption lines from the verdict', () => {
-    const spec = specFor('linkedin')!;
-    const fits = verdictForSpec(1080, 1350, spec)!;
-    expect(verdictChipText(1080, 1350, fits, spec)).toBe('1080×1350 · 4:5 · fits LinkedIn');
-    expect(feedCaption(fits, spec)).toBe('Fits the LinkedIn feed');
-    const crops = verdictForSpec(1080, 1920, spec)!;
-    expect(verdictChipText(1080, 1920, crops, spec)).toBe('1080×1920 · 9:16 · crops to 4:5');
-    expect(feedCaption(crops, spec)).toBe('Crops to 4:5 · 30% lost');
-  });
-
   it('keeps the pin geometry helpers pure and clamped (used by the gallery now)', () => {
     const rect = { left: 100, top: 50, width: 200, height: 100 };
     expect(pinPointFromRect(rect, 200, 100)).toEqual({ x: 0.5, y: 0.5 });
@@ -202,11 +163,11 @@ describe('lightboxView', () => {
     }
   });
 
-  it('shows only close, mono counter, Present and Download in the top bar', () => {
+  it('shows only close, mono counter and Download in the top bar', () => {
     const tree = lightboxView(props({ index: 1 }));
     expect(byLabel(tree, 'Close viewer')).toBeDefined();
-    expect(byLabel(tree, 'Present')).toBeDefined();
     expect(byLabel(tree, 'Download')).toBeDefined();
+    expect(byLabel(tree, 'Present')).toBeUndefined();
     expect(byLabel(tree, 'Add pin')).toBeUndefined();
     expect(byLabel(tree, 'Slide actions')).toBeUndefined();
     expect(byLabel(tree, 'Zoom in')).toBeUndefined();
@@ -235,8 +196,10 @@ describe('lightboxView', () => {
     expect(all.some((el) => className(el).includes('overflow-auto'))).toBe(false);
   });
 
-  it('renders the blurred cover backdrop behind each fit slide', () => {
+  it('renders the blurred cover backdrop behind each slide on the overlay dialog', () => {
     const tree = lightboxView(props());
+    const dialog = elements(tree).find((el) => (el.props as { role?: string }).role === 'dialog')!;
+    expect(className(dialog)).toContain('bg-overlay');
     const backdrops = elements(tree).filter((el) => className(el).includes('blur-[48px]'));
     expect(backdrops).toHaveLength(3);
     for (const b of backdrops) {
@@ -244,79 +207,15 @@ describe('lightboxView', () => {
     }
   });
 
-  it('switches modes through the Fit | Feed segmented control', () => {
-    const onSetMode = vi.fn();
-    const fitTree = lightboxView(props({ onSetMode }));
-    const seg = elements(fitTree).filter(
-      (el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] !== undefined,
-    );
-    expect(seg).toHaveLength(2);
-    (seg[1]!.props as { onClick: () => void }).onClick();
-    expect(onSetMode).toHaveBeenCalledWith('feed');
-
-    // Feed mode renders the skeleton card, the live frame, the safe zone and
-    // the crop caption; fit mode renders none of them.
-    const feedTree = lightboxView(props({ mode: 'feed', items: [item(0, 1080, 1920)] }));
-    const all = elements(feedTree);
-    expect(all.some((el) => 'data-feed-frame' in (el.props as object))).toBe(true);
-    expect(all.some((el) => 'data-feed-safe' in (el.props as object))).toBe(true);
-    expect(all.some((el) => 'data-feed-dim' in (el.props as object))).toBe(true);
-    expect(strings(feedTree)).toContain('LinkedIn feed · mobile');
-    expect(strings(feedTree)).toContain('Crops to 4:5 · 30% lost');
-    const frame = all.find((el) => 'data-feed-frame' in (el.props as object))!;
-    expect(className(frame)).toContain('border-warn');
-
-    expect(elements(fitTree).some((el) => 'data-feed-frame' in (el.props as object))).toBe(false);
-  });
-
-  it('shows the verdict chip with a good dot when fitting and warn when cropping', () => {
-    const fits = lightboxView(props({ items: [item(0, 1080, 1350)] }));
-    const chip = elements(fits).find((el) => 'data-verdict-chip' in (el.props as object))!;
-    expect(chip).toBeDefined();
-    expect(className(chip)).toContain('font-mono');
-    expect(strings(fits)).toContain('1080×1350 · 4:5 · fits LinkedIn');
-    const dot = elements(fits).find((el) => className(el).includes('bg-good'));
-    expect(dot).toBeDefined();
-
-    const crops = lightboxView(props({ items: [item(0, 1080, 1920)] }));
-    expect(strings(crops)).toContain('1080×1920 · 9:16 · crops to 4:5');
-    expect(elements(crops).some((el) => className(el).includes('bg-warn'))).toBe(true);
-  });
-
-  it('hides Feed mode and the chip entirely when the workspace platform is null', () => {
-    const tree = lightboxView(props({ spec: null }));
-    const all = elements(tree);
-    expect(all.some((el) => 'data-verdict-chip' in (el.props as object))).toBe(false);
-    expect(
-      all.some((el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] !== undefined),
-    ).toBe(false);
-    expect(strings(tree)).not.toContain('Fit');
-    expect(strings(tree)).not.toContain('Feed');
-  });
-
-  it('Present hides all chrome and the manage row on a plain black backdrop', () => {
-    const manage = {
-      onMakeFirst: vi.fn(),
-      onMoveLeft: vi.fn(),
-      onMoveRight: vi.fn(),
-      onMakeLast: vi.fn(),
-      onAddAfter: vi.fn(),
-    };
-    const tree = lightboxView(props({ present: true, manage }));
-    const all = elements(tree);
-    // Plain black backdrop, and no blurred letterbox filler.
-    const dialog = all.find((el) => (el.props as { role?: string }).role === 'dialog')!;
-    expect(className(dialog)).toContain('bg-black');
-    expect(all.some((el) => className(el).includes('blur-[48px]'))).toBe(false);
-    // Both chrome layers fade out and stop taking pointer events.
-    const hidden = all.filter(
+  it('hides both chrome layers when chrome is off and shows them when on', () => {
+    const off = lightboxView(props({ chrome: false }));
+    const hidden = elements(off).filter(
       (el) => className(el).includes('opacity-0') && className(el).includes('pointer-events-none'),
     );
     expect(hidden.length).toBeGreaterThanOrEqual(2);
-    // Normal chrome returns when present is off.
-    const normal = lightboxView(props({ manage }));
+    const on = lightboxView(props());
     expect(
-      elements(normal).some(
+      elements(on).some(
         (el) =>
           className(el).includes('opacity-100') && !className(el).includes('pointer-events-none'),
       ),

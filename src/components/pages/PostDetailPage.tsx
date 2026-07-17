@@ -332,29 +332,6 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     };
   }, [workspaceId]);
 
-  // The workspace's platform, fetched once per workspace (one small RLS-scoped
-  // select). It drives the lightbox's Feed lens and verdict chip; a null value
-  // (or a failed read) simply hides both.
-  const [workspacePlatform, setWorkspacePlatform] = useState<string | null>(null);
-  useEffect(() => {
-    if (workspaceId === null) {
-      setWorkspacePlatform(null);
-      return;
-    }
-    let cancelled = false;
-    void supabase
-      .from('workspaces')
-      .select('platform')
-      .eq('id', workspaceId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setWorkspacePlatform(data?.platform ?? null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId]);
-
   const agencySide = isAgencySide(role);
   const clientRole = isClient(role);
   const canDelete = isOwnerOrAdmin(role);
@@ -1217,7 +1194,6 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                 cache={cache}
                 deps={deps}
                 presignEnabled={presignEnabled}
-                platform={workspacePlatform}
                 pinOverlay={(item) => (
                   <PinOverlay
                     pins={pinsByAttachment[item.assetAttachmentId] ?? []}
