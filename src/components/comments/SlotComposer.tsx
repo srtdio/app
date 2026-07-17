@@ -215,7 +215,10 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
     setSubmitting(true);
     setError(null);
     const points = buildPoints(
-      slots.map((slot) => ({ body: slot.body, attachmentVersionIds: doneVersionIds(slot.pending) })),
+      slots.map((slot) => ({
+        body: slot.body,
+        attachmentVersionIds: doneVersionIds(slot.pending),
+      })),
     );
     const result = await onSubmit(points);
     if (result.ok) {
