@@ -7,11 +7,15 @@ import type {
 import type { ReactElement, ReactNode, Ref } from 'react';
 import { IconAssets, IconImagePlus, IconPin } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui/useLongPress';
-import { PostLightbox } from '@/components/pages/pcs/PostLightbox';
+import { PostLightbox, placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
+import { cn } from '@/lib/cn';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
-/** The gesture handlers an agency-side tile spreads for long-press + right-click. */
+/** Hold this long on a slide to arm pin placement (the relocated F5 flow). */
+export const PIN_ARM_PRESS_MS = 500;
+
+/** The gesture handlers a tile spreads for long-press + right-click. */
 export interface TileGestures {
   onPointerDown: (event: ReactPointerEvent) => void;
   onPointerMove: (event: ReactPointerEvent) => void;
@@ -101,6 +105,23 @@ export function activeSlideIndex(scrollLeft: number, slideWidth: number, count: 
   return Math.min(count - 1, Math.max(0, Math.round(scrollLeft / slideWidth)));
 }
 
+/**
+ * What a slide tap does given the pin-arming state: the click trailing the
+ * arming long-press is swallowed, a tap on the armed slide places the pin, a
+ * tap anywhere else while armed just disarms, and an unarmed tap opens the
+ * lightbox. Pure so the relocated placement flow is unit-testable without a DOM.
+ */
+export function slideTapAction(
+  armedIndex: number | null,
+  index: number,
+  suppressed: boolean,
+): 'suppress' | 'place' | 'disarm' | 'open' {
+  if (suppressed) return 'suppress';
+  if (armedIndex === index) return 'place';
+  if (armedIndex !== null) return 'disarm';
+  return 'open';
+}
+
 // Map the aspect token to a literal Tailwind arbitrary-aspect class, for the same
 // JIT-visibility reason. The default (4/5) matches the post gallery's tiles; the
 // brief gallery passes 3/2.
@@ -119,9 +140,9 @@ interface GalleryViewProps {
   aspect?: string;
   /** Per-tile index badge. Defaults to on, as the post gallery shows it. */
   showIndex?: boolean;
-  /** F7: agency-side gesture handlers per tile (long-press + right-click). */
+  /** Gesture handlers per tile (long-press + right-click). */
   slideGestures?: ((index: number) => TileGestures) | undefined;
-  /** F7: swallow the click that trails a long-press so it does not open the lightbox. */
+  /** Swallow the click that trails a long-press. */
   consumeClickSuppression?: (() => boolean) | undefined;
   /** F7: pin-count badge per tile; the badge renders only when this returns > 0. */
   pinCountFor?: ((item: GalleryItem) => number) | undefined;
@@ -135,6 +156,10 @@ interface GalleryViewProps {
   onScroll?: ((event: ReactUIEvent<HTMLDivElement>) => void) | undefined;
   /** Carousel: a dot tap requests a native smooth scroll to that slide. */
   onDotClick?: ((index: number) => void) | undefined;
+  /** F5 relocation: the slide index armed for pin placement, or null. */
+  pinArmedIndex?: number | null;
+  /** F5 relocation: an armed tap on a slide, with the click event for the rect. */
+  onSlideTap?: ((index: number, event: ReactMouseEvent<HTMLButtonElement>) => void) | undefined;
 }
 
 /**
@@ -144,7 +169,9 @@ interface GalleryViewProps {
  * overflow-x scroller with x-mandatory snapping, an n/N counter, and 44px dot
  * indicators. No JS-driven animation; all motion is native scrolling on the X
  * axis. The brief gallery overrides columns / aspect / showIndex and keeps its
- * overview grid; the empty and upload states are unchanged.
+ * overview grid; the empty and upload states are unchanged. Pin placement is
+ * armed by a long-press on a carousel slide (pinArmedIndex shows the hint pill)
+ * and the next tap routes through onSlideTap.
  */
 export function galleryView({
   items,
@@ -162,6 +189,8 @@ export function galleryView({
   scrollerRef,
   onScroll,
   onDotClick,
+  pinArmedIndex = null,
+  onSlideTap,
 }: GalleryViewProps): ReactElement {
   if (items.length === 0) {
     // Agency-side (onAddSlide present): a full-width "Add images" upload zone in
@@ -232,6 +261,14 @@ export function galleryView({
   return (
     <div>
       <div className="relative">
+        {pinArmedIndex !== null ? (
+          <div
+            role="status"
+            className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-xs font-medium text-overlay-fg"
+          >
+            Tap the image to place a pin
+          </div>
+        ) : null}
         <div
           ref={scrollerRef}
           onScroll={onScroll}
@@ -246,11 +283,18 @@ export function galleryView({
                 type="button"
                 aria-label={`View image ${index + 1}`}
                 {...(slideGestures !== undefined ? slideGestures(index) : {})}
-                onClick={() => {
+                onClick={(event) => {
+                  if (onSlideTap !== undefined) {
+                    onSlideTap(index, event);
+                    return;
+                  }
                   if (consumeClickSuppression !== undefined && consumeClickSuppression()) return;
                   onOpen(index);
                 }}
-                className={`group relative ${aspectClass(aspect)} w-full shrink-0 snap-center overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+                className={cn(
+                  `group relative ${aspectClass(aspect)} w-full shrink-0 snap-center overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`,
+                  pinArmedIndex === index && 'cursor-crosshair',
+                )}
               >
                 <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
                 {pinCount > 0 ? (
@@ -303,6 +347,8 @@ interface PostGalleryProps {
   cache: PresignCache;
   deps: PresignDeps;
   presignEnabled: boolean;
+  /** workspaces.platform for this workspace; drives the lightbox Feed lens. */
+  platform?: string | null;
   /** Grid columns. Defaults to the post gallery's responsive 4-up grid. */
   columns?: number;
   /** Tile aspect ratio token. Defaults to the post gallery's 4/5. */
@@ -311,34 +357,45 @@ interface PostGalleryProps {
   showIndex?: boolean;
   /** F5: overlay rendered over the open slide (numbered pins); none when omitted. */
   pinOverlay?: (item: GalleryItem, index: number) => ReactNode;
-  /** F5: the lightbox [pin] button seam; the button is inert when omitted. */
+  /** F5: fired when a long-press arms placement (clears any stale pin error). */
   onRequestPin?: (index: number) => void;
   /** F5: a placed pin reports the slide index + normalised point. */
   onPlacePin?: (index: number, x: number, y: number) => void;
   /** F7: pin-count badge per tile; the badge renders only when this returns > 0. */
   pinCountFor?: ((item: GalleryItem) => number) | undefined;
   /**
-   * F7 (agency-side): open the slide-actions sheet for a slide. When provided,
-   * grid tiles gain long-press + right-click and the lightbox gains a kebab.
+   * F7 (agency-side): open the slide-actions sheet (replace / remove) for a
+   * slide. Reached by right-click on a slide; the lightbox no longer links here.
    */
   onSlideActions?: ((index: number) => void) | undefined;
   /** F7 (agency-side): the dashed Add tile at the grid's end (append flow). */
   onAddSlide?: (() => void) | undefined;
+  /** Lightbox manage row: make-first over the existing gallery_set commit path. */
+  onMakeFirst?: ((index: number) => void) | undefined;
+  /** Lightbox manage row: the existing move-left path. */
+  onMoveLeft?: ((index: number) => void) | undefined;
+  /** Lightbox manage row: the existing move-right path. */
+  onMoveRight?: ((index: number) => void) | undefined;
+  /** Lightbox manage row: make-last over the existing gallery_set commit path. */
+  onMakeLast?: ((index: number) => void) | undefined;
+  /** Lightbox manage row: the existing insert-after add/upload flow. */
+  onAddAfter?: ((index: number) => void) | undefined;
 }
 
 /**
  * A post's images as a one-slide horizontal scroll-snap carousel (or a brief's as
  * its overview grid, via the columns override). Tapping a slide opens the PCS
- * {@link PostLightbox} at that index. No add/reorder/remove (F7) and no
- * pins/annotations (F5) here; the lightbox carries the inert F5 seams. The
- * columns / aspect / showIndex props default to the post gallery's look; the
- * brief gallery overrides them and keeps its grid.
+ * {@link PostLightbox} at that index. Pin placement lives here now: a ~500ms
+ * long-press on a slide arms it (hint pill), and the next tap on that slide
+ * converts to percentage coordinates and calls the existing onPlacePin path.
+ * The slide-actions sheet stays reachable by right-click on a slide.
  */
 export function PostGallery({
   items,
   cache,
   deps,
   presignEnabled,
+  platform = null,
   columns = 4,
   aspect = '4/5',
   showIndex = true,
@@ -348,6 +405,11 @@ export function PostGallery({
   pinCountFor,
   onSlideActions,
   onAddSlide,
+  onMakeFirst,
+  onMoveLeft,
+  onMoveRight,
+  onMakeLast,
+  onAddAfter,
 }: PostGalleryProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -370,29 +432,76 @@ export function PostGallery({
     }
   };
 
-  // One long-press controller for the whole grid: the pressed tile records its
-  // index on pointer-down, and a fired long-press opens that slide's actions.
-  // Only one press is live at a time, so a single controller is sufficient.
-  const pressIndexRef = useRef(0);
-  const { handlers, consumeClickSuppression } = useLongPress(() => {
-    if (onSlideActions !== undefined) onSlideActions(pressIndexRef.current);
-  });
+  // F5 relocation: the slide currently armed for pin placement, or null.
+  const [pinArmedIndex, setPinArmedIndex] = useState<number | null>(null);
+  const canPlacePins = columns === 4 && onPlacePin !== undefined;
 
-  const slideGestures =
-    onSlideActions !== undefined
-      ? (index: number): TileGestures => ({
-          onPointerDown: (event) => {
-            pressIndexRef.current = index;
-            handlers.onPointerDown(event);
-          },
-          onPointerMove: (event) => handlers.onPointerMove(event),
-          onPointerUp: () => handlers.onPointerUp(),
-          onPointerCancel: () => handlers.onPointerCancel(),
-          onContextMenu: (event) => {
-            event.preventDefault();
+  // One long-press controller for the whole gallery: the pressed tile records
+  // its index on pointer-down. In the carousel a fired long-press arms pin
+  // placement; in the grid (briefs) it keeps opening the slide actions.
+  const pressIndexRef = useRef(0);
+  const pressPointerTypeRef = useRef('');
+  const { handlers, consumeClickSuppression } = useLongPress(
+    () => {
+      if (canPlacePins) {
+        setPinArmedIndex(pressIndexRef.current);
+        onRequestPin?.(pressIndexRef.current);
+        return;
+      }
+      if (onSlideActions !== undefined) onSlideActions(pressIndexRef.current);
+    },
+    { thresholdMs: PIN_ARM_PRESS_MS },
+  );
+
+  const wantsGestures = canPlacePins || onSlideActions !== undefined;
+  const slideGestures = wantsGestures
+    ? (index: number): TileGestures => ({
+        onPointerDown: (event) => {
+          pressIndexRef.current = index;
+          pressPointerTypeRef.current = event.pointerType;
+          handlers.onPointerDown(event);
+        },
+        onPointerMove: (event) => handlers.onPointerMove(event),
+        onPointerUp: () => handlers.onPointerUp(),
+        onPointerCancel: () => handlers.onPointerCancel(),
+        onContextMenu: (event) => {
+          event.preventDefault();
+          // Right-click keeps the slide-actions sheet reachable. Touch
+          // long-presses also emit contextmenu in some browsers; those already
+          // armed pin placement above, so only a real mouse opens the sheet.
+          if (onSlideActions !== undefined && pressPointerTypeRef.current !== 'touch') {
             onSlideActions(index);
-          },
-        })
+          }
+        },
+      })
+    : undefined;
+
+  // A carousel slide tap routes through the arming state: place on the armed
+  // slide (existing onPlacePin path, percentage coords), disarm elsewhere,
+  // otherwise open the lightbox.
+  const handleSlideTap = (index: number, event: ReactMouseEvent<HTMLButtonElement>): void => {
+    const action = slideTapAction(pinArmedIndex, index, consumeClickSuppression());
+    if (action === 'suppress') return;
+    if (action === 'place') {
+      const point = placePinFromEvent(event.currentTarget, event.clientX, event.clientY);
+      setPinArmedIndex(null);
+      if (point !== null) onPlacePin?.(index, point.x, point.y);
+      return;
+    }
+    if (action === 'disarm') {
+      setPinArmedIndex(null);
+      return;
+    }
+    setOpenIndex(index);
+  };
+
+  const manage =
+    onMakeFirst !== undefined &&
+    onMoveLeft !== undefined &&
+    onMoveRight !== undefined &&
+    onMakeLast !== undefined &&
+    onAddAfter !== undefined
+      ? { onMakeFirst, onMoveLeft, onMoveRight, onMakeLast, onAddAfter }
       : undefined;
 
   return (
@@ -406,13 +515,15 @@ export function PostGallery({
         aspect,
         showIndex,
         slideGestures,
-        consumeClickSuppression: onSlideActions !== undefined ? consumeClickSuppression : undefined,
+        consumeClickSuppression: wantsGestures ? consumeClickSuppression : undefined,
         pinCountFor,
         onAddSlide,
         activeIndex,
         scrollerRef,
         onScroll: handleScroll,
         onDotClick: scrollToSlide,
+        pinArmedIndex: canPlacePins ? pinArmedIndex : null,
+        onSlideTap: columns === 4 ? handleSlideTap : undefined,
       })}
       {openIndex !== null ? (
         <PostLightbox
@@ -421,12 +532,11 @@ export function PostGallery({
           presignEnabled={presignEnabled}
           cache={cache}
           deps={deps}
+          platform={platform}
           onIndexChange={setOpenIndex}
           onClose={() => setOpenIndex(null)}
           pinOverlay={pinOverlay}
-          onRequestPin={onRequestPin}
-          onPlacePin={onPlacePin}
-          onSlideActions={onSlideActions}
+          manage={manage}
         />
       ) : null}
     </>
