@@ -4834,6 +4834,7 @@ export type Database = {
           name: string
           owner_user_id: string
           plan_tier: string
+          platform: string | null
           row_version: number
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -4856,6 +4857,7 @@ export type Database = {
           name: string
           owner_user_id: string
           plan_tier?: string
+          platform?: string | null
           row_version?: number
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -4878,6 +4880,7 @@ export type Database = {
           name?: string
           owner_user_id?: string
           plan_tier?: string
+          platform?: string | null
           row_version?: number
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
