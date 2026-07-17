@@ -48,13 +48,14 @@ interface CommentComposerProps {
   initialBody?: string;
 }
 
-type PendingStatus =
+export type PendingStatus =
   | { state: 'uploading' }
   | { state: 'done'; versionId: string }
   | { state: 'error'; message: string };
 
-/** One picked file and its upload lifecycle, shown as a removable chip. */
-interface Pending {
+/** One picked file and its upload lifecycle, shown as a removable chip. Shared
+ *  with SlotComposer, which runs the same upload flow once per slot. */
+export interface Pending {
   id: string;
   file: File;
   previewUrl: string | null;
@@ -63,7 +64,7 @@ interface Pending {
 
 let pendingSeq = 0;
 
-function doneVersionIds(pending: readonly Pending[]): string[] {
+export function doneVersionIds(pending: readonly Pending[]): string[] {
   const ids: string[] = [];
   for (const item of pending) {
     if (item.status.state === 'done') ids.push(item.status.versionId);
@@ -227,7 +228,13 @@ export function CommentComposer({
   );
 }
 
-function PendingChip({ item, onRemove }: { item: Pending; onRemove: () => void }): ReactElement {
+export function PendingChip({
+  item,
+  onRemove,
+}: {
+  item: Pending;
+  onRemove: () => void;
+}): ReactElement {
   const error = item.status.state === 'error';
   return (
     <li

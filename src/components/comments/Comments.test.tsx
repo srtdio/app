@@ -17,20 +17,24 @@ import { editComment, deleteComment } from '@srtdio/comments';
 import type { CommentRow } from '@srtdio/comments';
 import {
   annotationChip,
+  buildBatchArgs,
   buildCreateInput,
   buildThreads,
   canModifyComment,
   commentActions,
   commentCopyText,
   commentDomId,
+  parseBatchRows,
   renderCommentBody,
   replySeed,
+  runCreateCommentBatch,
   runDeleteComment,
   runEditComment,
   toCommentAttachments,
   tombstoneText,
   writeClipboard,
 } from '@/components/comments/Comments';
+import type { Client } from '@srtdio/comments';
 import { EX_MEMBER_LABEL, resolveName } from '@/components/comments/commentProfiles';
 import type { CommentProfile } from '@/components/comments/commentProfiles';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
@@ -389,6 +393,100 @@ describe('write-action wiring', () => {
     const client = {} as never;
     await runDeleteComment(client, 'cid', 'trace-2');
     expect(deleteComment).toHaveBeenCalledWith(client, { commentId: 'cid' }, 'trace-2');
+  });
+});
+
+describe('client checkpoint batch (comment_batch_create wiring)', () => {
+  function clientWith(rpc: ReturnType<typeof vi.fn>): Client {
+    return { rpc } as unknown as Client;
+  }
+
+  it('buildBatchArgs carries the points verbatim and the trace as p_trace_id', () => {
+    const args = buildBatchArgs({
+      workspaceId: 'ws',
+      postId: 'post-1',
+      points: [{ body: 'one' }, { body: 'two', attachment_version_ids: ['v1'] }],
+      traceId: 'trace-b',
+    });
+    expect(args).toEqual({
+      p_workspace_id: 'ws',
+      p_post_id: 'post-1',
+      p_points: [{ body: 'one' }, { body: 'two', attachment_version_ids: ['v1'] }],
+      p_trace_id: 'trace-b',
+    });
+  });
+
+  it('invokes the proc with the built args and returns the typed {id, seq} rows', async () => {
+    const rpc = vi.fn(async () => ({
+      data: [
+        { id: 'c1', seq: 1 },
+        { id: 'c2', seq: 2 },
+      ],
+      error: null,
+    }));
+    const result = await runCreateCommentBatch(clientWith(rpc), {
+      workspaceId: 'ws',
+      postId: 'post-1',
+      points: [{ body: 'a' }, { body: 'b' }],
+      traceId: 'trace-c',
+    });
+    expect(rpc).toHaveBeenCalledWith('comment_batch_create', {
+      p_workspace_id: 'ws',
+      p_post_id: 'post-1',
+      p_points: [{ body: 'a' }, { body: 'b' }],
+      p_trace_id: 'trace-c',
+    });
+    expect(result).toEqual({
+      ok: true,
+      data: [
+        { id: 'c1', seq: 1 },
+        { id: 'c2', seq: 2 },
+      ],
+    });
+  });
+
+  it('maps a raised domain code exactly as comment_create does', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: { message: 'forbidden_role' } }));
+    const result = await runCreateCommentBatch(clientWith(rpc), {
+      workspaceId: 'ws',
+      postId: 'post-1',
+      points: [{ body: 'a' }],
+      traceId: 't',
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'forbidden_role', message: 'forbidden_role' },
+    });
+  });
+
+  it('maps an unexpected error to unknown, keeping the raw message', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: { message: 'network down' } }));
+    const result = await runCreateCommentBatch(clientWith(rpc), {
+      workspaceId: 'ws',
+      postId: 'post-1',
+      points: [{ body: 'a' }],
+      traceId: 't',
+    });
+    expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
+  });
+
+  it('parseBatchRows keeps only well-formed {id, seq} rows and never throws', () => {
+    expect(
+      parseBatchRows([
+        { id: 'c1', seq: 1 },
+        { id: 42, seq: 2 },
+        { id: 'c3' },
+        'garbage',
+        null,
+        ['c4', 4],
+        { id: 'c5', seq: 5 },
+      ]),
+    ).toEqual([
+      { id: 'c1', seq: 1 },
+      { id: 'c5', seq: 5 },
+    ]);
+    expect(parseBatchRows(null)).toEqual([]);
+    expect(parseBatchRows({ id: 'c1', seq: 1 })).toEqual([]);
   });
 });
 

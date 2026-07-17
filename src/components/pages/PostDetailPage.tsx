@@ -1319,6 +1319,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                   }
                   refreshSignal={commentsRefresh}
                   focusCommentId={focusCommentId}
+                  viewerIsClient={clientRole}
                 />
               ) : (
                 <div className="px-4 py-8 text-center text-sm text-fg-3">
