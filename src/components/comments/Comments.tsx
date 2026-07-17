@@ -26,8 +26,13 @@ import type {
   CreateCommentInput,
   Result,
 } from '@srtdio/comments';
+import { DOMAIN_ERROR_CODES } from '@srtdio/rpc';
+import type { DomainErrorCode } from '@srtdio/rpc';
+import type { Json } from '@srtdio/schemas';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import { CommentComposer } from '@/components/comments/CommentComposer';
+import { SlotComposer } from '@/components/comments/SlotComposer';
+import type { CheckpointPoint } from '@/components/comments/SlotComposer';
 import { CommentImageLightbox, commentImageNav } from '@/components/comments/CommentImageLightbox';
 import { useMentionCandidates } from '@/components/comments/useMentionCandidates';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
@@ -61,6 +66,11 @@ interface CommentsProps {
   /** Email deep-link target: once this comment is present in the loaded list it
    *  is scrolled to and flashed exactly once (per distinct id). */
   focusCommentId?: string | null;
+  /** True when the viewer's workspace role is 'client'. Gates ONLY the
+   *  top-level composer on posts, which becomes the checkpoint SlotComposer
+   *  (comment_batch_create). Replies (any role), the agency composer, and the
+   *  brief mount (which never passes this) keep CommentComposer unchanged. */
+  viewerIsClient?: boolean;
 }
 
 /** Stable DOM id for a comment row, so a caption highlight can scroll to it. */
@@ -361,6 +371,70 @@ export function runDeleteComment(
   return deleteComment(client, { commentId }, traceId);
 }
 
+/** One created checkpoint as comment_batch_create returns it. */
+export interface CheckpointRow {
+  id: string;
+  seq: number;
+}
+
+export interface CreateCommentBatchParams {
+  workspaceId: string;
+  postId: string;
+  points: CheckpointPoint[];
+  traceId: string;
+}
+
+/** Build the comment_batch_create args; the trace rides as p_trace_id, exactly
+ *  as the comment_create proc receives it through the createComment wrapper. */
+export function buildBatchArgs(params: CreateCommentBatchParams): {
+  p_workspace_id: string;
+  p_post_id: string;
+  p_points: Json;
+  p_trace_id: string;
+} {
+  return {
+    p_workspace_id: params.workspaceId,
+    p_post_id: params.postId,
+    p_points: params.points as unknown as Json,
+    p_trace_id: params.traceId,
+  };
+}
+
+/** Defensive parse of the proc's jsonb reply into typed {id, seq} rows; a
+ *  malformed element is dropped rather than thrown on. */
+export function parseBatchRows(data: unknown): CheckpointRow[] {
+  if (!Array.isArray(data)) return [];
+  const rows: CheckpointRow[] = [];
+  for (const item of data) {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) continue;
+    const { id, seq } = item as { id?: unknown; seq?: unknown };
+    if (typeof id === 'string' && typeof seq === 'number') rows.push({ id, seq });
+  }
+  return rows;
+}
+
+/** Call comment_batch_create with comment_create's error mapping: a raised
+ *  domain code maps to itself, anything else to 'unknown', both carrying the
+ *  raw message the panel surfaces. */
+export async function runCreateCommentBatch(
+  client: Client,
+  params: CreateCommentBatchParams,
+): Promise<Result<CheckpointRow[]>> {
+  const args = buildBatchArgs(params);
+  const { data, error } = await client.rpc('comment_batch_create', args);
+  if (error) {
+    const known = (DOMAIN_ERROR_CODES as readonly string[]).includes(error.message);
+    return {
+      ok: false,
+      error: {
+        code: known ? (error.message as DomainErrorCode) : 'unknown',
+        message: error.message,
+      },
+    };
+  }
+  return { ok: true, data: parseBatchRows(data) };
+}
+
 /** Batched mime read so the renderer can dispatch image vs file (no N+1). */
 async function fetchAttachmentMime(
   client: Client,
@@ -396,6 +470,7 @@ export function Comments({
   onAnnotationChipClick,
   refreshSignal,
   focusCommentId,
+  viewerIsClient,
 }: CommentsProps) {
   const newTrace = useNewTrace();
   const { canAttach, presignEnabled, presignCache, uploadFile } = useChatAttachments();
@@ -589,6 +664,24 @@ export function Comments({
       });
       setExpanded((prev) => new Set(prev).add(parentId));
     }
+    await loadPage(0);
+    return { ok: true };
+  }
+
+  // Write one checkpoint batch through comment_batch_create, sourcing the trace
+  // the same way handleCreate does (one newTrace() per action). On success the
+  // returned {id, seq} rows land in the thread the way a new comment renders
+  // today: refetch page 0.
+  async function handleCreateBatch(
+    points: CheckpointPoint[],
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const result = await runCreateCommentBatch(supabase, {
+      workspaceId,
+      postId: entityId,
+      points,
+      traceId: newTrace(),
+    });
+    if (!result.ok) return { ok: false, error: result.error.message };
     await loadPage(0);
     return { ok: true };
   }
@@ -834,12 +927,16 @@ export function Comments({
 
   return (
     <div className="flex flex-col gap-4">
-      <CommentComposer
-        onSubmit={(body, options) => handleCreate(body, { ...options, parentCommentId: null })}
-        members={candidates}
-        canAttach={canAttach}
-        uploadFile={uploadFile}
-      />
+      {viewerIsClient === true && entityType === 'post' ? (
+        <SlotComposer onSubmit={handleCreateBatch} canAttach={canAttach} uploadFile={uploadFile} />
+      ) : (
+        <CommentComposer
+          onSubmit={(body, options) => handleCreate(body, { ...options, parentCommentId: null })}
+          members={candidates}
+          canAttach={canAttach}
+          uploadFile={uploadFile}
+        />
+      )}
 
       {loading ? (
         <p className="text-sm text-fg-3">Loading comments</p>
