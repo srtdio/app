@@ -10,6 +10,7 @@ routes = [
   { pattern = "srtd.io/posts/*", zone_name = "srtd.io" },
   { pattern = "srtd.io/og/*", zone_name = "srtd.io" },
   { pattern = "srtd.io/p/*", zone_name = "srtd.io" },
+  { pattern = "srtd.io/b/*", zone_name = "srtd.io" },
 ]
 
 [vars]
