@@ -529,7 +529,11 @@ describe.runIf(COMMENTS_SUITE)('comment_batch_create (feedback ledger)', () => {
     });
 
     it('leaves normal-comment edits unchanged: no word cap, resolved state untouched', async () => {
-      const created = await createComment(clientClient, {
+      // Authored by the owner: clients can no longer open a top-level post
+      // comment (comment_create raises forbidden_role), and a resolvable
+      // comment must be top-level, so this normal comment is owner-authored and
+      // owner-edited. The assertion is about edit semantics, not the actor.
+      const created = await createComment(ownerClient, {
         workspace_id: wsA.id,
         entity_type: 'post',
         entity_id: editPostId,
@@ -548,7 +552,7 @@ describe.runIf(COMMENTS_SUITE)('comment_batch_create (feedback ledger)', () => {
       expect(resolved.error).toBeNull();
 
       const edited = await editComment(
-        clientClient,
+        ownerClient,
         { commentId: normalId, body: words(60) },
         generateTraceId(),
       );

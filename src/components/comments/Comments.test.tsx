@@ -96,6 +96,7 @@ function row(partial: Partial<CommentRow> & { id: string }): CommentRow {
     resolution_note: null,
     resolved_at: null,
     resolved_by: null,
+    resolved_version_id: null,
     workspace_id: 'ws',
     ...partial,
   };
