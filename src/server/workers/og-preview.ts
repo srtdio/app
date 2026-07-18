@@ -625,6 +625,18 @@ export default {
       const errStack =
         error instanceof Error && error.stack ? (error.stack.split('\n')[1]?.trim() ?? '') : '';
       logger.error(`og preview failed: ${errName}: ${errMsg} ${errStack}`.trim());
+      // Temporary diagnostic: opt-in per request via x-og-debug: 1 to read the
+      // runtime crash. Normal requests still get an opaque empty 500.
+      if (request.headers.get('x-og-debug') === '1') {
+        const body =
+          error instanceof Error
+            ? `${error.name}: ${error.message}\n${(error.stack ?? '').split('\n').slice(0, 4).join('\n')}`
+            : String(error);
+        return new Response(body, {
+          status: 500,
+          headers: { 'content-type': 'text/plain; charset=utf-8' },
+        });
+      }
       return new Response(null, { status: 500 });
     } finally {
       logger.clearTraceId();

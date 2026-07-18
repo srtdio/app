@@ -128,6 +128,41 @@ describe('worker.fetch passthrough', () => {
   });
 });
 
+describe('worker.fetch diagnostic error surface', () => {
+  // A human /posts/* request routes to passthrough, whose fetch we make throw.
+  function throwingFetch(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('boom from passthrough'))),
+    );
+  }
+
+  it('returns a text/plain 500 with a non-empty body when route throws and x-og-debug: 1', async () => {
+    throwingFetch();
+    const req = new Request('https://srtd.io/posts/abc', {
+      headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0', 'x-og-debug': '1' },
+    });
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    const body = await res.text();
+    expect(body.length).toBeGreaterThan(0);
+    expect(body).toContain('boom from passthrough');
+  });
+
+  it('returns an empty 500 when route throws without the x-og-debug header', async () => {
+    throwingFetch();
+    const req = new Request('https://srtd.io/posts/abc', {
+      headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0' },
+    });
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).not.toBe('text/plain; charset=utf-8');
+    const body = await res.text();
+    expect(body).toBe('');
+  });
+});
+
 describe('renderPostCard', () => {
   it('renders an escaped title, absolute og:image URL, noindex meta and header for a post with an image', async () => {
     const store = new FakeStore({
