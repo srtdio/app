@@ -129,16 +129,17 @@ describe('worker.fetch passthrough', () => {
 });
 
 describe('worker.fetch diagnostic error surface', () => {
-  // A human /posts/* request routes to passthrough, whose fetch we make throw.
-  function throwingFetch(): void {
+  // A human /posts/* request routes to passthrough, whose fetch we make throw the
+  // given value (any shape, not just an Error).
+  function throwingFetch(thrown: unknown): void {
     vi.stubGlobal(
       'fetch',
-      vi.fn(() => Promise.reject(new Error('boom from passthrough'))),
+      vi.fn(() => Promise.reject(thrown)),
     );
   }
 
-  it('returns a text/plain 500 with a non-empty body when route throws and x-og-debug: 1', async () => {
-    throwingFetch();
+  it('fully serializes a thrown plain object (not "[object Object]") when x-og-debug: 1', async () => {
+    throwingFetch({ message: 'boom', code: 'X' });
     const req = new Request('https://srtd.io/posts/abc', {
       headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0', 'x-og-debug': '1' },
     });
@@ -147,11 +148,48 @@ describe('worker.fetch diagnostic error surface', () => {
     expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
     const body = await res.text();
     expect(body.length).toBeGreaterThan(0);
-    expect(body).toContain('boom from passthrough');
+    expect(body).not.toContain('[object Object]');
+    expect(body).toContain('boom');
+    expect(body).toContain('X');
+  });
+
+  it('reports env sanity (host, key len and prefix) without printing secret values', async () => {
+    throwingFetch({ message: 'boom', code: 'X' });
+    const req = new Request('https://srtd.io/posts/abc', {
+      headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0', 'x-og-debug': '1' },
+    });
+    const res = await worker.fetch(req, env);
+    const body = await res.text();
+    expect(body).toContain('SUPABASE_URL host=test.supabase.co');
+    expect(body).toContain(`SUPABASE_SECRET_KEY len=${env.SUPABASE_SECRET_KEY.length}`);
+    expect(body).not.toContain(env.SUPABASE_SECRET_KEY);
+  });
+
+  it('serializes a thrown Error including its name, message and a code property', async () => {
+    const err = Object.assign(new Error('db exploded'), { code: '42P01' });
+    throwingFetch(err);
+    const req = new Request('https://srtd.io/posts/abc', {
+      headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0', 'x-og-debug': '1' },
+    });
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(500);
+    const body = await res.text();
+    expect(body).toContain('Error: db exploded');
+    expect(body).toContain('42P01');
+  });
+
+  it('caps the debug body at 2000 chars', async () => {
+    throwingFetch(new Error('x'.repeat(5000)));
+    const req = new Request('https://srtd.io/posts/abc', {
+      headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0', 'x-og-debug': '1' },
+    });
+    const res = await worker.fetch(req, env);
+    const body = await res.text();
+    expect(body.length).toBeLessThanOrEqual(2000);
   });
 
   it('returns an empty 500 when route throws without the x-og-debug header', async () => {
-    throwingFetch();
+    throwingFetch(new Error('boom from passthrough'));
     const req = new Request('https://srtd.io/posts/abc', {
       headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0' },
     });
