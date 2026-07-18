@@ -613,6 +613,69 @@ async function route(request: Request, env: OgPreviewEnv): Promise<Response> {
   return passthrough(request, env);
 }
 
+/**
+ * Temporary diagnostic: one line of env sanity that never prints a secret value.
+ * SUPABASE_URL is reduced to its hostname (or MISSING/INVALID), the secret key to
+ * its length and a 6-char prefix only.
+ */
+function envSanityLine(env: OgPreviewEnv): string {
+  const rawUrl: string | undefined = env.SUPABASE_URL;
+  let host: string;
+  if (rawUrl === undefined || rawUrl === '') {
+    host = 'MISSING';
+  } else {
+    try {
+      host = new URL(rawUrl).hostname;
+    } catch (err: unknown) {
+      host = `INVALID:${String(err)}`;
+    }
+  }
+  const key: string | undefined = env.SUPABASE_SECRET_KEY;
+  const len = typeof key === 'string' ? key.length : 0;
+  const prefix = typeof key === 'string' && key.length > 0 ? key.slice(0, 6) : 'MISSING';
+  return `env SUPABASE_URL host=${host} SUPABASE_SECRET_KEY len=${len} prefix=${prefix}`;
+}
+
+/**
+ * Temporary diagnostic: fully serialize a thrown value by shape so a non-Error
+ * throw (a plain object, a supabase-js error) is legible instead of collapsing to
+ * "[object Object]". Never throws itself.
+ */
+function serializeThrown(error: unknown): string {
+  if (error instanceof Error) {
+    const stackLines = (error.stack ?? '').split('\n').slice(0, 4).join('\n');
+    let out = `${error.name}: ${error.message}`;
+    if (stackLines !== '') {
+      out += `\n${stackLines}`;
+    }
+    const extra: Record<string, unknown> = {};
+    for (const prop of Object.keys(error)) {
+      if (prop === 'message' || prop === 'stack') {
+        continue;
+      }
+      extra[prop] = (error as unknown as Record<string, unknown>)[prop];
+    }
+    if (Object.keys(extra).length > 0) {
+      try {
+        out += `\n${JSON.stringify(extra)}`;
+      } catch {
+        // Non-serializable extras are dropped; the message and stack still stand.
+      }
+    }
+    return out;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const ctor = (error as { constructor?: { name?: string } }).constructor?.name;
+    const label = ctor !== undefined && ctor !== '' ? `${ctor} ` : '';
+    try {
+      return `${label}${JSON.stringify(error, Object.getOwnPropertyNames(error))}`;
+    } catch {
+      return `${label}${String(error)}`;
+    }
+  }
+  return String(error);
+}
+
 export default {
   async fetch(request: Request, env: OgPreviewEnv): Promise<Response> {
     const traceId = extractTraceId(request);
@@ -626,12 +689,10 @@ export default {
         error instanceof Error && error.stack ? (error.stack.split('\n')[1]?.trim() ?? '') : '';
       logger.error(`og preview failed: ${errName}: ${errMsg} ${errStack}`.trim());
       // Temporary diagnostic: opt-in per request via x-og-debug: 1 to read the
-      // runtime crash. Normal requests still get an opaque empty 500.
+      // runtime crash plus env sanity. Normal requests still get an opaque empty
+      // 500. Capped at 2000 chars; never prints a secret value.
       if (request.headers.get('x-og-debug') === '1') {
-        const body =
-          error instanceof Error
-            ? `${error.name}: ${error.message}\n${(error.stack ?? '').split('\n').slice(0, 4).join('\n')}`
-            : String(error);
+        const body = `${envSanityLine(env)}\n${serializeThrown(error)}`.slice(0, 2000);
         return new Response(body, {
           status: 500,
           headers: { 'content-type': 'text/plain; charset=utf-8' },
