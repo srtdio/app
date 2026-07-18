@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import worker, {
   isCrawler,
+  renderBriefLinkCard,
   renderPostCard,
   renderShortLinkCard,
   serveOgImage,
@@ -36,6 +37,8 @@ interface Fixture {
   bound: { postId: string; assetVersionId: string; locator: ImageLocator } | null;
   /** The ref the store resolves to a live post (uppercase key, entity number). */
   refTarget?: { key: string; number: number; postId: string; title: string } | null;
+  /** The ref the store resolves to a live brief (uppercase key, entity number). */
+  briefRefTarget?: { key: string; number: number; briefId: string; title: string } | null;
 }
 
 class FakeStore implements OgPreviewStore {
@@ -52,6 +55,16 @@ class FakeStore implements OgPreviewStore {
       return Promise.resolve(null);
     }
     return Promise.resolve({ postId: t.postId, title: t.title });
+  }
+  findBriefByRef(ref: {
+    key: string;
+    number: number;
+  }): Promise<{ briefId: string; title: string } | null> {
+    const t = this.fx.briefRefTarget ?? null;
+    if (t === null || t.key !== ref.key || t.number !== ref.number) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve({ briefId: t.briefId, title: t.title });
   }
   findFirstPostImage(): Promise<PostImage | null> {
     return Promise.resolve(this.fx.firstImage);
@@ -227,6 +240,94 @@ describe('renderShortLinkCard', () => {
     const html = await res.text();
     expect(html).toContain('<meta property="og:title" content="Sorted">');
     expect(html).not.toContain('og:url');
+  });
+});
+
+describe('renderBriefLinkCard', () => {
+  const BRIEF_ID = '55555555-5555-7555-8555-555555555555';
+
+  it('renders a title-only card whose og:url is the /b/ short link, with no og:image', async () => {
+    const store = new FakeStore({
+      postTitle: 'never read via ref',
+      firstImage: { assetVersionId: VERSION_ID, width: 1200, height: 630 },
+      bound: null,
+      briefRefTarget: { key: 'GBL', number: 142, briefId: BRIEF_ID, title: 'Spring campaign' },
+    });
+    const res = await renderBriefLinkCard('gbl-142', store);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+    expect(res.headers.get('cache-control')).toBe('public, max-age=300');
+    const html = await res.text();
+    expect(html).toContain('<meta property="og:url" content="https://srtd.io/b/gbl-142">');
+    expect(html).toContain('<meta property="og:title" content="Spring campaign">');
+    expect(html).toContain('<meta property="og:site_name" content="Sorted">');
+    expect(html).toContain('<meta property="og:type" content="article">');
+    expect(html).toContain('<meta name="twitter:card" content="summary">');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    // Briefs never carry an OG image, and never point at the /posts/ or /p/ forms.
+    expect(html).not.toContain('og:image');
+    expect(html).not.toContain('/posts/');
+    expect(html).not.toContain('/p/');
+  });
+
+  it('serves the generic card for an unparseable ref without touching the store', async () => {
+    const store = new FakeStore({
+      postTitle: 'never read',
+      firstImage: null,
+      bound: null,
+      briefRefTarget: { key: 'GBL', number: 142, briefId: BRIEF_ID, title: 'Spring campaign' },
+    });
+    const res = await renderBriefLinkCard('garbage', store);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('<meta property="og:title" content="Sorted">');
+    expect(html).not.toContain('og:url');
+    expect(html).not.toContain('og:image');
+  });
+
+  it('serves the generic card when the ref resolves to no live brief', async () => {
+    const store = new FakeStore({
+      postTitle: null,
+      firstImage: null,
+      bound: null,
+      briefRefTarget: null,
+    });
+    const res = await renderBriefLinkCard('gbl-142', store);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('<meta property="og:title" content="Sorted">');
+    expect(html).not.toContain('og:url');
+  });
+});
+
+describe('worker.fetch brief short-link routing', () => {
+  it('passes a human /b/ request through to PAGES_ORIGIN', async () => {
+    const spy = vi.fn(() => Promise.resolve(new Response('spa', { status: 200 })));
+    vi.stubGlobal('fetch', spy);
+    const req = new Request('https://srtd.io/b/gbl-142', {
+      headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0' },
+    });
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledWith(
+      'https://srtdio-app.pages.dev/b/gbl-142',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('passes a deeper /b/ path through even for a crawler', async () => {
+    const spy = vi.fn(() => Promise.resolve(new Response('spa', { status: 200 })));
+    vi.stubGlobal('fetch', spy);
+    const req = new Request('https://srtd.io/b/gbl-142/extra', {
+      headers: { 'User-Agent': 'WhatsApp/2.23.20.0' },
+    });
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(
+      'https://srtdio-app.pages.dev/b/gbl-142/extra',
+      expect.objectContaining({ method: 'GET' }),
+    );
   });
 });
 

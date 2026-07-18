@@ -137,6 +137,13 @@ export interface OgPreviewStore {
    * missing/deleted post.
    */
   findPostByRef(ref: EntityRef): Promise<{ postId: string; title: string } | null>;
+  /**
+   * Resolve a pretty ref (workspace key + entity number) to a live brief's id and
+   * title. Two lookups only: workspaces.id by the uppercase key, then briefs by
+   * (workspace_id, number) with deleted_at null. Null on unknown key or a
+   * missing/deleted brief.
+   */
+  findBriefByRef(ref: EntityRef): Promise<{ briefId: string; title: string } | null>;
   /** First image attachment of a live post, ordered position, attached_at, id. */
   findFirstPostImage(postId: string): Promise<PostImage | null>;
   /**
@@ -302,6 +309,28 @@ export async function renderShortLinkCard(ref: string, store: OgPreviewStore): P
   return renderResolvedPostCard(target.postId, target.title, `${SITE_ORIGIN}/p/${ref}`, store);
 }
 
+/**
+ * The crawler card for a pretty brief short link /b/<key>-<number>. Resolves the
+ * ref to a live brief via two lookups, then renders a title-only card: og:title
+ * is the brief title, og:url points at the short link, twitter:card is summary.
+ * Briefs carry no OG image by design, so this never queries attachments and there
+ * is no /og/b/* endpoint. An unparseable ref, unknown key, or missing/deleted
+ * brief yields the generic card. Always HTTP 200.
+ */
+export async function renderBriefLinkCard(ref: string, store: OgPreviewStore): Promise<Response> {
+  const parsed = parseEntityRef(ref);
+  if (parsed === null) {
+    return genericCard();
+  }
+  const target = await store.findBriefByRef(parsed);
+  if (target === null) {
+    return genericCard();
+  }
+  return cardResponse(
+    renderCard({ title: target.title, url: `${SITE_ORIGIN}/b/${ref}`, image: null }),
+  );
+}
+
 function imageMiss(): Response {
   return new Response(null, {
     status: 404,
@@ -422,6 +451,37 @@ function createSupabaseOgPreviewStore(env: {
       return { postId: post.id, title: post.title };
     },
 
+    async findBriefByRef({ key, number }) {
+      // Two lookups, no join, no N+1: the active workspace by its key, then the
+      // live brief by (workspace_id, number). entity numbers are per-workspace.
+      const { data: workspace, error: workspaceError } = await client
+        .from('workspaces')
+        .select('id')
+        .eq('key', key)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (workspaceError) {
+        throw workspaceError;
+      }
+      if (!workspace) {
+        return null;
+      }
+      const { data: brief, error: briefError } = await client
+        .from('briefs')
+        .select('id, title')
+        .eq('workspace_id', workspace.id)
+        .eq('number', number)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (briefError) {
+        throw briefError;
+      }
+      if (!brief) {
+        return null;
+      }
+      return { briefId: brief.id, title: brief.title };
+    },
+
     async findFirstPostImage(postId) {
       // asset_versions carries no soft-delete column, so nothing to filter there;
       // width/height are the only real dimensions, emitted only when non-null.
@@ -493,8 +553,8 @@ function createSupabaseOgPreviewStore(env: {
 }
 
 /**
- * Route the request. /posts/:postId and /p/<key>-<number> serve the crawler card
- * to known crawlers and pass everything else through;
+ * Route the request. /posts/:postId, /p/<key>-<number>, and /b/<key>-<number>
+ * serve the crawler card to known crawlers and pass everything else through;
  * /og/p/:postId/:assetVersionId.jpg serves transformed image bytes. Any other
  * /og/* path is a 404.
  */
@@ -517,6 +577,15 @@ async function route(request: Request, env: OgPreviewEnv): Promise<Response> {
     // path, non-read method, or human is transparently passed through.
     if (isRead && segments.length === 2 && isCrawler(request.headers.get('User-Agent'))) {
       return renderShortLinkCard(segments[1] ?? '', createSupabaseOgPreviewStore(env));
+    }
+    return passthrough(request, env);
+  }
+
+  if (segments[0] === 'b') {
+    // Only a bare /b/<ref> read from a known crawler gets the card; any deeper
+    // path, non-read method, or human is transparently passed through.
+    if (isRead && segments.length === 2 && isCrawler(request.headers.get('User-Agent'))) {
+      return renderBriefLinkCard(segments[1] ?? '', createSupabaseOgPreviewStore(env));
     }
     return passthrough(request, env);
   }
