@@ -170,27 +170,19 @@ function IconChevronsRight({ className, size = 18 }: IconProps) {
   );
 }
 
-const TOOLBAR_BUTTON =
-  'inline-flex h-11 w-11 items-center justify-center rounded-lg text-overlay-fg ' +
-  'hover:bg-overlay disabled:opacity-40 focus-visible:outline-none ' +
+// Icon buttons overlaid on the image (counter/close/prev/next): a translucent
+// chip keeps them legible over any photo, dark in both app themes.
+const OVERLAY_BUTTON =
+  'inline-flex h-11 w-11 items-center justify-center rounded-lg bg-overlay-surface text-overlay-fg ' +
+  'hover:bg-overlay-line disabled:opacity-40 focus-visible:outline-none ' +
   'focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
 
-// The card hugs the current image: its width follows the rendered image width and
-// the image region's height follows the rendered height, both derived from the
-// item's aspect ratio and clamped to the viewport. Two 48px bars plus the dialog's
-// 1rem inset (2rem across an axis) are reserved so the whole card fits on screen.
-const CARD_INSET = '2rem';
-const BARS = '96px';
-
-/** The card width that hugs an image of aspect ratio `ratio`, viewport-clamped. */
-export function hugCardWidth(ratio: number): string {
-  return `min(calc(100vw - ${CARD_INSET}), calc((100vh - ${BARS} - ${CARD_INSET}) * ${ratio}))`;
-}
-
-/** The image region's height for an image of aspect ratio `ratio`, viewport-clamped. */
-export function hugImageHeight(ratio: number): string {
-  return `min(calc(100vh - ${BARS} - ${CARD_INSET}), calc((100vw - ${CARD_INSET}) / ${ratio}))`;
-}
+// Icon buttons in the action bar below the image, which sits on the viewer's own
+// dark backdrop, so they need no chip of their own.
+const TOOLBAR_BUTTON =
+  'inline-flex h-11 w-11 items-center justify-center rounded-lg text-overlay-fg ' +
+  'hover:bg-overlay-surface disabled:opacity-40 focus-visible:outline-none ' +
+  'focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
 
 /** The agency manage actions, prewired to the current slide. */
 export interface LightboxManage {
@@ -222,6 +214,10 @@ export interface LightboxViewProps {
   failedFor: (item: GalleryItem) => boolean;
   dimsFor: (item: GalleryItem) => { width: number; height: number } | null;
   onClose: () => void;
+  /** Step the carousel back one slide (overlay arrow; clamps at the first). */
+  onPrev: () => void;
+  /** Step the carousel forward one slide (overlay arrow; clamps at the last). */
+  onNext: () => void;
   onDownload: () => void;
   onTrackScroll: (event: ReactUIEvent<HTMLDivElement>) => void;
   onImageLoad: (item: GalleryItem, event: SyntheticEvent<HTMLImageElement>) => void;
@@ -320,15 +316,17 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   // A gallery can never be emptied, so delete is inert on the last image.
   const canDelete = count > 1;
 
-  // The card hugs the current image: its rendered width and the image region's
-  // height both follow the current item's aspect ratio (stored dims or measured
-  // fallback), viewport-clamped. Unknown dims fall back to the height cap.
+  // The image region is a full-width aspect-ratio box following the CURRENT
+  // item's ratio (stored dims or measured fallback), so the whole image shows
+  // with no letterbox and no viewport clamp. Unknown dims fall back to 4/5 until
+  // the image decodes and reports its true ratio.
   const current = items[index];
   const dims = current !== undefined ? props.dimsFor(current) : null;
-  const ratio = dims !== null ? dims.width / dims.height : null;
-  const cardWidth = ratio !== null ? hugCardWidth(ratio) : undefined;
-  const imageHeight =
-    ratio !== null ? hugImageHeight(ratio) : `calc(100vh - ${BARS} - ${CARD_INSET})`;
+  const ratioStyle: CSSProperties = {
+    aspectRatio: dims !== null ? `${dims.width} / ${dims.height}` : '4 / 5',
+  };
+  const atStart = index <= 0;
+  const atEnd = index >= count - 1;
 
   // Opacity only: no translate or rotate is introduced anywhere on this surface.
   const chromeMotion = (visible: boolean): string =>
@@ -338,73 +336,158 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
     );
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Image viewer"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4"
-    >
-      {/* The card hugs the image at its rendered width, clamped so it never
-          exceeds the viewport and never narrows below the controls' needs. It
-          is borderless and transparent: the photo hugs on the dialog's dark
-          backdrop with no box, border, or shadow. */}
-      <div
-        className="relative inline-flex max-w-full flex-col overflow-hidden"
-        style={{ width: cardWidth, minWidth: 'min(352px, 100%)' }}
-      >
-        {/* Top bar: mono counter · close. Transparent, flush above the image. */}
+    // In-flow, full-width block (no longer a modal): the viewer replaces the
+    // ribbon in normal page flow, the post content continues below it. It carries
+    // its own dark backdrop and stays dark in both app themes.
+    <div aria-label="Image viewer" className="relative w-full overflow-hidden bg-overlay">
+      {/* Image region: the native scroll-snap carousel, one slide per width, in a
+          full-width aspect-ratio box that follows the current image's ratio. The
+          counter, close, and prev/next arrows overlay this region. */}
+      <div className="relative w-full overflow-hidden" style={ratioStyle}>
         <div
+          ref={props.trackRef}
+          onScroll={props.onTrackScroll}
+          aria-roledescription="carousel"
+          data-motion-axis="x"
           className={cn(
-            'flex h-12 items-center justify-between px-1.5',
+            'absolute inset-0 flex overscroll-x-contain',
+            zoom.scale > 1 ? 'overflow-x-hidden' : 'snap-x snap-mandatory overflow-x-auto',
+          )}
+        >
+          {items.map((slide, i) => (
+            <div
+              key={slide.assetAttachmentId}
+              className="relative h-full w-full shrink-0 snap-center overflow-hidden"
+            >
+              {fitSlide(props, slide, i)}
+            </div>
+          ))}
+        </div>
+
+        {/* Counter overlaid top-left, close overlaid top-right; translucent chips
+            keep both legible over any photo. */}
+        <span
+          className={cn(
+            'pointer-events-none absolute left-2 top-2 rounded-md bg-overlay-surface px-2 py-1 font-mono text-sm tabular-nums text-overlay-fg',
             chromeMotion(chromeVisible),
           )}
         >
-          <span className="px-2 font-mono text-sm tabular-nums text-overlay-fg-dim">
-            {lightboxCounter(index, count)}
-          </span>
+          {lightboxCounter(index, count)}
+        </span>
+        <button
+          type="button"
+          aria-label="Close viewer"
+          onClick={props.onClose}
+          className={cn(OVERLAY_BUTTON, 'absolute right-2 top-2', chromeMotion(chromeVisible))}
+        >
+          <IconX size={20} />
+        </button>
+
+        {/* Prev / next overlay arrows for click; swipe still drives the track.
+            Centred by flex (no translate), edge-disabled. */}
+        {count > 1 ? (
+          <div
+            className={cn(
+              'pointer-events-none absolute inset-0 flex items-center justify-between px-2',
+              chromeMotion(chromeVisible),
+            )}
+          >
+            <button
+              type="button"
+              aria-label="Previous image"
+              disabled={atStart}
+              onClick={props.onPrev}
+              className={cn(OVERLAY_BUTTON, 'pointer-events-auto')}
+            >
+              <IconChevronLeft size={22} />
+            </button>
+            <button
+              type="button"
+              aria-label="Next image"
+              disabled={atEnd}
+              onClick={props.onNext}
+              className={cn(OVERLAY_BUTTON, 'pointer-events-auto')}
+            >
+              <IconChevronRight size={22} />
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Action bar: a slim full-width bar directly below the image (not
+          overlapping it) with the agency 7-control set (reorder · divider ·
+          download/add/delete), or download only for clients and read-only.
+          Delete swaps the whole bar for an inline confirm row. */}
+      <div
+        className={cn('flex h-12 w-full items-center justify-center', chromeMotion(chromeVisible))}
+      >
+        {manage === undefined ? (
+          <button
+            type="button"
+            aria-label="Download"
+            disabled={busy}
+            onClick={props.onDownload}
+            className={TOOLBAR_BUTTON}
+          >
+            <IconDownload size={20} />
+          </button>
+        ) : removeConfirming ? (
+          <div className="flex items-center gap-2 px-3">
+            <span className="text-sm text-overlay-fg">Remove this image?</span>
+            <button
+              type="button"
+              onClick={props.onCancelRemove}
+              className="inline-flex h-11 items-center rounded-lg px-3 text-sm text-overlay-fg-dim hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={props.onConfirmRemove}
+              className="inline-flex h-11 items-center rounded-lg border border-bad px-3 text-sm font-medium text-bad hover:bg-bad/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad"
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
           <div className="flex items-center">
             <button
               type="button"
-              aria-label="Close viewer"
-              onClick={props.onClose}
+              aria-label="Make first"
+              disabled={index === 0}
+              onClick={manage.onMakeFirst}
               className={TOOLBAR_BUTTON}
             >
-              <IconX size={20} />
+              <IconChevronsLeft size={20} />
             </button>
-          </div>
-        </div>
-
-        {/* Image region: the native scroll-snap carousel, one slide per width.
-            Its height follows the current image; the card's width equals the
-            frame's rendered width so the image hugs edge to edge. */}
-        <div className="relative w-full overflow-hidden" style={{ height: imageHeight }}>
-          <div
-            ref={props.trackRef}
-            onScroll={props.onTrackScroll}
-            aria-roledescription="carousel"
-            data-motion-axis="x"
-            className={cn(
-              'absolute inset-0 flex overscroll-x-contain',
-              zoom.scale > 1 ? 'overflow-x-hidden' : 'snap-x snap-mandatory overflow-x-auto',
-            )}
-          >
-            {items.map((slide, i) => (
-              <div
-                key={slide.assetAttachmentId}
-                className="relative h-full w-full shrink-0 snap-center overflow-hidden"
-              >
-                {fitSlide(props, slide, i)}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Bottom bar: the agency 7-control action bar (reorder · divider ·
-            download/add/delete), or download only for clients and read-only.
-            Transparent, flush below the image on the dark backdrop. Delete
-            swaps the whole bar for an inline confirm row. */}
-        <div className={cn('flex h-12 items-center justify-center', chromeMotion(chromeVisible))}>
-          {manage === undefined ? (
+            <button
+              type="button"
+              aria-label="Move left"
+              disabled={index === 0}
+              onClick={manage.onMoveLeft}
+              className={TOOLBAR_BUTTON}
+            >
+              <IconChevronLeft size={20} />
+            </button>
+            <button
+              type="button"
+              aria-label="Move right"
+              disabled={index === count - 1}
+              onClick={manage.onMoveRight}
+              className={TOOLBAR_BUTTON}
+            >
+              <IconChevronRight size={20} />
+            </button>
+            <button
+              type="button"
+              aria-label="Make last"
+              disabled={index === count - 1}
+              onClick={manage.onMakeLast}
+              className={TOOLBAR_BUTTON}
+            >
+              <IconChevronsRight size={20} />
+            </button>
+            <span aria-hidden className="mx-2 h-5 w-px bg-overlay-line" />
             <button
               type="button"
               aria-label="Download"
@@ -414,92 +497,25 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             >
               <IconDownload size={20} />
             </button>
-          ) : removeConfirming ? (
-            <div className="flex items-center gap-2 px-3">
-              <span className="text-sm text-overlay-fg">Remove this image?</span>
-              <button
-                type="button"
-                onClick={props.onCancelRemove}
-                className="inline-flex h-11 items-center rounded-lg px-3 text-sm text-overlay-fg-dim hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={props.onConfirmRemove}
-                className="inline-flex h-11 items-center rounded-lg border border-bad px-3 text-sm font-medium text-bad hover:bg-bad/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad"
-              >
-                Remove
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center">
-              <button
-                type="button"
-                aria-label="Make first"
-                disabled={index === 0}
-                onClick={manage.onMakeFirst}
-                className={TOOLBAR_BUTTON}
-              >
-                <IconChevronsLeft size={20} />
-              </button>
-              <button
-                type="button"
-                aria-label="Move left"
-                disabled={index === 0}
-                onClick={manage.onMoveLeft}
-                className={TOOLBAR_BUTTON}
-              >
-                <IconChevronLeft size={20} />
-              </button>
-              <button
-                type="button"
-                aria-label="Move right"
-                disabled={index === count - 1}
-                onClick={manage.onMoveRight}
-                className={TOOLBAR_BUTTON}
-              >
-                <IconChevronRight size={20} />
-              </button>
-              <button
-                type="button"
-                aria-label="Make last"
-                disabled={index === count - 1}
-                onClick={manage.onMakeLast}
-                className={TOOLBAR_BUTTON}
-              >
-                <IconChevronsRight size={20} />
-              </button>
-              <span aria-hidden className="mx-2 h-5 w-px bg-overlay-line" />
-              <button
-                type="button"
-                aria-label="Download"
-                disabled={busy}
-                onClick={props.onDownload}
-                className={TOOLBAR_BUTTON}
-              >
-                <IconDownload size={20} />
-              </button>
-              <button
-                type="button"
-                aria-label="Add image"
-                onClick={manage.onAddAfter}
-                className={cn(TOOLBAR_BUTTON, 'text-accent')}
-              >
-                <IconPlus size={20} />
-              </button>
-              <button
-                type="button"
-                aria-label="Delete image"
-                disabled={!canDelete}
-                onClick={props.onRequestRemove}
-                className={cn(TOOLBAR_BUTTON, 'hover:text-bad')}
-              >
-                <IconTrash size={20} />
-              </button>
-            </div>
-          )}
-        </div>
+            <button
+              type="button"
+              aria-label="Add image"
+              onClick={manage.onAddAfter}
+              className={cn(TOOLBAR_BUTTON, 'text-accent')}
+            >
+              <IconPlus size={20} />
+            </button>
+            <button
+              type="button"
+              aria-label="Delete image"
+              disabled={!canDelete}
+              onClick={props.onRequestRemove}
+              className={cn(TOOLBAR_BUTTON, 'hover:text-bad')}
+            >
+              <IconTrash size={20} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -562,10 +578,11 @@ interface PostLightboxProps {
 }
 
 /**
- * Fullscreen post-gallery viewer: a fixed inset-0 stage with a native horizontal
- * scroll-snap track (one slide per viewport), tap-toggled chrome, pinch and
- * double-tap zoom, and the agency manage row. Pins are placed from the inline
- * gallery now, never here.
+ * In-place post-gallery viewer: a full-width, in-flow block (no modal, no
+ * overlay sheet, no body scroll lock) with a native horizontal scroll-snap track
+ * (one slide per width), overlaid counter/close/prev-next, tap-toggled chrome,
+ * pinch and double-tap zoom, and the agency manage row below the image. Pins are
+ * placed from the inline gallery now, never here.
  */
 export function PostLightbox({
   items,
@@ -641,7 +658,8 @@ export function PostLightbox({
     setConfirmingRemove(false);
   }, [index]);
 
-  // Esc closes; arrows nudge the native scroller. Body scroll is locked while open.
+  // Esc closes; arrows nudge the native scroller. The viewer is in-flow now, so
+  // it never locks body scroll.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -653,11 +671,8 @@ export function PostLightbox({
       }
     };
     window.addEventListener('keydown', onKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
     };
   }, [onClose, onIndexChange, items.length]);
 
@@ -876,6 +891,8 @@ export function PostLightbox({
     failedFor: (it) => failed[it.assetVersionId] === true,
     dimsFor: (it) => intrinsicSize(it, measured),
     onClose,
+    onPrev: () => onIndexChange(Math.max(0, index - 1)),
+    onNext: () => onIndexChange(Math.min(items.length - 1, index + 1)),
     onDownload: handleDownload,
     onTrackScroll: handleTrackScroll,
     onImageLoad: (it, event) => {

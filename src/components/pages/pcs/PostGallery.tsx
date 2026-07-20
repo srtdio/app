@@ -214,6 +214,16 @@ export function slideTapAction(
   return 'open';
 }
 
+/**
+ * Whether the in-place viewer takes the ribbon's slot: a tile is open (openIndex
+ * set) and the gallery has images. Empty and upload states carry no open index,
+ * so they always fall through to the ribbon branch. Pure so the ribbon<->viewer
+ * swap is unit-testable without a DOM renderer.
+ */
+export function viewerReplacesRibbon(openIndex: number | null, itemCount: number): boolean {
+  return openIndex !== null && itemCount > 0;
+}
+
 // Map the aspect token to a literal Tailwind arbitrary-aspect class, for the same
 // JIT-visibility reason. The default (4/5) matches the post gallery's tiles; the
 // brief gallery passes 3/2.
@@ -650,42 +660,42 @@ export function PostGallery({
       ? { onMakeFirst, onMoveLeft, onMoveRight, onMakeLast, onAddAfter, onRemove }
       : undefined;
 
-  return (
-    <>
-      {galleryView({
-        items,
-        cache,
-        presignEnabled,
-        onOpen: setOpenIndex,
-        columns,
-        aspect,
-        showIndex,
-        slideGestures,
-        consumeClickSuppression: wantsGestures ? consumeClickSuppression : undefined,
-        pinCountFor,
-        onAddSlide,
-        activeIndex,
-        scrollerRef,
-        onScroll: handleScroll,
-        onDotClick: scrollToSlide,
-        pinArmedIndex: canPlacePins ? pinArmedIndex : null,
-        onSlideTap: columns === 4 ? handleSlideTap : undefined,
-        measuredDimensions,
-        onMeasure: columns === 4 ? handleMeasure : undefined,
-      })}
-      {openIndex !== null ? (
-        <PostLightbox
-          items={items}
-          index={openIndex}
-          presignEnabled={presignEnabled}
-          cache={cache}
-          deps={deps}
-          onIndexChange={setOpenIndex}
-          onClose={() => setOpenIndex(null)}
-          pinOverlay={pinOverlay}
-          manage={manage}
-        />
-      ) : null}
-    </>
+  // When a tile is open the in-place viewer takes the ribbon's slot (the page
+  // continues below it); closing returns to the ribbon. The empty and upload
+  // states have no open index, so they always fall through to the ribbon branch.
+  return viewerReplacesRibbon(openIndex, items.length) && openIndex !== null ? (
+    <PostLightbox
+      items={items}
+      index={openIndex}
+      presignEnabled={presignEnabled}
+      cache={cache}
+      deps={deps}
+      onIndexChange={setOpenIndex}
+      onClose={() => setOpenIndex(null)}
+      pinOverlay={pinOverlay}
+      manage={manage}
+    />
+  ) : (
+    galleryView({
+      items,
+      cache,
+      presignEnabled,
+      onOpen: setOpenIndex,
+      columns,
+      aspect,
+      showIndex,
+      slideGestures,
+      consumeClickSuppression: wantsGestures ? consumeClickSuppression : undefined,
+      pinCountFor,
+      onAddSlide,
+      activeIndex,
+      scrollerRef,
+      onScroll: handleScroll,
+      onDotClick: scrollToSlide,
+      pinArmedIndex: canPlacePins ? pinArmedIndex : null,
+      onSlideTap: columns === 4 ? handleSlideTap : undefined,
+      measuredDimensions,
+      onMeasure: columns === 4 ? handleMeasure : undefined,
+    })
   );
 }
