@@ -57,6 +57,10 @@ function byLabel(tree: ReactNode, value: string): ReactElement | undefined {
   );
 }
 
+function byLabelEq(el: ReactElement, value: string): boolean {
+  return (el.props as { 'aria-label'?: string })['aria-label'] === value;
+}
+
 function className(el: ReactElement): string {
   return (el.props as { className?: string }).className ?? '';
 }
@@ -87,6 +91,15 @@ const GESTURES: StageGestures = {
   onClick: () => {},
 };
 
+const MANAGE = {
+  onMakeFirst: () => {},
+  onMoveLeft: () => {},
+  onMoveRight: () => {},
+  onMakeLast: () => {},
+  onAddAfter: () => {},
+  onRemove: () => {},
+};
+
 function props(overrides: Partial<LightboxViewProps> = {}): LightboxViewProps {
   return {
     items: [item(0), item(1), item(2)],
@@ -101,7 +114,6 @@ function props(overrides: Partial<LightboxViewProps> = {}): LightboxViewProps {
       it.width !== null && it.height !== null ? { width: it.width, height: it.height } : null,
     onClose: () => {},
     onDownload: () => {},
-    onDotClick: () => {},
     onTrackScroll: () => {},
     onImageLoad: () => {},
     stageGestures: GESTURES,
@@ -163,19 +175,64 @@ describe('lightboxView', () => {
     }
   });
 
-  it('shows only close, mono counter and Download in the top bar', () => {
+  it('shows the mono counter and close in the top bar, with download no longer there', () => {
     const tree = lightboxView(props({ index: 1 }));
-    expect(byLabel(tree, 'Close viewer')).toBeDefined();
-    expect(byLabel(tree, 'Download')).toBeDefined();
-    expect(byLabel(tree, 'Present')).toBeUndefined();
-    expect(byLabel(tree, 'Add pin')).toBeUndefined();
-    expect(byLabel(tree, 'Slide actions')).toBeUndefined();
-    expect(byLabel(tree, 'Zoom in')).toBeUndefined();
+    const close = byLabel(tree, 'Close viewer')!;
+    expect(close).toBeDefined();
+    expect(className(close)).toContain('h-11');
+    expect(className(close)).toContain('w-11');
+    // The counter is the top bar's mono position readout; download has moved out.
     const counter = elements(tree).find(
       (el) => (el.props as { children?: ReactNode }).children === '2 / 3',
     );
     expect(counter).toBeDefined();
     expect(className(counter!)).toContain('font-mono');
+    expect(className(counter!)).toContain('text-overlay-fg-dim');
+    // Close and counter share the top bar; download is not a sibling there.
+    const topBar = elements(tree).find(
+      (el) => className(el).includes('h-12') && className(el).includes('border-b'),
+    )!;
+    const inTop = elements((topBar.props as { children?: ReactNode }).children);
+    expect(inTop.some((el) => byLabelEq(el, 'Close viewer'))).toBe(true);
+    expect(inTop.some((el) => byLabelEq(el, 'Download'))).toBe(false);
+  });
+
+  it('hugs the image in a bordered card with no blurred backdrop or letterbox gutters', () => {
+    const tree = lightboxView(props());
+    const dialog = elements(tree).find((el) => (el.props as { role?: string }).role === 'dialog')!;
+    // The dialog scrim stays, centred, on the overlay token.
+    expect(className(dialog)).toContain('bg-overlay');
+    expect(className(dialog)).toContain('items-center');
+    expect(className(dialog)).toContain('justify-center');
+    // The card hugs the image: inline-flex column with chrome/panel tokens.
+    const card = elements(tree).find(
+      (el) =>
+        className(el).includes('inline-flex') &&
+        className(el).includes('rounded-2xl') &&
+        className(el).includes('bg-overlay-surface'),
+    )!;
+    expect(card).toBeDefined();
+    expect(className(card)).toContain('border-overlay-line');
+    expect(className(card)).toContain('overflow-hidden');
+    expect(className(card)).toContain('flex-col');
+    // Its width follows the image and it can never exceed the viewport.
+    const cardStyle = (card.props as { style?: Record<string, unknown> }).style ?? {};
+    expect(cardStyle.minWidth).toBe('min(352px, 100%)');
+    expect(typeof cardStyle.width).toBe('string');
+    // The blurred cover backdrop is gone entirely.
+    expect(elements(tree).some((el) => className(el).includes('blur-[48px]'))).toBe(false);
+    expect(elements(tree).some((el) => className(el).includes('object-cover'))).toBe(false);
+  });
+
+  it('introduces no translate or rotate motion anywhere on the surface', () => {
+    for (const chrome of [true, false]) {
+      const tree = lightboxView(props({ chrome }));
+      for (const el of elements(tree)) {
+        const cls = className(el);
+        expect(cls).not.toMatch(/\btranslate-/);
+        expect(cls).not.toMatch(/\brotate-/);
+      }
+    }
   });
 
   it('constrains the fit image against the fixed stage so it is fully visible', () => {
@@ -196,18 +253,7 @@ describe('lightboxView', () => {
     expect(all.some((el) => className(el).includes('overflow-auto'))).toBe(false);
   });
 
-  it('renders the blurred cover backdrop behind each slide on the overlay dialog', () => {
-    const tree = lightboxView(props());
-    const dialog = elements(tree).find((el) => (el.props as { role?: string }).role === 'dialog')!;
-    expect(className(dialog)).toContain('bg-overlay');
-    const backdrops = elements(tree).filter((el) => className(el).includes('blur-[48px]'));
-    expect(backdrops).toHaveLength(3);
-    for (const b of backdrops) {
-      expect(className(b)).toContain('object-cover');
-    }
-  });
-
-  it('hides both chrome layers when chrome is off and shows them when on', () => {
+  it('hides both bars when chrome is off and shows them when on, by opacity only', () => {
     const off = lightboxView(props({ chrome: false }));
     const hidden = elements(off).filter(
       (el) => className(el).includes('opacity-0') && className(el).includes('pointer-events-none'),
@@ -222,42 +268,107 @@ describe('lightboxView', () => {
     ).toBe(true);
   });
 
-  it('manage row invokes the prewired existing mutation paths', () => {
+  it('renders the agency 7-control bottom bar: reorder, divider, download/add/delete', () => {
     const manage = {
       onMakeFirst: vi.fn(),
       onMoveLeft: vi.fn(),
       onMoveRight: vi.fn(),
       onMakeLast: vi.fn(),
       onAddAfter: vi.fn(),
+      onRemove: vi.fn(),
     };
     const tree = lightboxView(props({ index: 1, manage }));
+    // The reorder + download + add controls fire their prewired handlers, and
+    // every icon button is a 44px target.
     for (const [label, fn] of [
       ['Make first', manage.onMakeFirst],
       ['Move left', manage.onMoveLeft],
-      ['Add image', manage.onAddAfter],
       ['Move right', manage.onMoveRight],
       ['Make last', manage.onMakeLast],
+      ['Add image', manage.onAddAfter],
     ] as const) {
       const button = byLabel(tree, label)!;
       expect(button).toBeDefined();
-      expect((button.props as { disabled?: boolean }).disabled ?? false).toBe(false);
+      expect(className(button)).toContain('h-11');
+      expect(className(button)).toContain('w-11');
       (button.props as { onClick: () => void }).onClick();
       expect(fn).toHaveBeenCalledOnce();
     }
-    // Clients (no manage prop) never see the row.
+    // Download now lives in the bottom bar next to add and delete.
+    expect(byLabel(tree, 'Download')).toBeDefined();
+    expect(byLabel(tree, 'Delete image')).toBeDefined();
+    // Add keeps the accent token; delete hovers to the destructive token.
+    expect(className(byLabel(tree, 'Add image')!)).toContain('text-accent');
+    expect(className(byLabel(tree, 'Delete image')!)).toContain('hover:text-bad');
+    // A subtle divider separates the reorder group from the actions.
+    expect(elements(tree).some((el) => className(el).includes('bg-overlay-line'))).toBe(true);
+  });
+
+  it('shows only the download button in the bottom bar for clients and read-only', () => {
     const clientTree = lightboxView(props({ index: 1 }));
+    expect(byLabel(clientTree, 'Download')).toBeDefined();
+    // No edit actions render without a manage bar.
     expect(byLabel(clientTree, 'Make first')).toBeUndefined();
+    expect(byLabel(clientTree, 'Move left')).toBeUndefined();
     expect(byLabel(clientTree, 'Add image')).toBeUndefined();
+    expect(byLabel(clientTree, 'Delete image')).toBeUndefined();
+    // Download sits inside the bottom bar (border-t chrome), not the top bar.
+    const bottomBar = elements(clientTree).find(
+      (el) => className(el).includes('h-12') && className(el).includes('border-t'),
+    )!;
+    const inBottom = elements((bottomBar.props as { children?: ReactNode }).children);
+    expect(inBottom.some((el) => byLabelEq(el, 'Download'))).toBe(true);
+  });
+
+  it('disables delete on the last remaining image and confirms before removing otherwise', () => {
+    // A single-image gallery: delete is present but disabled (no confirm path).
+    const solo = lightboxView(props({ items: [item(0)], index: 0, manage: MANAGE }));
+    const soloDelete = byLabel(solo, 'Delete image')!;
+    expect((soloDelete.props as { disabled: boolean }).disabled).toBe(true);
+
+    // Tapping delete on a multi-image gallery requests the confirm swap.
+    const onRequestRemove = vi.fn();
+    const armed = lightboxView(props({ index: 1, manage: MANAGE, onRequestRemove }));
+    const del = byLabel(armed, 'Delete image')!;
+    expect((del.props as { disabled: boolean }).disabled).toBe(false);
+    (del.props as { onClick: () => void }).onClick();
+    expect(onRequestRemove).toHaveBeenCalledOnce();
+  });
+
+  it('swaps the bottom bar for a confirm row: cancel restores, remove runs onConfirmRemove', () => {
+    const onCancelRemove = vi.fn();
+    const onConfirmRemove = vi.fn();
+    const tree = lightboxView(
+      props({
+        index: 1,
+        manage: MANAGE,
+        removeConfirming: true,
+        onCancelRemove,
+        onConfirmRemove,
+      }),
+    );
+    // The confirm row replaces the controls; the reorder/add buttons are gone.
+    expect(strings(tree)).toContain('Remove this image?');
+    expect(byLabel(tree, 'Make first')).toBeUndefined();
+    expect(byLabel(tree, 'Add image')).toBeUndefined();
+
+    // Cancel restores the bar; Remove runs the existing remove handler.
+    const cancel = elements(tree).find(
+      (el) => (el.props as { children?: ReactNode }).children === 'Cancel',
+    )!;
+    const remove = elements(tree).find(
+      (el) => (el.props as { children?: ReactNode }).children === 'Remove',
+    )!;
+    expect(className(remove)).toContain('border-bad');
+    expect(className(remove)).toContain('text-bad');
+    (cancel.props as { onClick: () => void }).onClick();
+    expect(onCancelRemove).toHaveBeenCalledOnce();
+    (remove.props as { onClick: () => void }).onClick();
+    expect(onConfirmRemove).toHaveBeenCalledOnce();
   });
 
   it('disables left/first at position 1 and right/last at the end', () => {
-    const manage = {
-      onMakeFirst: () => {},
-      onMoveLeft: () => {},
-      onMoveRight: () => {},
-      onMakeLast: () => {},
-      onAddAfter: () => {},
-    };
+    const manage = MANAGE;
     const first = lightboxView(props({ index: 0, manage }));
     expect((byLabel(first, 'Make first')!.props as { disabled: boolean }).disabled).toBe(true);
     expect((byLabel(first, 'Move left')!.props as { disabled: boolean }).disabled).toBe(true);
@@ -271,22 +382,16 @@ describe('lightboxView', () => {
     expect((byLabel(last, 'Make last')!.props as { disabled: boolean }).disabled).toBe(true);
   });
 
-  it('renders one snapping slide per item and 44px dots that jump', () => {
-    const onDotClick = vi.fn();
-    const tree = lightboxView(props({ onDotClick }));
+  it('renders one snapping carousel slide per item, with navigation via swipe only', () => {
+    const tree = lightboxView(props());
     const all = elements(tree);
     const slides = all.filter((el) => className(el).includes('snap-center'));
     expect(slides).toHaveLength(3);
+    // The redesign drops the dot rail; the top-bar counter reflects the index.
     const dots = all.filter((el) =>
       ((el.props as { 'aria-label'?: string })['aria-label'] ?? '').startsWith('Go to image'),
     );
-    expect(dots).toHaveLength(3);
-    for (const dot of dots) {
-      expect(className(dot)).toContain('h-11');
-      expect(className(dot)).toContain('w-11');
-    }
-    (dots[2]!.props as { onClick: () => void }).onClick();
-    expect(onDotClick).toHaveBeenCalledWith(2);
+    expect(dots).toHaveLength(0);
   });
 
   it('disables slide swiping while zoomed past 1x', () => {
@@ -334,13 +439,14 @@ describe('lightboxView', () => {
     (captionButton.props as { onClick: () => void }).onClick();
     expect(onToggleCaptionExpand).toHaveBeenCalledOnce();
 
-    // It lives inside the bottom chrome layer, so it hides with the chrome.
-    const bottomChrome = elements(tree).find(
-      (el) => className(el).includes('bottom-0') && className(el).includes('inset-x-0'),
+    // The caption body renders as an overlay pinned to the bottom of the image
+    // region, so it never widens the card that hugs the image.
+    const overlay = elements(tree).find(
+      (el) => className(el).includes('absolute') && className(el).includes('bottom-0'),
     )!;
-    const inBottomChrome = elements((bottomChrome.props as { children?: ReactNode }).children);
+    const inOverlay = elements((overlay.props as { children?: ReactNode }).children);
     expect(
-      inBottomChrome.some(
+      inOverlay.some(
         (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Expand caption',
       ),
     ).toBe(true);
