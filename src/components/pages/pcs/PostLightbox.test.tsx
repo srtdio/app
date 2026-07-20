@@ -112,6 +112,8 @@ function props(overrides: Partial<LightboxViewProps> = {}): LightboxViewProps {
     dimsFor: (it) =>
       it.width !== null && it.height !== null ? { width: it.width, height: it.height } : null,
     onClose: () => {},
+    onPrev: () => {},
+    onNext: () => {},
     onDownload: () => {},
     onTrackScroll: () => {},
     onImageLoad: () => {},
@@ -174,58 +176,67 @@ describe('lightboxView', () => {
     }
   });
 
-  it('shows only the mono counter and close in the top bar: no download, no caption toggle', () => {
+  it('overlays only the mono counter and close on the image: no download, no caption toggle', () => {
     const tree = lightboxView(props({ index: 1 }));
     const close = byLabel(tree, 'Close viewer')!;
     expect(close).toBeDefined();
     expect(className(close)).toContain('h-11');
     expect(className(close)).toContain('w-11');
-    // The counter is the top bar's mono position readout; download has moved out.
+    // Close is overlaid at the top-right, not inside any chrome bar.
+    expect(className(close)).toContain('absolute');
+    expect(className(close)).toContain('top-2');
+    expect(className(close)).toContain('right-2');
+    // The counter is the mono position readout overlaid at the top-left.
     const counter = elements(tree).find(
       (el) => (el.props as { children?: ReactNode }).children === '2 / 3',
     );
     expect(counter).toBeDefined();
     expect(className(counter!)).toContain('font-mono');
-    expect(className(counter!)).toContain('text-overlay-fg-dim');
-    // The top bar is transparent (no border/surface) with counter + close only.
-    const topBar = elements(tree).find(
-      (el) => className(el).includes('h-12') && className(el).includes('justify-between'),
-    )!;
-    expect(className(topBar)).not.toContain('border-b');
-    expect(className(topBar)).not.toContain('bg-overlay-surface');
-    const inTop = elements((topBar.props as { children?: ReactNode }).children);
-    expect(inTop.some((el) => byLabelEq(el, 'Close viewer'))).toBe(true);
-    expect(inTop.some((el) => byLabelEq(el, 'Download'))).toBe(false);
+    expect(className(counter!)).toContain('absolute');
+    expect(className(counter!)).toContain('left-2');
+    // No separate top chrome bar exists (nothing is h-12 + justify-between), and
+    // download has moved into the action bar below the image.
+    expect(
+      elements(tree).some(
+        (el) => className(el).includes('h-12') && className(el).includes('justify-between'),
+      ),
+    ).toBe(false);
     // The caption is gone end to end: no toggle button, no caption text.
     expect(byLabel(tree, 'Toggle caption')).toBeUndefined();
     expect(strings(tree)).not.toContain('Launch day walkthrough.');
   });
 
-  it('hugs the image on a plain dark backdrop with no border, box, or blurred cover', () => {
+  it('renders in normal page flow, not as a fixed modal overlay', () => {
     const tree = lightboxView(props());
-    const dialog = elements(tree).find((el) => (el.props as { role?: string }).role === 'dialog')!;
-    // The dialog scrim stays, centred, on the overlay token: the dark backdrop.
-    expect(className(dialog)).toContain('bg-overlay');
-    expect(className(dialog)).toContain('items-center');
-    expect(className(dialog)).toContain('justify-center');
-    // The card hugs the image: a transparent, borderless inline-flex column.
-    const card = elements(tree).find(
-      (el) => className(el).includes('inline-flex') && className(el).includes('flex-col'),
-    )!;
-    expect(card).toBeDefined();
-    expect(className(card)).toContain('overflow-hidden');
-    // No chrome: no border, no rounded box, no surface fill, no shadow.
-    expect(className(card)).not.toContain('rounded-2xl');
-    expect(className(card)).not.toContain('border-overlay-line');
-    expect(className(card)).not.toContain('bg-overlay-surface');
-    expect(className(card)).not.toContain('shadow-2xl');
-    // Its width still follows the image and can never exceed the viewport.
-    const cardStyle = (card.props as { style?: Record<string, unknown> }).style ?? {};
-    expect(cardStyle.minWidth).toBe('min(352px, 100%)');
-    expect(typeof cardStyle.width).toBe('string');
-    // The blurred cover backdrop is gone entirely.
-    expect(elements(tree).some((el) => className(el).includes('blur-[48px]'))).toBe(false);
+    // No dialog/modal semantics: the viewer is an in-flow region, not a modal.
+    const root = elements(tree)[0]!;
+    expect((root.props as { role?: string }).role).toBeUndefined();
+    expect((root.props as { 'aria-modal'?: unknown })['aria-modal']).toBeUndefined();
+    expect(elements(tree).some((el) => (el.props as { role?: string }).role === 'dialog')).toBe(
+      false,
+    );
+    // The outer container is an in-flow, full-width block on the dark overlay
+    // token; it is not a fixed inset-0 overlay and locks no scroll.
+    expect((root.props as { 'aria-label'?: string })['aria-label']).toBe('Image viewer');
+    expect(className(root)).toContain('relative');
+    expect(className(root)).toContain('w-full');
+    expect(className(root)).toContain('bg-overlay');
+    expect(className(root)).not.toContain('fixed');
+    expect(className(root)).not.toContain('inset-0');
+    // No card chrome: no border, rounded box, surface fill, shadow, or blurred cover.
+    for (const el of elements(tree)) {
+      expect(className(el)).not.toContain('rounded-2xl');
+      expect(className(el)).not.toContain('shadow-2xl');
+      expect(className(el)).not.toContain('blur-[48px]');
+    }
     expect(elements(tree).some((el) => className(el).includes('object-cover'))).toBe(false);
+    // The image region is a full-width aspect-ratio box (the current item's ratio).
+    const region = elements(tree).find(
+      (el) =>
+        (el.props as { style?: { aspectRatio?: string } }).style?.aspectRatio === '1080 / 1350',
+    );
+    expect(region).toBeDefined();
+    expect(className(region!)).toContain('w-full');
   });
 
   it('introduces no translate or rotate motion anywhere on the surface', () => {
@@ -245,8 +256,12 @@ describe('lightboxView', () => {
     // The slide track and each stage are fixed/absolute boxes, never auto-height.
     const track = all.find((el) => className(el).includes('snap-x'))!;
     expect(className(track)).toContain('absolute inset-0');
+    // Each fit frame (the boxes carrying max-w-full inside the stages) constrains
+    // against the fixed stage so the whole image shows.
     const frames = all.filter(
-      (el) => (el.props as { style?: { aspectRatio?: string } }).style?.aspectRatio !== undefined,
+      (el) =>
+        (el.props as { style?: { aspectRatio?: string } }).style?.aspectRatio !== undefined &&
+        className(el).includes('max-w-full'),
     );
     expect(frames.length).toBeGreaterThan(0);
     for (const frame of frames) {
@@ -388,16 +403,48 @@ describe('lightboxView', () => {
     expect((byLabel(last, 'Make last')!.props as { disabled: boolean }).disabled).toBe(true);
   });
 
-  it('renders one snapping carousel slide per item, with navigation via swipe only', () => {
-    const tree = lightboxView(props());
+  it('renders one snapping carousel slide per item, navigable by swipe or overlay arrows', () => {
+    const onPrev = vi.fn();
+    const onNext = vi.fn();
+    const tree = lightboxView(props({ index: 1, onPrev, onNext }));
     const all = elements(tree);
     const slides = all.filter((el) => className(el).includes('snap-center'));
     expect(slides).toHaveLength(3);
-    // The redesign drops the dot rail; the top-bar counter reflects the index.
+    // The redesign drops the dot rail; the counter reflects the index instead.
     const dots = all.filter((el) =>
       ((el.props as { 'aria-label'?: string })['aria-label'] ?? '').startsWith('Go to image'),
     );
     expect(dots).toHaveLength(0);
+    // Overlaid prev/next arrows step the carousel (swipe still drives the track).
+    // They sit in an absolute inset-0 layer over the image, click-through except
+    // on the buttons themselves.
+    const prev = byLabel(tree, 'Previous image')!;
+    const next = byLabel(tree, 'Next image')!;
+    const arrowLayer = all.find(
+      (el) =>
+        className(el).includes('absolute inset-0') && className(el).includes('justify-between'),
+    )!;
+    expect(className(arrowLayer)).toContain('pointer-events-none');
+    expect(className(prev)).toContain('pointer-events-auto');
+    expect((prev.props as { disabled: boolean }).disabled).toBe(false);
+    expect((next.props as { disabled: boolean }).disabled).toBe(false);
+    (prev.props as { onClick: () => void }).onClick();
+    (next.props as { onClick: () => void }).onClick();
+    expect(onPrev).toHaveBeenCalledOnce();
+    expect(onNext).toHaveBeenCalledOnce();
+  });
+
+  it('disables the prev arrow at the first slide and the next arrow at the last', () => {
+    const first = lightboxView(props({ index: 0 }));
+    expect((byLabel(first, 'Previous image')!.props as { disabled: boolean }).disabled).toBe(true);
+    expect((byLabel(first, 'Next image')!.props as { disabled: boolean }).disabled).toBe(false);
+    const last = lightboxView(props({ index: 2 }));
+    expect((byLabel(last, 'Previous image')!.props as { disabled: boolean }).disabled).toBe(false);
+    expect((byLabel(last, 'Next image')!.props as { disabled: boolean }).disabled).toBe(true);
+    // A single-image gallery shows no arrows at all.
+    const solo = lightboxView(props({ items: [item(0)], index: 0 }));
+    expect(byLabel(solo, 'Previous image')).toBeUndefined();
+    expect(byLabel(solo, 'Next image')).toBeUndefined();
   });
 
   it('disables slide swiping while zoomed past 1x', () => {

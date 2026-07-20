@@ -8,6 +8,7 @@ import {
   resolveRibbonTileStyle,
   ribbonTileStyle,
   slideTapAction,
+  viewerReplacesRibbon,
 } from '@/components/pages/pcs/PostGallery';
 import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
@@ -477,6 +478,33 @@ describe('intrinsicSize ignores unusable natural dimensions', () => {
     expect(intrinsicSize(-1, 1000)).toBeNull();
     expect(intrinsicSize(Number.NaN, 1000)).toBeNull();
     expect(intrinsicSize(800, Number.NaN)).toBeNull();
+  });
+});
+
+describe('ribbon <-> in-place viewer swap', () => {
+  it('keeps the ribbon while no tile is open', () => {
+    // openIndex null: the ribbon renders, never the in-place viewer.
+    expect(viewerReplacesRibbon(null, 3)).toBe(false);
+    // A galleryView call with no open index still yields the ribbon tiles.
+    const tree = galleryView({
+      items: [item(0), item(1)],
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+    });
+    expect(elements(tree).some((el) => label(el)?.startsWith('View image'))).toBe(true);
+  });
+
+  it('replaces the ribbon with the in-place viewer once a tile is opened', () => {
+    // A non-null open index over a non-empty gallery swaps in the viewer.
+    expect(viewerReplacesRibbon(0, 3)).toBe(true);
+    expect(viewerReplacesRibbon(2, 3)).toBe(true);
+  });
+
+  it('never swaps in the viewer for the empty and upload states', () => {
+    // Empty gallery: even a stray index keeps the ribbon branch (empty/upload UI).
+    expect(viewerReplacesRibbon(0, 0)).toBe(false);
+    expect(viewerReplacesRibbon(null, 0)).toBe(false);
   });
 });
 
