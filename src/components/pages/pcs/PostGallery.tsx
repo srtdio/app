@@ -492,8 +492,6 @@ interface PostGalleryProps {
   onSlideActions?: ((index: number) => void) | undefined;
   /** F7 (agency-side): the dashed Add tile at the ribbon's end (append flow). */
   onAddSlide?: (() => void) | undefined;
-  /** The post's caption, shown read-only in the lightbox; hidden when null/empty. */
-  caption?: string | null;
   /** Lightbox manage row: make-first over the existing gallery_set commit path. */
   onMakeFirst?: ((index: number) => void) | undefined;
   /** Lightbox manage row: the existing move-left path. */
@@ -530,7 +528,6 @@ export function PostGallery({
   pinCountFor,
   onSlideActions,
   onAddSlide,
-  caption = null,
   onMakeFirst,
   onMoveLeft,
   onMoveRight,
@@ -686,7 +683,6 @@ export function PostGallery({
           onIndexChange={setOpenIndex}
           onClose={() => setOpenIndex(null)}
           pinOverlay={pinOverlay}
-          caption={caption}
           manage={manage}
         />
       ) : null}

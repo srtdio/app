@@ -4,7 +4,6 @@ import type {
   PointerEvent as ReactPointerEvent,
   MouseEvent as ReactMouseEvent,
   UIEvent as ReactUIEvent,
-  WheelEvent as ReactWheelEvent,
   ReactElement,
   ReactNode,
   Ref,
@@ -15,7 +14,6 @@ import {
   IconChevronRight,
   IconDownload,
   IconPlus,
-  IconText,
   IconTrash,
   IconX,
 } from '@/components/ui/icons';
@@ -24,7 +22,7 @@ import { cn } from '@/lib/cn';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
-/** Continuous zoom bounds: pinch/wheel scale between 1x and 5x. */
+/** Continuous zoom bounds: pinch scale between 1x and 5x. */
 export const ZOOM_MIN = 1;
 export const ZOOM_MAX = 5;
 /** Double-tap toggles to this scale, centred on the tap point. */
@@ -204,13 +202,12 @@ export interface LightboxManage {
   onRemove: () => void;
 }
 
-/** Pointer/wheel gesture handlers the zoom layer spreads onto each slide stage. */
+/** Pointer gesture handlers the zoom layer spreads onto each slide stage. */
 export interface StageGestures {
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerCancel: (event: ReactPointerEvent<HTMLDivElement>) => void;
-  onWheel: (event: ReactWheelEvent<HTMLDivElement>) => void;
   onClick: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
@@ -242,16 +239,6 @@ export interface LightboxViewProps {
   onConfirmRemove?: (() => void) | undefined;
   /** F5 seam: overlay rendered over the sharp image; nothing when omitted. */
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
-  /** Read-only post caption; nothing renders (toggle included) when null/empty. */
-  caption?: string | null;
-  /** Whether the caption block is shown (the top-chrome toggle's state). */
-  captionVisible?: boolean;
-  /** Whether the caption is expanded to its scrollable panel. */
-  captionExpanded?: boolean;
-  /** The top-chrome caption toggle. */
-  onToggleCaption?: (() => void) | undefined;
-  /** A tap on the caption text, flipping clamp and panel. */
-  onToggleCaptionExpand?: (() => void) | undefined;
 }
 
 /** One slide's stage: the fully-visible sharp image, no letterbox filler. */
@@ -329,10 +316,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const { items, index, chrome, busy, zoom, manage } = props;
   const count = items.length;
   const chromeVisible = chrome;
-  const caption = props.caption ?? null;
-  const hasCaption = caption !== null && caption.trim() !== '';
-  const captionShown = hasCaption && props.captionVisible === true;
-  const captionExpanded = props.captionExpanded === true;
   const removeConfirming = props.removeConfirming === true;
   // A gallery can never be emptied, so delete is inert on the last image.
   const canDelete = count > 1;
@@ -362,15 +345,17 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
       className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4"
     >
       {/* The card hugs the image at its rendered width, clamped so it never
-          exceeds the viewport and never narrows below the controls' needs. */}
+          exceeds the viewport and never narrows below the controls' needs. It
+          is borderless and transparent: the photo hugs on the dialog's dark
+          backdrop with no box, border, or shadow. */}
       <div
-        className="relative inline-flex max-w-full flex-col overflow-hidden rounded-2xl border border-overlay-line bg-overlay-surface shadow-2xl"
+        className="relative inline-flex max-w-full flex-col overflow-hidden"
         style={{ width: cardWidth, minWidth: 'min(352px, 100%)' }}
       >
-        {/* Top bar: mono counter · caption toggle · close. No download here. */}
+        {/* Top bar: mono counter · close. Transparent, flush above the image. */}
         <div
           className={cn(
-            'flex h-12 items-center justify-between border-b border-overlay-line bg-overlay-surface px-1.5',
+            'flex h-12 items-center justify-between px-1.5',
             chromeMotion(chromeVisible),
           )}
         >
@@ -378,17 +363,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             {lightboxCounter(index, count)}
           </span>
           <div className="flex items-center">
-            {hasCaption ? (
-              <button
-                type="button"
-                aria-label="Toggle caption"
-                aria-pressed={props.captionVisible === true}
-                onClick={props.onToggleCaption}
-                className={TOOLBAR_BUTTON}
-              >
-                <IconText size={20} />
-              </button>
-            ) : null}
             <button
               type="button"
               aria-label="Close viewer"
@@ -423,35 +397,13 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               </div>
             ))}
           </div>
-          {captionShown ? (
-            <div className="absolute inset-x-0 bottom-0 z-10 bg-overlay">
-              <button
-                type="button"
-                aria-label={captionExpanded ? 'Collapse caption' : 'Expand caption'}
-                aria-expanded={captionExpanded}
-                onClick={props.onToggleCaptionExpand}
-                className={cn(
-                  'min-h-[44px] w-full px-4 py-2 text-left text-sm leading-relaxed text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-overlay-fg/70',
-                  captionExpanded && 'max-h-[34vh] overflow-y-auto',
-                )}
-              >
-                <span className={cn('whitespace-pre-wrap', !captionExpanded && 'line-clamp-2')}>
-                  {caption}
-                </span>
-              </button>
-            </div>
-          ) : null}
         </div>
 
         {/* Bottom bar: the agency 7-control action bar (reorder · divider ·
             download/add/delete), or download only for clients and read-only.
-            Delete swaps the whole bar for an inline confirm row. */}
-        <div
-          className={cn(
-            'flex h-12 items-center justify-center border-t border-overlay-line bg-overlay-surface',
-            chromeMotion(chromeVisible),
-          )}
-        >
+            Transparent, flush below the image on the dark backdrop. Delete
+            swaps the whole bar for an inline confirm row. */}
+        <div className={cn('flex h-12 items-center justify-center', chromeMotion(chromeVisible))}>
           {manage === undefined ? (
             <button
               type="button"
@@ -593,11 +545,6 @@ interface PostLightboxProps {
   /** F5 seam: overlay rendered over the image area; nothing renders when omitted. */
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
   /**
-   * The post's caption, rendered read-only under the slide track. Null or empty
-   * renders nothing and hides the top-chrome caption toggle.
-   */
-  caption?: string | null;
-  /**
    * Agency manage-row callbacks, each taking the slide index. They MUST be wired
    * to the existing slide-mutation paths (gallery-transforms + gallery_set commit
    * and the existing add/upload flow); this component creates no write path.
@@ -616,7 +563,7 @@ interface PostLightboxProps {
 
 /**
  * Fullscreen post-gallery viewer: a fixed inset-0 stage with a native horizontal
- * scroll-snap track (one slide per viewport), tap-toggled chrome, pinch/wheel/
+ * scroll-snap track (one slide per viewport), tap-toggled chrome, pinch and
  * double-tap zoom, and the agency manage row. Pins are placed from the inline
  * gallery now, never here.
  */
@@ -629,7 +576,6 @@ export function PostLightbox({
   onIndexChange,
   onClose,
   pinOverlay,
-  caption = null,
   manage,
 }: PostLightboxProps) {
   const [srcs, setSrcs] = useState<Record<string, string>>({});
@@ -638,9 +584,6 @@ export function PostLightbox({
   const [chrome, setChrome] = useState(true);
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
-  // The caption is per-post, so its visibility and expansion survive slide changes.
-  const [captionVisible, setCaptionVisible] = useState(true);
-  const [captionExpanded, setCaptionExpanded] = useState(false);
   // The delete confirm row replaces the bottom-bar controls until resolved.
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
@@ -728,8 +671,8 @@ export function PostLightbox({
   );
 
   // --- Zoom gestures. The transform is driven only by the user's gesture:
-  // pinch (two pointers) 1..5x with pan, wheel zoom + drag pan on desktop,
-  // double-tap toggling 2x at the tap point. No animation, no rotation.
+  // pinch (two pointers) 1..5x with pan, and double-tap toggling 2x at the tap
+  // point with drag-pan while zoomed. No animation, no rotation.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchStart = useRef<{ d: number; scale: number; x: number; y: number } | null>(null);
   const panStart = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
@@ -825,11 +768,6 @@ export function PostLightbox({
         pointers.current.delete(event.pointerId);
         if (pointers.current.size < 2) pinchStart.current = null;
         if (pointers.current.size === 0) panStart.current = null;
-      },
-      onWheel: (event) => {
-        const rect = event.currentTarget.getBoundingClientRect();
-        const factor = Math.exp(-event.deltaY * 0.0022);
-        applyZoomAt(zoom.scale * factor, event.clientX, event.clientY, rect);
       },
       onClick: (event) => {
         if (movedRef.current) {
@@ -962,10 +900,5 @@ export function PostLightbox({
       setConfirmingRemove(false);
     },
     pinOverlay,
-    caption,
-    captionVisible,
-    captionExpanded,
-    onToggleCaption: () => setCaptionVisible((v) => !v),
-    onToggleCaptionExpand: () => setCaptionExpanded((e) => !e),
   });
 }
