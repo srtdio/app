@@ -69,7 +69,9 @@ export function isCheckpointAuthor(
 export function editedMarker(editedAt: string | null): ReactElement | null {
   if (editedAt === null) return null;
   return (
-    <span className="ml-1.5 text-[11px] text-fg-3">edited {relativeLong(editedAt, new Date())}</span>
+    <span className="ml-1.5 text-[11px] text-fg-3">
+      edited {relativeLong(editedAt, new Date())}
+    </span>
   );
 }
 
