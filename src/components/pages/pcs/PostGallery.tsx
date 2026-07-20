@@ -504,6 +504,8 @@ interface PostGalleryProps {
   onMakeLast?: ((index: number) => void) | undefined;
   /** Lightbox manage row: the existing insert-after add/upload flow. */
   onAddAfter?: ((index: number) => void) | undefined;
+  /** Lightbox manage bar: remove the slide over the existing gallery_set commit. */
+  onRemove?: ((index: number) => void) | undefined;
 }
 
 /**
@@ -534,6 +536,7 @@ export function PostGallery({
   onMoveRight,
   onMakeLast,
   onAddAfter,
+  onRemove,
 }: PostGalleryProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -645,8 +648,9 @@ export function PostGallery({
     onMoveLeft !== undefined &&
     onMoveRight !== undefined &&
     onMakeLast !== undefined &&
-    onAddAfter !== undefined
-      ? { onMakeFirst, onMoveLeft, onMoveRight, onMakeLast, onAddAfter }
+    onAddAfter !== undefined &&
+    onRemove !== undefined
+      ? { onMakeFirst, onMoveLeft, onMoveRight, onMakeLast, onAddAfter, onRemove }
       : undefined;
 
   return (

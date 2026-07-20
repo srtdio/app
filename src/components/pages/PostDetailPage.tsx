@@ -1215,6 +1215,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                     ? (index: number) => openAdd({ mode: 'insertAfter', index })
                     : undefined
                 }
+                onRemove={agencySide && !readOnly ? handleRemove : undefined}
               />
               {gallery.length > 0 ? (
                 <p className="mt-2.5 text-xs text-fg-3">

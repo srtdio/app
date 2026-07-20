@@ -16,6 +16,7 @@ import {
   IconDownload,
   IconPlus,
   IconText,
+  IconTrash,
   IconX,
 } from '@/components/ui/icons';
 import type { IconProps } from '@/components/ui/icons';
@@ -173,16 +174,34 @@ function IconChevronsRight({ className, size = 18 }: IconProps) {
 
 const TOOLBAR_BUTTON =
   'inline-flex h-11 w-11 items-center justify-center rounded-lg text-overlay-fg ' +
-  'hover:bg-overlay-surface disabled:opacity-40 focus-visible:outline-none ' +
+  'hover:bg-overlay disabled:opacity-40 focus-visible:outline-none ' +
   'focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
 
-/** The five 44px agency manage actions, prewired to the current slide. */
+// The card hugs the current image: its width follows the rendered image width and
+// the image region's height follows the rendered height, both derived from the
+// item's aspect ratio and clamped to the viewport. Two 48px bars plus the dialog's
+// 1rem inset (2rem across an axis) are reserved so the whole card fits on screen.
+const CARD_INSET = '2rem';
+const BARS = '96px';
+
+/** The card width that hugs an image of aspect ratio `ratio`, viewport-clamped. */
+export function hugCardWidth(ratio: number): string {
+  return `min(calc(100vw - ${CARD_INSET}), calc((100vh - ${BARS} - ${CARD_INSET}) * ${ratio}))`;
+}
+
+/** The image region's height for an image of aspect ratio `ratio`, viewport-clamped. */
+export function hugImageHeight(ratio: number): string {
+  return `min(calc(100vh - ${BARS} - ${CARD_INSET}), calc((100vw - ${CARD_INSET}) / ${ratio}))`;
+}
+
+/** The agency manage actions, prewired to the current slide. */
 export interface LightboxManage {
   onMakeFirst: () => void;
   onMoveLeft: () => void;
   onMoveRight: () => void;
   onMakeLast: () => void;
   onAddAfter: () => void;
+  onRemove: () => void;
 }
 
 /** Pointer/wheel gesture handlers the zoom layer spreads onto each slide stage. */
@@ -207,13 +226,20 @@ export interface LightboxViewProps {
   dimsFor: (item: GalleryItem) => { width: number; height: number } | null;
   onClose: () => void;
   onDownload: () => void;
-  onDotClick: (index: number) => void;
   onTrackScroll: (event: ReactUIEvent<HTMLDivElement>) => void;
   onImageLoad: (item: GalleryItem, event: SyntheticEvent<HTMLImageElement>) => void;
   stageGestures: StageGestures;
   trackRef?: Ref<HTMLDivElement> | undefined;
-  /** Agency-only manage row; absent for clients. */
+  /** Agency-only manage bar; absent for clients (their bar shows download only). */
   manage?: LightboxManage | undefined;
+  /** Whether the delete confirm row has replaced the bottom-bar controls. */
+  removeConfirming?: boolean;
+  /** Delete tapped: swap the bottom bar for the inline confirm row. */
+  onRequestRemove?: (() => void) | undefined;
+  /** Cancel in the confirm row: restore the bottom-bar controls. */
+  onCancelRemove?: (() => void) | undefined;
+  /** Remove in the confirm row: run the existing remove handler, then dismiss. */
+  onConfirmRemove?: (() => void) | undefined;
   /** F5 seam: overlay rendered over the sharp image; nothing when omitted. */
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
   /** Read-only post caption; nothing renders (toggle included) when null/empty. */
@@ -228,7 +254,7 @@ export interface LightboxViewProps {
   onToggleCaptionExpand?: (() => void) | undefined;
 }
 
-/** One slide's stage: blurred cover backdrop + fully-visible sharp image. */
+/** One slide's stage: the fully-visible sharp image, no letterbox filler. */
 function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): ReactElement {
   const { zoom, srcFor, failedFor, dimsFor, presignEnabled, onImageLoad, pinOverlay } = props;
   const src = srcFor(item);
@@ -243,68 +269,53 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
   const showVideo = presignEnabled && isVideo(item) && src !== null && !failed;
 
   return (
-    <>
-      {/* Letterbox filler: a blurred, darkened cover copy of the same slide. */}
-      {showImage ? (
-        <>
-          <img
-            src={src}
-            alt=""
-            aria-hidden
-            draggable={false}
-            className="absolute inset-0 h-full w-full scale-110 object-cover blur-[48px]"
-          />
-          <div aria-hidden className="absolute inset-0 bg-black/30" />
-        </>
-      ) : null}
-      <div
-        className="absolute inset-0 flex items-center justify-center"
-        {...props.stageGestures}
-        style={zoomed ? { touchAction: 'none' } : undefined}
-      >
-        {showImage && dims !== null ? (
-          // The frame is an aspect-ratio box constrained directly by this fixed
-          // stage (never an auto-height wrapper), so max-h/max-w always resolve
-          // and the whole image stays visible at every ratio.
-          <div
-            className="relative w-full max-h-full max-w-full"
-            style={{ ...fitFrameStyle(dims.width, dims.height), ...zoomStyle }}
-          >
-            <img
-              src={src}
-              alt={`Slide ${i + 1}`}
-              draggable={false}
-              onLoad={(event) => onImageLoad(item, event)}
-              className="h-full w-full object-contain"
-            />
-            {pinOverlay !== undefined && !zoomed ? (
-              <div className="pointer-events-none absolute inset-0">{pinOverlay(item, i)}</div>
-            ) : null}
-          </div>
-        ) : showImage ? (
+    <div
+      className="absolute inset-0 flex items-center justify-center"
+      {...props.stageGestures}
+      style={zoomed ? { touchAction: 'none' } : undefined}
+    >
+      {showImage && dims !== null ? (
+        // The frame is an aspect-ratio box constrained directly by this fixed
+        // stage (never an auto-height wrapper), so max-h/max-w always resolve
+        // and the whole image stays visible at every ratio.
+        <div
+          className="relative w-full max-h-full max-w-full"
+          style={{ ...fitFrameStyle(dims.width, dims.height), ...zoomStyle }}
+        >
           <img
             src={src}
             alt={`Slide ${i + 1}`}
             draggable={false}
             onLoad={(event) => onImageLoad(item, event)}
-            style={zoomStyle}
-            className="max-h-full max-w-full object-contain"
+            className="h-full w-full object-contain"
           />
-        ) : showVideo ? (
-          <video src={src} controls className="max-h-full max-w-full" />
-        ) : !presignEnabled ? (
-          <GracefulPanel message="Image previews are unavailable in this environment." />
-        ) : isInlineRenderable(item) && !failed ? (
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
-        ) : (
-          <GracefulPanel
-            message={failed ? 'This image could not be loaded.' : 'Preview unavailable.'}
-            onDownload={props.onDownload}
-            busy={props.busy}
-          />
-        )}
-      </div>
-    </>
+          {pinOverlay !== undefined && !zoomed ? (
+            <div className="pointer-events-none absolute inset-0">{pinOverlay(item, i)}</div>
+          ) : null}
+        </div>
+      ) : showImage ? (
+        <img
+          src={src}
+          alt={`Slide ${i + 1}`}
+          draggable={false}
+          onLoad={(event) => onImageLoad(item, event)}
+          style={zoomStyle}
+          className="max-h-full max-w-full object-contain"
+        />
+      ) : showVideo ? (
+        <video src={src} controls className="max-h-full max-w-full" />
+      ) : !presignEnabled ? (
+        <GracefulPanel message="Image previews are unavailable in this environment." />
+      ) : isInlineRenderable(item) && !failed ? (
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+      ) : (
+        <GracefulPanel
+          message={failed ? 'This image could not be loaded.' : 'Preview unavailable.'}
+          onDownload={props.onDownload}
+          busy={props.busy}
+        />
+      )}
+    </div>
   );
 }
 
@@ -322,11 +333,25 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const hasCaption = caption !== null && caption.trim() !== '';
   const captionShown = hasCaption && props.captionVisible === true;
   const captionExpanded = props.captionExpanded === true;
+  const removeConfirming = props.removeConfirming === true;
+  // A gallery can never be emptied, so delete is inert on the last image.
+  const canDelete = count > 1;
 
-  const chromeMotion = (visible: boolean, hiddenShift: string): string =>
+  // The card hugs the current image: its rendered width and the image region's
+  // height both follow the current item's aspect ratio (stored dims or measured
+  // fallback), viewport-clamped. Unknown dims fall back to the height cap.
+  const current = items[index];
+  const dims = current !== undefined ? props.dimsFor(current) : null;
+  const ratio = dims !== null ? dims.width / dims.height : null;
+  const cardWidth = ratio !== null ? hugCardWidth(ratio) : undefined;
+  const imageHeight =
+    ratio !== null ? hugImageHeight(ratio) : `calc(100vh - ${BARS} - ${CARD_INSET})`;
+
+  // Opacity only: no translate or rotate is introduced anywhere on this surface.
+  const chromeMotion = (visible: boolean): string =>
     cn(
-      'transition-[opacity,transform] duration-base',
-      visible ? 'opacity-100 translate-y-0' : `pointer-events-none opacity-0 ${hiddenShift}`,
+      'transition-opacity duration-base',
+      visible ? 'opacity-100' : 'pointer-events-none opacity-0',
     );
 
   return (
@@ -334,129 +359,129 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
       role="dialog"
       aria-modal="true"
       aria-label="Image viewer"
-      className="fixed inset-0 z-50 bg-overlay"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4"
     >
-      {/* Slide track: declared motion axis X, native scroll-snap only. While
-          zoomed (scale > 1) swiping is disabled so the gesture never fights. */}
+      {/* The card hugs the image at its rendered width, clamped so it never
+          exceeds the viewport and never narrows below the controls' needs. */}
       <div
-        ref={props.trackRef}
-        onScroll={props.onTrackScroll}
-        aria-roledescription="carousel"
-        data-motion-axis="x"
-        className={cn(
-          'absolute inset-0 flex overscroll-x-contain',
-          zoom.scale > 1 ? 'overflow-x-hidden' : 'snap-x snap-mandatory overflow-x-auto',
-        )}
+        className="relative inline-flex max-w-full flex-col overflow-hidden rounded-2xl border border-overlay-line bg-overlay-surface shadow-2xl"
+        style={{ width: cardWidth, minWidth: 'min(352px, 100%)' }}
       >
-        {items.map((slide, i) => (
-          <div
-            key={slide.assetAttachmentId}
-            className="relative h-full w-full shrink-0 snap-center overflow-hidden"
-          >
-            {fitSlide(props, slide, i)}
-          </div>
-        ))}
-      </div>
-
-      {/* Top chrome: close · mono counter · Download. Nothing else. */}
-      <div
-        className={cn(
-          'absolute inset-x-0 top-0 z-20',
-          chromeMotion(chromeVisible, '-translate-y-2'),
-        )}
-      >
+        {/* Top bar: mono counter · caption toggle · close. No download here. */}
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-overlay to-transparent"
-        />
-        <div className="relative flex h-14 items-center gap-1 px-3">
-          <button
-            type="button"
-            aria-label="Close viewer"
-            onClick={props.onClose}
-            className={TOOLBAR_BUTTON}
-          >
-            <IconX size={20} />
-          </button>
-          <span className="px-1 font-mono text-sm tabular-nums text-overlay-fg-dim">
+          className={cn(
+            'flex h-12 items-center justify-between border-b border-overlay-line bg-overlay-surface px-1.5',
+            chromeMotion(chromeVisible),
+          )}
+        >
+          <span className="px-2 font-mono text-sm tabular-nums text-overlay-fg-dim">
             {lightboxCounter(index, count)}
           </span>
-          <div className="flex-1" />
-          {hasCaption ? (
+          <div className="flex items-center">
+            {hasCaption ? (
+              <button
+                type="button"
+                aria-label="Toggle caption"
+                aria-pressed={props.captionVisible === true}
+                onClick={props.onToggleCaption}
+                className={TOOLBAR_BUTTON}
+              >
+                <IconText size={20} />
+              </button>
+            ) : null}
             <button
               type="button"
-              aria-label="Toggle caption"
-              aria-pressed={props.captionVisible === true}
-              onClick={props.onToggleCaption}
+              aria-label="Close viewer"
+              onClick={props.onClose}
               className={TOOLBAR_BUTTON}
             >
-              <IconText size={20} />
+              <IconX size={20} />
             </button>
-          ) : null}
-          <button
-            type="button"
-            aria-label="Download"
-            disabled={busy}
-            onClick={props.onDownload}
-            className={TOOLBAR_BUTTON}
-          >
-            <IconDownload size={20} />
-          </button>
+          </div>
         </div>
-      </div>
 
-      {/* Bottom chrome: dots · agency manage row. */}
-      <div
-        className={cn(
-          'absolute inset-x-0 bottom-0 z-20',
-          chromeMotion(chromeVisible, 'translate-y-2'),
-        )}
-      >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-overlay to-transparent"
-        />
-        <div className="relative flex flex-col items-center gap-1 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
+        {/* Image region: the native scroll-snap carousel, one slide per width.
+            Its height follows the current image; the card's width equals the
+            frame's rendered width so the image hugs edge to edge. */}
+        <div className="relative w-full overflow-hidden" style={{ height: imageHeight }}>
+          <div
+            ref={props.trackRef}
+            onScroll={props.onTrackScroll}
+            aria-roledescription="carousel"
+            data-motion-axis="x"
+            className={cn(
+              'absolute inset-0 flex overscroll-x-contain',
+              zoom.scale > 1 ? 'overflow-x-hidden' : 'snap-x snap-mandatory overflow-x-auto',
+            )}
+          >
+            {items.map((slide, i) => (
+              <div
+                key={slide.assetAttachmentId}
+                className="relative h-full w-full shrink-0 snap-center overflow-hidden"
+              >
+                {fitSlide(props, slide, i)}
+              </div>
+            ))}
+          </div>
           {captionShown ? (
-            <button
-              type="button"
-              aria-label={captionExpanded ? 'Collapse caption' : 'Expand caption'}
-              aria-expanded={captionExpanded}
-              onClick={props.onToggleCaptionExpand}
-              className={cn(
-                'min-h-[44px] w-full max-w-xl px-4 py-2 text-left text-sm leading-relaxed text-overlay-fg',
-                captionExpanded && 'max-h-[34vh] overflow-y-auto',
-              )}
-            >
-              <span className={cn('whitespace-pre-wrap', !captionExpanded && 'line-clamp-2')}>
-                {caption}
-              </span>
-            </button>
-          ) : null}
-          {count > 1 ? (
-            <div className="flex flex-wrap items-center justify-center">
-              {items.map((slide, dot) => (
-                <button
-                  key={slide.assetAttachmentId}
-                  type="button"
-                  aria-label={`Go to image ${dot + 1}`}
-                  aria-current={dot === index}
-                  onClick={() => props.onDotClick(dot)}
-                  className="inline-flex h-11 w-11 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
-                >
-                  <span
-                    className={cn(
-                      'h-2 w-2 rounded-full transition-colors',
-                      dot === index ? 'bg-overlay-fg' : 'bg-overlay-dot',
-                    )}
-                  />
-                </button>
-              ))}
+            <div className="absolute inset-x-0 bottom-0 z-10 bg-overlay">
+              <button
+                type="button"
+                aria-label={captionExpanded ? 'Collapse caption' : 'Expand caption'}
+                aria-expanded={captionExpanded}
+                onClick={props.onToggleCaptionExpand}
+                className={cn(
+                  'min-h-[44px] w-full px-4 py-2 text-left text-sm leading-relaxed text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-overlay-fg/70',
+                  captionExpanded && 'max-h-[34vh] overflow-y-auto',
+                )}
+              >
+                <span className={cn('whitespace-pre-wrap', !captionExpanded && 'line-clamp-2')}>
+                  {caption}
+                </span>
+              </button>
             </div>
           ) : null}
+        </div>
 
-          {manage !== undefined ? (
-            <div className="flex items-center gap-1">
+        {/* Bottom bar: the agency 7-control action bar (reorder · divider ·
+            download/add/delete), or download only for clients and read-only.
+            Delete swaps the whole bar for an inline confirm row. */}
+        <div
+          className={cn(
+            'flex h-12 items-center justify-center border-t border-overlay-line bg-overlay-surface',
+            chromeMotion(chromeVisible),
+          )}
+        >
+          {manage === undefined ? (
+            <button
+              type="button"
+              aria-label="Download"
+              disabled={busy}
+              onClick={props.onDownload}
+              className={TOOLBAR_BUTTON}
+            >
+              <IconDownload size={20} />
+            </button>
+          ) : removeConfirming ? (
+            <div className="flex items-center gap-2 px-3">
+              <span className="text-sm text-overlay-fg">Remove this image?</span>
+              <button
+                type="button"
+                onClick={props.onCancelRemove}
+                className="inline-flex h-11 items-center rounded-lg px-3 text-sm text-overlay-fg-dim hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={props.onConfirmRemove}
+                className="inline-flex h-11 items-center rounded-lg border border-bad px-3 text-sm font-medium text-bad hover:bg-bad/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center">
               <button
                 type="button"
                 aria-label="Make first"
@@ -477,14 +502,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               </button>
               <button
                 type="button"
-                aria-label="Add image"
-                onClick={manage.onAddAfter}
-                className={cn(TOOLBAR_BUTTON, 'text-accent')}
-              >
-                <IconPlus size={20} />
-              </button>
-              <button
-                type="button"
                 aria-label="Move right"
                 disabled={index === count - 1}
                 onClick={manage.onMoveRight}
@@ -501,8 +518,35 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               >
                 <IconChevronsRight size={20} />
               </button>
+              <span aria-hidden className="mx-2 h-5 w-px bg-overlay-line" />
+              <button
+                type="button"
+                aria-label="Download"
+                disabled={busy}
+                onClick={props.onDownload}
+                className={TOOLBAR_BUTTON}
+              >
+                <IconDownload size={20} />
+              </button>
+              <button
+                type="button"
+                aria-label="Add image"
+                onClick={manage.onAddAfter}
+                className={cn(TOOLBAR_BUTTON, 'text-accent')}
+              >
+                <IconPlus size={20} />
+              </button>
+              <button
+                type="button"
+                aria-label="Delete image"
+                disabled={!canDelete}
+                onClick={props.onRequestRemove}
+                className={cn(TOOLBAR_BUTTON, 'hover:text-bad')}
+              >
+                <IconTrash size={20} />
+              </button>
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </div>
@@ -565,6 +609,7 @@ interface PostLightboxProps {
         onMoveRight: (index: number) => void;
         onMakeLast: (index: number) => void;
         onAddAfter: (index: number) => void;
+        onRemove: (index: number) => void;
       }
     | undefined;
 }
@@ -596,6 +641,8 @@ export function PostLightbox({
   // The caption is per-post, so its visibility and expansion survive slide changes.
   const [captionVisible, setCaptionVisible] = useState(true);
   const [captionExpanded, setCaptionExpanded] = useState(false);
+  // The delete confirm row replaces the bottom-bar controls until resolved.
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const trackRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(index);
@@ -644,9 +691,11 @@ export function PostLightbox({
     mounted.current = true;
   }, []);
 
-  // Zoom resets whenever the slide changes.
+  // Zoom resets whenever the slide changes; a pending delete confirm is dropped
+  // too, so swiping away from a slide never leaves its confirm row armed.
   useEffect(() => {
     setZoom({ scale: 1, x: 0, y: 0 });
+    setConfirmingRemove(false);
   }, [index]);
 
   // Esc closes; arrows nudge the native scroller. Body scroll is locked while open.
@@ -868,6 +917,13 @@ export function PostLightbox({
           onAddAfter: () => {
             manage.onAddAfter(index);
           },
+          // Remove the viewed slide via the existing gallery_set commit, then
+          // keep a valid slide in view (the last one shrinks to its predecessor).
+          onRemove: () => {
+            if (items.length <= 1) return;
+            manage.onRemove(index);
+            onIndexChange(Math.min(index, items.length - 2));
+          },
         }
       : undefined;
 
@@ -883,7 +939,6 @@ export function PostLightbox({
     dimsFor: (it) => intrinsicSize(it, measured),
     onClose,
     onDownload: handleDownload,
-    onDotClick: onIndexChange,
     onTrackScroll: handleTrackScroll,
     onImageLoad: (it, event) => {
       const img = event.currentTarget;
@@ -899,6 +954,13 @@ export function PostLightbox({
     stageGestures,
     trackRef,
     manage: manageView,
+    removeConfirming: confirmingRemove,
+    onRequestRemove: () => setConfirmingRemove(true),
+    onCancelRemove: () => setConfirmingRemove(false),
+    onConfirmRemove: () => {
+      manageView?.onRemove();
+      setConfirmingRemove(false);
+    },
     pinOverlay,
     caption,
     captionVisible,
