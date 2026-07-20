@@ -87,7 +87,6 @@ const GESTURES: StageGestures = {
   onPointerMove: () => {},
   onPointerUp: () => {},
   onPointerCancel: () => {},
-  onWheel: () => {},
   onClick: () => {},
 };
 
@@ -175,7 +174,7 @@ describe('lightboxView', () => {
     }
   });
 
-  it('shows the mono counter and close in the top bar, with download no longer there', () => {
+  it('shows only the mono counter and close in the top bar: no download, no caption toggle', () => {
     const tree = lightboxView(props({ index: 1 }));
     const close = byLabel(tree, 'Close viewer')!;
     expect(close).toBeDefined();
@@ -188,34 +187,39 @@ describe('lightboxView', () => {
     expect(counter).toBeDefined();
     expect(className(counter!)).toContain('font-mono');
     expect(className(counter!)).toContain('text-overlay-fg-dim');
-    // Close and counter share the top bar; download is not a sibling there.
+    // The top bar is transparent (no border/surface) with counter + close only.
     const topBar = elements(tree).find(
-      (el) => className(el).includes('h-12') && className(el).includes('border-b'),
+      (el) => className(el).includes('h-12') && className(el).includes('justify-between'),
     )!;
+    expect(className(topBar)).not.toContain('border-b');
+    expect(className(topBar)).not.toContain('bg-overlay-surface');
     const inTop = elements((topBar.props as { children?: ReactNode }).children);
     expect(inTop.some((el) => byLabelEq(el, 'Close viewer'))).toBe(true);
     expect(inTop.some((el) => byLabelEq(el, 'Download'))).toBe(false);
+    // The caption is gone end to end: no toggle button, no caption text.
+    expect(byLabel(tree, 'Toggle caption')).toBeUndefined();
+    expect(strings(tree)).not.toContain('Launch day walkthrough.');
   });
 
-  it('hugs the image in a bordered card with no blurred backdrop or letterbox gutters', () => {
+  it('hugs the image on a plain dark backdrop with no border, box, or blurred cover', () => {
     const tree = lightboxView(props());
     const dialog = elements(tree).find((el) => (el.props as { role?: string }).role === 'dialog')!;
-    // The dialog scrim stays, centred, on the overlay token.
+    // The dialog scrim stays, centred, on the overlay token: the dark backdrop.
     expect(className(dialog)).toContain('bg-overlay');
     expect(className(dialog)).toContain('items-center');
     expect(className(dialog)).toContain('justify-center');
-    // The card hugs the image: inline-flex column with chrome/panel tokens.
+    // The card hugs the image: a transparent, borderless inline-flex column.
     const card = elements(tree).find(
-      (el) =>
-        className(el).includes('inline-flex') &&
-        className(el).includes('rounded-2xl') &&
-        className(el).includes('bg-overlay-surface'),
+      (el) => className(el).includes('inline-flex') && className(el).includes('flex-col'),
     )!;
     expect(card).toBeDefined();
-    expect(className(card)).toContain('border-overlay-line');
     expect(className(card)).toContain('overflow-hidden');
-    expect(className(card)).toContain('flex-col');
-    // Its width follows the image and it can never exceed the viewport.
+    // No chrome: no border, no rounded box, no surface fill, no shadow.
+    expect(className(card)).not.toContain('rounded-2xl');
+    expect(className(card)).not.toContain('border-overlay-line');
+    expect(className(card)).not.toContain('bg-overlay-surface');
+    expect(className(card)).not.toContain('shadow-2xl');
+    // Its width still follows the image and can never exceed the viewport.
     const cardStyle = (card.props as { style?: Record<string, unknown> }).style ?? {};
     expect(cardStyle.minWidth).toBe('min(352px, 100%)');
     expect(typeof cardStyle.width).toBe('string');
@@ -312,10 +316,12 @@ describe('lightboxView', () => {
     expect(byLabel(clientTree, 'Move left')).toBeUndefined();
     expect(byLabel(clientTree, 'Add image')).toBeUndefined();
     expect(byLabel(clientTree, 'Delete image')).toBeUndefined();
-    // Download sits inside the bottom bar (border-t chrome), not the top bar.
+    // Download sits inside the transparent bottom bar, not the top bar.
     const bottomBar = elements(clientTree).find(
-      (el) => className(el).includes('h-12') && className(el).includes('border-t'),
+      (el) => className(el).includes('h-12') && className(el).includes('justify-center'),
     )!;
+    expect(className(bottomBar)).not.toContain('border-t');
+    expect(className(bottomBar)).not.toContain('bg-overlay-surface');
     const inBottom = elements((bottomBar.props as { children?: ReactNode }).children);
     expect(inBottom.some((el) => byLabelEq(el, 'Download'))).toBe(true);
   });
@@ -406,79 +412,35 @@ describe('lightboxView', () => {
     expect(className(zTrack)).not.toContain('snap-mandatory');
   });
 
-  it('renders the caption toggle and the clamped caption when a caption exists and is shown', () => {
-    const onToggleCaption = vi.fn();
-    const onToggleCaptionExpand = vi.fn();
-    const tree = lightboxView(
-      props({
-        caption: 'Launch day walkthrough.',
-        captionVisible: true,
-        captionExpanded: false,
-        onToggleCaption,
-        onToggleCaptionExpand,
-      }),
+  it('wires no wheel handler onto the slide stage, so scroll/trackpad never zooms', () => {
+    const tree = lightboxView(props());
+    // The slide stages carry the pointer/click gesture handlers but no onWheel,
+    // so a trackpad or mouse-wheel scroll can never drive the zoom transform.
+    const stages = elements(tree).filter(
+      (el) => typeof (el.props as { onPointerDown?: unknown }).onPointerDown === 'function',
     );
-
-    // 44x44 toggle in the top chrome, pressed while the caption is shown.
-    const toggle = byLabel(tree, 'Toggle caption')!;
-    expect(toggle).toBeDefined();
-    expect(className(toggle)).toContain('h-11');
-    expect(className(toggle)).toContain('w-11');
-    expect((toggle.props as { 'aria-pressed': boolean })['aria-pressed']).toBe(true);
-    (toggle.props as { onClick: () => void }).onClick();
-    expect(onToggleCaption).toHaveBeenCalledOnce();
-
-    // The caption text renders read-only, clamped to two lines, a 44px target.
-    expect(strings(tree)).toContain('Launch day walkthrough.');
-    const captionButton = byLabel(tree, 'Expand caption')!;
-    expect(captionButton).toBeDefined();
-    expect(className(captionButton)).toContain('min-h-[44px]');
-    expect((captionButton.props as { 'aria-expanded': boolean })['aria-expanded']).toBe(false);
-    const clamp = elements(tree).find((el) => className(el).includes('line-clamp-2'));
-    expect(clamp).toBeDefined();
-    (captionButton.props as { onClick: () => void }).onClick();
-    expect(onToggleCaptionExpand).toHaveBeenCalledOnce();
-
-    // The caption body renders as an overlay pinned to the bottom of the image
-    // region, so it never widens the card that hugs the image.
-    const overlay = elements(tree).find(
-      (el) => className(el).includes('absolute') && className(el).includes('bottom-0'),
-    )!;
-    const inOverlay = elements((overlay.props as { children?: ReactNode }).children);
-    expect(
-      inOverlay.some(
-        (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Expand caption',
-      ),
-    ).toBe(true);
-  });
-
-  it('expands the caption to a scrollable panel capped at 34vh, collapsible again', () => {
-    const tree = lightboxView(
-      props({ caption: 'Long caption body.', captionVisible: true, captionExpanded: true }),
-    );
-    const captionButton = byLabel(tree, 'Collapse caption')!;
-    expect(captionButton).toBeDefined();
-    expect((captionButton.props as { 'aria-expanded': boolean })['aria-expanded']).toBe(true);
-    expect(className(captionButton)).toContain('max-h-[34vh]');
-    expect(className(captionButton)).toContain('overflow-y-auto');
-    expect(elements(tree).some((el) => className(el).includes('line-clamp-2'))).toBe(false);
-  });
-
-  it('hides the caption block while toggled off but keeps the unpressed toggle', () => {
-    const tree = lightboxView(props({ caption: 'Hidden for now.', captionVisible: false }));
-    const toggle = byLabel(tree, 'Toggle caption')!;
-    expect(toggle).toBeDefined();
-    expect((toggle.props as { 'aria-pressed': boolean })['aria-pressed']).toBe(false);
-    expect(byLabel(tree, 'Expand caption')).toBeUndefined();
-    expect(strings(tree)).not.toContain('Hidden for now.');
-  });
-
-  it('renders no caption and no toggle when the caption is null or blank', () => {
-    for (const caption of [null, '', '   ']) {
-      const tree = lightboxView(props({ caption, captionVisible: true }));
-      expect(byLabel(tree, 'Toggle caption')).toBeUndefined();
-      expect(byLabel(tree, 'Expand caption')).toBeUndefined();
+    expect(stages.length).toBeGreaterThan(0);
+    for (const stage of stages) {
+      expect((stage.props as { onWheel?: unknown }).onWheel).toBeUndefined();
     }
+    // At rest (scale 1) no frame carries a zoom transform.
+    const restFrames = elements(tree).filter(
+      (el) => (el.props as { style?: { aspectRatio?: string } }).style?.aspectRatio !== undefined,
+    );
+    for (const frame of restFrames) {
+      expect((frame.props as { style?: { transform?: string } }).style?.transform).toBeUndefined();
+    }
+  });
+
+  it('applies the zoom transform to the active frame past 1x (pinch/double-tap path)', () => {
+    const tree = lightboxView(props({ zoom: { scale: 2, x: 10, y: -5 } }));
+    const zoomedFrame = elements(tree).find(
+      (el) => (el.props as { style?: { transform?: string } }).style?.transform !== undefined,
+    );
+    expect(zoomedFrame).toBeDefined();
+    expect((zoomedFrame!.props as { style: { transform: string } }).style.transform).toContain(
+      'scale(2)',
+    );
   });
 
   it('renders the pin overlay over the sharp image only when provided', () => {
