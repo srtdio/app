@@ -6,8 +6,10 @@ import {
   NOTE_PLACEHOLDER,
   NOTIFY_LABEL,
   buildResolveArgs,
+  editedMarker,
   friendlyEditError,
   friendlyResolveError,
+  isCheckpointAuthor,
   ledgerCounts,
   ledgerProgress,
   markPostNotified,
@@ -56,9 +58,48 @@ describe('ledger read shape', () => {
       'id',
       'body',
       'attachment_asset_ids',
+      'author_user_id',
+      'edited_at',
     ]) {
       expect(LEDGER_SELECT).toContain(column);
     }
+  });
+});
+
+describe('isCheckpointAuthor (open-row Edit gating)', () => {
+  it('is true only for the checkpoint author, never another client or a signed-out viewer', () => {
+    expect(isCheckpointAuthor({ author_user_id: 'user-1' }, 'user-1')).toBe(true);
+    // A different client viewing the same open checkpoint no longer sees Edit.
+    expect(isCheckpointAuthor({ author_user_id: 'user-1' }, 'user-2')).toBe(false);
+    // Signed-out ('') is never the author.
+    expect(isCheckpointAuthor({ author_user_id: 'user-1' }, '')).toBe(false);
+  });
+});
+
+describe('editedMarker (subtle edited indicator)', () => {
+  it('renders nothing when the checkpoint has never been edited', () => {
+    expect(editedMarker(null)).toBeNull();
+  });
+
+  it('renders a muted "edited" marker (text-fg-3) when edited_at is set', () => {
+    const marker = editedMarker('2026-01-01T00:00:00.000Z');
+    expect(marker).not.toBeNull();
+    const els = elements(marker);
+    const classNames = els.map((el) => (el.props as { className?: string }).className ?? '');
+    expect(classNames.some((cls) => cls.includes('text-fg-3'))).toBe(true);
+    // No hardcoded colour and no dark: override; the token carries both themes.
+    for (const cls of classNames) {
+      expect(cls).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(cls).not.toContain('dark:');
+    }
+    const text = els
+      .flatMap((el) => {
+        const child = (el.props as { children?: unknown }).children;
+        return Array.isArray(child) ? child : [child];
+      })
+      .filter((c): c is string => typeof c === 'string')
+      .join(' ');
+    expect(text).toContain('edited');
   });
 });
 

@@ -1349,6 +1349,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                 postId={postId}
                 postStage={currentStage}
                 viewerIsClient={clientRole}
+                viewerUserId={userId ?? ''}
                 refreshSignal={commentsRefresh}
                 onMutated={bumpCommentsRefresh}
                 onCounts={handleLedgerCounts}

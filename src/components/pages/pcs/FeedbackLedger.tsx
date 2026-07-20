@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { IconCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { relativeLong } from '@/lib/relative-time';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
@@ -34,7 +35,7 @@ import type { Stage } from '@srtdio/posts';
 
 /** The ledger read: checkpoint columns only, ordered by seq via the query. */
 export const LEDGER_SELECT =
-  'id, body, attachment_asset_ids, ledger_seq, ledger_batch_id, resolution_note, resolved_at, resolved_by';
+  'id, body, attachment_asset_ids, ledger_seq, ledger_batch_id, resolution_note, resolved_at, resolved_by, author_user_id, edited_at';
 
 /** One checkpoint row as the ledger selects it. */
 export type LedgerRow = Pick<
@@ -47,7 +48,32 @@ export type LedgerRow = Pick<
   | 'resolution_note'
   | 'resolved_at'
   | 'resolved_by'
+  | 'author_user_id'
+  | 'edited_at'
 >;
+
+/** The author of a checkpoint is the only client who may edit it while it is
+ *  open (comment_batch_create makes every checkpoint client-authored, so this is
+ *  strictly narrower than viewerIsClient). A signed-out viewer ('') is never the
+ *  author. */
+export function isCheckpointAuthor(
+  row: Pick<LedgerRow, 'author_user_id'>,
+  viewerUserId: string,
+): boolean {
+  return viewerUserId !== '' && row.author_user_id === viewerUserId;
+}
+
+/** The subtle "edited <time>" marker for an edited checkpoint, reusing the same
+ *  relative timestamp the comment thread shows for comment times. Null when the
+ *  checkpoint has never been edited. text-fg-3 keeps it muted in both themes. */
+export function editedMarker(editedAt: string | null): ReactElement | null {
+  if (editedAt === null) return null;
+  return (
+    <span className="ml-1.5 text-[11px] text-fg-3">
+      edited {relativeLong(editedAt, new Date())}
+    </span>
+  );
+}
 
 /** The proc trims and caps the note at 500 chars; the input mirrors the cap. */
 export const MAX_NOTE_CHARS = 500;
@@ -203,6 +229,9 @@ export interface FeedbackLedgerProps {
   postStage: Stage;
   /** True when the viewer's workspace role is 'client'. */
   viewerIsClient: boolean;
+  /** The current viewer's user id ('' when signed out); gates the author-only
+   *  Edit control on an open checkpoint. */
+  viewerUserId: string;
   /** Bumped by the page (shared with Comments) to refetch. */
   refreshSignal: number;
   /** Called after every successful mutation so the page bumps the shared counter. */
@@ -216,6 +245,7 @@ export function FeedbackLedger({
   postId,
   postStage,
   viewerIsClient,
+  viewerUserId,
   refreshSignal,
   onMutated,
   onCounts,
@@ -408,6 +438,15 @@ export function FeedbackLedger({
           const attachments = toCommentAttachments(row.attachment_asset_ids, attachmentMime);
           const editing = editingId === row.id;
           const noteOpen = noteForId === row.id;
+          // The author is always a client (comment_batch_create enforces it), so
+          // this is stricter than viewerIsClient: only the checkpoint's own
+          // author sees Edit on an open row.
+          const isAuthor = isCheckpointAuthor(row, viewerUserId);
+          // "Not done" stays gated exactly as before (any client, resolved row);
+          // Edit is now author-only and open-row-only. Mutually exclusive by done.
+          const showNotDone = done && viewerIsClient;
+          const showEdit = !done && isAuthor;
+          const showRowControl = !editing && (showNotDone || showEdit);
           const editWords = countWords(editDraft);
           const editTone = counterTone(editWords);
           return (
@@ -432,6 +471,7 @@ export function FeedbackLedger({
                         )}
                       >
                         {row.body}
+                        {editedMarker(row.edited_at)}
                       </p>
                       {attachments.length > 0 ? (
                         <div className="mt-1.5">
@@ -477,9 +517,9 @@ export function FeedbackLedger({
                 )}
               </div>
 
-              {viewerIsClient && !editing ? (
+              {showRowControl ? (
                 <div className="-mt-1 flex items-center pl-7">
-                  {done ? (
+                  {showNotDone ? (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -489,7 +529,8 @@ export function FeedbackLedger({
                     >
                       {busy ? 'Saving' : 'Not done'}
                     </Button>
-                  ) : (
+                  ) : null}
+                  {showEdit ? (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -503,7 +544,7 @@ export function FeedbackLedger({
                     >
                       Edit
                     </Button>
-                  )}
+                  ) : null}
                 </div>
               ) : null}
 
