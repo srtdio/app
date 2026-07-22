@@ -293,47 +293,46 @@ export function toCommentAttachments(
 // ---------------------------------------------------------------------------
 
 /** One rendered item of the thread list: a plain one-level thread, or a run of
- *  consecutive checkpoint threads that share a ledger_batch_id (one send). */
+ *  consecutive checkpoint threads from the same author (collapsed into one card). */
 export type ThreadGroup =
   | { kind: 'single'; thread: ThreadRoot }
-  | { kind: 'batch'; batchId: string; threads: ThreadRoot[] };
+  | { kind: 'batch'; authorId: string; threads: ThreadRoot[] };
 
 /**
- * Group consecutive TOP-LEVEL checkpoint threads (ledger_seq not null) sharing a
- * ledger_batch_id into one batch; every other thread passes through unchanged.
- * Only adjacency in the newest-first list groups, so two runs of the same batch
- * separated by an ordinary comment stay separate. Points inside a batch are
- * re-ordered by ledger_seq ascending so they read in checkpoint order.
+ * Collapse consecutive TOP-LEVEL checkpoint threads (ledger_seq not null) from
+ * the SAME author into one card; every other thread passes through unchanged.
+ * Only adjacency in the newest-first list groups, so two runs from the same
+ * author separated by an ordinary comment stay separate. Points inside a card
+ * are ordered by created_at descending (newest send on top) with ledger_seq
+ * ascending as the tie-breaker so points from one send read in order.
  */
 export function groupThreads(threads: readonly ThreadRoot[]): ThreadGroup[] {
   const groups: ThreadGroup[] = [];
   for (const thread of threads) {
-    const batchId = thread.comment.ledger_seq !== null ? thread.comment.ledger_batch_id : null;
+    const authorId = thread.comment.ledger_seq !== null ? thread.comment.author_user_id : null;
     const last = groups[groups.length - 1];
     if (
-      batchId !== null &&
+      authorId !== null &&
       last !== undefined &&
       last.kind === 'batch' &&
-      last.batchId === batchId
+      last.authorId === authorId
     ) {
       last.threads.push(thread);
-    } else if (batchId !== null) {
-      groups.push({ kind: 'batch', batchId, threads: [thread] });
+    } else if (authorId !== null) {
+      groups.push({ kind: 'batch', authorId, threads: [thread] });
     } else {
       groups.push({ kind: 'single', thread });
     }
   }
   for (const group of groups) {
     if (group.kind === 'batch') {
-      group.threads.sort((a, b) => (a.comment.ledger_seq ?? 0) - (b.comment.ledger_seq ?? 0));
+      group.threads.sort((a, b) => {
+        const byTime = b.comment.created_at.localeCompare(a.comment.created_at);
+        return byTime !== 0 ? byTime : (a.comment.ledger_seq ?? 0) - (b.comment.ledger_seq ?? 0);
+      });
     }
   }
   return groups;
-}
-
-/** The batch group header line. */
-export function batchHeaderLabel(count: number): string {
-  return `added ${count} ${count === 1 ? 'checkpoint' : 'checkpoints'}`;
 }
 
 /** Which row actions a comment offers. Copy is harmless and shown on every live
@@ -985,6 +984,7 @@ export function Comments({
     replies: CommentRow[],
     tombstone: boolean,
     showResolve: boolean,
+    footRight?: ReactNode,
   ): ReactNode {
     const isExpanded = expanded.has(comment.id);
     const isReplyOpen = replyOpen.has(comment.id);
@@ -992,7 +992,7 @@ export function Comments({
     const isResolving = resolvingId === comment.id;
     return (
       <>
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex min-h-[44px] items-center gap-2">
           {replies.length > 0 ? (
             <Button
               size="sm"
@@ -1026,6 +1026,7 @@ export function Comments({
               {isResolving ? 'Saving' : isResolved ? 'Reopen' : 'Resolve'}
             </Button>
           ) : null}
+          {footRight !== undefined ? footRight : null}
         </div>
 
         {isExpanded && replies.length > 0 ? (
@@ -1091,11 +1092,12 @@ export function Comments({
     );
   }
 
-  // One checkpoint batch: a group card headed "added N checkpoints", then each
-  // point with its seq number (mono), verbatim body, attachments, and tick
+  // Consecutive checkpoints from one author, collapsed into a single card. The
+  // header is just the author (avatar + name); each point is an "ask row" with a
+  // number badge, the verbatim body, its own reply + time foot row, and the tick
   // state. Ticks are toggled in the feedback ledger, not here; the per-point
   // reply affordance is the existing thread tail (replies stay child comments).
-  function renderBatchItem(group: { batchId: string; threads: ThreadRoot[] }): ReactNode {
+  function renderBatchItem(group: { authorId: string; threads: ThreadRoot[] }): ReactNode {
     const first = group.threads[0]?.comment;
     if (first === undefined) return null;
     const authorName = first.legacy_author_name ?? nameOf(first.author_user_id) ?? EX_MEMBER_LABEL;
@@ -1103,8 +1105,8 @@ export function Comments({
       first.legacy_author_name !== null ? null : avatarOf(first.author_user_id);
     return (
       <li
-        key={`batch-${group.batchId}`}
-        className="rounded-xl border border-border bg-panel-2 px-4 py-3 transition-shadow"
+        key={`batch-${group.authorId}`}
+        className="rounded-xl border border-border bg-panel-2 px-4 py-3"
       >
         <div className="mb-2 flex items-center gap-2">
           <Avatar
@@ -1115,21 +1117,24 @@ export function Comments({
               : {})}
           />
           <span className="text-xs font-medium text-fg-2">{authorName}</span>
-          <span className="text-xs text-fg-3">{batchHeaderLabel(group.threads.length)}</span>
-          <span className="ml-auto shrink-0 text-xs text-fg-3 tabular-nums">
-            {relativeLong(first.created_at, new Date())}
-          </span>
         </div>
-        <ol className="flex flex-col gap-3">
-          {group.threads.map(({ comment, replies, tombstone }) => {
+        <ol className="flex flex-col">
+          {group.threads.map(({ comment, replies, tombstone }, index) => {
             const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
             const done = comment.resolved_at !== null;
             return (
-              <li key={comment.id} id={commentDomId(comment.id)}>
+              <li
+                key={comment.id}
+                id={commentDomId(comment.id)}
+                className={cn(
+                  'flex min-h-[44px] flex-col py-3',
+                  index > 0 ? 'border-t border-border' : 'pt-0',
+                )}
+              >
                 <div className="flex items-start gap-2">
                   <span
                     aria-hidden
-                    className="w-5 shrink-0 pt-0.5 text-right font-mono text-xs font-medium tabular-nums text-fg-3"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent-soft font-mono text-xs font-semibold tabular-nums text-accent"
                   >
                     {comment.ledger_seq}
                   </span>
@@ -1170,7 +1175,17 @@ export function Comments({
                     Done
                   </span>
                 </div>
-                <div className="pl-7">{renderThreadTail(comment, replies, tombstone, false)}</div>
+                <div className="pl-8">
+                  {renderThreadTail(
+                    comment,
+                    replies,
+                    tombstone,
+                    false,
+                    <span className="ml-auto shrink-0 text-xs text-fg-3 tabular-nums">
+                      {relativeLong(comment.created_at, new Date())}
+                    </span>,
+                  )}
+                </div>
               </li>
             );
           })}
