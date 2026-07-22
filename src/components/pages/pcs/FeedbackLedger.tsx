@@ -430,7 +430,7 @@ export function FeedbackLedger({
         </span>
       </div>
 
-      <ol className="flex flex-col">
+      <ol className="flex flex-col gap-2">
         {rows.map((row) => {
           const done = row.resolved_at !== null;
           const busy = busyId === row.id;
@@ -452,14 +452,13 @@ export function FeedbackLedger({
           return (
             <li
               key={row.id}
-              className="flex flex-col gap-1.5 border-b border-border py-1.5 first:pt-0 last:border-b-0 last:pb-0"
+              className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel p-3"
             >
               <div className="flex items-start gap-2">
-                <span
-                  aria-hidden
-                  className="flex h-11 w-5 shrink-0 items-center justify-center font-mono text-xs font-medium tabular-nums text-fg-3"
-                >
-                  {seq}
+                <span aria-hidden className="flex h-11 shrink-0 items-center">
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-panel-2 px-1.5 font-mono text-xs font-medium tabular-nums text-fg-3">
+                    {seq}
+                  </span>
                 </span>
                 <div className="min-w-0 flex-1 py-2.5">
                   {!editing ? (

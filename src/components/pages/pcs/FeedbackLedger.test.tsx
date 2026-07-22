@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement, ReactNode } from 'react';
+
+// The full component is provider-bound (trace) and pulls chat-attachment wiring;
+// both hooks are mocked so the component can be rendered to static markup with
+// no provider tree, mirroring PostCard.test.tsx's node-SSR render.
+vi.mock('@/lib/trace-context', () => ({
+  useNewTrace: () => () => 'trace-test',
+}));
+vi.mock('@/lib/chat/use-chat-attachments', () => ({
+  useChatAttachments: () => ({ presignEnabled: false, presignCache: {} }),
+}));
+
 import {
+  FeedbackLedger,
   LEDGER_SELECT,
   MAX_NOTE_CHARS,
   NOTE_PLACEHOLDER,
@@ -20,6 +33,7 @@ import {
   tickCircle,
   wasPostNotified,
 } from '@/components/pages/pcs/FeedbackLedger';
+import type { FeedbackLedgerProps } from '@/components/pages/pcs/FeedbackLedger';
 import { OVER_LIMIT_MESSAGE } from '@/components/comments/SlotComposer';
 import type { Client } from '@srtdio/rpc';
 
@@ -280,5 +294,28 @@ describe('motion (opacity/translateY only)', () => {
       expect(cls).toContain('transition-[opacity,transform]');
       expect(cls).not.toMatch(/translate-x|rotate|scale/);
     }
+  });
+});
+
+function ledgerProps(overrides: Partial<FeedbackLedgerProps> = {}): FeedbackLedgerProps {
+  return {
+    workspaceId: 'ws-1',
+    postId: 'post-1',
+    postStage: 'review',
+    viewerIsClient: false,
+    viewerUserId: 'user-1',
+    refreshSignal: 0,
+    onMutated: () => {},
+    ...overrides,
+  };
+}
+
+describe('render (empty state)', () => {
+  // The self-fetch runs in an effect that node SSR never flushes, so rows stay
+  // empty here: this exercises the mounted component and the "return null when
+  // there are no points" invariant. A populated card render needs a DOM runner
+  // (not installed) or a fetch effect (skipped under SSR); noted as a follow-up.
+  it('renders nothing when the post has no checkpoints', () => {
+    expect(renderToStaticMarkup(<FeedbackLedger {...ledgerProps()} />)).toBe('');
   });
 });
