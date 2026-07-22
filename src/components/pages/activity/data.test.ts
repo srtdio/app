@@ -73,6 +73,7 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     number: null,
     pointsAdded: null,
     checkpointTotal: null,
+    batchId: null,
     ...over,
   };
 }
@@ -283,6 +284,7 @@ describe('mapEntry ledger counts', () => {
       }),
     );
     expect(added.pointsAdded).toBe(4);
+    expect(added.batchId).toBe('b1');
     expect(added.checkpointTotal).toBeNull();
     const ready = mapEntry(row({ event_type: 'post_ready', payload: { checkpoints: 7 } }));
     expect(ready.checkpointTotal).toBe(7);
@@ -735,6 +737,72 @@ describe('fetchActivityEntries enrichment', () => {
     if (res.ok) {
       expect(res.data[0]?.actorName).toBeNull();
       expect(res.data[0]?.title).toBe('Q3 Launch');
+    }
+  });
+
+  it('resolves a checkpoints_added batch author + first-point body via comments -> users', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-points',
+          event_type: 'checkpoints_added',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { batch_id: 'batch-1', count: 2 },
+        }),
+      ]),
+      // Two points in the batch, same author; the fake returns them in ledger_seq
+      // order (the real query orders ascending), so seq 1 is the preview.
+      comments: ok([
+        {
+          author_user_id: 'u-alice',
+          body: 'First point: tighten the hook',
+          ledger_seq: 1,
+          ledger_batch_id: 'batch-1',
+        },
+        {
+          author_user_id: 'u-alice',
+          body: 'Second point: swap the image',
+          ledger_seq: 2,
+          ledger_batch_id: 'batch-1',
+        },
+      ]),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch' }]),
+      users: ok([{ id: 'u-alice', display_name: 'Alice', avatar_url: 'https://cdn/a.png' }]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const entry = res.data[0] ?? item({});
+      expect(entry.actorName).toBe('Alice');
+      expect(entry.actorAvatarUrl).toBe('https://cdn/a.png');
+      expect(activityLine(entry)).toBe('Alice sent 2 points on Q3 Launch');
+      expect(cardBodyLine(entry)).toBe('First point: tighten the hook');
+    }
+  });
+
+  it('degrades a checkpoints_added batch with no readable comments: actor + body null', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-points',
+          event_type: 'checkpoints_added',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { batch_id: 'batch-1', count: 3 },
+        }),
+      ]),
+      comments: ok([]),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch' }]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const entry = res.data[0] ?? item({});
+      expect(entry.actorName).toBeNull();
+      expect(entry.body).toBeNull();
+      expect(activityLine(entry)).toBe('3 points sent on Q3 Launch');
+      expect(cardBodyLine(entry)).toBe('3 points sent');
     }
   });
 });
