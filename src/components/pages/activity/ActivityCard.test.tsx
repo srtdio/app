@@ -79,6 +79,7 @@ function item(over: Partial<ActivityItem>): ActivityItem {
     thumbnailAssetVersionId: null,
     pointsAdded: null,
     checkpointTotal: null,
+    batchId: null,
     ...over,
   };
 }

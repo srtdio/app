@@ -138,6 +138,9 @@ export interface ActivityItem {
   pointsAdded: number | null;
   /** Total checkpoints on a post_ready ping (payload.checkpoints); null otherwise. */
   checkpointTotal: number | null;
+  /** The feedback-point batch id (checkpoints_added only, payload.batch_id); links
+   *  to comments.ledger_batch_id so the batch author + first point resolve by join. */
+  batchId: string | null;
 }
 
 /** Map a raw inbox_entries row into an ActivityItem. Pure; actorName stays null. */
@@ -169,6 +172,7 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     number: null,
     pointsAdded: payloadNum(payload, 'count'),
     checkpointTotal: payloadNum(payload, 'checkpoints'),
+    batchId: row.event_type === 'checkpoints_added' ? payloadStr(payload, 'batch_id') : null,
   };
 }
 
@@ -236,9 +240,10 @@ export function activityLine(item: ActivityItem): string {
     case 'invite':
       return who !== null ? `${who} invited a new member` : 'New workspace invite';
     case 'checkpoints_added':
-      return item.pointsAdded !== null
-        ? `${pointsLabel(item.pointsAdded)} sent on ${target}`
-        : `Points sent on ${target}`;
+      if (item.pointsAdded === null) return `Points sent on ${target}`;
+      return who !== null
+        ? `${who} sent ${pointsLabel(item.pointsAdded)} on ${target}`
+        : `${pointsLabel(item.pointsAdded)} sent on ${target}`;
     case 'post_ready':
       return `${target} is ready for review`;
     default:
@@ -305,7 +310,8 @@ function trimBody(text: string): string {
  * throws and never renders an empty string for a comment that has text.
  */
 export function cardBodyLine(item: ActivityItem): string {
-  if (item.eventType === 'comment' && item.body !== null && item.body.trim().length > 0) {
+  const showsBody = item.eventType === 'comment' || item.eventType === 'checkpoints_added';
+  if (showsBody && item.body !== null && item.body.trim().length > 0) {
     return trimBody(item.body);
   }
   return shortLine(item);
@@ -561,6 +567,14 @@ export async function fetchActivityEntries(
       item.entityType === 'brief' && item.entityId !== null ? [item.entityId] : [],
     ),
   );
+  // The distinct feedback-point batch ids on the page. Every point in one batch
+  // shares a single author, so one IN query (below) resolves author + preview for
+  // all of them (no per-batch fetch).
+  const batchIds = unique(
+    items.flatMap((item) =>
+      item.eventType === 'checkpoints_added' && item.batchId !== null ? [item.batchId] : [],
+    ),
+  );
 
   // WAVE 1: resolve comment authors and entity titles. Each sub-query is fired
   // only when it has ids; a failed one yields an empty map (never fails the feed).
@@ -568,7 +582,7 @@ export async function fetchActivityEntries(
   // (asset_attachments, image-mime inner join, position then attached_at order),
   // run once over the distinct post ids on the page (no N+1); a failure degrades
   // every thumbnailAssetVersionId to null rather than failing the feed.
-  const [commentsRes, postsRes, briefsRes, firstImagesRes] = await Promise.all([
+  const [commentsRes, postsRes, briefsRes, firstImagesRes, batchCommentsRes] = await Promise.all([
     commentIds.length > 0
       ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
       : Promise.resolve(null),
@@ -589,6 +603,13 @@ export async function fetchActivityEntries(
           .order('entity_id', { ascending: true })
           .order('position', { ascending: true })
           .order('attached_at', { ascending: true })
+      : Promise.resolve(null),
+    batchIds.length > 0
+      ? client
+          .from('comments')
+          .select('author_user_id, body, ledger_seq, ledger_batch_id')
+          .in('ledger_batch_id', batchIds)
+          .order('ledger_seq', { ascending: true })
       : Promise.resolve(null),
   ]);
 
@@ -629,6 +650,19 @@ export async function fetchActivityEntries(
       if (typeof r.number === 'number') briefNumbers.set(r.id, r.number);
     }
   }
+  // The author and preview body of each feedback-point batch: the first (lowest
+  // ledger_seq) comment in the batch. Rows arrive ordered by ledger_seq, so the
+  // first row seen per batch id wins. A batch with no readable rows (RLS-hidden or
+  // missing) simply never enters the maps and degrades to actor-less / bodyless.
+  const batchAuthors = new Map<string, string>();
+  const batchBodies = new Map<string, string>();
+  if (batchCommentsRes !== null && batchCommentsRes.error === null) {
+    for (const r of batchCommentsRes.data ?? []) {
+      if (r.ledger_batch_id === null || batchAuthors.has(r.ledger_batch_id)) continue;
+      batchAuthors.set(r.ledger_batch_id, r.author_user_id);
+      if (typeof r.body === 'string') batchBodies.set(r.ledger_batch_id, r.body);
+    }
+  }
 
   // WAVE 2: resolve the display names for every actor id we now know about: the
   // comment authors plus the payload-supplied created_by / invited_by (actorId).
@@ -642,6 +676,8 @@ export async function fetchActivityEntries(
       .filter((id): id is string => typeof id === 'string'),
     ...items.flatMap((item) => (item.actorId !== null ? [item.actorId] : [])),
     ...[...commentBodies.values()].flatMap((body) => parseMentions(body)),
+    ...batchAuthors.values(),
+    ...[...batchBodies.values()].flatMap((body) => parseMentions(body)),
   ]);
   const userNames = new Map<string, string>();
   const userAvatars = new Map<string, string>();
@@ -669,17 +705,22 @@ export async function fetchActivityEntries(
       actorUserId = payloadStr(payload, 'created_by');
     } else if (item.eventType === 'invite') {
       actorUserId = payloadStr(payload, 'invited_by');
+    } else if (item.eventType === 'checkpoints_added') {
+      // Every point in a batch shares one author; take it from the batch join.
+      actorUserId = item.batchId !== null ? (batchAuthors.get(item.batchId) ?? null) : null;
     }
     item.actorName = actorUserId !== null ? (userNames.get(actorUserId) ?? null) : null;
     item.actorAvatarUrl = actorUserId !== null ? (userAvatars.get(actorUserId) ?? null) : null;
 
-    // The comment text, for comment events only (other events have no body).
-    // Mention tokens are resolved to @Name here so the card never prints a raw
-    // @[uuid]; the same resolution the comment thread applies inline.
+    // The preview body: a comment event shows its comment text; a checkpoints_added
+    // event shows the first point in the batch. Mention tokens resolve to @Name here
+    // so the card never prints a raw @[uuid]; the same resolution the thread applies.
     const rawBody =
       item.eventType === 'comment' && item.commentId !== null
         ? (commentBodies.get(item.commentId) ?? null)
-        : null;
+        : item.eventType === 'checkpoints_added' && item.batchId !== null
+          ? (batchBodies.get(item.batchId) ?? null)
+          : null;
     item.body =
       rawBody !== null ? resolveBodyMentions(rawBody, (id) => userNames.get(id) ?? null) : null;
 
