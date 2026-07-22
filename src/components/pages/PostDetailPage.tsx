@@ -8,7 +8,6 @@ import { Comments, writeClipboard } from '@/components/comments/Comments';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
 import {
-  PcsTabs,
   PCS_TAB_PARAM,
   parsePcsTab,
   pcsTabPanelClass,
@@ -1174,19 +1173,9 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
         />
       ) : (
         <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:hidden">
-            <PcsTabs
-              active={activeTab}
-              onSelect={(tab) => setSearchParams(withPcsTab(searchParams, tab))}
-              feedbackCount={checkpointCounts.total - checkpointCounts.resolved}
-            />
-          </div>
           <div
             id={pcsTabPanelId('post')}
-            className={cn(
-              'md:col-span-2',
-              pcsTabPanelClass(activeTab === 'post', enteredTab === activeTab),
-            )}
+            className={cn('md:col-span-2', pcsTabPanelClass(true, true))}
           >
             <section>
               <PostGallery
@@ -1339,9 +1328,17 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
             id={pcsTabPanelId('feedback')}
             className={cn(
               'md:sticky md:top-14 md:max-h-[calc(100vh-3.5rem)] md:self-start md:overflow-y-auto',
-              pcsTabPanelClass(activeTab === 'feedback', enteredTab === activeTab),
+              pcsTabPanelClass(true, true),
             )}
           >
+            <div className="flex items-center gap-2 md:hidden">
+              <h2 className="text-lg font-semibold tracking-tight">Feedback</h2>
+              {checkpointCounts.total - checkpointCounts.resolved > 0 ? (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent">
+                  {checkpointCounts.total - checkpointCounts.resolved}
+                </span>
+              ) : null}
+            </div>
             {workspaceId !== null && postId !== undefined ? (
               <FeedbackLedger
                 workspaceId={workspaceId}
