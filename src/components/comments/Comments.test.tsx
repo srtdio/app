@@ -17,7 +17,6 @@ import { editComment, deleteComment } from '@srtdio/comments';
 import type { CommentRow } from '@srtdio/comments';
 import {
   annotationChip,
-  batchHeaderLabel,
   buildBatchArgs,
   buildCreateInput,
   buildThreads,
@@ -194,47 +193,55 @@ describe('buildThreads', () => {
   });
 });
 
-describe('groupThreads (feedback ledger batches in the thread)', () => {
+describe('groupThreads (feedback ledger: consecutive same-author checkpoints collapse)', () => {
   const BATCH_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-  const BATCH_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
-  function checkpoint(id: string, seq: number, batchId: string, created: string) {
-    return row({ id, ledger_seq: seq, ledger_batch_id: batchId, created_at: created });
+  function checkpoint(id: string, seq: number, author: string, created: string) {
+    return row({
+      id,
+      ledger_seq: seq,
+      ledger_batch_id: BATCH_A,
+      author_user_id: author,
+      created_at: created,
+    });
   }
 
-  it('groups consecutive top-level checkpoints sharing a batch id, sorted by seq', () => {
+  it('collapses consecutive same-author checkpoints, newest send on top, seq ascending inside a send', () => {
     const threads = buildThreads([
-      // Newest-first list order (seq desc inside one batch, as created together).
-      checkpoint('c2', 2, BATCH_A, '2026-01-02T00:00:02.000Z'),
-      checkpoint('c1', 1, BATCH_A, '2026-01-02T00:00:01.000Z'),
-      row({ id: 'plain', created_at: '2026-01-01T00:00:00.000Z' }),
+      // Newest-first list order; two sends (t2 newer than t1), each with two points.
+      checkpoint('c4', 4, UUID_A, '2026-01-02T00:00:02.000Z'),
+      checkpoint('c3', 3, UUID_A, '2026-01-02T00:00:02.000Z'),
+      checkpoint('c2', 2, UUID_A, '2026-01-01T00:00:01.000Z'),
+      checkpoint('c1', 1, UUID_A, '2026-01-01T00:00:01.000Z'),
+      row({ id: 'plain', created_at: '2025-12-31T00:00:00.000Z' }),
     ]);
     const groups = groupThreads(threads);
     expect(groups).toHaveLength(2);
-    expect(groups[0]).toMatchObject({ kind: 'batch', batchId: BATCH_A });
+    expect(groups[0]).toMatchObject({ kind: 'batch', authorId: UUID_A });
     if (groups[0]!.kind !== 'batch') throw new Error('expected a batch');
-    expect(groups[0]!.threads.map((t) => t.comment.ledger_seq)).toEqual([1, 2]);
+    // created_at DESC across sends, ledger_seq ASC within a send (tie-break).
+    expect(groups[0]!.threads.map((t) => t.comment.ledger_seq)).toEqual([3, 4, 1, 2]);
     expect(groups[1]).toMatchObject({ kind: 'single' });
   });
 
-  it('splits distinct batch ids into distinct groups', () => {
+  it('splits distinct authors into distinct cards', () => {
     const threads = buildThreads([
-      checkpoint('b1', 4, BATCH_B, '2026-01-03T00:00:00.000Z'),
-      checkpoint('a2', 2, BATCH_A, '2026-01-02T00:00:02.000Z'),
-      checkpoint('a1', 1, BATCH_A, '2026-01-02T00:00:01.000Z'),
+      checkpoint('b1', 4, UUID_B, '2026-01-03T00:00:00.000Z'),
+      checkpoint('a2', 2, UUID_A, '2026-01-02T00:00:02.000Z'),
+      checkpoint('a1', 1, UUID_A, '2026-01-02T00:00:01.000Z'),
     ]);
     const groups = groupThreads(threads);
     expect(groups.map((g) => g.kind)).toEqual(['batch', 'batch']);
     if (groups[0]!.kind !== 'batch' || groups[1]!.kind !== 'batch') throw new Error('batches');
-    expect(groups[0]!.batchId).toBe(BATCH_B);
-    expect(groups[1]!.batchId).toBe(BATCH_A);
+    expect(groups[0]!.authorId).toBe(UUID_B);
+    expect(groups[1]!.authorId).toBe(UUID_A);
   });
 
   it('only adjacency groups: an ordinary comment between runs keeps them apart', () => {
     const threads = buildThreads([
-      checkpoint('a2', 2, BATCH_A, '2026-01-04T00:00:00.000Z'),
+      checkpoint('a2', 2, UUID_A, '2026-01-04T00:00:00.000Z'),
       row({ id: 'between', created_at: '2026-01-03T00:00:00.000Z' }),
-      checkpoint('a1', 1, BATCH_A, '2026-01-02T00:00:00.000Z'),
+      checkpoint('a1', 1, UUID_A, '2026-01-02T00:00:00.000Z'),
     ]);
     const groups = groupThreads(threads);
     expect(groups.map((g) => g.kind)).toEqual(['batch', 'single', 'batch']);
@@ -247,17 +254,12 @@ describe('groupThreads (feedback ledger batches in the thread)', () => {
 
   it('carries each checkpoint thread whole, replies included (replies stay children)', () => {
     const threads = buildThreads([
-      checkpoint('cp', 1, BATCH_A, '2026-01-02T00:00:00.000Z'),
+      checkpoint('cp', 1, UUID_A, '2026-01-02T00:00:00.000Z'),
       row({ id: 'r1', parent_comment_id: 'cp', created_at: '2026-01-02T01:00:00.000Z' }),
     ]);
     const groups = groupThreads(threads);
     if (groups[0]!.kind !== 'batch') throw new Error('expected a batch');
     expect(groups[0]!.threads[0]!.replies.map((r) => r.id)).toEqual(['r1']);
-  });
-
-  it('labels the header "added N checkpoints" (singular at one)', () => {
-    expect(batchHeaderLabel(1)).toBe('added 1 checkpoint');
-    expect(batchHeaderLabel(4)).toBe('added 4 checkpoints');
   });
 });
 
