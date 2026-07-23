@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { KeyboardEvent, ReactElement } from 'react';
+import type { ComponentType, KeyboardEvent, ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Avatar } from '@/components/ui/Avatar';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
@@ -7,13 +7,22 @@ import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/forma
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   IconActivity,
-  IconBriefs,
-  IconChat,
-  IconCheck,
+  IconAt,
+  IconBroadcast,
   IconClock,
-  IconPipeline,
-  IconUpload,
-  IconUser,
+  IconDoorOpen,
+  IconFrame,
+  IconHistory,
+  IconHourglass,
+  IconListOrdered,
+  IconQuote,
+  IconReceipt,
+  IconScroll,
+  IconScrollText,
+  IconSignpost,
+  IconStamp,
+  IconTarget,
+  type IconProps,
 } from '@/components/ui/icons';
 import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
 import {
@@ -25,6 +34,7 @@ import {
   type ActivityItem,
   type SnoozeKind,
 } from '@/components/pages/activity/data';
+import type { InboxEventTypeValue } from '@srtdio/schemas';
 
 interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (threaded). */
@@ -42,64 +52,57 @@ interface ActivityCardProps {
   onMarkRead: (item: ActivityItem) => void;
 }
 
-type LeadTone = 'good' | 'bad' | 'warn' | 'accent' | 'neutral';
+type LeadTone = 'accent' | 'neutral';
 
-/** The tone of the lead event's icon circle, mirroring the stage / event colours. */
+/**
+ * The event types whose icon circle is accented. Every other event type (and any
+ * unrecognised value) is neutral. Colour is a two-state signal, keyed on the event
+ * type alone: it never reads the stored tier or the stage.
+ */
+const ACCENT_EVENTS = new Set<string>([
+  'mention',
+  'checkpoints_added',
+  'post_ready',
+  'trial_warning',
+  'billing_failure',
+]);
+
+/** The tone of the lead event's icon circle: accent for the five, neutral otherwise. */
 function leadTone(item: ActivityItem): LeadTone {
-  if (item.eventType === 'mention') return 'accent';
-  if (item.eventType === 'post_ready') return 'accent';
-  if (item.eventType === 'brief_closed') return 'good';
-  if (item.eventType === 'comment_resolved') return 'good';
-  if (item.eventType === 'stage_change') {
-    switch (item.toStage) {
-      case 'approved':
-        return 'good';
-      case 'rejected':
-        return 'bad';
-      case 'review':
-      case 'parked':
-      case 'trial':
-        return 'warn';
-      default:
-        return 'neutral';
-    }
-  }
-  return 'neutral';
+  return ACCENT_EVENTS.has(item.eventType) ? 'accent' : 'neutral';
 }
 
 const TONE_CIRCLE: Record<LeadTone, string> = {
-  good: 'bg-panel-2 border-good text-good',
-  bad: 'bg-panel-2 border-bad text-bad',
-  warn: 'bg-panel-2 border-warn text-warn',
   accent: 'bg-accent-soft border-accent-line text-accent',
   neutral: 'bg-panel-2 border-border text-fg-3',
 };
 
+/**
+ * One distinct glyph per known inbox event type. Typed as a total Record so the
+ * compiler enforces that every InboxEventTypeValue is mapped; a runtime value
+ * outside the set falls back to IconActivity in leadIcon.
+ */
+const LEAD_ICON: Record<InboxEventTypeValue, ComponentType<IconProps>> = {
+  mention: IconAt,
+  checkpoints_added: IconListOrdered,
+  comment: IconQuote,
+  comment_resolved: IconStamp,
+  stage_change: IconSignpost,
+  post_ready: IconTarget,
+  brief_created: IconScrollText,
+  brief_closed: IconScroll,
+  asset_uploaded: IconFrame,
+  asset_version_added: IconHistory,
+  invite: IconDoorOpen,
+  trial_warning: IconHourglass,
+  billing_failure: IconReceipt,
+  system: IconBroadcast,
+};
+
 /** The lead event's glyph, shown in the tone circle when there is no actor avatar. */
 function leadIcon(item: ActivityItem): ReactElement {
-  switch (item.eventType) {
-    case 'comment':
-    case 'mention':
-      return <IconChat size={24} />;
-    case 'comment_resolved':
-      return <IconCheck size={24} />;
-    case 'stage_change':
-      return <IconPipeline size={24} />;
-    case 'brief_created':
-    case 'brief_closed':
-      return <IconBriefs size={24} />;
-    case 'asset_uploaded':
-    case 'asset_version_added':
-      return <IconUpload size={24} />;
-    case 'invite':
-      return <IconUser size={24} />;
-    case 'checkpoints_added':
-      return <IconChat size={24} />;
-    case 'post_ready':
-      return <IconCheck size={24} />;
-    default:
-      return <IconActivity size={24} />;
-  }
+  const Icon = LEAD_ICON[item.eventType as InboxEventTypeValue] ?? IconActivity;
+  return <Icon size={24} />;
 }
 
 /**

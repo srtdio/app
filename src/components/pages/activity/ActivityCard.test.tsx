@@ -145,12 +145,109 @@ describe('ActivityCard', () => {
     expect(read).not.toContain('aria-label="Unread"');
   });
 
-  it('falls back to a tone-tinted icon circle when the group has no actor', () => {
+  it('falls back to a neutral icon circle when the group has no actor', () => {
     const html = renderCard([
       item({ id: 'a', actorName: null, eventType: 'stage_change', toStage: 'approved' }),
     ]);
-    // approved -> good tone on the icon circle.
-    expect(html).toContain('border-good');
+    // stage_change is neutral now: stage no longer tints the circle.
+    expect(html).toContain('rounded-full border bg-panel-2 border-border text-fg-3');
+    expect(html).not.toContain('border-good');
+  });
+
+  const ACCENT_CIRCLE = 'rounded-full border bg-accent-soft border-accent-line text-accent';
+  const NEUTRAL_CIRCLE = 'rounded-full border bg-panel-2 border-border text-fg-3';
+
+  const ALL_EVENT_TYPES = [
+    'mention',
+    'checkpoints_added',
+    'comment',
+    'comment_resolved',
+    'stage_change',
+    'post_ready',
+    'brief_created',
+    'brief_closed',
+    'asset_uploaded',
+    'asset_version_added',
+    'invite',
+    'trial_warning',
+    'billing_failure',
+    'system',
+  ] as const;
+
+  /** Collect every element in a returned element tree. */
+  function collectAll(node: ReactNode, acc: ReactElement[]): void {
+    if (Array.isArray(node)) {
+      for (const child of node) collectAll(child, acc);
+      return;
+    }
+    if (!isValidElement(node)) return;
+    acc.push(node);
+    collectAll((node.props as { children?: ReactNode }).children, acc);
+  }
+
+  /** The name of the icon component rendered inside the (actor-less) lead circle. */
+  function leadIconName(eventType: string): string {
+    const tree = ActivityCard({
+      group: [item({ eventType, actorName: null })],
+      nowMs: NOW,
+      cache,
+      presignEnabled: false,
+      onOpenGroup: () => {},
+      onOpenEntry: () => {},
+      onSnooze: () => {},
+      onMarkRead: () => {},
+    });
+    const all: ReactElement[] = [];
+    collectAll(tree, all);
+    const circle = all.find(
+      (el) =>
+        el.type === 'span' &&
+        String((el.props as { className?: string }).className ?? '').includes('h-12 w-12'),
+    );
+    const icon = (circle?.props as { children?: ReactNode } | undefined)?.children;
+    if (!isValidElement(icon)) throw new Error(`no lead icon for ${eventType}`);
+    const type = icon.type;
+    return typeof type === 'function' ? type.name : String(type);
+  }
+
+  it('gives each of the 14 event types its own distinct icon, none the fallback', () => {
+    const names = ALL_EVENT_TYPES.map(leadIconName);
+    expect(names).toHaveLength(14);
+    // Every event type maps to a different icon component.
+    expect(new Set(names).size).toBe(14);
+    // None of the known types fall through to the IconActivity default.
+    expect(names).not.toContain('IconActivity');
+  });
+
+  it('accents exactly the five accent event types and leaves the other nine neutral', () => {
+    const accent = new Set([
+      'mention',
+      'checkpoints_added',
+      'post_ready',
+      'trial_warning',
+      'billing_failure',
+    ]);
+    for (const eventType of ALL_EVENT_TYPES) {
+      const html = renderCard([item({ eventType, actorName: null })]);
+      if (accent.has(eventType)) {
+        expect(html).toContain(ACCENT_CIRCLE);
+        expect(html).not.toContain(NEUTRAL_CIRCLE);
+      } else {
+        expect(html).toContain(NEUTRAL_CIRCLE);
+        expect(html).not.toContain(ACCENT_CIRCLE);
+      }
+    }
+    // Precisely five accent, nine neutral.
+    const accentCount = ALL_EVENT_TYPES.filter((t) => accent.has(t)).length;
+    expect(accentCount).toBe(5);
+    expect(ALL_EVENT_TYPES.length - accentCount).toBe(9);
+  });
+
+  it('renders an unrecognised event type as IconActivity in a neutral circle', () => {
+    const html = renderCard([item({ eventType: 'not_a_real_event', actorName: null })]);
+    expect(html).toContain(NEUTRAL_CIRCLE);
+    expect(html).not.toContain(ACCENT_CIRCLE);
+    expect(leadIconName('not_a_real_event')).toBe('IconActivity');
   });
 
   it('marks each expanded thread row interactive in the collapsed markup contract', () => {
