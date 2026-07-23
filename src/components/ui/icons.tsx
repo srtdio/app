@@ -413,3 +413,137 @@ export function IconCalendar(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconAt(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx={12} cy={12} r={4} />
+      <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12A9 9 0 1 0 16.5 19" />
+    </Svg>
+  );
+}
+
+export function IconListOrdered(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M11 6h10M11 12h10M11 18h10" />
+      <path d="M4 5l1.5-1v5" />
+      <path d="M3.5 14.5a1.5 1.5 0 0 1 2.8.6c0 1.3-2.6 1.8-2.6 3.4h2.8" />
+    </Svg>
+  );
+}
+
+export function IconQuote(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9 8H6a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h3v2a2 2 0 0 1-2 2" />
+      <path d="M19 8h-3a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h3v2a2 2 0 0 1-2 2" />
+    </Svg>
+  );
+}
+
+export function IconStamp(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4a3 3 0 0 1 3 3c0 1.6-1.2 2.2-1.2 3.6V12H10.2v-1.4C10.2 9.2 9 8.6 9 7a3 3 0 0 1 3-3z" />
+      <rect x={6} y={12} width={12} height={4} rx={1} />
+      <path d="M5 20h14" />
+    </Svg>
+  );
+}
+
+export function IconSignpost(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4v16" />
+      <path d="M12 7h6l2.5 2.5L18 12h-6z" />
+    </Svg>
+  );
+}
+
+export function IconTarget(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx={12} cy={12} r={8} />
+      <circle cx={12} cy={12} r={2} fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconScrollText(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M17 19V6a2 2 0 0 0-2-2H5" />
+      <path d="M9 20h9a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1h-7a1 1 0 0 0-1 1v1a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2V6a2 2 0 0 0-2-2" />
+      <path d="M9 8h6M9 12h4" />
+    </Svg>
+  );
+}
+
+export function IconScroll(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M17 19V6a2 2 0 0 0-2-2H5" />
+      <path d="M9 20h9a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1h-7a1 1 0 0 0-1 1v1a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2V6a2 2 0 0 0-2-2" />
+    </Svg>
+  );
+}
+
+export function IconFrame(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 8h16M4 16h16M8 4v16M16 4v16" />
+    </Svg>
+  );
+}
+
+export function IconHistory(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l4 2" />
+    </Svg>
+  );
+}
+
+export function IconDoorOpen(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 5.5l8-1.5v16l-8-1.5z" />
+      <path d="M14 4h3a1 1 0 0 1 1 1v13" />
+      <path d="M4 20h16" />
+      <circle cx={11.5} cy={12} r={0.7} fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconHourglass(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 4h12M6 20h12" />
+      <path d="M8 4v1.5l4 6.5 4-6.5V4" />
+      <path d="M8 20v-1.5l4-6.5 4 6.5V20" />
+    </Svg>
+  );
+}
+
+export function IconReceipt(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 3h12v17l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5z" />
+      <path d="M13.6 9.1A2 2 0 0 0 11.8 8c-1.1 0-1.9.6-1.9 1.5 0 2 3.7 1 3.7 3 0 .9-.9 1.5-2 1.5a2 2 0 0 1-1.8-1.1" />
+      <path d="M12 6.5v1.5M12 14v1.5" />
+    </Svg>
+  );
+}
+
+export function IconBroadcast(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx={12} cy={12} r={1.6} fill="currentColor" stroke="none" />
+      <path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M6 6a9 9 0 0 0 0 12M18 6a9 9 0 0 1 0 12" />
+    </Svg>
+  );
+}
