@@ -99,10 +99,10 @@ const LEAD_ICON: Record<InboxEventTypeValue, ComponentType<IconProps>> = {
   system: IconBroadcast,
 };
 
-/** The lead event's glyph, shown in the tone circle when there is no actor avatar. */
-function leadIcon(item: ActivityItem): ReactElement {
+/** The lead event's glyph: the big circle glyph (no actor) and the avatar badge. */
+function leadIcon(item: ActivityItem, size = 24): ReactElement {
   const Icon = LEAD_ICON[item.eventType as InboxEventTypeValue] ?? IconActivity;
-  return <Icon size={24} />;
+  return <Icon size={size} />;
 }
 
 /**
@@ -201,11 +201,22 @@ export function ActivityCard({
         className="group flex min-h-[44px] cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-panel-2 md:px-5"
       >
         {actorName !== null ? (
-          <Avatar
-            name={actorName}
-            {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
-            size="xl"
-          />
+          <span className="relative shrink-0">
+            <Avatar
+              name={actorName}
+              {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
+              size="xl"
+            />
+            <span
+              aria-hidden="true"
+              className={cn(
+                'absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border ring-2 ring-panel',
+                TONE_CIRCLE[leadTone(lead)],
+              )}
+            >
+              {leadIcon(lead, 12)}
+            </span>
+          </span>
         ) : (
           <span
             className={cn(
