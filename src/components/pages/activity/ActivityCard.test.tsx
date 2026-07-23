@@ -185,10 +185,10 @@ describe('ActivityCard', () => {
     collectAll((node.props as { children?: ReactNode }).children, acc);
   }
 
-  /** The name of the icon component rendered inside the (actor-less) lead circle. */
-  function leadIconName(eventType: string): string {
+  /** The icon component name rendered inside the first span matching `marker`. */
+  function iconNameInSpan(over: Partial<ActivityItem>, marker: string): string {
     const tree = ActivityCard({
-      group: [item({ eventType, actorName: null })],
+      group: [item(over)],
       nowMs: NOW,
       cache,
       presignEnabled: false,
@@ -199,15 +199,25 @@ describe('ActivityCard', () => {
     });
     const all: ReactElement[] = [];
     collectAll(tree, all);
-    const circle = all.find(
+    const span = all.find(
       (el) =>
         el.type === 'span' &&
-        String((el.props as { className?: string }).className ?? '').includes('h-12 w-12'),
+        String((el.props as { className?: string }).className ?? '').includes(marker),
     );
-    const icon = (circle?.props as { children?: ReactNode } | undefined)?.children;
-    if (!isValidElement(icon)) throw new Error(`no lead icon for ${eventType}`);
+    const icon = (span?.props as { children?: ReactNode } | undefined)?.children;
+    if (!isValidElement(icon)) throw new Error(`no icon in span "${marker}" for ${over.eventType}`);
     const type = icon.type;
     return typeof type === 'function' ? type.name : String(type);
+  }
+
+  /** The icon name in the big fallback circle (actor-less card). */
+  function leadIconName(eventType: string): string {
+    return iconNameInSpan({ eventType, actorName: null }, 'h-12 w-12');
+  }
+
+  /** The icon name in the avatar corner badge (card with an actor). */
+  function badgeIconName(eventType: string): string {
+    return iconNameInSpan({ eventType, actorName: 'Ann Lee' }, 'h-5 w-5');
   }
 
   it('gives each of the 14 event types its own distinct icon, none the fallback', () => {
@@ -248,6 +258,50 @@ describe('ActivityCard', () => {
     expect(html).toContain(NEUTRAL_CIRCLE);
     expect(html).not.toContain(ACCENT_CIRCLE);
     expect(leadIconName('not_a_real_event')).toBe('IconActivity');
+  });
+
+  // The avatar corner badge: when a card has an actor it shows the person's
+  // avatar (not the big circle), with the event icon + tone in a corner badge.
+  const ACCENT_BADGE = 'ring-panel bg-accent-soft border-accent-line text-accent';
+  const NEUTRAL_BADGE = 'ring-panel bg-panel-2 border-border text-fg-3';
+
+  it('shows the event badge (not the fallback circle) when the group has an actor', () => {
+    const html = renderCard([item({ eventType: 'comment', actorName: 'Ann Lee' })]);
+    // The big fallback circle is not rendered when there is an avatar.
+    expect(html).not.toContain('h-12 w-12');
+    // The corner badge carries the event tone.
+    expect(html).toContain(NEUTRAL_BADGE);
+  });
+
+  it('gives every event type its own badge icon over the avatar, none the fallback', () => {
+    const names = ALL_EVENT_TYPES.map(badgeIconName);
+    expect(names).toHaveLength(14);
+    expect(new Set(names).size).toBe(14);
+    expect(names).not.toContain('IconActivity');
+    // The badge and the fallback circle draw the same icon for a given type.
+    for (const eventType of ALL_EVENT_TYPES) {
+      expect(badgeIconName(eventType)).toBe(leadIconName(eventType));
+    }
+  });
+
+  it('accents the five accent badges even though those events carry an actor', () => {
+    const accent = new Set([
+      'mention',
+      'checkpoints_added',
+      'post_ready',
+      'trial_warning',
+      'billing_failure',
+    ]);
+    for (const eventType of ALL_EVENT_TYPES) {
+      const html = renderCard([item({ eventType, actorName: 'Ann Lee' })]);
+      if (accent.has(eventType)) {
+        expect(html).toContain(ACCENT_BADGE);
+        expect(html).not.toContain(NEUTRAL_BADGE);
+      } else {
+        expect(html).toContain(NEUTRAL_BADGE);
+        expect(html).not.toContain(ACCENT_BADGE);
+      }
+    }
   });
 
   it('marks each expanded thread row interactive in the collapsed markup contract', () => {
