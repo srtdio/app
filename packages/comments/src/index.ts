@@ -11,6 +11,8 @@
 //   * editComment and deleteComment write through the author-only
 //     comment_edit / comment_soft_delete SECURITY DEFINER procs (via the
 //     @srtdio/rpc wrappers); see ./edit and ./delete.
+//   * deleteSubPoint writes through the author-only, sub-point-only
+//     comment_delete SECURITY DEFINER proc; see ./delete-sub-point.
 //   * resolveComment toggles the thread-level resolved state on a root comment
 //     through the comment_resolve SECURITY DEFINER proc; see ./resolve.
 //
@@ -32,6 +34,11 @@ export type { Client, DomainError, Result } from '@srtdio/rpc';
 
 export { editComment, EditCommentSchema, type EditCommentInput } from './edit';
 export { deleteComment, DeleteCommentSchema, type DeleteCommentInput } from './delete';
+export {
+  deleteSubPoint,
+  DeleteSubPointSchema,
+  type DeleteSubPointInput,
+} from './delete-sub-point';
 export { resolveComment, ResolveCommentSchema, type ResolveCommentInput } from './resolve';
 
 /** A persisted comment row, exactly as stored. */

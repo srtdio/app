@@ -212,6 +212,22 @@ export function commentResolve(
   return callProc(client, 'comment_resolve', args);
 }
 
+export type CommentDeleteArgs = ProcArgs<'comment_delete'>;
+export function commentDelete(
+  client: Client,
+  args: CommentDeleteArgs,
+): Promise<Result<ProcReturns<'comment_delete'>>> {
+  return callProc(client, 'comment_delete', args);
+}
+
+export type CheckpointAcceptArgs = ProcArgs<'checkpoint_accept'>;
+export function checkpointAccept(
+  client: Client,
+  args: CheckpointAcceptArgs,
+): Promise<Result<ProcReturns<'checkpoint_accept'>>> {
+  return callProc(client, 'checkpoint_accept', args);
+}
+
 export type WorkspaceCreateArgs = ProcArgs<'workspace_create'>;
 export function workspaceCreate(
   client: Client,
