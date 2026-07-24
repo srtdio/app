@@ -668,9 +668,9 @@ describe('renderReplyList (replies are permanently open)', () => {
     // The list container is present with one row per reply, in order, each row
     // carrying its stable comment DOM id.
     expect(els.some((el) => el.type === 'ul')).toBe(true);
-    expect(els.filter((el) => el.type === 'li').map((el) => (el.props as { id: string }).id)).toEqual(
-      [commentDomId('r1'), commentDomId('r2')],
-    );
+    expect(
+      els.filter((el) => el.type === 'li').map((el) => (el.props as { id: string }).id),
+    ).toEqual([commentDomId('r1'), commentDomId('r2')]);
     // Both bodies are in the rendered output with no click / expand step.
     expect(text(tree)).toContain('body:r1');
     expect(text(tree)).toContain('body:r2');
