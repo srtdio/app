@@ -288,6 +288,29 @@ export function toCommentAttachments(
   }));
 }
 
+/**
+ * The always-open replies list under a thread root. Replies are permanent:
+ * rendered whenever the thread has at least one live reply, with no expander
+ * gate and no interaction required. Zero replies renders nothing at all (no
+ * empty <ul> container). Each reply keeps its stable per-row DOM id so a
+ * deep-link can scroll to it. `renderReply` is the caller's card renderer.
+ */
+export function renderReplyList(
+  replies: readonly CommentRow[],
+  renderReply: (reply: CommentRow) => ReactNode,
+): ReactNode {
+  if (replies.length === 0) return null;
+  return (
+    <ul className="mt-3 flex flex-col gap-3 border-l border-border pl-4">
+      {replies.map((reply) => (
+        <li key={reply.id} id={commentDomId(reply.id)}>
+          {renderReply(reply)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Checkpoint batches in the thread (feedback ledger)
 // ---------------------------------------------------------------------------
@@ -504,9 +527,9 @@ export async function fetchAttachmentMime(
 
 /**
  * Read + create comments on one entity (a post or a brief). Renders a flat,
- * newest-first list grouped into one-level threads: each root may carry a
- * collapsed "N replies" expander, attachments, and (for the caller's own
- * comments) edit / delete. A soft-deleted root with a live reply renders as a
+ * newest-first list grouped into one-level threads: each root shows its
+ * replies (always open), attachments, and (for the caller's own comments)
+ * edit / delete. A soft-deleted root with a live reply renders as a
  * tombstone so the thread stays intact. The brief mount passes only
  * workspaceId / entityType / entityId, so every richer affordance degrades
  * gracefully there.
@@ -537,7 +560,6 @@ export function Comments({
   const [attachmentMime, setAttachmentMime] = useState<Map<string, string>>(new Map());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [replyOpen, setReplyOpen] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
@@ -711,7 +733,6 @@ export function Comments({
         next.delete(parentId);
         return next;
       });
-      setExpanded((prev) => new Set(prev).add(parentId));
     }
     await loadPage(0);
     return { ok: true };
@@ -781,15 +802,6 @@ export function Comments({
     window.setTimeout(() => {
       setCopiedId((current) => (current === comment.id ? null : current));
     }, 2000);
-  }
-
-  function toggleExpanded(id: string): void {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   }
 
   function toggleReply(id: string): void {
@@ -975,8 +987,8 @@ export function Comments({
     );
   }
 
-  // The shared tail of a top-level item: replies expander, Reply, (optionally)
-  // the thread Resolve toggle, the expanded replies, and the reply composer.
+  // The shared tail of a top-level item: Reply, (optionally) the thread Resolve
+  // toggle, the always-open replies list, and the reply composer.
   // Batch checkpoint points reuse it with showResolve=false: their tick state is
   // owned by the feedback ledger, but replies stay normal child comments.
   function renderThreadTail(
@@ -986,25 +998,12 @@ export function Comments({
     showResolve: boolean,
     footRight?: ReactNode,
   ): ReactNode {
-    const isExpanded = expanded.has(comment.id);
     const isReplyOpen = replyOpen.has(comment.id);
     const isResolved = comment.resolved_at !== null;
     const isResolving = resolvingId === comment.id;
     return (
       <>
         <div className="mt-2 flex min-h-[44px] items-center gap-2">
-          {replies.length > 0 ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="min-h-[44px]"
-              onClick={() => toggleExpanded(comment.id)}
-            >
-              {isExpanded
-                ? 'Hide replies'
-                : `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}
-            </Button>
-          ) : null}
           {!tombstone ? (
             <Button
               size="sm"
@@ -1029,15 +1028,7 @@ export function Comments({
           {footRight !== undefined ? footRight : null}
         </div>
 
-        {isExpanded && replies.length > 0 ? (
-          <ul className="mt-3 flex flex-col gap-3 border-l border-border pl-4">
-            {replies.map((reply) => (
-              <li key={reply.id} id={commentDomId(reply.id)}>
-                {renderCommentCard(reply, true)}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {renderReplyList(replies, (reply) => renderCommentCard(reply, true))}
 
         {isReplyOpen ? (
           <div className="mt-3 border-l border-border pl-4">

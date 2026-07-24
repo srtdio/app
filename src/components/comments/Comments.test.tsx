@@ -27,6 +27,7 @@ import {
   commentDomId,
   parseBatchRows,
   renderCommentBody,
+  renderReplyList,
   replySeed,
   runCreateCommentBatch,
   runDeleteComment,
@@ -645,5 +646,43 @@ describe('comment attachments', () => {
       failed: false,
     });
     expect(view.kind).toBe('file');
+  });
+});
+
+describe('renderReplyList (replies are permanently open)', () => {
+  // Replies used to hide behind an expander and render only while a parent was
+  // in the expanded set. They are now permanent: the list renders from the reply
+  // data alone, with no toggle and no interaction. Walk the returned tree in the
+  // hookless node style used across this file (no DOM mount needed).
+  const renderReply = (reply: CommentRow): ReactElement => (
+    <span key={reply.id}>{`body:${reply.id}`}</span>
+  );
+
+  it('renders every reply without any interaction, id-tagged for deep links', () => {
+    const replies = [
+      row({ id: 'r1', parent_comment_id: 'P', body: 'first' }),
+      row({ id: 'r2', parent_comment_id: 'P', body: 'second' }),
+    ];
+    const tree = renderReplyList(replies, renderReply);
+    const els = elements(tree);
+    // The list container is present with one row per reply, in order, each row
+    // carrying its stable comment DOM id.
+    expect(els.some((el) => el.type === 'ul')).toBe(true);
+    expect(els.filter((el) => el.type === 'li').map((el) => (el.props as { id: string }).id)).toEqual(
+      [commentDomId('r1'), commentDomId('r2')],
+    );
+    // Both bodies are in the rendered output with no click / expand step.
+    expect(text(tree)).toContain('body:r1');
+    expect(text(tree)).toContain('body:r2');
+  });
+
+  it('exposes no expander or other interactive control in the list', () => {
+    const tree = renderReplyList([row({ id: 'r1', parent_comment_id: 'P' })], renderReply);
+    // The old "N replies" / "Hide replies" toggle is gone; the list owns no button.
+    expect(elements(tree).some((el) => el.type === 'button')).toBe(false);
+  });
+
+  it('renders nothing (no empty list container) when there are no replies', () => {
+    expect(renderReplyList([], renderReply)).toBeNull();
   });
 });
