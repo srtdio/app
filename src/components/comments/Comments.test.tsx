@@ -78,6 +78,8 @@ const UUID_B = '22222222-2222-4222-8222-222222222222';
 
 function row(partial: Partial<CommentRow> & { id: string }): CommentRow {
   return {
+    accepted_at: null,
+    accepted_by: null,
     attachment_asset_ids: null,
     author_user_id: UUID_A,
     body: '',
@@ -96,6 +98,8 @@ function row(partial: Partial<CommentRow> & { id: string }): CommentRow {
     resolved_at: null,
     resolved_by: null,
     resolved_version_id: null,
+    unaccepted_at: null,
+    unaccepted_by: null,
     workspace_id: 'ws',
     ...partial,
   };
