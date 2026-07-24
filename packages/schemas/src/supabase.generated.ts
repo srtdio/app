@@ -2502,6 +2502,8 @@ export type Database = {
       }
       comments: {
         Row: {
+          accepted_at: string | null
+          accepted_by: string | null
           attachment_asset_ids: string[] | null
           author_user_id: string
           body: string
@@ -2521,9 +2523,13 @@ export type Database = {
           resolved_at: string | null
           resolved_by: string | null
           resolved_version_id: string | null
+          unaccepted_at: string | null
+          unaccepted_by: string | null
           workspace_id: string
         }
         Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
           attachment_asset_ids?: string[] | null
           author_user_id: string
           body: string
@@ -2543,9 +2549,13 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: string | null
           resolved_version_id?: string | null
+          unaccepted_at?: string | null
+          unaccepted_by?: string | null
           workspace_id: string
         }
         Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
           attachment_asset_ids?: string[] | null
           author_user_id?: string
           body?: string
@@ -2565,6 +2575,8 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: string | null
           resolved_version_id?: string | null
+          unaccepted_at?: string | null
+          unaccepted_by?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -4294,6 +4306,48 @@ export type Database = {
           },
         ]
       }
+      post_ready_notifications: {
+        Row: {
+          checkpoint_count: number
+          id: string
+          post_id: string
+          sent_at: string
+          sent_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          checkpoint_count: number
+          id?: string
+          post_id: string
+          sent_at?: string
+          sent_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          checkpoint_count?: number
+          id?: string
+          post_id?: string
+          sent_at?: string
+          sent_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_ready_notifications_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_ready_notifications_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_versions: {
         Row: {
           created_at: string
@@ -5003,6 +5057,10 @@ export type Database = {
         }
         Returns: Json
       }
+      checkpoint_accept: {
+        Args: { p_accepted: boolean; p_comment_id: string; p_trace_id: string }
+        Returns: undefined
+      }
       comment_batch_create: {
         Args: {
           p_points: Json
@@ -5024,6 +5082,10 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: string
+      }
+      comment_delete: {
+        Args: { p_comment_id: string; p_trace_id: string }
+        Returns: undefined
       }
       comment_edit: {
         Args: { p_body: string; p_comment_id: string; p_trace_id: string }
