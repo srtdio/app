@@ -289,9 +289,7 @@ export function friendlyResolveError(error: DomainError): string {
  *  sub-point create. The proc enforces the same 1..50 word cap the composer does,
  *  so invalid_payload reuses its line. */
 export function friendlyEditError(code: DomainErrorCode | 'invalid_mention'): string {
-  return code === 'invalid_payload'
-    ? OVER_LIMIT_MESSAGE
-    : 'Could not save. Please try again.';
+  return code === 'invalid_payload' ? OVER_LIMIT_MESSAGE : 'Could not save. Please try again.';
 }
 
 /** Friendly inline copy for a failed checkpoint_accept. invalid_stage sits outside
@@ -855,8 +853,7 @@ export function FeedbackLedger({
           const showEdit = viewerIsClient && state === 'open' && isAuthor && !editing;
           const showNotDone = viewerIsClient && state === 'client_turn';
           const showUndo = viewerIsClient && state === 'confirmed';
-          const showAdd =
-            showAddSubPoint(viewerIsClient, state) && !composerOpen && !editing;
+          const showAdd = showAddSubPoint(viewerIsClient, state) && !composerOpen && !editing;
           const hasClientActions = showEdit || showNotDone || showUndo || showAdd;
           return (
             <li
@@ -1114,9 +1111,7 @@ export function FeedbackLedger({
                         size="lg"
                         variant="primary"
                         disabled={
-                          busy ||
-                          countWords(subDraft) < 1 ||
-                          countWords(subDraft) > MAX_WORDS
+                          busy || countWords(subDraft) < 1 || countWords(subDraft) > MAX_WORDS
                         }
                         onClick={() => void handleAddSubPoint(row.id)}
                       >
@@ -1234,7 +1229,10 @@ export function FeedbackLedger({
               </Button>
               {open > 0 ? <p className="text-xs text-fg-3">{notifyDisabledReason(open)}</p> : null}
               {notifyError !== null ? (
-                <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
+                <div
+                  role="alert"
+                  className="rounded-md border border-bad px-3 py-2 text-sm text-bad"
+                >
                   {notifyError}
                 </div>
               ) : null}

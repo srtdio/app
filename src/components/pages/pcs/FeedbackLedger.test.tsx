@@ -204,28 +204,28 @@ describe('showAddSubPoint (client-only, agency never)', () => {
 
 describe('showWithdrawalLine (record shown only after an undo)', () => {
   it('shows the line after a client undo (resolved, unconfirmed, unaccepted stamp)', () => {
-    expect(
-      showWithdrawalLine({ resolved_at: 't', accepted_at: null, unaccepted_at: 'u' }),
-    ).toBe(true);
+    expect(showWithdrawalLine({ resolved_at: 't', accepted_at: null, unaccepted_at: 'u' })).toBe(
+      true,
+    );
   });
 
   it('hides the line after an agency un-tick or sub-point reopen (point returns to open)', () => {
     // resolved_at back to null even though the unaccepted stamp lingers.
-    expect(
-      showWithdrawalLine({ resolved_at: null, accepted_at: null, unaccepted_at: 'u' }),
-    ).toBe(false);
+    expect(showWithdrawalLine({ resolved_at: null, accepted_at: null, unaccepted_at: 'u' })).toBe(
+      false,
+    );
   });
 
   it('hides the line on a fresh resolve that was never accepted', () => {
-    expect(
-      showWithdrawalLine({ resolved_at: 't', accepted_at: null, unaccepted_at: null }),
-    ).toBe(false);
+    expect(showWithdrawalLine({ resolved_at: 't', accepted_at: null, unaccepted_at: null })).toBe(
+      false,
+    );
   });
 
   it('hides the line once the point is re-confirmed', () => {
-    expect(
-      showWithdrawalLine({ resolved_at: 't', accepted_at: 't', unaccepted_at: 'u' }),
-    ).toBe(false);
+    expect(showWithdrawalLine({ resolved_at: 't', accepted_at: 't', unaccepted_at: 'u' })).toBe(
+      false,
+    );
   });
 });
 

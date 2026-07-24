@@ -34,11 +34,7 @@ export type { Client, DomainError, Result } from '@srtdio/rpc';
 
 export { editComment, EditCommentSchema, type EditCommentInput } from './edit';
 export { deleteComment, DeleteCommentSchema, type DeleteCommentInput } from './delete';
-export {
-  deleteSubPoint,
-  DeleteSubPointSchema,
-  type DeleteSubPointInput,
-} from './delete-sub-point';
+export { deleteSubPoint, DeleteSubPointSchema, type DeleteSubPointInput } from './delete-sub-point';
 export { resolveComment, ResolveCommentSchema, type ResolveCommentInput } from './resolve';
 
 /** A persisted comment row, exactly as stored. */
