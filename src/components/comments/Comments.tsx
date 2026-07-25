@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Textarea';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconCheck, IconMore } from '@/components/ui/icons';
 import { MenuPopover } from '@/components/shell/MenuPopover';
@@ -27,7 +28,7 @@ import type {
   CreateCommentInput,
   Result,
 } from '@srtdio/comments';
-import { DOMAIN_ERROR_CODES } from '@srtdio/rpc';
+import { checkpointAccept, commentResolve, DOMAIN_ERROR_CODES } from '@srtdio/rpc';
 import type { DomainErrorCode } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 import type { MessageAttachment } from '@/lib/chat/attachments';
@@ -44,6 +45,21 @@ import {
   resolveName,
   type CommentProfile,
 } from '@/components/comments/commentProfiles';
+// Reuse the ledger's proven checkpoint building blocks rather than inventing a
+// second set: the tick circle (with its accent-ring "live" state), the resolution
+// note composer's reveal/limits, the comment_resolve arg builder, and the
+// friendly-error mapping already in use. The follow-up PR that removes the
+// ledger's duplicate controls will re-home these; until then this is the one
+// source of truth for the motion and copy.
+import {
+  buildResolveArgs,
+  friendlyAcceptError,
+  friendlyResolveError,
+  MAX_NOTE_CHARS,
+  NOTE_PLACEHOLDER,
+  noteRevealClass,
+  tickCircle,
+} from '@/components/pages/pcs/FeedbackLedger';
 
 /** One caption_span annotation as it reads on a comment row. Optional surface:
  *  posts pass it, briefs never do, so the chips are post-only by construction. */
@@ -358,6 +374,113 @@ export function groupThreads(threads: readonly ThreadRoot[]): ThreadGroup[] {
   return groups;
 }
 
+// ---------------------------------------------------------------------------
+// Checkpoint state + controls in the feed (derived from columns, never stored)
+// ---------------------------------------------------------------------------
+
+/** A checkpoint's live state, read straight off its columns:
+ *  resolved_at null -> 'open' (the agency owes work); resolved and unconfirmed ->
+ *  'client_turn' (the agency marked it done, it awaits the client); accepted ->
+ *  'confirmed'. Confirmed requires resolved, so an agency reopen (resolved_at back
+ *  to null) drops a confirmed point straight to 'open'. */
+export type CheckpointState = 'open' | 'client_turn' | 'confirmed';
+export function checkpointState(
+  row: Pick<CommentRow, 'resolved_at' | 'accepted_at'>,
+): CheckpointState {
+  if (row.resolved_at === null) return 'open';
+  return row.accepted_at !== null ? 'confirmed' : 'client_turn';
+}
+
+/** The state label text + design token for one checkpoint row. The wording turns
+ *  on the viewer's side; the token is muted (open), accent (client's turn), or
+ *  success (confirmed). */
+export interface CheckpointLabel {
+  text: string;
+  className: string;
+}
+export function checkpointStateLabel(state: CheckpointState, isClient: boolean): CheckpointLabel {
+  switch (state) {
+    case 'open':
+      return { text: isClient ? 'With agency' : 'Open', className: 'text-fg-3' };
+    case 'client_turn':
+      return { text: isClient ? 'Ready for your check' : 'With client', className: 'text-accent' };
+    case 'confirmed':
+      return { text: 'Confirmed', className: 'text-good' };
+  }
+}
+
+/** The tick is a live control only for the actor whose turn it is: the agency
+ *  while the point is open, the client while it is resolved-and-unconfirmed.
+ *  Every other case is a passive indicator. */
+export function tickInteractive(state: CheckpointState, isClient: boolean): boolean {
+  return isClient ? state === 'client_turn' : state === 'open';
+}
+
+/** The passive tick's fill: the agency's tick fills once the point is resolved;
+ *  the client's fills once they have confirmed. */
+export function tickFilled(state: CheckpointState, isClient: boolean): boolean {
+  return isClient ? state === 'confirmed' : state !== 'open';
+}
+
+/** "Not done" (the client un-resolves, then must say why) shows only on the
+ *  client's turn; "Undo" (the client withdraws a confirmation) only once
+ *  confirmed. An agency member sees neither. */
+export function showCheckpointNotDone(state: CheckpointState, isClient: boolean): boolean {
+  return isClient && state === 'client_turn';
+}
+export function showCheckpointUndo(state: CheckpointState, isClient: boolean): boolean {
+  return isClient && state === 'confirmed';
+}
+
+/** The withdrawal record shows only when a confirmation was withdrawn: the point
+ *  is the client's turn again (resolved, unconfirmed) AND an unaccepted stamp
+ *  exists. An agency un-tick returns the point to 'open', so this stays false
+ *  there; a point that simply never was confirmed has no unaccepted stamp. */
+export function showCheckpointWithdrawal(
+  row: Pick<CommentRow, 'resolved_at' | 'accepted_at' | 'unaccepted_at'>,
+): boolean {
+  return checkpointState(row) === 'client_turn' && row.unaccepted_at !== null;
+}
+
+/** The one-line withdrawal record, naming the withdrawing member through the same
+ *  chain the rest of the file uses (ex-member fallback when the id no longer
+ *  resolves to a member). */
+export function checkpointWithdrawalText(unacceptedAt: string, name: string | null): string {
+  return `Confirmation withdrawn by ${name ?? EX_MEMBER_LABEL} · ${relativeLong(
+    unacceptedAt,
+    new Date(),
+  )}`;
+}
+
+/** The pushback reason prompt. Un-resolving without saying why is the failure
+ *  mode "Not done" exists to prevent, so the reply composer opens pre-filled with
+ *  this line. No em-dash (user-facing string). */
+export const PUSHBACK_SEED = 'This point has gone back to the agency. What is still off? ';
+
+/** The seed body for a checkpoint's reply composer: the pushback prompt after a
+ *  "Not done", otherwise the ordinary author pre-tag. */
+export function checkpointReplySeed(
+  pushback: boolean,
+  comment: Pick<CommentRow, 'author_user_id' | 'legacy_author_name'>,
+  currentUserId: string | null,
+  candidates: readonly MentionCandidate[],
+): string {
+  return pushback ? PUSHBACK_SEED : replySeed(comment, currentUserId, candidates);
+}
+
+/** Merge the always-loaded checkpoints into the paginated list, de-duped by id
+ *  and re-sorted newest-first. Only non-checkpoint comments paginate, so a
+ *  checkpoint that fell beyond page zero is still present and its controls stay
+ *  reachable. */
+export function mergeCheckpoints(
+  paged: readonly CommentRow[],
+  checkpoints: readonly CommentRow[],
+): CommentRow[] {
+  const seen = new Set(paged.map((row) => row.id));
+  const merged = [...paged, ...checkpoints.filter((row) => !seen.has(row.id))];
+  return merged.sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 /** Which row actions a comment offers. Copy is harmless and shown on every live
  *  comment; edit / delete stay author-only; a tombstone offers nothing. */
 export interface CommentActions {
@@ -521,6 +644,53 @@ export async function fetchAttachmentMime(
   return mimeById;
 }
 
+/** Load EVERY checkpoint (ledger_seq set, top-level) for one post in ONE query,
+ *  regardless of pagination, so a checkpoint on a long post never falls out of
+ *  reach and its controls stay live. Soft-deleted checkpoints ride along so a
+ *  tombstone still renders; only non-checkpoint comments paginate. Returns [] on
+ *  error, matching the file's other best-effort reads (never null). */
+export async function fetchCheckpoints(
+  client: Client,
+  workspaceId: string,
+  entityId: string,
+): Promise<CommentRow[]> {
+  const { data, error } = await client
+    .from('comments')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .eq('entity_type', 'post')
+    .eq('entity_id', entityId)
+    .not('ledger_seq', 'is', null)
+    .is('parent_comment_id', null)
+    .order('created_at', { ascending: false });
+  if (error || data === null) return [];
+  return data;
+}
+
+/** A quiet text control: reads as plain text but carries a 44px minimum touch
+ *  target from invisible padding, not a visible box. Drives the client's
+ *  "Not done" / "Undo" beneath a checkpoint row. */
+function QuietTextButton({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex min-h-[44px] min-w-[44px] items-center text-sm text-fg-2 underline-offset-2 hover:text-fg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -550,6 +720,9 @@ export function Comments({
   const { candidates } = useMentionCandidates(workspaceId);
 
   const [comments, setComments] = useState<CommentRow[]>([]);
+  // Every checkpoint for this post, loaded whole in one query so none paginates
+  // away; merged with the paginated `comments` below (de-duped, newest-first).
+  const [checkpoints, setCheckpoints] = useState<CommentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -565,8 +738,18 @@ export function Comments({
   const [editBody, setEditBody] = useState('');
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  // The root thread whose resolve/reopen request is in flight; null when idle.
+  // The comment (thread root or checkpoint) whose resolve/accept request is in
+  // flight; null when idle. Shared by the single-thread resolve and every
+  // checkpoint tick / "Not done" / "Undo".
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  // Agency tick flow on a checkpoint: the row whose resolution-note composer is
+  // open, its draft, and the one-frame entrance flag for the reveal motion.
+  const [noteForId, setNoteForId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteEntered, setNoteEntered] = useState(false);
+  // Checkpoints whose reply composer was opened by a client "Not done"; their
+  // composer seeds with the pushback prompt so the client says what is still off.
+  const [pushbackSeeds, setPushbackSeeds] = useState<Set<string>>(new Set());
   // The comment whose per-row actions popover is open (kebab); null when closed.
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   // The open image lightbox: the clicked comment's image list + current index,
@@ -613,6 +796,13 @@ export function Comments({
         }
         return;
       }
+      // One extra query, only on a page-zero load: every checkpoint for the post,
+      // so none is paginated out of reach. Posts only (checkpoints never exist on
+      // a brief); a failed read keeps whatever was already shown.
+      if (nextPage === 0 && entityType === 'post') {
+        const checkpointRows = await fetchCheckpoints(supabase, workspaceId, entityId);
+        setCheckpoints(checkpointRows);
+      }
       setComments((prev) => (nextPage === 0 ? result.data : [...prev, ...result.data]));
       setPage(nextPage);
       setHasMore(result.data.length === PAGE_SIZE);
@@ -621,6 +811,11 @@ export function Comments({
     },
     [workspaceId, entityType, entityId],
   );
+
+  // The rendered list: the always-loaded checkpoints merged into the paginated
+  // comments, de-duped by id and newest-first. Only non-checkpoint comments
+  // paginate; a checkpoint beyond page zero is still here.
+  const merged = useMemo(() => mergeCheckpoints(comments, checkpoints), [comments, checkpoints]);
 
   useEffect(() => {
     void loadPage(0);
@@ -644,18 +839,22 @@ export function Comments({
   useEffect(() => {
     if (focusCommentId === undefined || focusCommentId === null || focusCommentId === '') return;
     if (flashedCommentId.current === focusCommentId) return;
-    if (!comments.some((c) => c.id === focusCommentId)) return;
+    if (!merged.some((c) => c.id === focusCommentId)) return;
     flashedCommentId.current = focusCommentId;
     flashNode(commentDomId(focusCommentId));
-  }, [comments, focusCommentId]);
+  }, [merged, focusCommentId]);
 
   // Resolve author + mention display names in one batched read. The attempted
   // set dedupes ids and stops a missing (ex-member) id from refetching forever.
   const attemptedProfiles = useRef<Set<string>>(new Set());
   useEffect(() => {
     const needed: string[] = [];
-    for (const comment of comments) {
-      for (const id of [comment.author_user_id, ...parseMentions(comment.body)]) {
+    for (const comment of merged) {
+      for (const id of [
+        comment.author_user_id,
+        ...parseMentions(comment.body),
+        ...(comment.unaccepted_by !== null ? [comment.unaccepted_by] : []),
+      ]) {
         if (!attemptedProfiles.current.has(id)) {
           attemptedProfiles.current.add(id);
           needed.push(id);
@@ -672,13 +871,13 @@ export function Comments({
     return () => {
       active = false;
     };
-  }, [comments]);
+  }, [merged]);
 
   // Resolve attachment mimes in one batched read (image vs file dispatch).
   const attemptedMime = useRef<Set<string>>(new Set());
   useEffect(() => {
     const needed: string[] = [];
-    for (const comment of comments) {
+    for (const comment of merged) {
       for (const id of comment.attachment_asset_ids ?? []) {
         if (!attemptedMime.current.has(id)) {
           attemptedMime.current.add(id);
@@ -696,7 +895,15 @@ export function Comments({
     return () => {
       active = false;
     };
-  }, [comments]);
+  }, [merged]);
+
+  // One-frame entrance for the agency note composer reveal (opacity/translateY
+  // only). Mirrors the ledger's note-reveal timing.
+  useEffect(() => {
+    if (noteForId === null || noteEntered) return;
+    const raf = requestAnimationFrame(() => setNoteEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, [noteForId, noteEntered]);
 
   const nameOf = useCallback((id: string): string | null => resolveName(profiles, id), [profiles]);
   // Author avatar URL from the SAME profiles map the card already holds; no new
@@ -729,6 +936,12 @@ export function Comments({
     const parentId = options.parentCommentId;
     if (parentId !== null) {
       setReplyOpen((prev) => {
+        const next = new Set(prev);
+        next.delete(parentId);
+        return next;
+      });
+      setPushbackSeeds((prev) => {
+        if (!prev.has(parentId)) return prev;
         const next = new Set(prev);
         next.delete(parentId);
         return next;
@@ -811,6 +1024,85 @@ export function Comments({
       else next.add(id);
       return next;
     });
+    // Closing a composer drops any pushback seed so a later manual reply opens
+    // with the ordinary author pre-tag, not the stale reason prompt.
+    setPushbackSeeds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  // Agency ticks a checkpoint done (resolved=true, with the optional note) or the
+  // client un-resolves it (resolved=false). Same Result/DomainError handling and
+  // refetch-on-success pattern as handleResolve: a failed call surfaces the mapped
+  // friendly error on the row and leaves the prior state untouched.
+  async function handleCheckpointResolve(
+    comment: CommentRow,
+    resolved: boolean,
+    note?: string,
+  ): Promise<void> {
+    setRowError(null);
+    setResolvingId(comment.id);
+    const result = await commentResolve(
+      supabase,
+      buildResolveArgs({
+        commentId: comment.id,
+        resolved,
+        traceId: newTrace(),
+        ...(note !== undefined ? { note } : {}),
+      }),
+    );
+    setResolvingId((current) => (current === comment.id ? null : current));
+    if (!result.ok) {
+      setRowError({ id: comment.id, message: friendlyResolveError(result.error) });
+      return;
+    }
+    if (noteForId === comment.id) {
+      setNoteForId(null);
+      setNoteDraft('');
+      setNoteEntered(false);
+    }
+    await loadPage(0);
+  }
+
+  // The client's "Not done": un-resolve, then open the reply composer seeded with
+  // the pushback prompt so the point does not go back silently. On a failed
+  // un-resolve nothing changes and the mapped error surfaces on the row.
+  async function handleCheckpointNotDone(comment: CommentRow): Promise<void> {
+    setRowError(null);
+    setResolvingId(comment.id);
+    const result = await commentResolve(
+      supabase,
+      buildResolveArgs({ commentId: comment.id, resolved: false, traceId: newTrace() }),
+    );
+    setResolvingId((current) => (current === comment.id ? null : current));
+    if (!result.ok) {
+      setRowError({ id: comment.id, message: friendlyResolveError(result.error) });
+      return;
+    }
+    setPushbackSeeds((prev) => new Set(prev).add(comment.id));
+    setReplyOpen((prev) => new Set(prev).add(comment.id));
+    await loadPage(0);
+  }
+
+  // The client confirms (accepted=true) or withdraws (accepted=false) a resolved
+  // checkpoint via checkpoint_accept, with the ledger's friendly-accept mapping.
+  async function handleCheckpointAccept(comment: CommentRow, accepted: boolean): Promise<void> {
+    setRowError(null);
+    setResolvingId(comment.id);
+    const result = await checkpointAccept(supabase, {
+      p_comment_id: comment.id,
+      p_accepted: accepted,
+      p_trace_id: newTrace(),
+    });
+    setResolvingId((current) => (current === comment.id ? null : current));
+    if (!result.ok) {
+      setRowError({ id: comment.id, message: friendlyAcceptError(result.error) });
+      return;
+    }
+    await loadPage(0);
   }
 
   function startEdit(comment: CommentRow): void {
@@ -819,8 +1111,9 @@ export function Comments({
     setRowError(null);
   }
 
-  const threads = buildThreads(comments);
+  const threads = buildThreads(merged);
   const groups = groupThreads(threads);
+  const isClient = viewerIsClient === true;
 
   function renderEditor(commentId: string): ReactNode {
     return (
@@ -1042,7 +1335,12 @@ export function Comments({
               placeholder="Write a reply"
               submitLabel="Reply"
               autoFocus
-              initialBody={replySeed(comment, currentUserId, candidates)}
+              initialBody={checkpointReplySeed(
+                pushbackSeeds.has(comment.id),
+                comment,
+                currentUserId,
+                candidates,
+              )}
             />
           </div>
         ) : null}
@@ -1085,9 +1383,13 @@ export function Comments({
 
   // Consecutive checkpoints from one author, collapsed into a single card. The
   // header is just the author (avatar + name); each point is an "ask row" with a
-  // number badge, the verbatim body, its own reply + time foot row, and the tick
-  // state. Ticks are toggled in the feedback ledger, not here; the per-point
-  // reply affordance is the existing thread tail (replies stay child comments).
+  // number badge, the verbatim body, its live state label, and its tick control.
+  // The tick is live for the actor whose turn it is (agency opens the note
+  // composer then resolves; client confirms via checkpoint_accept); every other
+  // case is a passive indicator. Beneath the row the client gets the quiet
+  // "Not done" / "Undo" controls and any withdrawal record. The feedback ledger
+  // still carries its own copy of these controls; a follow-up PR removes that
+  // duplication. The per-point reply affordance is the existing thread tail.
   function renderBatchItem(group: { authorId: string; threads: ThreadRoot[] }): ReactNode {
     const first = group.threads[0]?.comment;
     if (first === undefined) return null;
@@ -1112,7 +1414,16 @@ export function Comments({
         <ol className="flex flex-col">
           {group.threads.map(({ comment, replies, tombstone }, index) => {
             const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
-            const done = comment.resolved_at !== null;
+            const seq = comment.ledger_seq ?? 0;
+            const state = checkpointState(comment);
+            const label = checkpointStateLabel(state, isClient);
+            const live = !tombstone && tickInteractive(state, isClient);
+            const filled = tickFilled(state, isClient);
+            const busy = resolvingId === comment.id;
+            const noteOpen = noteForId === comment.id;
+            const withdrawn = !tombstone && showCheckpointWithdrawal(comment);
+            const notDone = !tombstone && showCheckpointNotDone(state, isClient);
+            const undo = !tombstone && showCheckpointUndo(state, isClient);
             return (
               <li
                 key={comment.id}
@@ -1154,18 +1465,127 @@ export function Comments({
                       </>
                     )}
                   </div>
-                  {/* The tick enters/leaves via opacity/translateY only. */}
-                  <span
-                    aria-hidden={!done}
-                    className={cn(
-                      'flex shrink-0 items-center gap-1 pt-0.5 text-xs font-medium text-good transition-[opacity,transform] duration-fast ease-enter',
-                      done ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
+                  <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                    {/* State label: muted (open) / accent (client's turn) / success (confirmed). */}
+                    <span className={cn('text-xs font-medium', label.className)}>{label.text}</span>
+                    {live ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={
+                          isClient ? `Confirm checkpoint ${seq}` : `Mark checkpoint ${seq} done`
+                        }
+                        onClick={() => {
+                          if (isClient) {
+                            void handleCheckpointAccept(comment, true);
+                            return;
+                          }
+                          // Agency: open the resolution-note composer; Mark done then
+                          // calls comment_resolve(true) with the note.
+                          setRowError(null);
+                          setNoteDraft('');
+                          setNoteEntered(false);
+                          setNoteForId(comment.id);
+                        }}
+                        // axis: background-color on hover only; the tick fill motion
+                        // (opacity + translateY) lives inside tickCircle.
+                        className="flex h-11 w-11 items-center justify-center rounded-md transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                      >
+                        {tickCircle(false, true)}
+                      </button>
+                    ) : (
+                      <span aria-hidden className="flex h-11 w-11 items-center justify-center">
+                        {tickCircle(filled)}
+                      </span>
                     )}
-                  >
-                    <IconCheck size={14} />
-                    Done
-                  </span>
+                  </div>
                 </div>
+
+                {withdrawn && comment.unaccepted_at !== null ? (
+                  <p className="pl-8 text-xs text-fg-3">
+                    {checkpointWithdrawalText(
+                      comment.unaccepted_at,
+                      comment.unaccepted_by !== null ? nameOf(comment.unaccepted_by) : null,
+                    )}
+                  </p>
+                ) : null}
+
+                {noteOpen ? (
+                  // axis: opacity + translateY only (noteRevealClass); no translateX,
+                  // rotate, or scale.
+                  <div
+                    className={cn('mt-2 flex flex-col gap-2 pl-8', noteRevealClass(noteEntered))}
+                  >
+                    <Textarea
+                      autoFocus
+                      autoGrow
+                      rows={1}
+                      maxLength={MAX_NOTE_CHARS}
+                      aria-label={`Resolution note for checkpoint ${seq}`}
+                      placeholder={NOTE_PLACEHOLDER}
+                      value={noteDraft}
+                      disabled={busy}
+                      onChange={(event) => setNoteDraft(event.target.value)}
+                      style={{ minHeight: '44px' }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="lg"
+                        variant="primary"
+                        disabled={busy}
+                        onClick={() => void handleCheckpointResolve(comment, true, noteDraft)}
+                      >
+                        {busy ? 'Saving' : 'Mark done'}
+                      </Button>
+                      <Button
+                        size="lg"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => {
+                          setNoteForId(null);
+                          setNoteDraft('');
+                          setNoteEntered(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <span className="ml-auto text-xs tabular-nums text-fg-3">
+                        {noteDraft.length}/{MAX_NOTE_CHARS}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {notDone || undo ? (
+                  <div className="flex items-center gap-3 pl-8">
+                    {notDone ? (
+                      <QuietTextButton
+                        disabled={busy}
+                        onClick={() => void handleCheckpointNotDone(comment)}
+                      >
+                        {busy ? 'Saving' : 'Not done'}
+                      </QuietTextButton>
+                    ) : null}
+                    {undo ? (
+                      <QuietTextButton
+                        disabled={busy}
+                        onClick={() => void handleCheckpointAccept(comment, false)}
+                      >
+                        {busy ? 'Saving' : 'Undo'}
+                      </QuietTextButton>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {rowError !== null && rowError.id === comment.id ? (
+                  <div
+                    role="alert"
+                    className="ml-8 mt-2 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+                  >
+                    {rowError.message}
+                  </div>
+                ) : null}
+
                 <div className="pl-8">
                   {renderThreadTail(
                     comment,

@@ -20,22 +20,34 @@ import {
   buildBatchArgs,
   buildCreateInput,
   buildThreads,
+  checkpointReplySeed,
+  checkpointState,
+  checkpointStateLabel,
+  checkpointWithdrawalText,
   groupThreads,
   canModifyComment,
   commentActions,
   commentCopyText,
   commentDomId,
+  mergeCheckpoints,
   parseBatchRows,
+  PUSHBACK_SEED,
   renderCommentBody,
   renderReplyList,
   replySeed,
   runCreateCommentBatch,
   runDeleteComment,
   runEditComment,
+  showCheckpointNotDone,
+  showCheckpointUndo,
+  showCheckpointWithdrawal,
+  tickFilled,
+  tickInteractive,
   toCommentAttachments,
   tombstoneText,
   writeClipboard,
 } from '@/components/comments/Comments';
+import { PAGE_SIZE } from '@srtdio/comments';
 import type { Client } from '@srtdio/comments';
 import { EX_MEMBER_LABEL, resolveName } from '@/components/comments/commentProfiles';
 import type { CommentProfile } from '@/components/comments/commentProfiles';
@@ -265,6 +277,164 @@ describe('groupThreads (feedback ledger: consecutive same-author checkpoints col
     const groups = groupThreads(threads);
     if (groups[0]!.kind !== 'batch') throw new Error('expected a batch');
     expect(groups[0]!.threads[0]!.replies.map((r) => r.id)).toEqual(['r1']);
+  });
+});
+
+describe('checkpoint state + feed controls', () => {
+  const RESOLVED = '2026-02-01T00:00:00.000Z';
+  const ACCEPTED = '2026-02-02T00:00:00.000Z';
+  const WITHDRAWN = '2026-02-03T00:00:00.000Z';
+
+  const open = row({ id: 'open', ledger_seq: 1, resolved_at: null, accepted_at: null });
+  const clientTurn = row({ id: 'ct', ledger_seq: 2, resolved_at: RESOLVED, accepted_at: null });
+  const confirmed = row({
+    id: 'cf',
+    ledger_seq: 3,
+    resolved_at: RESOLVED,
+    accepted_at: ACCEPTED,
+  });
+
+  it('derives state from the resolved / accepted columns only', () => {
+    expect(checkpointState(open)).toBe('open');
+    expect(checkpointState(clientTurn)).toBe('client_turn');
+    expect(checkpointState(confirmed)).toBe('confirmed');
+    // Confirmed requires resolved: an agency reopen (resolved_at null) is 'open'
+    // regardless of a lingering accepted stamp.
+    expect(checkpointState(row({ id: 'x', resolved_at: null, accepted_at: ACCEPTED }))).toBe(
+      'open',
+    );
+  });
+
+  it('labels each state with the right wording per side and the right token', () => {
+    expect(checkpointStateLabel('open', true)).toEqual({
+      text: 'With agency',
+      className: 'text-fg-3',
+    });
+    expect(checkpointStateLabel('open', false)).toEqual({ text: 'Open', className: 'text-fg-3' });
+    expect(checkpointStateLabel('client_turn', true)).toEqual({
+      text: 'Ready for your check',
+      className: 'text-accent',
+    });
+    expect(checkpointStateLabel('client_turn', false)).toEqual({
+      text: 'With client',
+      className: 'text-accent',
+    });
+    expect(checkpointStateLabel('confirmed', true)).toEqual({
+      text: 'Confirmed',
+      className: 'text-good',
+    });
+    expect(checkpointStateLabel('confirmed', false).text).toBe('Confirmed');
+  });
+
+  it('makes the tick live for an agency member only when the checkpoint is open', () => {
+    expect(tickInteractive('open', false)).toBe(true);
+    expect(tickInteractive('client_turn', false)).toBe(false);
+    expect(tickInteractive('confirmed', false)).toBe(false);
+  });
+
+  it('makes the tick live for a client only when resolved and unconfirmed', () => {
+    expect(tickInteractive('client_turn', true)).toBe(true);
+    expect(tickInteractive('open', true)).toBe(false);
+    expect(tickInteractive('confirmed', true)).toBe(false);
+  });
+
+  it('fills the agency tick once resolved, the client tick once confirmed', () => {
+    expect(tickFilled('open', false)).toBe(false);
+    expect(tickFilled('client_turn', false)).toBe(true);
+    expect(tickFilled('confirmed', false)).toBe(true);
+    expect(tickFilled('open', true)).toBe(false);
+    expect(tickFilled('client_turn', true)).toBe(false);
+    expect(tickFilled('confirmed', true)).toBe(true);
+  });
+
+  it('shows the client "Not done" only when resolved and "Undo" only when confirmed', () => {
+    expect(showCheckpointNotDone('client_turn', true)).toBe(true);
+    expect(showCheckpointNotDone('open', true)).toBe(false);
+    expect(showCheckpointNotDone('confirmed', true)).toBe(false);
+    expect(showCheckpointUndo('confirmed', true)).toBe(true);
+    expect(showCheckpointUndo('client_turn', true)).toBe(false);
+  });
+
+  it('shows an agency member neither "Not done" nor "Undo" in any state', () => {
+    for (const state of ['open', 'client_turn', 'confirmed'] as const) {
+      expect(showCheckpointNotDone(state, false)).toBe(false);
+      expect(showCheckpointUndo(state, false)).toBe(false);
+    }
+  });
+
+  it('surfaces the withdrawal line after a client undo, not after an agency un-tick', () => {
+    // Client withdrew: still resolved, unconfirmed, with an unaccepted stamp.
+    const clientUndo = row({
+      id: 'u',
+      resolved_at: RESOLVED,
+      accepted_at: null,
+      unaccepted_at: WITHDRAWN,
+      unaccepted_by: UUID_B,
+    });
+    expect(showCheckpointWithdrawal(clientUndo)).toBe(true);
+    // Agency un-tick: back to open (resolved_at null), even with a stale stamp.
+    const agencyUntick = row({
+      id: 'a',
+      resolved_at: null,
+      accepted_at: null,
+      unaccepted_at: WITHDRAWN,
+      unaccepted_by: UUID_B,
+    });
+    expect(showCheckpointWithdrawal(agencyUntick)).toBe(false);
+    // Never confirmed, no stamp: nothing to show.
+    expect(showCheckpointWithdrawal(clientTurn)).toBe(false);
+  });
+
+  it('names the withdrawing member, falling back to the ex-member label', () => {
+    expect(checkpointWithdrawalText(WITHDRAWN, 'Ada')).toMatch(/^Confirmation withdrawn by Ada · /);
+    expect(checkpointWithdrawalText(WITHDRAWN, null)).toMatch(
+      /^Confirmation withdrawn by \(ex-member\) · /,
+    );
+  });
+
+  it('seeds the reply composer with the pushback prompt only on a "Not done"', () => {
+    const candidates: MentionCandidate[] = [{ id: UUID_A, name: 'Ada', role: '', avatarUrl: null }];
+    const checkpoint = row({ id: 'c', author_user_id: UUID_A, ledger_seq: 1 });
+    // Pushing back opens the composer pre-filled so the client must say why.
+    expect(checkpointReplySeed(true, checkpoint, UUID_B, candidates)).toBe(PUSHBACK_SEED);
+    expect(PUSHBACK_SEED.length).toBeGreaterThan(0);
+    expect(PUSHBACK_SEED).not.toContain('—');
+    // Otherwise it is the ordinary author pre-tag.
+    expect(checkpointReplySeed(false, checkpoint, UUID_B, candidates)).toBe(`@[${UUID_A}] `);
+  });
+});
+
+describe('mergeCheckpoints (checkpoints never paginate away)', () => {
+  it('de-dupes a checkpoint that is in both lists and keeps newest-first order', () => {
+    const shared = row({ id: 'cp1', ledger_seq: 1, created_at: '2026-01-05T00:00:00.000Z' });
+    const plain = row({ id: 'p', created_at: '2026-01-06T00:00:00.000Z' });
+    const merged = mergeCheckpoints([plain, shared], [shared]);
+    expect(merged.map((r) => r.id)).toEqual(['p', 'cp1']);
+  });
+
+  it('surfaces every checkpoint on a post with more than PAGE_SIZE comments', () => {
+    // A full page-zero of ordinary, newer comments; the checkpoint is older, so it
+    // would fall beyond page zero, yet the whole-checkpoint read still carries it.
+    const paged = Array.from({ length: PAGE_SIZE }, (_unused, i) =>
+      row({
+        id: `plain-${i}`,
+        created_at: `2026-03-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`,
+      }),
+    );
+    const buried = row({
+      id: 'buried-cp',
+      ledger_seq: 1,
+      author_user_id: UUID_A,
+      created_at: '2026-01-01T00:00:00.000Z',
+    });
+    const merged = mergeCheckpoints(paged, [buried]);
+    expect(merged.some((r) => r.id === 'buried-cp')).toBe(true);
+    // And it still renders: it groups into a checkpoint batch card.
+    const groups = groupThreads(buildThreads(merged));
+    const batch = groups.find((g) => g.kind === 'batch');
+    expect(batch).toBeDefined();
+    if (batch!.kind !== 'batch') throw new Error('expected a batch');
+    expect(batch!.threads.some((t) => t.comment.id === 'buried-cp')).toBe(true);
   });
 });
 
