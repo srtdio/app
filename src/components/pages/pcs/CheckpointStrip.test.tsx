@@ -104,16 +104,16 @@ describe('chipCircleClass (each state its own token treatment)', () => {
   it('confirmed fills with the success token', () => {
     expect(chipCircleClass('confirmed')).toContain('bg-good');
   });
-  it('awaiting uses the accent-soft background with an accent border', () => {
+  it('awaiting uses the soft success background for a hollow green tick', () => {
     const cls = chipCircleClass('awaiting');
-    expect(cls).toContain('bg-accent-soft');
-    expect(cls).toContain('border-accent-line');
+    expect(cls).toContain('bg-good-soft');
+    expect(cls).toContain('border-good');
+    expect(cls).toContain('text-good');
   });
   it('open uses the muted panel treatment, distinct from the other two', () => {
     const cls = chipCircleClass('open');
     expect(cls).toContain('bg-panel-2');
     expect(cls).not.toContain('bg-good');
-    expect(cls).not.toContain('bg-accent-soft');
   });
   it('uses only design tokens: no hex, no dark: literal', () => {
     for (const state of ['open', 'awaiting', 'confirmed'] as const) {
@@ -164,17 +164,20 @@ describe('checkpointChips', () => {
     }
   });
 
-  it('shows the ledger_seq number and no glyph component on a non-confirmed chip', () => {
+  it('shows the ledger_seq number and no glyph component on an open chip', () => {
     const open = checkpointChips([row('y', 5, null, null)])[0]!;
     expect(collectText(open)).toContain('5');
     expect(elements(open).some((el) => typeof el.type === 'function')).toBe(false);
   });
 
-  it('shows a tick glyph and NOT the number on a confirmed chip', () => {
-    const confirmed = checkpointChips([row('x', 7, 't', 't')])[0]!;
-    expect(collectText(confirmed)).not.toContain('7');
-    // A component element (the tick glyph) stands in place of the number.
-    expect(elements(confirmed).some((el) => typeof el.type === 'function')).toBe(true);
+  it('shows a tick glyph and NOT the number on a resolved chip, awaiting or confirmed', () => {
+    // The tick tracks what the counter counts (resolved_at set), so both the
+    // awaiting and confirmed states swap their number for the glyph.
+    for (const resolved of [row('a', 7, 't', null), row('x', 7, 't', 't')]) {
+      const chip = checkpointChips([resolved])[0]!;
+      expect(collectText(chip)).not.toContain('7');
+      expect(elements(chip).some((el) => typeof el.type === 'function')).toBe(true);
+    }
   });
 
   it('applies each of the three states its own circle treatment', () => {
@@ -186,7 +189,7 @@ describe('checkpointChips', () => {
       return (inner?.props as { className?: string }).className ?? '';
     };
     expect(circleClass(chips[0]!)).toContain('bg-panel-2');
-    expect(circleClass(chips[1]!)).toContain('bg-accent-soft');
+    expect(circleClass(chips[1]!)).toContain('bg-good-soft');
     expect(circleClass(chips[2]!)).toContain('bg-good');
   });
 

@@ -1335,7 +1335,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
               pcsTabPanelClass(true, true),
             )}
           >
-            <div className="flex items-center gap-2 md:hidden">
+            <div className="-mb-4 flex items-center gap-2 md:hidden">
               <h2 className="text-lg font-semibold tracking-tight">Feedback</h2>
               {checkpointCounts.total - checkpointCounts.resolved > 0 ? (
                 <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent">
