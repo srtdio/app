@@ -507,6 +507,15 @@ export function IconHistory(props: IconProps) {
   );
 }
 
+export function IconRotateCcw(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 12a8 8 0 1 0 2.3-5.6" />
+      <path d="M3 4.5 6.3 6.4 4.4 9.7" />
+    </Svg>
+  );
+}
+
 export function IconDoorOpen(props: IconProps) {
   return (
     <Svg {...props}>
