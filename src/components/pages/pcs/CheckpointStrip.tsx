@@ -1,7 +1,7 @@
 // The checkpoint strip on PCS: a sticky, single-row index of the post's
 // checkpoint comments. The comment feed now owns every checkpoint's body, state
 // and controls; the strip is only a jump index into it. It shows one chip per
-// checkpoint (its ledger_seq, or a tick once confirmed), coloured by state, a
+// checkpoint (its ledger_seq, or a tick once resolved), coloured by state, a
 // settled-of-total counter, and a client-facing banner when points await the
 // client. Activating a chip scrolls to and rings that checkpoint's row in the
 // feed. No checkpoint text and no controls live here. When the post has no
@@ -60,14 +60,14 @@ export function chipState(row: Pick<CheckpointChipRow, 'resolved_at' | 'accepted
 
 /** The visible circle's treatment per state, from design tokens only so light and
  *  dark parity is automatic: confirmed fills with the success token; awaiting the
- *  client uses the accent-soft background with an accent border; open uses the
+ *  client uses the soft success background for a hollow green tick; open uses the
  *  muted panel treatment. */
 export function chipCircleClass(state: ChipState): string {
   switch (state) {
     case 'confirmed':
       return 'border-good bg-good text-white';
     case 'awaiting':
-      return 'border-accent-line bg-accent-soft text-accent';
+      return 'border-good bg-good-soft text-good';
     case 'open':
       return 'border-border bg-panel-2 text-fg-3';
   }
@@ -88,8 +88,8 @@ function byLedgerSeq(rows: readonly CheckpointChipRow[]): CheckpointChipRow[] {
 /** One chip per checkpoint, ledger_seq ascending. Each chip is a real button with
  *  a 44px minimum touch target (the visible circle is smaller) and an accessible
  *  label naming the checkpoint it jumps to; activating it scrolls to and rings
- *  that checkpoint's row in the feed. A confirmed chip shows a tick glyph in place
- *  of its number. */
+ *  that checkpoint's row in the feed. A resolved chip (awaiting or confirmed, the
+ *  ones the counter counts) shows a tick glyph in place of its number. */
 export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElement[] {
   return byLedgerSeq(rows).map((row) => {
     const state = chipState(row);
@@ -110,7 +110,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
             chipCircleClass(state),
           )}
         >
-          {state === 'confirmed' ? <IconCheck size={14} /> : seq}
+          {state === 'open' ? seq : <IconCheck size={14} />}
         </span>
       </button>
     );
