@@ -27,8 +27,9 @@ import { PinAnnotationComposer } from '@/components/pages/pcs/PinAnnotationCompo
 import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
 import { buildPinData } from '@/components/pages/pcs/pin-annotations';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
-import { FeedbackLedger } from '@/components/pages/pcs/FeedbackLedger';
-import type { LedgerCounts } from '@/components/pages/pcs/FeedbackLedger';
+import { CheckpointStrip } from '@/components/pages/pcs/CheckpointStrip';
+import type { CheckpointCounts } from '@/components/pages/pcs/CheckpointStrip';
+import { PostReadyNotice } from '@/components/pages/pcs/PostReadyNotice';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
 import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
 import { VersionPill } from '@/components/pages/pcs/VersionPill';
@@ -233,13 +234,16 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
   const [annotateError, setAnnotateError] = useState<string | null>(null);
   const [commentsRefresh, setCommentsRefresh] = useState(0);
 
-  // Checkpoint counts lifted from FeedbackLedger's one fetch (no duplicate
+  // Checkpoint counts lifted from CheckpointStrip's one fetch (no duplicate
   // read): they drive the header "X of N" chip and the Feedback tab badge.
-  const [checkpointCounts, setCheckpointCounts] = useState<LedgerCounts>({
+  const [checkpointCounts, setCheckpointCounts] = useState<CheckpointCounts>({
     resolved: 0,
     total: 0,
   });
-  const handleLedgerCounts = useCallback((counts: LedgerCounts) => setCheckpointCounts(counts), []);
+  const handleCheckpointCounts = useCallback(
+    (counts: CheckpointCounts) => setCheckpointCounts(counts),
+    [],
+  );
   const bumpCommentsRefresh = useCallback(() => setCommentsRefresh((n) => n + 1), []);
 
   // Pin annotation state (F5): the placed point drives the pin composer, sibling
@@ -1340,15 +1344,12 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
               ) : null}
             </div>
             {workspaceId !== null && postId !== undefined ? (
-              <FeedbackLedger
+              <CheckpointStrip
                 workspaceId={workspaceId}
                 postId={postId}
-                postStage={currentStage}
                 viewerIsClient={clientRole}
-                viewerUserId={userId ?? ''}
                 refreshSignal={commentsRefresh}
-                onMutated={bumpCommentsRefresh}
-                onCounts={handleLedgerCounts}
+                onCounts={handleCheckpointCounts}
               />
             ) : null}
 
@@ -1380,6 +1381,18 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                 </div>
               )}
             </section>
+
+            {workspaceId !== null && postId !== undefined ? (
+              <PostReadyNotice
+                workspaceId={workspaceId}
+                postId={postId}
+                postStage={currentStage}
+                viewerIsClient={clientRole}
+                openCount={checkpointCounts.total - checkpointCounts.resolved}
+                refreshSignal={commentsRefresh}
+                onMutated={bumpCommentsRefresh}
+              />
+            ) : null}
           </aside>
         </div>
       )}
