@@ -220,48 +220,44 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
   });
 
   // 2 -----------------------------------------------------------------------
-  it('routes a mentioned member to an urgent mention and off the checkpoints fan-out', async () => {
+  it('fans checkpoints_added to every other active member and creates no mention, even for mention-looking text', async () => {
     const postId = await insertPost('review');
     const { error } = await batchCreate(clientAClient, {
       p_workspace_id: wsA.id,
       p_post_id: postId,
+      // Body looks like a mention; checkpoints deliberately no longer carry mentions.
       p_points: [
-        { body: 'ping the agency', mentions: [agency.id] },
+        { body: 'ping @agency please take a look' },
       ] as unknown as BatchCreateArgs['p_points'],
       p_trace_id: generateTraceId(),
     });
     expect(error).toBeNull();
 
-    // The mentioned member: one urgent 'mention', zero 'checkpoints_added'.
-    expect(
-      await countWhere(asGeneric(admin), 'inbox_entries', [
-        ['event_type', 'mention'],
-        ['entity_id', postId],
-        ['user_id', agency.id],
-        ['tier', 'urgent'],
-      ]),
-    ).toBe(1);
+    // Exactly one 'checkpoints_added' per active member other than the author.
+    for (const member of [owner, clientB, agency]) {
+      expect(
+        await countWhere(asGeneric(admin), 'inbox_entries', [
+          ['event_type', 'checkpoints_added'],
+          ['entity_id', postId],
+          ['user_id', member.id],
+        ]),
+      ).toBe(1);
+    }
+
+    // The author is excluded from the fan-out.
     expect(
       await countWhere(asGeneric(admin), 'inbox_entries', [
         ['event_type', 'checkpoints_added'],
         ['entity_id', postId],
-        ['user_id', agency.id],
+        ['user_id', clientA.id],
       ]),
     ).toBe(0);
 
-    // A non-mentioned active member: 'checkpoints_added' only, no mention.
-    expect(
-      await countWhere(asGeneric(admin), 'inbox_entries', [
-        ['event_type', 'checkpoints_added'],
-        ['entity_id', postId],
-        ['user_id', owner.id],
-      ]),
-    ).toBe(1);
+    // No mention entry is created for anyone.
     expect(
       await countWhere(asGeneric(admin), 'inbox_entries', [
         ['event_type', 'mention'],
         ['entity_id', postId],
-        ['user_id', owner.id],
       ]),
     ).toBe(0);
   });
