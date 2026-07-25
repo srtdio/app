@@ -22,7 +22,10 @@ import type { CommentRow } from '@srtdio/comments';
 export const CHECKPOINT_SELECT = 'id, ledger_seq, resolved_at, accepted_at';
 
 /** One checkpoint as the strip selects it. */
-export type CheckpointChipRow = Pick<CommentRow, 'id' | 'ledger_seq' | 'resolved_at' | 'accepted_at'>;
+export type CheckpointChipRow = Pick<
+  CommentRow,
+  'id' | 'ledger_seq' | 'resolved_at' | 'accepted_at'
+>;
 
 /** The lifted counts PostDetailPage consumes for its header chip and tab badge.
  *  The shape is unchanged from the former LedgerCounts; only the name reflects

@@ -72,7 +72,9 @@ describe('notify copy and gating', () => {
     );
     expect(notifyErrorMessage('forbidden_role')).toBe('Only agency members can send this.');
     expect(notifyErrorMessage('invalid_stage')).toBe('This post is not in review anymore.');
-    expect(notifyErrorMessage('network down')).toBe('Could not notify the client. Please try again.');
+    expect(notifyErrorMessage('network down')).toBe(
+      'Could not notify the client. Please try again.',
+    );
   });
 
   it('states the open count as the disabled reason, pluralised, and null when clear', () => {

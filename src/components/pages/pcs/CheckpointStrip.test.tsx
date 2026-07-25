@@ -148,9 +148,11 @@ describe('checkpointChips', () => {
   it('renders one chip per checkpoint in ledger_seq order regardless of read order', () => {
     const chips = checkpointChips(rows);
     expect(chips).toHaveLength(3);
-    expect(
-      chips.map((chip) => (chip.props as { ['aria-label']: string })['aria-label']),
-    ).toEqual(['Jump to checkpoint 1', 'Jump to checkpoint 2', 'Jump to checkpoint 3']);
+    expect(chips.map((chip) => (chip.props as { ['aria-label']: string })['aria-label'])).toEqual([
+      'Jump to checkpoint 1',
+      'Jump to checkpoint 2',
+      'Jump to checkpoint 3',
+    ]);
   });
 
   it('every chip is a real button carrying a 44px minimum touch target', () => {
