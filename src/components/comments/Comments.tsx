@@ -45,12 +45,6 @@ import {
   resolveName,
   type CommentProfile,
 } from '@/components/comments/commentProfiles';
-// Reuse the ledger's proven checkpoint building blocks rather than inventing a
-// second set: the tick circle (with its accent-ring "live" state), the resolution
-// note composer's reveal/limits, the comment_resolve arg builder, and the
-// friendly-error mapping already in use. The follow-up PR that removes the
-// ledger's duplicate controls will re-home these; until then this is the one
-// source of truth for the motion and copy.
 import {
   buildResolveArgs,
   friendlyAcceptError,
@@ -59,7 +53,7 @@ import {
   NOTE_PLACEHOLDER,
   noteRevealClass,
   tickCircle,
-} from '@/components/pages/pcs/FeedbackLedger';
+} from '@/components/pages/pcs/checkpoint-controls';
 
 /** One caption_span annotation as it reads on a comment row. Optional surface:
  *  posts pass it, briefs never do, so the chips are post-only by construction. */
