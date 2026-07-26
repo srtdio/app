@@ -253,36 +253,40 @@ BEGIN
           jsonb_build_object('resolved', p_resolved, 'transitioned', v_rows > 0, 'has_note', v_note IS NOT NULL));
 END; $$;
 
-CREATE OR REPLACE FUNCTION public.comment_edit(
-  p_comment_id uuid, p_body text, p_trace_id uuid)
-RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
-DECLARE v_ws uuid; v_seq int; v_author uuid; v_deleted timestamptz; v_words int;
+CREATE OR REPLACE FUNCTION public.comment_edit(p_comment_id uuid, p_body text, p_trace_id uuid)
+ RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE v_ws uuid; v_ledger int; v_words int;
 BEGIN
-  SELECT workspace_id, ledger_seq, author_user_id, deleted_at
-    INTO v_ws, v_seq, v_author, v_deleted
-  FROM public.comments WHERE id = p_comment_id FOR UPDATE;
-  IF v_ws IS NULL OR v_deleted IS NOT NULL THEN RAISE EXCEPTION 'not_found'; END IF;
-  IF v_author <> auth.uid() THEN RAISE EXCEPTION 'forbidden_role'; END IF;
-  IF p_body IS NULL OR char_length(btrim(p_body)) < 1
-     OR char_length(p_body) > 10000 THEN RAISE EXCEPTION 'invalid_payload'; END IF;
-  IF v_seq IS NOT NULL THEN
-    v_words := array_length(regexp_split_to_array(btrim(p_body),'\s+'),1);
-    IF v_words IS NULL OR v_words < 1 OR v_words > 50 THEN RAISE EXCEPTION 'invalid_payload'; END IF;
-    UPDATE public.comments
-       SET body = p_body, edited_at = now(),
-           resolved_at = NULL, resolved_by = NULL, resolution_note = NULL,
-           resolved_version_id = NULL, accepted_at = NULL, accepted_by = NULL,
-           asked_at = NULL, asked_by = NULL,
-           sent_back_at = NULL, sent_back_by = NULL,
-           closed_at = NULL, closed_by = NULL
-     WHERE id = p_comment_id;
-  ELSE
-    UPDATE public.comments SET body = p_body, edited_at = now() WHERE id = p_comment_id;
+  SELECT workspace_id, ledger_seq INTO v_ws, v_ledger FROM public.comments
+   WHERE id = p_comment_id AND author_user_id = auth.uid() AND deleted_at IS NULL FOR UPDATE;
+  IF v_ws IS NULL THEN RAISE EXCEPTION 'forbidden_role'; END IF;
+  IF NOT public.is_active_workspace_member(v_ws) THEN RAISE EXCEPTION 'workspace_member_only'; END IF;
+  IF p_body IS NULL OR length(p_body) < 1 OR length(p_body) > 10000 THEN RAISE EXCEPTION 'invalid_payload'; END IF;
+  IF v_ledger IS NOT NULL THEN
+    v_words := coalesce(array_length(regexp_split_to_array(btrim(p_body), '\s+'), 1), 0);
+    IF v_words < 1 OR v_words > 50 THEN RAISE EXCEPTION 'invalid_payload'; END IF;
   END IF;
-  PERFORM public.audit_log_write('comment_edit','success',p_trace_id,v_ws,'comment',
-    p_comment_id::text, jsonb_build_object('is_checkpoint', v_seq IS NOT NULL));
+  UPDATE public.comments SET
+    body = p_body,
+    edited_at = now(),
+    resolved_at         = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE resolved_at END,
+    resolved_by         = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE resolved_by END,
+    resolution_note     = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE resolution_note END,
+    resolved_version_id = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE resolved_version_id END,
+    accepted_at         = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE accepted_at END,
+    accepted_by         = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE accepted_by END,
+    asked_at            = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE asked_at END,
+    asked_by            = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE asked_by END,
+    sent_back_at        = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE sent_back_at END,
+    sent_back_by        = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE sent_back_by END,
+    closed_at           = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE closed_at END,
+    closed_by           = CASE WHEN v_ledger IS NOT NULL THEN NULL ELSE closed_by END
+  WHERE id = p_comment_id;
+  PERFORM public.audit_log_write('comment_edit', 'success', p_trace_id, v_ws, 'comment',
+          p_comment_id::text, jsonb_build_object('checkpoint', v_ledger IS NOT NULL));
   RETURN p_comment_id;
-END; $$;
+END; $function$;
 
 CREATE OR REPLACE FUNCTION public.stage_transition(
   p_post_id uuid, p_to_stage text, p_trace_id uuid)
