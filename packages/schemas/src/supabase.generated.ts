@@ -2504,9 +2504,13 @@ export type Database = {
         Row: {
           accepted_at: string | null
           accepted_by: string | null
+          asked_at: string | null
+          asked_by: string | null
           attachment_asset_ids: string[] | null
           author_user_id: string
           body: string
+          closed_at: string | null
+          closed_by: string | null
           created_at: string
           deleted_at: string | null
           edited_at: string | null
@@ -2523,6 +2527,8 @@ export type Database = {
           resolved_at: string | null
           resolved_by: string | null
           resolved_version_id: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           unaccepted_at: string | null
           unaccepted_by: string | null
           workspace_id: string
@@ -2530,9 +2536,13 @@ export type Database = {
         Insert: {
           accepted_at?: string | null
           accepted_by?: string | null
+          asked_at?: string | null
+          asked_by?: string | null
           attachment_asset_ids?: string[] | null
           author_user_id: string
           body: string
+          closed_at?: string | null
+          closed_by?: string | null
           created_at?: string
           deleted_at?: string | null
           edited_at?: string | null
@@ -2549,6 +2559,8 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: string | null
           resolved_version_id?: string | null
+          sent_back_at?: string | null
+          sent_back_by?: string | null
           unaccepted_at?: string | null
           unaccepted_by?: string | null
           workspace_id: string
@@ -2556,9 +2568,13 @@ export type Database = {
         Update: {
           accepted_at?: string | null
           accepted_by?: string | null
+          asked_at?: string | null
+          asked_by?: string | null
           attachment_asset_ids?: string[] | null
           author_user_id?: string
           body?: string
+          closed_at?: string | null
+          closed_by?: string | null
           created_at?: string
           deleted_at?: string | null
           edited_at?: string | null
@@ -2575,6 +2591,8 @@ export type Database = {
           resolved_at?: string | null
           resolved_by?: string | null
           resolved_version_id?: string | null
+          sent_back_at?: string | null
+          sent_back_by?: string | null
           unaccepted_at?: string | null
           unaccepted_by?: string | null
           workspace_id?: string
@@ -5060,6 +5078,14 @@ export type Database = {
       checkpoint_accept: {
         Args: { p_accepted: boolean; p_comment_id: string; p_trace_id: string }
         Returns: undefined
+      }
+      checkpoint_ask: {
+        Args: { p_body: string; p_comment_id: string; p_trace_id: string }
+        Returns: string
+      }
+      checkpoint_send_back: {
+        Args: { p_body: string; p_comment_id: string; p_trace_id: string }
+        Returns: string
       }
       comment_batch_create: {
         Args: {
