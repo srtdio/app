@@ -10,6 +10,7 @@ import { AssetsPage } from '@/components/pages/AssetsPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
 import { DeletedPage } from '@/components/pages/DeletedPage';
 import { SignInPage } from '@/components/auth/SignInPage';
+import { AuthCallbackPage } from '@/components/auth/AuthCallbackPage';
 import { SignUpPage } from '@/components/auth/SignUpPage';
 import { AcceptInvitePage } from '@/components/auth/AcceptInvitePage';
 import { PostRefResolver } from '@/components/refs/PostRefResolver';
@@ -41,6 +42,7 @@ export default function App() {
     <BrowserRouter>
       <SessionProvider>
         <Routes>
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route element={<RequireGuest />}>
             <Route path="/signin" element={<SignInPage />} />
             <Route path="/signup" element={<SignUpPage />} />
