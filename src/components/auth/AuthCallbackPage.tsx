@@ -32,9 +32,7 @@ const EMAIL_OTP_TYPES: readonly EmailOtpType[] = [
 
 /** Narrow a raw query value to a known EmailOtpType, or null when unrecognised. */
 export function narrowEmailOtpType(value: string | null): EmailOtpType | null {
-  return value !== null && EMAIL_OTP_TYPES.includes(value)
-    ? value
-    : null;
+  return value !== null && EMAIL_OTP_TYPES.includes(value) ? value : null;
 }
 
 export type VerifyResult = { status: 'authenticated' } | { status: 'error' };
