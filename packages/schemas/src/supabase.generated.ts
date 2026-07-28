@@ -1374,6 +1374,7 @@ export type Database = {
           format_requested: string | null
           id: string
           legacy_author_name: string | null
+          mentions: Json | null
           number: number
           objective: string
           reference_links: Json | null
@@ -1395,6 +1396,7 @@ export type Database = {
           format_requested?: string | null
           id?: string
           legacy_author_name?: string | null
+          mentions?: Json | null
           number: number
           objective: string
           reference_links?: Json | null
@@ -1416,6 +1418,7 @@ export type Database = {
           format_requested?: string | null
           id?: string
           legacy_author_name?: string | null
+          mentions?: Json | null
           number?: number
           objective?: string
           reference_links?: Json | null
