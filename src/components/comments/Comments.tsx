@@ -48,6 +48,7 @@ import {
 import {
   buildResolveArgs,
   friendlyAcceptError,
+  friendlyPointFreezeError,
   friendlyResolveError,
   MAX_NOTE_CHARS,
   NOTE_PLACEHOLDER,
@@ -491,6 +492,48 @@ export function commentActions(
   if (tombstone) return { canCopy: false, canEdit: false, canDelete: false };
   const mine = canModifyComment(comment, currentUserId);
   return { canCopy: true, canEdit: mine, canDelete: mine };
+}
+
+/** The server caps a ledger point body at 50 whitespace-separated words; the
+ *  editor mirrors the cap so an over-long point surfaces inline instead of
+ *  bouncing off a raw invalid_payload. */
+export const POINT_WORD_CAP = 50;
+
+/** Count whitespace-separated words the way the point procs do (btrim, then split
+ *  on runs of whitespace); an empty or all-whitespace body is zero. */
+export function pointWordCount(body: string): number {
+  const trimmed = body.trim();
+  return trimmed === '' ? 0 : trimmed.split(/\s+/).length;
+}
+
+/** A ledger point is frozen against edit/delete once it is confirmed (accepted_at)
+ *  or locked by post approval (closed_at); the proc raises checkpoint_frozen either
+ *  way, so the affordance is hidden to match. */
+export function isPointFrozen(point: Pick<CommentRow, 'accepted_at' | 'closed_at'>): boolean {
+  return point.accepted_at !== null || point.closed_at !== null;
+}
+
+/** Row actions for a ledger point: the ordinary authorship gate (commentActions ->
+ *  canModifyComment), with Edit and Delete additionally withheld once the point is
+ *  frozen. Copy stays available in every state; replies are unaffected. */
+export function pointActions(
+  point: Pick<
+    CommentRow,
+    'author_user_id' | 'deleted_at' | 'legacy_author_name' | 'accepted_at' | 'closed_at'
+  >,
+  currentUserId: string | null,
+  tombstone: boolean,
+): CommentActions {
+  const base = commentActions(point, currentUserId, tombstone);
+  if (isPointFrozen(point)) return { canCopy: base.canCopy, canEdit: false, canDelete: false };
+  return base;
+}
+
+/** The "edited · <when>" marker for a ledger point, or null when it was never
+ *  edited. Reuses relativeLong (the same helper the card uses for created_at), so no
+ *  date library is added. */
+export function pointEditedMarker(editedAt: string | null, now: Date): string | null {
+  return editedAt === null ? null : `edited · ${relativeLong(editedAt, now)}`;
 }
 
 /** The plain text copied to the clipboard: the stored body with each @[uuid]
@@ -967,9 +1010,20 @@ export function Comments({
     const trimmed = editBody.trim();
     if (trimmed === '') return;
     setRowError(null);
+    const target = merged.find((c) => c.id === commentId) ?? null;
+    const isPoint = target !== null && target.ledger_seq !== null;
+    // Points are capped at 50 words server-side; enforce it before submit so an
+    // over-long edit surfaces inline rather than as a raw invalid_payload.
+    if (isPoint && pointWordCount(editBody) > POINT_WORD_CAP) {
+      setRowError({ id: commentId, message: `Points are limited to ${POINT_WORD_CAP} words.` });
+      return;
+    }
     const result = await runEditComment(supabase, commentId, editBody, newTrace());
     if (!result.ok) {
-      setRowError({ id: commentId, message: result.error.message });
+      setRowError({
+        id: commentId,
+        message: isPoint ? friendlyPointFreezeError(result.error, target, 'edit') : result.error.message,
+      });
       return;
     }
     setEditingId(null);
@@ -979,9 +1033,16 @@ export function Comments({
 
   async function handleDelete(commentId: string): Promise<void> {
     setRowError(null);
+    const target = merged.find((c) => c.id === commentId) ?? null;
+    const isPoint = target !== null && target.ledger_seq !== null;
     const result = await runDeleteComment(supabase, commentId, newTrace());
     if (!result.ok) {
-      setRowError({ id: commentId, message: result.error.message });
+      setRowError({
+        id: commentId,
+        message: isPoint
+          ? friendlyPointFreezeError(result.error, target, 'delete')
+          : result.error.message,
+      });
       return;
     }
     await loadPage(0);
@@ -1418,6 +1479,11 @@ export function Comments({
             const withdrawn = !tombstone && showCheckpointWithdrawal(comment);
             const notDone = !tombstone && showCheckpointNotDone(state, isClient);
             const undo = !tombstone && showCheckpointUndo(state, isClient);
+            const editing = editingId === comment.id;
+            // Author-only edit/delete, hidden once the point is frozen (confirmed or
+            // locked); Copy stays on every live point. The proc re-checks auth.uid().
+            const actions = pointActions(comment, currentUserId, tombstone);
+            const editedMarker = pointEditedMarker(comment.edited_at, new Date());
             return (
               <li
                 key={comment.id}
@@ -1437,12 +1503,14 @@ export function Comments({
                   <div className="min-w-0 flex-1">
                     {tombstone ? (
                       <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
+                    ) : editing ? (
+                      renderEditor(comment.id)
                     ) : (
                       <>
                         <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
                           {renderCommentBody(comment.body, nameOf)}
-                          {comment.edited_at !== null ? (
-                            <span className="ml-1.5 text-[11px] text-fg-3">edited</span>
+                          {editedMarker !== null ? (
+                            <span className="ml-1.5 text-[11px] text-fg-3">{editedMarker}</span>
                           ) : null}
                         </p>
                         {attachments.length > 0 ? (
@@ -1456,9 +1524,68 @@ export function Comments({
                             }}
                           />
                         ) : null}
+                        {copiedId === comment.id ? (
+                          <span role="status" className="mt-1.5 block text-xs text-fg-3">
+                            Comment copied
+                          </span>
+                        ) : null}
                       </>
                     )}
                   </div>
+                  {!tombstone && !editing && actions.canCopy ? (
+                    <div className="relative shrink-0">
+                      <IconButton
+                        label="Point actions"
+                        onClick={() =>
+                          setMenuOpenId((current) => (current === comment.id ? null : comment.id))
+                        }
+                      >
+                        <IconMore size={20} />
+                      </IconButton>
+                      <MenuPopover
+                        open={menuOpenId === comment.id}
+                        onClose={() => setMenuOpenId(null)}
+                        align="right"
+                      >
+                        {actions.canCopy ? (
+                          <button
+                            type="button"
+                            className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              void handleCopy(comment);
+                            }}
+                          >
+                            Copy text
+                          </button>
+                        ) : null}
+                        {actions.canEdit ? (
+                          <button
+                            type="button"
+                            className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              startEdit(comment);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        ) : null}
+                        {actions.canDelete ? (
+                          <button
+                            type="button"
+                            className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              void handleDelete(comment.id);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        ) : null}
+                      </MenuPopover>
+                    </div>
+                  ) : null}
                   <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
                     {/* State label: muted (open) / accent (client's turn) / success (confirmed). */}
                     <span className={cn('text-xs font-medium', label.className)}>{label.text}</span>
