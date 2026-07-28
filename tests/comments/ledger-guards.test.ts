@@ -465,6 +465,15 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
     it('comment_edit rejects a confirmed point (accepted_at) with checkpoint_frozen', async () => {
       const postId = await insertPost('review');
       const cp = await seedCheckpoint(clientAClient, wsA.id, postId, 'confirm target');
+      // Confirmed = resolved then accepted; resolve via the proc so resolved_at is
+      // set (the accept-requires-resolved check constraint depends on it), then stamp
+      // the client confirmation.
+      const resolved = await resolveComment(ownerClient, {
+        p_comment_id: cp,
+        p_resolved: true,
+        p_trace_id: generateTraceId(),
+      });
+      expect(resolved.error).toBeNull();
       await setPointColumns(cp, { accepted_at: new Date().toISOString(), accepted_by: clientA.id });
       const { error } = await commentEdit(clientAClient, {
         p_comment_id: cp,
@@ -491,6 +500,14 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
     it('comment_soft_delete rejects a confirmed point with checkpoint_frozen', async () => {
       const postId = await insertPost('review');
       const cp = await seedCheckpoint(clientAClient, wsA.id, postId, 'confirm del');
+      // Confirmed = resolved then accepted (see the edit test above for why the
+      // resolve must go through the proc before the accept stamp).
+      const resolved = await resolveComment(ownerClient, {
+        p_comment_id: cp,
+        p_resolved: true,
+        p_trace_id: generateTraceId(),
+      });
+      expect(resolved.error).toBeNull();
       await setPointColumns(cp, { accepted_at: new Date().toISOString(), accepted_by: clientA.id });
       const { error } = await softDelete(clientAClient, {
         p_comment_id: cp,

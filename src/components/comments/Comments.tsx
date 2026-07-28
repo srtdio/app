@@ -1022,7 +1022,9 @@ export function Comments({
     if (!result.ok) {
       setRowError({
         id: commentId,
-        message: isPoint ? friendlyPointFreezeError(result.error, target, 'edit') : result.error.message,
+        message: isPoint
+          ? friendlyPointFreezeError(result.error, target, 'edit')
+          : result.error.message,
       });
       return;
     }

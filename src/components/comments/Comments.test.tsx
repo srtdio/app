@@ -818,7 +818,11 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
   });
 
   it('shows Edit and Delete on an own point in ready state (resolved, unconfirmed)', () => {
-    const ready = point({ resolved_at: '2026-02-01T00:00:00.000Z', accepted_at: null, closed_at: null });
+    const ready = point({
+      resolved_at: '2026-02-01T00:00:00.000Z',
+      accepted_at: null,
+      closed_at: null,
+    });
     expect(pointActions(ready, UUID_A, false)).toEqual({
       canCopy: true,
       canEdit: true,
@@ -886,18 +890,22 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
   it('maps checkpoint_frozen to confirmed / locked copy and keeps every string em-dash free', () => {
     const frozen: DomainError = { code: 'unknown', message: 'checkpoint_frozen' };
     // Confirmed point (accepted_at set, not locked): edit vs delete wording.
-    expect(friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: null }, 'edit')).toBe(
-      'This point is confirmed. It can no longer be edited.',
-    );
+    expect(
+      friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: null }, 'edit'),
+    ).toBe('This point is confirmed. It can no longer be edited.');
     expect(
       friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: null }, 'delete'),
     ).toBe('This point is confirmed. It can no longer be deleted.');
     // Locked post wins even when the point is also confirmed.
-    expect(friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: CLOSED }, 'edit')).toBe(
-      'This post is approved. Points are locked.',
-    );
+    expect(
+      friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: CLOSED }, 'edit'),
+    ).toBe('This post is approved. Points are locked.');
     for (const action of ['edit', 'delete'] as const) {
-      const msg = friendlyPointFreezeError(frozen, { accepted_at: null, closed_at: CLOSED }, action);
+      const msg = friendlyPointFreezeError(
+        frozen,
+        { accepted_at: null, closed_at: CLOSED },
+        action,
+      );
       expect(msg).toBe('This post is approved. Points are locked.');
       expect(msg).not.toContain('—');
     }
@@ -917,7 +925,12 @@ describe('deleted point renders a tombstone with its replies still present', () 
         deleted_at: '2026-02-10T00:00:00.000Z',
         created_at: '2026-02-01T00:00:00.000Z',
       }),
-      row({ id: 'r1', parent_comment_id: 'cp', body: 'still here', created_at: '2026-02-02T00:00:00.000Z' }),
+      row({
+        id: 'r1',
+        parent_comment_id: 'cp',
+        body: 'still here',
+        created_at: '2026-02-02T00:00:00.000Z',
+      }),
     ];
     const threads = buildThreads(rows);
     expect(threads).toHaveLength(1);
