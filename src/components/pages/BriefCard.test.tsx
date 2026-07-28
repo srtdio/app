@@ -21,6 +21,7 @@ function makeBrief(overrides: Partial<BriefWithThumbnail>): BriefWithThumbnail {
     status: 'open',
     target_date: '2026-07-01',
     reference_links: null,
+    mentions: null,
     format_requested: null,
     brand_requirements: null,
     closed_at: null,

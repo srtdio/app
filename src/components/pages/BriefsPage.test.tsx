@@ -97,6 +97,7 @@ function makeBrief(id: string, overrides: Partial<BriefWithThumbnail> = {}): Bri
     status: 'open',
     target_date: null,
     reference_links: null,
+    mentions: null,
     format_requested: null,
     brand_requirements: null,
     closed_at: null,
