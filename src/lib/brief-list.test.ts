@@ -17,6 +17,7 @@ function brief(over: Partial<Brief>): Brief {
     brand_requirements: null,
     format_requested: null,
     reference_links: null,
+    mentions: null,
     target_date: null,
     closed_at: null,
     closed_by: null,
