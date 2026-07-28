@@ -62,6 +62,34 @@ export function friendlyAcceptError(error: DomainError): string {
   }
 }
 
+/** Friendly inline copy for a frozen ledger point. comment_edit / comment_soft_delete
+ *  raise 'checkpoint_frozen' (outside DOMAIN_ERROR_CODES, so it arrives as the raw
+ *  message, the same split friendlyAcceptError uses for invalid_stage) once a point
+ *  is confirmed (accepted_at) or locked by post approval (closed_at). The reason is
+ *  read off the row; a locked post is the terminal state, so it wins when both are
+ *  set. Any other failure maps by code, including the 50-word point cap. */
+export function friendlyPointFreezeError(
+  error: DomainError,
+  point: { accepted_at: string | null; closed_at: string | null },
+  action: 'edit' | 'delete',
+): string {
+  if (error.message === 'checkpoint_frozen') {
+    if (point.closed_at !== null) return 'This post is approved. Points are locked.';
+    return action === 'delete'
+      ? 'This point is confirmed. It can no longer be deleted.'
+      : 'This point is confirmed. It can no longer be edited.';
+  }
+  switch (error.code) {
+    case 'invalid_payload':
+      return 'Points are limited to 50 words.';
+    case 'forbidden_role':
+    case 'workspace_member_only':
+      return 'You do not have permission to make this change.';
+    default:
+      return 'Something went wrong. Please try again.';
+  }
+}
+
 /** The tick circle. The check enters/leaves via opacity/translateY only, per the
  *  motion tokens; the fill flips instantly (colour is state, not motion). When
  *  `live` (the client's turn, an unfilled circle), the ring/border switches to the

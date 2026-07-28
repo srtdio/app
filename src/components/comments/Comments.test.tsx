@@ -29,8 +29,13 @@ import {
   commentActions,
   commentCopyText,
   commentDomId,
+  isPointFrozen,
   mergeCheckpoints,
   parseBatchRows,
+  pointActions,
+  pointEditedMarker,
+  pointWordCount,
+  POINT_WORD_CAP,
   PUSHBACK_SEED,
   renderCommentBody,
   renderReplyList,
@@ -49,6 +54,8 @@ import {
 } from '@/components/comments/Comments';
 import { PAGE_SIZE } from '@srtdio/comments';
 import type { Client } from '@srtdio/comments';
+import { friendlyPointFreezeError } from '@/components/pages/pcs/checkpoint-controls';
+import type { DomainError } from '@srtdio/rpc';
 import { EX_MEMBER_LABEL, resolveName } from '@/components/comments/commentProfiles';
 import type { CommentProfile } from '@/components/comments/commentProfiles';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
@@ -790,6 +797,152 @@ describe('copy comment text', () => {
     });
     await expect(writeClipboard('x')).resolves.toBe(false);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('ledger point edit/delete affordance (author-only, frozen at confirmed/locked)', () => {
+  const ACCEPTED = '2026-02-02T00:00:00.000Z';
+  const CLOSED = '2026-02-05T00:00:00.000Z';
+
+  function point(partial: Partial<CommentRow>): CommentRow {
+    return row({ id: 'p', ledger_seq: 1, author_user_id: UUID_A, ...partial });
+  }
+
+  it('shows Edit and Delete on an own point in working state (open, unconfirmed)', () => {
+    const working = point({ resolved_at: null, accepted_at: null, closed_at: null });
+    expect(pointActions(working, UUID_A, false)).toEqual({
+      canCopy: true,
+      canEdit: true,
+      canDelete: true,
+    });
+  });
+
+  it('shows Edit and Delete on an own point in ready state (resolved, unconfirmed)', () => {
+    const ready = point({
+      resolved_at: '2026-02-01T00:00:00.000Z',
+      accepted_at: null,
+      closed_at: null,
+    });
+    expect(pointActions(ready, UUID_A, false)).toEqual({
+      canCopy: true,
+      canEdit: true,
+      canDelete: true,
+    });
+  });
+
+  it('hides Edit and Delete on a confirmed point (accepted_at), keeping Copy', () => {
+    const confirmed = point({ accepted_at: ACCEPTED, closed_at: null });
+    expect(isPointFrozen(confirmed)).toBe(true);
+    expect(pointActions(confirmed, UUID_A, false)).toEqual({
+      canCopy: true,
+      canEdit: false,
+      canDelete: false,
+    });
+  });
+
+  it('hides Edit and Delete on a locked point (closed_at), keeping Copy', () => {
+    const locked = point({ accepted_at: null, closed_at: CLOSED });
+    expect(isPointFrozen(locked)).toBe(true);
+    expect(pointActions(locked, UUID_A, false)).toEqual({
+      canCopy: true,
+      canEdit: false,
+      canDelete: false,
+    });
+  });
+
+  it("hides Edit and Delete on another member's point, keeping Copy", () => {
+    const theirs = point({ author_user_id: UUID_B, accepted_at: null, closed_at: null });
+    expect(pointActions(theirs, UUID_A, false)).toEqual({
+      canCopy: true,
+      canEdit: false,
+      canDelete: false,
+    });
+  });
+
+  it('offers no actions on a tombstoned point', () => {
+    const dead = point({ deleted_at: '2026-01-05T00:00:00.000Z' });
+    expect(pointActions(dead, UUID_A, true)).toEqual({
+      canCopy: false,
+      canEdit: false,
+      canDelete: false,
+    });
+  });
+
+  it('enforces the 50-word point cap the way the proc counts words', () => {
+    expect(POINT_WORD_CAP).toBe(50);
+    const fifty = Array.from({ length: 50 }, (_u, i) => `w${i}`).join(' ');
+    const fiftyOne = `${fifty} over`;
+    expect(pointWordCount('   ')).toBe(0);
+    expect(pointWordCount('  one  two   three ')).toBe(3);
+    expect(pointWordCount(fifty)).toBe(POINT_WORD_CAP);
+    expect(pointWordCount(fiftyOne)).toBeGreaterThan(POINT_WORD_CAP);
+  });
+
+  it('renders the edited marker with a timestamp only once a point is edited', () => {
+    const now = new Date('2026-03-01T00:00:00.000Z');
+    expect(pointEditedMarker(null, now)).toBeNull();
+    const marker = pointEditedMarker('2026-02-28T00:00:00.000Z', now);
+    expect(marker).not.toBeNull();
+    expect(marker!.startsWith('edited · ')).toBe(true);
+    expect(marker).not.toContain('—');
+  });
+
+  it('maps checkpoint_frozen to confirmed / locked copy and keeps every string em-dash free', () => {
+    const frozen: DomainError = { code: 'unknown', message: 'checkpoint_frozen' };
+    // Confirmed point (accepted_at set, not locked): edit vs delete wording.
+    expect(
+      friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: null }, 'edit'),
+    ).toBe('This point is confirmed. It can no longer be edited.');
+    expect(
+      friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: null }, 'delete'),
+    ).toBe('This point is confirmed. It can no longer be deleted.');
+    // Locked post wins even when the point is also confirmed.
+    expect(
+      friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: CLOSED }, 'edit'),
+    ).toBe('This post is approved. Points are locked.');
+    for (const action of ['edit', 'delete'] as const) {
+      const msg = friendlyPointFreezeError(
+        frozen,
+        { accepted_at: null, closed_at: CLOSED },
+        action,
+      );
+      expect(msg).toBe('This post is approved. Points are locked.');
+      expect(msg).not.toContain('—');
+    }
+  });
+});
+
+describe('deleted point renders a tombstone with its replies still present', () => {
+  const BATCH = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+  it('keeps a soft-deleted point as a tombstone batch while a live reply remains', () => {
+    const rows = [
+      row({
+        id: 'cp',
+        ledger_seq: 1,
+        ledger_batch_id: BATCH,
+        author_user_id: UUID_A,
+        deleted_at: '2026-02-10T00:00:00.000Z',
+        created_at: '2026-02-01T00:00:00.000Z',
+      }),
+      row({
+        id: 'r1',
+        parent_comment_id: 'cp',
+        body: 'still here',
+        created_at: '2026-02-02T00:00:00.000Z',
+      }),
+    ];
+    const threads = buildThreads(rows);
+    expect(threads).toHaveLength(1);
+    expect(threads[0]!.tombstone).toBe(true);
+    // The conversation under the deleted point survives.
+    expect(threads[0]!.replies.map((r) => r.id)).toEqual(['r1']);
+    // It still groups as a checkpoint batch (ledger_seq survives soft-delete).
+    const groups = groupThreads(threads);
+    expect(groups[0]!.kind).toBe('batch');
+    if (groups[0]!.kind !== 'batch') throw new Error('expected a batch');
+    expect(groups[0]!.threads[0]!.tombstone).toBe(true);
+    expect(groups[0]!.threads[0]!.replies.map((r) => r.id)).toEqual(['r1']);
   });
 });
 

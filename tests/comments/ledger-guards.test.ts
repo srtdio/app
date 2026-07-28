@@ -55,6 +55,8 @@ interface GuardRow {
   resolved_by: string | null;
   resolution_note: string | null;
   resolved_version_id: string | null;
+  accepted_at: string | null;
+  closed_at: string | null;
 }
 
 function batchCreate(client: Db, args: BatchCreateArgs) {
@@ -157,13 +159,21 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
     const res = await asGeneric(admin)
       .from('comments')
       .select(
-        'body, ledger_seq, deleted_at, resolved_at, resolved_by, resolution_note, resolved_version_id',
+        'body, ledger_seq, deleted_at, resolved_at, resolved_by, resolution_note, resolved_version_id, accepted_at, closed_at',
       )
       .eq('id', id);
     if (res.error) throw new Error(`comments read failed: ${res.error.message}`);
     const first = (res.data as GuardRow[] | null)?.[0];
     if (!first) throw new Error(`comment ${id} not found`);
     return first;
+  }
+
+  /** Force freeze columns onto a point via the service-role client (RLS bypassed),
+   *  standing in for a client confirmation (accepted_at) or a post approval that
+   *  locks the ledger (closed_at). */
+  async function setPointColumns(id: string, cols: Record<string, unknown>): Promise<void> {
+    const res = await asGeneric(admin).from('comments').update(cols).eq('id', id);
+    if (res.error) throw new Error(`comments update failed: ${res.error.message}`);
   }
 
   beforeAll(async () => {
@@ -447,6 +457,119 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
       });
       expect(error).toBeNull();
       expect((await readRow(id)).deleted_at).not.toBeNull();
+    });
+  });
+
+  // 5b ----------------------------------------------------------------------
+  describe('ledger point freeze (confirmed / locked)', () => {
+    it('comment_edit rejects a confirmed point (accepted_at) with checkpoint_frozen', async () => {
+      const postId = await insertPost('review');
+      const cp = await seedCheckpoint(clientAClient, wsA.id, postId, 'confirm target');
+      // Confirmed = resolved then accepted; resolve via the proc so resolved_at is
+      // set (the accept-requires-resolved check constraint depends on it), then stamp
+      // the client confirmation.
+      const resolved = await resolveComment(ownerClient, {
+        p_comment_id: cp,
+        p_resolved: true,
+        p_trace_id: generateTraceId(),
+      });
+      expect(resolved.error).toBeNull();
+      await setPointColumns(cp, { accepted_at: new Date().toISOString(), accepted_by: clientA.id });
+      const { error } = await commentEdit(clientAClient, {
+        p_comment_id: cp,
+        p_body: 'try to edit',
+        p_trace_id: generateTraceId(),
+      });
+      expect(error?.message).toBe('checkpoint_frozen');
+      expect((await readRow(cp)).body).toBe('confirm target');
+    });
+
+    it('comment_edit rejects a locked point (closed_at) with checkpoint_frozen', async () => {
+      const postId = await insertPost('review');
+      const cp = await seedCheckpoint(clientAClient, wsA.id, postId, 'lock target');
+      await setPointColumns(cp, { closed_at: new Date().toISOString() });
+      const { error } = await commentEdit(clientAClient, {
+        p_comment_id: cp,
+        p_body: 'try to edit',
+        p_trace_id: generateTraceId(),
+      });
+      expect(error?.message).toBe('checkpoint_frozen');
+      expect((await readRow(cp)).body).toBe('lock target');
+    });
+
+    it('comment_soft_delete rejects a confirmed point with checkpoint_frozen', async () => {
+      const postId = await insertPost('review');
+      const cp = await seedCheckpoint(clientAClient, wsA.id, postId, 'confirm del');
+      // Confirmed = resolved then accepted (see the edit test above for why the
+      // resolve must go through the proc before the accept stamp).
+      const resolved = await resolveComment(ownerClient, {
+        p_comment_id: cp,
+        p_resolved: true,
+        p_trace_id: generateTraceId(),
+      });
+      expect(resolved.error).toBeNull();
+      await setPointColumns(cp, { accepted_at: new Date().toISOString(), accepted_by: clientA.id });
+      const { error } = await softDelete(clientAClient, {
+        p_comment_id: cp,
+        p_trace_id: generateTraceId(),
+      });
+      expect(error?.message).toBe('checkpoint_frozen');
+      expect((await readRow(cp)).deleted_at).toBeNull();
+    });
+
+    it('comment_soft_delete rejects a locked point with checkpoint_frozen', async () => {
+      const postId = await insertPost('review');
+      const cp = await seedCheckpoint(clientAClient, wsA.id, postId, 'lock del');
+      await setPointColumns(cp, { closed_at: new Date().toISOString() });
+      const { error } = await softDelete(clientAClient, {
+        p_comment_id: cp,
+        p_trace_id: generateTraceId(),
+      });
+      expect(error?.message).toBe('checkpoint_frozen');
+      expect((await readRow(cp)).deleted_at).toBeNull();
+    });
+
+    it('rejects a non-author editing or deleting a point with forbidden_role', async () => {
+      const postId = await insertPost('review');
+      const cp = await seedCheckpoint(clientAClient, wsA.id, postId, 'not yours');
+      const edit = await commentEdit(ownerClient, {
+        p_comment_id: cp,
+        p_body: 'nope',
+        p_trace_id: generateTraceId(),
+      });
+      expect(edit.error?.message).toBe('forbidden_role');
+      const del = await softDelete(ownerClient, {
+        p_comment_id: cp,
+        p_trace_id: generateTraceId(),
+      });
+      expect(del.error?.message).toBe('forbidden_role');
+    });
+
+    it('editing a ready point clears resolved_at and leaves accepted_at / closed_at untouched', async () => {
+      const postId = await insertPost('review');
+      const cp = await seedCheckpoint(clientAClient, wsA.id, postId, 'ready point');
+      const resolved = await resolveComment(ownerClient, {
+        p_comment_id: cp,
+        p_resolved: true,
+        p_trace_id: generateTraceId(),
+      });
+      expect(resolved.error).toBeNull();
+      let r = await readRow(cp);
+      expect(r.resolved_at).not.toBeNull();
+      expect(r.accepted_at).toBeNull();
+      expect(r.closed_at).toBeNull();
+
+      const edited = await commentEdit(clientAClient, {
+        p_comment_id: cp,
+        p_body: 'ready point, edited',
+        p_trace_id: generateTraceId(),
+      });
+      expect(edited.error).toBeNull();
+      r = await readRow(cp);
+      expect(r.body).toBe('ready point, edited');
+      expect(r.resolved_at).toBeNull();
+      expect(r.accepted_at).toBeNull();
+      expect(r.closed_at).toBeNull();
     });
   });
 
