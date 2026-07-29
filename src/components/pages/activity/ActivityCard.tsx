@@ -1,31 +1,11 @@
 import { useState } from 'react';
-import type { ComponentType, KeyboardEvent, ReactElement } from 'react';
+import type { KeyboardEvent, ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Avatar } from '@/components/ui/Avatar';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
-import {
-  IconActivity,
-  IconAt,
-  IconBroadcast,
-  IconChat,
-  IconClock,
-  IconDoorOpen,
-  IconFrame,
-  IconHistory,
-  IconHourglass,
-  IconListOrdered,
-  IconQuote,
-  IconReceipt,
-  IconRotateCcw,
-  IconScroll,
-  IconScrollText,
-  IconSignpost,
-  IconStamp,
-  IconTarget,
-  type IconProps,
-} from '@/components/ui/icons';
+import { IconClock } from '@/components/ui/icons';
 import {
   MENTION_EVENT_TYPE,
   activityLine,
@@ -37,7 +17,6 @@ import {
   type ActivityItem,
   type SnoozeKind,
 } from '@/components/pages/activity/data';
-import type { InboxEventTypeValue } from '@srtdio/schemas';
 
 interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (threaded). */
@@ -79,7 +58,7 @@ function mentionPreview(body: string, selfName: string | null): ReactElement[] {
 type LeadTone = 'accent' | 'neutral';
 
 /**
- * The event types whose icon circle is accented. Every other event type (and any
+ * The event types whose lead rail is accented. Every other event type (and any
  * unrecognised value) is neutral. Colour is a two-state signal, keyed on the event
  * type alone: it never reads the stored tier or the stage.
  */
@@ -91,45 +70,9 @@ const ACCENT_EVENTS = new Set<string>([
   'billing_failure',
 ]);
 
-/** The tone of the lead event's icon circle: accent for the five, neutral otherwise. */
+/** The tone of the lead rail: accent for the five, neutral otherwise. */
 function leadTone(item: ActivityItem): LeadTone {
   return ACCENT_EVENTS.has(item.eventType) ? 'accent' : 'neutral';
-}
-
-/** The tone of the inline actor-row glyph: the bare glyph coloured by event tone. */
-const TONE_INLINE: Record<LeadTone, string> = {
-  accent: 'text-accent',
-  neutral: 'text-fg-3',
-};
-
-/**
- * One distinct glyph per known inbox event type. Typed as a total Record so the
- * compiler enforces that every InboxEventTypeValue is mapped; a runtime value
- * outside the set falls back to IconActivity in leadIcon.
- */
-const LEAD_ICON: Record<InboxEventTypeValue, ComponentType<IconProps>> = {
-  mention: IconAt,
-  checkpoints_added: IconListOrdered,
-  comment: IconQuote,
-  comment_resolved: IconStamp,
-  checkpoint_reopened: IconRotateCcw,
-  checkpoint_asked: IconChat,
-  stage_change: IconSignpost,
-  post_ready: IconTarget,
-  brief_created: IconScrollText,
-  brief_closed: IconScroll,
-  asset_uploaded: IconFrame,
-  asset_version_added: IconHistory,
-  invite: IconDoorOpen,
-  trial_warning: IconHourglass,
-  billing_failure: IconReceipt,
-  system: IconBroadcast,
-};
-
-/** The lead event's glyph, drawn inline beside the actor at the given size. */
-function leadIcon(item: ActivityItem, size = 24): ReactElement {
-  const Icon = LEAD_ICON[item.eventType as InboxEventTypeValue] ?? IconActivity;
-  return <Icon size={size} />;
 }
 
 /**
@@ -209,9 +152,10 @@ function actorLine(item: ActivityItem, who: string | null): string {
 
 /**
  * One digest entry as a single contained card. The card is a flex row: a 3px lead
- * rail, then a column holding the content row (actor line, entity title, body,
- * meta) beside a full-height media tile flush to the card's right edge. A threaded
- * group (>1 entry) gets a "+N more" footer that expands the remaining events inside
+ * rail, then a column holding the content row (actor line, entity title, body)
+ * beside a square media tile inset from the card edge, above a footer that carries
+ * the meta (relative time, scope tag, snoozed chip). A threaded group (>1 entry)
+ * adds a "+N more" toggle to the footer that expands the remaining events inside
  * the same card. The content row opens the thread (marking every entry read).
  */
 export function ActivityCard({
@@ -264,9 +208,9 @@ export function ActivityCard({
           tabIndex={0}
           onClick={() => onOpenGroup(group)}
           onKeyDown={onKeyDown}
-          className="flex cursor-pointer items-stretch transition-colors hover:bg-panel-2"
+          className="flex cursor-pointer items-start gap-3 p-[14px] transition-colors hover:bg-panel-2"
         >
-          <div className="min-w-0 flex-1 py-[14px] pl-[14px] pr-3">
+          <div className="min-w-0 flex-1">
             <div className="mb-1.5 flex items-center gap-[7px]">
               {actorName !== null ? (
                 <Avatar
@@ -275,9 +219,6 @@ export function ActivityCard({
                   size="sm"
                 />
               ) : null}
-              <span aria-hidden="true" className={cn('shrink-0', TONE_INLINE[tone])}>
-                {leadIcon(lead, 14)}
-              </span>
               <span className="truncate text-xs font-medium text-fg-3">
                 {actorLine(lead, actorName)}
               </span>
@@ -303,26 +244,9 @@ export function ActivityCard({
                 {mentionPreview(lead.body, selfName)}
               </p>
             ) : null}
-
-            <div className="mt-2 flex items-center gap-1.5">
-              <span className="font-mono text-xs text-fg-3">
-                {relativeTime(lead.createdAt, nowMs)}
-              </span>
-              {tag !== undefined ? (
-                <span className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-[11px] font-medium text-fg-2">
-                  {tag}
-                </span>
-              ) : null}
-              {snoozed ? (
-                <span className="inline-flex h-5 items-center gap-1 rounded-md bg-panel-2 px-2 text-[11px] font-medium text-fg-2">
-                  <IconClock size={12} inline />
-                  Snoozed
-                </span>
-              ) : null}
-            </div>
           </div>
 
-          <div className="flex min-h-[104px] w-24 shrink-0 self-stretch">
+          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg">
             <Thumbnail
               assetVersionId={lead.thumbnailAssetVersionId ?? null}
               cache={cache}
@@ -334,58 +258,68 @@ export function ActivityCard({
           </div>
         </div>
 
-        {rest.length > 0 ? (
-          <>
-            <div className="h-px bg-border" />
+        <div className="h-px bg-border" />
+        <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
+          <span className="font-mono text-xs text-fg-3">{relativeTime(lead.createdAt, nowMs)}</span>
+          {tag !== undefined ? (
+            <span className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-[11px] font-medium text-fg-2">
+              {tag}
+            </span>
+          ) : null}
+          {snoozed ? (
+            <span className="inline-flex h-5 items-center gap-1 rounded-md bg-panel-2 px-2 text-[11px] font-medium text-fg-2">
+              <IconClock size={12} inline />
+              Snoozed
+            </span>
+          ) : null}
+          {rest.length > 0 ? (
             <button
               type="button"
               aria-expanded={expanded}
               onClick={() => setExpanded((prev) => !prev)}
-              className="flex min-h-[44px] w-full items-center px-[14px] text-left text-[13px] font-medium text-accent transition-colors hover:bg-panel-2"
+              className="ml-auto flex min-h-[44px] items-center px-2 text-[13px] font-medium text-accent transition-colors hover:bg-panel-2"
             >
               {expanded ? 'Show less' : `+${rest.length} more`}
             </button>
-            {expanded ? (
-              <ul className="border-t border-border">
-                {rest.map((entry) => (
-                  <li
-                    key={entry.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onOpenEntry(entry)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        onOpenEntry(entry);
-                      }
-                    }}
-                    className="flex min-h-[44px] cursor-pointer items-center gap-2 py-2 pl-[14px] pr-3 transition-colors hover:bg-panel-2"
+          ) : null}
+        </div>
+        {rest.length > 0 && expanded ? (
+          <ul className="border-t border-border">
+            {rest.map((entry) => (
+              <li
+                key={entry.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => onOpenEntry(entry)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onOpenEntry(entry);
+                  }
+                }}
+                className="flex min-h-[44px] cursor-pointer items-center gap-2 py-2 pl-[14px] pr-3 transition-colors hover:bg-panel-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={cn(
+                      'line-clamp-2 text-sm',
+                      entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
+                    )}
                   >
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={cn(
-                          'line-clamp-2 text-sm',
-                          entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
-                        )}
-                      >
-                        {cardBodyLine(entry)}
-                      </p>
-                      <p className="mt-0.5 text-xs text-fg-3">
-                        {relativeTime(entry.createdAt, nowMs)}
-                      </p>
-                    </div>
-                    {entry.readAt === null ? (
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full bg-accent"
-                        aria-label="Unread"
-                        role="status"
-                      />
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </>
+                    {cardBodyLine(entry)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
+                </div>
+                {entry.readAt === null ? (
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full bg-accent"
+                    aria-label="Unread"
+                    role="status"
+                  />
+                ) : null}
+              </li>
+            ))}
+          </ul>
         ) : null}
       </div>
     </div>
