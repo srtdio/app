@@ -54,7 +54,7 @@ import {
 } from '@/components/comments/Comments';
 import { PAGE_SIZE } from '@srtdio/comments';
 import type { Client } from '@srtdio/comments';
-import { friendlyPointFreezeError } from '@/components/pages/pcs/checkpoint-controls';
+import { friendlyPointFreezeError, tickCircle } from '@/components/pages/pcs/checkpoint-controls';
 import type { DomainError } from '@srtdio/rpc';
 import { EX_MEMBER_LABEL, resolveName } from '@/components/comments/commentProfiles';
 import type { CommentProfile } from '@/components/comments/commentProfiles';
@@ -318,25 +318,57 @@ describe('checkpoint state + feed controls', () => {
     );
   });
 
-  it('labels each state with the right wording per side and the right token', () => {
+  it('labels each state with the right wording per side and a chip token pair', () => {
     expect(checkpointStateLabel('open', true)).toEqual({
       text: 'With agency',
-      className: 'text-fg-3',
+      className: 'bg-panel-3 text-fg-3',
     });
-    expect(checkpointStateLabel('open', false)).toEqual({ text: 'Open', className: 'text-fg-3' });
+    expect(checkpointStateLabel('open', false)).toEqual({
+      text: 'Open',
+      className: 'bg-panel-3 text-fg-3',
+    });
     expect(checkpointStateLabel('client_turn', true)).toEqual({
       text: 'Ready for your check',
-      className: 'text-accent',
+      className: 'bg-accent-soft text-accent',
     });
     expect(checkpointStateLabel('client_turn', false)).toEqual({
       text: 'With client',
-      className: 'text-accent',
+      className: 'bg-accent-soft text-accent',
     });
     expect(checkpointStateLabel('confirmed', true)).toEqual({
       text: 'Confirmed',
-      className: 'text-good',
+      className: 'bg-good-soft text-good',
     });
     expect(checkpointStateLabel('confirmed', false).text).toBe('Confirmed');
+  });
+
+  // Every className across the tickCircle subtree, joined, so a substring match
+  // can assert the colour treatment regardless of which span carries it.
+  const tickClasses = (done: boolean, live = false): string =>
+    elements(tickCircle(done, live))
+      .map((el) => (el.props as { className?: string }).className ?? '')
+      .join(' ');
+
+  it('renders an unconfirmed tick with a visible ghost glyph and good-family outline', () => {
+    const cls = tickClasses(false, false);
+    expect(cls).toContain('border-good'); // good-family outline
+    expect(cls).toContain('bg-good-soft'); // soft green fill
+    expect(cls).toContain('text-good'); // ghost glyph colour
+    expect(cls).not.toContain('text-transparent'); // glyph stays visible
+    expect(cls).not.toContain('opacity-0'); // glyph not faded out
+  });
+
+  it('adds the good-family halo only on a live, unconfirmed tick', () => {
+    expect(tickClasses(false, true)).toContain('ring-good-soft'); // live: halo
+    expect(tickClasses(false, false)).not.toContain('ring-good-soft'); // passive: none
+  });
+
+  it('renders a confirmed tick with the filled treatment', () => {
+    const cls = tickClasses(true);
+    expect(cls).toContain('bg-good');
+    expect(cls).toContain('text-white');
+    expect(cls).toContain('opacity-100');
+    expect(cls).not.toContain('ring-good-soft');
   });
 
   it('makes the tick live for an agency member only when the checkpoint is open', () => {
