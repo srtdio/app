@@ -45,13 +45,6 @@ function collectByType(node: ReactNode, type: string, acc: ReactElement[]): void
 // safe (no presigning in the unit env).
 const cache = {} as unknown as PresignCache;
 
-// The card embeds ActivityRowMenu, which reads window.matchMedia at render. The
-// unit env is `node`, so stub a minimal matchMedia (no DOM, no listeners fire).
-const mql = { matches: false, addEventListener: () => {}, removeEventListener: () => {} };
-(globalThis as unknown as { window: { matchMedia: () => typeof mql } }).window = {
-  matchMedia: () => mql,
-};
-
 function item(over: Partial<ActivityItem>): ActivityItem {
   return {
     id: 'e1',
@@ -112,11 +105,12 @@ describe('ActivityCard', () => {
       item({ id: 'a', title: 'Q3 Launch', eventType: 'stage_change', toStage: 'review' }),
       item({ id: 'b', title: 'Q3 Launch', eventType: 'comment' }),
     ]);
-    // One bordered, rounded card shell.
+    // A single bordered, rounded card shell, laid out as a flex row with a rail.
     expect(html).toContain('rounded-xl');
-    // Title appears exactly once (the header), never repeated per event line.
+    expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
+    // Title appears exactly once (the header row), never repeated per event line.
     expect(count(html, 'Q3 Launch')).toBe(1);
-    // Lead short line carries the event without the title.
+    // Lead actor line carries the event without the title.
     expect(html).toContain('Moved to review');
   });
 
@@ -146,17 +140,20 @@ describe('ActivityCard', () => {
     expect(read).not.toContain('aria-label="Unread"');
   });
 
-  it('falls back to a neutral icon circle when the group has no actor', () => {
+  it('renders a neutral lead rail when a non-accent group has no actor', () => {
     const html = renderCard([
       item({ id: 'a', actorName: null, eventType: 'stage_change', toStage: 'approved' }),
     ]);
-    // stage_change is neutral now: stage no longer tints the circle.
-    expect(html).toContain('rounded-full border bg-panel-2 border-border text-fg-3');
-    expect(html).not.toContain('border-good');
+    // stage_change is neutral now: stage no longer tints the rail or the glyph.
+    expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
+    expect(html).not.toContain('w-[3px] shrink-0 bg-accent');
+    expect(html).toContain('shrink-0 text-fg-3');
   });
 
-  const ACCENT_CIRCLE = 'rounded-full border bg-accent-soft border-accent-line text-accent';
-  const NEUTRAL_CIRCLE = 'rounded-full border bg-panel-2 border-border text-fg-3';
+  // The lead rail: accent for the five accent events, neutral otherwise. The 3px
+  // rail is the card's first child and the two-state colour signal.
+  const ACCENT_RAIL = 'w-[3px] shrink-0 bg-accent';
+  const NEUTRAL_RAIL = 'w-[3px] shrink-0 bg-border-strong';
 
   const ALL_EVENT_TYPES = [
     'mention',
@@ -212,14 +209,18 @@ describe('ActivityCard', () => {
     return typeof type === 'function' ? type.name : String(type);
   }
 
-  /** The icon name in the big fallback circle (actor-less card). */
+  // The event glyph is the same single inline glyph in every layout branch: the
+  // bare glyph span is the only one whose class starts with `shrink-0 text-`.
+  const GLYPH_MARKER = 'shrink-0 text-';
+
+  /** The inline glyph icon name for an actor-less card. */
   function leadIconName(eventType: string): string {
-    return iconNameInSpan({ eventType, actorName: null }, 'h-12 w-12');
+    return iconNameInSpan({ eventType, actorName: null }, GLYPH_MARKER);
   }
 
-  /** The icon name in the inline title-row glyph (card with an actor). */
+  /** The inline glyph icon name for a card that carries an actor. */
   function inlineGlyphIconName(eventType: string): string {
-    return iconNameInSpan({ eventType, actorName: 'Ann Lee' }, 'shrink-0 text-');
+    return iconNameInSpan({ eventType, actorName: 'Ann Lee' }, GLYPH_MARKER);
   }
 
   it('gives each of the 14 event types its own distinct icon, none the fallback', () => {
@@ -242,11 +243,11 @@ describe('ActivityCard', () => {
     for (const eventType of ALL_EVENT_TYPES) {
       const html = renderCard([item({ eventType, actorName: null })]);
       if (accent.has(eventType)) {
-        expect(html).toContain(ACCENT_CIRCLE);
-        expect(html).not.toContain(NEUTRAL_CIRCLE);
+        expect(html).toContain(ACCENT_RAIL);
+        expect(html).not.toContain(NEUTRAL_RAIL);
       } else {
-        expect(html).toContain(NEUTRAL_CIRCLE);
-        expect(html).not.toContain(ACCENT_CIRCLE);
+        expect(html).toContain(NEUTRAL_RAIL);
+        expect(html).not.toContain(ACCENT_RAIL);
       }
     }
     // Precisely five accent, nine neutral.
@@ -255,33 +256,32 @@ describe('ActivityCard', () => {
     expect(ALL_EVENT_TYPES.length - accentCount).toBe(9);
   });
 
-  it('renders an unrecognised event type as IconActivity in a neutral circle', () => {
+  it('renders an unrecognised event type as IconActivity on a neutral rail', () => {
     const html = renderCard([item({ eventType: 'not_a_real_event', actorName: null })]);
-    expect(html).toContain(NEUTRAL_CIRCLE);
-    expect(html).not.toContain(ACCENT_CIRCLE);
+    expect(html).toContain(NEUTRAL_RAIL);
+    expect(html).not.toContain(ACCENT_RAIL);
     expect(leadIconName('not_a_real_event')).toBe('IconActivity');
   });
 
-  // The inline title glyph: when a card has an actor the event glyph sits inline
-  // at the start of the title row (no badge, no circle), coloured by event tone.
-  // The bare glyph span is the only one whose class starts with `shrink-0 text-`.
+  // The inline event glyph: coloured by event tone. The bare glyph span is the
+  // only one whose class starts with `shrink-0 text-`.
   const ACCENT_INLINE = 'shrink-0 text-accent';
   const NEUTRAL_INLINE = 'shrink-0 text-fg-3';
 
-  it('shows the inline event glyph (not the fallback circle) when the group has an actor', () => {
+  it('shows the inline event glyph beside the actor, never a fallback circle', () => {
     const html = renderCard([item({ eventType: 'comment', actorName: 'Ann Lee' })]);
-    // The big fallback circle is not rendered when there is an avatar.
+    // The old 48px fallback circle is gone from the layout entirely.
     expect(html).not.toContain('h-12 w-12');
     // The inline glyph carries the event tone.
     expect(html).toContain(NEUTRAL_INLINE);
   });
 
-  it('gives every event type its own inline glyph over the avatar, none the fallback', () => {
+  it('gives every event type its own inline glyph, none the fallback', () => {
     const names = ALL_EVENT_TYPES.map(inlineGlyphIconName);
     expect(names).toHaveLength(14);
     expect(new Set(names).size).toBe(14);
     expect(names).not.toContain('IconActivity');
-    // The inline glyph and the fallback circle draw the same icon for a given type.
+    // The inline glyph draws the same icon whether or not the card has an actor.
     for (const eventType of ALL_EVENT_TYPES) {
       expect(inlineGlyphIconName(eventType)).toBe(leadIconName(eventType));
     }
