@@ -5,8 +5,25 @@ import type { ActivityScope, ActivityState } from '@/components/pages/activity/d
 const STATE_CHIPS: { key: ActivityState; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
+  { key: 'mentions', label: 'Mentions' },
   { key: 'snoozed', label: 'Snoozed' },
 ];
+
+/**
+ * The chip label, with the live count appended for the two counted chips exactly
+ * as the Unread chip has always done it (count folded into the label text, hidden
+ * when zero, no clamp). The Mentions chip mirrors that markup so both read the
+ * same in light and dark.
+ */
+function chipLabel(
+  item: { key: ActivityState; label: string },
+  totalUnread: number,
+  mentionCount: number,
+): string {
+  if (item.key === 'unread' && totalUnread > 0) return `Unread ${totalUnread}`;
+  if (item.key === 'mentions' && mentionCount > 0) return `Mentions ${mentionCount}`;
+  return item.label;
+}
 
 // Scope chips are single-select toggles; the 'everything' default is never a chip.
 const SCOPE_CHIPS: { key: Exclude<ActivityScope, 'everything'>; label: string }[] = [
@@ -35,6 +52,7 @@ interface ActivityFilterBarProps {
   scope: ActivityScope;
   onScopeChange: (scope: ActivityScope) => void;
   totalUnread: number;
+  mentionCount: number;
 }
 
 export function ActivityFilterBar({
@@ -43,6 +61,7 @@ export function ActivityFilterBar({
   scope,
   onScopeChange,
   totalUnread,
+  mentionCount,
 }: ActivityFilterBarProps) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
@@ -72,7 +91,7 @@ export function ActivityFilterBar({
       {STATE_CHIPS.map((item) => (
         <Chip
           key={item.key}
-          label={item.key === 'unread' && totalUnread > 0 ? `Unread ${totalUnread}` : item.label}
+          label={chipLabel(item, totalUnread, mentionCount)}
           selected={state === item.key}
           size="tap"
           className="flex-none whitespace-nowrap"

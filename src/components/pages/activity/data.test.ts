@@ -17,6 +17,7 @@ import {
   payloadStr,
   relativeTime,
   resolveBodyMentions,
+  segmentSelfMentions,
   shortLine,
   unreadCount,
   type ActivityItem,
@@ -419,6 +420,44 @@ describe('snooze + state filtering', () => {
     ];
     expect(unreadCount(all, now)).toBe(1);
   });
+
+  it('Mentions keeps read + unread mentions, drops snoozed and non-mention rows, newest first', () => {
+    const unreadMention = item({ id: 'm-unread', eventType: 'mention', readAt: null });
+    const readMention = item({ id: 'm-read', eventType: 'mention', readAt: past });
+    const snoozedMention = item({
+      id: 'm-snoozed',
+      eventType: 'mention',
+      readAt: null,
+      snoozedUntil: future,
+    });
+    const comment = item({ id: 'c', eventType: 'comment', readAt: null });
+    // Input arrives newest-first (as the server page does); order must survive.
+    const input = [unreadMention, comment, readMention, snoozedMention];
+    expect(filterByState(input, 'mentions', now).map((i) => i.id)).toEqual(['m-unread', 'm-read']);
+  });
+});
+
+describe('segmentSelfMentions', () => {
+  it('accents only the self @name and leaves other names and text plain', () => {
+    const segs = segmentSelfMentions('Hey @Alice and @Bob, ship it', 'Alice');
+    expect(segs).toEqual([
+      { text: 'Hey ', self: false },
+      { text: '@Alice', self: true },
+      { text: ' and @Bob, ship it', self: false },
+    ]);
+  });
+
+  it('does not light up a self name that is only a prefix of a longer name', () => {
+    const segs = segmentSelfMentions('ping @Alexandra now', 'Alex');
+    expect(segs).toEqual([{ text: 'ping @Alexandra now', self: false }]);
+  });
+
+  it('returns a single plain segment when selfName is null or unmatched', () => {
+    expect(segmentSelfMentions('no mentions here', null)).toEqual([
+      { text: 'no mentions here', self: false },
+    ]);
+    expect(segmentSelfMentions('hi @Bob', 'Alice')).toEqual([{ text: 'hi @Bob', self: false }]);
+  });
 });
 
 describe('filterByScope', () => {
@@ -804,5 +843,117 @@ describe('fetchActivityEntries enrichment', () => {
       expect(activityLine(entry)).toBe('3 points sent on Q3 Launch');
       expect(cardBodyLine(entry)).toBe('3 points sent');
     }
+  });
+
+  it('resolves a mention preview body from the joined comment (no extra fetch)', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e-mention',
+          event_type: 'mention',
+          entity_type: 'post',
+          entity_id: 'p1',
+          payload: { comment_id: 'c1' },
+        }),
+      ]),
+      comments: ok([
+        {
+          id: 'c1',
+          author_user_id: 'u-alice',
+          body: 'Please review @[00000000-0000-4000-8000-000000000002]',
+        },
+      ]),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch' }]),
+      users: ok([
+        { id: 'u-alice', display_name: 'Alice', avatar_url: null },
+        { id: '00000000-0000-4000-8000-000000000002', display_name: 'Bob', avatar_url: null },
+      ]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data[0]?.eventType).toBe('mention');
+      // The mention token is resolved to @Name; the raw @[uuid] never survives.
+      expect(res.data[0]?.body).toBe('Please review @Bob');
+    }
+  });
+});
+
+// A recording fake that captures every builder call so the query the loader
+// composes (event_type filter + keyset `before` + DESC order + page-size limit)
+// can be asserted directly. Only inbox_entries is exercised here; the enrichment
+// joins see empty tables and degrade to null, which is fine for query assertions.
+describe('fetchActivityEntries query composition', () => {
+  type QueryResult = { data: Record<string, unknown>[] | null; error: { message: string } | null };
+  type FakeClient = Parameters<typeof fetchActivityEntries>[0];
+
+  interface Call {
+    method: string;
+    args: unknown[];
+  }
+
+  function recordingClient(inboxRows: Record<string, unknown>[]): {
+    client: FakeClient;
+    calls: Call[];
+  } {
+    const calls: Call[] = [];
+    function builder(result: QueryResult, record: boolean): Record<string, unknown> {
+      const self: Record<string, unknown> = {};
+      for (const method of ['select', 'eq', 'is', 'order', 'limit', 'lt', 'like', 'in']) {
+        self[method] = (...args: unknown[]) => {
+          if (record) calls.push({ method, args });
+          return self;
+        };
+      }
+      self.then = (
+        onfulfilled: (v: QueryResult) => unknown,
+        onrejected?: (e: unknown) => unknown,
+      ) => Promise.resolve(result).then(onfulfilled, onrejected);
+      return self;
+    }
+    const client = {
+      from(table: string) {
+        const isInbox = table === 'inbox_entries';
+        return builder(
+          isInbox ? { data: inboxRows, error: null } : { data: [], error: null },
+          isInbox,
+        );
+      },
+    };
+    return { client: client as unknown as FakeClient, calls };
+  }
+
+  const hasCall = (
+    calls: { method: string; args: unknown[] }[],
+    method: string,
+    args: unknown[],
+  ): boolean =>
+    calls.some((c) => c.method === method && JSON.stringify(c.args) === JSON.stringify(args));
+
+  it('applies the event_type filter when eventType is given', async () => {
+    const { client, calls } = recordingClient([]);
+    await fetchActivityEntries(client, 'w1', { eventType: 'mention' });
+    expect(hasCall(calls, 'eq', ['event_type', 'mention'])).toBe(true);
+    expect(hasCall(calls, 'eq', ['workspace_id', 'w1'])).toBe(true);
+    expect(hasCall(calls, 'order', ['created_at', { ascending: false }])).toBe(true);
+    expect(hasCall(calls, 'limit', [50])).toBe(true);
+  });
+
+  it('omits the event_type filter when eventType is absent', async () => {
+    const { client, calls } = recordingClient([]);
+    await fetchActivityEntries(client, 'w1');
+    expect(calls.some((c) => c.method === 'eq' && c.args[0] === 'event_type')).toBe(false);
+  });
+
+  it('preserves keyset pagination alongside the event_type filter', async () => {
+    const { client, calls } = recordingClient([]);
+    await fetchActivityEntries(client, 'w1', {
+      before: '2026-06-14T00:00:00.000Z',
+      eventType: 'mention',
+    });
+    expect(hasCall(calls, 'lt', ['created_at', '2026-06-14T00:00:00.000Z'])).toBe(true);
+    expect(hasCall(calls, 'eq', ['event_type', 'mention'])).toBe(true);
+    expect(hasCall(calls, 'order', ['created_at', { ascending: false }])).toBe(true);
+    expect(hasCall(calls, 'limit', [50])).toBe(true);
   });
 });

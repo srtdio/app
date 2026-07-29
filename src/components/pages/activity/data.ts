@@ -7,7 +7,7 @@
 
 import type { Client, Result } from '@srtdio/rpc';
 import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '@srtdio/rpc';
-import type { Database, Json } from '@srtdio/schemas';
+import type { Database, InboxEventTypeValue, Json } from '@srtdio/schemas';
 import { INBOX_EVENT_TYPES } from '@srtdio/schemas';
 import { parseMentions } from '@srtdio/comments';
 import { readProfiles } from '@/lib/chat-reads';
@@ -72,8 +72,16 @@ export function warnUnknownEventType(eventType: string): void {
   logger.warn('activity: unknown inbox event_type (app/DB drift)', { eventType });
 }
 
+/**
+ * The single inbox event_type the Mentions chip filters on. Typed against the
+ * canonical union so it tracks INBOX_EVENT_TYPES (the one source of truth) rather
+ * than being a free-floating literal; the Mentions server filter and the unread
+ * mention count both reference this constant.
+ */
+export const MENTION_EVENT_TYPE: InboxEventTypeValue = 'mention';
+
 /** The state chips: which slice of the inbox is shown. */
-export type ActivityState = 'all' | 'unread' | 'snoozed';
+export type ActivityState = 'all' | 'unread' | 'mentions' | 'snoozed';
 
 /** The scope chips. 'everything' is the no-filter sentinel. */
 export type ActivityScope = 'everything' | 'posts' | 'briefs' | 'people' | 'groups' | 'clients';
@@ -356,7 +364,11 @@ export function isSnoozed(item: ActivityItem, nowMs: number): boolean {
   return !Number.isNaN(until) && until > nowMs;
 }
 
-/** Apply the state chip: All hides snoozed; Unread is unread + not snoozed. */
+/**
+ * Apply the state chip: All hides snoozed; Unread is unread + not snoozed;
+ * Mentions is every mention (read AND unread) that is not snoozed. Input order is
+ * preserved, so a newest-first page stays newest-first through the filter.
+ */
 export function filterByState(
   items: readonly ActivityItem[],
   state: ActivityState,
@@ -367,10 +379,54 @@ export function filterByState(
       return items.filter((item) => isSnoozed(item, nowMs));
     case 'unread':
       return items.filter((item) => item.readAt === null && !isSnoozed(item, nowMs));
+    case 'mentions':
+      return items.filter(
+        (item) => item.eventType === MENTION_EVENT_TYPE && !isSnoozed(item, nowMs),
+      );
     case 'all':
     default:
       return items.filter((item) => !isSnoozed(item, nowMs));
   }
+}
+
+/** One segment of a mention preview: the current user's own @name (self) is set
+ *  apart so the card can accent just that run and leave every other name plain. */
+export interface MentionSegment {
+  text: string;
+  self: boolean;
+}
+
+const NAME_CHAR = /[\p{L}\p{N}]/u;
+
+/**
+ * Split a resolved comment body into runs, marking the current user's own
+ * `@<selfName>` occurrences so only those get accented. Pure string work on the
+ * already-resolved body (no `@[uuid]` tokens remain): a match counts only at a
+ * name boundary (the char before `@` and the char after the name are not
+ * name characters), so `@Al` never lights up inside `@Alex`. A null/empty
+ * selfName, or no match, yields a single non-self segment.
+ */
+export function segmentSelfMentions(body: string, selfName: string | null): MentionSegment[] {
+  if (selfName === null || selfName.length === 0) return [{ text: body, self: false }];
+  const token = `@${selfName}`;
+  const segments: MentionSegment[] = [];
+  let last = 0;
+  let idx = body.indexOf(token);
+  while (idx !== -1) {
+    const beforeOk = idx === 0 || !NAME_CHAR.test(body[idx - 1] ?? '');
+    const afterIdx = idx + token.length;
+    const afterOk = afterIdx >= body.length || !NAME_CHAR.test(body[afterIdx] ?? '');
+    if (beforeOk && afterOk) {
+      if (idx > last) segments.push({ text: body.slice(last, idx), self: false });
+      segments.push({ text: token, self: true });
+      last = afterIdx;
+      idx = body.indexOf(token, afterIdx);
+    } else {
+      idx = body.indexOf(token, idx + 1);
+    }
+  }
+  if (last < body.length) segments.push({ text: body.slice(last), self: false });
+  return segments.length > 0 ? segments : [{ text: body, self: false }];
 }
 
 /** Apply the scope chip. 'everything' is the no-filter sentinel. */
@@ -531,19 +587,23 @@ interface FirstImageRow {
  * one (comments / posts / briefs by id) and wave two (users by id). Every join is
  * best-effort: a failed sub-query leaves its field null rather than failing the
  * feed. Soft-deleted rows are excluded; the inbox is a permanent surface. Pass
- * `before` (the oldest loaded created_at) to fetch the next, older page.
+ * `before` (the oldest loaded created_at) to fetch the next, older page. Pass
+ * `eventType` to filter server-side to a single event_type (the Mentions chip),
+ * so older matches are never hidden behind the newest-page cap: the DESC order,
+ * the keyset `before` cursor and the page size are all preserved unchanged.
  */
 export async function fetchActivityEntries(
   client: Client,
   workspaceId: string,
-  input: { before?: string } = {},
+  input: { before?: string; eventType?: string | undefined } = {},
 ): Promise<LoadResult> {
   const base = client
     .from('inbox_entries')
     .select(SELECT_COLS)
     .eq('workspace_id', workspaceId)
     .is('deleted_at', null);
-  const scoped = input.before !== undefined ? base.lt('created_at', input.before) : base;
+  const typed = input.eventType !== undefined ? base.eq('event_type', input.eventType) : base;
+  const scoped = input.before !== undefined ? typed.lt('created_at', input.before) : typed;
   const res = await scoped.order('created_at', { ascending: false }).limit(ACTIVITY_PAGE_SIZE);
   if (res.error) return { ok: false, error: res.error.message };
 
@@ -712,11 +772,14 @@ export async function fetchActivityEntries(
     item.actorName = actorUserId !== null ? (userNames.get(actorUserId) ?? null) : null;
     item.actorAvatarUrl = actorUserId !== null ? (userAvatars.get(actorUserId) ?? null) : null;
 
-    // The preview body: a comment event shows its comment text; a checkpoints_added
-    // event shows the first point in the batch. Mention tokens resolve to @Name here
-    // so the card never prints a raw @[uuid]; the same resolution the thread applies.
+    // The preview body: a comment OR mention event shows its comment text (the
+    // mention's comment_id is already joined via COMMENT_EVENTS, so this adds no
+    // fetch); a checkpoints_added event shows the first point in the batch. Mention
+    // tokens resolve to @Name here so the card never prints a raw @[uuid]; the same
+    // resolution the thread applies.
     const rawBody =
-      item.eventType === 'comment' && item.commentId !== null
+      (item.eventType === 'comment' || item.eventType === MENTION_EVENT_TYPE) &&
+      item.commentId !== null
         ? (commentBodies.get(item.commentId) ?? null)
         : item.eventType === 'checkpoints_added' && item.batchId !== null
           ? (batchBodies.get(item.batchId) ?? null)

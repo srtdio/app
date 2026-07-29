@@ -6,7 +6,7 @@
 // like the Activity page's own loader, and reuses readProfiles for author display.
 
 import type { Client, Result } from '@srtdio/rpc';
-import { mapEntry } from '@/components/pages/activity/data';
+import { MENTION_EVENT_TYPE, mapEntry } from '@/components/pages/activity/data';
 import { readProfiles } from '@/lib/chat-reads';
 import { pickNewest, type EnrichedNew, type InboxRow } from '@/lib/inbox/inbox-live';
 
@@ -39,6 +39,29 @@ export async function fetchInboxUnreadCount(
     .is('deleted_at', null)
     .or(`snoozed_until.is.null,snoozed_until.lte.${params.nowIso}`);
   if (res.error) return fail(`fetchInboxUnreadCount: ${res.error.message}`);
+  return { ok: true, data: res.count ?? 0 };
+}
+
+/**
+ * HEAD count of the caller's actionable unread mentions: identical to
+ * fetchInboxUnreadCount (unread, not soft-deleted, not currently snoozed) but
+ * narrowed to event_type='mention'. Drives the Mentions chip count. One round
+ * trip, no rows transferred.
+ */
+export async function fetchUnreadMentionCount(
+  client: Client,
+  params: { workspaceId: string; userId: string; nowIso: string },
+): Promise<Result<number>> {
+  const res = await client
+    .from('inbox_entries')
+    .select('id', { count: 'exact', head: true })
+    .eq('workspace_id', params.workspaceId)
+    .eq('user_id', params.userId)
+    .eq('event_type', MENTION_EVENT_TYPE)
+    .is('read_at', null)
+    .is('deleted_at', null)
+    .or(`snoozed_until.is.null,snoozed_until.lte.${params.nowIso}`);
+  if (res.error) return fail(`fetchUnreadMentionCount: ${res.error.message}`);
   return { ok: true, data: res.count ?? 0 };
 }
 

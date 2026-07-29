@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHead } from '@/components/shell/PageHead';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
-import { IconActivity } from '@/components/ui/icons';
+import { IconActivity, IconAt } from '@/components/ui/icons';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
@@ -12,6 +12,7 @@ import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
 import {
   ACTIVITY_PAGE_SIZE,
+  MENTION_EVENT_TYPE,
   bucketActorNames,
   entityHref,
   fetchActivityEntries,
@@ -29,8 +30,11 @@ import {
   type ActivityState,
   type SnoozeKind,
 } from '@/components/pages/activity/data';
+import { fetchUnreadMentionCount } from '@/lib/inbox/inbox-reads';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
+import { useSession } from '@/lib/session-context';
+import { useCurrentProfile } from '@/lib/use-current-profile';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSort } from '@/lib/use-sort';
 import { PresignCache } from '@/lib/asset-presign';
@@ -63,10 +67,19 @@ export function ActivityPage() {
   const navigate = useNavigate();
   const { workspaceId, workspaceKey } = useWorkspace();
   const newTrace = useNewTrace();
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
+  const { profile } = useCurrentProfile();
+  const selfName = profile?.display_name ?? null;
 
   const [state, setState] = useState<ActivityState>('all');
   const [scope, setScope] = useState<ActivityScope>('everything');
   const { value: sort, setValue: setSort } = useSort<ActivityDirection>('activity', 'newest');
+
+  // The Mentions chip filters server-side to a single event_type so older mentions
+  // are never hidden behind the newest-page cap; every other state stays a
+  // client-side slice of the same all-types page (undefined = no server filter).
+  const eventType = state === 'mentions' ? MENTION_EVENT_TYPE : undefined;
 
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,6 +87,7 @@ export function ActivityPage() {
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [mentionCount, setMentionCount] = useState(0);
   const { toasts, push, dismiss } = useToasts();
 
   // One presign cache for the whole feed: it bounds concurrency and caches URLs
@@ -91,11 +105,17 @@ export function ActivityPage() {
     [],
   );
 
+  // Load page one for the active view. Because `eventType` is a dependency, a
+  // switch to or away from the Mentions chip re-runs this and replaces `items`
+  // wholesale, which resets pagination: the keyset cursor lives in the loaded
+  // rows (loadMore reads the oldest), so clearing them clears the cursor and
+  // hasMore is recomputed here. Other state chips leave eventType unchanged and
+  // never refetch (they slice the loaded page client-side).
   const loadActivity = useCallback(async () => {
     if (workspaceId === null) return;
     setLoading(true);
     setError(null);
-    const result = await fetchActivityEntries(supabase, workspaceId);
+    const result = await fetchActivityEntries(supabase, workspaceId, { eventType });
     setLoading(false);
     setNowMs(Date.now());
     if (!result.ok) {
@@ -104,16 +124,17 @@ export function ActivityPage() {
     }
     setItems(result.data);
     setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
-  }, [workspaceId]);
+  }, [workspaceId, eventType]);
 
   // Fetch the next, older page (rows strictly before the oldest loaded created_at)
-  // and append it, re-running enrichment for just the new rows.
+  // and append it, re-running enrichment for just the new rows. The active
+  // eventType is carried so pagination stays within the Mentions filter.
   const loadMore = useCallback(async () => {
     if (workspaceId === null) return;
     const oldest = items[items.length - 1]?.createdAt;
     if (oldest === undefined) return;
     setLoadingMore(true);
-    const result = await fetchActivityEntries(supabase, workspaceId, { before: oldest });
+    const result = await fetchActivityEntries(supabase, workspaceId, { before: oldest, eventType });
     setLoadingMore(false);
     if (!result.ok) {
       push('Could not load more activity');
@@ -121,11 +142,27 @@ export function ActivityPage() {
     }
     setItems((prev) => [...prev, ...result.data]);
     setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
-  }, [workspaceId, items, push]);
+  }, [workspaceId, eventType, items, push]);
+
+  // The unread-mention count for the Mentions chip. Independent of the active
+  // view (it is a HEAD count), so it is not affected by the state/scope chips.
+  const loadMentionCount = useCallback(async () => {
+    if (workspaceId === null || userId === null) return;
+    const res = await fetchUnreadMentionCount(supabase, {
+      workspaceId,
+      userId,
+      nowIso: new Date().toISOString(),
+    });
+    if (res.ok) setMentionCount(res.data);
+  }, [workspaceId, userId]);
 
   useEffect(() => {
     void loadActivity();
   }, [loadActivity]);
+
+  useEffect(() => {
+    void loadMentionCount();
+  }, [loadMentionCount]);
 
   // Reset filters when the active workspace changes.
   useEffect(() => {
@@ -196,10 +233,11 @@ export function ActivityPage() {
           void loadActivity();
           return;
         }
+        void loadMentionCount();
         window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
       });
     },
-    [workspaceId, newTrace, markReadLocal, push, loadActivity],
+    [workspaceId, newTrace, markReadLocal, push, loadActivity, loadMentionCount],
   );
 
   // Workspace-wide: mark every currently-loaded unread, non-snoozed item read,
@@ -220,9 +258,10 @@ export function ActivityPage() {
         void loadActivity();
         return;
       }
+      void loadMentionCount();
       window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
     });
-  }, [workspaceId, items, nowMs, newTrace, push, loadActivity]);
+  }, [workspaceId, items, nowMs, newTrace, push, loadActivity, loadMentionCount]);
 
   // Optimistic snooze: flip the row's snoozed_until locally first, then call the
   // proc; on failure revert and surface the error (matches handleMarkRead).
@@ -275,6 +314,7 @@ export function ActivityPage() {
         scope={scope}
         onScopeChange={setScope}
         totalUnread={totalUnread}
+        mentionCount={mentionCount}
       />
 
       {error !== null ? (
@@ -289,11 +329,19 @@ export function ActivityPage() {
       ) : listLoading ? (
         <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading activity</div>
       ) : buckets.length === 0 ? (
-        <EmptyState
-          icon={<IconActivity size={24} />}
-          title="You are all caught up"
-          description="Activity across posts, briefs and people will appear here."
-        />
+        state === 'mentions' ? (
+          <EmptyState
+            icon={<IconAt size={24} />}
+            title="No mentions yet"
+            description="When someone types @ and your name in a comment, it lands here."
+          />
+        ) : (
+          <EmptyState
+            icon={<IconActivity size={24} />}
+            title="You are all caught up"
+            description="Activity across posts, briefs and people will appear here."
+          />
+        )
       ) : (
         <div className="pb-6">
           {buckets.map((bucket) => {
@@ -319,6 +367,7 @@ export function ActivityPage() {
                       onOpenEntry={handleOpenEntry}
                       onSnooze={handleSnooze}
                       onMarkRead={handleMarkRead}
+                      selfName={selfName}
                     />
                   ))}
                 </div>
