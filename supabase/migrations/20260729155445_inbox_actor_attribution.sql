@@ -88,7 +88,7 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.inbox_entry_create(uuid,uuid,text,text,text,text,text,text,jsonb,uuid,uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.inbox_entry_create(uuid,uuid,text,text,text,text,text,text,jsonb,uuid,uuid) FROM PUBLIC, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Seven procs that INSERT into inbox_entries directly: each fan-out now stamps
