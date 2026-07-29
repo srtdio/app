@@ -309,7 +309,8 @@ Inbox is the only permanent in-app event surface. Email is out-of-app catch-up, 
 | Column | Type | Notes |
 | --- | --- | --- |
 | id | uuid | PK part |
-| user_id | uuid | FK auth.users.id |
+| user_id | uuid | FK auth.users.id (the recipient) |
+| actor_user_id | uuid | nullable, FK public.users.id ON DELETE SET NULL: the user who performed the event, distinct from user_id which is the recipient |
 | workspace_id | uuid | FK workspaces.id |
 | event_type | text | see enums (publish/approval/plan values removed) |
 | entity_type | text | nullable: post / brief / plan_cell / plan_period / chat_channel / workspace (see section 12) |
@@ -321,7 +322,7 @@ Inbox is the only permanent in-app event surface. Email is out-of-app catch-up, 
 | read_at / snoozed_until / email_sent_at / deleted_at | timestamptz | nullable |
 | created_at | timestamptz | PK part, default now() |
 
-PK (id, created_at). Partitions: 2026_05, 2026_06, 2026_07.
+PK (id, created_at). Partitions: 2026_05, 2026_06, 2026_07. actor_user_id is set by the seven procs that fan out into inbox_entries (checkpoint_ask, checkpoint_send_back, comment_batch_create, comment_create, comment_resolve, post_ready_notify, stage_transition); it is permanently null on stage_change and post_ready rows written before this change, because the actor was never recorded at the time.
 
 ### email_threads
 

@@ -62,6 +62,7 @@ describe('INBOX_EVENT_TYPES (canonical event_type list)', () => {
       payload: {},
       read_at: null,
       snoozed_until: null,
+      actor_user_id: null,
       email_sent_at: null,
       created_at: '2026-07-17T00:00:00.000Z',
       deleted_at: null,

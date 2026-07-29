@@ -21,6 +21,7 @@ function row(over: Partial<InboxRow>): InboxRow {
     payload: {},
     read_at: null,
     snoozed_until: null,
+    actor_user_id: null,
     email_sent_at: null,
     deleted_at: null,
     created_at: '2026-06-14T00:00:00.000Z',
