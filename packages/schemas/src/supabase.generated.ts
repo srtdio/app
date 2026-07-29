@@ -2984,6 +2984,7 @@ export type Database = {
       }
       inbox_entries: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3001,6 +3002,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3018,6 +3020,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3036,6 +3039,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "inbox_entries_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "inbox_entries_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
@@ -3046,6 +3056,7 @@ export type Database = {
       }
       inbox_entries_2026_05: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3063,6 +3074,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3080,6 +3092,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3100,6 +3113,7 @@ export type Database = {
       }
       inbox_entries_2026_06: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3117,6 +3131,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3134,6 +3149,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3154,6 +3170,7 @@ export type Database = {
       }
       inbox_entries_2026_07: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3171,6 +3188,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3188,6 +3206,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3208,6 +3227,7 @@ export type Database = {
       }
       inbox_entries_2026_08: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3225,6 +3245,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3242,6 +3263,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3262,6 +3284,7 @@ export type Database = {
       }
       inbox_entries_2026_09: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3279,6 +3302,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3296,6 +3320,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3316,6 +3341,7 @@ export type Database = {
       }
       inbox_entries_2026_10: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3333,6 +3359,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3350,6 +3377,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3370,6 +3398,7 @@ export type Database = {
       }
       inbox_entries_2026_11: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3387,6 +3416,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3404,6 +3434,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3424,6 +3455,7 @@ export type Database = {
       }
       inbox_entries_2026_12: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3441,6 +3473,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3458,6 +3491,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3478,6 +3512,7 @@ export type Database = {
       }
       inbox_entries_2027_01: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3495,6 +3530,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3512,6 +3548,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3532,6 +3569,7 @@ export type Database = {
       }
       inbox_entries_2027_02: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3549,6 +3587,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3566,6 +3605,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3586,6 +3626,7 @@ export type Database = {
       }
       inbox_entries_2027_03: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3603,6 +3644,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3620,6 +3662,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3640,6 +3683,7 @@ export type Database = {
       }
       inbox_entries_2027_04: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3657,6 +3701,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3674,6 +3719,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3694,6 +3740,7 @@ export type Database = {
       }
       inbox_entries_2027_05: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3711,6 +3758,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3728,6 +3776,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3748,6 +3797,7 @@ export type Database = {
       }
       inbox_entries_2027_06: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3765,6 +3815,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3782,6 +3833,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3802,6 +3854,7 @@ export type Database = {
       }
       inbox_entries_2027_07: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3819,6 +3872,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3836,6 +3890,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3856,6 +3911,7 @@ export type Database = {
       }
       inbox_entries_2027_08: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3873,6 +3929,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3890,6 +3947,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3910,6 +3968,7 @@ export type Database = {
       }
       inbox_entries_2027_09: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3927,6 +3986,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3944,6 +4004,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3964,6 +4025,7 @@ export type Database = {
       }
       inbox_entries_2027_10: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -3981,6 +4043,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -3998,6 +4061,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -4018,6 +4082,7 @@ export type Database = {
       }
       inbox_entries_2027_11: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -4035,6 +4100,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -4052,6 +4118,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -4072,6 +4139,7 @@ export type Database = {
       }
       inbox_entries_2027_12: {
         Row: {
+          actor_user_id: string | null
           created_at: string
           deleted_at: string | null
           email_sent_at: string | null
@@ -4089,6 +4157,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -4106,6 +4175,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          actor_user_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email_sent_at?: string | null
@@ -5181,6 +5251,7 @@ export type Database = {
       has_capability: { Args: { p_capability: string }; Returns: boolean }
       inbox_entry_create: {
         Args: {
+          p_actor_user_id?: string
           p_entity_id: string
           p_entity_type: string
           p_event_type: string
@@ -5193,6 +5264,40 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: string
+      }
+      inbox_list: {
+        Args: {
+          p_before: string
+          p_limit: number
+          p_scope: string
+          p_since: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          actor_avatar_url: string
+          actor_name: string
+          actor_user_id: string
+          attachment_count: number
+          created_at: string
+          entity_id: string
+          entity_type: string
+          entry_id: string
+          event_type: string
+          group_count: number
+          media_duration_ms: number
+          media_external_url: string
+          media_height: number
+          media_kind: string
+          media_source_key: string
+          media_thumb_key: string
+          media_width: number
+          payload: Json
+          quote: string
+          read_at: string
+          tier: string
+          title: string
+        }[]
       }
       inbox_mark_all_read: {
         Args: { p_trace_id: string; p_workspace_id: string }
