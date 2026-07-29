@@ -3,11 +3,11 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconCheck, IconMore } from '@/components/ui/icons';
+import { IconCheck, IconCopy, IconMore } from '@/components/ui/icons';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
-import { relativeLong } from '@/lib/relative-time';
+import { relativeLong, relativeShort } from '@/lib/relative-time';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
 import { supabase } from '@/lib/supabase';
@@ -401,7 +401,7 @@ export function checkpointStateLabel(state: CheckpointState, isClient: boolean):
       return { text: isClient ? 'With agency' : 'Open', className: 'bg-panel-3 text-fg-3' };
     case 'client_turn':
       return {
-        text: isClient ? 'Ready for your check' : 'With client',
+        text: isClient ? 'Your turn' : 'With client',
         className: 'bg-accent-soft text-accent',
       };
     case 'confirmed':
@@ -497,6 +497,18 @@ export function commentActions(
   if (tombstone) return { canCopy: false, canEdit: false, canDelete: false };
   const mine = canModifyComment(comment, currentUserId);
   return { canCopy: true, canEdit: mine, canDelete: mine };
+}
+
+/** Which row-action control a point offers. 'menu' when edit or delete is
+ *  available (the full kebab popover); else 'copy' when only copy remains (a
+ *  direct copy button, no overflow menu for a single item); else 'none'. This is
+ *  deliberately not an author check: a frozen point returns canCopy true with
+ *  canEdit/canDelete false even for its own author, so it gets the direct copy
+ *  button too. */
+export type PointMenuMode = 'none' | 'copy' | 'menu';
+export function pointMenuMode(actions: CommentActions): PointMenuMode {
+  if (actions.canEdit || actions.canDelete) return 'menu';
+  return actions.canCopy ? 'copy' : 'none';
 }
 
 /** The server caps a ledger point body at 50 whitespace-separated words; the
@@ -1245,7 +1257,13 @@ export function Comments({
           <span className="ml-auto shrink-0 text-xs text-fg-3 tabular-nums">
             {relativeLong(comment.created_at, new Date())}
           </span>
-          {!editing ? (
+          {!editing && pointMenuMode(actions) === 'copy' ? (
+            <div className="shrink-0">
+              <IconButton label="Copy text" onClick={() => void handleCopy(comment)}>
+                <IconCopy size={18} />
+              </IconButton>
+            </div>
+          ) : !editing && pointMenuMode(actions) === 'menu' ? (
             <div className="relative shrink-0">
               <IconButton
                 label="Comment actions"
@@ -1558,7 +1576,17 @@ export function Comments({
                         </>
                       )}
                     </div>
-                    {!tombstone && !editing && actions.canCopy ? (
+                    {!editing && pointMenuMode(actions) === 'copy' ? (
+                      <div className="shrink-0">
+                        <IconButton
+                          label="Copy text"
+                          className="opacity-70"
+                          onClick={() => void handleCopy(comment)}
+                        >
+                          <IconCopy size={18} />
+                        </IconButton>
+                      </div>
+                    ) : !editing && pointMenuMode(actions) === 'menu' ? (
                       <div className="relative shrink-0">
                         <IconButton
                           label="Point actions"
@@ -1620,14 +1648,14 @@ export function Comments({
                   <div className="mt-2 flex items-center gap-2 pl-7">
                     <span
                       className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium',
+                        'inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.06em]',
                         label.className,
                       )}
                     >
                       {label.text}
                     </span>
-                    <span className="font-mono text-[11px] tabular-nums text-fg-3">
-                      {relativeLong(comment.created_at, new Date())}
+                    <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-fg-3">
+                      {relativeShort(comment.created_at, new Date())}
                     </span>
                     {!tombstone ? (
                       <Button
