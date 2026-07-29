@@ -26,7 +26,6 @@ import {
   IconTarget,
   type IconProps,
 } from '@/components/ui/icons';
-import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
 import {
   MENTION_EVENT_TYPE,
   activityLine,
@@ -97,12 +96,7 @@ function leadTone(item: ActivityItem): LeadTone {
   return ACCENT_EVENTS.has(item.eventType) ? 'accent' : 'neutral';
 }
 
-const TONE_CIRCLE: Record<LeadTone, string> = {
-  accent: 'bg-accent-soft border-accent-line text-accent',
-  neutral: 'bg-panel-2 border-border text-fg-3',
-};
-
-/** The tone of the inline title-row glyph: the bare glyph coloured by event tone. */
+/** The tone of the inline actor-row glyph: the bare glyph coloured by event tone. */
 const TONE_INLINE: Record<LeadTone, string> = {
   accent: 'text-accent',
   neutral: 'text-fg-3',
@@ -132,7 +126,7 @@ const LEAD_ICON: Record<InboxEventTypeValue, ComponentType<IconProps>> = {
   system: IconBroadcast,
 };
 
-/** The lead event's glyph: the big circle glyph (no actor) and the inline title glyph. */
+/** The lead event's glyph, drawn inline beside the actor at the given size. */
 function leadIcon(item: ActivityItem, size = 24): ReactElement {
   const Icon = LEAD_ICON[item.eventType as InboxEventTypeValue] ?? IconActivity;
   return <Icon size={size} />;
@@ -175,17 +169,50 @@ const SCOPE_TAG: Record<string, string> = {
   clients: 'Clients',
 };
 
-const UNREAD_DOT = (
-  <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Unread" role="status" />
-);
+/** "1 point" / "N points". UI vocabulary: the DB stores these as checkpoints. */
+function pointsPhrase(n: number): string {
+  return `${n} ${n === 1 ? 'point' : 'points'}`;
+}
 
 /**
- * One digest entry as a single contained card. The entity title is the header,
- * shown once; the lead event's short line sits beneath it with the timestamp and a
- * scope tag. A threaded group (>1 entry) gets a "+N more" toggle that expands the
- * remaining events inside the same card, each its own short line and timestamp.
- * The card body opens the thread (marking every entry read); the kebab acts on the
- * lead and stops propagation so it never triggers that.
+ * The short actor line for the top of a card. It carries NO entity name (the title
+ * row already carries the entity): just who did what. `who` is the resolved actor
+ * display name, or null when the group has no actor, in which case each event type
+ * degrades to a name-free phrase. Unknown/other event types read as the bare actor
+ * name, or fall back to the full activity line when there is no actor.
+ */
+function actorLine(item: ActivityItem, who: string | null): string {
+  switch (item.eventType) {
+    case 'comment':
+      return who !== null ? `${who} commented` : 'New comment';
+    case 'mention':
+      return who !== null ? `${who} mentioned you` : 'New mention';
+    case 'comment_resolved':
+      return who !== null ? `${who} resolved a thread` : 'Thread resolved';
+    case 'checkpoints_added': {
+      const pts = item.pointsAdded;
+      if (pts === null) return who !== null ? `${who} sent points` : 'Points sent';
+      return who !== null ? `${who} sent ${pointsPhrase(pts)}` : `${pointsPhrase(pts)} sent`;
+    }
+    case 'checkpoint_asked':
+      return who !== null ? `${who} asked a question` : 'Question asked';
+    case 'checkpoint_reopened':
+      return who !== null ? `${who} reopened a point` : 'Point reopened';
+    case 'stage_change':
+      return `Moved to ${item.toStage ?? 'a new stage'}`;
+    case 'post_ready':
+      return 'Ready for review';
+    default:
+      return who !== null ? who : activityLine(item);
+  }
+}
+
+/**
+ * One digest entry as a single contained card. The card is a flex row: a 3px lead
+ * rail, then a column holding the content row (actor line, entity title, body,
+ * meta) beside a full-height media tile flush to the card's right edge. A threaded
+ * group (>1 entry) gets a "+N more" footer that expands the remaining events inside
+ * the same card. The content row opens the thread (marking every entry read).
  */
 export function ActivityCard({
   group,
@@ -194,8 +221,6 @@ export function ActivityCard({
   presignEnabled,
   onOpenGroup,
   onOpenEntry,
-  onSnooze,
-  onMarkRead,
   selfName,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -212,6 +237,7 @@ export function ActivityCard({
   const actorEntry = group.find((entry) => entry.actorName !== null) ?? null;
   const actorName = actorEntry?.actorName ?? null;
   const actorAvatarUrl = actorEntry?.actorAvatarUrl ?? null;
+  const tone = leadTone(lead);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -223,144 +249,145 @@ export function ActivityCard({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl border bg-panel transition-colors',
+        'flex overflow-hidden rounded-xl border bg-panel transition-colors',
         unread ? 'border-accent-line' : 'border-border',
       )}
     >
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onOpenGroup(group)}
-        onKeyDown={onKeyDown}
-        className="group flex min-h-[44px] cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-panel-2 md:px-5"
-      >
-        {actorName !== null ? (
-          <span className="shrink-0">
-            <Avatar
-              name={actorName}
-              {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
-              size="xl"
-            />
-          </span>
-        ) : (
-          <span
-            className={cn(
-              'flex h-12 w-12 shrink-0 items-center justify-center rounded-full border',
-              TONE_CIRCLE[leadTone(lead)],
-            )}
-          >
-            {leadIcon(lead)}
-          </span>
-        )}
+        aria-hidden="true"
+        className={cn('w-[3px] shrink-0', tone === 'accent' ? 'bg-accent' : 'bg-border-strong')}
+      />
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {actorName !== null ? (
-              <span aria-hidden="true" className={cn('shrink-0', TONE_INLINE[leadTone(lead)])}>
+      <div className="min-w-0 flex-1">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpenGroup(group)}
+          onKeyDown={onKeyDown}
+          className="flex cursor-pointer items-stretch transition-colors hover:bg-panel-2"
+        >
+          <div className="min-w-0 flex-1 py-[14px] pl-[14px] pr-3">
+            <div className="mb-1.5 flex items-center gap-[7px]">
+              {actorName !== null ? (
+                <Avatar
+                  name={actorName}
+                  {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
+                  size="sm"
+                />
+              ) : null}
+              <span aria-hidden="true" className={cn('shrink-0', TONE_INLINE[tone])}>
                 {leadIcon(lead, 14)}
               </span>
+              <span className="truncate text-xs font-medium text-fg-3">
+                {actorLine(lead, actorName)}
+              </span>
+              {unread ? (
+                <span
+                  className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+                  aria-label="Unread"
+                  role="status"
+                />
+              ) : null}
+            </div>
+
+            <p className="truncate text-[15px] font-semibold leading-[1.3] text-fg">{title}</p>
+
+            {hasEntity ? (
+              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2">
+                {cardBodyLine(lead)}
+              </p>
             ) : null}
-            <p className={cn('truncate text-sm', unread ? 'font-medium text-fg' : 'text-fg-2')}>
-              {title}
-            </p>
-            {unread ? UNREAD_DOT : null}
+
+            {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
+              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+                {mentionPreview(lead.body, selfName)}
+              </p>
+            ) : null}
+
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="font-mono text-xs text-fg-3">
+                {relativeTime(lead.createdAt, nowMs)}
+              </span>
+              {tag !== undefined ? (
+                <span className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-[11px] font-medium text-fg-2">
+                  {tag}
+                </span>
+              ) : null}
+              {snoozed ? (
+                <span className="inline-flex h-5 items-center gap-1 rounded-md bg-panel-2 px-2 text-[11px] font-medium text-fg-2">
+                  <IconClock size={12} inline />
+                  Snoozed
+                </span>
+              ) : null}
+            </div>
           </div>
-          {hasEntity ? (
-            <p className={cn('mt-0.5 line-clamp-2 text-sm', unread ? 'text-fg-2' : 'text-fg-3')}>
-              {cardBodyLine(lead)}
-            </p>
-          ) : null}
-          {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
-            <p
-              className={cn(
-                'mt-0.5 line-clamp-2 text-sm [overflow-wrap:anywhere]',
-                unread ? 'text-fg-2' : 'text-fg-3',
-              )}
+
+          <div className="flex min-h-[104px] w-24 shrink-0 self-stretch">
+            <Thumbnail
+              assetVersionId={lead.thumbnailAssetVersionId ?? null}
+              cache={cache}
+              presignEnabled={presignEnabled}
+              aspect="square"
+              fallback={leadFallback(lead)}
+              alt={title}
+            />
+          </div>
+        </div>
+
+        {rest.length > 0 ? (
+          <>
+            <div className="h-px bg-border" />
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((prev) => !prev)}
+              className="flex min-h-[44px] w-full items-center px-[14px] text-left text-[13px] font-medium text-accent transition-colors hover:bg-panel-2"
             >
-              {mentionPreview(lead.body, selfName)}
-            </p>
-          ) : null}
-          <p className="mt-0.5 flex items-center gap-2 text-xs text-fg-3">
-            <span>{relativeTime(lead.createdAt, nowMs)}</span>
-            {tag !== undefined ? (
-              <span className="inline-flex items-center rounded-md bg-panel-2 px-2 py-0.5 text-[11px] font-medium text-fg-2">
-                {tag}
-              </span>
+              {expanded ? 'Show less' : `+${rest.length} more`}
+            </button>
+            {expanded ? (
+              <ul className="border-t border-border">
+                {rest.map((entry) => (
+                  <li
+                    key={entry.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpenEntry(entry)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onOpenEntry(entry);
+                      }
+                    }}
+                    className="flex min-h-[44px] cursor-pointer items-center gap-2 py-2 pl-[14px] pr-3 transition-colors hover:bg-panel-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          'line-clamp-2 text-sm',
+                          entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
+                        )}
+                      >
+                        {cardBodyLine(entry)}
+                      </p>
+                      <p className="mt-0.5 text-xs text-fg-3">
+                        {relativeTime(entry.createdAt, nowMs)}
+                      </p>
+                    </div>
+                    {entry.readAt === null ? (
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full bg-accent"
+                        aria-label="Unread"
+                        role="status"
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
             ) : null}
-            {snoozed ? (
-              <span className="inline-flex items-center gap-1 rounded-md bg-panel-2 px-2 py-0.5 text-[11px] font-medium text-fg-2">
-                <IconClock size={12} inline />
-                Snoozed
-              </span>
-            ) : null}
-          </p>
-        </div>
-
-        <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg">
-          <Thumbnail
-            assetVersionId={lead.thumbnailAssetVersionId ?? null}
-            cache={cache}
-            presignEnabled={presignEnabled}
-            aspect="square"
-            fallback={leadFallback(lead)}
-            alt={title}
-          />
-        </div>
-
-        <ActivityRowMenu
-          snoozed={snoozed}
-          unread={unread}
-          onSnooze={(kind) => onSnooze(lead, kind)}
-          onMarkRead={() => onMarkRead(lead)}
-        />
+          </>
+        ) : null}
       </div>
-
-      {rest.length > 0 ? (
-        <>
-          <button
-            type="button"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((prev) => !prev)}
-            className="flex min-h-[44px] w-full items-center border-t border-border px-4 text-left text-xs font-medium text-accent transition-colors hover:bg-panel-2 md:px-5"
-          >
-            {expanded ? 'Show less' : `+${rest.length} more`}
-          </button>
-          {expanded ? (
-            <ul className="border-t border-border">
-              {rest.map((entry) => (
-                <li
-                  key={entry.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onOpenEntry(entry)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onOpenEntry(entry);
-                    }
-                  }}
-                  className="flex min-h-[44px] cursor-pointer items-center gap-2 py-2 pl-[3.25rem] pr-4 transition-colors hover:bg-panel-2 md:pr-5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={cn(
-                        'line-clamp-2 text-sm',
-                        entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
-                      )}
-                    >
-                      {cardBodyLine(entry)}
-                    </p>
-                    <p className="mt-0.5 text-xs text-fg-3">
-                      {relativeTime(entry.createdAt, nowMs)}
-                    </p>
-                  </div>
-                  {entry.readAt === null ? UNREAD_DOT : null}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </>
-      ) : null}
     </div>
   );
 }
