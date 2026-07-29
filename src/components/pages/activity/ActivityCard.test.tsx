@@ -97,6 +97,7 @@ function renderCard(group: ActivityItem[]): string {
       onOpenEntry={() => {}}
       onSnooze={() => {}}
       onMarkRead={() => {}}
+      selfName={null}
     />,
   );
 }
@@ -196,6 +197,7 @@ describe('ActivityCard', () => {
       onOpenEntry: () => {},
       onSnooze: () => {},
       onMarkRead: () => {},
+      selfName: null,
     });
     const all: ReactElement[] = [];
     collectAll(tree, all);
@@ -321,6 +323,7 @@ describe('ActivityCard', () => {
         onOpenEntry,
         onSnooze: () => {},
         onMarkRead: () => {},
+        selfName: null,
       });
       const rows: ReactElement[] = [];
       collectByType(tree, 'li', rows);

@@ -28,11 +28,13 @@ import {
 } from '@/components/ui/icons';
 import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
 import {
+  MENTION_EVENT_TYPE,
   activityLine,
   cardBodyLine,
   cardTitle,
   isSnoozed,
   relativeTime,
+  segmentSelfMentions,
   type ActivityItem,
   type SnoozeKind,
 } from '@/components/pages/activity/data';
@@ -52,6 +54,27 @@ interface ActivityCardProps {
   onOpenEntry: (entry: ActivityItem) => void;
   onSnooze: (item: ActivityItem, kind: SnoozeKind) => void;
   onMarkRead: (item: ActivityItem) => void;
+  /** The signed-in user's resolved display name, used to accent their own @name
+   *  inside a mention preview; null when it has not resolved yet. */
+  selfName: string | null;
+}
+
+/**
+ * Render a resolved mention body as a preview line, accenting only the current
+ * user's own `@name` (the same accent the comment thread gives a mention) and
+ * leaving every other name in the surrounding body colour. Plain string in, so no
+ * `@[uuid]` ever reaches the DOM.
+ */
+function mentionPreview(body: string, selfName: string | null): ReactElement[] {
+  return segmentSelfMentions(body, selfName).map((seg, i) =>
+    seg.self ? (
+      <span key={`s${i}`} className="font-medium text-accent">
+        {seg.text}
+      </span>
+    ) : (
+      <span key={`t${i}`}>{seg.text}</span>
+    ),
+  );
 }
 
 type LeadTone = 'accent' | 'neutral';
@@ -167,6 +190,7 @@ export function ActivityCard({
   onOpenEntry,
   onSnooze,
   onMarkRead,
+  selfName,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -242,6 +266,16 @@ export function ActivityCard({
           {hasEntity ? (
             <p className={cn('mt-0.5 line-clamp-2 text-sm', unread ? 'text-fg-2' : 'text-fg-3')}>
               {cardBodyLine(lead)}
+            </p>
+          ) : null}
+          {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
+            <p
+              className={cn(
+                'mt-0.5 line-clamp-2 text-sm [overflow-wrap:anywhere]',
+                unread ? 'text-fg-2' : 'text-fg-3',
+              )}
+            >
+              {mentionPreview(lead.body, selfName)}
             </p>
           ) : null}
           <p className="mt-0.5 flex items-center gap-2 text-xs text-fg-3">

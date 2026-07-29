@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Database } from '@srtdio/schemas';
-import { enrichNewRows, fetchInboxSince, fetchInboxUnreadCount } from '@/lib/inbox/inbox-reads';
+import {
+  enrichNewRows,
+  fetchInboxSince,
+  fetchInboxUnreadCount,
+  fetchUnreadMentionCount,
+} from '@/lib/inbox/inbox-reads';
 import type { InboxRow } from '@/lib/inbox/inbox-live';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
@@ -107,6 +112,40 @@ describe('fetchInboxUnreadCount', () => {
   it('fails closed on a query error', async () => {
     const client = fakeClient({ inbox_entries: err('count boom') });
     const res = await fetchInboxUnreadCount(client, {
+      workspaceId: 'w1',
+      userId: 'u1',
+      nowIso: '2026-06-14T00:00:00.000Z',
+    });
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe('fetchUnreadMentionCount', () => {
+  it('returns the HEAD count', async () => {
+    const client = fakeClient({ inbox_entries: okCount(3) });
+    const res = await fetchUnreadMentionCount(client, {
+      workspaceId: 'w1',
+      userId: 'u1',
+      nowIso: '2026-06-14T00:00:00.000Z',
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data).toBe(3);
+  });
+
+  it('treats a null count as zero', async () => {
+    const client = fakeClient({ inbox_entries: { count: null, error: null } });
+    const res = await fetchUnreadMentionCount(client, {
+      workspaceId: 'w1',
+      userId: 'u1',
+      nowIso: '2026-06-14T00:00:00.000Z',
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data).toBe(0);
+  });
+
+  it('fails closed on a query error', async () => {
+    const client = fakeClient({ inbox_entries: err('mention count boom') });
+    const res = await fetchUnreadMentionCount(client, {
       workspaceId: 'w1',
       userId: 'u1',
       nowIso: '2026-06-14T00:00:00.000Z',
