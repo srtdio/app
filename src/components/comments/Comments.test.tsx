@@ -33,6 +33,7 @@ import {
   mergeCheckpoints,
   parseBatchRows,
   pointActions,
+  pointMenuMode,
   pointEditedMarker,
   pointWordCount,
   POINT_WORD_CAP,
@@ -52,6 +53,7 @@ import {
   tombstoneText,
   writeClipboard,
 } from '@/components/comments/Comments';
+import type { PointMenuMode } from '@/components/comments/Comments';
 import { PAGE_SIZE } from '@srtdio/comments';
 import type { Client } from '@srtdio/comments';
 import { friendlyPointFreezeError, tickCircle } from '@/components/pages/pcs/checkpoint-controls';
@@ -328,7 +330,7 @@ describe('checkpoint state + feed controls', () => {
       className: 'bg-panel-3 text-fg-3',
     });
     expect(checkpointStateLabel('client_turn', true)).toEqual({
-      text: 'Ready for your check',
+      text: 'Your turn',
       className: 'bg-accent-soft text-accent',
     });
     expect(checkpointStateLabel('client_turn', false)).toEqual({
@@ -941,6 +943,56 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
       expect(msg).toBe('This post is approved. Points are locked.');
       expect(msg).not.toContain('—');
     }
+  });
+});
+
+describe('pointMenuMode (kebab menu vs direct copy button vs nothing)', () => {
+  const FROZEN = '2026-02-02T00:00:00.000Z';
+
+  function point(partial: Partial<CommentRow>): CommentRow {
+    return row({ id: 'p', ledger_seq: 1, author_user_id: UUID_A, ...partial });
+  }
+
+  it('returns the full menu when the viewer can edit or delete (author, live point)', () => {
+    const live = point({ accepted_at: null, closed_at: null });
+    expect(pointMenuMode(pointActions(live, UUID_A, false))).toBe('menu');
+  });
+
+  it('returns a direct copy for a non-author on a live point (copy only, no menu)', () => {
+    const theirs = point({ author_user_id: UUID_B, accepted_at: null, closed_at: null });
+    expect(pointMenuMode(pointActions(theirs, UUID_A, false))).toBe('copy');
+  });
+
+  it('returns a direct copy for the author of a frozen point (not an author check)', () => {
+    const frozen = point({ accepted_at: FROZEN, closed_at: null });
+    // Confirmed against its own author: copy stays, edit/delete gone.
+    expect(pointMenuMode(pointActions(frozen, UUID_A, false))).toBe('copy');
+  });
+
+  it('returns nothing on a tombstone', () => {
+    const dead = point({ deleted_at: '2026-01-05T00:00:00.000Z' });
+    expect(pointMenuMode(pointActions(dead, UUID_A, true))).toBe('none');
+  });
+
+  it('a copy-only viewer gets the "Copy text" button and no "Point actions" trigger; an author gets "Point actions"', () => {
+    // The card renders one control per mode: 'menu' -> the "Point actions" kebab,
+    // 'copy' -> a direct "Copy text" button, 'none' -> nothing. Assert the label
+    // the render branch selects for each viewer.
+    const CONTROL_LABEL: Record<PointMenuMode, string | null> = {
+      none: null,
+      copy: 'Copy text',
+      menu: 'Point actions',
+    };
+    const frozenOwn = point({ accepted_at: FROZEN, closed_at: null });
+    const copyMode = pointMenuMode(pointActions(frozenOwn, UUID_A, false));
+    expect(copyMode).toBe('copy');
+    expect(CONTROL_LABEL[copyMode]).toBe('Copy text');
+    expect(CONTROL_LABEL[copyMode]).not.toBe('Point actions');
+
+    const liveOwn = point({ accepted_at: null, closed_at: null });
+    const menuMode = pointMenuMode(pointActions(liveOwn, UUID_A, false));
+    expect(menuMode).toBe('menu');
+    expect(CONTROL_LABEL[menuMode]).toBe('Point actions');
   });
 });
 
