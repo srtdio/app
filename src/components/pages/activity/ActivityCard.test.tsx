@@ -144,10 +144,9 @@ describe('ActivityCard', () => {
     const html = renderCard([
       item({ id: 'a', actorName: null, eventType: 'stage_change', toStage: 'approved' }),
     ]);
-    // stage_change is neutral now: stage no longer tints the rail or the glyph.
+    // stage_change is neutral now: stage no longer tints the rail.
     expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
     expect(html).not.toContain('w-[3px] shrink-0 bg-accent');
-    expect(html).toContain('shrink-0 text-fg-3');
   });
 
   // The lead rail: accent for the five accent events, neutral otherwise. The 3px
@@ -171,66 +170,6 @@ describe('ActivityCard', () => {
     'billing_failure',
     'system',
   ] as const;
-
-  /** Collect every element in a returned element tree. */
-  function collectAll(node: ReactNode, acc: ReactElement[]): void {
-    if (Array.isArray(node)) {
-      for (const child of node) collectAll(child, acc);
-      return;
-    }
-    if (!isValidElement(node)) return;
-    acc.push(node);
-    collectAll((node.props as { children?: ReactNode }).children, acc);
-  }
-
-  /** The icon component name rendered inside the first span matching `marker`. */
-  function iconNameInSpan(over: Partial<ActivityItem>, marker: string): string {
-    const tree = ActivityCard({
-      group: [item(over)],
-      nowMs: NOW,
-      cache,
-      presignEnabled: false,
-      onOpenGroup: () => {},
-      onOpenEntry: () => {},
-      onSnooze: () => {},
-      onMarkRead: () => {},
-      selfName: null,
-    });
-    const all: ReactElement[] = [];
-    collectAll(tree, all);
-    const span = all.find(
-      (el) =>
-        el.type === 'span' &&
-        String((el.props as { className?: string }).className ?? '').includes(marker),
-    );
-    const icon = (span?.props as { children?: ReactNode } | undefined)?.children;
-    if (!isValidElement(icon)) throw new Error(`no icon in span "${marker}" for ${over.eventType}`);
-    const type = icon.type;
-    return typeof type === 'function' ? type.name : String(type);
-  }
-
-  // The event glyph is the same single inline glyph in every layout branch: the
-  // bare glyph span is the only one whose class starts with `shrink-0 text-`.
-  const GLYPH_MARKER = 'shrink-0 text-';
-
-  /** The inline glyph icon name for an actor-less card. */
-  function leadIconName(eventType: string): string {
-    return iconNameInSpan({ eventType, actorName: null }, GLYPH_MARKER);
-  }
-
-  /** The inline glyph icon name for a card that carries an actor. */
-  function inlineGlyphIconName(eventType: string): string {
-    return iconNameInSpan({ eventType, actorName: 'Ann Lee' }, GLYPH_MARKER);
-  }
-
-  it('gives each of the 14 event types its own distinct icon, none the fallback', () => {
-    const names = ALL_EVENT_TYPES.map(leadIconName);
-    expect(names).toHaveLength(14);
-    // Every event type maps to a different icon component.
-    expect(new Set(names).size).toBe(14);
-    // None of the known types fall through to the IconActivity default.
-    expect(names).not.toContain('IconActivity');
-  });
 
   it('accents exactly the five accent event types and leaves the other nine neutral', () => {
     const accent = new Set([
@@ -260,51 +199,62 @@ describe('ActivityCard', () => {
     const html = renderCard([item({ eventType: 'not_a_real_event', actorName: null })]);
     expect(html).toContain(NEUTRAL_RAIL);
     expect(html).not.toContain(ACCENT_RAIL);
-    expect(leadIconName('not_a_real_event')).toBe('IconActivity');
   });
 
-  // The inline event glyph: coloured by event tone. The bare glyph span is the
-  // only one whose class starts with `shrink-0 text-`.
-  const ACCENT_INLINE = 'shrink-0 text-accent';
-  const NEUTRAL_INLINE = 'shrink-0 text-fg-3';
-
-  it('shows the inline event glyph beside the actor, never a fallback circle', () => {
+  it('renders no inline event glyph span in the actor row', () => {
     const html = renderCard([item({ eventType: 'comment', actorName: 'Ann Lee' })]);
-    // The old 48px fallback circle is gone from the layout entirely.
-    expect(html).not.toContain('h-12 w-12');
-    // The inline glyph carries the event tone.
-    expect(html).toContain(NEUTRAL_INLINE);
+    expect(html).not.toContain('shrink-0 text-accent');
+    expect(html).not.toContain('shrink-0 text-fg-3');
   });
 
-  it('gives every event type its own inline glyph, none the fallback', () => {
-    const names = ALL_EVENT_TYPES.map(inlineGlyphIconName);
-    expect(names).toHaveLength(14);
-    expect(new Set(names).size).toBe(14);
-    expect(names).not.toContain('IconActivity');
-    // The inline glyph draws the same icon whether or not the card has an actor.
-    for (const eventType of ALL_EVENT_TYPES) {
-      expect(inlineGlyphIconName(eventType)).toBe(leadIconName(eventType));
-    }
+  it('squares the thumbnail wrapper and insets it, dropping the stretched tile', () => {
+    const html = renderCard([item({ id: 'a', eventType: 'comment' })]);
+    expect(html).toContain('w-24 shrink-0 self-start overflow-hidden rounded-lg');
+    expect(html).not.toContain('min-h-[104px]');
+    expect(html).not.toContain('self-stretch');
   });
 
-  it('accents the five accent inline glyphs even though those events carry an actor', () => {
-    const accent = new Set([
-      'mention',
-      'checkpoints_added',
-      'post_ready',
-      'trial_warning',
-      'billing_failure',
+  it('renders a footer with the relative time for a solo group and no "+N more"', () => {
+    const html = renderCard([
+      item({ id: 'a', eventType: 'comment', createdAt: '2026-06-14T00:00:00.000Z' }),
     ]);
-    for (const eventType of ALL_EVENT_TYPES) {
-      const html = renderCard([item({ eventType, actorName: 'Ann Lee' })]);
-      if (accent.has(eventType)) {
-        expect(html).toContain(ACCENT_INLINE);
-        expect(html).not.toContain(NEUTRAL_INLINE);
-      } else {
-        expect(html).toContain(NEUTRAL_INLINE);
-        expect(html).not.toContain(ACCENT_INLINE);
-      }
-    }
+    // The footer container renders even with a single entry.
+    expect(html).toContain('min-h-[44px] items-center gap-1.5 px-[14px]');
+    expect(html).toContain('font-mono text-xs text-fg-3');
+    expect(html).not.toContain('more');
+  });
+
+  it('renders the relative time and "+N more" together in the footer of a threaded group', () => {
+    const html = renderCard([
+      item({ id: 'a', eventType: 'comment' }),
+      item({ id: 'b', eventType: 'mention' }),
+    ]);
+    expect(html).toContain('font-mono text-xs text-fg-3');
+    expect(html).toContain('+1 more');
+    // The toggle is an inset touch target, not the old full-width button.
+    expect(html).toContain('ml-auto flex min-h-[44px]');
+    expect(html).not.toContain('min-h-[44px] w-full');
+  });
+
+  it('places the scope tag and snoozed chip in the footer, not the content column', () => {
+    // Snooze one hour past NOW so isSnoozed is true.
+    const html = renderCard([
+      item({
+        id: 'a',
+        eventType: 'comment',
+        scope: 'briefs',
+        snoozedUntil: '2026-06-14T02:00:00.000Z',
+      }),
+    ]);
+    // Both chips render, and they sit after the footer container marker in the markup.
+    const footerAt = html.indexOf('min-h-[44px] items-center gap-1.5 px-[14px]');
+    expect(footerAt).toBeGreaterThanOrEqual(0);
+    const tagAt = html.indexOf('Briefs');
+    const snoozeAt = html.indexOf('Snoozed');
+    expect(tagAt).toBeGreaterThan(footerAt);
+    expect(snoozeAt).toBeGreaterThan(footerAt);
+    // The old content-column meta row is gone.
+    expect(html).not.toContain('mt-2 flex items-center gap-1.5');
   });
 
   it('marks each expanded thread row interactive in the collapsed markup contract', () => {
