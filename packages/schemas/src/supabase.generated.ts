@@ -5265,40 +5265,6 @@ export type Database = {
         }
         Returns: string
       }
-      inbox_list: {
-        Args: {
-          p_before: string
-          p_limit: number
-          p_scope: string
-          p_since: string
-          p_trace_id: string
-          p_workspace_id: string
-        }
-        Returns: {
-          actor_avatar_url: string
-          actor_name: string
-          actor_user_id: string
-          attachment_count: number
-          created_at: string
-          entity_id: string
-          entity_type: string
-          entry_id: string
-          event_type: string
-          group_count: number
-          media_duration_ms: number
-          media_external_url: string
-          media_height: number
-          media_kind: string
-          media_source_key: string
-          media_thumb_key: string
-          media_width: number
-          payload: Json
-          quote: string
-          read_at: string
-          tier: string
-          title: string
-        }[]
-      }
       inbox_mark_all_read: {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: undefined
