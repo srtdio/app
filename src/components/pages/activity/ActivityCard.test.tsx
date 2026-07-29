@@ -217,9 +217,9 @@ describe('ActivityCard', () => {
     return iconNameInSpan({ eventType, actorName: null }, 'h-12 w-12');
   }
 
-  /** The icon name in the avatar corner badge (card with an actor). */
-  function badgeIconName(eventType: string): string {
-    return iconNameInSpan({ eventType, actorName: 'Ann Lee' }, 'h-5 w-5');
+  /** The icon name in the inline title-row glyph (card with an actor). */
+  function inlineGlyphIconName(eventType: string): string {
+    return iconNameInSpan({ eventType, actorName: 'Ann Lee' }, 'shrink-0 text-');
   }
 
   it('gives each of the 14 event types its own distinct icon, none the fallback', () => {
@@ -262,31 +262,32 @@ describe('ActivityCard', () => {
     expect(leadIconName('not_a_real_event')).toBe('IconActivity');
   });
 
-  // The avatar corner badge: when a card has an actor it shows the person's
-  // avatar (not the big circle), with the event icon + tone in a corner badge.
-  const ACCENT_BADGE = 'ring-panel bg-accent-soft border-accent-line text-accent';
-  const NEUTRAL_BADGE = 'ring-panel bg-panel-2 border-border text-fg-3';
+  // The inline title glyph: when a card has an actor the event glyph sits inline
+  // at the start of the title row (no badge, no circle), coloured by event tone.
+  // The bare glyph span is the only one whose class starts with `shrink-0 text-`.
+  const ACCENT_INLINE = 'shrink-0 text-accent';
+  const NEUTRAL_INLINE = 'shrink-0 text-fg-3';
 
-  it('shows the event badge (not the fallback circle) when the group has an actor', () => {
+  it('shows the inline event glyph (not the fallback circle) when the group has an actor', () => {
     const html = renderCard([item({ eventType: 'comment', actorName: 'Ann Lee' })]);
     // The big fallback circle is not rendered when there is an avatar.
     expect(html).not.toContain('h-12 w-12');
-    // The corner badge carries the event tone.
-    expect(html).toContain(NEUTRAL_BADGE);
+    // The inline glyph carries the event tone.
+    expect(html).toContain(NEUTRAL_INLINE);
   });
 
-  it('gives every event type its own badge icon over the avatar, none the fallback', () => {
-    const names = ALL_EVENT_TYPES.map(badgeIconName);
+  it('gives every event type its own inline glyph over the avatar, none the fallback', () => {
+    const names = ALL_EVENT_TYPES.map(inlineGlyphIconName);
     expect(names).toHaveLength(14);
     expect(new Set(names).size).toBe(14);
     expect(names).not.toContain('IconActivity');
-    // The badge and the fallback circle draw the same icon for a given type.
+    // The inline glyph and the fallback circle draw the same icon for a given type.
     for (const eventType of ALL_EVENT_TYPES) {
-      expect(badgeIconName(eventType)).toBe(leadIconName(eventType));
+      expect(inlineGlyphIconName(eventType)).toBe(leadIconName(eventType));
     }
   });
 
-  it('accents the five accent badges even though those events carry an actor', () => {
+  it('accents the five accent inline glyphs even though those events carry an actor', () => {
     const accent = new Set([
       'mention',
       'checkpoints_added',
@@ -297,11 +298,11 @@ describe('ActivityCard', () => {
     for (const eventType of ALL_EVENT_TYPES) {
       const html = renderCard([item({ eventType, actorName: 'Ann Lee' })]);
       if (accent.has(eventType)) {
-        expect(html).toContain(ACCENT_BADGE);
-        expect(html).not.toContain(NEUTRAL_BADGE);
+        expect(html).toContain(ACCENT_INLINE);
+        expect(html).not.toContain(NEUTRAL_INLINE);
       } else {
-        expect(html).toContain(NEUTRAL_BADGE);
-        expect(html).not.toContain(ACCENT_BADGE);
+        expect(html).toContain(NEUTRAL_INLINE);
+        expect(html).not.toContain(ACCENT_INLINE);
       }
     }
   });

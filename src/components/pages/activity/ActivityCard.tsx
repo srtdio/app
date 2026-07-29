@@ -102,6 +102,12 @@ const TONE_CIRCLE: Record<LeadTone, string> = {
   neutral: 'bg-panel-2 border-border text-fg-3',
 };
 
+/** The tone of the inline title-row glyph: the bare glyph coloured by event tone. */
+const TONE_INLINE: Record<LeadTone, string> = {
+  accent: 'text-accent',
+  neutral: 'text-fg-3',
+};
+
 /**
  * One distinct glyph per known inbox event type. Typed as a total Record so the
  * compiler enforces that every InboxEventTypeValue is mapped; a runtime value
@@ -126,7 +132,7 @@ const LEAD_ICON: Record<InboxEventTypeValue, ComponentType<IconProps>> = {
   system: IconBroadcast,
 };
 
-/** The lead event's glyph: the big circle glyph (no actor) and the avatar badge. */
+/** The lead event's glyph: the big circle glyph (no actor) and the inline title glyph. */
 function leadIcon(item: ActivityItem, size = 24): ReactElement {
   const Icon = LEAD_ICON[item.eventType as InboxEventTypeValue] ?? IconActivity;
   return <Icon size={size} />;
@@ -229,21 +235,12 @@ export function ActivityCard({
         className="group flex min-h-[44px] cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-panel-2 md:px-5"
       >
         {actorName !== null ? (
-          <span className="relative shrink-0">
+          <span className="shrink-0">
             <Avatar
               name={actorName}
               {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
               size="xl"
             />
-            <span
-              aria-hidden="true"
-              className={cn(
-                'absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border ring-2 ring-panel',
-                TONE_CIRCLE[leadTone(lead)],
-              )}
-            >
-              {leadIcon(lead, 12)}
-            </span>
           </span>
         ) : (
           <span
@@ -258,6 +255,11 @@ export function ActivityCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
+            {actorName !== null ? (
+              <span aria-hidden="true" className={cn('shrink-0', TONE_INLINE[leadTone(lead)])}>
+                {leadIcon(lead, 14)}
+              </span>
+            ) : null}
             <p className={cn('truncate text-sm', unread ? 'font-medium text-fg' : 'text-fg-2')}>
               {title}
             </p>
@@ -281,12 +283,12 @@ export function ActivityCard({
           <p className="mt-0.5 flex items-center gap-2 text-xs text-fg-3">
             <span>{relativeTime(lead.createdAt, nowMs)}</span>
             {tag !== undefined ? (
-              <span className="rounded border border-border px-1.5 py-0.5 text-[11px] text-fg-3">
+              <span className="inline-flex items-center rounded-md bg-panel-2 px-2 py-0.5 text-[11px] font-medium text-fg-2">
                 {tag}
               </span>
             ) : null}
             {snoozed ? (
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1 rounded-md bg-panel-2 px-2 py-0.5 text-[11px] font-medium text-fg-2">
                 <IconClock size={12} inline />
                 Snoozed
               </span>
@@ -294,7 +296,7 @@ export function ActivityCard({
           </p>
         </div>
 
-        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg">
+        <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg">
           <Thumbnail
             assetVersionId={lead.thumbnailAssetVersionId ?? null}
             cache={cache}
