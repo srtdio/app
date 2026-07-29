@@ -102,18 +102,6 @@ const TONE_CIRCLE: Record<LeadTone, string> = {
   neutral: 'bg-panel-2 border-border text-fg-3',
 };
 
-/** The tone as a bare text colour, for the inline title-row glyph. */
-const TONE_TEXT: Record<LeadTone, string> = {
-  accent: 'text-accent',
-  neutral: 'text-fg-3',
-};
-
-/** The tone as a fill, for the 3px left-edge rail. */
-const TONE_RAIL: Record<LeadTone, string> = {
-  accent: 'bg-accent',
-  neutral: 'bg-fg-3/40',
-};
-
 /**
  * One distinct glyph per known inbox event type. Typed as a total Record so the
  * compiler enforces that every InboxEventTypeValue is mapped; a runtime value
@@ -138,7 +126,7 @@ const LEAD_ICON: Record<InboxEventTypeValue, ComponentType<IconProps>> = {
   system: IconBroadcast,
 };
 
-/** The lead event's glyph: the big circle glyph (no actor) or the inline title glyph. */
+/** The lead event's glyph: the big circle glyph (no actor) and the avatar badge. */
 function leadIcon(item: ActivityItem, size = 24): ReactElement {
   const Icon = LEAD_ICON[item.eventType as InboxEventTypeValue] ?? IconActivity;
   return <Icon size={size} />;
@@ -229,147 +217,148 @@ export function ActivityCard({
   return (
     <div
       className={cn(
-        'flex overflow-hidden rounded-xl border bg-panel transition-colors',
+        'overflow-hidden rounded-xl border bg-panel transition-colors',
         unread ? 'border-accent-line' : 'border-border',
       )}
     >
-      <div className={cn('w-[3px] shrink-0', TONE_RAIL[leadTone(lead)])} aria-hidden="true" />
-      <div className="min-w-0 flex-1">
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => onOpenGroup(group)}
-          onKeyDown={onKeyDown}
-          className="group flex min-h-[44px] cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-panel-2 md:px-5"
-        >
-          {actorName !== null ? (
-            <span className="shrink-0">
-              <Avatar
-                name={actorName}
-                {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
-                size="xl"
-              />
-            </span>
-          ) : (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onOpenGroup(group)}
+        onKeyDown={onKeyDown}
+        className="group flex min-h-[44px] cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-panel-2 md:px-5"
+      >
+        {actorName !== null ? (
+          <span className="relative shrink-0">
+            <Avatar
+              name={actorName}
+              {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
+              size="xl"
+            />
             <span
+              aria-hidden="true"
               className={cn(
-                'flex h-12 w-12 shrink-0 items-center justify-center rounded-full border',
+                'absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border ring-2 ring-panel',
                 TONE_CIRCLE[leadTone(lead)],
               )}
             >
-              {leadIcon(lead)}
+              {leadIcon(lead, 12)}
             </span>
-          )}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-full border',
+              TONE_CIRCLE[leadTone(lead)],
+            )}
+          >
+            {leadIcon(lead)}
+          </span>
+        )}
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {actorName !== null ? (
-                <span className={cn('shrink-0', TONE_TEXT[leadTone(lead)])} aria-hidden="true">
-                  {leadIcon(lead, 14)}
-                </span>
-              ) : null}
-              <p className={cn('truncate text-sm', unread ? 'font-medium text-fg' : 'text-fg-2')}>
-                {title}
-              </p>
-              {unread ? UNREAD_DOT : null}
-            </div>
-            {hasEntity ? (
-              <p className={cn('mt-0.5 line-clamp-2 text-sm', unread ? 'text-fg-2' : 'text-fg-3')}>
-                {cardBodyLine(lead)}
-              </p>
-            ) : null}
-            {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
-              <p
-                className={cn(
-                  'mt-0.5 line-clamp-2 text-sm [overflow-wrap:anywhere]',
-                  unread ? 'text-fg-2' : 'text-fg-3',
-                )}
-              >
-                {mentionPreview(lead.body, selfName)}
-              </p>
-            ) : null}
-            <p className="mt-0.5 flex items-center gap-2 text-xs text-fg-3">
-              <span>{relativeTime(lead.createdAt, nowMs)}</span>
-              {tag !== undefined ? (
-                <span className="inline-flex items-center rounded-md bg-panel-2 px-2 py-0.5 text-[11px] font-medium text-fg-2">
-                  {tag}
-                </span>
-              ) : null}
-              {snoozed ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-panel-2 px-2 py-0.5 text-[11px] font-medium text-fg-2">
-                  <IconClock size={12} inline />
-                  Snoozed
-                </span>
-              ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className={cn('truncate text-sm', unread ? 'font-medium text-fg' : 'text-fg-2')}>
+              {title}
             </p>
+            {unread ? UNREAD_DOT : null}
           </div>
+          {hasEntity ? (
+            <p className={cn('mt-0.5 line-clamp-2 text-sm', unread ? 'text-fg-2' : 'text-fg-3')}>
+              {cardBodyLine(lead)}
+            </p>
+          ) : null}
+          {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
+            <p
+              className={cn(
+                'mt-0.5 line-clamp-2 text-sm [overflow-wrap:anywhere]',
+                unread ? 'text-fg-2' : 'text-fg-3',
+              )}
+            >
+              {mentionPreview(lead.body, selfName)}
+            </p>
+          ) : null}
+          <p className="mt-0.5 flex items-center gap-2 text-xs text-fg-3">
+            <span>{relativeTime(lead.createdAt, nowMs)}</span>
+            {tag !== undefined ? (
+              <span className="rounded border border-border px-1.5 py-0.5 text-[11px] text-fg-3">
+                {tag}
+              </span>
+            ) : null}
+            {snoozed ? (
+              <span className="inline-flex items-center gap-1">
+                <IconClock size={12} inline />
+                Snoozed
+              </span>
+            ) : null}
+          </p>
+        </div>
 
-          <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg">
-            <Thumbnail
-              assetVersionId={lead.thumbnailAssetVersionId ?? null}
-              cache={cache}
-              presignEnabled={presignEnabled}
-              aspect="square"
-              fallback={leadFallback(lead)}
-              alt={title}
-            />
-          </div>
-
-          <ActivityRowMenu
-            snoozed={snoozed}
-            unread={unread}
-            onSnooze={(kind) => onSnooze(lead, kind)}
-            onMarkRead={() => onMarkRead(lead)}
+        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg">
+          <Thumbnail
+            assetVersionId={lead.thumbnailAssetVersionId ?? null}
+            cache={cache}
+            presignEnabled={presignEnabled}
+            aspect="square"
+            fallback={leadFallback(lead)}
+            alt={title}
           />
         </div>
 
-        {rest.length > 0 ? (
-          <>
-            <button
-              type="button"
-              aria-expanded={expanded}
-              onClick={() => setExpanded((prev) => !prev)}
-              className="flex min-h-[44px] w-full items-center border-t border-border px-4 text-left text-xs font-medium text-accent transition-colors hover:bg-panel-2 md:px-5"
-            >
-              {expanded ? 'Show less' : `+${rest.length} more`}
-            </button>
-            {expanded ? (
-              <ul className="border-t border-border">
-                {rest.map((entry) => (
-                  <li
-                    key={entry.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onOpenEntry(entry)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        onOpenEntry(entry);
-                      }
-                    }}
-                    className="flex min-h-[44px] cursor-pointer items-center gap-2 py-2 pl-[3.25rem] pr-4 transition-colors hover:bg-panel-2 md:pr-5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={cn(
-                          'line-clamp-2 text-sm',
-                          entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
-                        )}
-                      >
-                        {cardBodyLine(entry)}
-                      </p>
-                      <p className="mt-0.5 text-xs text-fg-3">
-                        {relativeTime(entry.createdAt, nowMs)}
-                      </p>
-                    </div>
-                    {entry.readAt === null ? UNREAD_DOT : null}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </>
-        ) : null}
+        <ActivityRowMenu
+          snoozed={snoozed}
+          unread={unread}
+          onSnooze={(kind) => onSnooze(lead, kind)}
+          onMarkRead={() => onMarkRead(lead)}
+        />
       </div>
+
+      {rest.length > 0 ? (
+        <>
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((prev) => !prev)}
+            className="flex min-h-[44px] w-full items-center border-t border-border px-4 text-left text-xs font-medium text-accent transition-colors hover:bg-panel-2 md:px-5"
+          >
+            {expanded ? 'Show less' : `+${rest.length} more`}
+          </button>
+          {expanded ? (
+            <ul className="border-t border-border">
+              {rest.map((entry) => (
+                <li
+                  key={entry.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpenEntry(entry)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onOpenEntry(entry);
+                    }
+                  }}
+                  className="flex min-h-[44px] cursor-pointer items-center gap-2 py-2 pl-[3.25rem] pr-4 transition-colors hover:bg-panel-2 md:pr-5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={cn(
+                        'line-clamp-2 text-sm',
+                        entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
+                      )}
+                    >
+                      {cardBodyLine(entry)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-fg-3">
+                      {relativeTime(entry.createdAt, nowMs)}
+                    </p>
+                  </div>
+                  {entry.readAt === null ? UNREAD_DOT : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }
