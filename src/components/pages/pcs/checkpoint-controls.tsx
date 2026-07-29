@@ -91,23 +91,26 @@ export function friendlyPointFreezeError(
 }
 
 /** The tick circle. The check enters/leaves via opacity/translateY only, per the
- *  motion tokens; the fill flips instantly (colour is state, not motion). When
- *  `live` (the client's turn, an unfilled circle), the ring/border switches to the
- *  accent line so the circle reads as the one thing to act on. */
+ *  motion tokens; the fill flips instantly (colour is state, not motion). An
+ *  unconfirmed circle reads in the good family already: a green outline over a
+ *  soft green fill, with the check kept visible at reduced emphasis (never
+ *  transparent, so it survives the dark panel). When `live` (the actor's turn) a
+ *  soft green halo ring is added so the circle reads as the one thing to act on;
+ *  the passive indicator gets the same colours but no halo. */
 export function tickCircle(done: boolean, live = false): ReactElement {
   return (
     <span
       className={cn(
-        'flex h-6 w-6 items-center justify-center rounded-full border',
-        done ? 'border-good bg-good text-white' : 'border-border text-transparent',
-        live && !done ? 'border-accent-line ring-2 ring-accent' : '',
+        'flex h-7 w-7 items-center justify-center rounded-full border',
+        done ? 'border-good bg-good text-white' : 'border-good bg-good-soft text-good',
+        live && !done ? 'ring-2 ring-good-soft' : '',
       )}
     >
       <span
         className={cn(
           // axis: opacity + translateY only (no translateX, rotate, scale)
           'transition-[opacity,transform] duration-fast ease-enter',
-          done ? 'translate-y-0 opacity-100' : 'translate-y-0.5 opacity-0',
+          done ? 'translate-y-0 opacity-100' : 'translate-y-0.5 opacity-60',
         )}
       >
         <IconCheck size={14} />

@@ -386,9 +386,11 @@ export function checkpointState(
   return row.accepted_at !== null ? 'confirmed' : 'client_turn';
 }
 
-/** The state label text + design token for one checkpoint row. The wording turns
- *  on the viewer's side; the token is muted (open), accent (client's turn), or
- *  success (confirmed). */
+/** The state label text + design tokens for one checkpoint row. The wording turns
+ *  on the viewer's side; the tokens pair a foreground with its matching soft
+ *  background so the label reads as a chip: muted (open), accent (client's turn),
+ *  or success (confirmed). Open has no dedicated soft token, so it borrows the
+ *  neutral raised surface (panel-3). */
 export interface CheckpointLabel {
   text: string;
   className: string;
@@ -396,11 +398,14 @@ export interface CheckpointLabel {
 export function checkpointStateLabel(state: CheckpointState, isClient: boolean): CheckpointLabel {
   switch (state) {
     case 'open':
-      return { text: isClient ? 'With agency' : 'Open', className: 'text-fg-3' };
+      return { text: isClient ? 'With agency' : 'Open', className: 'bg-panel-3 text-fg-3' };
     case 'client_turn':
-      return { text: isClient ? 'Ready for your check' : 'With client', className: 'text-accent' };
+      return {
+        text: isClient ? 'Ready for your check' : 'With client',
+        className: 'bg-accent-soft text-accent',
+      };
     case 'confirmed':
-      return { text: 'Confirmed', className: 'text-good' };
+      return { text: 'Confirmed', className: 'bg-good-soft text-good' };
   }
 }
 
@@ -1491,106 +1496,149 @@ export function Comments({
                 key={comment.id}
                 id={commentDomId(comment.id)}
                 className={cn(
-                  'flex min-h-[44px] flex-col py-3',
+                  'flex min-h-[44px] gap-3 py-3',
                   index > 0 ? 'border-t border-border' : 'pt-0',
                 )}
               >
-                <div className="flex items-start gap-2">
-                  <span
-                    aria-hidden
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent-soft font-mono text-xs font-semibold tabular-nums text-accent"
-                  >
-                    {comment.ledger_seq}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    {tombstone ? (
-                      <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
-                    ) : editing ? (
-                      renderEditor(comment.id)
-                    ) : (
-                      <>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
-                          {renderCommentBody(comment.body, nameOf)}
-                          {editedMarker !== null ? (
-                            <span className="ml-1.5 text-[11px] text-fg-3">{editedMarker}</span>
+                {/* Decorative state rail on the leading edge: neutral (open),
+                    accent (client's turn), soft success (confirmed). Colour only. */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    'w-0.5 shrink-0 self-stretch rounded-full',
+                    state === 'open'
+                      ? 'bg-border'
+                      : state === 'client_turn'
+                        ? 'bg-accent'
+                        : 'bg-good opacity-60',
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-2">
+                    <span
+                      aria-hidden
+                      className="w-5 shrink-0 pt-0.5 text-right font-mono text-xs tabular-nums text-fg-3"
+                    >
+                      {comment.ledger_seq}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {tombstone ? (
+                        <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
+                      ) : editing ? (
+                        renderEditor(comment.id)
+                      ) : (
+                        <>
+                          <p
+                            className={cn(
+                              'text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
+                              state === 'confirmed' ? 'text-fg-2' : 'text-fg',
+                            )}
+                          >
+                            {renderCommentBody(comment.body, nameOf)}
+                            {editedMarker !== null ? (
+                              <span className="ml-1.5 text-[11px] text-fg-3">{editedMarker}</span>
+                            ) : null}
+                          </p>
+                          {attachments.length > 0 ? (
+                            <MessageAttachments
+                              attachments={attachments}
+                              cache={presignCache}
+                              presignEnabled={presignEnabled}
+                              onImageClick={(attachment) => {
+                                const nav = commentImageNav(attachments, attachment.assetId);
+                                if (nav.images.length > 0) setLightbox(nav);
+                              }}
+                            />
                           ) : null}
-                        </p>
-                        {attachments.length > 0 ? (
-                          <MessageAttachments
-                            attachments={attachments}
-                            cache={presignCache}
-                            presignEnabled={presignEnabled}
-                            onImageClick={(attachment) => {
-                              const nav = commentImageNav(attachments, attachment.assetId);
-                              if (nav.images.length > 0) setLightbox(nav);
-                            }}
-                          />
-                        ) : null}
-                        {copiedId === comment.id ? (
-                          <span role="status" className="mt-1.5 block text-xs text-fg-3">
-                            Comment copied
-                          </span>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                  {!tombstone && !editing && actions.canCopy ? (
-                    <div className="relative shrink-0">
-                      <IconButton
-                        label="Point actions"
-                        onClick={() =>
-                          setMenuOpenId((current) => (current === comment.id ? null : comment.id))
-                        }
-                      >
-                        <IconMore size={20} />
-                      </IconButton>
-                      <MenuPopover
-                        open={menuOpenId === comment.id}
-                        onClose={() => setMenuOpenId(null)}
-                        align="right"
-                      >
-                        {actions.canCopy ? (
-                          <button
-                            type="button"
-                            className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                            onClick={() => {
-                              setMenuOpenId(null);
-                              void handleCopy(comment);
-                            }}
-                          >
-                            Copy text
-                          </button>
-                        ) : null}
-                        {actions.canEdit ? (
-                          <button
-                            type="button"
-                            className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                            onClick={() => {
-                              setMenuOpenId(null);
-                              startEdit(comment);
-                            }}
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                        {actions.canDelete ? (
-                          <button
-                            type="button"
-                            className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                            onClick={() => {
-                              setMenuOpenId(null);
-                              void handleDelete(comment.id);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        ) : null}
-                      </MenuPopover>
+                          {copiedId === comment.id ? (
+                            <span role="status" className="mt-1.5 block text-xs text-fg-3">
+                              Comment copied
+                            </span>
+                          ) : null}
+                        </>
+                      )}
                     </div>
-                  ) : null}
-                  <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
-                    {/* State label: muted (open) / accent (client's turn) / success (confirmed). */}
-                    <span className={cn('text-xs font-medium', label.className)}>{label.text}</span>
+                    {!tombstone && !editing && actions.canCopy ? (
+                      <div className="relative shrink-0">
+                        <IconButton
+                          label="Point actions"
+                          className="opacity-70"
+                          onClick={() =>
+                            setMenuOpenId((current) => (current === comment.id ? null : comment.id))
+                          }
+                        >
+                          <IconMore size={18} />
+                        </IconButton>
+                        <MenuPopover
+                          open={menuOpenId === comment.id}
+                          onClose={() => setMenuOpenId(null)}
+                          align="right"
+                        >
+                          {actions.canCopy ? (
+                            <button
+                              type="button"
+                              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                void handleCopy(comment);
+                              }}
+                            >
+                              Copy text
+                            </button>
+                          ) : null}
+                          {actions.canEdit ? (
+                            <button
+                              type="button"
+                              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                startEdit(comment);
+                              }}
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                          {actions.canDelete ? (
+                            <button
+                              type="button"
+                              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                void handleDelete(comment.id);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          ) : null}
+                        </MenuPopover>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Meta row: state chip, timestamp, Reply, flexible spacer, tick.
+                      One row, aligned to the point-text column. */}
+                  <div className="mt-2 flex items-center gap-2 pl-7">
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-xs font-medium',
+                        label.className,
+                      )}
+                    >
+                      {label.text}
+                    </span>
+                    <span className="font-mono text-[11px] tabular-nums text-fg-3">
+                      {relativeLong(comment.created_at, new Date())}
+                    </span>
+                    {!tombstone ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="min-h-[44px] min-w-[44px]"
+                        onClick={() => toggleReply(comment.id)}
+                      >
+                        {replyOpen.has(comment.id) ? 'Cancel' : 'Reply'}
+                      </Button>
+                    ) : null}
                     {live ? (
                       <button
                         type="button"
@@ -1612,113 +1660,129 @@ export function Comments({
                         }}
                         // axis: background-color on hover only; the tick fill motion
                         // (opacity + translateY) lives inside tickCircle.
-                        className="flex h-11 w-11 items-center justify-center rounded-md transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                        className="ml-auto flex h-11 w-11 items-center justify-center rounded-md transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
                       >
                         {tickCircle(false, true)}
                       </button>
                     ) : (
-                      <span aria-hidden className="flex h-11 w-11 items-center justify-center">
+                      <span
+                        aria-hidden
+                        className="ml-auto flex h-11 w-11 items-center justify-center"
+                      >
                         {tickCircle(filled)}
                       </span>
                     )}
                   </div>
-                </div>
 
-                {withdrawn && comment.unaccepted_at !== null ? (
-                  <p className="pl-8 text-xs text-fg-3">
-                    {checkpointWithdrawalText(
-                      comment.unaccepted_at,
-                      comment.unaccepted_by !== null ? nameOf(comment.unaccepted_by) : null,
-                    )}
-                  </p>
-                ) : null}
+                  {withdrawn && comment.unaccepted_at !== null ? (
+                    <p className="pl-7 text-xs text-fg-3">
+                      {checkpointWithdrawalText(
+                        comment.unaccepted_at,
+                        comment.unaccepted_by !== null ? nameOf(comment.unaccepted_by) : null,
+                      )}
+                    </p>
+                  ) : null}
 
-                {noteOpen ? (
-                  // axis: opacity + translateY only (noteRevealClass); no translateX,
-                  // rotate, or scale.
-                  <div
-                    className={cn('mt-2 flex flex-col gap-2 pl-8', noteRevealClass(noteEntered))}
-                  >
-                    <Textarea
-                      autoFocus
-                      autoGrow
-                      rows={1}
-                      maxLength={MAX_NOTE_CHARS}
-                      aria-label={`Resolution note for checkpoint ${seq}`}
-                      placeholder={NOTE_PLACEHOLDER}
-                      value={noteDraft}
-                      disabled={busy}
-                      onChange={(event) => setNoteDraft(event.target.value)}
-                      style={{ minHeight: '44px' }}
-                    />
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="lg"
-                        variant="primary"
+                  {noteOpen ? (
+                    // axis: opacity + translateY only (noteRevealClass); no translateX,
+                    // rotate, or scale.
+                    <div
+                      className={cn('mt-2 flex flex-col gap-2 pl-7', noteRevealClass(noteEntered))}
+                    >
+                      <Textarea
+                        autoFocus
+                        autoGrow
+                        rows={1}
+                        maxLength={MAX_NOTE_CHARS}
+                        aria-label={`Resolution note for checkpoint ${seq}`}
+                        placeholder={NOTE_PLACEHOLDER}
+                        value={noteDraft}
                         disabled={busy}
-                        onClick={() => void handleCheckpointResolve(comment, true, noteDraft)}
-                      >
-                        {busy ? 'Saving' : 'Mark done'}
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() => {
-                          setNoteForId(null);
-                          setNoteDraft('');
-                          setNoteEntered(false);
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <span className="ml-auto text-xs tabular-nums text-fg-3">
-                        {noteDraft.length}/{MAX_NOTE_CHARS}
-                      </span>
+                        onChange={(event) => setNoteDraft(event.target.value)}
+                        style={{ minHeight: '44px' }}
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="lg"
+                          variant="primary"
+                          disabled={busy}
+                          onClick={() => void handleCheckpointResolve(comment, true, noteDraft)}
+                        >
+                          {busy ? 'Saving' : 'Mark done'}
+                        </Button>
+                        <Button
+                          size="lg"
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() => {
+                            setNoteForId(null);
+                            setNoteDraft('');
+                            setNoteEntered(false);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <span className="ml-auto text-xs tabular-nums text-fg-3">
+                          {noteDraft.length}/{MAX_NOTE_CHARS}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
 
-                {notDone || undo ? (
-                  <div className="flex items-center gap-3 pl-8">
-                    {notDone ? (
-                      <QuietTextButton
-                        disabled={busy}
-                        onClick={() => void handleCheckpointNotDone(comment)}
-                      >
-                        {busy ? 'Saving' : 'Not done'}
-                      </QuietTextButton>
+                  {notDone || undo ? (
+                    <div className="flex items-center gap-3 pl-7">
+                      {notDone ? (
+                        <QuietTextButton
+                          disabled={busy}
+                          onClick={() => void handleCheckpointNotDone(comment)}
+                        >
+                          {busy ? 'Saving' : 'Not done'}
+                        </QuietTextButton>
+                      ) : null}
+                      {undo ? (
+                        <QuietTextButton
+                          disabled={busy}
+                          onClick={() => void handleCheckpointAccept(comment, false)}
+                        >
+                          {busy ? 'Saving' : 'Undo'}
+                        </QuietTextButton>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {rowError !== null && rowError.id === comment.id ? (
+                    <div
+                      role="alert"
+                      className="ml-7 mt-2 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+                    >
+                      {rowError.message}
+                    </div>
+                  ) : null}
+
+                  <div className="pl-7">
+                    {renderReplyList(replies, (reply) => renderCommentCard(reply, true))}
+                    {!tombstone && replyOpen.has(comment.id) ? (
+                      <div className="mt-3 border-l border-border pl-4">
+                        <CommentComposer
+                          onSubmit={(body, options) =>
+                            handleCreate(body, { ...options, parentCommentId: comment.id })
+                          }
+                          members={candidates}
+                          canAttach={canAttach}
+                          uploadFile={uploadFile}
+                          placeholder="Write a reply"
+                          submitLabel="Reply"
+                          autoFocus
+                          initialBody={checkpointReplySeed(
+                            pushbackSeeds.has(comment.id),
+                            comment,
+                            currentUserId,
+                            candidates,
+                          )}
+                        />
+                      </div>
                     ) : null}
-                    {undo ? (
-                      <QuietTextButton
-                        disabled={busy}
-                        onClick={() => void handleCheckpointAccept(comment, false)}
-                      >
-                        {busy ? 'Saving' : 'Undo'}
-                      </QuietTextButton>
-                    ) : null}
                   </div>
-                ) : null}
-
-                {rowError !== null && rowError.id === comment.id ? (
-                  <div
-                    role="alert"
-                    className="ml-8 mt-2 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-                  >
-                    {rowError.message}
-                  </div>
-                ) : null}
-
-                <div className="pl-8">
-                  {renderThreadTail(
-                    comment,
-                    replies,
-                    tombstone,
-                    false,
-                    <span className="ml-auto shrink-0 text-xs text-fg-3 tabular-nums">
-                      {relativeLong(comment.created_at, new Date())}
-                    </span>,
-                  )}
                 </div>
               </li>
             );
