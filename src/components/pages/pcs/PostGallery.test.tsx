@@ -8,6 +8,7 @@ import {
   resolveRibbonTileStyle,
   ribbonTileStyle,
   slideTapAction,
+  soloTileStyle,
   viewerReplacesRibbon,
 } from '@/components/pages/pcs/PostGallery';
 import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
@@ -192,34 +193,83 @@ describe('galleryView', () => {
     expect(ribbonTileStyle(0, 1000)).toEqual(fallback);
   });
 
-  it('appends the dashed Add tile only when onAddSlide is provided', () => {
+  it('never renders an add tile on the post ribbon, with or without onAddSlide', () => {
     const onAddSlide = vi.fn();
     const items = [item(0), item(1)];
-    const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {}, onAddSlide });
-    const all = elements(tree);
-    const addTile = all.find((el) => label(el) === 'Add image')!;
-    expect(addTile).toBeDefined();
 
-    // Fixed narrow width, dashed border, the shared height cap, snapping like a tile.
-    expect(className(addTile)).toContain('w-20');
-    expect(className(addTile)).toContain('border-dashed');
-    expect(className(addTile)).toContain('shrink-0');
-    expect(className(addTile)).toContain('snap-start');
-    expect((addTile.props as { style?: unknown }).style).toEqual({
-      height: 'clamp(200px, 38vh, 320px)',
+    // The trailing dashed Add tile is gone: the ribbon carries only image tiles,
+    // even when the append flow (onAddSlide) is wired.
+    const withAdd = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      onAddSlide,
     });
-
-    // It trails the image tiles inside the scroller and calls the append flow.
-    const scroller = all.find((el) => className(el).includes('snap-x'))!;
+    const withAll = elements(withAdd);
+    expect(withAll.some((el) => label(el) === 'Add image')).toBe(false);
+    const scroller = withAll.find((el) => className(el).includes('snap-x'))!;
     const inScroller = elements((scroller.props as { children?: ReactNode }).children);
-    const labels = inScroller.map((el) => label(el)).filter((l) => l !== undefined);
-    expect(labels).toEqual(['View image 1', 'View image 2', 'Add image']);
-    (addTile.props as { onClick: () => void }).onClick();
-    expect(onAddSlide).toHaveBeenCalledOnce();
+    expect(inScroller.map((el) => label(el)).filter((l) => l !== undefined)).toEqual([
+      'View image 1',
+      'View image 2',
+    ]);
 
-    // Without onAddSlide the ribbon has no Add tile.
+    // Nothing changes without onAddSlide either.
     const viewOnly = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
     expect(elements(viewOnly).some((el) => label(el) === 'Add image')).toBe(false);
+  });
+
+  it('offers the append upload zone as the sole add affordance, only in the empty state', () => {
+    const onAddSlide = vi.fn();
+    // Zero-asset empty state (agency side): a full-width "Add images" upload zone
+    // wired to the append flow. This is now the only add affordance on the post.
+    const tree = galleryView({
+      items: [],
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      onAddSlide,
+    });
+    const strings = elements(tree)
+      .map((el) => (el.props as { children?: ReactNode }).children)
+      .filter((child): child is string => typeof child === 'string');
+    expect(strings).toContain('Add images');
+    const zone = elements(tree).find(
+      (el) => (el.props as { onClick?: unknown }).onClick !== undefined,
+    )!;
+    (zone.props as { onClick: () => void }).onClick();
+    expect(onAddSlide).toHaveBeenCalledOnce();
+
+    // A view-only empty gallery (no onAddSlide) keeps the calm line, no zone.
+    const viewOnly = galleryView({ items: [], cache, presignEnabled: true, onOpen: () => {} });
+    const viewStrings = elements(viewOnly)
+      .map((el) => (el.props as { children?: ReactNode }).children)
+      .filter((child): child is string => typeof child === 'string');
+    expect(viewStrings).toContain('No images on this post yet.');
+    expect(viewStrings).not.toContain('Add images');
+  });
+
+  it('renders a lone image full width at its own ratio, never a narrow peek tile', () => {
+    // item(0) is 800x1000: the single tile fills the column (width 100%) and hugs
+    // its own aspect ratio, capped in height so it cannot overflow the fold.
+    const tree = galleryView({ items: [item(0)], cache, presignEnabled: true, onOpen: () => {} });
+    const all = elements(tree);
+    const tiles = all.filter((el) => label(el)?.startsWith('View image'));
+    expect(tiles.length).toBe(1);
+    const tile = tiles[0]!;
+    // The authoritative resolver returns the full-width solo box for one image.
+    expect((tile.props as { style?: unknown }).style).toEqual(soloTileStyle(800, 1000));
+    expect((tile.props as { style: { width: string } }).style.width).toBe('100%');
+    expect((tile.props as { style: { aspectRatio: string } }).style.aspectRatio).toBe('800 / 1000');
+    // No fixed narrow width and no horizontal overflow: width is 100% of the column.
+    expect(className(tile)).not.toContain('w-20');
+    // The lone image still shows its 1/1 index chip, exactly as today.
+    const counter = all
+      .filter((el) => className(el).includes('text-overlay-fg'))
+      .map((el) => (el.props as { children?: ReactNode }).children)
+      .find((child): child is string => typeof child === 'string' && child.includes('/'));
+    expect(counter).toBe('1/1');
   });
 
   it('shows an n/N counter for the active slide (clamped into range)', () => {

@@ -854,10 +854,6 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     void commitGallery(ids);
   }
   function handleRemove(index: number): void {
-    if (orderedIds.length <= 1) {
-      push('A post needs at least one image.');
-      return;
-    }
     void commitGallery(removeAt(orderedIds, index));
   }
   function openAdd(target: { mode: 'append' } | { mode: 'insertAfter'; index: number }): void {
