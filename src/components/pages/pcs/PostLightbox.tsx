@@ -20,7 +20,13 @@ import {
 import type { IconProps } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
+import { wrapIndex, lightboxCounter } from '@/components/ui/ImageLightbox';
 import type { GalleryItem } from '@srtdio/posts';
+
+// wrapIndex / lightboxCounter live in the shared ImageLightbox now; re-exported
+// here so existing importers (and the gallery's own looping navigation) resolve
+// them from one definition.
+export { wrapIndex, lightboxCounter };
 
 /** Continuous zoom bounds: pinch scale between 1x and 5x. */
 export const ZOOM_MIN = 1;
@@ -44,21 +50,6 @@ function isVideo(item: GalleryItem): boolean {
 /** Whether the item can be shown in place at all (vs a download-only panel). */
 function isInlineRenderable(item: GalleryItem): boolean {
   return isImage(item) || isVideo(item);
-}
-
-/** The mono top-bar counter: "n / N". Pure. */
-export function lightboxCounter(index: number, count: number): string {
-  return `${index + 1} / ${count}`;
-}
-
-/**
- * Wrap an index by `delta` over `n` items, cycling past either end. Pure. No
- * longer used by this viewer (its track clamps), but the comment-image lightbox
- * still navigates with it.
- */
-export function wrapIndex(index: number, delta: number, n: number): number {
-  if (n <= 0) return 0;
-  return (((index + delta) % n) + n) % n;
 }
 
 /** The minimal rect shape the pin math reads off the rendered image. */
@@ -214,9 +205,9 @@ export interface LightboxViewProps {
   failedFor: (item: GalleryItem) => boolean;
   dimsFor: (item: GalleryItem) => { width: number; height: number } | null;
   onClose: () => void;
-  /** Step the carousel back one slide (overlay arrow; clamps at the first). */
+  /** Step the carousel back one slide (overlay arrow; loops to the last). */
   onPrev: () => void;
-  /** Step the carousel forward one slide (overlay arrow; clamps at the last). */
+  /** Step the carousel forward one slide (overlay arrow; loops to the first). */
   onNext: () => void;
   onDownload: () => void;
   onTrackScroll: (event: ReactUIEvent<HTMLDivElement>) => void;
@@ -325,9 +316,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const ratioStyle: CSSProperties = {
     aspectRatio: dims !== null ? `${dims.width} / ${dims.height}` : '4 / 5',
   };
-  const atStart = index <= 0;
-  const atEnd = index >= count - 1;
-
   // Opacity only: no translate or rotate is introduced anywhere on this surface.
   const chromeMotion = (visible: boolean): string =>
     cn(
@@ -395,7 +383,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <button
               type="button"
               aria-label="Previous image"
-              disabled={atStart}
               onClick={props.onPrev}
               className={cn(OVERLAY_BUTTON, 'pointer-events-auto')}
             >
@@ -404,7 +391,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <button
               type="button"
               aria-label="Next image"
-              disabled={atEnd}
               onClick={props.onNext}
               className={cn(OVERLAY_BUTTON, 'pointer-events-auto')}
             >
@@ -665,9 +651,9 @@ export function PostLightbox({
       if (event.key === 'Escape') {
         onClose();
       } else if (event.key === 'ArrowLeft') {
-        onIndexChange(Math.max(0, indexRef.current - 1));
+        onIndexChange(wrapIndex(indexRef.current, -1, items.length));
       } else if (event.key === 'ArrowRight') {
-        onIndexChange(Math.min(items.length - 1, indexRef.current + 1));
+        onIndexChange(wrapIndex(indexRef.current, 1, items.length));
       }
     };
     window.addEventListener('keydown', onKey);
@@ -891,8 +877,8 @@ export function PostLightbox({
     failedFor: (it) => failed[it.assetVersionId] === true,
     dimsFor: (it) => intrinsicSize(it, measured),
     onClose,
-    onPrev: () => onIndexChange(Math.max(0, index - 1)),
-    onNext: () => onIndexChange(Math.min(items.length - 1, index + 1)),
+    onPrev: () => onIndexChange(wrapIndex(index, -1, items.length)),
+    onNext: () => onIndexChange(wrapIndex(index, 1, items.length)),
     onDownload: handleDownload,
     onTrackScroll: handleTrackScroll,
     onImageLoad: (it, event) => {

@@ -426,21 +426,28 @@ describe('lightboxView', () => {
     )!;
     expect(className(arrowLayer)).toContain('pointer-events-none');
     expect(className(prev)).toContain('pointer-events-auto');
-    expect((prev.props as { disabled: boolean }).disabled).toBe(false);
-    expect((next.props as { disabled: boolean }).disabled).toBe(false);
     (prev.props as { onClick: () => void }).onClick();
     (next.props as { onClick: () => void }).onClick();
     expect(onPrev).toHaveBeenCalledOnce();
     expect(onNext).toHaveBeenCalledOnce();
   });
 
-  it('disables the prev arrow at the first slide and the next arrow at the last', () => {
+  it('keeps both arrows enabled at either end so navigation loops', () => {
+    // Navigation now wraps at both ends (the wrap math lives in PostLightbox), so
+    // the view never disables an arrow: prev is live at the first slide, next at
+    // the last. Undefined means the prop was dropped, i.e. not disabled.
     const first = lightboxView(props({ index: 0 }));
-    expect((byLabel(first, 'Previous image')!.props as { disabled: boolean }).disabled).toBe(true);
-    expect((byLabel(first, 'Next image')!.props as { disabled: boolean }).disabled).toBe(false);
+    expect((byLabel(first, 'Previous image')!.props as { disabled?: boolean }).disabled).toBe(
+      undefined,
+    );
+    expect((byLabel(first, 'Next image')!.props as { disabled?: boolean }).disabled).toBe(
+      undefined,
+    );
     const last = lightboxView(props({ index: 2 }));
-    expect((byLabel(last, 'Previous image')!.props as { disabled: boolean }).disabled).toBe(false);
-    expect((byLabel(last, 'Next image')!.props as { disabled: boolean }).disabled).toBe(true);
+    expect((byLabel(last, 'Previous image')!.props as { disabled?: boolean }).disabled).toBe(
+      undefined,
+    );
+    expect((byLabel(last, 'Next image')!.props as { disabled?: boolean }).disabled).toBe(undefined);
     // A single-image gallery shows no arrows at all.
     const solo = lightboxView(props({ items: [item(0)], index: 0 }));
     expect(byLabel(solo, 'Previous image')).toBeUndefined();

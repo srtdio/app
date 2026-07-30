@@ -31,11 +31,11 @@ import type {
 import { checkpointAccept, commentResolve, DOMAIN_ERROR_CODES } from '@srtdio/rpc';
 import type { DomainErrorCode } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
-import type { MessageAttachment } from '@/lib/chat/attachments';
+import { classifyAttachment, type MessageAttachment } from '@/lib/chat/attachments';
 import { CommentComposer } from '@/components/comments/CommentComposer';
 import { SlotComposer } from '@/components/comments/SlotComposer';
 import type { CheckpointPoint } from '@/components/comments/SlotComposer';
-import { CommentImageLightbox, commentImageNav } from '@/components/comments/CommentImageLightbox';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { useMentionCandidates } from '@/components/comments/useMentionCandidates';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 import { flashNode } from '@/components/comments/flash-node';
@@ -88,6 +88,21 @@ interface CommentsProps {
 /** Stable DOM id for a comment row, so a caption highlight can scroll to it. */
 export function commentDomId(commentId: string): string {
   return `comment-${commentId}`;
+}
+
+/**
+ * Filter a comment's attachments to its images and locate the clicked one among
+ * them. Returns the image list plus the clicked image's index (0 when the id is
+ * not found but images exist; an all-files comment yields an empty list). The
+ * shared ImageLightbox is images-only, so callers pass the filtered list. Pure.
+ */
+export function commentImageNav(
+  attachments: MessageAttachment[],
+  clickedAssetId: string,
+): { images: MessageAttachment[]; index: number } {
+  const images = attachments.filter((a) => classifyAttachment(a.mime) === 'image');
+  const found = images.findIndex((a) => a.assetId === clickedAssetId);
+  return { images, index: found >= 0 ? found : 0 };
 }
 
 /**
@@ -1863,7 +1878,7 @@ export function Comments({
       ) : null}
 
       {lightbox !== null ? (
-        <CommentImageLightbox
+        <ImageLightbox
           images={lightbox.images}
           index={lightbox.index}
           cache={presignCache}
