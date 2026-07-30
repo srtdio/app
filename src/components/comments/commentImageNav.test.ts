@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { commentImageNav } from '@/components/comments/CommentImageLightbox';
+import { commentImageNav } from '@/components/comments/Comments';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 
 // commentImageNav is the only DOM-free logic in the lightbox: it filters a
