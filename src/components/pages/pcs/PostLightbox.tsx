@@ -304,8 +304,9 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const count = items.length;
   const chromeVisible = chrome;
   const removeConfirming = props.removeConfirming === true;
-  // A gallery can never be emptied, so delete is inert on the last image.
-  const canDelete = count > 1;
+  // A gallery may be emptied: deleting the sole image is allowed and leaves the
+  // post with no artwork, so the confirm copy shifts to the only-image wording.
+  const soloRemaining = count <= 1;
 
   // The image region is a full-width aspect-ratio box following the CURRENT
   // item's ratio (stored dims or measured fallback), so the whole image shows
@@ -419,7 +420,16 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           </button>
         ) : removeConfirming ? (
           <div className="flex items-center gap-2 px-3">
-            <span className="text-sm text-overlay-fg">Remove this image?</span>
+            <span className="flex min-w-0 flex-col text-left">
+              <span className="text-sm text-overlay-fg">
+                {soloRemaining ? 'Delete the only image?' : 'Remove this image?'}
+              </span>
+              {soloRemaining ? (
+                <span className="text-xs text-overlay-fg-dim">
+                  The post goes back to having no artwork, for everyone. The file stays in Assets.
+                </span>
+              ) : null}
+            </span>
             <button
               type="button"
               onClick={props.onCancelRemove}
@@ -494,7 +504,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <button
               type="button"
               aria-label="Delete image"
-              disabled={!canDelete}
               onClick={props.onRequestRemove}
               className={cn(TOOLBAR_BUTTON, 'hover:text-bad')}
             >
@@ -858,10 +867,11 @@ export function PostLightbox({
           },
           // Remove the viewed slide via the existing gallery_set commit, then
           // keep a valid slide in view (the last one shrinks to its predecessor).
+          // Removing the sole image empties the gallery; the parent clears the
+          // open index when items becomes empty, so the viewer closes on its own.
           onRemove: () => {
-            if (items.length <= 1) return;
             manage.onRemove(index);
-            onIndexChange(Math.min(index, items.length - 2));
+            onIndexChange(Math.max(0, Math.min(index, items.length - 2)));
           },
         }
       : undefined;

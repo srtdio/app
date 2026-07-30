@@ -3,7 +3,8 @@
 // only: it renders the four actions and reports the intent; the page owns the
 // pure transform + the single gallerySet write (so versioning and annotation
 // re-staling stay server-side). The move actions are disabled at the ends; Remove
-// is the danger action and is itself blocked by the page when one image remains.
+// is the danger action and the page now allows it down to the last image (an
+// empty gallery is valid, so the post is simply left with no artwork).
 
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';

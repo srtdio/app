@@ -151,6 +151,9 @@ export function nearestTileIndex(scrollLeft: number, tileOffsets: readonly numbe
 // the viewport (minus the page's 1rem side paddings).
 const RIBBON_TILE_MAX_HEIGHT = 'clamp(200px, 38vh, 320px)';
 const RIBBON_TILE_MAX_WIDTH = 'calc(100vw - 2rem)';
+// A solo image is not a peek ribbon: it fills the column at its own ratio, taller
+// than a ribbon tile is allowed to be.
+const SOLO_TILE_MAX_HEIGHT = '78vh';
 
 /**
  * The reserved box for one ribbon tile. With both intrinsic dimensions known
@@ -176,25 +179,48 @@ export function ribbonTileStyle(width: number | null, height: number | null): CS
   };
 }
 
+/**
+ * The reserved box for the lone image in the ribbon branch: it fills the column
+ * width and keeps its own aspect ratio (so the contained image never crops),
+ * capped only in height. Unknown dimensions degrade to the same stable 4/5 box
+ * the multi-image fallback uses. No fixed width means it can never overflow the
+ * column on the X axis. Pure.
+ */
+export function soloTileStyle(width: number | null, height: number | null): CSSProperties {
+  const aspectRatio =
+    width !== null && height !== null && width > 0 && height > 0 ? `${width} / ${height}` : '4 / 5';
+  return { width: '100%', aspectRatio, maxHeight: SOLO_TILE_MAX_HEIGHT };
+}
+
 /** A tile's intrinsic size measured from the decoded image, keyed by attachment id. */
 export type MeasuredDimensions = Record<string, { width: number; height: number }>;
 
 /**
  * The reserved box for one ribbon tile, resolving size by precedence: stored
  * intrinsic dimensions first, then the pair measured from the decoded image,
- * then the stable 4/5 fallback (until that image loads). Both usable paths feed
- * {@link ribbonTileStyle} unchanged. Pure.
+ * then the stable 4/5 fallback (until that image loads). The resolved dimensions
+ * feed one authoritative sizing function: a peek tile ({@link ribbonTileStyle})
+ * when the ribbon holds several images, or the full-width solo box
+ * ({@link soloTileStyle}) when it holds exactly one. Pure.
  */
 export function resolveRibbonTileStyle(
   item: GalleryItem,
   measured: MeasuredDimensions,
+  solo = false,
 ): CSSProperties {
+  let width: number | null = null;
+  let height: number | null = null;
   if (item.width !== null && item.height !== null && item.width > 0 && item.height > 0) {
-    return ribbonTileStyle(item.width, item.height);
+    width = item.width;
+    height = item.height;
+  } else {
+    const seen = measured[item.assetAttachmentId];
+    if (seen !== undefined) {
+      width = seen.width;
+      height = seen.height;
+    }
   }
-  const seen = measured[item.assetAttachmentId];
-  if (seen !== undefined) return ribbonTileStyle(seen.width, seen.height);
-  return ribbonTileStyle(null, null);
+  return solo ? soloTileStyle(width, height) : ribbonTileStyle(width, height);
 }
 
 /**
@@ -248,7 +274,7 @@ interface GalleryViewProps {
   consumeClickSuppression?: (() => boolean) | undefined;
   /** F7: pin-count badge per tile; the badge renders only when this returns > 0. */
   pinCountFor?: ((item: GalleryItem) => number) | undefined;
-  /** F7: agency-only dashed Add tile at the ribbon's end (append flow). */
+  /** F7: agency-only append flow, wired to the zero-asset empty-state upload zone. */
   onAddSlide?: (() => void) | undefined;
   /** Carousel: the slide the counter and dots highlight. Defaults to the first. */
   activeIndex?: number;
@@ -274,9 +300,11 @@ interface GalleryViewProps {
  * omitted) renders an uncropped horizontal snap ribbon: a native overflow-x
  * scroller with x-mandatory snapping and snap-start tiles that hug their images
  * at true aspect ratio (heights vary by ratio inside the shared caps), an n/N
- * counter, 44px dot indicators, and a trailing dashed Add tile when onAddSlide
- * is provided. No JS-driven animation; all motion is native scrolling on the X
- * axis. The brief gallery overrides columns / aspect / showIndex and keeps its
+ * counter, and 44px dot indicators. A lone image is not a peek tile: it fills the
+ * column at its own ratio. There is no add tile on the ribbon; the zero-asset
+ * empty state carries the only add affordance. No JS-driven animation; all motion
+ * is native scrolling on the X axis. The brief gallery overrides columns / aspect
+ * / showIndex and keeps its
  * cropped overview grid; the empty and upload states are unchanged. Pin
  * placement is armed by a long-press on a ribbon tile (pinArmedIndex shows the
  * hint pill) and the next tap routes through onSlideTap.
@@ -394,7 +422,7 @@ export function galleryView({
                 key={item.assetAttachmentId}
                 type="button"
                 aria-label={`View image ${index + 1}`}
-                style={resolveRibbonTileStyle(item, measuredDimensions)}
+                style={resolveRibbonTileStyle(item, measuredDimensions, items.length === 1)}
                 {...(slideGestures !== undefined ? slideGestures(index) : {})}
                 onClick={(event) => {
                   if (onSlideTap !== undefined) {
@@ -429,17 +457,6 @@ export function galleryView({
               </button>
             );
           })}
-          {onAddSlide !== undefined ? (
-            <button
-              type="button"
-              aria-label="Add image"
-              onClick={onAddSlide}
-              style={{ height: RIBBON_TILE_MAX_HEIGHT }}
-              className="flex w-20 shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 text-accent transition-colors hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <IconImagePlus size={22} />
-            </button>
-          ) : null}
         </div>
         {showIndex ? (
           <span
@@ -500,7 +517,7 @@ interface PostGalleryProps {
    * slide. Reached by right-click on a slide; the lightbox no longer links here.
    */
   onSlideActions?: ((index: number) => void) | undefined;
-  /** F7 (agency-side): the dashed Add tile at the ribbon's end (append flow). */
+  /** F7 (agency-side): the append flow, used by the zero-asset empty state. */
   onAddSlide?: (() => void) | undefined;
   /** Lightbox manage row: make-first over the existing gallery_set commit path. */
   onMakeFirst?: ((index: number) => void) | undefined;
@@ -547,6 +564,13 @@ export function PostGallery({
 }: PostGalleryProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
+  // Deleting the last image empties the gallery: the in-place viewer has nothing
+  // to show, so clear the open index and let the ribbon branch fall through to
+  // the zero-asset empty state.
+  useEffect(() => {
+    if (items.length === 0) setOpenIndex(null);
+  }, [items.length]);
+
   // Carousel state: the active slide is derived from the native scroller's
   // offset (no JS animation, scrolling stays native). A dot tap asks the
   // scroller for a native smooth scroll to that slide's snap point.
@@ -554,8 +578,8 @@ export function PostGallery({
   const [activeIndex, setActiveIndex] = useState(0);
   const handleScroll = (event: ReactUIEvent<HTMLDivElement>): void => {
     const el = event.currentTarget;
-    // Measure each image tile's left edge (the trailing Add tile is excluded);
-    // tile widths vary with aspect ratio, so offsets are never assumed uniform.
+    // Measure each image tile's left edge; tile widths vary with aspect ratio, so
+    // offsets are never assumed uniform.
     const offsets: number[] = [];
     for (let i = 0; i < items.length; i += 1) {
       const tile = el.children.item(i);
