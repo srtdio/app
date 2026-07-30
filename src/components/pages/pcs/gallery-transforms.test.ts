@@ -61,7 +61,7 @@ describe('removeAt', () => {
   it('is an out-of-range no-op copy', () => {
     expect(removeAt(ids, 9)).toEqual(['a', 'b', 'c']);
   });
-  it('throws rather than ever producing an empty gallery', () => {
-    expect(() => removeAt(['only'], 0)).toThrow();
+  it('yields an empty gallery when the last image is removed', () => {
+    expect(removeAt(['only'], 0)).toEqual([]);
   });
 });

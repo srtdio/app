@@ -304,8 +304,9 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const count = items.length;
   const chromeVisible = chrome;
   const removeConfirming = props.removeConfirming === true;
-  // A gallery can never be emptied, so delete is inert on the last image.
-  const canDelete = count > 1;
+  // Deleting the sole image is allowed now (it empties the post's artwork), so
+  // the confirm copy escalates when only one image remains.
+  const soleImage = count <= 1;
 
   // The image region is a full-width aspect-ratio box following the CURRENT
   // item's ratio (stored dims or measured fallback), so the whole image shows
@@ -405,7 +406,10 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           download/add/delete), or download only for clients and read-only.
           Delete swaps the whole bar for an inline confirm row. */}
       <div
-        className={cn('flex h-12 w-full items-center justify-center', chromeMotion(chromeVisible))}
+        className={cn(
+          'flex min-h-12 w-full items-center justify-center',
+          chromeMotion(chromeVisible),
+        )}
       >
         {manage === undefined ? (
           <button
@@ -418,22 +422,31 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <IconDownload size={20} />
           </button>
         ) : removeConfirming ? (
-          <div className="flex items-center gap-2 px-3">
-            <span className="text-sm text-overlay-fg">Remove this image?</span>
-            <button
-              type="button"
-              onClick={props.onCancelRemove}
-              className="inline-flex h-11 items-center rounded-lg px-3 text-sm text-overlay-fg-dim hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={props.onConfirmRemove}
-              className="inline-flex h-11 items-center rounded-lg border border-bad px-3 text-sm font-medium text-bad hover:bg-bad/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad"
-            >
-              Remove
-            </button>
+          <div className="flex flex-col items-center gap-2 px-4 py-3 text-center">
+            <span className="text-sm font-medium text-overlay-fg">
+              {soleImage ? 'Delete the only image?' : 'Remove this image?'}
+            </span>
+            {soleImage ? (
+              <span className="max-w-sm text-xs text-overlay-fg-dim">
+                The post goes back to having no artwork, for everyone. The file stays in Assets.
+              </span>
+            ) : null}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={props.onCancelRemove}
+                className="inline-flex h-11 items-center rounded-lg px-3 text-sm text-overlay-fg-dim hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={props.onConfirmRemove}
+                className="inline-flex h-11 items-center rounded-lg border border-bad px-3 text-sm font-medium text-bad hover:bg-bad/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex items-center">
@@ -494,7 +507,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <button
               type="button"
               aria-label="Delete image"
-              disabled={!canDelete}
               onClick={props.onRequestRemove}
               className={cn(TOOLBAR_BUTTON, 'hover:text-bad')}
             >
@@ -858,10 +870,11 @@ export function PostLightbox({
           },
           // Remove the viewed slide via the existing gallery_set commit, then
           // keep a valid slide in view (the last one shrinks to its predecessor).
+          // Removing the sole image empties the gallery: the index clamps to 0
+          // and the viewer yields to the zero-asset empty state.
           onRemove: () => {
-            if (items.length <= 1) return;
             manage.onRemove(index);
-            onIndexChange(Math.min(index, items.length - 2));
+            onIndexChange(Math.max(0, Math.min(index, items.length - 2)));
           },
         }
       : undefined;

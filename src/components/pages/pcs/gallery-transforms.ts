@@ -2,8 +2,8 @@
 // asset_version_id uuids (the exact argument gallery_set takes). Every transform
 // is non-mutating and total; the component layer applies one and then sends the
 // result to gallerySet, so the reorder/add/remove logic is unit-tested with no
-// React and no database. `removeAt` NEVER yields an empty list (gallery_set
-// raises on []): removing the final image throws, and the caller blocks it first.
+// React and no database. `removeAt` yields an empty list when the final image is
+// removed; gallery_set now accepts an empty gallery (a post may hold no artwork).
 
 /** Swap the item at `index` with the one before it. Out of range is a no-op. */
 export function moveLeft(ids: readonly string[], index: number): string[] {
@@ -43,14 +43,11 @@ export function insertAfter(ids: readonly string[], index: number, versionId: st
 }
 
 /**
- * Remove the item at `index`. Throws when only one image remains, because an
- * empty gallery is illegal (gallery_set raises on []); the caller must block the
- * last-image removal before calling. An out-of-range index is a no-op copy.
+ * Remove the item at `index`. Removing the last remaining image yields an empty
+ * list; an empty gallery is allowed now (gallery_set accepts []). An
+ * out-of-range index is a no-op copy.
  */
 export function removeAt(ids: readonly string[], index: number): string[] {
-  if (ids.length <= 1) {
-    throw new RangeError('A gallery must keep at least one image.');
-  }
   if (index < 0 || index >= ids.length) return [...ids];
   return ids.filter((_, i) => i !== index);
 }
