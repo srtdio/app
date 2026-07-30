@@ -215,7 +215,9 @@ export function resolveRibbonTileStyle(
       ? { width: item.width, height: item.height }
       : (measured[item.assetAttachmentId] ?? null);
   if (solo) return soloTileStyle(stored?.width ?? null, stored?.height ?? null);
-  return stored !== null ? ribbonTileStyle(stored.width, stored.height) : ribbonTileStyle(null, null);
+  return stored !== null
+    ? ribbonTileStyle(stored.width, stored.height)
+    : ribbonTileStyle(null, null);
 }
 
 /**

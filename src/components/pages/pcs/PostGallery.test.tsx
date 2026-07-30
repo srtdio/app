@@ -199,7 +199,13 @@ describe('galleryView', () => {
 
     // The trailing dashed Add tile is gone: the ribbon carries only image tiles,
     // even when the append flow (onAddSlide) is wired.
-    const withAdd = galleryView({ items, cache, presignEnabled: true, onOpen: () => {}, onAddSlide });
+    const withAdd = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      onAddSlide,
+    });
     const withAll = elements(withAdd);
     expect(withAll.some((el) => label(el) === 'Add image')).toBe(false);
     const scroller = withAll.find((el) => className(el).includes('snap-x'))!;
@@ -218,7 +224,13 @@ describe('galleryView', () => {
     const onAddSlide = vi.fn();
     // Zero-asset empty state (agency side): a full-width "Add images" upload zone
     // wired to the append flow. This is now the only add affordance on the post.
-    const tree = galleryView({ items: [], cache, presignEnabled: true, onOpen: () => {}, onAddSlide });
+    const tree = galleryView({
+      items: [],
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      onAddSlide,
+    });
     const strings = elements(tree)
       .map((el) => (el.props as { children?: ReactNode }).children)
       .filter((child): child is string => typeof child === 'string');

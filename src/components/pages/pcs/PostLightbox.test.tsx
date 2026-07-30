@@ -358,7 +358,13 @@ describe('lightboxView', () => {
     // the viewer yield to the zero-asset empty state.
     const onConfirmRemove = vi.fn();
     const soloConfirm = lightboxView(
-      props({ items: [item(0)], index: 0, manage: MANAGE, removeConfirming: true, onConfirmRemove }),
+      props({
+        items: [item(0)],
+        index: 0,
+        manage: MANAGE,
+        removeConfirming: true,
+        onConfirmRemove,
+      }),
     );
     const soloText = strings(soloConfirm);
     expect(soloText).toContain('Delete the only image?');
@@ -379,8 +385,9 @@ describe('lightboxView', () => {
     expect((manyDelete.props as { disabled?: boolean }).disabled).toBe(undefined);
     (manyDelete.props as { onClick: () => void }).onClick();
     expect(manyRequest).toHaveBeenCalledOnce();
-    expect(strings(lightboxView(props({ index: 1, manage: MANAGE, removeConfirming: true }))))
-      .toContain('Remove this image?');
+    expect(
+      strings(lightboxView(props({ index: 1, manage: MANAGE, removeConfirming: true }))),
+    ).toContain('Remove this image?');
   });
 
   it('swaps the bottom bar for a confirm row: cancel restores, remove runs onConfirmRemove', () => {
