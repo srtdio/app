@@ -341,19 +341,54 @@ describe('lightboxView', () => {
     expect(inBottom.some((el) => byLabelEq(el, 'Download'))).toBe(true);
   });
 
-  it('disables delete on the last remaining image and confirms before removing otherwise', () => {
-    // A single-image gallery: delete is present but disabled (no confirm path).
-    const solo = lightboxView(props({ items: [item(0)], index: 0, manage: MANAGE }));
-    const soloDelete = byLabel(solo, 'Delete image')!;
-    expect((soloDelete.props as { disabled: boolean }).disabled).toBe(true);
-
-    // Tapping delete on a multi-image gallery requests the confirm swap.
+  it('enables delete on the last remaining image and confirms with the only-image copy', () => {
+    // A single-image gallery: delete is enabled now (an empty gallery is valid),
+    // and tapping it requests the confirm swap.
     const onRequestRemove = vi.fn();
-    const armed = lightboxView(props({ index: 1, manage: MANAGE, onRequestRemove }));
-    const del = byLabel(armed, 'Delete image')!;
-    expect((del.props as { disabled: boolean }).disabled).toBe(false);
-    (del.props as { onClick: () => void }).onClick();
+    const solo = lightboxView(
+      props({ items: [item(0)], index: 0, manage: MANAGE, onRequestRemove }),
+    );
+    const soloDelete = byLabel(solo, 'Delete image')!;
+    expect((soloDelete.props as { disabled?: boolean }).disabled).toBeUndefined();
+    (soloDelete.props as { onClick: () => void }).onClick();
     expect(onRequestRemove).toHaveBeenCalledOnce();
+
+    // Confirming on the solo gallery shows the only-image heading and body, and
+    // Remove runs onConfirmRemove (which empties the gallery and closes the
+    // viewer once items drains). Today's shorter copy is gone here.
+    const onConfirmRemove = vi.fn();
+    const confirming = lightboxView(
+      props({
+        items: [item(0)],
+        index: 0,
+        manage: MANAGE,
+        removeConfirming: true,
+        onConfirmRemove,
+      }),
+    );
+    const text = strings(confirming);
+    expect(text).toContain('Delete the only image?');
+    expect(text).toContain(
+      'The post goes back to having no artwork, for everyone. The file stays in Assets.',
+    );
+    expect(text).not.toContain('Remove this image?');
+    const remove = elements(confirming).find(
+      (el) => (el.props as { children?: ReactNode }).children === 'Remove',
+    )!;
+    (remove.props as { onClick: () => void }).onClick();
+    expect(onConfirmRemove).toHaveBeenCalledOnce();
+
+    // With more than one image delete still opens the confirm swap, and the copy
+    // keeps today's shorter wording without the only-image body.
+    const multiRequest = vi.fn();
+    const multi = lightboxView(props({ index: 1, manage: MANAGE, onRequestRemove: multiRequest }));
+    const multiDelete = byLabel(multi, 'Delete image')!;
+    expect((multiDelete.props as { disabled?: boolean }).disabled).toBeUndefined();
+    (multiDelete.props as { onClick: () => void }).onClick();
+    expect(multiRequest).toHaveBeenCalledOnce();
+    const multiConfirm = lightboxView(props({ index: 1, manage: MANAGE, removeConfirming: true }));
+    expect(strings(multiConfirm)).toContain('Remove this image?');
+    expect(strings(multiConfirm)).not.toContain('Delete the only image?');
   });
 
   it('swaps the bottom bar for a confirm row: cancel restores, remove runs onConfirmRemove', () => {

@@ -854,10 +854,9 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     void commitGallery(ids);
   }
   function handleRemove(index: number): void {
-    if (orderedIds.length <= 1) {
-      push('A post needs at least one image.');
-      return;
-    }
+    // Removing the last image is allowed now: gallery_set accepts an empty list,
+    // the post keeps its review stage, and the surface falls back to the empty
+    // state. The stage is never touched here.
     void commitGallery(removeAt(orderedIds, index));
   }
   function openAdd(target: { mode: 'append' } | { mode: 'insertAfter'; index: number }): void {
