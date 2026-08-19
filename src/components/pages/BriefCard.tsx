@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
+import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
 
@@ -21,67 +23,6 @@ function formatTargetDate(value: string): string {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** A string is usable only when it trims non-empty AND parses as an absolute URL. */
-function parseUrl(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (trimmed === '') return null;
-  try {
-    new URL(trimmed);
-    return trimmed;
-  } catch {
-    return null;
-  }
-}
-
-/** One reference_links entry: a bare URL string, or a `{ url }` object. */
-function usableUrl(item: unknown): string | null {
-  if (typeof item === 'string') return parseUrl(item);
-  if (isRecord(item) && typeof item.url === 'string') return parseUrl(item.url);
-  return null;
-}
-
-/**
- * reference_links is jsonb whose shape is inconsistent across the codebase: a bare
- * `string[]`, an array of `{ url }` objects, or the ETL object `{ drive_link, images }`.
- * Narrow `unknown` defensively (no any) and return the FIRST usable absolute URL, or
- * null when nothing parses. Re-implemented locally so this never imports BriefDetailPage.
- */
-function firstReferenceUrl(value: unknown): string | null {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const url = usableUrl(item);
-      if (url !== null) return url;
-    }
-    return null;
-  }
-  if (isRecord(value)) {
-    const drive = usableUrl(value.drive_link);
-    if (drive !== null) return drive;
-    if (Array.isArray(value.images)) {
-      for (const item of value.images) {
-        const url = usableUrl(item);
-        if (url !== null) return url;
-      }
-    }
-    const direct = usableUrl(value.url);
-    if (direct !== null) return direct;
-  }
-  return null;
-}
-
-/** The bare host (no www.) of a URL for the link-fallback label. */
-function domainOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
-}
-
 /** The objective (or title) text used for the text-fallback caption, trimmed. */
 function objectiveCaption(brief: Brief): string | null {
   const objective = brief.objective.trim();
@@ -93,17 +34,28 @@ function objectiveCaption(brief: Brief): string | null {
 
 /**
  * The non-image tile for a brief, mirroring PostCard.postFallback. Used only when the
- * brief has no thumbnail image (or presign is disabled/fails). Selection order: a
- * usable reference link -> its domain; else objective/title text -> a caption snippet;
- * else a plain glyph. The image path itself is owned by Thumbnail (it shows this
- * fallback whenever thumbnailAssetVersionId is null).
+ * brief has no thumbnail image (or presign is disabled/fails). The tile no longer
+ * carries the link case: a reference link is now a real, tappable LinkButton in the
+ * card body rather than a dead domain label painted inside the thumbnail. Selection
+ * order: objective/title text -> a caption snippet; else a plain glyph. The image
+ * path itself is owned by Thumbnail (it shows this fallback whenever
+ * thumbnailAssetVersionId is null).
  */
 function briefFallback(brief: BriefWithThumbnail): ThumbnailFallback {
-  const url = firstReferenceUrl(brief.reference_links);
-  if (url !== null) return { kind: 'link', label: domainOf(url) };
   const caption = objectiveCaption(brief);
   if (caption !== null) return { kind: 'text', caption };
   return { kind: 'glyph' };
+}
+
+/**
+ * The one external link a card may show, or null for none. An image brief keeps the
+ * card exactly as it was: the thumbnail already carries the visual, so no button is
+ * added. Only a brief with no image attachment falls through to its first reference
+ * link, and never to more than one. Pure, so the precedence is unit-tested.
+ */
+export function briefCardLink(brief: BriefWithThumbnail): ExternalLink | null {
+  if (brief.thumbnailAssetVersionId !== null) return null;
+  return toExternalLinks(brief.reference_links)[0] ?? null;
 }
 
 interface BriefCardProps {
@@ -143,6 +95,7 @@ export function BriefCard({
 }: BriefCardProps) {
   const [confirming, setConfirming] = useState(false);
   const closed = isBriefClosed(brief);
+  const link = briefCardLink(brief);
 
   return (
     <div
@@ -186,6 +139,20 @@ export function BriefCard({
         </div>
 
         <p className="text-sm text-fg-3 line-clamp-2">{brief.objective}</p>
+
+        {/* The card itself is the tap target for opening the brief, so the link
+            stops propagation exactly as the Close action below does: tapping the
+            button follows the link instead of also opening the detail view. */}
+        {link !== null ? (
+          <div
+            className="flex min-w-0"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            role="presentation"
+          >
+            <LinkButton url={link.href} />
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-3">
           {brief.target_date !== null ? (

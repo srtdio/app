@@ -8,6 +8,7 @@ import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
 import { EntityRefChip } from '@/components/refs/EntityRefChip';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
@@ -16,6 +17,7 @@ import { env } from '@/lib/env';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
+import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import { getBrief, getBriefGallery } from '@srtdio/briefs';
 import type { BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
 import { briefClose } from '@srtdio/rpc';
@@ -40,11 +42,27 @@ function formatTargetDate(value: string): string {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-// reference_links is stored as jsonb; defensively coerce to a list of non-empty
-// strings so a malformed value never crashes the read-only view.
-function toLinks(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+/**
+ * Every external URL this brief carries, in one deduped list: the reference_links
+ * jsonb first (whatever legacy shape it holds), then the URL of every link-kind
+ * attachment. Link attachments used to reach PostGallery, which has no link
+ * branch and painted them as dead tiles; they belong here, as real buttons.
+ * Deduping runs over the combined input so the same URL stored both ways shows
+ * once. Pure, so the merge and its order are unit-tested without rendering.
+ */
+export function briefExternalLinks(
+  referenceLinks: unknown,
+  gallery: readonly BriefGalleryItem[],
+): ExternalLink[] {
+  return toExternalLinks([
+    ...toExternalLinks(referenceLinks).map((link) => link.href),
+    ...gallery.filter((item) => item.kind === 'link').map((item) => item.externalUrl),
+  ]);
+}
+
+/** The gallery minus link-kind attachments: only real media reaches PostGallery. */
+export function briefMediaItems(gallery: readonly BriefGalleryItem[]): BriefGalleryItem[] {
+  return gallery.filter((item) => item.kind !== 'link');
 }
 
 // Map the proc's domain errors to friendly, inline copy. The proc owns the
@@ -260,7 +278,8 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
 
   const brief = detail.brief;
   const closed = isBriefClosed(brief);
-  const links = toLinks(brief.reference_links);
+  const links = briefExternalLinks(brief.reference_links, gallery);
+  const mediaItems = briefMediaItems(gallery);
 
   return (
     <>
@@ -286,14 +305,14 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
 
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 flex flex-col gap-6">
-          {gallery.length > 0 ? (
+          {mediaItems.length > 0 ? (
             <section>
               <p className="mb-3 text-sm text-fg-3">
                 Reference images from the client. Tap for full screen or download. Briefs are
                 read-only after creation.
               </p>
               <PostGallery
-                items={gallery}
+                items={mediaItems}
                 cache={cache}
                 deps={deps}
                 presignEnabled={presignEnabled}
@@ -327,17 +346,10 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
               <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
                 Reference links
               </div>
-              <ul className="flex flex-col gap-1.5">
+              <ul className="flex flex-col gap-2">
                 {links.map((link) => (
-                  <li key={link}>
-                    <a
-                      href={link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center min-h-[44px] text-sm text-accent hover:underline break-all"
-                    >
-                      {link}
-                    </a>
+                  <li key={link.href}>
+                    <LinkButton url={link.href} className="w-full" />
                   </li>
                 ))}
               </ul>

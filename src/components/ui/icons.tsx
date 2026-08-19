@@ -238,6 +238,15 @@ export function IconLink(props: IconProps) {
   );
 }
 
+export function IconArrowUpRight(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 16L16 8" />
+      <path d="M9 8h7v7" />
+    </Svg>
+  );
+}
+
 export function IconDownload(props: IconProps) {
   return (
     <Svg {...props}>

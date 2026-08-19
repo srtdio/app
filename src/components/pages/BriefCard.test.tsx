@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { BriefCard } from '@/components/pages/BriefCard';
+import { BriefCard, briefCardLink } from '@/components/pages/BriefCard';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 
@@ -72,8 +72,9 @@ describe('BriefCard thumbnail tile', () => {
   });
 
   // One case per known reference_links shape: bare string[], [{ url }], and the ETL
-  // object { drive_link, images }. Each must surface the same domain link fallback.
-  it('falls back to the link domain for a string[] reference_links', () => {
+  // object { drive_link, images }. Each must surface the same domain link BUTTON
+  // (the dead link tile is gone), while the tile itself falls through to text.
+  it('renders a link button for a string[] reference_links', () => {
     const { cache } = makeCache(null);
     const out = render(
       makeBrief({
@@ -85,10 +86,12 @@ describe('BriefCard thumbnail tile', () => {
       cache,
     );
     expect(out).not.toContain('<img');
-    expect(out).toContain('figma.com');
+    expect(out).toContain('href="https://www.figma.com/file/abc"');
+    expect(out).toContain('>figma.com<');
+    expect(out).not.toContain('>https://www.figma.com/file/abc<');
   });
 
-  it('falls back to the link domain for an array of { url } objects', () => {
+  it('renders a link button for an array of { url } objects', () => {
     const { cache } = makeCache(null);
     const out = render(
       makeBrief({
@@ -100,10 +103,11 @@ describe('BriefCard thumbnail tile', () => {
       cache,
     );
     expect(out).not.toContain('<img');
-    expect(out).toContain('notion.so');
+    expect(out).toContain('href="https://notion.so/spring-brief"');
+    expect(out).toContain('>notion.so<');
   });
 
-  it('falls back to the link domain for the ETL { drive_link, images } object', () => {
+  it('renders a link button for the ETL { drive_link, images } object', () => {
     const { cache } = makeCache(null);
     const out = render(
       makeBrief({
@@ -116,7 +120,57 @@ describe('BriefCard thumbnail tile', () => {
       cache,
     );
     expect(out).not.toContain('<img');
-    expect(out).toContain('drive.google.com');
+    expect(out).toContain('href="https://drive.google.com/folder/xyz"');
+    expect(out).toContain('>drive.google.com<');
+  });
+
+  it('renders at most one link button, for the first usable link', () => {
+    const { cache } = makeCache(null);
+    const out = render(
+      makeBrief({
+        thumbnailAssetVersionId: null,
+        reference_links: [
+          'https://first.example/a',
+          'https://second.example/b',
+        ] as unknown as BriefWithThumbnail['reference_links'],
+      }),
+      cache,
+    );
+    expect(out.match(/<a /g) ?? []).toHaveLength(1);
+    expect(out).toContain('>first.example<');
+    expect(out).not.toContain('second.example');
+  });
+
+  it('renders no link button when the brief has an image, leaving the card unchanged', () => {
+    const { cache } = makeCache('https://cdn.example/thumb.jpg');
+    const out = render(
+      makeBrief({
+        thumbnailAssetVersionId: 'av1',
+        reference_links: [
+          'https://www.figma.com/file/abc',
+        ] as unknown as BriefWithThumbnail['reference_links'],
+      }),
+      cache,
+    );
+    expect(out).toContain('<img');
+    expect(out).not.toContain('<a ');
+    expect(out).not.toContain('figma.com');
+  });
+
+  it('renders no link button for a reference_links value with nothing usable', () => {
+    const { cache } = makeCache(null);
+    const out = render(
+      makeBrief({
+        thumbnailAssetVersionId: null,
+        reference_links: [
+          'javascript:alert(1)',
+          'not-a-url',
+        ] as unknown as BriefWithThumbnail['reference_links'],
+      }),
+      cache,
+    );
+    expect(out).not.toContain('<a ');
+    expect(out).not.toContain('javascript:');
   });
 
   it('falls back to the objective text when there is no thumbnail and no usable link', () => {
@@ -165,5 +219,38 @@ describe('BriefCard thumbnail tile', () => {
     const out = render(makeBrief({ status: 'closed' }), cache);
     expect(out).toContain('Closed');
     expect(out).not.toContain('>Close<');
+  });
+});
+
+// The image-wins rule on its own, without rendering: an image brief never grows a
+// link button, and a brief with no image takes its FIRST usable link.
+describe('briefCardLink', () => {
+  const links = [
+    'https://first.example/a',
+    'https://second.example/b',
+  ] as unknown as BriefWithThumbnail['reference_links'];
+
+  it('returns null when the brief has an image attachment, whatever its links', () => {
+    expect(
+      briefCardLink(makeBrief({ thumbnailAssetVersionId: 'av1', reference_links: links })),
+    ).toBeNull();
+  });
+
+  it('returns the first usable link when there is no image', () => {
+    expect(
+      briefCardLink(makeBrief({ thumbnailAssetVersionId: null, reference_links: links })),
+    ).toEqual({ href: 'https://first.example/a', domain: 'first.example' });
+  });
+
+  it('returns null when there is no image and nothing usable', () => {
+    expect(briefCardLink(makeBrief({ thumbnailAssetVersionId: null }))).toBeNull();
+    expect(
+      briefCardLink(
+        makeBrief({
+          thumbnailAssetVersionId: null,
+          reference_links: ['not-a-url'] as unknown as BriefWithThumbnail['reference_links'],
+        }),
+      ),
+    ).toBeNull();
   });
 });
