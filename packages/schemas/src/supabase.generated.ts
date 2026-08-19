@@ -1362,6 +1362,669 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_log_2028_01: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_02: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_03: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_04: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_05: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_06: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_07: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_08: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_09: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_10: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_11: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_2028_12: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_log_default: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_code: string | null
+          id: string
+          impersonation_session_id: string | null
+          ip_subnet: unknown
+          on_behalf_of: string | null
+          outcome: string
+          payload: Json | null
+          trace_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome: string
+          payload?: Json | null
+          trace_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_code?: string | null
+          id?: string
+          impersonation_session_id?: string | null
+          ip_subnet?: unknown
+          on_behalf_of?: string | null
+          outcome?: string
+          payload?: Json | null
+          trace_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       briefs: {
         Row: {
           brand_requirements: string | null
