@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement, ReactNode } from 'react';
 
 // editComment / deleteComment are spied so we can assert the wrapper asymmetry
@@ -65,6 +66,13 @@ import { attachmentView } from '@/components/chat/MessageAttachments';
 
 // Node unit environment: walk the JSX returned by the hookless helpers and
 // assert structure / text, rather than mounting the stateful Comments list.
+// URLs in a body are now rendered by the shared LinkButton component rather than
+// a bare <a>, so those cases render the returned nodes to static markup (node
+// SSR, no DOM) and assert on the html the reader actually gets.
+
+function html(tree: ReactNode): string {
+  return renderToStaticMarkup(<>{tree}</>);
+}
 
 function flatten(node: ReactNode, out: ReactElement[]): void {
   if (Array.isArray(node)) {
@@ -608,39 +616,40 @@ describe('renderCommentBody (author + mention resolution)', () => {
     expect(resolveName(profiles, UUID_B)).toBeNull();
   });
 
-  it('turns an http(s) URL into a safe new-tab anchor', () => {
-    const tree = renderCommentBody('go https://srtd.io/abc now', () => null);
-    const anchor = elements(tree).find((el) => el.type === 'a')!;
-    expect(anchor).toBeDefined();
-    const props = anchor.props as { href: string; target: string; rel: string };
-    expect(props.href).toBe('https://srtd.io/abc');
-    expect(props.target).toBe('_blank');
-    expect(props.rel).toBe('noopener noreferrer');
-    expect(text(tree)).toContain('https://srtd.io/abc');
+  it('turns an http(s) URL into a safe new-tab link button labelled by domain', () => {
+    const out = html(renderCommentBody('go https://srtd.io/abc now', () => null));
+    expect(out).toContain('href="https://srtd.io/abc"');
+    expect(out).toContain('target="_blank"');
+    expect(out).toContain('rel="noopener noreferrer"');
+    // The domain is the label; the raw URL is never body text any more.
+    expect(out).toContain('>srtd.io<');
+    expect(out).not.toContain('>https://srtd.io/abc<');
+    expect(out).toContain('go ');
+    expect(out).toContain(' now');
   });
 
-  it('trims trailing punctuation out of the anchor href but keeps it as text', () => {
+  it('trims trailing punctuation out of the link href but keeps it as text', () => {
     const tree = renderCommentBody('see https://srtd.io.', () => null);
-    const anchor = elements(tree).find((el) => el.type === 'a')!;
-    expect((anchor.props as { href: string }).href).toBe('https://srtd.io');
+    expect(html(tree)).toContain('href="https://srtd.io/"');
     expect(tree).toContain('.');
   });
 
   it('never links javascript: or scheme-less text', () => {
-    const js = renderCommentBody('run javascript:alert(1) please', () => null);
-    expect(elements(js).some((el) => el.type === 'a')).toBe(false);
-    const bare = renderCommentBody('visit www.foo.com today', () => null);
-    expect(elements(bare).some((el) => el.type === 'a')).toBe(false);
+    expect(html(renderCommentBody('run javascript:alert(1) please', () => null))).not.toContain(
+      '<a',
+    );
+    expect(html(renderCommentBody('visit www.foo.com today', () => null))).not.toContain('<a');
   });
 
-  it('renders both a mention span and a URL anchor in one body', () => {
+  it('renders both a mention span and a URL link button in one body', () => {
     const tree = renderCommentBody(`hi @[${UUID_A}] see https://srtd.io/x`, (id) =>
       id === UUID_A ? 'Ada' : null,
     );
     const span = elements(tree).find((el) => el.type === 'span')!;
     expect(text(span)).toContain('@Ada');
-    const anchor = elements(tree).find((el) => el.type === 'a')!;
-    expect((anchor.props as { href: string }).href).toBe('https://srtd.io/x');
+    const out = html(tree);
+    expect(out).toContain('href="https://srtd.io/x"');
+    expect(out).toContain('>srtd.io<');
   });
 });
 

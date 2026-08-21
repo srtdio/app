@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { IconButton } from '@/components/ui/IconButton';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { IconCheck, IconCopy, IconMore } from '@/components/ui/icons';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
@@ -247,17 +248,10 @@ function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
     const suffix = trail !== null ? trail[0] : '';
     if (suffix !== '') href = href.slice(0, href.length - suffix.length);
     if (start > last) nodes.push(text.slice(last, start));
-    nodes.push(
-      <a
-        key={`${keyBase}-u${i}`}
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-accent underline underline-offset-2 [overflow-wrap:anywhere]"
-      >
-        {href}
-      </a>,
-    );
+    // The raw URL never reaches the screen: LinkButton labels it with the domain
+    // only. align-middle keeps the inline-flex button sitting on the text run's
+    // baseline; it renders nothing at all when the token is not a usable URL.
+    nodes.push(<LinkButton key={`${keyBase}-u${i}`} url={href} className="align-middle" />);
     if (suffix !== '') nodes.push(suffix);
     i += 1;
     last = start + m[0].length;
