@@ -119,8 +119,12 @@ function safeZone(timeZone: string): string {
   }
 }
 
-/** The civil date 'YYYY-MM-DD' of an instant rendered in a (validated) zone. */
-function civilDate(instant: Date, timeZone: string): string {
+/**
+ * The civil date 'YYYY-MM-DD' of an instant rendered in a (validated) zone.
+ * Exported for the Plan week grouping (src/lib/plan-week.ts), which needs the
+ * exact same civil-date reading this filter uses; behaviour is unchanged.
+ */
+export function civilDate(instant: Date, timeZone: string): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
@@ -145,9 +149,10 @@ function formatCivil(y: number, m: number, d: number): string {
 /**
  * Shift a civil date by whole days. All arithmetic runs in UTC (no DST), so a
  * day add/subtract is exact; the result is read back as a naked civil date and
- * never converted to a zoned instant.
+ * never converted to a zoned instant. Exported for the Plan week bounds
+ * (src/lib/plan-week.ts) so day stepping has a single implementation.
  */
-function addCivilDays(civil: string, days: number): string {
+export function addCivilDays(civil: string, days: number): string {
   const [y, m, d] = parseCivil(civil);
   const base = Date.UTC(y, m - 1, d) + days * 86400000;
   const shifted = new Date(base);

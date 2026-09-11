@@ -63,12 +63,20 @@ import {
   moveErrorMessage,
   pipelineHeader,
   PipelinePage,
+  pipelineSurface,
+  planCount,
+  planList,
   postCountLabel,
   runMovePost,
   sanitizePostSort,
   stageCounts,
 } from '@/components/pages/PipelinePage';
-import type { MovePostDeps } from '@/components/pages/PipelinePage';
+import type { MovePostDeps, PipelineSurfaceProps } from '@/components/pages/PipelinePage';
+import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
+import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
+import { PlanWeek } from '@/components/pages/pipeline/PlanWeek';
+import { groupByCivilDay, weekBounds } from '@/lib/plan-week';
+import type { PresignCache } from '@/lib/asset-presign';
 import {
   PipelineSortControl,
   customRangeLabel,
@@ -90,6 +98,7 @@ import {
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
+import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
 
 const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 const stMock = vi.mocked(stageTransition);
@@ -277,7 +286,7 @@ describe('pipelineHeader', () => {
 });
 
 describe('opens on the Review chip by default', () => {
-  it('initializes the stage filter to review, not all, and keeps All the first chip', () => {
+  it('initializes the stage filter to review, with Plan leading the row and All closing it', () => {
     hookState.reset();
     try {
       // Invoke the page body far enough to run its first useState (the stage
@@ -291,9 +300,8 @@ describe('opens on the Review chip by default', () => {
     // (a) On first render the stage passed down (StageChips.active) is 'review'.
     expect(hookState.inits[0]).toBe('review');
 
-    // (b) The chip order is unchanged: 'All' is still the first chip, followed by
-    // the stages in transition-map order; the review default only shifts which
-    // chip is selected, never the list.
+    // (b) The chip order is Plan, the stages in transition-map order, then All;
+    // the review default only shifts which chip is selected, never the list.
     const chips = findAll(
       pipelineHeader({
         search: '',
@@ -314,8 +322,151 @@ describe('opens on the Review chip by default', () => {
     expect(chips).toHaveLength(1);
     const props = chips[0]!.props as { active: string; items: { key: string }[] };
     expect(props.active).toBe('review');
-    expect(props.items[0]!.key).toBe('all');
-    expect(props.items.map((t) => t.key)).toEqual(['all', ...STAGES]);
+    expect(props.items[0]!.key).toBe('plan');
+    expect(props.items[props.items.length - 1]!.key).toBe('all');
+    expect(props.items.map((t) => t.key)).toEqual(['plan', ...STAGES, 'all']);
+  });
+});
+
+describe('the Plan chip', () => {
+  function chipItems(stage: string): StageChipItem[] {
+    const chips = findAll(
+      pipelineHeader({
+        search: '',
+        onSearchChange: () => {},
+        sort: 'updated',
+        onSortChange: () => {},
+        dateWindow: 'any',
+        onDateWindowChange: () => {},
+        customRange: null,
+        onCustomRangeChange: () => {},
+        weekStartDay: 1,
+        stage,
+        onStageChange: () => {},
+        counts: { all: 3, draft: 2, review: 1 },
+      }),
+      (el) => el.type === StageChips,
+    );
+    return (chips[0]!.props as { items: StageChipItem[] }).items;
+  }
+
+  it('carries no stage (so no dot) and no count, unlike every stage chip', () => {
+    const items = chipItems('review');
+    const plan = items.find((item) => item.key === 'plan')!;
+    expect(plan.label).toBe('Plan');
+    expect(plan.stage).toBeUndefined();
+    expect(plan.count).toBeUndefined();
+    // Each stage chip still carries both, so StageChips renders its dot + badge.
+    for (const stage of STAGES) {
+      const item = items.find((i) => i.key === stage)!;
+      expect(item.stage).toBe(stage);
+      expect(typeof item.count).toBe('number');
+    }
+    // All keeps its count but has never carried a dot.
+    const all = items.find((item) => item.key === 'all')!;
+    expect(all.count).toBe(3);
+    expect(all.stage).toBeUndefined();
+  });
+});
+
+describe('the Plan surface', () => {
+  const now = new Date('2026-09-09T12:00:00Z');
+
+  function surface(over: Partial<PipelineSurfaceProps> = {}): ReactElement {
+    const posts = over.sorted ?? [];
+    return pipelineSurface({
+      stage: 'plan',
+      isDesktop: true,
+      sorted: posts,
+      planPosts: over.planPosts ?? posts,
+      grouped: groupByStage(posts, STAGES),
+      timeZone: 'UTC',
+      weekStartDay: 1,
+      weekOffset: 0,
+      onWeekOffsetChange: () => {},
+      // The tree is walked and no card is ever expanded, so the cache is untouched.
+      cache: {} as unknown as PresignCache,
+      presignEnabled: false,
+      workspaceKey: null,
+      onViewAll: () => {},
+      onMovePost: () => {},
+      onLongPressPost: () => {},
+      ...over,
+    });
+  }
+
+  it('renders PlanWeek for the Plan chip and neither the board nor the feed', () => {
+    const tree = surface({ stage: 'plan' });
+    expect(findAll(tree, (el) => el.type === PlanWeek)).toHaveLength(1);
+    expect(findAll(tree, (el) => el.type === PipelineBoard)).toHaveLength(0);
+    expect(findAll(tree, (el) => el.type === PipelineFeed)).toHaveLength(0);
+  });
+
+  it('keeps the board (desktop) and the feed (phone) for every other chip', () => {
+    const desktop = surface({ stage: 'all', isDesktop: true });
+    expect(findAll(desktop, (el) => el.type === PipelineBoard)).toHaveLength(1);
+    expect(findAll(desktop, (el) => el.type === PlanWeek)).toHaveLength(0);
+
+    const phone = surface({ stage: 'review', isDesktop: false });
+    expect(findAll(phone, (el) => el.type === PipelineFeed)).toHaveLength(1);
+    expect(findAll(phone, (el) => el.type === PlanWeek)).toHaveLength(0);
+  });
+
+  it('hands PlanWeek the workspace zone, week start and offset, never the browser zone', () => {
+    const plan = findAll(
+      surface({ stage: 'plan', timeZone: 'Asia/Kolkata', weekStartDay: 0, weekOffset: -2 }),
+      (el) => el.type === PlanWeek,
+    )[0]!;
+    const props = plan.props as { timeZone: string; weekStartDay: number; offset: number };
+    expect(props.timeZone).toBe('Asia/Kolkata');
+    expect(props.weekStartDay).toBe(0);
+    expect(props.offset).toBe(-2);
+  });
+
+  it('Plan IGNORES the date window: a post the window would hide still reaches it', () => {
+    const posts: PipelinePost[] = [
+      { ...makePost('in', 'draft'), target_date: '2026-09-09T00:00:00Z' },
+      { ...makePost('out', 'draft'), target_date: '2026-11-20T00:00:00Z' },
+    ];
+    // The board list is window-filtered ('This week' drops the November post)...
+    const windowed = filterByWindow(posts, 'week', { now, timeZone: 'UTC', weekStartDay: 1 });
+    expect(windowed.map((p) => p.id)).toEqual(['in']);
+    // ...while the Plan list applies search + sort only, so nothing is hidden.
+    expect(
+      planList(posts, '', 'updated')
+        .map((p) => p.id)
+        .sort(),
+    ).toEqual(['in', 'out']);
+
+    const plan = findAll(
+      surface({ stage: 'plan', sorted: windowed, planPosts: planList(posts, '', 'updated') }),
+      (el) => el.type === PlanWeek,
+    )[0]!;
+    const given = (plan.props as { posts: PipelinePost[] }).posts;
+    expect(given.map((p) => p.id).sort()).toEqual(['in', 'out']);
+  });
+
+  it('the Plan list still honours the active search', () => {
+    const posts: PipelinePost[] = [
+      { ...makePost('a', 'draft'), title: 'Alpha launch' },
+      { ...makePost('b', 'review'), title: 'Beta teaser' },
+    ];
+    expect(planList(posts, 'beta', 'updated').map((p) => p.id)).toEqual(['b']);
+  });
+
+  it('the Plan counter is the week posts plus EVERY undated post', () => {
+    const posts: PipelinePost[] = [
+      { ...makePost('mon', 'draft'), target_date: '2026-09-07T00:00:00Z' },
+      { ...makePost('wed', 'draft'), target_date: '2026-09-09T00:00:00Z' },
+      { ...makePost('later', 'draft'), target_date: '2026-11-20T00:00:00Z' },
+      ...Array.from({ length: 9 }, (_unused, i) => makePost(`u${i}`, 'draft')),
+    ];
+    const bounds = weekBounds({ now, timeZone: 'UTC', weekStartDay: 1, offset: 0 });
+    const grouping = groupByCivilDay(posts, bounds.days, 'UTC');
+    // 2 dated in the week + 9 undated; the post dated outside the week is not counted,
+    // and the undated block's display cap never trims the total.
+    expect(planCount(grouping, bounds.days)).toBe(11);
+    expect(postCountLabel(planCount(grouping, bounds.days))).toBe('11 posts');
   });
 });
 
