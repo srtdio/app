@@ -2,7 +2,7 @@
 
 Decisions only. No rationale.
 
-Sorted v2 is a social-media approval tool. Client writes a brief; agency drafts a post; the post moves through review to approved, rejected, or parked. No publishing, no scheduling, no plan, no insights in the MVP.
+Sorted v2 is a social-media approval tool. Client writes a brief; agency drafts a post; the post moves through review to approved, rejected, or parked. No publishing, no scheduling, no insights in the MVP. Plan is a read-only week view of the Pipeline grouped by target date; it is not scheduling.
 
 ## Index
 
@@ -74,7 +74,7 @@ Any operation targeting ozptjplxbyswclolbxyn must say "v1" explicitly in the sam
 - Approval is per-post, deliberate. Inside Sorted only. No bulk approve.
 - Touch targets 44x44 minimum everywhere.
 - Email is out-of-app catch-up. Bundled, 9am-9pm workspace TZ.
-- No AI features. No publishing, scheduling, plan, or insights in MVP.
+- No AI features. No publishing, scheduling, or insights in MVP. Plan is a read-only week grouping, not scheduling.
 - All sensitive writes go through SECURITY DEFINER procs. INSERT/UPDATE/DELETE revoked from authenticated role on sensitive tables.
 - post_versions and post_annotations are immutable edit history. Never soft-deletable.
 - Users not hard-deleted from auth.users except for GDPR. public.users.deleted_at signals account removal; workspace_members.active=false signals workspace removal. Either surfaces as '(ex-member)' badge.

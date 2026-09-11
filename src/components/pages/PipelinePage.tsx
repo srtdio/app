@@ -8,6 +8,7 @@ import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
+import { PlanWeek } from '@/components/pages/pipeline/PlanWeek';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
 import { PipelineSortControl } from '@/components/pages/pipeline/PipelineSortControl';
@@ -42,10 +43,19 @@ import type { Client, DomainErrorCode, PipelinePost, Stage } from '@srtdio/posts
 import { PresignCache } from '@/lib/asset-presign';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
+import { groupByCivilDay, weekBounds, type DayGrouping } from '@/lib/plan-week';
 
 // The board columns are the workflow stages, in transition-map order. Stage
 // values come from the @srtdio/posts type, never hardcoded literals in JSX.
 const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
+
+/**
+ * The two UI-only chip keys. Neither is a workflow stage: PLAN_KEY switches the
+ * surface to the read-only week view (and clears the stage filter, so Plan shows
+ * every stage), ALL_KEY is the existing unfiltered board.
+ */
+export const PLAN_KEY = 'plan';
+const ALL_KEY = 'all';
 
 // The app's md breakpoint: kanban at >=768px, the stacked tab feed below it.
 const DESKTOP_QUERY = '(min-width: 768px)';
@@ -76,13 +86,17 @@ interface PipelineHeaderProps {
  * the state and re-fetch.
  */
 export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
+  // Plan leads the row (no dot, no count: it is a surface switch, not a stage
+  // filter), the five stages keep their transition-map order, All closes it.
   const items: StageChipItem[] = [
-    { key: 'all', label: 'All', count: props.counts.all ?? 0 },
+    { key: PLAN_KEY, label: 'Plan' },
     ...STAGES.map((stage) => ({
       key: stage,
       label: stageLabel(stage),
       count: props.counts[stage] ?? 0,
+      stage,
     })),
+    { key: ALL_KEY, label: 'All', count: props.counts.all ?? 0 },
   ];
   return (
     <SectionHeader<PostSort>
@@ -168,6 +182,102 @@ export function postCountLabel(count: number): string {
   return `${count} ${count === 1 ? 'post' : 'posts'}`;
 }
 
+/** The searchable fields of a post; one source for both list derivations. */
+function postSearchFields(post: PipelinePost): (string | null)[] {
+  return [post.title, post.caption, post.platform];
+}
+
+/**
+ * The Plan list: the same search and sort every other surface applies, and
+ * nothing else. The target-date window (and its custom range) is deliberately
+ * NOT applied here: in Plan the week arrows own the date range, so a window left
+ * on 'This week' must never hide a post from the week the arrows are pointing
+ * at. Pure and derived over the in-memory list: no refetch, no N+1.
+ */
+export function planList(posts: PipelinePost[], search: string, sort: PostSort): PipelinePost[] {
+  return sortPosts(filterByFields(posts, search, postSearchFields), sort);
+}
+
+/**
+ * The Plan header counter: every post shown on the surface, which is the week's
+ * dated posts plus ALL the undated ones (the undated block's cap is a display
+ * depth, not a filter).
+ */
+export function planCount(grouping: DayGrouping<PipelinePost>, days: string[]): number {
+  const dated = days.reduce((total, day) => total + (grouping.byDay[day]?.length ?? 0), 0);
+  return dated + grouping.undated.length;
+}
+
+/** Everything {@link pipelineSurface} needs to pick and wire the active surface. */
+export interface PipelineSurfaceProps {
+  /** The active chip: PLAN_KEY, ALL_KEY, or a Stage. */
+  stage: string;
+  isDesktop: boolean;
+  /** Search + window + sort; the board and feed list. */
+  sorted: PipelinePost[];
+  /** Search + sort only; the Plan list (see {@link planList}). */
+  planPosts: PipelinePost[];
+  grouped: Record<Stage, PipelinePost[]>;
+  timeZone: string;
+  weekStartDay: number;
+  weekOffset: number;
+  onWeekOffsetChange: (offset: number) => void;
+  cache: PresignCache;
+  presignEnabled: boolean;
+  /** The active workspace key, threaded into every card for its pretty /p link. */
+  workspaceKey: string | null;
+  onViewAll: (stage: Stage) => void;
+  onMovePost: (postId: string, toStage: Stage) => void;
+  onLongPressPost: (post: PipelinePost) => void;
+}
+
+/**
+ * Pick the body surface for the active chip: the read-only Plan week, the
+ * desktop kanban, or the mobile feed. Pure (no hooks; the components it returns
+ * own their own state) so the branch is unit-tested by walking the element.
+ */
+export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
+  if (props.stage === PLAN_KEY) {
+    return (
+      <PlanWeek
+        posts={props.planPosts}
+        timeZone={props.timeZone}
+        weekStartDay={props.weekStartDay}
+        offset={props.weekOffset}
+        onOffsetChange={props.onWeekOffsetChange}
+        isDesktop={props.isDesktop}
+        cache={props.cache}
+        presignEnabled={props.presignEnabled}
+        workspaceKey={props.workspaceKey}
+      />
+    );
+  }
+  if (props.isDesktop) {
+    return (
+      <PipelineBoard
+        stages={stageColumns(STAGES, props.stage)}
+        grouped={props.grouped}
+        cap={props.stage === ALL_KEY ? BOARD_CAP : null}
+        cache={props.cache}
+        presignEnabled={props.presignEnabled}
+        workspaceKey={props.workspaceKey}
+        onViewAll={props.onViewAll}
+        onMovePost={props.onMovePost}
+      />
+    );
+  }
+  return (
+    <PipelineFeed
+      posts={props.sorted}
+      activeStage={props.stage}
+      cache={props.cache}
+      presignEnabled={props.presignEnabled}
+      workspaceKey={props.workspaceKey}
+      onLongPressPost={props.onLongPressPost}
+    />
+  );
+}
+
 /**
  * Heal a persisted sort the trimmed menu no longer lists. Live workspaces stored
  * 'newest'/'oldest'/'title' from the old five-option menu; those map back to the
@@ -245,6 +355,9 @@ export function PipelinePage() {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [stage, setStage] = useState('review');
+  // Whole weeks from the current one on the Plan surface. In-memory only: never
+  // persisted, and reset to 0 every time the Plan chip is picked.
+  const [weekOffset, setWeekOffset] = useState(0);
   const [search, setSearch] = useState('');
   const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
   // Sanitize the persisted sort: a live workspace may hold a value the trimmed
@@ -332,11 +445,12 @@ export function PipelinePage() {
   const sorted = useMemo(
     () =>
       sortPosts(
-        filterByWindow(
-          filterByFields(posts, search, (post) => [post.title, post.caption, post.platform]),
-          dateWindow,
-          { now: new Date(), timeZone, weekStartDay, customRange },
-        ),
+        filterByWindow(filterByFields(posts, search, postSearchFields), dateWindow, {
+          now: new Date(),
+          timeZone,
+          weekStartDay,
+          customRange,
+        }),
         activeSort,
       ),
     [posts, search, dateWindow, customRange, activeSort, timeZone, weekStartDay],
@@ -345,6 +459,30 @@ export function PipelinePage() {
 
   // Per-tab counts over the filtered list: each stage plus the 'all' total.
   const counts = useMemo(() => stageCounts(grouped, STAGES), [grouped]);
+
+  // The Plan derivations: the same in-memory list, searched and sorted but NOT
+  // date-windowed (the week arrows own the range there), grouped into the
+  // workspace week. Pure and cheap, so no extra fetch and no N+1.
+  const planPosts = useMemo(() => planList(posts, search, activeSort), [posts, search, activeSort]);
+  const planBounds = useMemo(
+    () => weekBounds({ now: new Date(), timeZone, weekStartDay, offset: weekOffset }),
+    [timeZone, weekStartDay, weekOffset],
+  );
+  const planGrouped = useMemo(
+    () => groupByCivilDay(planPosts, planBounds.days, timeZone),
+    [planPosts, planBounds.days, timeZone],
+  );
+  const isPlan = stage === PLAN_KEY;
+  // The header counter follows the active surface: the week + undated total in
+  // Plan, the filtered board total everywhere else.
+  const shownCount = isPlan ? planCount(planGrouped, planBounds.days) : (counts.all ?? 0);
+
+  // Picking Plan clears the stage filter (Plan shows every stage) and always
+  // lands on this week; picking any other chip simply leaves Plan.
+  const changeStage = useCallback((key: string): void => {
+    if (key === PLAN_KEY) setWeekOffset(0);
+    setStage(key);
+  }, []);
 
   // Single source for the move: both the desktop drop and the mobile sheet call
   // this, which awaits the proc then re-groups on success (see runMovePost).
@@ -374,8 +512,6 @@ export function PipelinePage() {
     },
     [posts, push],
   );
-
-  const visibleStages = stageColumns(STAGES, stage);
 
   const steps: OnboardingStep[] = [
     {
@@ -433,14 +569,15 @@ export function PipelinePage() {
         onCustomRangeChange: setCustomRange,
         weekStartDay,
         stage,
-        onStageChange: setStage,
+        onStageChange: changeStage,
         counts,
       })}
 
       {/* Honest counter: the FILTERED total (counts.all, summed from the same
           grouped list the board/feed render), so it tracks the active search
-          instead of freezing at the unfiltered posts.length. */}
-      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">{postCountLabel(counts.all ?? 0)}</div>
+          instead of freezing at the unfiltered posts.length. In Plan it is the
+          week's posts plus every undated one, matching what that surface shows. */}
+      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">{postCountLabel(shownCount)}</div>
 
       {showCard ? (
         <div className="px-4 md:px-6 mt-4">
@@ -488,26 +625,24 @@ export function PipelinePage() {
         </div>
       ) : boardLoading ? (
         <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading posts</div>
-      ) : isDesktop ? (
-        <PipelineBoard
-          stages={visibleStages}
-          grouped={grouped}
-          cap={stage === 'all' ? BOARD_CAP : null}
-          cache={cache}
-          presignEnabled={presignEnabled}
-          workspaceKey={workspaceKey}
-          onViewAll={setStage}
-          onMovePost={movePost}
-        />
       ) : (
-        <PipelineFeed
-          posts={sorted}
-          activeStage={stage}
-          cache={cache}
-          presignEnabled={presignEnabled}
-          workspaceKey={workspaceKey}
-          onLongPressPost={setMovePostTarget}
-        />
+        pipelineSurface({
+          stage,
+          isDesktop,
+          sorted,
+          planPosts,
+          grouped,
+          timeZone,
+          weekStartDay,
+          weekOffset,
+          onWeekOffsetChange: setWeekOffset,
+          cache,
+          presignEnabled,
+          workspaceKey,
+          onViewAll: setStage,
+          onMovePost: movePost,
+          onLongPressPost: setMovePostTarget,
+        })
       )}
 
       <MoveSheet

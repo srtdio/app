@@ -5,9 +5,13 @@ import { StageDot } from '@/components/pages/pipeline/stage-meta';
 import type { Stage } from '@srtdio/posts';
 
 export interface StageChipItem {
+  /** The chip's filter key: a Stage, or a UI-only key such as 'plan' / 'all'. */
   key: string;
   label: string;
-  count: number;
+  /** Trailing count badge; omitted entirely for a chip that carries no count. */
+  count?: number;
+  /** The stage whose dot this chip shows; omitted for the non-stage chips. */
+  stage?: Stage;
 }
 
 export interface StageChipsProps {
@@ -23,7 +27,9 @@ const OVERFLOW_MASK = 'linear-gradient(to right, #000 0, #000 calc(100% - 26px),
 
 /**
  * The Pipeline stage switcher: one horizontally scrollable, non-wrapping row of
- * chip-pill buttons (All plus every stage) mirroring the Activity filter row.
+ * chip-pill buttons (the stages plus the UI-only Plan and All) mirroring the
+ * Activity filter row. A chip shows its dot only when it carries a stage and its
+ * count only when one is supplied, so a non-stage chip renders label-only.
  * Runs full-bleed to the right edge with an edge-cut fade applied only when the
  * row overflows. Each chip is a 44px touch target; the active chip carries the
  * accent treatment and aria-current.
@@ -65,11 +71,13 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
                 : 'border-border text-fg-2 hover:bg-panel-2',
             )}
           >
-            {item.key !== 'all' ? <StageDot stage={item.key as Stage} /> : null}
+            {item.stage !== undefined ? <StageDot stage={item.stage} /> : null}
             {item.label}
-            <span className={cn('text-xs tabular-nums', isActive ? 'text-accent' : 'text-fg-3')}>
-              {item.count}
-            </span>
+            {item.count !== undefined ? (
+              <span className={cn('text-xs tabular-nums', isActive ? 'text-accent' : 'text-fg-3')}>
+                {item.count}
+              </span>
+            ) : null}
           </button>
         );
       })}
