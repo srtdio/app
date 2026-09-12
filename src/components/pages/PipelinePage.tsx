@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { SectionHeader } from '@/components/shell/SectionHeader';
@@ -13,6 +13,7 @@ import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
 import { PipelineSortControl } from '@/components/pages/pipeline/PipelineSortControl';
 import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
+import { SetDateSheet } from '@/components/pages/pipeline/SetDateSheet';
 import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
@@ -21,6 +22,10 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useSort } from '@/lib/use-sort';
+import { useSession } from '@/lib/session-context';
+import { useNewTrace } from '@/lib/trace-context';
+import { fetchMemberRole } from '@/lib/assets';
+import { isAgencySide } from '@/components/pages/pcs/roles';
 import {
   DATE_WINDOW_DEFAULT,
   POST_SORT_DEFAULT,
@@ -38,12 +43,26 @@ interface DateRange {
 }
 import { groupByStage, stageColumns } from '@/lib/post-board';
 import { useWorkspaceMembers } from '@/components/chat/use-workspace-members';
-import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
-import type { Client, DomainErrorCode, PipelinePost, Stage } from '@srtdio/posts';
+import { listPosts, postUpdate, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
+import type {
+  Client,
+  DomainErrorCode,
+  PipelinePost,
+  PostUpdateInput,
+  Result,
+  Stage,
+} from '@srtdio/posts';
 import { PresignCache } from '@/lib/asset-presign';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
-import { groupByCivilDay, weekBounds, type DayGrouping } from '@/lib/plan-week';
+import {
+  civilNoonInZoneIso,
+  groupByCivilDay,
+  weekBounds,
+  PLAN_WEEK_DAYS,
+  type DayGrouping,
+} from '@/lib/plan-week';
+import { addCivilDays } from '@/lib/list-sort';
 
 // The board columns are the workflow stages, in transition-map order. Stage
 // values come from the @srtdio/posts type, never hardcoded literals in JSX.
@@ -222,6 +241,12 @@ export interface PipelineSurfaceProps {
   weekStartDay: number;
   weekOffset: number;
   onWeekOffsetChange: (offset: number) => void;
+  /** Agency side only: Plan renders the per-tile set-date button. */
+  canSetDate: boolean;
+  onSetDate: (post: PipelinePost) => void;
+  onAddOnDay: (civil: string) => void;
+  /** True while any sheet is open; Plan's keyboard arrows stand down. */
+  sheetOpen: boolean;
   cache: PresignCache;
   presignEnabled: boolean;
   /** The active workspace key, threaded into every card for its pretty /p link. */
@@ -249,6 +274,10 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
         cache={props.cache}
         presignEnabled={props.presignEnabled}
         workspaceKey={props.workspaceKey}
+        canSetDate={props.canSetDate}
+        onSetDate={props.onSetDate}
+        onAddOnDay={props.onAddOnDay}
+        sheetOpen={props.sheetOpen}
       />
     );
   }
@@ -286,6 +315,119 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
  */
 export function sanitizePostSort(sort: string): PostSort {
   return POST_SORT_OPTIONS.some((o) => o.value === sort) ? (sort as PostSort) : POST_SORT_DEFAULT;
+}
+
+/** The two URL params this surface owns: which view, and which week. */
+const VIEW_PARAM = 'view';
+const WEEK_PARAM = 'week';
+
+/** A civil date, shape only; {@link civilDayMs} re-checks that it is a real day. */
+const CIVIL_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A civil date as UTC midnight ms, or null when it is not a real calendar day. */
+function civilDayMs(civil: string): number | null {
+  // addCivilDays normalizes (2026-02-31 -> 2026-03-03), so a value that survives
+  // a zero-day step unchanged is a real date, not just a well-shaped string.
+  if (!CIVIL_RE.test(civil) || addCivilDays(civil, 0) !== civil) return null;
+  const [year, month, day] = civil.split('-').map((part) => Number(part));
+  if (year === undefined || month === undefined || day === undefined) return null;
+  return Date.UTC(year, month - 1, day);
+}
+
+/**
+ * The stage chip the page opens on, read from the URL: `?view=plan` restores the
+ * Plan surface, anything else (including a missing or unknown value) keeps the
+ * Review default. Only the surface is restored from the URL; the stage filter
+ * itself is never a param.
+ */
+export function initialStage(params: URLSearchParams): string {
+  return params.get(VIEW_PARAM) === PLAN_KEY ? PLAN_KEY : 'review';
+}
+
+/**
+ * The week offset a `?week=YYYY-MM-DD` param means, relative to the current
+ * week. An absent, malformed, impossible, or non-week-aligned value is ignored
+ * (offset 0) rather than throwing or landing the user on a half week.
+ */
+export function weekOffsetFromParam(
+  week: string | null,
+  opts: { now: Date; timeZone: string; weekStartDay: number },
+): number {
+  if (week === null) return 0;
+  const picked = civilDayMs(week);
+  if (picked === null) return 0;
+  const current = civilDayMs(weekBounds({ ...opts, offset: 0 }).start);
+  if (current === null) return 0;
+  const days = Math.round((picked - current) / 86400000);
+  return days % PLAN_WEEK_DAYS === 0 ? days / PLAN_WEEK_DAYS : 0;
+}
+
+/**
+ * The next search params for a surface change: `view=plan` only on Plan, `week`
+ * only on a non-zero offset, and every other param on the URL left untouched.
+ * Pure (a new URLSearchParams), so the page can hand it straight to
+ * setSearchParams with `replace` and the arrows never pollute history.
+ */
+export function planParams(
+  current: URLSearchParams,
+  next: { stage: string; weekStart: string | null },
+): URLSearchParams {
+  const params = new URLSearchParams(current);
+  if (next.stage === PLAN_KEY) params.set(VIEW_PARAM, PLAN_KEY);
+  else params.delete(VIEW_PARAM);
+  if (next.stage === PLAN_KEY && next.weekStart !== null) params.set(WEEK_PARAM, next.weekStart);
+  else params.delete(WEEK_PARAM);
+  return params;
+}
+
+/** Everything {@link runSetTargetDate} needs; the page wires it, tests drive it. */
+export interface SetTargetDateDeps {
+  client: Client;
+  postId: string;
+  /** The workspace zone the picked civil day is anchored in. */
+  timeZone: string;
+  newTrace: () => string;
+  /** Injected so the test drives the write without mocking the module. */
+  postUpdate: (client: Client, input: PostUpdateInput, traceId?: string) => Promise<Result<string>>;
+  /** Closes the sheet; only called on success. */
+  onClose: () => void;
+  /** Re-reads the board; one call, so dating a post is never an N+1. */
+  reload: () => Promise<void>;
+  toast: (message: string) => void;
+}
+
+/** The single retry line for a failed target-date write. */
+export const SET_DATE_FALLBACK_MESSAGE = 'Could not save the change. Please try again.';
+
+/**
+ * Write a post's target date from Plan. A picked civil day is stored as the
+ * instant that is NOON IN THE WORKSPACE ZONE, so the post groups back onto the
+ * day the user tapped in every zone (negative offsets and DST included); null
+ * clears the column. On failure the sheet stays open and a friendly line is
+ * toasted; on success the sheet closes and the board reloads once.
+ */
+export async function runSetTargetDate(
+  deps: SetTargetDateDeps,
+  civil: string | null,
+): Promise<void> {
+  const targetDate = civil === null ? null : civilNoonInZoneIso(civil, deps.timeZone);
+  try {
+    const result = await deps.postUpdate(
+      deps.client,
+      { postId: deps.postId, targetDate },
+      deps.newTrace(),
+    );
+    if (!result.ok) {
+      deps.toast(SET_DATE_FALLBACK_MESSAGE);
+      return;
+    }
+    deps.onClose();
+    await deps.reload();
+  } catch {
+    // Transport-level failure (network / RPC throw, not a domain Result): the
+    // sheet stays open with the same retry line, exactly as a domain error.
+    deps.toast(SET_DATE_FALLBACK_MESSAGE);
+  }
 }
 
 /** Everything {@link runMovePost} needs, so the page wires it and tests drive it directly. */
@@ -352,12 +494,11 @@ interface OnboardingStep {
 
 export function PipelinePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
-  const [stage, setStage] = useState('review');
-  // Whole weeks from the current one on the Plan surface. In-memory only: never
-  // persisted, and reset to 0 every time the Plan chip is picked.
-  const [weekOffset, setWeekOffset] = useState(0);
+  // The active surface, restored from ?view=plan on load (Review otherwise).
+  const [stage, setStage] = useState(() => initialStage(searchParams));
   const [search, setSearch] = useState('');
   const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
   // Sanitize the persisted sort: a live workspace may hold a value the trimmed
@@ -376,6 +517,19 @@ export function PipelinePage() {
   const activeWorkspace = workspaces.find((w) => w.id === workspaceId);
   const timeZone = activeWorkspace?.timezone ?? 'UTC';
   const weekStartDay = activeWorkspace?.week_start_day ?? 1;
+  // Whole weeks from the current one on the Plan surface, DERIVED from ?week so
+  // the URL is the single source of truth: a shared link opens the same week,
+  // and the offset re-derives correctly once the workspace zone resolves. Never
+  // persisted; an absent or unparseable param is this week.
+  const weekOffset = useMemo(
+    () =>
+      weekOffsetFromParam(searchParams.get(WEEK_PARAM), {
+        now: new Date(),
+        timeZone,
+        weekStartDay,
+      }),
+    [searchParams, timeZone, weekStartDay],
+  );
   const [cardDismissed, setCardDismissed] = useState(false);
   const [skipped, setSkipped] = useState<Record<string, boolean>>({});
 
@@ -383,11 +537,26 @@ export function PipelinePage() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsError, setPostsError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  // The civil day the create sheet opens prefilled with (from an empty day in
+  // Plan); null is the plain "+" create with no date.
+  const [createTargetDate, setCreateTargetDate] = useState<string | null>(null);
   const [movePostTarget, setMovePostTarget] = useState<PipelinePost | null>(null);
+  // The post whose target date is being set from Plan, and the in-flight flag
+  // that disables the sheet while post_update runs.
+  const [setDateTarget, setSetDateTarget] = useState<PipelinePost | null>(null);
+  const [savingDate, setSavingDate] = useState(false);
   // Reactive mirror of the in-flight guard for the open move sheet: the guard
   // itself is a ref (no re-render), so this state drives the sheet's busy prop.
   const [movingId, setMovingId] = useState<string | null>(null);
   const { toasts, push, dismiss } = useToasts();
+  const newTrace = useNewTrace();
+  // The viewer's role, loaded once from the membership exactly as PCS does: only
+  // the agency side may set a date from Plan, and an unknown role stays
+  // read-only, so a client never sees the calendar button.
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
+  const [role, setRole] = useState<string | null>(null);
+  const agencySide = isAgencySide(role);
   // Per-post in-flight guard for the move handler (a ref so a re-render never
   // resets it mid-flight); shared by the desktop drop and mobile sheet paths.
   const inFlight = useRef<Set<string>>(new Set());
@@ -425,10 +594,26 @@ export function PipelinePage() {
     void loadPosts();
   }, [loadPosts]);
 
+  useEffect(() => {
+    if (workspaceId === null || userId === null) {
+      setRole(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchMemberRole(supabase, workspaceId, userId).then((next) => {
+      if (!cancelled) setRole(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, userId]);
+
   // The Create (+) button and command palette dispatch this event; the sheet
   // lives here so the board can re-fetch on success.
   useEffect(() => {
     function openCreate(): void {
+      // The generic "+" never carries a day; only an empty Plan day prefills one.
+      setCreateTargetDate(null);
       setCreateOpen(true);
     }
     window.addEventListener('sorted:create-post', openCreate);
@@ -478,10 +663,58 @@ export function PipelinePage() {
   const shownCount = isPlan ? planCount(planGrouped, planBounds.days) : (counts.all ?? 0);
 
   // Picking Plan clears the stage filter (Plan shows every stage) and always
-  // lands on this week; picking any other chip simply leaves Plan.
-  const changeStage = useCallback((key: string): void => {
-    if (key === PLAN_KEY) setWeekOffset(0);
-    setStage(key);
+  // lands on this week; picking any other chip simply leaves Plan. The URL
+  // follows: ?view=plan on Plan, both params dropped everywhere else. replace,
+  // never push, so switching surfaces never grows the back stack.
+  const changeStage = useCallback(
+    (key: string): void => {
+      setStage(key);
+      setSearchParams(planParams(searchParams, { stage: key, weekStart: null }), { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  // The week arrows write the week's start day into ?week (offset 0 drops it),
+  // which is what the derived weekOffset above reads back. replace, not push, so
+  // stepping through weeks never pollutes history.
+  const changeWeekOffset = useCallback(
+    (next: number): void => {
+      const start = weekBounds({ now: new Date(), timeZone, weekStartDay, offset: next }).start;
+      setSearchParams(
+        planParams(searchParams, { stage: PLAN_KEY, weekStart: next === 0 ? null : start }),
+        { replace: true },
+      );
+    },
+    [searchParams, setSearchParams, timeZone, weekStartDay],
+  );
+
+  // Dating a post from Plan: one post_update, then one reload (never an N+1).
+  const saveTargetDate = useCallback(
+    (civil: string | null): void => {
+      if (setDateTarget === null) return;
+      setSavingDate(true);
+      void runSetTargetDate(
+        {
+          client: supabase,
+          postId: setDateTarget.id,
+          timeZone,
+          newTrace,
+          postUpdate,
+          onClose: () => setSetDateTarget(null),
+          reload: loadPosts,
+          toast: push,
+        },
+        civil,
+      ).finally(() => setSavingDate(false));
+    },
+    [setDateTarget, timeZone, newTrace, loadPosts, push],
+  );
+
+  // An empty day in Plan opens the same create sheet the "+" opens, with that
+  // day prefilled as the target date.
+  const addOnDay = useCallback((civil: string): void => {
+    setCreateTargetDate(civil);
+    setCreateOpen(true);
   }, []);
 
   // Single source for the move: both the desktop drop and the mobile sheet call
@@ -635,7 +868,11 @@ export function PipelinePage() {
           timeZone,
           weekStartDay,
           weekOffset,
-          onWeekOffsetChange: setWeekOffset,
+          onWeekOffsetChange: changeWeekOffset,
+          canSetDate: agencySide,
+          onSetDate: setSetDateTarget,
+          onAddOnDay: addOnDay,
+          sheetOpen: createOpen || movePostTarget !== null || setDateTarget !== null,
           cache,
           presignEnabled,
           workspaceKey,
@@ -653,12 +890,28 @@ export function PipelinePage() {
         onMove={movePost}
       />
 
+      <SetDateSheet
+        open={setDateTarget !== null}
+        post={setDateTarget}
+        weekStart={planBounds.start}
+        timeZone={timeZone}
+        weekStartDay={weekStartDay}
+        saving={savingDate}
+        onPick={saveTargetDate}
+        onClose={() => setSetDateTarget(null)}
+      />
+
       <CreatePostSheet
         open={createOpen}
         workspaceId={workspaceId}
-        onClose={() => setCreateOpen(false)}
+        {...(createTargetDate !== null ? { initialTargetDate: createTargetDate } : {})}
+        onClose={() => {
+          setCreateOpen(false);
+          setCreateTargetDate(null);
+        }}
         onCreated={() => {
           setCreateOpen(false);
+          setCreateTargetDate(null);
           void loadPosts();
         }}
       />
