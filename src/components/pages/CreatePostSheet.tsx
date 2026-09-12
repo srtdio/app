@@ -26,6 +26,8 @@ import type { Json } from '@srtdio/schemas';
 interface CreatePostSheetProps {
   open: boolean;
   workspaceId: string | null;
+  /** Seeds the target date when the sheet opens ('YYYY-MM-DD'); default blank. */
+  initialTargetDate?: string;
   onClose: () => void;
   onCreated: () => void;
 }
@@ -63,6 +65,8 @@ export interface CreateFormState {
 export function initialCreateState(opts: {
   defaultFormat: string;
   currentUserId: string | null;
+  /** Prefilled target date (Plan opens the sheet on a day); default blank. */
+  targetDate?: string;
 }): CreateFormState {
   return {
     title: '',
@@ -71,7 +75,7 @@ export function initialCreateState(opts: {
     format: opts.defaultFormat,
     ownerUserId: opts.currentUserId ?? '',
     bucketId: '',
-    targetDate: '',
+    targetDate: opts.targetDate ?? '',
     origin: 'none',
     briefId: '',
     attachments: [],
@@ -187,14 +191,24 @@ export async function submitCreatePost(
   return { ok: true, postId: created.data };
 }
 
-export function CreatePostSheet({ open, workspaceId, onClose, onCreated }: CreatePostSheetProps) {
+export function CreatePostSheet({
+  open,
+  workspaceId,
+  initialTargetDate,
+  onClose,
+  onCreated,
+}: CreatePostSheetProps) {
   const newTrace = useNewTrace();
   const { session } = useSession();
   const currentUserId = session?.user.id ?? null;
   const { options: memberOptions } = usePostMembers(open ? workspaceId : null);
 
   const [form, setForm] = useState<CreateFormState>(() =>
-    initialCreateState({ defaultFormat: DEFAULT_FORMAT, currentUserId }),
+    initialCreateState({
+      defaultFormat: DEFAULT_FORMAT,
+      currentUserId,
+      ...(initialTargetDate !== undefined ? { targetDate: initialTargetDate } : {}),
+    }),
   );
   const [buckets, setBuckets] = useState<BucketOption[]>([]);
   const [briefs, setBriefs] = useState<BriefWithThumbnail[]>([]);
@@ -211,13 +225,19 @@ export function CreatePostSheet({ open, workspaceId, onClose, onCreated }: Creat
   // below, so the reset never depends on the (possibly still-resolving) session.
   useEffect(() => {
     if (!open) return;
-    setForm(initialCreateState({ defaultFormat: DEFAULT_FORMAT, currentUserId: null }));
+    setForm(
+      initialCreateState({
+        defaultFormat: DEFAULT_FORMAT,
+        currentUserId: null,
+        ...(initialTargetDate !== undefined ? { targetDate: initialTargetDate } : {}),
+      }),
+    );
     setBuckets([]);
     setBriefs([]);
     setFieldErrors({});
     setSubmitError(null);
     setSubmitting(false);
-  }, [open]);
+  }, [open, initialTargetDate]);
 
   // Default the owner to the current user once the session resolves while open.
   useEffect(() => {

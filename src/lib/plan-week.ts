@@ -5,6 +5,7 @@
 // a zoned instant of its own, so the browser's default zone never leaks in.
 
 import { addCivilDays, civilDate } from '@/lib/list-sort';
+import type { Stage } from '@srtdio/posts';
 
 /** Weekday index 0=Sun..6=Sat, in the order Intl's 'short' weekday returns. */
 const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -81,6 +82,94 @@ export function dayOfMonth(civil: string): number {
  */
 export function weekdayName(weekStartDay: number, index: number): string {
   return WEEKDAY_NAMES[(safeWeekStart(weekStartDay) + index) % 7]!;
+}
+
+/**
+ * The order the undated block lists posts in: the most urgent first. Approved
+ * posts with no date are the ones that need a date, so they lead; rejected ones
+ * need it least, so they close. This is a PLAN-ONLY ordering: the week columns
+ * keep the page's own sort, and nothing else on the surface reads it.
+ */
+export const PLAN_URGENCY_ORDER: readonly Stage[] = [
+  'approved',
+  'review',
+  'draft',
+  'parked',
+  'rejected',
+];
+
+const URGENCY_RANK = new Map<string, number>(
+  PLAN_URGENCY_ORDER.map((stage, index) => [stage, index]),
+);
+
+/**
+ * A new list ordered by {@link PLAN_URGENCY_ORDER}. Stable, so posts sharing a
+ * stage keep the caller's sort; an unknown stage sorts last rather than
+ * vanishing or throwing.
+ */
+export function sortByUrgency<T extends { stage: string }>(posts: T[]): T[] {
+  return [...posts].sort(
+    (a, b) =>
+      (URGENCY_RANK.get(a.stage) ?? PLAN_URGENCY_ORDER.length) -
+      (URGENCY_RANK.get(b.stage) ?? PLAN_URGENCY_ORDER.length),
+  );
+}
+
+/** The zone's UTC offset in ms at an instant, read through Intl (no libraries). */
+function zoneOffsetMs(instant: Date, zone: string): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(instant);
+  const read = (type: string): number => Number(parts.find((part) => part.type === type)?.value);
+  // hourCycle 'h23' still reports midnight as '24' in some engines; % 24 folds it.
+  const wall = Date.UTC(
+    read('year'),
+    read('month') - 1,
+    read('day'),
+    read('hour') % 24,
+    read('minute'),
+    read('second'),
+  );
+  return wall - instant.getTime();
+}
+
+/**
+ * The instant that is 12:00 on a civil date IN THE GIVEN ZONE, as an ISO string.
+ *
+ * posts.target_date is timestamptz, so a bare 'YYYY-MM-DD' would be stored as
+ * UTC midnight and read back as the PREVIOUS day in every negative-offset zone.
+ * Anchoring on local noon puts the instant at least eleven hours from either
+ * civil boundary, so {@link groupByCivilDay} always buckets it back onto the day
+ * the user picked, in any zone and on either side of a DST change.
+ *
+ * The offset is probed at the guessed instant and then re-probed at the
+ * corrected one, so a guess that landed on the wrong side of a transition is
+ * healed. An unparseable civil date or zone degrades to UTC noon instead of
+ * throwing.
+ */
+export function civilNoonInZoneIso(civil: string, timeZone: string): string {
+  const [year, month, day] = civil.split('-').map((part) => Number(part));
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
+    return new Date(0).toISOString();
+  }
+  const zone = safeZone(timeZone);
+  const wallNoon = Date.UTC(year, month - 1, day, 12, 0, 0);
+  const first = new Date(wallNoon - zoneOffsetMs(new Date(wallNoon), zone));
+  return new Date(wallNoon - zoneOffsetMs(first, zone)).toISOString();
 }
 
 export interface WeekBoundsInput {

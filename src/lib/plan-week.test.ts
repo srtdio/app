@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  civilNoonInZoneIso,
   civilToday,
   dayOfMonth,
   formatCivilShort,
   groupByCivilDay,
+  PLAN_URGENCY_ORDER,
+  sortByUrgency,
   weekBounds,
   weekdayName,
   weekLabel,
@@ -164,5 +167,73 @@ describe('civil formatting', () => {
     expect(formatCivilShort('2026-09-07')).toBe('7 Sep');
     expect(formatCivilShort('2026-12-31')).toBe('31 Dec');
     expect(dayOfMonth('2026-09-07')).toBe(7);
+  });
+});
+
+describe('sortByUrgency', () => {
+  function staged(...stages: string[]): { id: string; stage: string }[] {
+    return stages.map((stage, i) => ({ id: `${stage}${i}`, stage }));
+  }
+
+  it('orders approved, review, draft, parked, rejected', () => {
+    expect([...PLAN_URGENCY_ORDER]).toEqual(['approved', 'review', 'draft', 'parked', 'rejected']);
+    const sorted = sortByUrgency(staged('rejected', 'draft', 'approved', 'parked', 'review')).map(
+      (item) => item.stage,
+    );
+    expect(sorted).toEqual([...PLAN_URGENCY_ORDER]);
+  });
+
+  it('is stable within a stage and never mutates the input', () => {
+    const input = staged('draft', 'draft', 'approved');
+    const sorted = sortByUrgency(input);
+    expect(sorted.map((item) => item.id)).toEqual(['approved2', 'draft0', 'draft1']);
+    // The caller's list (and its order) is untouched.
+    expect(input.map((item) => item.id)).toEqual(['draft0', 'draft1', 'approved2']);
+  });
+
+  it('sorts an unknown stage last instead of dropping it', () => {
+    const sorted = sortByUrgency([{ stage: 'mystery' }, { stage: 'approved' }]);
+    expect(sorted.map((item) => item.stage)).toEqual(['approved', 'mystery']);
+  });
+});
+
+describe('civilNoonInZoneIso', () => {
+  it('anchors on local noon in the workspace zone, not UTC midnight', () => {
+    // IST is UTC+5:30 year round: noon local is 06:30 UTC.
+    expect(civilNoonInZoneIso('2026-09-10', 'Asia/Kolkata')).toBe('2026-09-10T06:30:00.000Z');
+    // UTC is its own noon.
+    expect(civilNoonInZoneIso('2026-09-10', 'UTC')).toBe('2026-09-10T12:00:00.000Z');
+  });
+
+  it('tracks DST in a negative-offset zone (New York, winter and summer)', () => {
+    // EST (UTC-5) in January, EDT (UTC-4) in July.
+    expect(civilNoonInZoneIso('2026-01-15', 'America/New_York')).toBe('2026-01-15T17:00:00.000Z');
+    expect(civilNoonInZoneIso('2026-07-15', 'America/New_York')).toBe('2026-07-15T16:00:00.000Z');
+    // The transition days themselves: spring forward and fall back.
+    expect(civilNoonInZoneIso('2026-03-08', 'America/New_York')).toBe('2026-03-08T16:00:00.000Z');
+    expect(civilNoonInZoneIso('2026-11-01', 'America/New_York')).toBe('2026-11-01T17:00:00.000Z');
+  });
+
+  it('an invalid zone degrades to UTC and a malformed civil date never throws', () => {
+    expect(civilNoonInZoneIso('2026-09-10', 'Not/AZone')).toBe('2026-09-10T12:00:00.000Z');
+    expect(() => civilNoonInZoneIso('nonsense', 'UTC')).not.toThrow();
+  });
+
+  it('round-trips: the written instant groups back onto the chosen day in every zone', () => {
+    const zones = ['Asia/Kolkata', 'America/New_York', 'UTC', 'Pacific/Kiritimati'];
+    // A week spanning both New York DST changes plus ordinary days.
+    const chosen = ['2026-01-15', '2026-03-08', '2026-07-15', '2026-11-01', '2026-09-10'];
+    for (const zone of zones) {
+      for (const civil of chosen) {
+        const stored = civilNoonInZoneIso(civil, zone);
+        const { byDay, undated } = groupByCivilDay(
+          [{ id: civil, target_date: stored }],
+          [civil],
+          zone,
+        );
+        expect(undated).toHaveLength(0);
+        expect(byDay[civil]!.map((item) => item.id)).toEqual([civil]);
+      }
+    }
   });
 });

@@ -149,6 +149,20 @@ describe('initialCreateState (reset-on-open)', () => {
     });
   });
 
+  it('seeds the target date when the sheet opens on a Plan day (initialTargetDate)', () => {
+    const seeded = initialCreateState({
+      defaultFormat: 'text',
+      currentUserId: 'me',
+      targetDate: '2026-09-10',
+    });
+    expect(seeded.targetDate).toBe('2026-09-10');
+    // Nothing else is prefilled by the day: the rest is still a clean form.
+    expect(seeded.title).toBe('');
+    expect(seeded.caption).toBe('');
+    // And the plain "+" create (no day) still starts blank.
+    expect(initialCreateState({ defaultFormat: 'text', currentUserId: 'me' }).targetDate).toBe('');
+  });
+
   it('leaves the owner empty when there is no current user', () => {
     expect(initialCreateState({ defaultFormat: 'text', currentUserId: null }).ownerUserId).toBe('');
   });

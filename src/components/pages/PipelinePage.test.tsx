@@ -53,25 +53,41 @@ vi.mock('react', async (importOriginal) => {
 
 // The page reads workspace + navigation on render; both are stubbed so the page
 // body can be invoked far enough to run its first useState (the stage filter).
-vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }));
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => () => {},
+  // The page reads ?view / ?week on its first render; an empty set is the
+  // no-params default the Review-chip guard below asserts against.
+  useSearchParams: () => [new URLSearchParams(), () => {}],
+}));
+vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaceId: null, workspaces: [] }),
 }));
 
 import {
   MOVE_FALLBACK_MESSAGE,
+  SET_DATE_FALLBACK_MESSAGE,
+  initialStage,
   moveErrorMessage,
   pipelineHeader,
   PipelinePage,
   pipelineSurface,
   planCount,
   planList,
+  planParams,
   postCountLabel,
   runMovePost,
+  runSetTargetDate,
   sanitizePostSort,
   stageCounts,
+  weekOffsetFromParam,
 } from '@/components/pages/PipelinePage';
-import type { MovePostDeps, PipelineSurfaceProps } from '@/components/pages/PipelinePage';
+import type {
+  MovePostDeps,
+  PipelineSurfaceProps,
+  SetTargetDateDeps,
+} from '@/components/pages/PipelinePage';
+import { civilNoonInZoneIso } from '@/lib/plan-week';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { PlanWeek } from '@/components/pages/pipeline/PlanWeek';
@@ -85,7 +101,7 @@ import {
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
-import type { Client, PipelinePost, Result, Stage } from '@srtdio/posts';
+import type { Client, PipelinePost, PostUpdateInput, Result, Stage } from '@srtdio/posts';
 import { groupByStage } from '@/lib/post-board';
 import {
   POST_SORT_DEFAULT,
@@ -384,6 +400,10 @@ describe('the Plan surface', () => {
       weekStartDay: 1,
       weekOffset: 0,
       onWeekOffsetChange: () => {},
+      canSetDate: false,
+      onSetDate: () => {},
+      onAddOnDay: () => {},
+      sheetOpen: false,
       // The tree is walked and no card is ever expanded, so the cache is untouched.
       cache: {} as unknown as PresignCache,
       presignEnabled: false,
@@ -467,6 +487,189 @@ describe('the Plan surface', () => {
     // and the undated block's display cap never trims the total.
     expect(planCount(grouping, bounds.days)).toBe(11);
     expect(postCountLabel(planCount(grouping, bounds.days))).toBe('11 posts');
+  });
+});
+
+describe('the Plan URL params', () => {
+  const now = new Date('2026-09-09T12:00:00Z');
+  const zone = { now, timeZone: 'UTC', weekStartDay: 1 };
+
+  it('?view=plan opens Plan; anything else opens the Review default', () => {
+    expect(initialStage(new URLSearchParams('view=plan'))).toBe('plan');
+    expect(initialStage(new URLSearchParams('view=plan&week=2026-09-14'))).toBe('plan');
+    expect(initialStage(new URLSearchParams(''))).toBe('review');
+    expect(initialStage(new URLSearchParams('view=board'))).toBe('review');
+  });
+
+  it('?week derives the offset from the workspace week bounds', () => {
+    // This week starts on Monday the 7th with a Monday week start.
+    expect(weekOffsetFromParam('2026-09-07', zone)).toBe(0);
+    expect(weekOffsetFromParam('2026-09-14', zone)).toBe(1);
+    expect(weekOffsetFromParam('2026-08-31', zone)).toBe(-1);
+    expect(weekOffsetFromParam('2026-10-05', zone)).toBe(4);
+    // A Sunday-start workspace anchors a week earlier, so the same param shifts.
+    expect(weekOffsetFromParam('2026-09-13', { ...zone, weekStartDay: 0 })).toBe(1);
+  });
+
+  it('ignores an absent, malformed, impossible or half-week param (offset 0)', () => {
+    expect(weekOffsetFromParam(null, zone)).toBe(0);
+    expect(weekOffsetFromParam('', zone)).toBe(0);
+    expect(weekOffsetFromParam('nonsense', zone)).toBe(0);
+    expect(weekOffsetFromParam('2026-9-7', zone)).toBe(0);
+    expect(weekOffsetFromParam('2026-02-31', zone)).toBe(0);
+    // A day that is not a week start is not half a week away: it is ignored.
+    expect(weekOffsetFromParam('2026-09-10', zone)).toBe(0);
+  });
+
+  it('writes view=plan and week only where they belong, dropping them elsewhere', () => {
+    const plan = planParams(new URLSearchParams(''), { stage: 'plan', weekStart: '2026-09-14' });
+    expect(plan.get('view')).toBe('plan');
+    expect(plan.get('week')).toBe('2026-09-14');
+
+    // Offset 0 carries no week param at all.
+    const thisWeek = planParams(plan, { stage: 'plan', weekStart: null });
+    expect(thisWeek.get('view')).toBe('plan');
+    expect(thisWeek.get('week')).toBeNull();
+
+    // Any other chip clears both.
+    const board = planParams(plan, { stage: 'review', weekStart: '2026-09-14' });
+    expect(board.get('view')).toBeNull();
+    expect(board.get('week')).toBeNull();
+  });
+
+  it('leaves every unrelated param on the URL untouched and never mutates the input', () => {
+    const current = new URLSearchParams('asset=a1&view=plan&week=2026-09-14');
+    const next = planParams(current, { stage: 'all', weekStart: null });
+    expect(next.get('asset')).toBe('a1');
+    expect(current.get('view')).toBe('plan');
+    expect(current.get('week')).toBe('2026-09-14');
+  });
+
+  it('round-trips: a week written by the arrows reads back as the same offset', () => {
+    for (const offset of [-3, -1, 0, 2, 7]) {
+      const start = weekBounds({ ...zone, offset }).start;
+      const params = planParams(new URLSearchParams(''), {
+        stage: 'plan',
+        weekStart: offset === 0 ? null : start,
+      });
+      expect(weekOffsetFromParam(params.get('week'), zone)).toBe(offset);
+    }
+  });
+});
+
+describe('the set-date surface wiring', () => {
+  it('a client sees no calendar button; the agency side does', () => {
+    const props = (canSetDate: boolean): { canSetDate: boolean } =>
+      findAll(
+        pipelineSurface({
+          stage: 'plan',
+          isDesktop: true,
+          sorted: [],
+          planPosts: [],
+          grouped: groupByStage([], STAGES),
+          timeZone: 'UTC',
+          weekStartDay: 1,
+          weekOffset: 0,
+          onWeekOffsetChange: () => {},
+          canSetDate,
+          onSetDate: () => {},
+          onAddOnDay: () => {},
+          sheetOpen: false,
+          cache: {} as unknown as PresignCache,
+          presignEnabled: false,
+          workspaceKey: null,
+          onViewAll: () => {},
+          onMovePost: () => {},
+          onLongPressPost: () => {},
+        }),
+        (el) => el.type === PlanWeek,
+      )[0]!.props as { canSetDate: boolean };
+    // isAgencySide(role) is what the page passes; a client role resolves false.
+    expect(props(false).canSetDate).toBe(false);
+    expect(props(true).canSetDate).toBe(true);
+  });
+});
+
+describe('runSetTargetDate', () => {
+  function setDateHarness(over: Partial<SetTargetDateDeps> = {}): {
+    deps: SetTargetDateDeps;
+    writes: { input: PostUpdateInput; traceId?: string }[];
+    toasts: string[];
+    closed: () => number;
+    reloads: () => number;
+  } {
+    const writes: { input: PostUpdateInput; traceId?: string }[] = [];
+    const toasts: string[] = [];
+    let closed = 0;
+    let reloads = 0;
+    const deps: SetTargetDateDeps = {
+      client: {} as Client,
+      postId: 'p1',
+      timeZone: 'Asia/Kolkata',
+      newTrace: () => 'trace-1',
+      postUpdate: (_client, input, traceId) => {
+        writes.push({ input, ...(traceId !== undefined ? { traceId } : {}) });
+        return Promise.resolve({ ok: true, data: 'p1' } satisfies Result<string>);
+      },
+      onClose: () => {
+        closed += 1;
+      },
+      reload: () => {
+        reloads += 1;
+        return Promise.resolve();
+      },
+      toast: (message) => toasts.push(message),
+      ...over,
+    };
+    return { deps, writes, toasts, closed: () => closed, reloads: () => reloads };
+  }
+
+  it('success: writes noon-in-zone for the picked day, closes, and reloads ONCE', async () => {
+    const h = setDateHarness();
+    await runSetTargetDate(h.deps, '2026-09-10');
+
+    expect(h.writes).toHaveLength(1);
+    expect(h.writes[0]!.input).toEqual({
+      postId: 'p1',
+      targetDate: civilNoonInZoneIso('2026-09-10', 'Asia/Kolkata'),
+    });
+    // The stored instant is 12:00 IST, not UTC midnight (which would misfile it).
+    expect(h.writes[0]!.input.targetDate).toBe('2026-09-10T06:30:00.000Z');
+    // The trace id is explicit on every write, never inferred.
+    expect(h.writes[0]!.traceId).toBe('trace-1');
+    expect(h.closed()).toBe(1);
+    expect(h.reloads()).toBe(1);
+    expect(h.toasts).toEqual([]);
+  });
+
+  it('a cleared date writes an explicit null', async () => {
+    const h = setDateHarness();
+    await runSetTargetDate(h.deps, null);
+    expect(h.writes[0]!.input).toEqual({ postId: 'p1', targetDate: null });
+    expect(h.closed()).toBe(1);
+  });
+
+  it('failure: toasts the retry line, keeps the sheet open, and never reloads', async () => {
+    const h = setDateHarness({
+      postUpdate: () =>
+        Promise.resolve({
+          ok: false,
+          error: { code: 'forbidden_role', message: 'forbidden_role' },
+        } satisfies Result<string>),
+    });
+    await runSetTargetDate(h.deps, '2026-09-10');
+    expect(h.toasts).toEqual([SET_DATE_FALLBACK_MESSAGE]);
+    expect(h.closed()).toBe(0);
+    expect(h.reloads()).toBe(0);
+  });
+
+  it('a thrown proc is swallowed into the same toast', async () => {
+    const h = setDateHarness({ postUpdate: () => Promise.reject(new Error('network down')) });
+    // Must not reject: the catch turns the throw into a toast.
+    await runSetTargetDate(h.deps, '2026-09-10');
+    expect(h.toasts).toEqual([SET_DATE_FALLBACK_MESSAGE]);
+    expect(h.closed()).toBe(0);
+    expect(h.reloads()).toBe(0);
   });
 });
 
