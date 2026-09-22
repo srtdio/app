@@ -1,23 +1,26 @@
 /// <reference types="@cloudflare/workers-types" />
-// Cloudflare Worker: Agora-sync (A2b). A Supabase Realtime consumer that mirrors
-// our group/channel state into Agora Chat, following the inbox-writer precedent:
-// a bare service-role supabase-js client (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY),
-// stateless, idempotent, one uuid_v7 trace id per handled event.
+// Cloudflare Worker: Agora-sync (A2b). Mirrors our group/channel state into
+// Agora Chat, following the inbox-writer precedent: a bare service-role
+// supabase-js client (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY), stateless,
+// idempotent, uuid_v7 trace ids on every log line.
 //
-// It subscribes to postgres_changes on:
-//   * public.chat_channels INSERT  - create the Agora group (group channels) and
-//     stamp last_synced_at via chat_channel_mark_synced; DM channels have no Agora
-//     object, so they are just stamped with a null group id.
-//   * public.group_members INSERT  - add the user to the synced Agora group.
-//   * public.group_members DELETE  - remove the user from the synced Agora group.
-//   * public.groups UPDATE         - rename the Agora group when the name changed.
+// Two sources of truth feed it, both driven by the every-minute cron:
+//   * public.chat_channels rows with last_synced_at null - create the Agora
+//     group (group channels) and stamp last_synced_at via chat_channel_mark_synced;
+//     DM channels have no Agora object, so they are just stamped with a null
+//     group id. (reconcile)
+//   * public.chat_sync_events, the outbox fed by the group_members INSERT/DELETE
+//     and groups.name UPDATE triggers: member_add -> add the user to the synced
+//     Agora group, member_remove -> remove them, group_rename -> rename the
+//     group. (drainSyncEvents)
 //
-// Idempotency: adding an existing member, removing an absent one, and re-handling
-// an already-synced group channel are all safe no-ops (see chat-agora-rest). A
-// member event for a not-yet-synced group is a deferred no-op - Realtime
-// redelivery and the reconciliation cron are the backstop. A failed Agora call is
-// logged loudly and swallowed per event so one bad event never tears down the
-// subscription.
+// Idempotency: adding an existing member, removing an absent one, and
+// re-handling an already-synced group channel are all safe no-ops (see
+// chat-agora-rest), so every outbox row can be retried without side effects. An
+// outbox event whose channel has no agora_group_id yet is left untouched for the
+// next run. A failed Agora call bumps the row's attempts + last_error; after
+// SYNC_EVENT_MAX_ATTEMPTS the row stays unprocessed and /health reports it as
+// stuck.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@srtdio/schemas';
@@ -37,7 +40,16 @@ interface ChatAgoraSyncEnv {
   AGORA_CHAT_REST_URL: string;
 }
 
-/** The four change shapes the consumer acts on. */
+/** An outbox row is retried until this many attempts; then it is stuck. */
+export const SYNC_EVENT_MAX_ATTEMPTS = 10;
+
+/** Outbox rows drained per cron run; a larger backlog drains across runs. */
+export const SYNC_EVENT_BATCH_SIZE = 100;
+
+/** last_error is a short operator hint, not a full dump. */
+const MAX_LAST_ERROR_CHARS = 500;
+
+/** The change shapes the consumer acts on. */
 export type SyncEvent =
   | {
       kind: 'channel_insert';
@@ -46,9 +58,9 @@ export type SyncEvent =
       groupId: string | null;
       agoraGroupId: string | null;
     }
-  | { kind: 'member_insert'; groupId: string; userId: string }
-  | { kind: 'member_delete'; groupId: string; userId: string }
-  | { kind: 'group_rename'; groupId: string; name: string };
+  | { kind: 'member_add'; agoraGroupId: string; userId: string }
+  | { kind: 'member_remove'; agoraGroupId: string; userId: string }
+  | { kind: 'group_rename'; agoraGroupId: string; name: string };
 
 /** A postgres_changes payload, narrowed to the fields we read. */
 export interface ChangePayload {
@@ -58,14 +70,24 @@ export interface ChangePayload {
   old: Record<string, unknown>;
 }
 
+/** One pending public.chat_sync_events row, narrowed to what the drain reads. */
+export interface SyncEventRow {
+  id: string;
+  eventType: string;
+  channelId: string;
+  userId: string | null;
+  payload: unknown;
+  attempts: number;
+}
+
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 /**
  * Map a raw postgres_changes payload to a SyncEvent, or null to ignore it. Only
- * the watched (table, eventType) combinations forward; a groups UPDATE forwards
- * only when the name actually changed.
+ * a chat_channels INSERT forwards; membership and rename changes reach Agora
+ * through the chat_sync_events outbox instead (see toSyncEvent).
  */
 export function mapChangePayload(payload: ChangePayload): SyncEvent | null {
   const { table, eventType } = payload;
@@ -81,31 +103,40 @@ export function mapChangePayload(payload: ChangePayload): SyncEvent | null {
       agoraGroupId: asString(payload.new.agora_group_id),
     };
   }
-  if (table === 'group_members' && (eventType === 'INSERT' || eventType === 'DELETE')) {
-    const row = eventType === 'INSERT' ? payload.new : payload.old;
-    const groupId = asString(row.group_id);
-    const userId = asString(row.user_id);
-    if (!groupId || !userId) return null;
-    return { kind: eventType === 'INSERT' ? 'member_insert' : 'member_delete', groupId, userId };
-  }
-  if (table === 'groups' && eventType === 'UPDATE') {
-    const groupId = asString(payload.new.id);
-    const name = asString(payload.new.name);
-    if (!groupId || name === null) return null;
-    // Only a name change is actionable; ignore other column updates.
-    if (asString(payload.old.name) === name) return null;
-    return { kind: 'group_rename', groupId, name };
-  }
   return null;
 }
 
-/** The DB reads + mark-synced write the consumer needs; injected for tests. */
+/**
+ * Map an outbox row to a SyncEvent once its channel's Agora group id is known.
+ * Throws on a malformed row (unknown event_type, member event without user_id,
+ * rename without payload.name) so the drain records it as a failed attempt and
+ * it surfaces as stuck rather than being silently dropped.
+ */
+export function toSyncEvent(row: SyncEventRow, agoraGroupId: string): SyncEvent {
+  switch (row.eventType) {
+    case 'member_add':
+    case 'member_remove': {
+      if (!row.userId) throw new Error(`${row.eventType} event without user_id`);
+      return { kind: row.eventType, agoraGroupId, userId: row.userId };
+    }
+    case 'group_rename': {
+      const payload =
+        typeof row.payload === 'object' && row.payload !== null
+          ? (row.payload as Record<string, unknown>)
+          : {};
+      const name = asString(payload.name);
+      if (name === null) throw new Error('group_rename event without payload.name');
+      return { kind: 'group_rename', agoraGroupId, name };
+    }
+    default:
+      throw new Error(`unsupported event_type: ${row.eventType}`);
+  }
+}
+
+/** The DB reads + writes the consumer needs; injected for tests. */
 export interface SyncReader {
   getGroup(groupId: string): Promise<{ name: string; createdBy: string | null } | null>;
   getGroupMemberIds(groupId: string): Promise<string[]>;
-  getChannelByGroupId(
-    groupId: string,
-  ): Promise<{ channelId: string; agoraGroupId: string | null } | null>;
   markSynced(channelId: string, agoraGroupId: string | null, traceId: string): Promise<void>;
   /** Channels still awaiting their first Agora sync (last_synced_at is null). */
   listUnsyncedChannels(): Promise<
@@ -116,12 +147,23 @@ export interface SyncReader {
       agoraGroupId: string | null;
     }>
   >;
+  /**
+   * Pending outbox rows: processed_at null, attempts below the cap, oldest
+   * first, capped at SYNC_EVENT_BATCH_SIZE.
+   */
+  listPendingSyncEvents(): Promise<SyncEventRow[]>;
+  /** channel_id -> agora_group_id for the given channels, in one query. */
+  getChannelAgoraGroupIds(channelIds: string[]): Promise<Map<string, string | null>>;
+  markSyncEventProcessed(eventId: string): Promise<void>;
+  markSyncEventFailed(eventId: string, attempts: number, lastError: string): Promise<void>;
+  /** Unprocessed rows that have exhausted their attempts. */
+  countStuckSyncEvents(): Promise<number>;
 }
 
 export interface SyncDeps {
   reader: SyncReader;
   agora: AgoraGroupApi;
-  /** Fresh uuid_v7 trace id per event. */
+  /** Fresh uuid_v7 trace id. */
   newTraceId(): string;
   log: Pick<typeof logger, 'info' | 'warn' | 'error'>;
 }
@@ -153,16 +195,6 @@ function createSyncReader(client: SupabaseClient<Database>): SyncReader {
       if (error) throw new Error(error.message);
       return (data ?? []).map((row) => row.user_id);
     },
-    async getChannelByGroupId(groupId) {
-      const { data, error } = await client
-        .from('chat_channels')
-        .select('channel_id, agora_group_id')
-        .eq('entity_id', groupId)
-        .eq('channel_type', 'group')
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      return data ? { channelId: data.channel_id, agoraGroupId: data.agora_group_id } : null;
-    },
     async markSynced(channelId, agoraGroupId, traceId) {
       // p_agora_group_id is nullable in the proc (DM stamps a null group id); the
       // generated arg type widens it to string, so the params are cast.
@@ -189,6 +221,60 @@ function createSyncReader(client: SupabaseClient<Database>): SyncReader {
         entityId: asString(row.entity_id),
         agoraGroupId: asString(row.agora_group_id),
       }));
+    },
+    async listPendingSyncEvents() {
+      const { data, error } = await client
+        .from('chat_sync_events')
+        .select('id, event_type, channel_id, user_id, payload, attempts')
+        .is('processed_at', null)
+        .lt('attempts', SYNC_EVENT_MAX_ATTEMPTS)
+        .order('created_at', { ascending: true })
+        .limit(SYNC_EVENT_BATCH_SIZE);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        eventType: row.event_type,
+        channelId: row.channel_id,
+        userId: asString(row.user_id),
+        payload: row.payload,
+        attempts: row.attempts,
+      }));
+    },
+    async getChannelAgoraGroupIds(channelIds) {
+      const byChannel = new Map<string, string | null>();
+      if (channelIds.length === 0) return byChannel;
+      const { data, error } = await client
+        .from('chat_channels')
+        .select('channel_id, agora_group_id')
+        .in('channel_id', channelIds);
+      if (error) throw new Error(error.message);
+      for (const row of data ?? []) {
+        byChannel.set(row.channel_id, asString(row.agora_group_id));
+      }
+      return byChannel;
+    },
+    async markSyncEventProcessed(eventId) {
+      const { error } = await client
+        .from('chat_sync_events')
+        .update({ processed_at: new Date().toISOString(), last_error: null })
+        .eq('id', eventId);
+      if (error) throw new Error(error.message);
+    },
+    async markSyncEventFailed(eventId, attempts, lastError) {
+      const { error } = await client
+        .from('chat_sync_events')
+        .update({ attempts, last_error: lastError })
+        .eq('id', eventId);
+      if (error) throw new Error(error.message);
+    },
+    async countStuckSyncEvents() {
+      const { count, error } = await client
+        .from('chat_sync_events')
+        .select('id', { count: 'exact', head: true })
+        .is('processed_at', null)
+        .gte('attempts', SYNC_EVENT_MAX_ATTEMPTS);
+      if (error) throw new Error(error.message);
+      return count ?? 0;
     },
   };
 }
@@ -271,64 +357,37 @@ async function handleChannelInsert(
   });
 }
 
-async function handleMemberChange(
-  event: Extract<SyncEvent, { kind: 'member_insert' | 'member_delete' }>,
-  deps: SyncDeps,
-  traceId: string,
-): Promise<void> {
-  const channel = await deps.reader.getChannelByGroupId(event.groupId);
-  if (!channel || !channel.agoraGroupId) {
-    // Group not synced yet: defer. Realtime redelivery / reconciliation catches it.
-    deps.log.info('chat_agora_sync member change deferred (group not synced)', {
-      trace_id: traceId,
-      group_id: event.groupId,
-    });
-    return;
+/**
+ * Apply one event against Agora / the DB under the given trace id. Throws on
+ * failure; callers decide whether to swallow (processEvent) or record the
+ * attempt (drainSyncEvents).
+ */
+async function applyEvent(event: SyncEvent, deps: SyncDeps, traceId: string): Promise<void> {
+  switch (event.kind) {
+    case 'channel_insert':
+      await handleChannelInsert(event, deps, traceId);
+      return;
+    case 'member_add':
+      await deps.agora.addMember(event.agoraGroupId, toAgoraUsername(event.userId), traceId);
+      return;
+    case 'member_remove':
+      await deps.agora.removeMember(event.agoraGroupId, toAgoraUsername(event.userId), traceId);
+      return;
+    case 'group_rename':
+      await deps.agora.updateGroupName(event.agoraGroupId, event.name, traceId);
+      return;
   }
-  const username = toAgoraUsername(event.userId);
-  if (event.kind === 'member_insert') {
-    await deps.agora.addMember(channel.agoraGroupId, username, traceId);
-  } else {
-    await deps.agora.removeMember(channel.agoraGroupId, username, traceId);
-  }
-}
-
-async function handleGroupRename(
-  event: Extract<SyncEvent, { kind: 'group_rename' }>,
-  deps: SyncDeps,
-  traceId: string,
-): Promise<void> {
-  const channel = await deps.reader.getChannelByGroupId(event.groupId);
-  if (!channel || !channel.agoraGroupId) {
-    deps.log.info('chat_agora_sync rename deferred (group not synced)', {
-      trace_id: traceId,
-      group_id: event.groupId,
-    });
-    return;
-  }
-  await deps.agora.updateGroupName(channel.agoraGroupId, event.name, traceId);
 }
 
 /**
- * Handle one Realtime change. Generates a uuid_v7 trace id, dispatches to the
- * per-kind handler, and swallows any failure (logged loudly) so a bad event can
- * never tear down the subscription - the reconciliation cron is the backstop.
+ * Handle one event in isolation. Generates a uuid_v7 trace id, dispatches to
+ * the per-kind handler, and swallows any failure (logged loudly) so a bad event
+ * can never abort a reconciliation batch - the next cron run is the backstop.
  */
 export async function processEvent(event: SyncEvent, deps: SyncDeps): Promise<void> {
   const traceId = deps.newTraceId();
   try {
-    switch (event.kind) {
-      case 'channel_insert':
-        await handleChannelInsert(event, deps, traceId);
-        return;
-      case 'member_insert':
-      case 'member_delete':
-        await handleMemberChange(event, deps, traceId);
-        return;
-      case 'group_rename':
-        await handleGroupRename(event, deps, traceId);
-        return;
-    }
+    await applyEvent(event, deps, traceId);
   } catch (error) {
     deps.log.error('chat_agora_sync event failed', {
       trace_id: traceId,
@@ -339,8 +398,8 @@ export async function processEvent(event: SyncEvent, deps: SyncDeps): Promise<vo
 }
 
 /**
- * Cron reconciliation pass: the durable backstop for the Realtime consumer that
- * a stateless Cloudflare Worker cannot host. Reads the channels still awaiting
+ * Cron reconciliation pass: the durable backstop for a Realtime consumer that a
+ * stateless Cloudflare Worker cannot host. Reads the channels still awaiting
  * their first sync and replays each through the same processEvent path used for
  * a live INSERT, so the create-group / stamp-synced logic is never duplicated.
  * processEvent mints one uuid_v7 trace id per channel and swallows per-channel
@@ -362,22 +421,151 @@ export async function reconcile(deps: SyncDeps): Promise<void> {
   }
 }
 
+/**
+ * Cron outbox drain: one uuid_v7 trace id per run. Loads a batch of pending
+ * chat_sync_events rows (oldest first) and the agora_group_id of every distinct
+ * channel in the batch with a single IN query, then applies the rows in
+ * created_at order. Rows for a channel that is not synced yet (no
+ * agora_group_id) are left untouched for a later run. Once a row for a channel
+ * fails, the channel's later rows in this batch are also left untouched so a
+ * member_remove never overtakes its failed member_add; they retry next minute
+ * in order. Success stamps processed_at; failure bumps attempts + last_error
+ * and logs with the event id. Rows at the attempt cap are excluded by the read
+ * and reported by /health.
+ */
+export async function drainSyncEvents(deps: SyncDeps): Promise<void> {
+  const traceId = deps.newTraceId();
+  const rows = await deps.reader.listPendingSyncEvents();
+  if (rows.length === 0) return;
+
+  const channelIds = [...new Set(rows.map((row) => row.channelId))];
+  const agoraGroupIds = await deps.reader.getChannelAgoraGroupIds(channelIds);
+
+  // Channels whose remaining rows this run must leave untouched.
+  const halted = new Set<string>();
+  let processed = 0;
+  let failed = 0;
+  let deferred = 0;
+
+  for (const row of rows) {
+    if (halted.has(row.channelId)) {
+      deferred += 1;
+      continue;
+    }
+    const agoraGroupId = agoraGroupIds.get(row.channelId);
+    if (agoraGroupId === null) {
+      // Channel exists but reconcile has not created its Agora group yet.
+      halted.add(row.channelId);
+      deferred += 1;
+      deps.log.info('chat_agora_sync outbox event deferred (channel not synced)', {
+        trace_id: traceId,
+        event_id: row.id,
+        channel_id: row.channelId,
+      });
+      continue;
+    }
+    try {
+      if (agoraGroupId === undefined) {
+        throw new Error('channel not found');
+      }
+      await applyEvent(toSyncEvent(row, agoraGroupId), deps, traceId);
+      await deps.reader.markSyncEventProcessed(row.id);
+      processed += 1;
+      deps.log.info('chat_agora_sync outbox event processed', {
+        trace_id: traceId,
+        event_id: row.id,
+        channel_id: row.channelId,
+        event_type: row.eventType,
+      });
+    } catch (error) {
+      halted.add(row.channelId);
+      failed += 1;
+      const attempts = row.attempts + 1;
+      const lastError = serializeError(error).slice(0, MAX_LAST_ERROR_CHARS);
+      deps.log.error('chat_agora_sync outbox event failed', {
+        trace_id: traceId,
+        event_id: row.id,
+        channel_id: row.channelId,
+        event_type: row.eventType,
+        attempts,
+        stuck: attempts >= SYNC_EVENT_MAX_ATTEMPTS,
+        error: lastError,
+      });
+      await deps.reader.markSyncEventFailed(row.id, attempts, lastError);
+    }
+  }
+
+  deps.log.info('chat_agora_sync outbox drained', {
+    trace_id: traceId,
+    batch: rows.length,
+    processed,
+    failed,
+    deferred,
+  });
+}
+
+/** The full scheduled pass: channel reconcile, then the outbox drain. */
+export async function runScheduled(deps: SyncDeps): Promise<void> {
+  try {
+    await reconcile(deps);
+  } catch (error) {
+    deps.log.error('chat_agora_sync reconcile failed', {
+      trace_id: deps.newTraceId(),
+      error: serializeError(error),
+    });
+  }
+  try {
+    await drainSyncEvents(deps);
+  } catch (error) {
+    deps.log.error('chat_agora_sync outbox drain failed', {
+      trace_id: deps.newTraceId(),
+      error: serializeError(error),
+    });
+  }
+}
+
+function jsonResponse(body: Record<string, unknown>, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+/**
+ * /health: liveness plus the count of outbox rows that exhausted their
+ * attempts (unprocessed, attempts >= SYNC_EVENT_MAX_ATTEMPTS). A non-zero
+ * count means an operator has to look at last_error; 503 when the count
+ * itself cannot be read.
+ */
+export async function healthResponse(deps: SyncDeps): Promise<Response> {
+  const traceId = deps.newTraceId();
+  try {
+    const stuck = await deps.reader.countStuckSyncEvents();
+    return jsonResponse({ ok: true, service: 'chat-agora-sync', stuck_sync_events: stuck }, 200);
+  } catch (error) {
+    deps.log.error('chat_agora_sync health check failed', {
+      trace_id: traceId,
+      error: serializeError(error),
+    });
+    return jsonResponse({ ok: false, service: 'chat-agora-sync', error: 'db unavailable' }, 503);
+  }
+}
+
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: ChatAgoraSyncEnv): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === '/health') {
-      return new Response(JSON.stringify({ ok: true, service: 'chat-agora-sync' }), {
-        headers: { 'content-type': 'application/json' },
-      });
+      return healthResponse(buildDeps(env));
     }
     return new Response('chat-agora-sync', { status: 200 });
   },
 
   // Cron entrypoint (see workers/chat-agora-sync/wrangler.toml [triggers]). A
-  // Worker cannot hold the Realtime subscription, so the every-minute schedule
-  // drives reconcile(): create the Agora group for any not-yet-synced group
-  // channel and stamp DM channels. waitUntil keeps the run alive past return.
+  // Worker cannot hold a Realtime subscription, so the every-minute schedule
+  // drives reconcile() (create the Agora group for any not-yet-synced group
+  // channel, stamp DM channels) and then drainSyncEvents() (push the
+  // chat_sync_events outbox to Agora). waitUntil keeps the run alive past return.
   scheduled(_controller: ScheduledController, env: ChatAgoraSyncEnv, ctx: ExecutionContext): void {
-    ctx.waitUntil(reconcile(buildDeps(env)));
+    ctx.waitUntil(runScheduled(buildDeps(env)));
   },
 };
