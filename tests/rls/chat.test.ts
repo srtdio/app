@@ -11,6 +11,13 @@
 //   4. group_members / groups changes enqueue chat_sync_events rows, which the
 //      authenticated role can never read.
 //
+// Follow-ups (20260922210000_chat_sync_guard_and_unread.sql):
+//
+//   5. The member trigger is guarded: a workspace hard-delete cascading through
+//      group_members succeeds and leaves no chat_sync_events rows behind.
+//   6. chat_unread_counts returns one row per channel the caller can read, with
+//      the unread count relative to the caller's read cursor (if any).
+//
 // Seeding goes through the service role (the privileged path), following the
 // rationale in packages/test-utils/rls.ts.
 
@@ -565,6 +572,181 @@ describe.runIf(RLS_SUITE)('chat record: channel-membership RLS and procs', () =>
       for (const client of [ownerClient, bClient, cClient, outsiderClient]) {
         expect(await visibleRowCount(client, 'chat_sync_events', match)).toBe(0);
       }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 5. chat_sync_enqueue_member guard (workspace hard-delete cascade)
+  // -------------------------------------------------------------------------
+
+  describe('chat_sync_enqueue_member guard', () => {
+    it('a workspace with groups and group members hard-deletes cleanly and leaves no outbox rows', async () => {
+      // A workspace of its own, so the delete cannot disturb the shared fixtures.
+      const wsDel = await seedWorkspace(admin, outsider, `Chat D ${outsider.email}`);
+      await seedMember(adminGeneric, wsDel, userB, 'agency');
+      const group = await insertRow(adminGeneric, 'groups', {
+        workspace_id: wsDel.id,
+        name: `Grp ${randomSuffix()}`,
+        created_by: outsider.id,
+      });
+      await insertRow(adminGeneric, 'chat_channels', {
+        channel_id: `group__${wsDel.id}__${String(group.id)}`,
+        workspace_id: wsDel.id,
+        channel_type: 'group',
+        entity_id: group.id,
+      });
+      for (const user of [outsider, userB]) {
+        await insertRow(adminGeneric, 'group_members', {
+          group_id: group.id,
+          user_id: user.id,
+          workspace_id: wsDel.id,
+        });
+      }
+      const match: MatchSpec = [['workspace_id', wsDel.id]];
+      // The live path still enqueues: workspace and channel both exist.
+      expect(await countWhere(adminGeneric, 'chat_sync_events', match)).toBe(2);
+
+      // Hard-delete the workspace WITHOUT clearing group_members first. The
+      // cascade fires the member trigger after the workspace row is gone, which
+      // used to raise on the outbox's workspace FK.
+      const del = await adminGeneric.from('workspaces').delete().eq('id', wsDel.id);
+      expect(del.error).toBeNull();
+      expect(await countWhere(adminGeneric, 'workspaces', [['id', wsDel.id]])).toBe(0);
+      expect(await countWhere(adminGeneric, 'group_members', match)).toBe(0);
+      expect(await countWhere(adminGeneric, 'chat_sync_events', match)).toBe(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 6. chat_unread_counts
+  // -------------------------------------------------------------------------
+
+  describe('chat_unread_counts', () => {
+    type UnreadRow = Database['public']['Functions']['chat_unread_counts']['Returns'][number];
+    interface SentMessage {
+      id: string;
+      created_at: string;
+    }
+
+    // Fresh channels for owner + userC so the expected counts are exact: the
+    // scaffold messages sit at partitionTimestamp, outside the function's
+    // 90-day window, so everything counted here is sent through
+    // chat_message_send (server-stamped now()).
+    let dm2: string;
+    let group2Channel: string;
+    let ownerDm: SentMessage[];
+    let userCDm: SentMessage;
+
+    async function sendAs(userId: string, channelId: string, body: string): Promise<SentMessage> {
+      const res = await clientFor(userId).rpc('chat_message_send', sendArgs(channelId, body));
+      if (res.error || !res.data) {
+        throw new Error(`chat_message_send failed: ${res.error?.message ?? 'no row'}`);
+      }
+      return { id: res.data.id, created_at: res.data.created_at };
+    }
+
+    async function unreadFor(userId: string, workspaceId: string): Promise<UnreadRow[]> {
+      // chat_unread_counts is a SECURITY INVOKER read function whose live
+      // signature is (p_workspace_id uuid) only: it takes no trace parameter,
+      // and sending one would break the PostgREST function lookup (same
+      // exemption as audit_log_write in src/server/audit.ts).
+      // eslint-disable-next-line no-restricted-syntax
+      const res = await clientFor(userId).rpc('chat_unread_counts', {
+        p_workspace_id: workspaceId,
+      });
+      if (res.error) throw new Error(`chat_unread_counts failed: ${res.error.message}`);
+      return res.data ?? [];
+    }
+
+    function rowFor(rows: UnreadRow[], channelId: string): UnreadRow | undefined {
+      return rows.find((r) => r.channel_id === channelId);
+    }
+
+    beforeAll(async () => {
+      dm2 = await seedDmChannel(adminGeneric, wsA.id, owner, userC);
+      const group2 = await insertRow(adminGeneric, 'groups', {
+        workspace_id: wsA.id,
+        name: `Grp ${randomSuffix()}`,
+        created_by: owner.id,
+      });
+      group2Channel = `group__${wsA.id}__${String(group2.id)}`;
+      await insertRow(adminGeneric, 'chat_channels', {
+        channel_id: group2Channel,
+        workspace_id: wsA.id,
+        channel_type: 'group',
+        entity_id: group2.id,
+      });
+      for (const user of [owner, userC]) {
+        await insertRow(adminGeneric, 'group_members', {
+          group_id: group2.id,
+          user_id: user.id,
+          workspace_id: wsA.id,
+        });
+      }
+
+      // DM: owner sends three, then userC replies once. Group: owner sends two.
+      ownerDm = [];
+      for (const body of ['dm 1', 'dm 2', 'dm 3']) ownerDm.push(await sendAs(owner.id, dm2, body));
+      userCDm = await sendAs(userC.id, dm2, 'dm reply');
+      await sendAs(owner.id, group2Channel, 'group 1');
+      await sendAs(owner.id, group2Channel, 'group 2');
+    });
+
+    it('without a cursor: one row per member channel, own messages excluded', async () => {
+      const rows = await unreadFor(userC.id, wsA.id);
+      // userC is a member of exactly dm2 and group2 (its scaffold-group
+      // membership was removed by the outbox test above).
+      expect(rows.map((r) => r.channel_id).sort()).toEqual([dm2, group2Channel].sort());
+
+      const dm = rowFor(rows, dm2);
+      expect(dm?.unread).toBe(3);
+      expect(Date.parse(dm?.last_message_at ?? '')).toBe(Date.parse(userCDm.created_at));
+      expect(rowFor(rows, group2Channel)?.unread).toBe(2);
+
+      // The other side of the same channels: only userC's reply is unread for
+      // the owner, and the group the owner alone wrote to has nothing unread.
+      const ownerRows = await unreadFor(owner.id, wsA.id);
+      expect(rowFor(ownerRows, dm2)?.unread).toBe(1);
+      expect(rowFor(ownerRows, group2Channel)?.unread).toBe(0);
+    });
+
+    it('returns nothing for channels the caller is not a member of', async () => {
+      // A workspace member in neither channel gets no row for them.
+      const bRows = await unreadFor(userB.id, wsA.id);
+      expect(rowFor(bRows, dm2)).toBeUndefined();
+      expect(rowFor(bRows, group2Channel)).toBeUndefined();
+
+      // Not a member of the workspace at all: no rows.
+      expect(await unreadFor(outsider.id, wsA.id)).toEqual([]);
+
+      // userC reads the owner/userB DM and the scaffold group in no case.
+      const cRows = await unreadFor(userC.id, wsA.id);
+      expect(rowFor(cRows, dmChannelId)).toBeUndefined();
+      expect(rowFor(cRows, ctx.channelId)).toBeUndefined();
+    });
+
+    it('with a cursor: only later messages from other senders count', async () => {
+      const second = ownerDm[1];
+      if (!second) throw new Error('fixture: expected three owner DM messages');
+
+      const mid = await clientFor(userC.id).rpc('chat_read_cursor_set', cursorArgs(dm2, second.id));
+      expect(mid.error).toBeNull();
+      let dm = rowFor(await unreadFor(userC.id, wsA.id), dm2);
+      // Only 'dm 3' is after the cursor and not userC's own.
+      expect(dm?.unread).toBe(1);
+      expect(Date.parse(dm?.last_message_at ?? '')).toBe(Date.parse(userCDm.created_at));
+
+      const latest = await clientFor(userC.id).rpc(
+        'chat_read_cursor_set',
+        cursorArgs(dm2, userCDm.id),
+      );
+      expect(latest.error).toBeNull();
+      dm = rowFor(await unreadFor(userC.id, wsA.id), dm2);
+      // Fully read: the channel row stays (one row per channel), count is zero.
+      expect(dm?.unread).toBe(0);
+
+      // The cursor is per user: the owner's count is unchanged.
+      expect(rowFor(await unreadFor(owner.id, wsA.id), dm2)?.unread).toBe(1);
     });
   });
 });

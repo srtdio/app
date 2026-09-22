@@ -8,7 +8,7 @@ export const ChatMessageSchema = z.object({
   body: z.string().nullable(),
   mentions: z.unknown().nullable(),
   attachment_asset_ids: z.array(z.string().uuid()).nullable(),
-  agora_event_id: z.string(),
+  agora_event_id: z.string().nullable(),
   created_at: z.string(),
   edited_at: z.string().nullable(),
   deleted_at: z.string().nullable(),

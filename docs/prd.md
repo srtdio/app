@@ -437,9 +437,9 @@ Schema is fully executed on v2 project movnexawfhsyuluspxoc (Postgres 17). v1 (o
 | asset_versions | id, asset_id, version_number, r2_key, sha256, uploaded_at, uploaded_by. |
 | asset_attachments | Binds entity to a specific asset_version_id. Immutable. FK NO ACTION. |
 | inbox_entries | Permanent Activity feed. Partitioned monthly. |
-| chat_channels | Local Agora channel registry + last_synced_at. |
-| chat_messages | Agora mirror only. Partitioned monthly. Never on read path. |
-| groups, group_members | Sorted source of truth. Agora ACL mirrors. |
+| chat_channels | Channel registry (dm / group) keyed by channel_id; membership is resolved by chat_channel_member. last_synced_at tracks the Agora live-delivery channel. |
+| chat_messages | The chat record and the only read path. Written by chat_message_send, read directly under channel-membership RLS; chat_unread_counts derives per-channel unread from chat_read_cursors. Partitioned monthly. Agora is live delivery only; there is no Agora mirror. Companion tables: chat_reactions, chat_read_cursors, chat_sync_events (service-role outbox to Agora). |
+| groups, group_members | Sorted source of truth. Membership and rename changes enqueue chat_sync_events for Agora live delivery. |
 | email_threads | root_id, root_type, message_id, subject, workspace_id. |
 | delivery_attempts | Per-event email/push delivery row. email_sent_at for dedupe. |
 | webhook_events, webhook_processing_attempts | Inbound webhook capture (incl. Agora chat entry) and retry log. |
