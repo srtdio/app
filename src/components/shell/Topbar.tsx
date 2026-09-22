@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconBriefs, IconPipeline, IconPlus, IconSearch } from '@/components/ui/icons';
+import {
+  IconBriefs,
+  IconChevronDown,
+  IconPipeline,
+  IconPlus,
+  IconSearch,
+} from '@/components/ui/icons';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { MenuItem } from '@/components/shell/MenuItem';
 import { dispatchSorted } from '@/lib/events';
@@ -28,7 +34,16 @@ export function Topbar({
       {workspaceName === null ? (
         <span className="md:hidden h-4 w-24 rounded bg-panel-3 animate-pulse" aria-hidden />
       ) : (
-        <span className="md:hidden font-semibold text-sm truncate">{workspaceName}</span>
+        <button
+          type="button"
+          aria-label="Switch workspace"
+          aria-haspopup="dialog"
+          onClick={() => dispatchSorted('sorted:switch-workspace')}
+          className="md:hidden flex items-center gap-1 min-h-[44px] max-w-[180px] px-2 rounded-lg text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <span className="font-semibold text-sm truncate">{workspaceName}</span>
+          <IconChevronDown size={16} className="shrink-0 text-fg-3" />
+        </button>
       )}
 
       <button
