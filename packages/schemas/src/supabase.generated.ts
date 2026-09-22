@@ -7266,6 +7266,14 @@ export type Database = {
         Args: { p_channel_id: string; p_message_id: string; p_trace_id: string }
         Returns: undefined
       }
+      chat_unread_counts: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          channel_id: string
+          last_message_at: string
+          unread: number
+        }[]
+      }
       chat_webhook_ingest: {
         Args: {
           p_agora_event_id: string
