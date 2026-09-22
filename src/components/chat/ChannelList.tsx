@@ -22,6 +22,8 @@ interface ChannelListProps {
   onSelect: (channel: ChannelSummary) => void;
   /** Opens the New chat sheet (header "+" and empty-state action). */
   onNewChat: () => void;
+  /** The workspace IANA zone the card dates render in; UTC when absent. */
+  timeZone?: string;
 }
 
 interface ChannelListBodyProps extends ChannelListProps {
@@ -64,6 +66,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   }
   const summaryFor: SummaryLookup = props.summaryFor ?? (() => undefined);
   const nowMs = props.nowMs ?? 0;
+  const timeZone = props.timeZone ?? 'UTC';
   return (
     <ul className="flex flex-col gap-2 px-3 py-3">
       {props.channels.map((channel) => (
@@ -73,6 +76,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
             selected={channel.channelId === props.selectedChannelId}
             summary={summaryFor(channel.channelId)}
             nowMs={nowMs}
+            timeZone={timeZone}
             onSelect={props.onSelect}
           />
         </li>
@@ -81,8 +85,13 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   );
 }
 
-/** Build the preview line: an optional sender prefix before the last message. */
-function previewLine(summary: ConversationSummary): string {
+/**
+ * Build the preview line: an optional sender prefix before the last message. A
+ * channel whose last message is known only by time (outside the preview scan)
+ * reads as an empty line rather than "No messages yet".
+ */
+export function previewLine(summary: ConversationSummary): string {
+  if (summary.lastMessageText === '') return '';
   const prefix = summary.lastMessagePrefix !== undefined ? `${summary.lastMessagePrefix}: ` : '';
   return `${prefix}${summary.lastMessageText}`;
 }
@@ -93,6 +102,7 @@ function ChannelCard(props: {
   selected: boolean;
   summary: ConversationSummary | undefined;
   nowMs: number;
+  timeZone: string;
   onSelect: (channel: ChannelSummary) => void;
 }): ReactElement {
   const { channel, summary } = props;
@@ -100,7 +110,9 @@ function ChannelCard(props: {
   const unread = summary?.unread ?? 0;
   const isUnread = unread > 0;
   const preview = hasMessage ? previewLine(summary) : 'No messages yet';
-  const time = hasMessage ? formatRelativeTime(summary.lastMessageTs, props.nowMs) : '';
+  const time = hasMessage
+    ? formatRelativeTime(summary.lastMessageTs, props.nowMs, props.timeZone)
+    : '';
   return (
     <button
       type="button"
@@ -206,6 +218,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
           onNewChat: props.onNewChat,
           summaryFor,
           ...(props.nowMs !== undefined ? { nowMs: props.nowMs } : {}),
+          ...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {}),
         })}
       </div>
     </div>

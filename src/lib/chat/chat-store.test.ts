@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyIncoming,
+  applyPreviews,
+  applyUnreadCounts,
   clearPendingOpen,
   initialState,
   markRead,
   mergeInitial,
+  previewText,
   requestOpen,
   selectConversation,
   selectTotalUnread,
@@ -13,26 +16,24 @@ import {
   type ChatStoreState,
 } from '@/lib/chat/chat-store';
 
-/** A store seeded with two known channels, each with one unread message. */
+const ME = 'me';
+
+/** A store seeded with two known channels from chat_unread_counts. */
 function seeded(): ChatStoreState {
-  return mergeInitial(
-    [{ channelId: 'a' }, { channelId: 'b' }],
-    [
-      { channelId: 'a', lastMessageText: 'hi a', lastMessageTs: 10, unread: 1 },
-      { channelId: 'b', lastMessageText: 'hi b', lastMessageTs: 20, unread: 2 },
-    ],
-  );
+  return applyUnreadCounts(mergeInitial([{ channelId: 'a' }, { channelId: 'b' }]), [
+    { channelId: 'a', unread: 1, lastMessageAt: '1970-01-01T00:00:00.010Z' },
+    { channelId: 'b', unread: 2, lastMessageAt: '1970-01-01T00:00:00.020Z' },
+  ]);
 }
 
-describe('mergeInitial', () => {
-  it('keys summaries by channel_id and leaves message-less channels at unread 0', () => {
-    const state = mergeInitial(
-      [{ channelId: 'a' }, { channelId: 'silent' }],
-      [{ channelId: 'a', lastMessageText: 'hi', lastMessageTs: 5, unread: 3 }],
-    );
+describe('mergeInitial + applyUnreadCounts', () => {
+  it('keys every roster channel at unread 0 and lets chat_unread_counts drive badges + order', () => {
+    const state = applyUnreadCounts(mergeInitial([{ channelId: 'a' }, { channelId: 'silent' }]), [
+      { channelId: 'a', unread: 3, lastMessageAt: '1970-01-01T00:00:00.005Z' },
+    ]);
 
     expect(selectConversation(state, 'a')).toEqual({
-      lastMessageText: 'hi',
+      lastMessageText: '',
       lastMessageTs: 5,
       unread: 3,
     });
@@ -41,6 +42,70 @@ describe('mergeInitial', () => {
       lastMessageTs: 0,
       unread: 0,
     });
+    expect(selectTotalUnread(state)).toBe(3);
+  });
+
+  it('pins the active conversation at unread 0 on refresh and keeps the preview text', () => {
+    const viewing = setActive(
+      applyPreviews(
+        seeded(),
+        [
+          {
+            channelId: 'a',
+            messageId: 'm',
+            senderUserId: 'x',
+            body: 'hi a',
+            hasAttachments: false,
+            createdAt: '1970-01-01T00:00:00.010Z',
+          },
+        ],
+        ME,
+      ),
+      'a',
+    );
+    const refreshed = applyUnreadCounts(viewing, [
+      { channelId: 'a', unread: 5, lastMessageAt: '1970-01-01T00:00:00.030Z' },
+    ]);
+    expect(selectConversation(refreshed, 'a')).toEqual({
+      lastMessageText: 'hi a',
+      lastMessageTs: 30,
+      unread: 0,
+    });
+  });
+});
+
+describe('applyPreviews / previewText', () => {
+  it('sets the line from the record with a You prefix for own sends and an attachment label', () => {
+    const state = applyPreviews(
+      seeded(),
+      [
+        {
+          channelId: 'a',
+          messageId: 'm1',
+          senderUserId: ME,
+          body: 'sent by me',
+          hasAttachments: false,
+          createdAt: '1970-01-01T00:00:00.010Z',
+        },
+        {
+          channelId: 'b',
+          messageId: 'm2',
+          senderUserId: 'x',
+          body: '',
+          hasAttachments: true,
+          createdAt: '1970-01-01T00:00:00.020Z',
+        },
+      ],
+      ME,
+    );
+    expect(selectConversation(state, 'a')).toEqual({
+      lastMessageText: 'sent by me',
+      lastMessagePrefix: 'You',
+      lastMessageTs: 10,
+      unread: 1,
+    });
+    expect(selectConversation(state, 'b')?.lastMessageText).toBe('Attachment');
+    expect(previewText({ body: ' ', hasAttachments: false })).toBe('');
   });
 });
 

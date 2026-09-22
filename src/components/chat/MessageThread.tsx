@@ -9,7 +9,7 @@ import {
 import { isNearBottom } from '@/lib/chat/scroll';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconChat, IconChevronRight, IconSettings } from '@/components/ui/icons';
+import { IconChat, IconChevronRight, IconRotateCcw, IconSettings } from '@/components/ui/icons';
 import { useLongPress, type LongPressHandlers } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
@@ -17,6 +17,7 @@ import type { ChatProfile } from '@/lib/chat-reads';
 import type { MessageStatus, ThreadMessage } from '@/lib/chat/thread';
 import type { MessageAttachment, ReplyQuote } from '@/lib/chat/attachments';
 import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
+import { formatMessageTime } from '@/lib/chat/time-format';
 import type { PresignCache } from '@/lib/asset-presign';
 import { Composer } from '@/components/chat/Composer';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
@@ -29,8 +30,16 @@ interface MessageThreadProps {
   profiles: Map<string, ChatProfile>;
   messages: ThreadMessage[];
   loading: boolean;
-  sending: boolean;
-  /** False when the channel has no Agora target yet (e.g. group not synced). */
+  /** An older page is loading (scroll-to-top); renders a slim row at the top. */
+  loadingOlder?: boolean;
+  /** Whether scrolling to the top should request an older page. */
+  hasMore?: boolean;
+  onLoadOlder?: () => void;
+  /** The newest message is on screen; the thread advances the read cursor. */
+  onNewestVisible?: () => void;
+  /** The workspace IANA zone every timestamp renders in. */
+  timeZone: string;
+  /** False when sending is impossible (no channel selected). */
   canSend: boolean;
   onSend: (
     text: string,
@@ -38,6 +47,8 @@ interface MessageThreadProps {
     sharedPostIds: string[],
     reply: ReplyQuote | null,
   ) => Promise<void>;
+  /** Re-run a failed send with the same message id. */
+  onRetry?: (messageId: string) => void;
   /** Present on small screens only; renders a back affordance to the list. */
   onBack?: () => void;
   /** Present for group channels only; opens the group management panel. */
@@ -50,25 +61,29 @@ interface MessageThreadProps {
   onTyping?: () => void;
   /** DM peer presence; absent for groups. Renders a header status line when available. */
   presence?: { online: boolean; lastTimeMs: number | null; available: boolean };
-  /** True only for DM threads; gates delivery/read ticks on own bubbles. */
+  /** True only for DM threads; gates seen ticks on own bubbles. */
   showTicks?: boolean;
   /** Add or remove the current user's reaction on a message. */
   onToggleReaction?: (messageId: string, emoji: string, currentlyMine: boolean) => void;
 }
 
+/** Scroll positions within this many px of the top request the older page. */
+const LOAD_OLDER_THRESHOLD_PX = 80;
+
 /**
  * Coarse "last seen" label from a timestamp, bucketed minutes/hours/days. Null
  * (no known last-seen) reads as a plain 'Offline'. Computed at render against a
- * supplied now so there is no timer or interval driving the header.
+ * supplied now so there is no timer or interval driving the header. Beyond a
+ * day it shows the workspace-zone clock time of the last visit.
  */
-function lastSeenLabel(lastTimeMs: number | null, nowMs: number): string {
+export function lastSeenLabel(lastTimeMs: number | null, nowMs: number, timeZone: string): string {
   if (lastTimeMs === null) return 'Offline';
   const mins = Math.floor((nowMs - lastTimeMs) / 60000);
   if (mins < 1) return 'last seen just now';
   if (mins < 60) return `last seen ${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `last seen ${hours}h ago`;
-  return `last seen ${Math.floor(hours / 24)}d ago`;
+  return `last seen ${Math.floor(hours / 24)}d ago at ${formatMessageTime(lastTimeMs, timeZone)}`;
 }
 
 /**
@@ -128,14 +143,21 @@ function senderAvatarProps(
   return profile?.avatarUrl != null ? { src: profile.avatarUrl } : {};
 }
 
-function formatTime(time: number): string {
-  return new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+/**
+ * The footer label for a bubble: the server time on the workspace clock once
+ * the message is recorded, 'Sending' while the record write is in flight, and
+ * 'Not sent' when it failed (the Retry control sits beside it).
+ */
+export function bubbleTimeLabel(message: ThreadMessage, timeZone: string): string {
+  if (message.state === 'sending') return 'Sending';
+  if (message.state === 'failed') return 'Not sent';
+  return formatMessageTime(message.createdAt, timeZone);
 }
 
 /**
- * WhatsApp-style delivery/read ticks for an own DM message. Single check = sent,
- * double check = delivered, double check in the accent token = read. Inline SVG
- * with token-class colour only, so light and dark stay at parity; no animation.
+ * WhatsApp-style seen ticks for an own DM message. Single check = recorded,
+ * double check in the accent token = read by the peer. Inline SVG with
+ * token-class colour only, so light and dark stay at parity; no animation.
  */
 function MessageTicks({ status }: { status: MessageStatus }): ReactElement {
   const color = status === 'read' ? 'text-accent' : 'text-fg-3';
@@ -177,11 +199,13 @@ function MessageTicks({ status }: { status: MessageStatus }): ReactElement {
  * One message row in the WhatsApp-style thread. Own messages (`message.mine`)
  * right-align with an accent-tinted bubble, no avatar and no sender name. Peer
  * messages left-align; in a group the run head carries the avatar + sender name
- * above the bubble, while tucked replies reserve an aligned gutter. The
- * timestamp (and own-DM ticks) sit inside the bubble, and reactions hang as one
- * small badge over the tail edge. Pure and hook-free: long-press wiring is owned
- * by the MessageRow wrapper and passed in via `press`, so the unit test can call
- * this directly. All colours are design tokens, so light and dark stay at parity.
+ * above the bubble, while tucked replies reserve an aligned gutter. The footer
+ * (server time on the workspace clock, or the sending / not-sent state, and
+ * own-DM ticks) sits inside the bubble; a failed own send offers a 44px Retry
+ * beside the bubble; reactions hang as one small badge over the tail edge.
+ * Pure and hook-free: long-press wiring is owned by the MessageRow wrapper and
+ * passed in via `press`, so the unit test can call this directly. All colours
+ * are design tokens, so light and dark stay at parity.
  */
 export function MessageBubble(props: {
   message: ThreadMessage;
@@ -191,7 +215,9 @@ export function MessageBubble(props: {
   showTicks: boolean;
   isGroup: boolean;
   head: boolean;
+  timeZone: string;
   onBadgeClick: () => void;
+  onRetry?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
   bubbleRef?: Ref<HTMLDivElement>;
   press?: {
@@ -202,13 +228,15 @@ export function MessageBubble(props: {
 }): ReactElement {
   const { message, profiles, cache, presignEnabled, showTicks, isGroup, head, onBadgeClick } =
     props;
-  const { bubbleRef, press } = props;
+  const { bubbleRef, press, timeZone } = props;
   const mine = message.mine;
   const reply = message.reply;
   const name = senderName(message, profiles);
   const showMeta = isGroup && !mine && head;
   const gutter = isGroup && !mine && !head;
   const hasReactions = message.reactions.length > 0;
+  const failed = message.state === 'failed';
+  const sending = message.state === 'sending';
   const textOnly =
     message.body.trim() !== '' &&
     message.attachments.length === 0 &&
@@ -217,13 +245,14 @@ export function MessageBubble(props: {
   const distinctEmojis = message.reactions.map((r) => r.emoji).join('');
   const time = (
     <>
-      <span>{formatTime(message.time)}</span>
-      {showTicks && mine ? <MessageTicks status={message.status} /> : null}
+      <span className={cn(failed && 'text-bad')}>{bubbleTimeLabel(message, timeZone)}</span>
+      {showTicks && mine && !failed && !sending ? <MessageTicks status={message.status} /> : null}
     </>
   );
   return (
     <li
       data-msg-id={message.id}
+      data-state={message.state}
       className={cn(
         'flex items-start gap-2 px-4 py-2',
         mine ? 'flex-row-reverse' : 'flex-row',
@@ -250,6 +279,8 @@ export function MessageBubble(props: {
             mine
               ? 'rounded-br-sm border-accent-line bg-accent-soft'
               : 'rounded-bl-sm border-border bg-panel-2',
+            sending && 'opacity-70',
+            failed && 'border-bad',
           )}
         >
           {reply !== null ? (
@@ -303,8 +334,6 @@ export function MessageBubble(props: {
                 cache={cache}
                 presignEnabled={presignEnabled}
               />
-              {/* PR6 'post' extension point: shared posts resolve + render here,
-                  separate from the attachment branch above. */}
               <SharedPostCards postIds={message.sharedPostIds} />
               <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-3">
                 {time}
@@ -328,6 +357,15 @@ export function MessageBubble(props: {
           ) : null}
         </div>
       </div>
+      {failed && mine ? (
+        <IconButton
+          label="Retry sending"
+          className="shrink-0 self-center text-bad hover:bg-bad-soft hover:text-bad"
+          onClick={() => props.onRetry?.(message.id)}
+        >
+          <IconRotateCcw size={18} />
+        </IconButton>
+      ) : null}
     </li>
   );
 }
@@ -353,7 +391,9 @@ function MessageRow(props: {
   showTicks: boolean;
   isGroup: boolean;
   head: boolean;
+  timeZone: string;
   onOpen: (message: ThreadMessage, rect: DOMRect | null) => void;
+  onRetry?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
 }): ReactElement {
   const bubbleRef = useRef<HTMLDivElement>(null);
@@ -373,8 +413,10 @@ function MessageRow(props: {
       showTicks={props.showTicks}
       isGroup={props.isGroup}
       head={props.head}
+      timeZone={props.timeZone}
       bubbleRef={bubbleRef}
       press={{ handlers, onContextMenu, consumeClick: consumeClickSuppression }}
+      {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
       {...(props.onJumpToMessage !== undefined ? { onJumpToMessage: props.onJumpToMessage } : {})}
       onBadgeClick={() =>
         props.onOpen(props.message, bubbleRef.current?.getBoundingClientRect() ?? null)
@@ -386,7 +428,17 @@ function MessageRow(props: {
 function ThreadBody(
   props: Pick<
     MessageThreadProps,
-    'title' | 'messages' | 'loading' | 'profiles' | 'onToggleReaction'
+    | 'title'
+    | 'messages'
+    | 'loading'
+    | 'loadingOlder'
+    | 'hasMore'
+    | 'onLoadOlder'
+    | 'onNewestVisible'
+    | 'profiles'
+    | 'onToggleReaction'
+    | 'onRetry'
+    | 'timeZone'
   > & {
     cache: PresignCache;
     presignEnabled: boolean;
@@ -395,6 +447,7 @@ function ThreadBody(
     onReply: (message: ThreadMessage) => void;
   },
 ): ReactElement {
+  const { onNewestVisible } = props;
   const [menu, setMenu] = useState<{ message: ThreadMessage; rect: DOMRect | null } | null>(null);
   const toast = useToast();
   const listRef = useRef<HTMLUListElement>(null);
@@ -402,30 +455,43 @@ function ThreadBody(
   // latest message, and whether the reader is currently parked at the bottom.
   const didInitialScrollRef = useRef(false);
   const atBottomRef = useRef(true);
+  // The scroll height before an older page was requested, so the prepended rows
+  // do not move what the reader was looking at.
+  const anchorHeightRef = useRef<number | null>(null);
+  const newestIdRef = useRef<string | null>(null);
   // Reset on conversation switch so a fresh thread always lands at the latest
   // message even if the previous one was scrolled up. `title` is the only
-  // per-conversation identifier reaching this component (use-chat-thread keys
-  // its load on the Agora target, which never flows down here). Declared BEFORE
-  // the messages effect so the reset commits first on a switch.
+  // per-conversation identifier reaching this component. Declared BEFORE the
+  // messages effect so the reset commits first on a switch.
   useLayoutEffect(() => {
     didInitialScrollRef.current = false;
     atBottomRef.current = true;
+    anchorHeightRef.current = null;
+    newestIdRef.current = null;
   }, [props.title]);
   // Keep the latest message in view: instant pre-paint snap on first load (no
   // top-flash), then a smooth follow for own sends or when already at bottom.
+  // After an older page is prepended, restore the reader's position instead.
   useLayoutEffect(() => {
     const el = listRef.current;
     if (el === null || props.messages.length === 0) return;
-    if (!didInitialScrollRef.current) {
-      el.scrollTop = el.scrollHeight;
-      didInitialScrollRef.current = true;
+    if (anchorHeightRef.current !== null) {
+      el.scrollTop += el.scrollHeight - anchorHeightRef.current;
+      anchorHeightRef.current = null;
       return;
     }
     const last = props.messages[props.messages.length - 1];
-    if (last !== undefined && (last.mine || atBottomRef.current)) {
+    if (!didInitialScrollRef.current) {
+      el.scrollTop = el.scrollHeight;
+      didInitialScrollRef.current = true;
+    } else if (last !== undefined && (last.mine || atBottomRef.current)) {
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }
-  }, [props.messages]);
+    if (last !== undefined && atBottomRef.current && newestIdRef.current !== last.id) {
+      newestIdRef.current = last.id;
+      onNewestVisible?.();
+    }
+  }, [props.messages, onNewestVisible]);
   const scrollToMessage = (id: string): void => {
     const el = listRef.current?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
     if (el == null) {
@@ -455,10 +521,30 @@ function ThreadBody(
         ref={listRef}
         onScroll={(e) => {
           const el = e.currentTarget;
+          const wasAtBottom = atBottomRef.current;
           atBottomRef.current = isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight);
+          if (atBottomRef.current && !wasAtBottom) {
+            const last = props.messages[props.messages.length - 1];
+            if (last !== undefined && newestIdRef.current !== last.id) {
+              newestIdRef.current = last.id;
+              props.onNewestVisible?.();
+            }
+          }
+          if (
+            el.scrollTop <= LOAD_OLDER_THRESHOLD_PX &&
+            props.hasMore === true &&
+            props.loadingOlder !== true &&
+            anchorHeightRef.current === null
+          ) {
+            anchorHeightRef.current = el.scrollHeight;
+            props.onLoadOlder?.();
+          }
         }}
         className="flex-1 overflow-y-auto py-2"
       >
+        {props.loadingOlder === true ? (
+          <li className="px-4 py-2 text-center text-xs text-fg-3">Loading earlier messages</li>
+        ) : null}
         {props.messages.map((message, i) => (
           <MessageRow
             key={message.id}
@@ -469,8 +555,10 @@ function ThreadBody(
             showTicks={props.showTicks}
             isGroup={props.isGroup}
             head={isHead(props.messages[i - 1], message)}
+            timeZone={props.timeZone}
             onOpen={(m, rect) => setMenu({ message: m, rect })}
             onJumpToMessage={scrollToMessage}
+            {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
           />
         ))}
       </ul>
@@ -482,7 +570,7 @@ function ThreadBody(
         currentReaction={menu ? (menu.message.reactions.find((r) => r.mine)?.emoji ?? null) : null}
         canCopy={menu ? menu.message.body.trim() !== '' : false}
         onReact={(emoji) => {
-          if (menu)
+          if (menu && menu.message.state === 'sent')
             props.onToggleReaction?.(
               menu.message.id,
               emoji,
@@ -547,7 +635,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
               />
               {props.presence.online
                 ? 'Online'
-                : lastSeenLabel(props.presence.lastTimeMs, Date.now())}
+                : lastSeenLabel(props.presence.lastTimeMs, Date.now(), props.timeZone)}
             </span>
           ) : null}
         </div>
@@ -566,7 +654,13 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         presignEnabled={presignEnabled}
         showTicks={props.showTicks ?? false}
         isGroup={props.isGroup ?? false}
+        timeZone={props.timeZone}
         onReply={handleReply}
+        {...(props.loadingOlder !== undefined ? { loadingOlder: props.loadingOlder } : {})}
+        {...(props.hasMore !== undefined ? { hasMore: props.hasMore } : {})}
+        {...(props.onLoadOlder !== undefined ? { onLoadOlder: props.onLoadOlder } : {})}
+        {...(props.onNewestVisible !== undefined ? { onNewestVisible: props.onNewestVisible } : {})}
+        {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
         {...(props.onToggleReaction !== undefined
           ? { onToggleReaction: props.onToggleReaction }
           : {})}
@@ -574,7 +668,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
       <TypingIndicator ids={props.typingUserIds} profiles={props.profiles} />
       <Composer
         onSend={props.onSend}
-        disabled={!props.canSend || props.sending}
+        disabled={!props.canSend}
         onTyping={props.onTyping}
         onCancelReply={() => setReplyDraft(null)}
         {...(replyDraft !== null ? { reply: replyDraft } : {})}

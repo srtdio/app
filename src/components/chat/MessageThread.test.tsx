@@ -9,7 +9,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { Avatar } from '@/components/ui/Avatar';
-import { MessageBubble } from '@/components/chat/MessageThread';
+import { bubbleTimeLabel, lastSeenLabel, MessageBubble } from '@/components/chat/MessageThread';
 import { PresignCache } from '@/lib/asset-presign';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { ThreadMessage } from '@/lib/chat/thread';
@@ -28,16 +28,21 @@ const PROFILES: Map<string, ChatProfile> = new Map([
   ['peer-1', { userId: 'peer-1', displayName: 'Alice', avatarUrl: null }],
 ]);
 
+const CREATED_AT = '2026-09-22T18:45:00.123456+00:00';
+
 function makeMessage(over: Partial<ThreadMessage>): ThreadMessage {
   return {
     id: 'm1',
     senderUserId: 'peer-1',
     body: 'hello there',
-    time: 0,
+    createdAt: CREATED_AT,
+    time: Date.parse(CREATED_AT),
+    provisionalTime: false,
     mine: false,
     attachments: [],
     sharedPostIds: [],
     reply: null,
+    state: 'sent',
     status: 'sent',
     reactions: [],
     ...over,
@@ -46,7 +51,7 @@ function makeMessage(over: Partial<ThreadMessage>): ThreadMessage {
 
 function renderBubble(
   message: ThreadMessage,
-  opts?: { isGroup?: boolean; head?: boolean },
+  opts?: { isGroup?: boolean; head?: boolean; timeZone?: string; onRetry?: (id: string) => void },
 ): ReactElement {
   return MessageBubble({
     message,
@@ -56,7 +61,9 @@ function renderBubble(
     showTicks: false,
     isGroup: opts?.isGroup ?? false,
     head: opts?.head ?? true,
+    timeZone: opts?.timeZone ?? 'UTC',
     onBadgeClick: () => {},
+    ...(opts?.onRetry !== undefined ? { onRetry: opts.onRetry } : {}),
   });
 }
 
@@ -119,6 +126,67 @@ describe('MessageBubble WhatsApp-style layout', () => {
   });
 });
 
+describe('MessageBubble time and state', () => {
+  it('renders the server created_at on the WORKSPACE clock (two workspaces, two times)', () => {
+    const message = makeMessage({});
+    expect(allText(renderBubble(message, { timeZone: 'Asia/Kolkata' }))).toContain('00:15');
+    expect(allText(renderBubble(message, { timeZone: 'Europe/London' }))).toContain('19:45');
+    expect(bubbleTimeLabel(message, 'UTC')).toBe('18:45');
+  });
+
+  it('labels a sending bubble and a failed bubble instead of a time', () => {
+    expect(bubbleTimeLabel(makeMessage({ state: 'sending', createdAt: '' }), 'UTC')).toBe(
+      'Sending',
+    );
+    expect(bubbleTimeLabel(makeMessage({ state: 'failed', createdAt: '' }), 'UTC')).toBe(
+      'Not sent',
+    );
+  });
+
+  it('offers a 44px Retry control on an own failed bubble that resends the same id', () => {
+    const onRetry = vi.fn();
+    const root = renderBubble(
+      makeMessage({ id: 'm-fail', mine: true, state: 'failed', createdAt: '' }),
+      {
+        onRetry,
+      },
+    );
+    let retry: ReactElement | null = null;
+    walk(root, (el) => {
+      if ((el.props as { label?: string }).label === 'Retry sending') retry = el;
+    });
+    expect(retry).not.toBeNull();
+    (retry as unknown as { props: { onClick: () => void } }).props.onClick();
+    expect(onRetry).toHaveBeenCalledWith('m-fail');
+    expect((root.props as { 'data-state': string })['data-state']).toBe('failed');
+  });
+
+  it('has no Retry control on a sent bubble or a peer bubble', () => {
+    for (const message of [
+      makeMessage({ mine: true }),
+      makeMessage({ state: 'failed', mine: false }),
+    ]) {
+      let retry: ReactElement | null = null;
+      walk(renderBubble(message, { onRetry: vi.fn() }), (el) => {
+        if ((el.props as { label?: string }).label === 'Retry sending') retry = el;
+      });
+      expect(retry).toBeNull();
+    }
+  });
+});
+
+describe('lastSeenLabel', () => {
+  it('buckets recent presence and renders an older last-seen on the workspace clock', () => {
+    const now = Date.parse('2026-09-23T12:00:00Z');
+    expect(lastSeenLabel(null, now, 'UTC')).toBe('Offline');
+    expect(lastSeenLabel(now - 30_000, now, 'UTC')).toBe('last seen just now');
+    expect(lastSeenLabel(now - 5 * 60_000, now, 'UTC')).toBe('last seen 5m ago');
+    expect(lastSeenLabel(now - 3 * 3_600_000, now, 'UTC')).toBe('last seen 3h ago');
+    const twoDaysAgo = Date.parse('2026-09-21T18:45:00Z');
+    expect(lastSeenLabel(twoDaysAgo, now, 'Asia/Kolkata')).toBe('last seen 1d ago at 00:15');
+  });
+});
+
 function findByChildren(root: ReactElement, text: string): ReactElement | null {
   let found: ReactElement | null = null;
   walk(root, (el) => {
@@ -172,6 +240,7 @@ describe('MessageBubble reply quote', () => {
       showTicks: false,
       isGroup: false,
       head: true,
+      timeZone: 'UTC',
       onBadgeClick: () => {},
       onJumpToMessage,
     });

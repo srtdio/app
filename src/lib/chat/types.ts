@@ -1,17 +1,20 @@
 import type { AgoraChat } from 'agora-chat';
 
 /**
- * Connection lifecycle as the rest of the app sees it. There is no error state:
- * any failure (missing env, no session, 401, SDK throw, network) collapses to
- * 'unavailable' so chat-down can never break the surrounding app.
+ * Connection lifecycle as the rest of the app sees it. 'connecting' is the
+ * first open (nothing has connected yet), 'reconnecting' is any gap after a
+ * successful connection, and 'unavailable' is reached only when the availability
+ * gate is closed (no token URL, no session, no workspace), on signout, or after
+ * the controller's retry loop gives up. Chat reads and sends go to Postgres, so
+ * the UI stays mounted through 'connecting' and 'reconnecting'.
  */
-export type ChatStatus = 'connecting' | 'connected' | 'unavailable';
+export type ChatStatus = 'connecting' | 'connected' | 'reconnecting' | 'unavailable';
 
 /** Stable id for our SDK event handler, used on both add and remove. */
 export const CHAT_EVENT_HANDLER_ID = 'sorted-chat';
 
 /**
- * The slice of the agora-chat Connection this PR drives. The real
+ * The slice of the agora-chat Connection the lifecycle drives. The real
  * AgoraChat.Connection satisfies it structurally; narrowing to these members
  * keeps the lifecycle code (and its mock in tests) honest about what it touches.
  */
@@ -41,8 +44,10 @@ export type ChatTokenResult =
     }
   | { ok: false };
 
-/** Exposed to later PRs via ChatProvider. `client` is null until connected. */
+/** Exposed via ChatProvider. `client` is null until the SDK connection is open. */
 export interface ChatContextValue {
   status: ChatStatus;
   client: ChatConnection | null;
+  /** Restart the connection attempt now (the Retry button, after the loop gave up). */
+  retry: () => void;
 }
