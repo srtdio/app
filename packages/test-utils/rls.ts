@@ -360,6 +360,45 @@ export async function seedOperator(admin: GenericClient, user: SeededUser): Prom
   await insertRow(admin, 'platform_operators', { user_id: user.id });
 }
 
+/** Add a seeded user as an active member of `ws` with the given role (service-role insert). */
+export async function seedMember(
+  admin: GenericClient,
+  ws: SeededWorkspace,
+  user: SeededUser,
+  role: 'admin' | 'agency' | 'client',
+): Promise<void> {
+  await insertRow(admin, 'workspace_members', {
+    workspace_id: ws.id,
+    user_id: user.id,
+    role,
+    active: true,
+  });
+}
+
+/**
+ * Seed a DM chat channel between two users in a workspace and return its id.
+ * Mirrors dm_channel_ensure: channel_id is dm__{workspace}__{min(a,b)}__{max(a,b)}
+ * and chat_channels_shape requires dm_user_a < dm_user_b. Postgres orders uuid
+ * bytewise, which equals lexicographic order on the canonical lowercase text.
+ */
+export async function seedDmChannel(
+  admin: GenericClient,
+  workspaceId: string,
+  userA: SeededUser,
+  userB: SeededUser,
+): Promise<string> {
+  const [lo, hi] = userA.id < userB.id ? [userA.id, userB.id] : [userB.id, userA.id];
+  const channelId = `dm__${workspaceId}__${lo}__${hi}`;
+  await insertRow(admin, 'chat_channels', {
+    channel_id: channelId,
+    workspace_id: workspaceId,
+    channel_type: 'dm',
+    dm_user_a: lo,
+    dm_user_b: hi,
+  });
+  return channelId;
+}
+
 // ---------------------------------------------------------------------------
 // Per-workspace scaffold of parent rows that the leaf tables reference
 // ---------------------------------------------------------------------------
@@ -375,7 +414,10 @@ export interface Ctx {
   assetVersionId: string;
   commentId: string;
   groupId: string;
+  /** Group chat channel for `groupId`; the workspace owner is seeded as a group member. */
   channelId: string;
+  /** A message in `channelId`, seeded through the service role (agora_event_id null). */
+  chatMessageId: string;
   webhookEventId: string;
 }
 
@@ -445,12 +487,31 @@ export async function seedScaffold(
     name: `Grp ${randomSuffix()}`,
     created_by: userId,
   });
-  const channelId = `group__${String(group.id)}__c`;
+  // Canonical group channel id (group__{workspace}__{group}), the same shape the
+  // chat_sync_events triggers derive for this group.
+  const channelId = `group__${workspaceId}__${String(group.id)}`;
   await insertRow(g, 'chat_channels', {
     channel_id: channelId,
     workspace_id: workspaceId,
     channel_type: 'group',
     entity_id: group.id,
+  });
+  // chat_channel_member gates group channels on group_members, so the owner must
+  // be a member of the scaffold group for the chat positive-read controls.
+  await insertRow(g, 'group_members', {
+    group_id: group.id,
+    user_id: userId,
+    workspace_id: workspaceId,
+  });
+  const chatMessageId = crypto.randomUUID();
+  await insertRow(g, 'chat_messages', {
+    id: chatMessageId,
+    channel_id: channelId,
+    workspace_id: workspaceId,
+    sender_user_id: userId,
+    body: 'scaffold message',
+    agora_event_id: null,
+    created_at: partitionTimestamp,
   });
   const webhookEvent = await insertRow(g, 'webhook_events', {
     workspace_id: workspaceId,
@@ -473,6 +534,7 @@ export async function seedScaffold(
     commentId: String(comment.id),
     groupId: String(group.id),
     channelId,
+    chatMessageId,
     webhookEventId: String(webhookEvent.id),
   };
 }
@@ -637,21 +699,15 @@ export const tenantTables: readonly TenantTableProbe[] = [
     seed: (_a, c) => ({ match: [['id', c.groupId]], patch: { name: `Zz ${randomSuffix()}` } }),
   },
   {
+    // The owner's membership row is seeded by the scaffold (PK group_id, user_id).
     table: 'group_members',
-    seed: async (a, c) => {
-      await insertRow(a, 'group_members', {
-        group_id: c.groupId,
-        user_id: c.userId,
-        workspace_id: c.workspaceId,
-      });
-      return {
-        match: [
-          ['group_id', c.groupId],
-          ['user_id', c.userId],
-        ],
-        patch: {},
-      };
-    },
+    seed: (_a, c) => ({
+      match: [
+        ['group_id', c.groupId],
+        ['user_id', c.userId],
+      ],
+      patch: {},
+    }),
   },
   {
     table: 'chat_channels',
@@ -661,16 +717,48 @@ export const tenantTables: readonly TenantTableProbe[] = [
     }),
   },
   {
+    // Seeded by the scaffold in the owner's group channel; read access is gated
+    // by chat_channel_member (group_members), not workspace membership alone.
     table: 'chat_messages',
+    seed: (_a, c) => ({ match: [['id', c.chatMessageId]], patch: { body: 'zz' } }),
+  },
+  {
+    table: 'chat_reactions',
     seed: async (a, c) => {
-      const row = await insertRow(a, 'chat_messages', {
-        id: crypto.randomUUID(),
+      await insertRow(a, 'chat_reactions', {
+        message_id: c.chatMessageId,
         channel_id: c.channelId,
         workspace_id: c.workspaceId,
-        agora_event_id: crypto.randomUUID(),
-        created_at: partitionTimestamp,
+        user_id: c.userId,
+        emoji: 'x',
       });
-      return { match: [['id', String(row.id)]], patch: { body: 'zz' } };
+      return {
+        match: [
+          ['message_id', c.chatMessageId],
+          ['user_id', c.userId],
+          ['emoji', 'x'],
+        ],
+        patch: {},
+      };
+    },
+  },
+  {
+    table: 'chat_read_cursors',
+    seed: async (a, c) => {
+      await insertRow(a, 'chat_read_cursors', {
+        channel_id: c.channelId,
+        user_id: c.userId,
+        workspace_id: c.workspaceId,
+        last_read_message_id: c.chatMessageId,
+        last_read_at: partitionTimestamp,
+      });
+      return {
+        match: [
+          ['channel_id', c.channelId],
+          ['user_id', c.userId],
+        ],
+        patch: { last_read_message_id: 'zz' },
+      };
     },
   },
   {
@@ -816,6 +904,11 @@ export async function cleanupWorkspaces(
 ): Promise<void> {
   const g = asGeneric(admin);
   for (const ws of workspaces) {
+    // Drop group memberships before the workspace: the chat_sync_group_members
+    // trigger (AFTER DELETE on group_members) enqueues a chat_sync_events row
+    // that references the workspace, so a cascade from the workspace delete
+    // would insert against a workspace row already gone in the same statement.
+    await g.from('group_members').delete().eq('workspace_id', ws.id);
     await g.from('workspaces').delete().eq('id', ws.id);
   }
   for (const user of users) {

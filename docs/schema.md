@@ -3,7 +3,7 @@
 Generated from live database movnexawfhsyuluspxoc (srtdio-v2) after the MVP stripdown.
 This file is the human-readable design reference. The migrations folder is implementation truth.
 
-Sorted v2 MVP is a social-media approval tool: client writes a brief, agency drafts a post, post moves through review to approved, rejected, or parked. No publishing, no scheduling, no plan. Chat is Agora (DB mirror only). Email is out-of-app catch-up.
+Sorted v2 MVP is a social-media approval tool: client writes a brief, agency drafts a post, post moves through review to approved, rejected, or parked. No publishing, no scheduling, no plan. Chat history is the Postgres record (chat_messages); Agora is live delivery only. Email is out-of-app catch-up.
 
 All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` unless noted. Timestamps are `timestamptz`. `*_by` FK columns are SET NULL on delete except `workspaces.owner_user_id` (RESTRICT) and `asset_attachments` (NO ACTION).
 
@@ -15,7 +15,7 @@ All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` un
 4. Briefs: briefs
 5. Assets: assets, asset_versions, asset_attachments, folders
 6. People grouping: groups, group_members
-7. Chat (Agora mirror): chat_channels, chat_messages
+7. Chat (Postgres record): chat_channels, chat_messages, chat_reactions, chat_read_cursors, chat_sync_events
 8. Inbox and delivery: inbox_entries, email_threads, delivery_attempts, webhook_events, webhook_processing_attempts
 9. Platform ops (Cockpit): audit_log, feature_flags, cockpit_access_log, cockpit_procedure_allowlist, intent_ledger, pending_flows
 10. Enumerations reference
@@ -152,7 +152,7 @@ Immutable. No deleted_at. PK id.
 
 ## 3. Discussion
 
-Two primitives: Comments (Postgres, here) and Chat (Agora, section 7).
+Two primitives: Comments (here) and Chat (section 7). Both are recorded in Postgres.
 
 ### comments
 
@@ -288,17 +288,49 @@ PK (group_id, user_id). Fields: workspace_id FK, joined_at. user_id FK auth.user
 
 Six SECURITY DEFINER procs (search_path='', EXECUTE to authenticated only): group_create, group_rename, group_member_add, group_member_remove, group_leave, dm_channel_ensure. group_create also seeds the group chat_channels row; dm_channel_ensure upserts the dm channel. Gating: group_create / dm_channel_ensure require an active workspace member; group_rename / group_member_add / group_member_remove require the group creator or a workspace owner/admin; group_leave is self only.
 
-## 7. Chat (Agora mirror)
+## 7. Chat (Postgres record)
 
-Agora owns chat. These tables are a compliance/mirror only, fed by webhook. chat_messages is partitioned monthly.
+Chat record: public.chat_messages is the single source of truth for chat history and the only read path. Every send calls chat_message_send (client-generated uuid_v7 id, server-stamped created_at, idempotent) BEFORE publishing to Agora; the Agora message carries the Sorted id in ext for dedupe. Agora is live delivery only: never read for history, never the record. Agora Free plan, no server callbacks. Access: chat_channel_member(channel_id, uid) gates every chat table; DMs are visible only to the two participants, group channels only to group_members. Reactions in chat_reactions, read position in chat_read_cursors. Membership and rename changes to Agora flow through the chat_sync_events outbox, drained by the chat-agora-sync worker. chat_message_save and chat_webhook_ingest are retired (drop pending).
+
+Applied to live 2026-09-22 and recorded in 20260922200000_chat_postgres_record.sql (idempotent). chat_messages is partitioned monthly.
 
 ### chat_channels
 
-PK channel_id (text, ^(dm|group|plan)__[a-f0-9-]{36}__.+$). Fields: workspace_id FK, channel_type (dm / group / plan_period), entity_id uuid nullable, dm_user_a / dm_user_b nullable FK auth.users.id, last_synced_at nullable, created_at.
+PK channel_id (text, ^(dm|group)__[a-f0-9-]{36}__.+$). Fields: workspace_id FK, channel_type (dm / group), entity_id uuid nullable (the group id for group channels), dm_user_a / dm_user_b nullable FK auth.users.id (dm_user_a < dm_user_b), agora_group_id nullable (unique where not null), last_synced_at nullable, created_at. Channel ids: dm__W__min(A,B)__max(A,B); group__W__G.
+
+chat_channel_member(p_channel_id text, p_user_id uuid) RETURNS boolean, SQL STABLE SECURITY DEFINER (search_path='', EXECUTE to authenticated only): true when p_user_id is an active workspace_members row of the channel's workspace AND, for a dm channel, is dm_user_a or dm_user_b, or, for a group channel, has a group_members row for entity_id. Every chat SELECT policy and every chat proc below gates on it.
 
 ### chat_messages (partitioned by created_at, monthly)
 
-PK (id, created_at). Fields: id text, channel_id FK, workspace_id FK, sender_user_id nullable FK auth.users.id, body nullable, mentions jsonb nullable, attachment_asset_ids uuid[] nullable, agora_event_id, created_at, edited_at / deleted_at nullable. Unique (agora_event_id, created_at). Partitions: 2026_05, 2026_06, 2026_07.
+PK (id, created_at). Fields: id text (the client-generated uuid_v7, stored as text), channel_id FK chat_channels ON DELETE CASCADE, workspace_id FK, sender_user_id nullable FK auth.users.id, body nullable (1 to 5000 chars when present), mentions jsonb nullable, attachment_asset_ids uuid[] nullable, agora_event_id text NULLABLE (null for every row written by chat_message_send; only legacy mirror rows carry a value), created_at (server-stamped now()), edited_at / deleted_at nullable. Unique (agora_event_id, created_at). Indexes: chat_messages_channel_created_idx (channel_id, created_at desc, id) for history pagination, chat_messages_id_idx (id) for the idempotent lookup, plus the baseline channel / sender / workspace indexes. Partitions: monthly through 2028_12 plus a DEFAULT (section 11).
+
+RLS: chat_messages_select_channel_member (SELECT to authenticated) USING deleted_at IS NULL AND chat_channel_member(channel_id, auth.uid()). The former workspace-wide chat_messages_select_member policy is dropped. No direct INSERT/UPDATE/DELETE policies.
+
+chat_message_send(p_id uuid, p_channel_id text, p_trace_id uuid, p_body text default null, p_mentions jsonb default null, p_attachment_asset_ids uuid[] default null) RETURNS chat_messages, SECURITY DEFINER (search_path='', EXECUTE to authenticated only): the only write path. Requires auth.uid(), p_id and p_trace_id; raises 'message has no body and no attachments' when the trimmed body is empty and there are no attachments, 'body exceeds 5000 characters' past the cap, and 'not a member of this chat' unless chat_channel_member. Takes pg_advisory_xact_lock(hashtext(p_id)) and, when a row with that id already exists, returns it unchanged (idempotent retry); otherwise inserts with sender_user_id = auth.uid(), created_at = now(), agora_event_id null, and returns the new row.
+
+### chat_reactions
+
+PK (message_id, user_id, emoji). Fields: message_id text, channel_id FK chat_channels ON DELETE CASCADE, workspace_id FK workspaces ON DELETE CASCADE, user_id FK auth.users.id ON DELETE CASCADE, emoji 1 to 16 chars, created_at. Index chat_reactions_message_idx (message_id).
+
+RLS: chat_reactions_select_channel_member (SELECT to authenticated) USING chat_channel_member(channel_id, auth.uid()). No direct write policies. Writes go through chat_reaction_add(p_message_id, p_channel_id, p_emoji, p_trace_id) (member-gated; the message must exist in that channel else 'message not found'; ON CONFLICT DO NOTHING) and chat_reaction_remove(p_message_id, p_channel_id, p_emoji, p_trace_id) (deletes only the caller's own reaction). Both RETURNS void, SECURITY DEFINER (search_path='', EXECUTE to authenticated only).
+
+### chat_read_cursors
+
+PK (channel_id, user_id). Fields: channel_id FK chat_channels ON DELETE CASCADE, user_id FK auth.users.id ON DELETE CASCADE, workspace_id FK workspaces ON DELETE CASCADE, last_read_message_id text, last_read_at timestamptz, updated_at default now().
+
+RLS: chat_read_cursors_select_channel_member (SELECT to authenticated) USING chat_channel_member(channel_id, auth.uid()). No direct write policies. chat_read_cursor_set(p_channel_id, p_message_id, p_trace_id) RETURNS void, SECURITY DEFINER (search_path='', EXECUTE to authenticated only): member-gated, the message must exist in that channel else 'message not found'; upserts the caller's cursor to (p_message_id, that message's created_at) and only moves forward (the ON CONFLICT update applies when the new last_read_at is later than the stored one).
+
+### chat_sync_events
+
+Outbox for membership and rename changes that must reach Agora; drained by the chat-agora-sync worker as service_role. PK id uuidv7. Fields: workspace_id FK workspaces ON DELETE CASCADE, event_type (member_add / member_remove / group_rename), channel_id text (group__{workspace_id}__{group_id}), user_id uuid nullable (the member for member_* events), payload jsonb default {} ({name} for group_rename), created_at, processed_at nullable, attempts int default 0, last_error nullable. Partial index chat_sync_events_pending_idx (created_at) where processed_at is null.
+
+RLS enabled with NO policies: anon and authenticated read zero rows; only service_role (BYPASSRLS) reads and writes it.
+
+Triggers: chat_sync_group_members (AFTER INSERT OR DELETE on group_members, chat_sync_enqueue_member()) enqueues member_add on insert and member_remove on delete; chat_sync_groups_rename (AFTER UPDATE OF name on groups, chat_sync_enqueue_rename()) enqueues group_rename only when the name actually changed. Both trigger functions are SECURITY DEFINER, search_path='', EXECUTE revoked from PUBLIC.
+
+Known: the member trigger inserts a row that references the workspace, so a hard DELETE of a workspace that still has group_members rows fails the chat_sync_events workspace FK during the cascade. The app soft-deletes workspaces; the RLS test cleanup deletes group_members first.
+
+Retired: chat_message_save and chat_webhook_ingest are no longer called by any Worker or client; both are dropped by the chat cleanup PR (drop pending).
 
 ## 8. Inbox and delivery
 
@@ -380,7 +412,8 @@ PK id. Fields: operator_user_id FK, flow_type (billing_override / sentry_inspect
 - inbox_entries.event_type: comment, mention, stage_change, comment_resolved, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system, checkpoints_added, post_ready (canonical list: INBOX_EVENT_TYPES in @srtdio/schemas)
 - inbox_entries.scope: everything, posts, briefs, people, groups, clients
 - inbox_entries.tier: urgent, active, ambient
-- chat_channels.channel_type: dm, group, plan_period
+- chat_channels.channel_type: dm, group
+- chat_sync_events.event_type: member_add, member_remove, group_rename
 - audit_log.outcome: success, failure
 
 ## 11. Partitioning reference
