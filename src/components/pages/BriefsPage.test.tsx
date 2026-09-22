@@ -186,68 +186,107 @@ describe('briefCardList presign wiring', () => {
   });
 });
 
-// A fixed "now": Wednesday 2026-07-08 (local). Its week opens Monday 2026-07-06.
-const NOW = new Date(2026, 6, 8, 12, 0, 0);
+// The workspace calendar the page reads its sections on: Mumbai, Monday weeks.
+// Passed explicitly, so nothing below depends on the machine's timezone.
+const CAL = { timeZone: 'Asia/Kolkata', weekStartDay: 1 };
 
-function created(year: number, monthIndex: number, day: number): string {
-  return new Date(year, monthIndex, day, 12, 0, 0).toISOString();
+// A fixed "now": Wednesday 2026-07-08, 12:00 in the workspace zone. Its week
+// opens Monday 2026-07-06.
+const NOW = new Date('2026-07-08T12:00:00+05:30');
+
+// A created_at from WORKSPACE wall-clock parts: the offset is written into the
+// string, so the instant reads back as that civil day in Asia/Kolkata anywhere.
+function created(civil: string, time = '12:00'): string {
+  return `${civil}T${time}:00+05:30`;
 }
 
 describe('deriveBriefGroups', () => {
   const briefs = [
-    makeBrief('week', { created_at: created(2026, 6, 7) }), // This Week
-    makeBrief('last', { created_at: created(2026, 6, 2) }), // Last Week
-    makeBrief('june', { title: 'Launch plan', created_at: created(2026, 5, 10) }), // June
-    makeBrief('may', { created_at: created(2026, 4, 5) }), // May
-    makeBrief('closed', { status: 'closed', created_at: created(2026, 6, 6) }), // This Week
+    makeBrief('week', { created_at: created('2026-07-07') }), // This Week
+    makeBrief('last', { created_at: created('2026-07-02') }), // Last Week
+    makeBrief('june', { title: 'Launch plan', created_at: created('2026-06-10') }), // June
+    makeBrief('may', { created_at: created('2026-05-05') }), // May
+    makeBrief('closed', { status: 'closed', created_at: created('2026-07-06') }), // This Week
   ];
 
   it('renders one section per time bucket with correct labels and counts', () => {
-    const groups = deriveBriefGroups(briefs, 'all', '', NOW);
+    const groups = deriveBriefGroups(briefs, 'all', '', NOW, CAL);
     expect(groups.map((g) => g.label)).toEqual(['This Week', 'Last Week', 'June', 'May']);
     expect(groups.map((g) => g.items.length)).toEqual([2, 1, 1, 1]);
     expect(groups.map((g) => g.key)).toEqual(['w0', 'w1', 'm-2026-06', 'm-2026-05']);
   });
 
   it('re-narrows to BriefWithThumbnail, preserving the same object references', () => {
-    const groups = deriveBriefGroups(briefs, 'all', '', NOW);
+    const groups = deriveBriefGroups(briefs, 'all', '', NOW, CAL);
     const week = groups[0]!.items.find((b) => b.id === 'week');
     expect(week).toBe(briefs[0]);
   });
 
   it('lets the status chip change section counts (Closed drops the open This Week brief)', () => {
-    const groups = deriveBriefGroups(briefs, 'closed', '', NOW);
+    const groups = deriveBriefGroups(briefs, 'closed', '', NOW, CAL);
     expect(groups.map((g) => g.label)).toEqual(['This Week']);
     expect(groups[0]!.items.map((b) => b.id)).toEqual(['closed']);
   });
 
   it('lets search change section counts, dropping now-empty sections', () => {
-    const groups = deriveBriefGroups(briefs, 'all', 'launch', NOW);
+    const groups = deriveBriefGroups(briefs, 'all', 'launch', NOW, CAL);
     expect(groups.map((g) => g.label)).toEqual(['June']);
     expect(groups[0]!.items.map((b) => b.id)).toEqual(['june']);
   });
+
+  it('buckets on the WORKSPACE zone, not the browser zone', () => {
+    // 19:00Z on Sunday 2026-07-05 is already Monday the 6th in Mumbai, so the
+    // same instant opens This Week there and closes Last Week in London.
+    const brief = [makeBrief('edge', { created_at: '2026-07-05T19:00:00Z' })];
+    expect(deriveBriefGroups(brief, 'all', '', NOW, CAL)[0]!.label).toBe('This Week');
+    expect(
+      deriveBriefGroups(brief, 'all', '', NOW, { timeZone: 'Europe/London', weekStartDay: 1 })[0]!
+        .label,
+    ).toBe('Last Week');
+  });
 });
+
+interface DayShape {
+  label: string;
+  className: string;
+  cards: number;
+}
 
 interface SectionShape {
   label: string;
   count: string;
-  cards: number;
+  days: DayShape[];
 }
 
-// Walk one <section> from briefSections into its label, count text, and card
-// tally without rendering: children are [headerDiv, gridDiv]; the header holds
-// an <h3> label and a <span> count, the grid holds the BriefCard list.
+// Walk one <section> from briefSections without rendering. Children are
+// [headerDiv, dayNodes]: the header holds an <h3> label and a <span> count, and
+// dayNodes is the flat [heading, grid, heading, grid, ...] sequence, one pair per
+// civil day, each grid holding that day's BriefCard list.
 function readSection(section: ReactElement): SectionShape {
-  const [headerDiv, gridDiv] = (section.props as { children: ReactElement[] }).children;
-  const [h3, span] = (headerDiv!.props as { children: ReactElement[] }).children;
-  const cards = (gridDiv!.props as { children: ReactElement[] }).children;
+  const [headerDiv, dayNodes] = (section.props as { children: [ReactElement, ReactElement[]] })
+    .children;
+  const [h3, span] = (headerDiv.props as { children: ReactElement[] }).children;
   const countParts = (span!.props as { children: (string | number)[] }).children;
+  const days: DayShape[] = [];
+  for (let i = 0; i < dayNodes.length; i += 2) {
+    const heading = dayNodes[i]!.props as { children: string; className: string };
+    const grid = dayNodes[i + 1]!.props as { children: ReactElement[] };
+    days.push({
+      label: String(heading.children),
+      className: heading.className,
+      cards: grid.children.length,
+    });
+  }
   return {
     label: String((h3!.props as { children: string }).children),
     count: countParts.join(''),
-    cards: cards.length,
+    days,
   };
 }
+
+// The day heading is a plain label: token colours only (text-fg-2 flips with the
+// theme), never sticky, never interactive, no transition or transform.
+const DAY_HEADING_CLASS = 'pt-3 pb-1 text-xs font-medium text-fg-2';
 
 describe('briefSections', () => {
   const cache = {
@@ -255,19 +294,10 @@ describe('briefSections', () => {
     resolve: async () => ({ url: '', expiresAt: 0 }),
   } as unknown as PresignCache;
 
-  it('renders a section per group with label, brief count and one card per brief', () => {
-    const groups = deriveBriefGroups(
-      [
-        makeBrief('a', { created_at: created(2026, 6, 7) }),
-        makeBrief('b', { created_at: created(2026, 6, 6) }),
-        makeBrief('c', { created_at: created(2026, 5, 10) }),
-      ],
-      'all',
-      '',
-      NOW,
-    );
-    const sections = briefSections({
-      groups,
+  function sectionsFor(briefs: BriefWithThumbnail[]): ReactElement[] {
+    return briefSections({
+      groups: deriveBriefGroups(briefs, 'all', '', NOW, CAL),
+      timeZone: CAL.timeZone,
       cache,
       presignEnabled: true,
       closingId: null,
@@ -275,17 +305,78 @@ describe('briefSections', () => {
       onClose: () => {},
       onOpen: () => {},
     });
+  }
+
+  it('renders a section per group with label, brief count and one card per brief', () => {
+    const sections = sectionsFor([
+      makeBrief('a', { created_at: created('2026-07-07') }),
+      makeBrief('b', { created_at: created('2026-07-06') }),
+      makeBrief('c', { created_at: created('2026-06-10') }),
+    ]);
     expect(sections).toHaveLength(2);
     expect(sections.map((s) => readSection(s))).toEqual([
-      { label: 'This Week', count: '2 briefs', cards: 2 },
-      { label: 'June', count: '1 brief', cards: 1 },
+      {
+        label: 'This Week',
+        count: '2 briefs',
+        days: [
+          { label: 'Tuesday 7 Jul', className: DAY_HEADING_CLASS, cards: 1 },
+          { label: 'Monday 6 Jul', className: DAY_HEADING_CLASS, cards: 1 },
+        ],
+      },
+      {
+        label: 'June',
+        count: '1 brief',
+        days: [{ label: 'Wednesday 10 Jun', className: DAY_HEADING_CLASS, cards: 1 }],
+      },
     ]);
     const firstCard = (
-      (sections[0]!.props as { children: ReactElement[] }).children[1]!.props as {
+      (sections[0]!.props as { children: [ReactElement, ReactElement[]] }).children[1][1]!
+        .props as {
         children: ReactElement[];
       }
     ).children[0]!;
     expect(firstCard.type).toBe(BriefCard);
+  });
+
+  it('splits one time group across two day headings, newest day first', () => {
+    const sections = sectionsFor([
+      makeBrief('mon', { created_at: created('2026-07-06', '09:00') }),
+      makeBrief('wed-late', { created_at: created('2026-07-08', '18:00') }),
+      makeBrief('wed-early', { created_at: created('2026-07-08', '08:00') }),
+    ]);
+    expect(sections).toHaveLength(1);
+    const { days } = readSection(sections[0]!);
+    expect(days.map((d) => d.label)).toEqual(['Wednesday 8 Jul', 'Monday 6 Jul']);
+    expect(days.map((d) => d.cards)).toEqual([2, 1]);
+  });
+
+  it('renders a single day heading when every brief in a group shares a day', () => {
+    const sections = sectionsFor([
+      makeBrief('a', { created_at: created('2026-07-07', '20:00') }),
+      makeBrief('b', { created_at: created('2026-07-07', '06:00') }),
+    ]);
+    const { days } = readSection(sections[0]!);
+    expect(days).toEqual([{ label: 'Tuesday 7 Jul', className: DAY_HEADING_CLASS, cards: 2 }]);
+  });
+
+  it('reads the day heading in the workspace zone, not the browser zone', () => {
+    const briefs = [makeBrief('edge', { created_at: '2026-07-07T19:00:00Z' })];
+    const groups = deriveBriefGroups(briefs, 'all', '', NOW, CAL);
+    const shared = {
+      groups,
+      cache,
+      presignEnabled: true,
+      closingId: null,
+      closeError: null,
+      onClose: () => {},
+      onOpen: () => {},
+    };
+    expect(
+      readSection(briefSections({ ...shared, timeZone: 'Asia/Kolkata' })[0]!).days[0]!.label,
+    ).toBe('Wednesday 8 Jul');
+    expect(
+      readSection(briefSections({ ...shared, timeZone: 'Europe/London' })[0]!).days[0]!.label,
+    ).toBe('Tuesday 7 Jul');
   });
 });
 

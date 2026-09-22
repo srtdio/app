@@ -18,7 +18,12 @@ import { entityUrlPath } from '@/lib/entityRef';
 import { useNewTrace } from '@/lib/trace-context';
 import { filterByTitle } from '@/lib/list-sort';
 import { filterBriefsByStatus, type BriefFilter } from '@/lib/brief-list';
-import { groupBriefsByTime, type BriefGroup } from '@/lib/brief-groups';
+import {
+  groupBriefsByDay,
+  groupBriefsByTime,
+  type BriefCalendar,
+  type BriefGroup,
+} from '@/lib/brief-groups';
 import { cn } from '@/lib/cn';
 import { briefClose } from '@srtdio/rpc';
 import { listBriefs } from '@srtdio/briefs';
@@ -125,17 +130,20 @@ export function briefsCountLine(total: number, open: number): string {
 
 /**
  * Derive the rendered time sections from the loaded list: status chip, then
- * title search, then time grouping (newest-first, Monday weeks, month buckets).
- * Section counts therefore reflect the active chip + search. filterBriefsByStatus
- * is typed over the bare Brief, so re-narrow each surviving row back to its
- * BriefWithThumbnail (same object reference) via an id map; the cards need
- * thumbnailAssetVersionId. Pure so the wiring is unit-tested without rendering.
+ * title search, then time grouping (newest-first, workspace weeks, month
+ * buckets). `calendar` carries the workspace zone and week start, so the
+ * sections read the same on every machine. Section counts therefore reflect the
+ * active chip + search. filterBriefsByStatus is typed over the bare Brief, so
+ * re-narrow each surviving row back to its BriefWithThumbnail (same object
+ * reference) via an id map; the cards need thumbnailAssetVersionId. Pure so the
+ * wiring is unit-tested without rendering.
  */
 export function deriveBriefGroups(
   briefs: BriefWithThumbnail[],
   filter: BriefFilter,
   search: string,
   now: Date,
+  calendar: BriefCalendar,
 ): BriefGroup<BriefWithThumbnail>[] {
   const byId = new Map(briefs.map((brief) => [brief.id, brief]));
   const filtered = filterByTitle(filterBriefsByStatus(briefs, filter), search);
@@ -143,11 +151,13 @@ export function deriveBriefGroups(
     const full = byId.get(brief.id);
     return full !== undefined ? [full] : [];
   });
-  return groupBriefsByTime(narrowed, now);
+  return groupBriefsByTime(narrowed, now, calendar);
 }
 
 interface BriefSectionsDeps extends Omit<BriefCardListDeps, 'briefs'> {
   groups: BriefGroup<BriefWithThumbnail>[];
+  /** The workspace zone the day headings inside each section are read in. */
+  timeZone: string;
 }
 
 // Sticky per-section header: pinned to the top of the scroll area (below the app
@@ -160,14 +170,21 @@ const SECTION_HEADER_CLASS = cn(
   'bg-[color-mix(in_srgb,var(--bg)_80%,transparent)] backdrop-blur',
 );
 
+// The day heading inside a time section: which day the briefs below it were
+// raised on, in the workspace zone. Deliberately NOT sticky and not interactive
+// (the section header above it already pins), so it is a plain label: token
+// colours only, so light/dark parity is automatic, and no motion.
+const DAY_HEADING_CLASS = 'pt-3 pb-1 text-xs font-medium text-fg-2';
+
 /**
- * One section per time group: a sticky label + count header followed by the
- * existing card grid for that group's briefs. Pure (no hooks) so the section
- * labels, counts and per-group card wiring are unit-tested by walking the tree,
- * mirroring briefCardList.
+ * One section per time group: a sticky label + count header, then, for every
+ * civil day inside that group (newest-first, workspace zone), a day heading
+ * followed by the existing card grid for that day's briefs. Pure (no hooks) so
+ * the section labels, counts, day headings and per-group card wiring are
+ * unit-tested by walking the tree, mirroring briefCardList.
  */
 export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
-  const { groups, ...cardDeps } = deps;
+  const { groups, timeZone, ...cardDeps } = deps;
   return groups.map((group) => (
     <section key={group.key}>
       <div className={SECTION_HEADER_CLASS}>
@@ -176,17 +193,29 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
           {group.items.length} {briefUnit(group.items.length)}
         </span>
       </div>
-      <div className="pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {briefCardList({ ...cardDeps, briefs: group.items })}
-      </div>
+      {groupBriefsByDay(group.items, timeZone).flatMap((day) => [
+        <div key={`${day.key}-label`} className={DAY_HEADING_CLASS}>
+          {day.label}
+        </div>,
+        <div key={day.key} className="pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {briefCardList({ ...cardDeps, briefs: day.items })}
+        </div>,
+      ])}
     </section>
   ));
 }
 
 export function BriefsPage() {
   const navigate = useNavigate();
-  const { workspaceId, workspaceKey } = useWorkspace();
+  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const newTrace = useNewTrace();
+  // The active workspace's civil calendar: the sections and the day headings are
+  // read on the WORKSPACE zone and week start, never the browser's. Derived the
+  // same way the Pipeline surface derives it; the helpers re-validate the zone,
+  // so a blank or stale stored value is still safe.
+  const activeWorkspace = workspaces.find((w) => w.id === workspaceId);
+  const timeZone = activeWorkspace?.timezone ?? 'UTC';
+  const weekStartDay = activeWorkspace?.week_start_day ?? 1;
   const [filter, setFilter] = useState<BriefFilter>('all');
   const [search, setSearch] = useState('');
 
@@ -255,8 +284,9 @@ export function BriefsPage() {
   // N+1): status chip, then title search, then time grouping. Section counts
   // therefore reflect the active chip + search.
   const groups = useMemo(
-    () => deriveBriefGroups(workspaceBriefs, filter, search, new Date()),
-    [workspaceBriefs, filter, search],
+    () =>
+      deriveBriefGroups(workspaceBriefs, filter, search, new Date(), { timeZone, weekStartDay }),
+    [workspaceBriefs, filter, search, timeZone, weekStartDay],
   );
 
   const openCount = useMemo(
@@ -310,6 +340,7 @@ export function BriefsPage() {
         <div className="px-4 md:px-6 py-4 flex flex-col gap-6">
           {briefSections({
             groups,
+            timeZone,
             cache,
             presignEnabled,
             closingId,

@@ -3,8 +3,32 @@ import {
   briefAuthorLabel,
   briefExternalLinks,
   briefMediaItems,
+  briefRaisedLabel,
 } from '@/components/pages/BriefDetailPage';
 import type { BriefGalleryItem } from '@srtdio/briefs';
+
+// The Details "Raised" row: the day the brief was raised in the WORKSPACE zone,
+// carrying its four-digit year, e.g. "Tuesday 22 Sep 2026".
+describe('briefRaisedLabel', () => {
+  it('renders the raised day with the year in the workspace zone', () => {
+    expect(briefRaisedLabel('2026-09-22T12:00:00Z', 'Asia/Kolkata')).toBe('Tuesday 22 Sep 2026');
+  });
+
+  it('reads day AND year in the workspace zone, not the browser zone', () => {
+    // 19:00Z on 31 Dec 2025 is already 1 Jan 2026 in Mumbai; London still reads
+    // the old year, so the year must come from the same zoned reading as the day.
+    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Asia/Kolkata')).toBe('Thursday 1 Jan 2026');
+    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Europe/London')).toBe('Wednesday 31 Dec 2025');
+  });
+
+  it('degrades an unknown zone to UTC instead of throwing', () => {
+    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Not/AZone')).toBe('Wednesday 31 Dec 2025');
+  });
+
+  it('returns an unparseable created_at unchanged', () => {
+    expect(briefRaisedLabel('not-a-date', 'Asia/Kolkata')).toBe('not-a-date');
+  });
+});
 
 // Unit-test the pure "Created by" resolver across every branch. The resolver is
 // handed a memberName lookup that returns a current member's display name or null
