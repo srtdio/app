@@ -389,7 +389,7 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 | --- | --- |
 | Trigger | cmd+K palette. Scoped router. |
 | Comments and entities | Postgres FTS. tsvector indexes. |
-| Chat | Agora SDK. searchMsgFromDB (local) + asyncFetchHistoryMessages (server). Not on Postgres mirror. |
+| Chat | Postgres over chat_messages, the chat record and only read path. Agora is never read for history or search. |
 | Scope chips | All, Posts, Briefs, Comments, Chat, Assets, People |
 | Result ranking | Recency + relevance |
 
@@ -501,15 +501,15 @@ Two primitives, separate backends. Users don't know which is which.
 | Aspect | Comments | Chat |
 | --- | --- | --- |
 | Surfaces | PCS, Brief | DM, Group |
-| Backend | Postgres | Agora |
-| Real-time | Supabase Realtime | Agora SDK |
-| Mirror | None | chat_messages (batch, compliance only) |
+| Backend | Postgres | Postgres (chat_messages is the record). Agora for live delivery only. |
+| Real-time | Supabase Realtime | Agora SDK, live delivery only. Never read for history. |
+| Mirror | None | None. chat_messages is the record, not a mirror. |
 | Anchors to post version | Yes | No |
 | Decision Records | Yes | No |
 | @-mentions | inbox_entries + email | Agora native push (MENTION_ONLY) |
 | Attachments | Sorted asset pipeline | Sorted asset pipeline (asset_id ref) |
-| Search | Postgres FTS | Agora SDK |
-| Downtime UX | May lag, refresh | Chat unavailable. Rest unaffected. |
+| Search | Postgres FTS | Postgres over chat_messages |
+| Downtime UX | May lag, refresh | History still reads from Postgres. Live delivery pauses until Agora returns. |
 
 Chat messages never land in the Activity feed. Chat notification is Agora native push only.
 
@@ -517,12 +517,14 @@ Chat messages never land in the Activity feed. Chat notification is Agora native
 
 | Item | Decision |
 | --- | --- |
-| Source of truth | Agora. Sorted does not own messages, live feed, search, push. |
+| Chat record | public.chat_messages is the single source of truth for chat history and the only read path. Every send calls chat_message_send (client-generated uuid_v7 id, server-stamped created_at, idempotent) BEFORE publishing to Agora; the Agora message carries the Sorted id in ext for dedupe. |
+| Agora | Live delivery only: never read for history, never the record. Agora Free plan, no server callbacks. |
 | Channel IDs | dm__W__min(A,B)__max(A,B); group__W__G |
-| Auth | Sorted mints 15-min Agora tokens, JWT-aligned. Per-channel ACL at creation. |
-| Group membership | Sorted is source of truth. Agora ACL mirrors via REST. |
-| Mirror | Webhook writes a DB entry per message into chat_messages. 90-day retention, GDPR export, email digest aggregation, audit only. Never on read path. |
-| Reconciliation cron | Daily 04:00 UTC. >5% drift P3. >20% drift P2. |
+| Auth | Sorted mints Agora Chat user tokens for authenticated workspace members via the chat-token Worker (24-hour, renewed via SDK onTokenWillExpire). Channel access is enforced in Postgres by chat_channel_member. |
+| Access | chat_channel_member(channel_id, uid) gates every chat table. DMs are visible only to the two participants, group channels only to group_members. |
+| Reactions, read position | chat_reactions and chat_read_cursors, written through chat_reaction_add, chat_reaction_remove, chat_read_cursor_set. |
+| Group membership | Sorted is source of truth. Membership and rename changes to Agora flow through the chat_sync_events outbox, drained by the chat-agora-sync worker. |
+| Retired | chat_message_save and chat_webhook_ingest (drop pending). No webhook mirror, no reconciliation cron. |
 
 ## 24. Compliance
 

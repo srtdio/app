@@ -2162,7 +2162,7 @@ export type Database = {
       }
       chat_messages: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2175,7 +2175,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2188,7 +2188,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2219,7 +2219,7 @@ export type Database = {
       }
       chat_messages_2026_05: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2232,7 +2232,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2245,7 +2245,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2261,7 +2261,7 @@ export type Database = {
       }
       chat_messages_2026_06: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2274,7 +2274,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2287,7 +2287,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2303,7 +2303,7 @@ export type Database = {
       }
       chat_messages_2026_07: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2316,7 +2316,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2329,7 +2329,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2345,7 +2345,7 @@ export type Database = {
       }
       chat_messages_2026_08: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2358,7 +2358,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2371,7 +2371,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2387,7 +2387,7 @@ export type Database = {
       }
       chat_messages_2026_09: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2400,7 +2400,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2413,7 +2413,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2429,7 +2429,7 @@ export type Database = {
       }
       chat_messages_2026_10: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2442,7 +2442,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2455,7 +2455,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2471,7 +2471,7 @@ export type Database = {
       }
       chat_messages_2026_11: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2484,7 +2484,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2497,7 +2497,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2513,7 +2513,7 @@ export type Database = {
       }
       chat_messages_2026_12: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2526,7 +2526,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2539,7 +2539,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2555,7 +2555,7 @@ export type Database = {
       }
       chat_messages_2027_01: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2568,7 +2568,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2581,7 +2581,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2597,7 +2597,7 @@ export type Database = {
       }
       chat_messages_2027_02: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2610,7 +2610,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2623,7 +2623,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2639,7 +2639,7 @@ export type Database = {
       }
       chat_messages_2027_03: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2652,7 +2652,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2665,7 +2665,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2681,7 +2681,7 @@ export type Database = {
       }
       chat_messages_2027_04: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2694,7 +2694,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2707,7 +2707,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2723,7 +2723,7 @@ export type Database = {
       }
       chat_messages_2027_05: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2736,7 +2736,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2749,7 +2749,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2765,7 +2765,7 @@ export type Database = {
       }
       chat_messages_2027_06: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2778,7 +2778,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2791,7 +2791,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2807,7 +2807,7 @@ export type Database = {
       }
       chat_messages_2027_07: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2820,7 +2820,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2833,7 +2833,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2849,7 +2849,7 @@ export type Database = {
       }
       chat_messages_2027_08: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2862,7 +2862,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2875,7 +2875,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2891,7 +2891,7 @@ export type Database = {
       }
       chat_messages_2027_09: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2904,7 +2904,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2917,7 +2917,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2933,7 +2933,7 @@ export type Database = {
       }
       chat_messages_2027_10: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2946,7 +2946,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -2959,7 +2959,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -2975,7 +2975,7 @@ export type Database = {
       }
       chat_messages_2027_11: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -2988,7 +2988,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3001,7 +3001,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3017,7 +3017,7 @@ export type Database = {
       }
       chat_messages_2027_12: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3030,7 +3030,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3043,7 +3043,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3059,7 +3059,7 @@ export type Database = {
       }
       chat_messages_2028_01: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3072,7 +3072,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3085,7 +3085,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3101,7 +3101,7 @@ export type Database = {
       }
       chat_messages_2028_02: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3114,7 +3114,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3127,7 +3127,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3143,7 +3143,7 @@ export type Database = {
       }
       chat_messages_2028_03: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3156,7 +3156,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3169,7 +3169,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3185,7 +3185,7 @@ export type Database = {
       }
       chat_messages_2028_04: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3198,7 +3198,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3211,7 +3211,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3227,7 +3227,7 @@ export type Database = {
       }
       chat_messages_2028_05: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3240,7 +3240,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3253,7 +3253,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3269,7 +3269,7 @@ export type Database = {
       }
       chat_messages_2028_06: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3282,7 +3282,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3295,7 +3295,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3311,7 +3311,7 @@ export type Database = {
       }
       chat_messages_2028_07: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3324,7 +3324,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3337,7 +3337,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3353,7 +3353,7 @@ export type Database = {
       }
       chat_messages_2028_08: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3366,7 +3366,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3379,7 +3379,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3395,7 +3395,7 @@ export type Database = {
       }
       chat_messages_2028_09: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3408,7 +3408,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3421,7 +3421,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3437,7 +3437,7 @@ export type Database = {
       }
       chat_messages_2028_10: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3450,7 +3450,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3463,7 +3463,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3479,7 +3479,7 @@ export type Database = {
       }
       chat_messages_2028_11: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3492,7 +3492,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3505,7 +3505,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3521,7 +3521,7 @@ export type Database = {
       }
       chat_messages_2028_12: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3534,7 +3534,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3547,7 +3547,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3563,7 +3563,7 @@ export type Database = {
       }
       chat_messages_default: {
         Row: {
-          agora_event_id: string
+          agora_event_id: string | null
           attachment_asset_ids: string[] | null
           body: string | null
           channel_id: string
@@ -3576,7 +3576,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
-          agora_event_id: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id: string
@@ -3589,7 +3589,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
-          agora_event_id?: string
+          agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
           body?: string | null
           channel_id?: string
@@ -3602,6 +3602,137 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: []
+      }
+      chat_reactions: {
+        Row: {
+          channel_id: string
+          created_at: string
+          emoji: string
+          message_id: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          emoji: string
+          message_id: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          emoji?: string
+          message_id?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_reactions_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["channel_id"]
+          },
+          {
+            foreignKeyName: "chat_reactions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_read_cursors: {
+        Row: {
+          channel_id: string
+          last_read_at: string
+          last_read_message_id: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          last_read_at: string
+          last_read_message_id: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          last_read_at?: string
+          last_read_message_id?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_read_cursors_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["channel_id"]
+          },
+          {
+            foreignKeyName: "chat_read_cursors_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sync_events: {
+        Row: {
+          attempts: number
+          channel_id: string
+          created_at: string
+          event_type: string
+          id: string
+          last_error: string | null
+          payload: Json
+          processed_at: string | null
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          channel_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          processed_at?: string | null
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          channel_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          processed_at?: string | null
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sync_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cockpit_access_log: {
         Row: {
@@ -7068,6 +7199,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      chat_channel_member: {
+        Args: { p_channel_id: string; p_user_id: string }
+        Returns: boolean
+      }
       chat_message_save: {
         Args: {
           p_agora_message_id: string
@@ -7078,6 +7213,57 @@ export type Database = {
           p_mentions?: Json
           p_trace_id?: string
         }
+        Returns: undefined
+      }
+      chat_message_send: {
+        Args: {
+          p_attachment_asset_ids?: string[]
+          p_body?: string
+          p_channel_id: string
+          p_id: string
+          p_mentions?: Json
+          p_trace_id: string
+        }
+        Returns: {
+          agora_event_id: string | null
+          attachment_asset_ids: string[] | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          mentions: Json | null
+          sender_user_id: string | null
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chat_messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      chat_reaction_add: {
+        Args: {
+          p_channel_id: string
+          p_emoji: string
+          p_message_id: string
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
+      chat_reaction_remove: {
+        Args: {
+          p_channel_id: string
+          p_emoji: string
+          p_message_id: string
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
+      chat_read_cursor_set: {
+        Args: { p_channel_id: string; p_message_id: string; p_trace_id: string }
         Returns: undefined
       }
       chat_webhook_ingest: {
