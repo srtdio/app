@@ -17,6 +17,8 @@ import { env } from '@/lib/env';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
+import { civilDate } from '@/lib/list-sort';
+import { formatRaisedDay } from '@/lib/brief-groups';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import { getBrief, getBriefGallery } from '@srtdio/briefs';
 import type { BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
@@ -40,6 +42,27 @@ function formatTargetDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/**
+ * The day this brief was raised, read in the WORKSPACE zone and carrying the
+ * four-digit year: "Tuesday 22 Sep 2026". The day itself comes from the Briefs
+ * list formatter, so the detail row and the list's day headings can never
+ * disagree; the year is the same civil reading, sliced off the civil date. An
+ * unparseable created_at is returned unchanged (never handed to Intl.format), and
+ * an unknown zone degrades to UTC rather than throwing. Pure, so the label is
+ * unit-tested without rendering the page.
+ */
+export function briefRaisedLabel(createdAt: string, timeZone: string): string {
+  const instant = new Date(createdAt);
+  if (Number.isNaN(instant.getTime())) return createdAt;
+  let year: string;
+  try {
+    year = civilDate(instant, timeZone).slice(0, 4);
+  } catch {
+    year = civilDate(instant, 'UTC').slice(0, 4);
+  }
+  return `${formatRaisedDay(createdAt, timeZone)} ${year}`;
 }
 
 /**
@@ -102,8 +125,13 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const briefId = briefIdProp ?? params.briefId;
   const navigate = useNavigate();
   const newTrace = useNewTrace();
-  const { workspaceId, workspaceKey } = useWorkspace();
+  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const { toasts, push, dismiss } = useToasts();
+
+  // The active workspace's zone, derived exactly as the Pipeline surface derives
+  // it, so the Raised row reads on the workspace calendar rather than whatever
+  // zone the reviewer's laptop happens to be in.
+  const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
   // Resolve created_by to a current member's display name, never a raw uuid.
   // Reuses the post detail page's member hook unchanged; the map is the resolver
@@ -425,6 +453,10 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
                   <dd className="text-fg">{brief.format_requested}</dd>
                 </div>
               ) : null}
+              <div className="flex flex-col gap-1">
+                <dt className="text-fg-3">Raised</dt>
+                <dd className="tabular-nums">{briefRaisedLabel(brief.created_at, timeZone)}</dd>
+              </div>
               <div className="flex flex-col gap-1">
                 <dt className="text-fg-3">Target date</dt>
                 <dd className="tabular-nums">
