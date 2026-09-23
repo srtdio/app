@@ -1,26 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgoraChat } from 'agora-chat';
 import {
-  addMessageReaction,
   appendMessage,
-  applyReactionChange,
-  belongsToTarget,
-  deliveredMessageId,
-  echoMessage,
-  fetchReactions,
-  loadHistory,
-  mapTextMessage,
-  markDelivered,
+  applyReactionOp,
+  compareMessages,
+  mapLiveTextMessage,
   markReadUpTo,
-  mergeHistoryReactions,
-  parseEventReactions,
-  parseReactionListItems,
-  removeMessageReaction,
+  markReadUpToMessage,
+  mergeFetched,
+  mergeReactions,
+  newestCursor,
+  oldestCursor,
+  parseLiveEvent,
+  parseLiveIds,
+  pendingMessage,
+  reactionEventExt,
+  readEventExt,
+  rowToThreadMessage,
   sendText,
+  setMessageState,
   subscribeIncoming,
   targetFromSummary,
   THREAD_EVENT_HANDLER_ID,
+  upsertMessage,
   type ChannelTarget,
+  type ChatMessageRow,
   type MessageReaction,
   type ThreadConnection,
   type ThreadMessage,
@@ -30,19 +34,53 @@ import type { ChannelSummary } from '@/lib/chat-reads';
 
 const ME = '11111111-1111-4111-8111-111111111111';
 const PEER = '22222222-2222-4222-8222-222222222222';
+const CHANNEL = 'group__ws__g1';
 const GROUP_TARGET: ChannelTarget = { targetId: 'agora-group-1', chatType: 'groupChat' };
 
-function txt(over: Partial<AgoraChat.TextMsgBody>): AgoraChat.TextMsgBody {
+function txt(
+  over: Omit<Partial<AgoraChat.TextMsgBody>, 'ext'> & { ext?: unknown | undefined },
+): AgoraChat.TextMsgBody {
   return {
-    id: 'm1',
+    id: 'agora-1',
     type: 'txt',
-    chatType: 'singleChat',
-    to: toAgoraUsername(ME),
+    chatType: 'groupChat',
+    to: 'agora-group-1',
     from: toAgoraUsername(PEER),
     msg: 'hi',
-    time: 1000,
+    time: Date.parse('2026-09-22T10:00:05Z'),
+    ext: { sorted_message_id: 'm-live', sorted_channel_id: CHANNEL },
     ...over,
   } as AgoraChat.TextMsgBody;
+}
+
+function cmd(over: Partial<AgoraChat.CmdMsgBody>): AgoraChat.CmdMsgBody {
+  return {
+    id: 'agora-cmd',
+    type: 'cmd',
+    chatType: 'groupChat',
+    to: 'agora-group-1',
+    from: toAgoraUsername(PEER),
+    action: 'sorted_signal',
+    time: 1,
+    ...over,
+  } as AgoraChat.CmdMsgBody;
+}
+
+function row(over: Partial<ChatMessageRow>): ChatMessageRow {
+  return {
+    id: 'm1',
+    channel_id: CHANNEL,
+    workspace_id: 'ws',
+    sender_user_id: PEER,
+    body: 'hello',
+    mentions: null,
+    attachment_asset_ids: null,
+    agora_event_id: null,
+    created_at: '2026-09-22T10:00:00.123456+00:00',
+    edited_at: null,
+    deleted_at: null,
+    ...over,
+  };
 }
 
 function groupSummary(over: Partial<ChannelSummary> = {}): ChannelSummary {
@@ -75,15 +113,33 @@ function dmSummary(over: Partial<ChannelSummary> = {}): ChannelSummary {
 
 function fakeConnection(over: Partial<ThreadConnection> = {}): ThreadConnection {
   return {
-    getHistoryMessages: vi.fn(),
     send: vi.fn(),
+    open: vi.fn(),
+    close: vi.fn(),
+    renewToken: vi.fn(),
     addEventHandler: vi.fn(),
     removeEventHandler: vi.fn(),
-    addReaction: vi.fn(),
-    deleteReaction: vi.fn(),
-    getReactionlist: vi.fn(),
     ...over,
   } as unknown as ThreadConnection;
+}
+
+function mine(over: Partial<ThreadMessage>): ThreadMessage {
+  return {
+    id: 'x',
+    senderUserId: ME,
+    body: 'yo',
+    createdAt: '2026-09-22T10:00:00+00:00',
+    time: Date.parse('2026-09-22T10:00:00Z'),
+    provisionalTime: false,
+    mine: true,
+    attachments: [],
+    sharedPostIds: [],
+    reply: null,
+    state: 'sent',
+    status: 'sent',
+    reactions: [],
+    ...over,
+  };
 }
 
 describe('targetFromSummary', () => {
@@ -98,189 +154,357 @@ describe('targetFromSummary', () => {
     });
   });
 
-  it('returns null when the channel cannot be opened yet', () => {
+  it('returns null when the channel has no live target yet', () => {
     expect(targetFromSummary(groupSummary({ agoraGroupId: null }))).toBeNull();
     expect(targetFromSummary(dmSummary({ peerUserId: null }))).toBeNull();
   });
 });
 
-describe('mapTextMessage / belongsToTarget', () => {
-  it('maps the Agora sender back to a Sorted user id and flags own messages', () => {
-    expect(mapTextMessage(txt({}), ME)).toEqual({
-      id: 'm1',
-      senderUserId: PEER,
-      body: 'hi',
-      time: 1000,
-      mine: false,
-      attachments: [],
-      sharedPostIds: [],
-      reply: null,
-      status: 'sent',
-      reactions: [],
+describe('parseLiveIds / parseLiveEvent', () => {
+  it('reads both Sorted ids and rejects a message missing either', () => {
+    expect(parseLiveIds({ sorted_message_id: 'a', sorted_channel_id: 'c' })).toEqual({
+      ok: true,
+      ids: { sorted_message_id: 'a', sorted_channel_id: 'c' },
     });
-    expect(mapTextMessage(txt({ from: toAgoraUsername(ME) }), ME).mine).toBe(true);
+    expect(parseLiveIds({ sorted_message_id: 'a' })).toEqual({ ok: false });
+    expect(parseLiveIds({ sorted_channel_id: 'c' })).toEqual({ ok: false });
+    expect(parseLiveIds(undefined)).toEqual({ ok: false });
   });
 
-  it('parses a reply_to off the ext into a ReplyQuote, and is null without one', () => {
-    expect(mapTextMessage(txt({}), ME).reply).toBeNull();
-    const replied = mapTextMessage(
-      txt({ ext: { reply_to: { id: 'm0', author_user_id: PEER, preview: 'earlier' } } }),
-      ME,
-    );
-    expect(replied.reply).toEqual({ id: 'm0', authorUserId: PEER, preview: 'earlier' });
-  });
-
-  it('keeps a null sender for an unmappable username instead of throwing', () => {
-    expect(mapTextMessage(txt({ from: 'not-agora' }), ME).senderUserId).toBeNull();
-  });
-
-  it('matches DM messages from the peer and group messages addressed to the group', () => {
+  it('parses reaction and read signals and rejects anything else', () => {
+    expect(parseLiveEvent(reactionEventExt({ messageId: 'm', emoji: '👍', op: 'add' }))).toEqual({
+      kind: 'reaction',
+      messageId: 'm',
+      emoji: '👍',
+      op: 'add',
+    });
+    expect(parseLiveEvent(readEventExt({ channelId: 'c', messageId: 'm' }))).toEqual({
+      kind: 'read',
+      channelId: 'c',
+      messageId: 'm',
+    });
     expect(
-      belongsToTarget(txt({}), { targetId: toAgoraUsername(PEER), chatType: 'singleChat' }),
-    ).toBe(true);
-    expect(
-      belongsToTarget(txt({ from: 'u_other' }), {
-        targetId: toAgoraUsername(PEER),
-        chatType: 'singleChat',
-      }),
-    ).toBe(false);
-    expect(belongsToTarget(txt({ chatType: 'groupChat', to: 'agora-group-1' }), GROUP_TARGET)).toBe(
-      true,
-    );
-    expect(belongsToTarget(txt({ chatType: 'groupChat', to: 'other-group' }), GROUP_TARGET)).toBe(
-      false,
-    );
+      parseLiveEvent({ sorted_event: 'reaction', message_id: 'm', emoji: '👍', op: 'x' }),
+    ).toEqual({ kind: 'unknown' });
+    expect(parseLiveEvent(undefined)).toEqual({ kind: 'unknown' });
   });
 });
 
-describe('loadHistory', () => {
-  it('fetches from the SDK and returns text messages oldest-first', async () => {
-    const getHistoryMessages = vi.fn().mockResolvedValue({
-      messages: [
-        txt({ id: 'b', time: 2000 }),
-        txt({ id: 'a', time: 1000 }),
-        { id: 'cmd', type: 'cmd', time: 1500 } as unknown as AgoraChat.MessagesType,
-      ],
+describe('mapLiveTextMessage', () => {
+  it('maps a stamped live message by its Sorted ids with the Agora server time', () => {
+    const mapped = mapLiveTextMessage(txt({}), ME);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    expect(mapped.channelId).toBe(CHANNEL);
+    expect(mapped.message).toMatchObject({
+      id: 'm-live',
+      senderUserId: PEER,
+      body: 'hi',
+      time: Date.parse('2026-09-22T10:00:05Z'),
+      createdAt: '2026-09-22T10:00:05.000Z',
+      provisionalTime: true,
+      mine: false,
+      state: 'sent',
     });
-    const connection = fakeConnection({ getHistoryMessages });
+  });
 
-    const history = await loadHistory({ connection, target: GROUP_TARGET, currentUserId: ME });
-
-    expect(getHistoryMessages).toHaveBeenCalledWith({
-      targetId: 'agora-group-1',
-      chatType: 'groupChat',
-      pageSize: 50,
+  it('ignores a live message without the Sorted ids (pre-rewrite client)', () => {
+    expect(mapLiveTextMessage(txt({ ext: undefined }), ME)).toEqual({
+      ok: false,
+      reason: 'missing_ids',
     });
-    expect(history.map((m) => m.id)).toEqual(['a', 'b']);
+    expect(mapLiveTextMessage(txt({ ext: { attachment_asset_ids: [] } }), ME).ok).toBe(false);
+  });
+
+  it('flags own messages and keeps a null sender for an unmappable username', () => {
+    const own = mapLiveTextMessage(txt({ from: toAgoraUsername(ME) }), ME);
+    expect(own.ok && own.message.mine).toBe(true);
+    const odd = mapLiveTextMessage(txt({ from: 'not-agora' }), ME);
+    expect(odd.ok && odd.message.senderUserId).toBeNull();
+  });
+
+  it('reads attachments, shared posts and the reply quote off the ext', () => {
+    const mapped = mapLiveTextMessage(
+      txt({
+        ext: {
+          sorted_message_id: 'm-live',
+          sorted_channel_id: CHANNEL,
+          attachment_asset_ids: ['a1'],
+          attachment_meta: [{ assetId: 'a1', name: 'p.png', mime: 'image/png' }],
+          shared_post_ids: ['p1'],
+          reply_to: { id: 'm0', author_user_id: PEER, preview: 'earlier' },
+        },
+      }),
+      ME,
+    );
+    expect(mapped.ok && mapped.message.attachments).toEqual([
+      { assetId: 'a1', name: 'p.png', mime: 'image/png' },
+    ]);
+    expect(mapped.ok && mapped.message.sharedPostIds).toEqual(['p1']);
+    expect(mapped.ok && mapped.message.reply).toEqual({
+      id: 'm0',
+      authorUserId: PEER,
+      preview: 'earlier',
+    });
+  });
+});
+
+describe('rowToThreadMessage', () => {
+  it('maps a record row with the verbatim server created_at', () => {
+    const message = rowToThreadMessage(row({}), ME);
+    expect(message).toMatchObject({
+      id: 'm1',
+      senderUserId: PEER,
+      body: 'hello',
+      createdAt: '2026-09-22T10:00:00.123456+00:00',
+      provisionalTime: false,
+      mine: false,
+      state: 'sent',
+      status: 'sent',
+    });
+    expect(message.time).toBe(Date.parse('2026-09-22T10:00:00.123Z'));
+  });
+
+  it('renders bare asset ids from the row and prefers the local rich content', () => {
+    const bare = rowToThreadMessage(row({ body: null, attachment_asset_ids: ['a1'] }), ME);
+    expect(bare.body).toBe('');
+    expect(bare.attachments).toEqual([{ assetId: 'a1', name: '', mime: '' }]);
+
+    const rich = rowToThreadMessage(row({ sender_user_id: ME, attachment_asset_ids: ['a1'] }), ME, {
+      attachments: [{ assetId: 'a1', name: 'p.png', mime: 'image/png' }],
+      sharedPostIds: ['p1'],
+      reply: { id: 'm0', authorUserId: PEER, preview: 'earlier' },
+    });
+    expect(rich.mine).toBe(true);
+    expect(rich.attachments[0]?.name).toBe('p.png');
+    expect(rich.sharedPostIds).toEqual(['p1']);
+    expect(rich.reply?.id).toBe('m0');
+  });
+});
+
+describe('list transitions', () => {
+  it('orders by server time then id, and appendMessage drops a duplicate id', () => {
+    const a = mine({ id: 'a', time: 1 });
+    const b = mine({ id: 'b', time: 1 });
+    const c = mine({ id: 'c', time: 2 });
+    expect([c, b, a].sort(compareMessages).map((m) => m.id)).toEqual(['a', 'b', 'c']);
+    expect(appendMessage([a], a)).toHaveLength(1);
+    expect(appendMessage([c], a).map((m) => m.id)).toEqual(['a', 'c']);
+  });
+
+  it('mergeFetched replaces a provisional live message with its row, keeping live content', () => {
+    const live = mine({
+      id: 'm1',
+      mine: false,
+      provisionalTime: true,
+      time: Date.parse('2026-09-22T10:00:05Z'),
+      attachments: [{ assetId: 'a1', name: 'p.png', mime: 'image/png' }],
+      reactions: [{ emoji: '👍', count: 1, mine: true }],
+    });
+    const fetched = rowToThreadMessage(row({ attachment_asset_ids: ['a1'] }), ME);
+    const merged = mergeFetched([live], [fetched]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.createdAt).toBe('2026-09-22T10:00:00.123456+00:00');
+    expect(merged[0]?.provisionalTime).toBe(false);
+    expect(merged[0]?.attachments[0]?.name).toBe('p.png');
+    expect(merged[0]?.reactions).toEqual([{ emoji: '👍', count: 1, mine: true }]);
+  });
+
+  it('mergeFetched leaves a recorded message alone and inserts new ids in order', () => {
+    const recorded = mine({ id: 'm1', body: 'kept' });
+    const older = rowToThreadMessage(
+      row({ id: 'm0', created_at: '2026-09-22T09:00:00+00:00' }),
+      ME,
+    );
+    const merged = mergeFetched([recorded], [older, rowToThreadMessage(row({ body: 'new' }), ME)]);
+    expect(merged.map((m) => m.id)).toEqual(['m0', 'm1']);
+    expect(merged[1]?.body).toBe('kept');
+  });
+
+  it('upsertMessage replaces by id and setMessageState flips one bubble', () => {
+    const pending = mine({ id: 'p', state: 'sending', provisionalTime: true, createdAt: '' });
+    const sent = mine({ id: 'p', state: 'sent' });
+    expect(upsertMessage([pending], sent)[0]?.state).toBe('sent');
+    expect(
+      setMessageState([pending, mine({ id: 'q' })], 'p', 'failed').map((m) => m.state),
+    ).toEqual(['failed', 'sent']);
+  });
+
+  it('pendingMessage orders after the newest loaded message and never reads a clock', () => {
+    const last = mine({ id: 'z', time: 1000 });
+    const pending = pendingMessage({
+      id: 'p',
+      currentUserId: ME,
+      text: 'draft',
+      local: { attachments: [], sharedPostIds: [], reply: null },
+      after: [last],
+    });
+    expect(pending).toMatchObject({ id: 'p', time: 1001, state: 'sending', provisionalTime: true });
+  });
+});
+
+describe('cursors', () => {
+  it('read the oldest / newest RECORDED (created_at, id) and skip provisional entries', () => {
+    const list = [
+      mine({ id: 'a', createdAt: '2026-09-22T09:00:00+00:00', time: 1 }),
+      mine({ id: 'b', createdAt: '2026-09-22T10:00:00+00:00', time: 2 }),
+      mine({ id: 'live', provisionalTime: true, time: 3 }),
+      mine({ id: 'pending', state: 'sending', provisionalTime: true, createdAt: '', time: 4 }),
+    ];
+    expect(oldestCursor(list)).toEqual({ createdAt: '2026-09-22T09:00:00+00:00', id: 'a' });
+    expect(newestCursor(list)).toEqual({ createdAt: '2026-09-22T10:00:00+00:00', id: 'b' });
+    expect(oldestCursor([])).toBeUndefined();
+  });
+});
+
+describe('reactions', () => {
+  it('applyReactionOp adds, counts, removes and is idempotent for own toggles', () => {
+    const base = [mine({ id: 'm' })];
+    const added = applyReactionOp(base, { messageId: 'm', emoji: '👍', op: 'add', mine: true });
+    expect(added[0]?.reactions).toEqual([{ emoji: '👍', count: 1, mine: true }]);
+    const again = applyReactionOp(added, { messageId: 'm', emoji: '👍', op: 'add', mine: true });
+    expect(again[0]?.reactions).toEqual([{ emoji: '👍', count: 1, mine: true }]);
+    const peer = applyReactionOp(again, { messageId: 'm', emoji: '👍', op: 'add', mine: false });
+    expect(peer[0]?.reactions).toEqual([{ emoji: '👍', count: 2, mine: true }]);
+    const removed = applyReactionOp(peer, {
+      messageId: 'm',
+      emoji: '👍',
+      op: 'remove',
+      mine: true,
+    });
+    expect(removed[0]?.reactions).toEqual([{ emoji: '👍', count: 1, mine: false }]);
+    const gone = applyReactionOp(removed, {
+      messageId: 'm',
+      emoji: '👍',
+      op: 'remove',
+      mine: false,
+    });
+    expect(gone[0]?.reactions).toEqual([]);
+    expect(
+      applyReactionOp(base, { messageId: 'other', emoji: '👍', op: 'add', mine: true }),
+    ).toEqual(base);
+  });
+
+  it('mergeReactions sets reactions for mapped ids only', () => {
+    const list = [mine({ id: 'a' }), mine({ id: 'b' })];
+    const byId = new Map<string, MessageReaction[]>([
+      ['a', [{ emoji: '❤️', count: 2, mine: false }]],
+    ]);
+    const merged = mergeReactions(list, byId);
+    expect(merged[0]?.reactions).toEqual([{ emoji: '❤️', count: 2, mine: false }]);
+    expect(merged[1]?.reactions).toEqual([]);
+  });
+});
+
+describe('read ticks', () => {
+  it('markReadUpTo advances own messages at or before the read time, monotonically', () => {
+    const list = [
+      mine({ id: 'a', time: 500 }),
+      mine({ id: 'b', time: 1000 }),
+      mine({ id: 'c', time: 2000 }),
+      mine({ id: 'd', time: 500, mine: false }),
+    ];
+    expect(markReadUpTo(list, 1000).map((m) => m.status)).toEqual(['read', 'read', 'sent', 'sent']);
+  });
+
+  it('markReadUpToMessage resolves the id to its time and ignores an unknown id', () => {
+    const list = [mine({ id: 'a', time: 500 }), mine({ id: 'b', time: 1000 })];
+    expect(markReadUpToMessage(list, 'a').map((m) => m.status)).toEqual(['read', 'sent']);
+    expect(markReadUpToMessage(list, 'zzz')).toEqual(list);
   });
 });
 
 describe('subscribeIncoming', () => {
-  it('registers the chat-thread handler, delivers matching messages, and removes it on teardown', () => {
+  function subscribed(): {
+    handler: AgoraChat.EventHandlerType | undefined;
+    connection: ThreadConnection;
+    onMessage: ReturnType<typeof vi.fn>;
+    onIgnored: ReturnType<typeof vi.fn>;
+    onReaction: ReturnType<typeof vi.fn>;
+    onRead: ReturnType<typeof vi.fn>;
+    teardown: () => void;
+  } {
     const handlers: Record<string, AgoraChat.EventHandlerType> = {};
     const connection = fakeConnection({
       addEventHandler: vi.fn((id: string, handler: AgoraChat.EventHandlerType) => {
         handlers[id] = handler;
       }),
-      removeEventHandler: vi.fn(),
     });
     const onMessage = vi.fn();
-    const onDelivered = vi.fn();
-    const onConversationRead = vi.fn();
+    const onIgnored = vi.fn();
     const onReaction = vi.fn();
-
+    const onRead = vi.fn();
     const teardown = subscribeIncoming({
       connection,
-      target: { targetId: toAgoraUsername(PEER), chatType: 'singleChat' },
+      channelId: CHANNEL,
       currentUserId: ME,
       onMessage,
-      onDelivered,
-      onConversationRead,
+      onIgnored,
       onReaction,
+      onRead,
     });
+    return {
+      handler: handlers[THREAD_EVENT_HANDLER_ID],
+      connection,
+      onMessage,
+      onIgnored,
+      onReaction,
+      onRead,
+      teardown,
+    };
+  }
 
-    expect(connection.addEventHandler).toHaveBeenCalledWith(
+  it('delivers stamped messages for the open channel only and removes the handler on teardown', () => {
+    const s = subscribed();
+    expect(s.connection.addEventHandler).toHaveBeenCalledWith(
       THREAD_EVENT_HANDLER_ID,
       expect.any(Object),
     );
-    handlers[THREAD_EVENT_HANDLER_ID]?.onTextMessage?.(txt({ id: 'live' }));
-    handlers[THREAD_EVENT_HANDLER_ID]?.onTextMessage?.(txt({ id: 'other', from: 'u_someoneelse' }));
-    expect(onMessage).toHaveBeenCalledTimes(1);
-    expect(onMessage.mock.calls[0]?.[0]?.id).toBe('live');
-
-    teardown();
-    expect(connection.removeEventHandler).toHaveBeenCalledWith(THREAD_EVENT_HANDLER_ID);
+    s.handler?.onTextMessage?.(txt({}));
+    s.handler?.onTextMessage?.(
+      txt({ ext: { sorted_message_id: 'other', sorted_channel_id: 'group__ws__g2' } }),
+    );
+    expect(s.onMessage).toHaveBeenCalledTimes(1);
+    expect(s.onMessage.mock.calls[0]?.[0]?.id).toBe('m-live');
+    s.teardown();
+    expect(s.connection.removeEventHandler).toHaveBeenCalledWith(THREAD_EVENT_HANDLER_ID);
   });
 
-  it('routes delivery and conversation-read receipts to their callbacks', () => {
-    const handlers: Record<string, AgoraChat.EventHandlerType> = {};
-    const connection = fakeConnection({
-      addEventHandler: vi.fn((id: string, handler: AgoraChat.EventHandlerType) => {
-        handlers[id] = handler;
-      }),
-    });
-    const onDelivered = vi.fn();
-    const onConversationRead = vi.fn();
-
-    subscribeIncoming({
-      connection,
-      target: { targetId: toAgoraUsername(PEER), chatType: 'singleChat' },
-      currentUserId: ME,
-      onMessage: vi.fn(),
-      onDelivered,
-      onConversationRead,
-      onReaction: vi.fn(),
-    });
-    const handler = handlers[THREAD_EVENT_HANDLER_ID];
-
-    handler?.onDeliveredMessage?.({ mid: 'mid-1', ackId: 'ack-1' } as AgoraChat.DeliveryMsgBody);
-    handler?.onDeliveredMessage?.({ ackId: 'ack-2' } as AgoraChat.DeliveryMsgBody);
-    expect(onDelivered.mock.calls).toEqual([['mid-1'], ['ack-2']]);
-
-    handler?.onChannelMessage?.({
-      from: toAgoraUsername(PEER),
-      time: 9000,
-    } as AgoraChat.ChannelMsgBody);
-    expect(onConversationRead).toHaveBeenCalledTimes(1);
-    expect(onConversationRead).toHaveBeenCalledWith(9000);
-
-    // A channel ack from a different user is ignored for this DM target.
-    handler?.onChannelMessage?.({
-      from: 'u_someoneelse',
-      time: 9999,
-    } as AgoraChat.ChannelMsgBody);
-    expect(onConversationRead).toHaveBeenCalledTimes(1);
+  it('reports and drops a message without the Sorted ids', () => {
+    const s = subscribed();
+    s.handler?.onTextMessage?.(txt({ id: 'legacy', ext: undefined }));
+    expect(s.onMessage).not.toHaveBeenCalled();
+    expect(s.onIgnored).toHaveBeenCalledWith('legacy');
   });
 
-  it('ignores conversation-read receipts for a group target', () => {
-    const handlers: Record<string, AgoraChat.EventHandlerType> = {};
-    const connection = fakeConnection({
-      addEventHandler: vi.fn((id: string, handler: AgoraChat.EventHandlerType) => {
-        handlers[id] = handler;
-      }),
+  it('routes reaction and read signals with the mapped sender, filtering read by channel', () => {
+    const s = subscribed();
+    s.handler?.onCmdMessage?.(
+      cmd({ ext: reactionEventExt({ messageId: 'm', emoji: '👍', op: 'add' }) }),
+    );
+    expect(s.onReaction).toHaveBeenCalledWith({
+      messageId: 'm',
+      emoji: '👍',
+      op: 'add',
+      fromUserId: PEER,
     });
-    const onConversationRead = vi.fn();
-
-    subscribeIncoming({
-      connection,
-      target: GROUP_TARGET,
-      currentUserId: ME,
-      onMessage: vi.fn(),
-      onDelivered: vi.fn(),
-      onConversationRead,
-      onReaction: vi.fn(),
-    });
-
-    handlers[THREAD_EVENT_HANDLER_ID]?.onChannelMessage?.({
-      from: GROUP_TARGET.targetId,
-      time: 9000,
-    } as AgoraChat.ChannelMsgBody);
-    expect(onConversationRead).not.toHaveBeenCalled();
+    s.handler?.onCmdMessage?.(cmd({ ext: readEventExt({ channelId: CHANNEL, messageId: 'm' }) }));
+    s.handler?.onCmdMessage?.(
+      cmd({ ext: readEventExt({ channelId: 'elsewhere', messageId: 'm' }) }),
+    );
+    expect(s.onRead).toHaveBeenCalledTimes(1);
+    expect(s.onRead).toHaveBeenCalledWith({ messageId: 'm', fromUserId: PEER });
+    // A typing command (no ext) and an unmappable sender are ignored.
+    s.handler?.onCmdMessage?.(cmd({ action: 'typing' }));
+    s.handler?.onCmdMessage?.(
+      cmd({ from: 'nobody', ext: reactionEventExt({ messageId: 'm', emoji: '👍', op: 'add' }) }),
+    );
+    expect(s.onReaction).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('sendText', () => {
-  it('creates a text message from the composed text and sends it via the SDK', async () => {
+  it('stamps the Sorted ids on ext alongside the content ext', async () => {
     const created = { id: 'created' } as unknown as AgoraChat.MessageBody;
     const createMessage = vi.fn().mockReturnValue(created);
     const send = vi.fn().mockResolvedValue({ serverMsgId: 's1', localMsgId: 'l1' });
@@ -290,277 +514,46 @@ describe('sendText', () => {
       connection,
       target: GROUP_TARGET,
       text: 'hello team',
-      attachments: [],
-      sharedPostIds: [],
-      reply: null,
+      attachments: [{ assetId: 'a1', name: 'p.png', mime: 'image/png' }],
+      sharedPostIds: ['p1'],
+      reply: { id: 'm0', authorUserId: PEER, preview: 'earlier' },
       createMessage,
+      liveIds: { sorted_message_id: 'm-new', sorted_channel_id: CHANNEL },
     });
 
-    // A text-only send carries no `ext`: the options are exactly the text shape.
     expect(createMessage).toHaveBeenCalledWith({
       chatType: 'groupChat',
       type: 'txt',
       to: 'agora-group-1',
       msg: 'hello team',
+      ext: {
+        attachment_asset_ids: ['a1'],
+        attachment_meta: [{ assetId: 'a1', name: 'p.png', mime: 'image/png' }],
+        shared_post_ids: ['p1'],
+        reply_to: { id: 'm0', author_user_id: PEER, preview: 'earlier' },
+        sorted_message_id: 'm-new',
+        sorted_channel_id: CHANNEL,
+      },
     });
     expect(send).toHaveBeenCalledWith(created);
   });
 
-  it('carries the reply quote on `ext` for a reply send with no attachments', async () => {
-    const created = { id: 'created' } as unknown as AgoraChat.MessageBody;
-    const createMessage = vi.fn().mockReturnValue(created);
-    const send = vi.fn().mockResolvedValue({ serverMsgId: 's1', localMsgId: 'l1' });
-    const connection = fakeConnection({ send });
-
+  it('keeps the bare text shape (no ext) for an unstamped plain send', async () => {
+    const createMessage = vi.fn().mockReturnValue({} as AgoraChat.MessageBody);
     await sendText({
-      connection,
+      connection: fakeConnection({ send: vi.fn().mockResolvedValue({}) }),
       target: GROUP_TARGET,
-      text: 'on it',
+      text: 'plain',
       attachments: [],
       sharedPostIds: [],
-      reply: { id: 'm0', authorUserId: PEER, preview: 'earlier' },
+      reply: null,
       createMessage,
     });
-
-    const options = createMessage.mock.calls[0]?.[0] as { ext?: { reply_to?: unknown } };
-    expect(options.ext?.reply_to).toEqual({
-      id: 'm0',
-      author_user_id: PEER,
-      preview: 'earlier',
-    });
-  });
-});
-
-describe('echoMessage / appendMessage', () => {
-  it('builds an own-bubble echo from the send result', () => {
-    const echo = echoMessage({
-      result: { serverMsgId: 's1', localMsgId: 'l1' } as AgoraChat.SendMsgResult,
-      text: 'yo',
-      currentUserId: ME,
-      time: 5000,
-      attachments: [],
-      sharedPostIds: [],
-      reply: null,
-    });
-    expect(echo).toEqual({
-      id: 's1',
-      senderUserId: ME,
-      body: 'yo',
-      time: 5000,
-      mine: true,
-      attachments: [],
-      sharedPostIds: [],
-      reply: null,
-      status: 'sent',
-      reactions: [],
-    });
-  });
-
-  it('carries the reply quote through to the echoed message', () => {
-    const reply = { id: 'm0', authorUserId: PEER, preview: 'earlier' };
-    const echo = echoMessage({
-      result: { serverMsgId: 's1', localMsgId: 'l1' } as AgoraChat.SendMsgResult,
-      text: 'on it',
-      currentUserId: ME,
-      time: 5000,
-      attachments: [],
-      sharedPostIds: [],
-      reply,
-    });
-    expect(echo.reply).toEqual(reply);
-  });
-
-  it('does not append a duplicate id', () => {
-    const base = mapTextMessage(txt({ id: 'dup' }), ME);
-    expect(appendMessage([base], base)).toHaveLength(1);
-    expect(appendMessage([base], mapTextMessage(txt({ id: 'new' }), ME))).toHaveLength(2);
-  });
-});
-
-function mine(over: Partial<ThreadMessage>): ThreadMessage {
-  return {
-    id: 'x',
-    senderUserId: ME,
-    body: 'yo',
-    time: 1000,
-    mine: true,
-    attachments: [],
-    sharedPostIds: [],
-    reply: null,
-    status: 'sent',
-    reactions: [],
-    ...over,
-  };
-}
-
-describe('deliveredMessageId', () => {
-  it('prefers mid, falls back to ackId, and is undefined when both are absent', () => {
-    expect(deliveredMessageId({ mid: 'm', ackId: 'a' } as AgoraChat.DeliveryMsgBody)).toBe('m');
-    expect(deliveredMessageId({ ackId: 'a' } as AgoraChat.DeliveryMsgBody)).toBe('a');
-    expect(deliveredMessageId({} as AgoraChat.DeliveryMsgBody)).toBeUndefined();
-  });
-});
-
-describe('markDelivered', () => {
-  it('advances the matching own sent message and leaves everything else untouched', () => {
-    const messages = [
-      mine({ id: 'a', status: 'sent' }),
-      mine({ id: 'b', status: 'sent' }),
-      mine({ id: 'c', status: 'read' }),
-      mine({ id: 'd', status: 'sent', mine: false }),
-    ];
-    const next = markDelivered(messages, 'a');
-    expect(next.map((m) => m.status)).toEqual(['delivered', 'sent', 'read', 'sent']);
-    // No downgrade: an already-read own message stays read even if acked.
-    expect(markDelivered(messages, 'c')[2]?.status).toBe('read');
-    // A non-mine message with the matching id is never changed.
-    expect(markDelivered(messages, 'd')[3]?.status).toBe('sent');
-  });
-});
-
-describe('markReadUpTo', () => {
-  it('marks own messages at or before the read time as read, monotonically', () => {
-    const messages = [
-      mine({ id: 'a', time: 500, status: 'sent' }),
-      mine({ id: 'b', time: 1000, status: 'delivered' }),
-      mine({ id: 'c', time: 2000, status: 'sent' }),
-      mine({ id: 'd', time: 500, status: 'read' }),
-      mine({ id: 'e', time: 500, status: 'sent', mine: false }),
-    ];
-    const next = markReadUpTo(messages, 1000);
-    expect(next.map((m) => m.status)).toEqual(['read', 'read', 'sent', 'read', 'sent']);
-  });
-});
-
-describe('parseEventReactions', () => {
-  it('maps reaction/count/isAddedBySelf and defaults a missing isAddedBySelf to false', () => {
-    const reactions = [
-      { reaction: '👍', count: 2, userList: ['a', 'b'], isAddedBySelf: true },
-      { reaction: '❤️', count: 1, userList: ['c'] },
-    ] as unknown as AgoraChat.Reaction[];
-    expect(parseEventReactions(reactions)).toEqual([
-      { emoji: '👍', count: 2, mine: true },
-      { emoji: '❤️', count: 1, mine: false },
-    ]);
-  });
-});
-
-describe('parseReactionListItems', () => {
-  it('maps reaction/userCount/isAddedBySelf to the rendered shape', () => {
-    const items = [
-      { reaction: '😂', userCount: 3, isAddedBySelf: false, userList: ['a', 'b', 'c'] },
-      { reaction: '🙏', userCount: 1, isAddedBySelf: true, userList: ['me'] },
-    ] as unknown as AgoraChat.ReactionListItem[];
-    expect(parseReactionListItems(items)).toEqual([
-      { emoji: '😂', count: 3, mine: false },
-      { emoji: '🙏', count: 1, mine: true },
-    ]);
-  });
-});
-
-describe('applyReactionChange', () => {
-  it('replaces the matching message reactions and leaves others unchanged', () => {
-    const messages = [mine({ id: 'a' }), mine({ id: 'b' })];
-    const next: MessageReaction[] = [{ emoji: '👍', count: 1, mine: true }];
-    const result = applyReactionChange(messages, 'a', next);
-    expect(result[0]?.reactions).toEqual(next);
-    expect(result[1]?.reactions).toEqual([]);
-    // A non-matching id leaves every message untouched.
-    expect(applyReactionChange(messages, 'missing', next)).toEqual(messages);
-  });
-});
-
-describe('mergeHistoryReactions', () => {
-  it('sets reactions for mapped messages and leaves absent ones unchanged', () => {
-    const messages = [mine({ id: 'a' }), mine({ id: 'b' })];
-    const byId = new Map<string, MessageReaction[]>([
-      ['a', [{ emoji: '❤️', count: 2, mine: false }]],
-    ]);
-    const result = mergeHistoryReactions(messages, byId);
-    expect(result[0]?.reactions).toEqual([{ emoji: '❤️', count: 2, mine: false }]);
-    expect(result[1]?.reactions).toEqual([]);
-  });
-});
-
-describe('fetchReactions', () => {
-  it('returns an empty Map without calling the SDK when there are no ids', async () => {
-    const getReactionlist = vi.fn();
-    const connection = fakeConnection({ getReactionlist });
-    const map = await fetchReactions({ connection, target: GROUP_TARGET, messageIds: [] });
-    expect(map.size).toBe(0);
-    expect(getReactionlist).not.toHaveBeenCalled();
-  });
-
-  it('keys parsed reactions by message id from the SDK result', async () => {
-    const getReactionlist = vi.fn().mockResolvedValue({
-      data: [
-        {
-          msgId: 'm1',
-          reactionList: [
-            { reaction: '👍', userCount: 2, isAddedBySelf: true, userList: ['a', 'b'] },
-          ],
-        },
-      ],
-    });
-    const connection = fakeConnection({ getReactionlist });
-    const map = await fetchReactions({ connection, target: GROUP_TARGET, messageIds: ['m1'] });
-    expect(getReactionlist).toHaveBeenCalledWith({
+    expect(createMessage).toHaveBeenCalledWith({
       chatType: 'groupChat',
-      messageId: ['m1'],
-      groupId: 'agora-group-1',
+      type: 'txt',
+      to: 'agora-group-1',
+      msg: 'plain',
     });
-    expect(map.get('m1')).toEqual([{ emoji: '👍', count: 2, mine: true }]);
-  });
-
-  it('returns an empty Map when getReactionlist rejects, never throwing', async () => {
-    const getReactionlist = vi.fn().mockRejectedValue(new Error('reactions disabled'));
-    const connection = fakeConnection({ getReactionlist });
-    const map = await fetchReactions({
-      connection,
-      target: { targetId: toAgoraUsername(PEER), chatType: 'singleChat' },
-      messageIds: ['m1'],
-    });
-    expect(map.size).toBe(0);
-  });
-});
-
-describe('addMessageReaction / removeMessageReaction', () => {
-  it('adds and removes via the SDK with messageId and emoji as reaction', async () => {
-    const addReaction = vi.fn().mockResolvedValue(undefined);
-    const deleteReaction = vi.fn().mockResolvedValue(undefined);
-    const connection = fakeConnection({ addReaction, deleteReaction });
-    await addMessageReaction({ connection, messageId: 'm1', emoji: '👍' });
-    await removeMessageReaction({ connection, messageId: 'm1', emoji: '👍' });
-    expect(addReaction).toHaveBeenCalledWith({ messageId: 'm1', reaction: '👍' });
-    expect(deleteReaction).toHaveBeenCalledWith({ messageId: 'm1', reaction: '👍' });
-  });
-});
-
-describe('subscribeIncoming reactions', () => {
-  it('routes onReactionChange to onReaction with the message id and parsed reactions', () => {
-    const handlers: Record<string, AgoraChat.EventHandlerType> = {};
-    const connection = fakeConnection({
-      addEventHandler: vi.fn((id: string, handler: AgoraChat.EventHandlerType) => {
-        handlers[id] = handler;
-      }),
-    });
-    const onReaction = vi.fn();
-
-    subscribeIncoming({
-      connection,
-      target: { targetId: toAgoraUsername(PEER), chatType: 'singleChat' },
-      currentUserId: ME,
-      onMessage: vi.fn(),
-      onDelivered: vi.fn(),
-      onConversationRead: vi.fn(),
-      onReaction,
-    });
-
-    handlers[THREAD_EVENT_HANDLER_ID]?.onReactionChange?.({
-      messageId: 'm1',
-      reactions: [{ reaction: '👍', count: 1, userList: ['me'], isAddedBySelf: true }],
-    } as unknown as AgoraChat.ReactionMessage);
-
-    expect(onReaction).toHaveBeenCalledWith('m1', [{ emoji: '👍', count: 1, mine: true }]);
   });
 });

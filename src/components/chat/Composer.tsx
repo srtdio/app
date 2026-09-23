@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent, ReactElement } from 'react';
+import { logger } from '@/lib/logger';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
@@ -130,12 +131,15 @@ function completedAttachments(pending: readonly Pending[]): MessageAttachment[] 
 }
 
 /**
- * Composer with text + an extensible attach menu (Photo / File this PR). Files
- * are pre-checked client-side, uploaded through the asset pipeline, and shown as
+ * Composer with text + an extensible attach menu (Photo / File). Files are
+ * pre-checked client-side, uploaded through the asset pipeline, and shown as
  * removable chips with progress; an upload failure surfaces inline on its chip
  * and never throws. Send carries the completed attachments plus any text;
  * attachments-only is allowed, empty is blocked, and send is disabled while any
- * upload is in flight.
+ * upload is in flight. `onSend` resolves once the thread has taken the message
+ * (a record failure surfaces on the bubble with Retry, not here); a rejection is
+ * unexpected, so it is logged, surfaced as a toast, and the draft is kept. The
+ * `submitting` flag is the double-submit guard.
  */
 export function Composer(props: ComposerProps): ReactElement {
   const [text, setText] = useState('');
@@ -252,8 +256,11 @@ export function Composer(props: ComposerProps): ReactElement {
       setPending([]);
       setSharedPosts([]);
       props.onCancelReply?.();
-    } catch {
-      // Keep the draft (text + chips + shared posts) so a failed send is not lost.
+    } catch (error) {
+      // Unexpected: the thread reports record failures on the bubble instead of
+      // throwing. Keep the draft (text + chips + shared posts) so it is not lost.
+      logger.error('chat composer: send threw', { error: String(error) });
+      toast.show({ title: 'Could not send the message. Your draft is kept.' });
     } finally {
       setSubmitting(false);
     }
@@ -299,7 +306,8 @@ export function Composer(props: ComposerProps): ReactElement {
     try {
       await props.onSend('', [attachment], [], props.reply?.quote ?? null);
       props.onCancelReply?.();
-    } catch {
+    } catch (error) {
+      logger.error('chat composer: voice note send threw', { error: String(error) });
       toast.show({ title: 'Could not send the voice note.' });
     } finally {
       setVoiceBusy(false);

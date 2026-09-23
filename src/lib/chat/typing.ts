@@ -1,14 +1,16 @@
 // Live-only typing signals, driven entirely by the Agora SDK and carried as
-// command (`cmd`) messages so nothing touches Postgres, the mirror, or the
-// schema. This mirrors thread.ts's ethos: the SDK connection and message
-// factory are injected, so every branch is unit-tested under the node test job
-// with the SDK fully mocked and no DOM.
+// command (`cmd`) messages so nothing touches Postgres or the schema. This
+// mirrors thread.ts's ethos: the SDK connection and message factory are
+// injected, so every branch is unit-tested under the node test job with the SDK
+// fully mocked and no DOM.
 //
 // Agora type names are taken verbatim from the installed agora-chat 1.3.1
 // typings (`import type { AgoraChat }`): a command message is built with
-// `message.create({ type: 'cmd', chatType, to, action })`, sent via
+// `message.create({ type: 'cmd', chatType, to, action, ext? })`, sent via
 // `connection.send(MessageBody)`, and received on the `onCmdMessage(CmdMsgBody)`
 // event. The factory is injected as `createCmd` so this module stays SDK-free.
+// The same factory carries the thread's reaction and read signals (see
+// thread.ts), which ride `ext` on a command message.
 
 import type { AgoraChat } from 'agora-chat';
 import type { ChatConnection } from '@/lib/chat/types';
@@ -20,6 +22,9 @@ export const TYPING_EVENT_HANDLER_ID = 'chat-typing';
 
 /** The `action` value our typing command messages carry. */
 export const TYPING_ACTION = 'typing';
+
+/** The `action` value the thread's live signals (reaction, read) carry. */
+export const SIGNAL_ACTION = 'sorted_signal';
 
 /**
  * The connection surface typing drives: the Foundation ChatConnection plus the
@@ -36,6 +41,8 @@ export type CreateCmdMessage = (options: {
   type: 'cmd';
   to: string;
   action: string;
+  /** Custom extension; the thread's live signals ride here. */
+  ext?: Record<string, unknown>;
 }) => AgoraChat.MessageBody;
 
 /** Whether a live command message belongs to the open channel. */
@@ -59,6 +66,23 @@ export function sendTyping(params: {
     type: 'cmd',
     to: params.target.targetId,
     action: TYPING_ACTION,
+  });
+  return params.connection.send(message);
+}
+
+/** Build a live signal command (reaction / read) for the channel and send it. */
+export function sendSignal(params: {
+  connection: TypingConnection;
+  target: ChannelTarget;
+  createCmd: CreateCmdMessage;
+  ext: Record<string, unknown>;
+}): Promise<AgoraChat.SendMsgResult> {
+  const message = params.createCmd({
+    chatType: params.target.chatType,
+    type: 'cmd',
+    to: params.target.targetId,
+    action: SIGNAL_ACTION,
+    ext: params.ext,
   });
   return params.connection.send(message);
 }

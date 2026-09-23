@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { useMediaQuery } from '@/lib/use-media-query';
+import { useWorkspace } from '@/lib/workspace-context';
 import {
   listChannelSummaries,
   readProfiles,
@@ -15,7 +16,7 @@ import { useChatThread } from '@/lib/chat/use-chat-thread';
 import { useChatTyping } from '@/lib/chat/use-chat-typing';
 import { useChatPresence } from '@/lib/chat/use-chat-presence';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
-import type { ChatConnection } from '@/lib/chat/types';
+import type { ChatConnection, ChatStatus } from '@/lib/chat/types';
 import { ChannelList } from '@/components/chat/ChannelList';
 import { MessageThread } from '@/components/chat/MessageThread';
 import { NewChatSheet } from '@/components/chat/NewChatSheet';
@@ -23,6 +24,7 @@ import { GroupInfoSheet } from '@/components/chat/GroupInfoSheet';
 
 interface ChatConnectedProps {
   client: ChatConnection | null;
+  status: ChatStatus;
   workspaceId: string;
   currentUserId: string;
 }
@@ -41,8 +43,11 @@ function safeTarget(channel: ChannelSummary | null): ChannelTarget | null {
 }
 
 export function ChatConnected(props: ChatConnectedProps): ReactElement {
-  const { client, workspaceId, currentUserId } = props;
+  const { client, status, workspaceId, currentUserId } = props;
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const { workspaces } = useWorkspace();
+  // The workspace civil clock every timestamp renders on (never the browser's).
+  const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
   const [channels, setChannels] = useState<ChannelSummary[]>([]);
   const [selected, setSelected] = useState<ChannelSummary | null>(null);
@@ -133,11 +138,13 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     setActive,
     markConversationRead,
     updateOwnMessage,
+    refreshUnreadCounts,
     clearPendingOpen,
   } = useChatStore();
 
   // Keep the live store's active conversation in step with the open channel:
-  // opening one marks it read (and acks Agora); leaving or unmounting clears it.
+  // opening one zeroes its badge locally (the thread records the read cursor);
+  // leaving or unmounting clears it.
   const selectedChannelId = selected?.channelId ?? null;
   useEffect(() => {
     if (selectedChannelId === null) {
@@ -160,14 +167,23 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   }, [pendingOpen, channels, clearPendingOpen]);
 
   const onOwnMessage = useCallback(
-    (text: string) => {
-      if (selectedChannelId !== null) updateOwnMessage(selectedChannelId, text);
+    (text: string, ts: number) => {
+      if (selectedChannelId !== null) updateOwnMessage(selectedChannelId, text, ts);
     },
     [selectedChannelId, updateOwnMessage],
   );
 
   const target = useMemo(() => safeTarget(selected), [selected]);
-  const thread = useChatThread({ client, target, currentUserId, onOwnMessage });
+  const thread = useChatThread({
+    client,
+    status,
+    channelId: selectedChannelId,
+    target,
+    currentUserId,
+    peerUserId: selected?.peerUserId ?? null,
+    onOwnMessage,
+    onCaughtUp: refreshUnreadCounts,
+  });
   const typing = useChatTyping({ client, target, currentUserId });
   const presence = useChatPresence({ client, peerUserId: selected?.peerUserId ?? null });
 
@@ -185,7 +201,11 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     if (needed.size === 0) return;
     let cancelled = false;
     void readProfiles(supabase, [...needed]).then((result) => {
-      if (cancelled || !result.ok) return;
+      if (cancelled) return;
+      if (!result.ok) {
+        logger.warn('chat: profile read failed', { error: result.error.message });
+        return;
+      }
       setProfiles((prev) => {
         const next = new Map(prev);
         for (const profile of result.data) next.set(profile.userId, profile);
@@ -213,6 +233,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             selectedChannelId={selected?.channelId ?? null}
             onSelect={setSelected}
             onNewChat={() => setNewChatOpen(true)}
+            timeZone={timeZone}
           />
         </div>
       ) : null}
@@ -225,14 +246,19 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
               profiles={profiles}
               messages={thread.messages}
               loading={thread.loading}
-              sending={thread.sending}
-              canSend={target !== null}
+              loadingOlder={thread.loadingOlder}
+              hasMore={thread.hasMore}
+              onLoadOlder={thread.loadOlder}
+              onNewestVisible={thread.markNewestVisible}
+              timeZone={timeZone}
+              canSend
               onSend={thread.send}
+              onRetry={thread.retry}
               typingUserIds={typing.typingUserIds}
               onTyping={typing.notifyTyping}
               onToggleReaction={thread.toggleReaction}
-              showTicks={target?.chatType === 'singleChat'}
-              {...(selected?.peerUserId != null ? { presence } : {})}
+              showTicks={selected.channelType === 'dm'}
+              {...(selected.peerUserId != null ? { presence } : {})}
               {...(isDesktop ? {} : { onBack })}
               {...(isGroup ? { onOpenInfo: () => setGroupInfoOpen(true) } : {})}
             />

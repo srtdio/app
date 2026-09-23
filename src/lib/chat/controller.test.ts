@@ -1,7 +1,17 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgoraChat } from 'agora-chat';
-import { runChatConnection, type RunChatConnectionParams } from '@/lib/chat/controller';
+import {
+  backoffDelayMs,
+  BACKOFF_CAP_MS,
+  MAX_CONSECUTIVE_FAILURES,
+  runChatConnection,
+  type RunChatConnectionParams,
+} from '@/lib/chat/controller';
 import type { ChatConnection, ChatStatus, ChatTokenResult } from '@/lib/chat/types';
+
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 const token: Extract<ChatTokenResult, { ok: true }> = {
   ok: true,
@@ -11,8 +21,10 @@ const token: Extract<ChatTokenResult, { ok: true }> = {
   app_key: 'org#app',
 };
 
-/** Drain pending microtasks (the fetchToken -> open chain) on a macrotask turn. */
-const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+/** Drain the fetchToken -> open microtask chain under fake timers. */
+const flush = async (): Promise<void> => {
+  await vi.advanceTimersByTimeAsync(0);
+};
 
 interface FakeConnection extends ChatConnection {
   handler: () => AgoraChat.EventHandlerType | null;
@@ -34,49 +46,86 @@ function fakeConnection(): FakeConnection {
 
 interface Harness {
   params: RunChatConnectionParams;
-  conn: FakeConnection;
+  conns: FakeConnection[];
+  latest: () => FakeConnection;
   createConnection: ReturnType<typeof vi.fn>;
   setStatus: ReturnType<typeof vi.fn>;
   setClient: ReturnType<typeof vi.fn>;
   removeSignout: ReturnType<typeof vi.fn>;
+  removeWake: ReturnType<typeof vi.fn>;
   signout: () => void;
+  wake: () => void;
+  statuses: () => ChatStatus[];
 }
 
-function harness(fetchToken: () => Promise<ChatTokenResult>): Harness {
-  const conn = fakeConnection();
-  const createConnection = vi.fn(() => conn);
+function harness(
+  fetchToken: () => Promise<ChatTokenResult>,
+  build: () => FakeConnection = fakeConnection,
+): Harness {
+  const conns: FakeConnection[] = [];
+  const createConnection = vi.fn(() => {
+    const conn = build();
+    conns.push(conn);
+    return conn;
+  });
   const setStatus = vi.fn<(status: ChatStatus) => void>();
   const setClient = vi.fn<(client: ChatConnection | null) => void>();
   const removeSignout = vi.fn();
+  const removeWake = vi.fn();
   let signoutHandler: () => void = () => {};
-  const addSignoutListener = (handler: () => void): (() => void) => {
-    signoutHandler = handler;
-    return removeSignout;
-  };
+  let wakeHandler: () => void = () => {};
   return {
-    params: { fetchToken, createConnection, setStatus, setClient, addSignoutListener },
-    conn,
+    params: {
+      fetchToken,
+      createConnection,
+      setStatus,
+      setClient,
+      addSignoutListener: (handler) => {
+        signoutHandler = handler;
+        return removeSignout;
+      },
+      addWakeListener: (handler) => {
+        wakeHandler = handler;
+        return removeWake;
+      },
+    },
+    conns,
+    latest: () => conns[conns.length - 1] as FakeConnection,
     createConnection,
     setStatus,
     setClient,
     removeSignout,
+    removeWake,
     signout: () => signoutHandler(),
+    wake: () => wakeHandler(),
+    statuses: () => setStatus.mock.calls.map((c) => c[0]),
   };
 }
 
-describe('runChatConnection availability gate', () => {
-  it('reports unavailable and never builds a connection when the token fetch fails (e.g. URL unset)', async () => {
-    const h = harness(() => Promise.resolve({ ok: false }));
+beforeEach(() => {
+  vi.useFakeTimers();
+});
 
-    runChatConnection(h.params);
-    await flush();
+afterEach(() => {
+  vi.useRealTimers();
+});
 
-    expect(h.setStatus).toHaveBeenNthCalledWith(1, 'connecting');
-    expect(h.setStatus).toHaveBeenLastCalledWith('unavailable');
-    expect(h.createConnection).not.toHaveBeenCalled();
-    expect(h.setClient).not.toHaveBeenCalled();
+describe('backoffDelayMs', () => {
+  it('doubles from 1s and caps at 30s', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 20].map(backoffDelayMs)).toEqual([
+      1000,
+      2000,
+      4000,
+      8000,
+      16000,
+      30000,
+      30000,
+      BACKOFF_CAP_MS,
+    ]);
   });
+});
 
+describe('runChatConnection open path', () => {
   it('opens with the worker username + token and reports connected', async () => {
     const h = harness(() => Promise.resolve(token));
 
@@ -84,55 +133,192 @@ describe('runChatConnection availability gate', () => {
     await flush();
 
     expect(h.createConnection).toHaveBeenCalledWith('org#app');
-    expect(h.conn.open).toHaveBeenCalledWith({ user: 'u_abc', accessToken: 'agora-token' });
-    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
-    expect(h.setClient).toHaveBeenCalledWith(h.conn);
+    expect(h.latest().open).toHaveBeenCalledWith({ user: 'u_abc', accessToken: 'agora-token' });
+    expect(h.statuses()).toEqual(['connecting', 'connected']);
+    expect(h.setClient).toHaveBeenCalledWith(h.latest());
   });
 
-  it('resolves to unavailable (never throws) when the SDK open rejects', async () => {
-    const h = harness(() => Promise.resolve(token));
-    h.conn.open = vi.fn().mockRejectedValue(new Error('sdk down'));
+  it('retries a failed token fetch with backoff instead of going unavailable', async () => {
+    const fetchToken = vi
+      .fn<() => Promise<ChatTokenResult>>()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValue(token);
+    const h = harness(fetchToken);
 
     runChatConnection(h.params);
     await flush();
+    expect(h.statuses()).toEqual(['connecting', 'connecting']);
+    expect(h.createConnection).not.toHaveBeenCalled();
 
-    expect(h.conn.close).toHaveBeenCalledOnce();
-    expect(h.conn.removeEventHandler).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchToken).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await flush();
+    expect(fetchToken).toHaveBeenCalledTimes(2);
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
+  });
+});
+
+describe('runChatConnection retry loop', () => {
+  it('backs off 1s, 2s, 4s ... 30s across consecutive open failures and resets once connected', async () => {
+    let attempts = 0;
+    const h = harness(
+      () => Promise.resolve(token),
+      () => {
+        const conn = fakeConnection();
+        attempts += 1;
+        // Attempts 1..7 fail, the 8th opens.
+        conn.open = attempts <= 7 ? vi.fn().mockRejectedValue(new Error('down')) : conn.open;
+        return conn;
+      },
+    );
+
+    runChatConnection(h.params);
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(1);
+    expect(h.conns[0]?.close).toHaveBeenCalledOnce();
+
+    for (const [delay, expected] of [
+      [1000, 2],
+      [2000, 3],
+      [4000, 4],
+      [8000, 5],
+      [16000, 6],
+      [30000, 7],
+      [30000, 8],
+    ] as const) {
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(h.createConnection).toHaveBeenCalledTimes(expected - 1);
+      await vi.advanceTimersByTimeAsync(1);
+      await flush();
+      expect(h.createConnection).toHaveBeenCalledTimes(expected);
+    }
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
+
+    // Reset: a disconnect after success schedules the FIRST delay again (1s).
+    h.latest().handler()?.onDisconnected?.();
+    expect(h.setStatus).toHaveBeenLastCalledWith('reconnecting');
+    await vi.advanceTimersByTimeAsync(999);
+    expect(h.createConnection).toHaveBeenCalledTimes(8);
+    await vi.advanceTimersByTimeAsync(1);
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(9);
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
+  });
+
+  it('gives up with unavailable after MAX_CONSECUTIVE_FAILURES, and Retry restarts the loop', async () => {
+    const h = harness(
+      () => Promise.resolve(token),
+      () => {
+        const conn = fakeConnection();
+        conn.open = vi.fn().mockRejectedValue(new Error('down'));
+        return conn;
+      },
+    );
+
+    const handle = runChatConnection(h.params);
+    await flush();
+    for (let i = 0; i < MAX_CONSECUTIVE_FAILURES; i += 1) {
+      await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS);
+      await flush();
+    }
+    expect(h.createConnection).toHaveBeenCalledTimes(MAX_CONSECUTIVE_FAILURES);
     expect(h.setStatus).toHaveBeenLastCalledWith('unavailable');
-    expect(h.setClient).not.toHaveBeenCalledWith(h.conn);
+    expect(h.setClient).toHaveBeenLastCalledWith(null);
+
+    // No further timers fire once it gave up.
+    await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS * 2);
+    expect(h.createConnection).toHaveBeenCalledTimes(MAX_CONSECUTIVE_FAILURES);
+
+    handle.retry();
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(MAX_CONSECUTIVE_FAILURES + 1);
+    expect(h.setStatus).toHaveBeenLastCalledWith('connecting');
+  });
+
+  it('retries immediately on a wake signal (tab visible / online) while waiting', async () => {
+    let attempts = 0;
+    const h = harness(
+      () => Promise.resolve(token),
+      () => {
+        const conn = fakeConnection();
+        attempts += 1;
+        if (attempts === 1) conn.open = vi.fn().mockRejectedValue(new Error('down'));
+        return conn;
+      },
+    );
+
+    runChatConnection(h.params);
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(1);
+
+    h.wake();
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(2);
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
+    // The pending backoff timer was cleared: no third attempt fires later.
+    await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS);
+    expect(h.createConnection).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports reconnecting on SDK reconnect/offline events and connected again on onConnected', async () => {
+    const h = harness(() => Promise.resolve(token));
+    runChatConnection(h.params);
+    await flush();
+
+    const handler = h.latest().handler();
+    handler?.onReconnecting?.();
+    expect(h.setStatus).toHaveBeenLastCalledWith('reconnecting');
+    handler?.onConnected?.();
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
+    handler?.onOffline?.();
+    expect(h.setStatus).toHaveBeenLastCalledWith('reconnecting');
+    handler?.onOnline?.();
+    await flush();
+    // onOnline attempts a fresh open when not live.
+    expect(h.createConnection).toHaveBeenCalledTimes(2);
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
   });
 });
 
 describe('runChatConnection teardown', () => {
-  it('closes the connection and removes the signout listener on signout', async () => {
+  it('closes the connection and removes the listeners on signout', async () => {
     const h = harness(() => Promise.resolve(token));
 
     runChatConnection(h.params);
     await flush();
     h.signout();
 
-    expect(h.conn.removeEventHandler).toHaveBeenCalledOnce();
-    expect(h.conn.close).toHaveBeenCalledOnce();
+    expect(h.latest().removeEventHandler).toHaveBeenCalledOnce();
+    expect(h.latest().close).toHaveBeenCalledOnce();
     expect(h.removeSignout).toHaveBeenCalledOnce();
+    expect(h.removeWake).toHaveBeenCalledOnce();
     expect(h.setClient).toHaveBeenLastCalledWith(null);
     expect(h.setStatus).toHaveBeenLastCalledWith('unavailable');
   });
 
-  it('closes the prior connection when torn down (as on a workspace change)', async () => {
-    const h = harness(() => Promise.resolve(token));
+  it('clears a pending retry timer when torn down (as on a workspace change)', async () => {
+    const h = harness(
+      () => Promise.resolve(token),
+      () => {
+        const conn = fakeConnection();
+        conn.open = vi.fn().mockRejectedValue(new Error('down'));
+        return conn;
+      },
+    );
 
-    const teardown = runChatConnection(h.params);
+    const handle = runChatConnection(h.params);
     await flush();
-    teardown();
+    handle.teardown();
+    await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS);
 
-    expect(h.conn.removeEventHandler).toHaveBeenCalledOnce();
-    expect(h.conn.close).toHaveBeenCalledOnce();
+    expect(h.createConnection).toHaveBeenCalledTimes(1);
     expect(h.removeSignout).toHaveBeenCalledOnce();
     expect(h.setClient).toHaveBeenLastCalledWith(null);
   });
 });
 
-describe('runChatConnection renewal', () => {
+describe('runChatConnection tokens', () => {
   it('renews via onTokenWillExpire by fetching a fresh token and calling renewToken', async () => {
     const fetchToken = vi
       .fn<() => Promise<ChatTokenResult>>()
@@ -142,12 +328,49 @@ describe('runChatConnection renewal', () => {
 
     runChatConnection(h.params);
     await flush();
-
-    const handler = h.conn.handler();
-    handler?.onTokenWillExpire?.();
+    h.latest().handler()?.onTokenWillExpire?.();
     await flush();
 
     expect(fetchToken).toHaveBeenCalledTimes(2);
-    expect(h.conn.renewToken).toHaveBeenCalledWith('renewed-token');
+    expect(h.latest().renewToken).toHaveBeenCalledWith('renewed-token');
+  });
+
+  it('never closes the connection when the Supabase access token rotates; renewal reads the latest one', async () => {
+    // The hook keys nothing on the access token: the getter simply returns
+    // whatever the current session holds. Rotating it between calls must leave
+    // the open connection untouched and only affect the next mint.
+    let sessionToken = 'jwt-1';
+    const fetchToken = vi.fn(() =>
+      Promise.resolve({ ...token, token: `agora-for-${sessionToken}` }),
+    );
+    const h = harness(fetchToken);
+
+    runChatConnection(h.params);
+    await flush();
+    const conn = h.latest();
+    expect(conn.open).toHaveBeenCalledWith({ user: 'u_abc', accessToken: 'agora-for-jwt-1' });
+
+    sessionToken = 'jwt-2';
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(conn.close).not.toHaveBeenCalled();
+    expect(h.createConnection).toHaveBeenCalledTimes(1);
+
+    conn.handler()?.onTokenWillExpire?.();
+    await flush();
+    expect(conn.renewToken).toHaveBeenCalledWith('agora-for-jwt-2');
+    expect(conn.close).not.toHaveBeenCalled();
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
+  });
+
+  it('reopens with a fresh token when the SDK reports the token expired', async () => {
+    const h = harness(() => Promise.resolve(token));
+    runChatConnection(h.params);
+    await flush();
+
+    h.latest().handler()?.onTokenExpired?.();
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(2);
+    expect(h.conns[0]?.close).toHaveBeenCalledOnce();
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
   });
 });

@@ -1,11 +1,14 @@
 // The always-on chat live layer. Mounted once at the shell (inside the Agora
 // ChatProvider, the toast provider, and the router), it seeds the pure chat
-// store from the registry roster + the Agora server conversation list on
-// connect, then keeps it live off the controller's global incoming-message
-// fan-out. A message for a conversation the user is not viewing fires a toast
-// and stays unread; a message for the open conversation is marked read and
-// acked. All store mutation lives in the pure reducer (chat-store.ts); this
-// file only wires that reducer to Agora, React, and the toast surface.
+// store from the registry roster plus Postgres (chat_unread_counts for badges
+// and ordering, one bounded scan for the preview lines), then keeps it live off
+// the controller's global incoming-message fan-out. Unread counts are re-read
+// on open, on every reconnect, and 2s after the last incoming live message, so
+// Postgres stays the truth for the badge. A message for a conversation the user
+// is not viewing fires a toast and stays unread; a message for the open
+// conversation is marked read locally (the thread writes the cursor). All store
+// mutation lives in the pure reducer (chat-store.ts); this file only wires that
+// reducer to Agora, Postgres, React, and the toast surface.
 
 import {
   createContext,
@@ -18,7 +21,6 @@ import {
 } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import websdk from 'agora-chat';
 import type { AgoraChat } from 'agora-chat';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
@@ -28,41 +30,36 @@ import { useToast } from '@/components/ui/toast';
 import { Avatar } from '@/components/ui/Avatar';
 import { listChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
 import { useChat } from '@/lib/chat/chat-context';
-import { toAgoraUsername } from '@/lib/chat/agora-identity';
-import { targetFromSummary, type ChannelTarget } from '@/lib/chat/thread';
+import { mapLiveTextMessage } from '@/lib/chat/thread';
 import { subscribeGlobalMessages } from '@/lib/chat/controller';
-import {
-  buildChannelIndex,
-  fetchConversationSummaries,
-  type ConversationsConnection,
-} from '@/lib/chat/conversations';
-import type { ChatConnection } from '@/lib/chat/types';
+import { loadConversationPreviews, loadUnreadCounts } from '@/lib/chat/history';
+import { createDebouncer, UNREAD_REFRESH_DEBOUNCE_MS } from '@/lib/chat/read-cursor';
 import * as store from '@/lib/chat/chat-store';
-import type { AgoraConversationSummary, ChatStoreState } from '@/lib/chat/chat-store';
+import type { ChatStoreState } from '@/lib/chat/chat-store';
 
-/** The store plus the actions the chat UI uses to keep it in step with Agora. */
+/** The store plus the actions the chat UI uses to keep it in step. */
 export interface ChatStoreContextValue {
   state: ChatStoreState;
   /** Sum of unread across every channel; the Chat-tab badge reads this. */
   totalUnread: number;
   /** Mark the viewed channel (its incoming messages stay read), or clear it. */
   setActive: (channelId: string | null) => void;
-  /** Reset a channel's unread and send the Agora channel-ack. */
+  /** Zero a channel's unread locally (the thread records the read cursor). */
   markConversationRead: (channelId: string) => void;
-  /** Refresh a channel's last line after a successful own send ('You: ...'). */
-  updateOwnMessage: (channelId: string, text: string) => void;
+  /** Refresh a channel's last line after a recorded own send ('You: ...'). */
+  updateOwnMessage: (channelId: string, text: string, ts: number) => void;
+  /** Re-read chat_unread_counts now (after a catch-up). */
+  refreshUnreadCounts: () => void;
   /** Ask the chat page to open a channel (consumed via pendingOpenConversationId). */
   requestOpen: (channelId: string) => void;
   /** Clear the pending-open request once the chat page has acted on it. */
   clearPendingOpen: () => void;
 }
 
-/** The connection slice used to send a channel-ack, structurally the real Connection. */
-interface AckConnection extends ChatConnection {
-  send(message: AgoraChat.MessageBody): Promise<unknown>;
-}
-
 const ChatStoreContext = createContext<ChatStoreContextValue | null>(null);
+
+/** Bound on the live-message ids remembered for dedupe. */
+const SEEN_IDS_LIMIT = 500;
 
 function indexSummaries(roster: readonly ChannelSummary[]): Map<string, ChannelSummary> {
   const map = new Map<string, ChannelSummary>();
@@ -72,31 +69,19 @@ function indexSummaries(roster: readonly ChannelSummary[]): Map<string, ChannelS
   return map;
 }
 
-function buildTargets(roster: readonly ChannelSummary[]): Map<string, ChannelTarget> {
-  const map = new Map<string, ChannelTarget>();
-  for (const summary of roster) {
-    const target = targetFromSummary(summary);
-    if (target !== null) {
-      map.set(summary.channelId, target);
-    }
+/** Remember a live message id; true when it was already seen. Bounded FIFO. */
+export function rememberSeen(seen: Set<string>, id: string): boolean {
+  if (seen.has(id)) return true;
+  seen.add(id);
+  if (seen.size > SEEN_IDS_LIMIT) {
+    const oldest = seen.values().next().value;
+    if (oldest !== undefined) seen.delete(oldest);
   }
-  return map;
-}
-
-/** Send the Agora channel read-ack for a target; a failure is logged, not thrown. */
-function sendChannelAck(client: ChatConnection, target: ChannelTarget): void {
-  const ack = websdk.message.create({
-    type: 'channel',
-    chatType: target.chatType,
-    to: target.targetId,
-  });
-  void (client as AckConnection).send(ack).catch((error: unknown) => {
-    logger.warn('chat store: channel ack failed', { error: String(error) });
-  });
+  return false;
 }
 
 export function ChatStoreProvider({ children }: { children: ReactNode }): ReactElement {
-  const { status, client } = useChat();
+  const { status } = useChat();
   const { session } = useSession();
   const { workspaceId } = useWorkspace();
   const toast = useToast();
@@ -106,15 +91,11 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   const [state, setState] = useState<ChatStoreState>(store.initialState);
 
   // The live handler reads these refs so the global subscription registers once
-  // and never goes stale: roster index (Agora target -> our channel_id), display
-  // summaries, ack targets, the current user's Agora username, the connection,
-  // and the active channel.
-  const channelIndexRef = useRef<Map<string, string>>(new Map());
+  // and never goes stale: roster summaries, the active channel, and the ids
+  // already folded in.
   const summariesRef = useRef<Map<string, ChannelSummary>>(new Map());
-  const targetsRef = useRef<Map<string, ChannelTarget>>(new Map());
-  const currentAgoraUsernameRef = useRef<string | null>(null);
-  const clientRef = useRef<ChatConnection | null>(null);
   const activeRef = useRef<string | null>(null);
+  const seenRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     activeRef.current = state.activeConversationId;
@@ -126,15 +107,10 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
 
   const markConversationRead = useCallback((channelId: string) => {
     setState((prev) => store.markRead(prev, channelId));
-    const client = clientRef.current;
-    const target = targetsRef.current.get(channelId);
-    if (client !== null && target !== undefined) {
-      sendChannelAck(client, target);
-    }
   }, []);
 
-  const updateOwnMessage = useCallback((channelId: string, text: string) => {
-    setState((prev) => store.updateOwnMessage(prev, { channelId, text, ts: Date.now() }));
+  const updateOwnMessage = useCallback((channelId: string, text: string, ts: number) => {
+    setState((prev) => store.updateOwnMessage(prev, { channelId, text, ts }));
   }, []);
 
   const requestOpen = useCallback((channelId: string) => {
@@ -145,24 +121,25 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     setState((prev) => store.clearPendingOpen(prev));
   }, []);
 
-  // Seed the store on connect: one bounded roster query plus the paginated Agora
-  // conversation list, merged into the store. Re-runs on workspace/user switch.
-  useEffect(() => {
-    if (status !== 'connected' || client === null || !workspaceId || currentUserId === null) {
-      clientRef.current = null;
-      return;
-    }
-    let agoraUsername: string;
-    try {
-      agoraUsername = toAgoraUsername(currentUserId);
-    } catch (error) {
-      logger.error('chat store: bad current user id', { error: String(error) });
-      return;
-    }
-    currentAgoraUsernameRef.current = agoraUsername;
-    clientRef.current = client;
-    let cancelled = false;
+  const refreshUnreadCounts = useCallback(() => {
+    if (workspaceId === null || currentUserId === null) return;
+    const forWorkspace = workspaceId;
+    void loadUnreadCounts(supabase, forWorkspace).then((result) => {
+      if (!result.ok) {
+        logger.warn('chat store: unread counts load failed', { error: result.error.message });
+        return;
+      }
+      setState((prev) => store.applyUnreadCounts(prev, result.data));
+    });
+  }, [workspaceId, currentUserId]);
 
+  // Seed the store on workspace/user switch: the roster (registry), then the
+  // unread counts and the preview lines from Postgres. Independent of the Agora
+  // connection: the list and badges work while chat is still connecting.
+  useEffect(() => {
+    if (!workspaceId || currentUserId === null) return;
+    let cancelled = false;
+    seenRef.current = new Set();
     void (async (): Promise<void> => {
       const rosterRes = await listChannelSummaries(supabase, { workspaceId, currentUserId });
       if (cancelled) return;
@@ -171,57 +148,78 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
         return;
       }
       const roster = rosterRes.data;
-      let convos: AgoraConversationSummary[] = [];
-      try {
-        convos = await fetchConversationSummaries({
-          connection: client as ConversationsConnection,
-          roster,
-          currentAgoraUsername: agoraUsername,
-        });
-      } catch (error) {
-        logger.warn('chat store: conversation fetch failed', { error: String(error) });
-      }
-      if (cancelled) return;
-      channelIndexRef.current = buildChannelIndex(roster);
       summariesRef.current = indexSummaries(roster);
-      targetsRef.current = buildTargets(roster);
-      setState(store.mergeInitial(roster, convos));
+      setState(store.mergeInitial(roster));
+      const [counts, previews] = await Promise.all([
+        loadUnreadCounts(supabase, workspaceId),
+        loadConversationPreviews(supabase, workspaceId),
+      ]);
+      if (cancelled) return;
+      if (!counts.ok) {
+        logger.warn('chat store: unread counts load failed', { error: counts.error.message });
+      }
+      if (!previews.ok) {
+        logger.warn('chat store: previews load failed', { error: previews.error.message });
+      }
+      setState((prev) => {
+        const withPreviews = previews.ok
+          ? store.applyPreviews(prev, previews.data, currentUserId)
+          : prev;
+        return counts.ok ? store.applyUnreadCounts(withPreviews, counts.data) : withPreviews;
+      });
     })();
-
     return () => {
       cancelled = true;
     };
-  }, [status, client, workspaceId, currentUserId]);
+  }, [workspaceId, currentUserId]);
+
+  // Every (re)connect re-reads the counts: live messages missed while offline
+  // are already in Postgres.
+  const previousStatusRef = useRef(status);
+  useEffect(() => {
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = status;
+    if (status === 'connected' && previous !== 'connected') refreshUnreadCounts();
+  }, [status, refreshUnreadCounts]);
+
+  // Debounced reconcile after live traffic (2s after the last incoming message).
+  const refreshRef = useRef(refreshUnreadCounts);
+  refreshRef.current = refreshUnreadCounts;
+  const debouncedRefresh = useMemo(
+    () => createDebouncer<null>(() => refreshRef.current(), UNREAD_REFRESH_DEBOUNCE_MS),
+    [],
+  );
+  useEffect(() => () => debouncedRefresh.cancel(), [debouncedRefresh]);
 
   // Latest incoming-message logic, held in a ref so the global subscription
   // below registers exactly once yet always runs the current closure.
   const onIncomingRef = useRef<(message: AgoraChat.TextMsgBody) => void>(() => {});
   onIncomingRef.current = (raw) => {
-    const key = raw.chatType === 'groupChat' ? raw.to : raw.from;
-    if (key === undefined) return;
-    const channelId = channelIndexRef.current.get(key);
-    if (channelId === undefined) return;
-    if (raw.from !== undefined && raw.from === currentAgoraUsernameRef.current) return;
+    if (currentUserId === null) return;
+    const mapped = mapLiveTextMessage(raw, currentUserId);
+    if (!mapped.ok) {
+      logger.warn('chat store: live message without sorted ids ignored', { agora_id: raw.id });
+      return;
+    }
+    const summary = summariesRef.current.get(mapped.channelId);
+    if (summary === undefined) return;
+    if (mapped.message.mine) return;
+    if (rememberSeen(seenRef.current, mapped.message.id)) return;
 
     setState((prev) =>
       store.applyIncoming(prev, {
-        channelId,
+        channelId: mapped.channelId,
         senderIsSelf: false,
-        text: raw.msg,
-        ts: raw.time,
+        text: mapped.message.body,
+        ts: mapped.message.time,
       }),
     );
+    debouncedRefresh.schedule(null);
 
-    if (channelId === activeRef.current) {
-      markConversationRead(channelId);
-      return;
-    }
-
-    const summary = summariesRef.current.get(channelId);
-    if (summary === undefined) return;
+    if (mapped.channelId === activeRef.current) return;
     toast.show({
       title: summary.title,
-      description: raw.msg,
+      description: mapped.message.body,
       icon: (
         <Avatar
           name={summary.title}
@@ -230,7 +228,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
         />
       ),
       onPress: () => {
-        requestOpen(channelId);
+        requestOpen(mapped.channelId);
         navigate('/chat');
       },
     });
@@ -245,10 +243,19 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       setActive,
       markConversationRead,
       updateOwnMessage,
+      refreshUnreadCounts,
       requestOpen,
       clearPendingOpen,
     }),
-    [state, setActive, markConversationRead, updateOwnMessage, requestOpen, clearPendingOpen],
+    [
+      state,
+      setActive,
+      markConversationRead,
+      updateOwnMessage,
+      refreshUnreadCounts,
+      requestOpen,
+      clearPendingOpen,
+    ],
   );
 
   return <ChatStoreContext.Provider value={value}>{children}</ChatStoreContext.Provider>;
