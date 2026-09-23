@@ -330,7 +330,7 @@ Triggers: chat_sync_group_members (AFTER INSERT OR DELETE on group_members, chat
 
 Known: the member trigger inserts a row that references the workspace, so a hard DELETE of a workspace that still has group_members rows fails the chat_sync_events workspace FK during the cascade. The app soft-deletes workspaces; the RLS test cleanup deletes group_members first.
 
-Retired: chat_message_save and chat_webhook_ingest are no longer called by any Worker or client; both are dropped by the chat cleanup PR (drop pending).
+Retired: chat_message_save and chat_webhook_ingest are removed (dropped in 20260923094800_chat_drop_retired_procs.sql).
 
 ## 8. Inbox and delivery
 

@@ -1,7 +1,7 @@
 // Shared error-to-string serializer for worker logging. Consolidates the
-// private copies previously duplicated in avatar-upload, chat-transcribe, and
-// chat-webhook-mirror. Errors keep name/message/stack; Supabase-style error
-// objects keep their structured fields; anything else is stringified.
+// private copies previously duplicated in avatar-upload and chat-transcribe.
+// Errors keep name/message/stack; Supabase-style error objects keep their
+// structured fields; anything else is stringified.
 
 export function serializeError(error: unknown): string {
   if (error instanceof Error) {
