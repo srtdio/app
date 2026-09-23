@@ -2164,6 +2164,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2171,12 +2172,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2184,12 +2188,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2197,7 +2204,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: [
@@ -2221,6 +2230,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2228,12 +2238,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2241,12 +2254,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2254,7 +2270,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2263,6 +2281,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2270,12 +2289,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2283,12 +2305,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2296,7 +2321,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2305,6 +2332,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2312,12 +2340,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2325,12 +2356,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2338,7 +2372,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2347,6 +2383,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2354,12 +2391,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2367,12 +2407,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2380,7 +2423,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2389,6 +2434,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2396,12 +2442,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2409,12 +2458,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2422,7 +2474,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2431,6 +2485,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2438,12 +2493,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2451,12 +2509,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2464,7 +2525,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2473,6 +2536,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2480,12 +2544,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2493,12 +2560,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2506,7 +2576,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2515,6 +2587,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2522,12 +2595,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2535,12 +2611,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2548,7 +2627,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2557,6 +2638,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2564,12 +2646,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2577,12 +2662,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2590,7 +2678,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2599,6 +2689,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2606,12 +2697,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2619,12 +2713,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2632,7 +2729,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2641,6 +2740,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2648,12 +2748,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2661,12 +2764,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2674,7 +2780,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2683,6 +2791,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2690,12 +2799,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2703,12 +2815,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2716,7 +2831,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2725,6 +2842,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2732,12 +2850,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2745,12 +2866,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2758,7 +2882,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2767,6 +2893,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2774,12 +2901,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2787,12 +2917,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2800,7 +2933,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2809,6 +2944,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2816,12 +2952,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2829,12 +2968,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2842,7 +2984,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2851,6 +2995,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2858,12 +3003,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2871,12 +3019,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2884,7 +3035,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2893,6 +3046,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2900,12 +3054,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2913,12 +3070,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2926,7 +3086,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2935,6 +3097,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2942,12 +3105,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2955,12 +3121,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -2968,7 +3137,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -2977,6 +3148,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -2984,12 +3156,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -2997,12 +3172,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3010,7 +3188,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3019,6 +3199,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3026,12 +3207,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3039,12 +3223,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3052,7 +3239,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3061,6 +3250,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3068,12 +3258,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3081,12 +3274,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3094,7 +3290,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3103,6 +3301,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3110,12 +3309,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3123,12 +3325,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3136,7 +3341,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3145,6 +3352,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3152,12 +3360,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3165,12 +3376,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3178,7 +3392,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3187,6 +3403,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3194,12 +3411,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3207,12 +3427,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3220,7 +3443,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3229,6 +3454,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3236,12 +3462,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3249,12 +3478,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3262,7 +3494,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3271,6 +3505,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3278,12 +3513,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3291,12 +3529,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3304,7 +3545,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3313,6 +3556,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3320,12 +3564,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3333,12 +3580,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3346,7 +3596,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3355,6 +3607,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3362,12 +3615,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3375,12 +3631,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3388,7 +3647,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3397,6 +3658,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3404,12 +3666,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3417,12 +3682,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3430,7 +3698,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3439,6 +3709,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3446,12 +3717,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3459,12 +3733,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3472,7 +3749,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3481,6 +3760,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3488,12 +3768,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3501,12 +3784,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3514,7 +3800,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3523,6 +3811,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3530,12 +3819,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3543,12 +3835,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3556,7 +3851,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -3565,6 +3862,7 @@ export type Database = {
         Row: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -3572,12 +3870,15 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         Insert: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id: string
           created_at: string
@@ -3585,12 +3886,15 @@ export type Database = {
           edited_at?: string | null
           id: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id: string
         }
         Update: {
           agora_event_id?: string | null
           attachment_asset_ids?: string[] | null
+          attachment_meta?: Json | null
           body?: string | null
           channel_id?: string
           created_at?: string
@@ -3598,7 +3902,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           mentions?: Json | null
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
+          shared_post_ids?: string[] | null
           workspace_id?: string
         }
         Relationships: []
@@ -7206,15 +7512,19 @@ export type Database = {
       chat_message_send: {
         Args: {
           p_attachment_asset_ids?: string[]
+          p_attachment_meta?: Json
           p_body?: string
           p_channel_id: string
           p_id: string
           p_mentions?: Json
+          p_reply_to_message_id?: string
+          p_shared_post_ids?: string[]
           p_trace_id: string
         }
         Returns: {
           agora_event_id: string | null
           attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
           body: string | null
           channel_id: string
           created_at: string
@@ -7222,7 +7532,9 @@ export type Database = {
           edited_at: string | null
           id: string
           mentions: Json | null
+          reply_to_message_id: string | null
           sender_user_id: string | null
+          shared_post_ids: string[] | null
           workspace_id: string
         }
         SetofOptions: {

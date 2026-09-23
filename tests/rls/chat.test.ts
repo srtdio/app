@@ -18,6 +18,13 @@
 //   6. chat_unread_counts returns one row per channel the caller can read, with
 //      the unread count relative to the caller's read cursor (if any).
 //
+// Fix-wave foundation (20260923103500_chat_shared_posts_and_deactivation.sql):
+//
+//   7. chat_message_send accepts a shared-posts-only message and rejects a
+//      reply whose target lives in another channel.
+//   8. Flipping workspace_members.active enqueues member_remove / member_add
+//      for every group channel the user is in.
+//
 // Seeding goes through the service role (the privileged path), following the
 // rationale in packages/test-utils/rls.ts.
 
@@ -77,7 +84,7 @@ function cursorArgs(channelId: string, messageId: string): CursorArgs {
 function sendArgs(
   channelId: string,
   body: string | null,
-  extra: { id?: string; attachments?: string[] } = {},
+  extra: { id?: string; attachments?: string[]; sharedPosts?: string[]; replyTo?: string } = {},
 ): SendArgs {
   const args: SendArgs = {
     p_id: extra.id ?? crypto.randomUUID(),
@@ -86,6 +93,8 @@ function sendArgs(
   };
   if (body !== null) args.p_body = body;
   if (extra.attachments) args.p_attachment_asset_ids = extra.attachments;
+  if (extra.sharedPosts) args.p_shared_post_ids = extra.sharedPosts;
+  if (extra.replyTo) args.p_reply_to_message_id = extra.replyTo;
   return args;
 }
 
@@ -284,16 +293,16 @@ describe.runIf(RLS_SUITE)('chat record: channel-membership RLS and procs', () =>
     it('raises when the body is empty or blank and there are no attachments', async () => {
       const empty = sendArgs(ctx.channelId, '');
       const res = await clientFor(userB.id).rpc('chat_message_send', empty);
-      expect(res.error?.message).toBe('message has no body and no attachments');
+      expect(res.error?.message).toBe('message has no body, attachments or shared posts');
       expect(await countWhere(adminGeneric, 'chat_messages', [['id', empty.p_id]])).toBe(0);
 
       const blank = sendArgs(ctx.channelId, '   ');
       const resBlank = await clientFor(userB.id).rpc('chat_message_send', blank);
-      expect(resBlank.error?.message).toBe('message has no body and no attachments');
+      expect(resBlank.error?.message).toBe('message has no body, attachments or shared posts');
 
       const missing = sendArgs(ctx.channelId, null);
       const resMissing = await clientFor(userB.id).rpc('chat_message_send', missing);
-      expect(resMissing.error?.message).toBe('message has no body and no attachments');
+      expect(resMissing.error?.message).toBe('message has no body, attachments or shared posts');
     });
 
     it('accepts an attachments-only message', async () => {
@@ -308,6 +317,23 @@ describe.runIf(RLS_SUITE)('chat record: channel-membership RLS and procs', () =>
       const args = sendArgs(ctx.channelId, 'x'.repeat(5001));
       const res = await clientFor(userB.id).rpc('chat_message_send', args);
       expect(res.error?.message).toBe('body exceeds 5000 characters');
+    });
+
+    it('accepts a shared-posts-only message', async () => {
+      const args = sendArgs(ctx.channelId, null, { sharedPosts: [ctx.postId] });
+      const res = await clientFor(userB.id).rpc('chat_message_send', args);
+      expect(res.error).toBeNull();
+      expect(res.data?.body).toBeNull();
+      expect(res.data?.attachment_asset_ids).toBeNull();
+      expect(res.data?.shared_post_ids).toEqual([ctx.postId]);
+    });
+
+    it('raises when the reply target is a message from another channel', async () => {
+      // userB is in both the DM and the group, so only the channel check can fail.
+      const args = sendArgs(ctx.channelId, 'reply', { replyTo: dmMessageId });
+      const res = await clientFor(userB.id).rpc('chat_message_send', args);
+      expect(res.error?.message).toBe('reply target not in this chat');
+      expect(await countWhere(adminGeneric, 'chat_messages', [['id', args.p_id]])).toBe(0);
     });
   });
 
@@ -747,6 +773,78 @@ describe.runIf(RLS_SUITE)('chat record: channel-membership RLS and procs', () =>
 
       // The cursor is per user: the owner's count is unchanged.
       expect(rowFor(await unreadFor(owner.id, wsA.id), dm2)?.unread).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. workspace_members.active flips reach the outbox
+  // -------------------------------------------------------------------------
+
+  describe('chat_sync_enqueue_membership_state', () => {
+    it('deactivating enqueues one member_remove per group channel; reactivating enqueues member_add', async () => {
+      // A workspace of its own, so the flips cannot disturb the shared fixtures.
+      const wsFlip = await seedWorkspace(admin, outsider, `Chat F ${outsider.email}`);
+      await seedMember(adminGeneric, wsFlip, userC, 'agency');
+      const channelIds: string[] = [];
+      for (let i = 0; i < 2; i += 1) {
+        const group = await insertRow(adminGeneric, 'groups', {
+          workspace_id: wsFlip.id,
+          name: `Grp ${randomSuffix()}`,
+          created_by: outsider.id,
+        });
+        const channelId = `group__${wsFlip.id}__${String(group.id)}`;
+        await insertRow(adminGeneric, 'chat_channels', {
+          channel_id: channelId,
+          workspace_id: wsFlip.id,
+          channel_type: 'group',
+          entity_id: group.id,
+        });
+        await insertRow(adminGeneric, 'group_members', {
+          group_id: group.id,
+          user_id: userC.id,
+          workspace_id: wsFlip.id,
+        });
+        channelIds.push(channelId);
+      }
+      channelIds.sort();
+
+      const removeMatch: MatchSpec = [
+        ['workspace_id', wsFlip.id],
+        ['user_id', userC.id],
+        ['event_type', 'member_remove'],
+      ];
+      const addMatch: MatchSpec = [
+        ['workspace_id', wsFlip.id],
+        ['user_id', userC.id],
+        ['event_type', 'member_add'],
+      ];
+      // The group_members inserts already enqueued one member_add per channel.
+      expect(await syncEvents(adminGeneric, removeMatch)).toHaveLength(0);
+      expect(await syncEvents(adminGeneric, addMatch)).toHaveLength(2);
+
+      const setActive = (active: boolean) =>
+        adminGeneric
+          .from('workspace_members')
+          .update({ active })
+          .eq('workspace_id', wsFlip.id)
+          .eq('user_id', userC.id);
+
+      expect((await setActive(false)).error).toBeNull();
+      const removed = await syncEvents(adminGeneric, removeMatch);
+      expect(removed.map((e) => e.channel_id).sort()).toEqual(channelIds);
+      expect(await syncEvents(adminGeneric, addMatch)).toHaveLength(2);
+
+      // Re-writing the same value is not a flip (IS NOT DISTINCT FROM guard).
+      expect((await setActive(false)).error).toBeNull();
+      expect(await syncEvents(adminGeneric, removeMatch)).toHaveLength(2);
+
+      expect((await setActive(true)).error).toBeNull();
+      const added = await syncEvents(adminGeneric, addMatch);
+      expect(added).toHaveLength(4);
+      expect(await syncEvents(adminGeneric, removeMatch)).toHaveLength(2);
+
+      const del = await adminGeneric.from('workspaces').delete().eq('id', wsFlip.id);
+      expect(del.error).toBeNull();
     });
   });
 });
