@@ -7203,18 +7203,6 @@ export type Database = {
         Args: { p_channel_id: string; p_user_id: string }
         Returns: boolean
       }
-      chat_message_save: {
-        Args: {
-          p_agora_message_id: string
-          p_attachment_asset_ids?: string[]
-          p_body?: string
-          p_channel_id: string
-          p_created_at: string
-          p_mentions?: Json
-          p_trace_id?: string
-        }
-        Returns: undefined
-      }
       chat_message_send: {
         Args: {
           p_attachment_asset_ids?: string[]
@@ -7273,24 +7261,6 @@ export type Database = {
           last_message_at: string
           unread: number
         }[]
-      }
-      chat_webhook_ingest: {
-        Args: {
-          p_agora_event_id: string
-          p_attachment_asset_ids: string[]
-          p_body: string
-          p_channel_id: string
-          p_created_at: string
-          p_event_type: string
-          p_mentions: Json
-          p_message_id: string
-          p_raw_payload: Json
-          p_sender_user_id: string
-          p_signature_verified: boolean
-          p_source_event_id: string
-          p_trace_id: string
-        }
-        Returns: Json
       }
       checkpoint_accept: {
         Args: { p_accepted: boolean; p_comment_id: string; p_trace_id: string }
