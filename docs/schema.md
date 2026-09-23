@@ -292,6 +292,8 @@ Six SECURITY DEFINER procs (search_path='', EXECUTE to authenticated only): grou
 
 Chat record: public.chat_messages is the single source of truth for chat history and the only read path. Every send calls chat_message_send (client-generated uuid_v7 id, server-stamped created_at, idempotent) BEFORE publishing to Agora; the Agora message carries the Sorted id in ext for dedupe. Agora is live delivery only: never read for history, never the record. Agora Free plan, no server callbacks. Access: chat_channel_member(channel_id, uid) gates every chat table; DMs are visible only to the two participants, group channels only to group_members. Reactions in chat_reactions, read position in chat_read_cursors. Membership and rename changes to Agora flow through the chat_sync_events outbox, drained by the chat-agora-sync worker. chat_message_save and chat_webhook_ingest are retired (drop pending).
 
+chat_messages carries shared_post_ids, reply_to_message_id and attachment_meta (mime, name, size, duration_ms per asset id); workspace_members.active flips enqueue member_add/member_remove for every group channel the user is in.
+
 Applied to live 2026-09-22 and recorded in 20260922200000_chat_postgres_record.sql (idempotent). chat_messages is partitioned monthly.
 
 ### chat_channels

@@ -62,7 +62,7 @@ export interface ChatTokenEnv {
  * unset. The sole entry is treated as the primary origin.
  * Mirrors the asset workers so the CORS surface cannot drift.
  */
-const DEFAULT_ALLOWED_ORIGINS = ['https://srtd.io'] as const;
+const DEFAULT_ALLOWED_ORIGINS = ['https://srtd.io', 'https://v2.srtd.io'] as const;
 
 /** Preflight cache lifetime: 24 hours. */
 const CORS_MAX_AGE_SECONDS = 86_400;

@@ -8,6 +8,10 @@ on:
       - 'src/server/workers/chat-agora-sync.ts'
       - 'src/server/workers/chat-agora-rest.ts'
       - 'src/server/workers/agora-identity.ts'
+      - 'src/server/logger.ts'
+      - 'src/server/traced-fetch.ts'
+      - 'packages/schemas/**'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/chat-agora-sync-deploy.yml'
   workflow_dispatch:
 
