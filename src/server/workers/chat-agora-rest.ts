@@ -1,15 +1,15 @@
 // Agora Chat REST client for group lifecycle, scoped to exactly what the
-// chat-agora-sync Worker (A2b) needs: create a group, add/remove a member, and
-// rename a group. Every call is authenticated with an app token minted from the
+// chat-agora-sync Worker (A2b) needs: register users, create a group, add/remove
+// a member, and rename a group. Every call is authenticated with an app token minted from the
 // App ID + App Certificate via ChatTokenBuilder.buildAppToken - the same scheme
 // the chat-token Worker uses, never a hand-rolled signature - and goes through
 // tracedFetch so it carries X-Trace-Id.
 //
-// Idempotency lives here: Agora's "already a member" and "user/group not found"
-// responses are treated as success, so a Realtime redelivery (add an existing
-// member, remove an absent one) is a safe no-op rather than a crash. Genuine
-// faults still throw and are swallowed per-event by the consumer, with the
-// reconciliation cron as the backstop.
+// Idempotency lives here, matched per operation: "already a member" on add,
+// "not a member" / "not found" on remove, and "already exists" on register are
+// treated as success, so a retry is a safe no-op rather than a crash. Genuine
+// faults throw an AgoraRestError carrying status, body and operation as
+// separate fields so the consumer can log them without parsing a message.
 
 import { ChatTokenBuilder } from 'agora-token';
 import { tracedFetch } from '@/server/traced-fetch';
@@ -19,6 +19,37 @@ const APP_TOKEN_TTL_SECONDS = 3_600;
 
 /** Default ceiling for a freshly created Agora group. */
 const DEFAULT_MAX_USERS = 2_000;
+
+/** Agora's per-request ceiling for bulk user registration. */
+export const REGISTER_BATCH_SIZE = 60;
+
+/** Agora error bodies are truncated to this many chars before they are logged. */
+export const MAX_AGORA_BODY_CHARS = 500;
+
+/** The REST operations the client performs; logged as the `operation` field. */
+export type AgoraOperation =
+  | 'register_users'
+  | 'create_group'
+  | 'add_member'
+  | 'remove_member'
+  | 'rename_group';
+
+/** A non-2xx Agora REST response, with the log fields kept apart. */
+export class AgoraRestError extends Error {
+  readonly operation: AgoraOperation;
+  readonly status: number;
+  /** Response body, truncated to MAX_AGORA_BODY_CHARS. */
+  readonly body: string;
+
+  constructor(operation: AgoraOperation, status: number, body: string) {
+    const truncated = body.slice(0, MAX_AGORA_BODY_CHARS);
+    super(`Agora ${operation} failed: ${status} ${truncated}`);
+    this.name = 'AgoraRestError';
+    this.operation = operation;
+    this.status = status;
+    this.body = truncated;
+  }
+}
 
 export interface AgoraRestConfig {
   appId: string;
@@ -36,6 +67,12 @@ export type TracedFetchFn = (
 
 /** The group operations the Worker performs against Agora; injected for tests. */
 export interface AgoraGroupApi {
+  /**
+   * Register Agora users so group operations never reference a missing one.
+   * Bulk (REGISTER_BATCH_SIZE per request); an already-registered user counts
+   * as success.
+   */
+  ensureUsers(usernames: string[], traceId: string): Promise<void>;
   /** Create a group and return Agora's generated group id. */
   createGroup(
     args: { name: string; ownerUsername: string; memberUsernames: string[] },
@@ -61,19 +98,44 @@ export function serializeError(error: unknown): string {
   return String(error);
 }
 
+const ADD_MEMBER_SUCCESS_PHRASES = ['already', 'already in', 'exist'] as const;
+
+const REMOVE_MEMBER_SUCCESS_PHRASES = [
+  'not a member',
+  'not in group',
+  'not in the group',
+  'user_not_found',
+  'not found',
+  'does not exist',
+  'not exist',
+] as const;
+
+function matchesAny(status: number, body: string, phrases: readonly string[]): boolean {
+  if (status === 404) return true;
+  const lowered = body.toLowerCase();
+  return phrases.some((phrase) => lowered.includes(phrase));
+}
+
+/** True when a failed add-member response means the user is already in the group. */
+export function isAddMemberIdempotent(status: number, body: string): boolean {
+  return matchesAny(status, body, ADD_MEMBER_SUCCESS_PHRASES);
+}
+
+/** True when a failed remove-member response means the user is already out. */
+export function isRemoveMemberIdempotent(status: number, body: string): boolean {
+  return matchesAny(status, body, REMOVE_MEMBER_SUCCESS_PHRASES);
+}
+
 /**
- * True when a non-2xx body reports a benign idempotent condition: the user is
- * already a member, or the user / group does not exist. These mean the desired
- * state already holds, so the caller treats them as success.
+ * True when a failed register response means the username already exists
+ * (Agora: 400 duplicate_unique_property_exists), the chat-token Worker's
+ * idempotent success path.
  */
-function isIdempotentMiss(status: number, body: string): boolean {
+export function isRegisterDuplicate(status: number, body: string): boolean {
   const lowered = body.toLowerCase();
   return (
-    lowered.includes('already') ||
-    lowered.includes('user_not_found') ||
-    lowered.includes('not found') ||
-    lowered.includes('does not exist') ||
-    status === 404
+    status === 400 &&
+    (lowered.includes('already exists') || lowered.includes('duplicate_unique_property_exists'))
   );
 }
 
@@ -93,7 +155,45 @@ export function createAgoraGroupApi(
     return { authorization: `Bearer ${appToken}`, 'content-type': 'application/json' };
   }
 
+  /** POST /users with the chat-token Worker's body shape (one object or an array). */
+  function registerBody(usernames: string[]): string {
+    const users = usernames.map((username) => ({ username, password: crypto.randomUUID() }));
+    return JSON.stringify(users.length === 1 ? users[0] : users);
+  }
+
+  async function register(usernames: string[], traceId: string): Promise<Response> {
+    return fetchImpl(
+      `${base}/users`,
+      { method: 'POST', headers: authHeaders(), body: registerBody(usernames) },
+      traceId,
+    );
+  }
+
   return {
+    async ensureUsers(usernames, traceId) {
+      const unique = [...new Set(usernames)];
+      for (let i = 0; i < unique.length; i += REGISTER_BATCH_SIZE) {
+        const chunk = unique.slice(i, i + REGISTER_BATCH_SIZE);
+        const response = await register(chunk, traceId);
+        if (response.ok) continue;
+        const text = await response.text();
+        if (!isRegisterDuplicate(response.status, text)) {
+          throw new AgoraRestError('register_users', response.status, text);
+        }
+        if (chunk.length === 1) continue;
+        // Agora rejects the whole bulk request when any username exists, so fall
+        // back to one call per user for this chunk; duplicates are success.
+        for (const username of chunk) {
+          const single = await register([username], traceId);
+          if (single.ok) continue;
+          const singleText = await single.text();
+          if (!isRegisterDuplicate(single.status, singleText)) {
+            throw new AgoraRestError('register_users', single.status, singleText);
+          }
+        }
+      }
+    },
+
     async createGroup(args, traceId) {
       const response = await fetchImpl(
         `${base}/chatgroups`,
@@ -113,7 +213,7 @@ export function createAgoraGroupApi(
         traceId,
       );
       if (!response.ok) {
-        throw new Error(`Agora group create failed: ${response.status} ${await response.text()}`);
+        throw new AgoraRestError('create_group', response.status, await response.text());
       }
       const parsed = (await response.json()) as { data?: { groupid?: unknown } };
       const groupId = parsed.data?.groupid;
@@ -133,10 +233,10 @@ export function createAgoraGroupApi(
         return;
       }
       const text = await response.text();
-      if (isIdempotentMiss(response.status, text)) {
+      if (isAddMemberIdempotent(response.status, text)) {
         return;
       }
-      throw new Error(`Agora add-member failed: ${response.status} ${text}`);
+      throw new AgoraRestError('add_member', response.status, text);
     },
 
     async removeMember(groupId, username, traceId) {
@@ -149,10 +249,10 @@ export function createAgoraGroupApi(
         return;
       }
       const text = await response.text();
-      if (isIdempotentMiss(response.status, text)) {
+      if (isRemoveMemberIdempotent(response.status, text)) {
         return;
       }
-      throw new Error(`Agora remove-member failed: ${response.status} ${text}`);
+      throw new AgoraRestError('remove_member', response.status, text);
     },
 
     async updateGroupName(groupId, name, traceId) {
@@ -162,7 +262,7 @@ export function createAgoraGroupApi(
         traceId,
       );
       if (!response.ok) {
-        throw new Error(`Agora group rename failed: ${response.status} ${await response.text()}`);
+        throw new AgoraRestError('rename_group', response.status, await response.text());
       }
     },
   };
