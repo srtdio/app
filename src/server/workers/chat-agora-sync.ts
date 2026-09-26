@@ -14,20 +14,27 @@
 //     Agora group, member_remove -> remove them, group_rename -> rename the
 //     group. (drainSyncEvents)
 //
-// Idempotency: adding an existing member, removing an absent one, and
-// re-handling an already-synced group channel are all safe no-ops (see
-// chat-agora-rest), so every outbox row can be retried without side effects. An
-// outbox event whose channel has no agora_group_id yet is left untouched for the
-// next run. A failed Agora call bumps the row's attempts + last_error; after
-// SYNC_EVENT_MAX_ATTEMPTS the row stays unprocessed and /health reports it as
-// stuck.
+// Idempotency: registering an existing user, adding an existing member,
+// removing an absent one, and re-handling an already-synced group channel are
+// all safe no-ops (see chat-agora-rest), so every outbox row can be retried
+// without side effects. Every Agora user a group operation references is
+// registered first, so a member who never minted a chat token cannot fail the
+// create or add. An outbox event whose channel has no agora_group_id yet is
+// left untouched for the next run. A failed Agora call bumps the row's
+// attempts + last_error; after SYNC_EVENT_MAX_ATTEMPTS the row stays
+// unprocessed and /health reports it as stuck.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@srtdio/schemas';
 import { v7 as uuidv7 } from 'uuid';
 import { logger } from '@/server/logger';
 import { toAgoraUsername } from './agora-identity';
-import { createAgoraGroupApi, serializeError, type AgoraGroupApi } from './chat-agora-rest';
+import {
+  AgoraRestError,
+  createAgoraGroupApi,
+  serializeError,
+  type AgoraGroupApi,
+} from './chat-agora-rest';
 
 interface ChatAgoraSyncEnv {
   SUPABASE_URL: string;
@@ -43,8 +50,20 @@ interface ChatAgoraSyncEnv {
 /** An outbox row is retried until this many attempts; then it is stuck. */
 export const SYNC_EVENT_MAX_ATTEMPTS = 10;
 
-/** Outbox rows drained per cron run; a larger backlog drains across runs. */
+/**
+ * Outbox rows attempted (processed or failed) per cron run; a larger backlog
+ * drains across runs. Deferred rows do not count toward it.
+ */
 export const SYNC_EVENT_BATCH_SIZE = 100;
+
+/**
+ * Pending outbox rows read per cron run. Wider than the batch so rows for an
+ * unsynced channel at the head of the queue cannot starve other channels.
+ */
+export const SYNC_EVENT_READ_LIMIT = 500;
+
+/** Unsynced channel ids listed by /health. */
+const HEALTH_UNSYNCED_LIMIT = 200;
 
 /** last_error is a short operator hint, not a full dump. */
 const MAX_LAST_ERROR_CHARS = 500;
@@ -149,7 +168,7 @@ export interface SyncReader {
   >;
   /**
    * Pending outbox rows: processed_at null, attempts below the cap, oldest
-   * first, capped at SYNC_EVENT_BATCH_SIZE.
+   * first, capped at SYNC_EVENT_READ_LIMIT.
    */
   listPendingSyncEvents(): Promise<SyncEventRow[]>;
   /** channel_id -> agora_group_id for the given channels, in one query. */
@@ -158,6 +177,12 @@ export interface SyncReader {
   markSyncEventFailed(eventId: string, attempts: number, lastError: string): Promise<void>;
   /** Unprocessed rows that have exhausted their attempts. */
   countStuckSyncEvents(): Promise<number>;
+  /** Unprocessed rows still below the attempt cap. */
+  countPendingSyncEvents(): Promise<number>;
+  /** Pending rows (as countPendingSyncEvents) for the given channels. */
+  countPendingSyncEventsForChannels(channelIds: string[]): Promise<number>;
+  /** Group channels with no agora_group_id yet, oldest first. */
+  listUnsyncedGroupChannelIds(): Promise<string[]>;
 }
 
 export interface SyncDeps {
@@ -229,7 +254,7 @@ function createSyncReader(client: SupabaseClient<Database>): SyncReader {
         .is('processed_at', null)
         .lt('attempts', SYNC_EVENT_MAX_ATTEMPTS)
         .order('created_at', { ascending: true })
-        .limit(SYNC_EVENT_BATCH_SIZE);
+        .limit(SYNC_EVENT_READ_LIMIT);
       if (error) throw new Error(error.message);
       return (data ?? []).map((row) => ({
         id: row.id,
@@ -275,6 +300,37 @@ function createSyncReader(client: SupabaseClient<Database>): SyncReader {
         .gte('attempts', SYNC_EVENT_MAX_ATTEMPTS);
       if (error) throw new Error(error.message);
       return count ?? 0;
+    },
+    async countPendingSyncEvents() {
+      const { count, error } = await client
+        .from('chat_sync_events')
+        .select('id', { count: 'exact', head: true })
+        .is('processed_at', null)
+        .lt('attempts', SYNC_EVENT_MAX_ATTEMPTS);
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+    async countPendingSyncEventsForChannels(channelIds) {
+      if (channelIds.length === 0) return 0;
+      const { count, error } = await client
+        .from('chat_sync_events')
+        .select('id', { count: 'exact', head: true })
+        .is('processed_at', null)
+        .lt('attempts', SYNC_EVENT_MAX_ATTEMPTS)
+        .in('channel_id', channelIds);
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+    async listUnsyncedGroupChannelIds() {
+      const { data, error } = await client
+        .from('chat_channels')
+        .select('channel_id')
+        .eq('channel_type', 'group')
+        .is('agora_group_id', null)
+        .order('created_at', { ascending: true })
+        .limit(HEALTH_UNSYNCED_LIMIT);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((row) => row.channel_id);
     },
   };
 }
@@ -341,12 +397,13 @@ async function handleChannelInsert(
     return;
   }
   const memberIds = await deps.reader.getGroupMemberIds(event.groupId);
+  const ownerUsername = toAgoraUsername(group.createdBy);
+  const memberUsernames = memberIds.map(toAgoraUsername);
+  // Agora rejects a create that names an unregistered user; the owner or a
+  // member who never minted a chat token has no Agora user yet.
+  await deps.agora.ensureUsers([ownerUsername, ...memberUsernames], traceId);
   const agoraGroupId = await deps.agora.createGroup(
-    {
-      name: group.name,
-      ownerUsername: toAgoraUsername(group.createdBy),
-      memberUsernames: memberIds.map(toAgoraUsername),
-    },
+    { name: group.name, ownerUsername, memberUsernames },
     traceId,
   );
   await deps.reader.markSynced(event.channelId, agoraGroupId, traceId);
@@ -360,16 +417,28 @@ async function handleChannelInsert(
 /**
  * Apply one event against Agora / the DB under the given trace id. Throws on
  * failure; callers decide whether to swallow (processEvent) or record the
- * attempt (drainSyncEvents).
+ * attempt (drainSyncEvents). `registered` holds Agora usernames already
+ * ensured this run; a member_add for anyone else registers them first.
  */
-async function applyEvent(event: SyncEvent, deps: SyncDeps, traceId: string): Promise<void> {
+async function applyEvent(
+  event: SyncEvent,
+  deps: SyncDeps,
+  traceId: string,
+  registered: Set<string> = new Set(),
+): Promise<void> {
   switch (event.kind) {
     case 'channel_insert':
       await handleChannelInsert(event, deps, traceId);
       return;
-    case 'member_add':
-      await deps.agora.addMember(event.agoraGroupId, toAgoraUsername(event.userId), traceId);
+    case 'member_add': {
+      const username = toAgoraUsername(event.userId);
+      if (!registered.has(username)) {
+        await deps.agora.ensureUsers([username], traceId);
+        registered.add(username);
+      }
+      await deps.agora.addMember(event.agoraGroupId, username, traceId);
       return;
+    }
     case 'member_remove':
       await deps.agora.removeMember(event.agoraGroupId, toAgoraUsername(event.userId), traceId);
       return;
@@ -377,6 +446,21 @@ async function applyEvent(event: SyncEvent, deps: SyncDeps, traceId: string): Pr
       await deps.agora.updateGroupName(event.agoraGroupId, event.name, traceId);
       return;
   }
+}
+
+/**
+ * Log fields for a failure: an Agora REST fault carries its operation, status
+ * and truncated body as separate fields; anything else gets the fallback
+ * operation and null status/body. Never includes request headers or tokens.
+ */
+function failureFields(
+  error: unknown,
+  fallbackOperation: string,
+): { operation: string; status: number | null; body: string | null } {
+  if (error instanceof AgoraRestError) {
+    return { operation: error.operation, status: error.status, body: error.body };
+  }
+  return { operation: fallbackOperation, status: null, body: null };
 }
 
 /**
@@ -392,7 +476,9 @@ export async function processEvent(event: SyncEvent, deps: SyncDeps): Promise<vo
     deps.log.error('chat_agora_sync event failed', {
       trace_id: traceId,
       kind: event.kind,
-      error: serializeError(error),
+      channel_id: event.kind === 'channel_insert' ? event.channelId : null,
+      ...failureFields(error, event.kind),
+      error: serializeError(error).slice(0, MAX_LAST_ERROR_CHARS),
     });
   }
 }
@@ -422,16 +508,18 @@ export async function reconcile(deps: SyncDeps): Promise<void> {
 }
 
 /**
- * Cron outbox drain: one uuid_v7 trace id per run. Loads a batch of pending
- * chat_sync_events rows (oldest first) and the agora_group_id of every distinct
- * channel in the batch with a single IN query, then applies the rows in
- * created_at order. Rows for a channel that is not synced yet (no
- * agora_group_id) are left untouched for a later run. Once a row for a channel
- * fails, the channel's later rows in this batch are also left untouched so a
- * member_remove never overtakes its failed member_add; they retry next minute
- * in order. Success stamps processed_at; failure bumps attempts + last_error
- * and logs with the event id. Rows at the attempt cap are excluded by the read
- * and reported by /health.
+ * Cron outbox drain: one uuid_v7 trace id per run. Reads up to
+ * SYNC_EVENT_READ_LIMIT pending chat_sync_events rows (oldest first) and the
+ * agora_group_id of every distinct channel in them with a single IN query, then
+ * applies the rows in created_at order. Rows for a channel that is not synced
+ * yet (no agora_group_id) are deferred: left untouched, not counted toward
+ * SYNC_EVENT_BATCH_SIZE, and never blocking other channels. Once a row for a
+ * channel fails, the channel's later rows are also deferred so a member_remove
+ * never overtakes its failed member_add. At most SYNC_EVENT_BATCH_SIZE rows are
+ * attempted per run. Every member_add user is registered with Agora in one bulk
+ * call first. Success stamps processed_at; failure bumps attempts + last_error,
+ * and a failure to record that never aborts the batch. Rows at the attempt cap
+ * are excluded by the read and reported by /health.
  */
 export async function drainSyncEvents(deps: SyncDeps): Promise<void> {
   const traceId = deps.newTraceId();
@@ -441,6 +529,35 @@ export async function drainSyncEvents(deps: SyncDeps): Promise<void> {
   const channelIds = [...new Set(rows.map((row) => row.channelId))];
   const agoraGroupIds = await deps.reader.getChannelAgoraGroupIds(channelIds);
 
+  // Register every member_add user on a synced channel in one bulk call. On
+  // failure each row registers its own user and records its own failure.
+  const registered = new Set<string>();
+  const addUsernames = [
+    ...new Set(
+      rows.flatMap((row) =>
+        row.eventType === 'member_add' &&
+        row.userId !== null &&
+        typeof agoraGroupIds.get(row.channelId) === 'string'
+          ? [toAgoraUsername(row.userId)]
+          : [],
+      ),
+    ),
+  ];
+  if (addUsernames.length > 0) {
+    try {
+      await deps.agora.ensureUsers(addUsernames, traceId);
+      for (const username of addUsernames) registered.add(username);
+    } catch (error) {
+      deps.log.error('chat_agora_sync outbox bulk user register failed', {
+        trace_id: traceId,
+        channel_id: null,
+        ...failureFields(error, 'register_users'),
+        users: addUsernames.length,
+        error: serializeError(error).slice(0, MAX_LAST_ERROR_CHARS),
+      });
+    }
+  }
+
   // Channels whose remaining rows this run must leave untouched.
   const halted = new Set<string>();
   let processed = 0;
@@ -448,6 +565,7 @@ export async function drainSyncEvents(deps: SyncDeps): Promise<void> {
   let deferred = 0;
 
   for (const row of rows) {
+    if (processed + failed >= SYNC_EVENT_BATCH_SIZE) break;
     if (halted.has(row.channelId)) {
       deferred += 1;
       continue;
@@ -468,7 +586,7 @@ export async function drainSyncEvents(deps: SyncDeps): Promise<void> {
       if (agoraGroupId === undefined) {
         throw new Error('channel not found');
       }
-      await applyEvent(toSyncEvent(row, agoraGroupId), deps, traceId);
+      await applyEvent(toSyncEvent(row, agoraGroupId), deps, traceId, registered);
       await deps.reader.markSyncEventProcessed(row.id);
       processed += 1;
       deps.log.info('chat_agora_sync outbox event processed', {
@@ -487,17 +605,27 @@ export async function drainSyncEvents(deps: SyncDeps): Promise<void> {
         event_id: row.id,
         channel_id: row.channelId,
         event_type: row.eventType,
+        ...failureFields(error, row.eventType),
         attempts,
         stuck: attempts >= SYNC_EVENT_MAX_ATTEMPTS,
         error: lastError,
       });
-      await deps.reader.markSyncEventFailed(row.id, attempts, lastError);
+      try {
+        await deps.reader.markSyncEventFailed(row.id, attempts, lastError);
+      } catch (markError) {
+        deps.log.error('chat_agora_sync outbox mark failed errored', {
+          trace_id: traceId,
+          event_id: row.id,
+          channel_id: row.channelId,
+          error: serializeError(markError).slice(0, MAX_LAST_ERROR_CHARS),
+        });
+      }
     }
   }
 
   deps.log.info('chat_agora_sync outbox drained', {
     trace_id: traceId,
-    batch: rows.length,
+    read: rows.length,
     processed,
     failed,
     deferred,
@@ -532,16 +660,32 @@ function jsonResponse(body: Record<string, unknown>, status: number): Response {
 }
 
 /**
- * /health: liveness plus the count of outbox rows that exhausted their
- * attempts (unprocessed, attempts >= SYNC_EVENT_MAX_ATTEMPTS). A non-zero
- * count means an operator has to look at last_error; 503 when the count
- * itself cannot be read.
+ * /health: liveness plus the outbox state: pending rows (below the attempt
+ * cap), deferred rows (pending on a group channel with no agora_group_id),
+ * stuck rows (attempts >= SYNC_EVENT_MAX_ATTEMPTS, an operator has to look at
+ * last_error), and the unsynced group channel ids (ids only). 503 when any of
+ * it cannot be read.
  */
 export async function healthResponse(deps: SyncDeps): Promise<Response> {
   const traceId = deps.newTraceId();
   try {
-    const stuck = await deps.reader.countStuckSyncEvents();
-    return jsonResponse({ ok: true, service: 'chat-agora-sync', stuck_sync_events: stuck }, 200);
+    const [pending, stuck, unsyncedChannelIds] = await Promise.all([
+      deps.reader.countPendingSyncEvents(),
+      deps.reader.countStuckSyncEvents(),
+      deps.reader.listUnsyncedGroupChannelIds(),
+    ]);
+    const deferred = await deps.reader.countPendingSyncEventsForChannels(unsyncedChannelIds);
+    return jsonResponse(
+      {
+        ok: true,
+        service: 'chat-agora-sync',
+        pending_sync_events: pending,
+        deferred_sync_events: deferred,
+        stuck_sync_events: stuck,
+        unsynced_channel_ids: unsyncedChannelIds,
+      },
+      200,
+    );
   } catch (error) {
     deps.log.error('chat_agora_sync health check failed', {
       trace_id: traceId,
