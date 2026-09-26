@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
-import { runSend, type SendFlowDeps, type SendInput } from '@/lib/chat/send-flow';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  LIVE_PUBLISH_TIMEOUT_MS,
+  runSend,
+  type SendFlowDeps,
+  type SendInput,
+} from '@/lib/chat/send-flow';
 import type { ChatMessageRow } from '@/lib/chat/thread';
 
 const ME = '11111111-1111-4111-8111-111111111111';
@@ -69,6 +74,9 @@ describe('runSend', () => {
       traceId: 'trace-1',
       body: 'hello',
       attachmentAssetIds: [],
+      sharedPostIds: [],
+      replyToMessageId: null,
+      attachmentMeta: {},
     });
     expect(d.publishLive).toHaveBeenCalledWith({
       id: ID,
@@ -151,5 +159,83 @@ describe('runSend', () => {
     expect(recordMessage.mock.calls[1]?.[0].id).toBe(ID);
     // Each attempt is its own user action with its own trace id.
     expect(recordMessage.mock.calls[1]?.[0].traceId).toBe('trace-2');
+  });
+
+  it('persists shared posts, the reply target and attachment meta (shared-posts-only, no body)', async () => {
+    const d = deps();
+    const longTranscript = 'x'.repeat(2001);
+    await runSend(
+      d,
+      input({
+        text: '',
+        local: {
+          attachments: [
+            { assetId: 'v1', name: 'p.png', mime: 'image/png', size: 120 },
+            {
+              assetId: 'v2',
+              name: 'voice.webm',
+              mime: 'audio/webm',
+              size: 900,
+              durationMs: 4000,
+              transcript: 'hello there',
+            },
+            { assetId: 'v3', name: 'long.webm', mime: 'audio/webm', transcript: longTranscript },
+          ],
+          sharedPostIds: ['post-1'],
+          reply: { id: 'quoted-1', authorUserId: ME, preview: 'hi' },
+        },
+      }),
+    );
+    expect(d.recordMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: '',
+        sharedPostIds: ['post-1'],
+        replyToMessageId: 'quoted-1',
+        attachmentMeta: {
+          v1: { mime: 'image/png', name: 'p.png', size: 120 },
+          v2: {
+            mime: 'audio/webm',
+            name: 'voice.webm',
+            size: 900,
+            duration_ms: 4000,
+            transcript: 'hello there',
+          },
+          // Over 2000 chars: the transcript is left out of the record.
+          v3: { mime: 'audio/webm', name: 'long.webm', size: 0 },
+        },
+      }),
+    );
+  });
+});
+
+describe('runSend live publish timeout', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('gives up on a hung Agora publish after 5s: warns, bubble stays sent, send resolves', async () => {
+    vi.useFakeTimers();
+    const onRecorded = vi.fn();
+    const d = deps({ publishLive: vi.fn(() => new Promise<unknown>(() => {})), onRecorded });
+    const pending = runSend(d, input());
+    await vi.advanceTimersByTimeAsync(0);
+    // The row exists: the bubble goes sent before Agora answers.
+    expect(onRecorded).toHaveBeenCalledWith(expect.objectContaining({ id: ID, state: 'sent' }));
+    await vi.advanceTimersByTimeAsync(LIVE_PUBLISH_TIMEOUT_MS);
+    const outcome = await pending;
+    expect(outcome.ok && outcome.livePublished).toBe(false);
+    expect(outcome.ok && outcome.message.state).toBe('sent');
+    expect(d.onLiveWarning).toHaveBeenCalledWith(
+      expect.objectContaining({ message_id: ID, error: 'live publish timed out' }),
+    );
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('clears the timer when the publish settles first', async () => {
+    vi.useFakeTimers();
+    const d = deps();
+    const outcome = await runSend(d, input());
+    expect(outcome.ok && outcome.livePublished).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

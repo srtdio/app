@@ -56,6 +56,54 @@ describe('sendMessageRecord', () => {
     expect(result.ok && result.row.id).toBe(ID);
   });
 
+  it('passes shared posts, the reply target and attachment meta; a shared-posts-only send has no body', async () => {
+    const { client, rpc } = makeClient({ data: row, error: null });
+    const result = await sendMessageRecord({
+      client,
+      id: ID,
+      channelId: CHANNEL,
+      traceId: 'trace-1',
+      body: '',
+      attachmentAssetIds: ['v1'],
+      sharedPostIds: ['post-1', 'post-2'],
+      replyToMessageId: 'quoted-1',
+      attachmentMeta: { v1: { mime: 'audio/webm', name: 'v.webm', size: 10, duration_ms: 3000 } },
+    });
+    expect(rpc).toHaveBeenCalledWith('chat_message_send', {
+      p_id: ID,
+      p_channel_id: CHANNEL,
+      p_trace_id: 'trace-1',
+      p_attachment_asset_ids: ['v1'],
+      p_shared_post_ids: ['post-1', 'post-2'],
+      p_reply_to_message_id: 'quoted-1',
+      p_attachment_meta: {
+        v1: { mime: 'audio/webm', name: 'v.webm', size: 10, duration_ms: 3000 },
+      },
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('omits empty shared posts, a null reply and empty meta', async () => {
+    const { client, rpc } = makeClient({ data: row, error: null });
+    await sendMessageRecord({
+      client,
+      id: ID,
+      channelId: CHANNEL,
+      traceId: 'trace-1',
+      body: 'hi',
+      attachmentAssetIds: [],
+      sharedPostIds: [],
+      replyToMessageId: null,
+      attachmentMeta: {},
+    });
+    expect(rpc).toHaveBeenCalledWith('chat_message_send', {
+      p_id: ID,
+      p_channel_id: CHANNEL,
+      p_trace_id: 'trace-1',
+      p_body: 'hi',
+    });
+  });
+
   it('passes the trimmed body and no attachments for a text send', async () => {
     const { client, rpc } = makeClient({ data: row, error: null });
     await sendMessageRecord({

@@ -4,7 +4,9 @@ import {
   appendMessage,
   applyReactionOp,
   compareMessages,
+  hydrateReplies,
   mapLiveTextMessage,
+  missingReplyIds,
   markReadUpTo,
   markReadUpToMessage,
   mergeFetched,
@@ -23,6 +25,7 @@ import {
   targetFromSummary,
   THREAD_EVENT_HANDLER_ID,
   upsertMessage,
+  withOutboxBubbles,
   type ChannelTarget,
   type ChatMessageRow,
   type MessageReaction,
@@ -282,6 +285,105 @@ describe('rowToThreadMessage', () => {
     expect(rich.attachments[0]?.name).toBe('p.png');
     expect(rich.sharedPostIds).toEqual(['p1']);
     expect(rich.reply?.id).toBe('m0');
+  });
+});
+
+describe('rowToThreadMessage from the persisted columns', () => {
+  it('renders images, voice notes, shared posts and reply quotes from the row as they render live', () => {
+    const quoted = rowToThreadMessage(
+      row({ id: 'm0', body: 'the original', sender_user_id: ME }),
+      ME,
+    );
+    const message = rowToThreadMessage(
+      row({
+        id: 'm2',
+        body: null,
+        attachment_asset_ids: ['img', 'voice', 'bare'],
+        attachment_meta: {
+          img: { mime: 'image/png', name: 'photo.png', size: 120 },
+          voice: {
+            mime: 'audio/webm',
+            name: 'voice.webm',
+            size: 900,
+            duration_ms: 4000,
+            transcript: 'hello there',
+          },
+        },
+        shared_post_ids: ['post-1'],
+        reply_to_message_id: 'm0',
+      }),
+      ME,
+    );
+    expect(message.attachments).toEqual([
+      { assetId: 'img', name: 'photo.png', mime: 'image/png', size: 120 },
+      {
+        assetId: 'voice',
+        name: 'voice.webm',
+        mime: 'audio/webm',
+        size: 900,
+        durationMs: 4000,
+        transcript: 'hello there',
+      },
+      { assetId: 'bare', name: '', mime: '' },
+    ]);
+    expect(message.sharedPostIds).toEqual(['post-1']);
+    // The quote starts unresolved and fills from the loaded quoted message.
+    expect(message.reply).toEqual({ id: 'm0', authorUserId: null, preview: '' });
+    const [, hydrated] = hydrateReplies([quoted, message], []);
+    expect(hydrated?.reply).toEqual({ id: 'm0', authorUserId: ME, preview: 'the original' });
+
+    // Same content as the live Agora path produces for the same send.
+    const live = mapLiveTextMessage(
+      txt({
+        msg: '',
+        ext: {
+          sorted_message_id: 'm2',
+          sorted_channel_id: CHANNEL,
+          attachment_asset_ids: ['img'],
+          attachment_meta: [{ assetId: 'img', name: 'photo.png', mime: 'image/png', size: 120 }],
+          shared_post_ids: ['post-1'],
+        },
+      }),
+      ME,
+    );
+    expect(live.ok && live.message.attachments[0]).toEqual(message.attachments[0]);
+    expect(live.ok && live.message.sharedPostIds).toEqual(message.sharedPostIds);
+  });
+
+  it('lists quoted ids that are not loaded and settles a missing one to a label', () => {
+    const reply = rowToThreadMessage(row({ id: 'm2', reply_to_message_id: 'gone' }), ME);
+    expect(missingReplyIds([reply])).toEqual(['gone']);
+    expect(hydrateReplies([reply], [])[0]?.reply?.preview).toBe('');
+    expect(hydrateReplies([reply], [], true)[0]?.reply?.preview).toBe('Message');
+  });
+});
+
+describe('withOutboxBubbles', () => {
+  const entry = (id: string, state: 'sending' | 'failed') => ({
+    id,
+    text: `draft ${id}`,
+    local: { attachments: [], sharedPostIds: [], reply: null },
+    state,
+  });
+
+  it('lays unrecorded sends after the newest loaded message in their outbox state', () => {
+    const loaded = [mine({ id: 'm1', time: 1000 })];
+    const list = withOutboxBubbles(loaded, [entry('f1', 'failed'), entry('s1', 'sending')], ME);
+    expect(list.map((m) => [m.id, m.state])).toEqual([
+      ['m1', 'sent'],
+      ['f1', 'failed'],
+      ['s1', 'sending'],
+    ]);
+    expect(list[1]?.time).toBeGreaterThan(1000);
+  });
+
+  it('skips an entry whose row is already loaded, and re-lays a bubble after newer rows', () => {
+    const recorded = mine({ id: 'f1', time: 1000 });
+    expect(withOutboxBubbles([recorded], [entry('f1', 'failed')], ME)).toEqual([recorded]);
+    const bubble = { ...mine({ id: 'f2', time: 5 }), state: 'failed' as const };
+    const newer = mine({ id: 'm9', time: 2000 });
+    const list = withOutboxBubbles([bubble, newer], [entry('f2', 'failed')], ME);
+    expect(list.map((m) => m.id)).toEqual(['m9', 'f2']);
   });
 });
 

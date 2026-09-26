@@ -10,6 +10,7 @@
 // isolation with no connection.
 
 import type { ConversationPreview, UnreadCount } from '@/lib/chat/history';
+import type { LocalMessageContent } from '@/lib/chat/thread';
 
 /** Sender label written before the preview when the current user sent it. */
 export const OWN_PREFIX = 'You';
@@ -107,14 +108,18 @@ export function mergeInitial(roster: readonly RosterEntry[]): ChatStoreState {
 /**
  * Overlay the chat_unread_counts result: each row sets its channel's unread and
  * last message time (preview text is untouched). A channel absent from the rows
- * has no readable messages in the window and keeps unread 0; the active
- * conversation is pinned at unread 0 because the reader is looking at it.
+ * has nothing unread for the caller, so its unread is set to 0 (a stale local
+ * increment never outlives the refresh); the active conversation is pinned at
+ * unread 0 because the reader is looking at it.
  */
 export function applyUnreadCounts(
   state: ChatStoreState,
   rows: readonly UnreadCount[],
 ): ChatStoreState {
-  const conversations = { ...state.conversations };
+  const conversations: Record<string, ConversationSummary> = {};
+  for (const [channelId, existing] of Object.entries(state.conversations)) {
+    conversations[channelId] = existing.unread === 0 ? existing : { ...existing, unread: 0 };
+  }
   for (const row of rows) {
     const existing = conversations[row.channelId] ?? emptySummary();
     const ts = Date.parse(row.lastMessageAt);
@@ -235,4 +240,80 @@ export function selectConversation(
   channelId: string,
 ): ConversationSummary | undefined {
   return state.conversations[channelId];
+}
+
+/**
+ * One own send that has not reached the record yet: in flight ('sending') or
+ * failed and waiting on Retry. Kept per channel, outside any open thread, so
+ * switching channels neither loses a failed bubble nor its Retry payload.
+ */
+export interface OutboxEntry {
+  id: string;
+  text: string;
+  local: LocalMessageContent;
+  state: 'sending' | 'failed';
+}
+
+/** Unrecorded own sends keyed by our channel_id, oldest first per channel. */
+export type Outbox = Record<string, readonly OutboxEntry[]>;
+
+/** Add (or replace by id) one entry in a channel's outbox. */
+export function outboxPut(outbox: Outbox, channelId: string, entry: OutboxEntry): Outbox {
+  const list = outbox[channelId] ?? [];
+  const next = list.some((e) => e.id === entry.id)
+    ? list.map((e) => (e.id === entry.id ? entry : e))
+    : [...list, entry];
+  return { ...outbox, [channelId]: next };
+}
+
+/** Set one entry's state; unknown ids leave the outbox unchanged. */
+export function outboxSetState(
+  outbox: Outbox,
+  channelId: string,
+  id: string,
+  state: OutboxEntry['state'],
+): Outbox {
+  const list = outbox[channelId];
+  if (list === undefined || !list.some((e) => e.id === id)) return outbox;
+  return { ...outbox, [channelId]: list.map((e) => (e.id === id ? { ...e, state } : e)) };
+}
+
+/** Drop one entry once its row is recorded; an emptied channel is removed. */
+export function outboxRemove(outbox: Outbox, channelId: string, id: string): Outbox {
+  const list = outbox[channelId];
+  if (list === undefined || !list.some((e) => e.id === id)) return outbox;
+  const next = list.filter((e) => e.id !== id);
+  const copy = { ...outbox };
+  if (next.length === 0) delete copy[channelId];
+  else copy[channelId] = next;
+  return copy;
+}
+
+/** A channel's unrecorded sends; empty when there are none. */
+export function selectOutbox(outbox: Outbox, channelId: string): readonly OutboxEntry[] {
+  return outbox[channelId] ?? [];
+}
+
+/** The outbox surface the thread drives; the store provider implements it. */
+export interface ChannelOutbox {
+  entries: (channelId: string) => readonly OutboxEntry[];
+  put: (channelId: string, entry: OutboxEntry) => void;
+  setState: (channelId: string, id: string, state: OutboxEntry['state']) => void;
+  remove: (channelId: string, id: string) => void;
+}
+
+/** A ChannelOutbox over a mutable holder (the provider's ref, or a hook-local fallback). */
+export function createChannelOutbox(holder: { current: Outbox }): ChannelOutbox {
+  return {
+    entries: (channelId) => selectOutbox(holder.current, channelId),
+    put: (channelId, entry) => {
+      holder.current = outboxPut(holder.current, channelId, entry);
+    },
+    setState: (channelId, id, state) => {
+      holder.current = outboxSetState(holder.current, channelId, id, state);
+    },
+    remove: (channelId, id) => {
+      holder.current = outboxRemove(holder.current, channelId, id);
+    },
+  };
 }

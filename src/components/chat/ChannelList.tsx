@@ -12,6 +12,7 @@ import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { selectConversation, type ConversationSummary } from '@/lib/chat/chat-store';
 import { sortChannelsByRecency } from '@/lib/chat/sort-conversations';
 import { formatRelativeTime } from '@/lib/chat/format-relative-time';
+import { workspaceTimeZone } from '@/lib/chat/time-format';
 
 /** Per-channel store lookup the cards read (preview, time, unread). */
 type SummaryLookup = (channelId: string) => ConversationSummary | undefined;
@@ -22,7 +23,7 @@ interface ChannelListProps {
   onSelect: (channel: ChannelSummary) => void;
   /** Opens the New chat sheet (header "+" and empty-state action). */
   onNewChat: () => void;
-  /** The workspace IANA zone the card dates render in; UTC when absent. */
+  /** The workspace IANA zone the card dates render in; the browser zone when absent. */
   timeZone?: string;
 }
 
@@ -66,7 +67,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   }
   const summaryFor: SummaryLookup = props.summaryFor ?? (() => undefined);
   const nowMs = props.nowMs ?? 0;
-  const timeZone = props.timeZone ?? 'UTC';
+  const timeZone = workspaceTimeZone(props.timeZone);
   return (
     <ul className="flex flex-col gap-2 px-3 py-3">
       {props.channels.map((channel) => (

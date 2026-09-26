@@ -25,18 +25,29 @@ describe('formatRelativeTime', () => {
     expect(formatRelativeTime(ago(HOUR - 1), now, 'UTC')).toBe('59m');
   });
 
-  it('reads hours from the one-hour boundary up to the day', () => {
+  it('reads hours from the one-hour boundary within the same calendar day', () => {
     expect(formatRelativeTime(ago(HOUR), now, 'UTC')).toBe('1h');
     expect(formatRelativeTime(ago(3 * HOUR), now, 'UTC')).toBe('3h');
-    expect(formatRelativeTime(ago(DAY - 1), now, 'UTC')).toBe('23h');
+    expect(formatRelativeTime(ago(12 * HOUR), now, 'UTC')).toBe('12h');
   });
 
-  it('reads "Yesterday" across the prior day only', () => {
+  it('reads "Yesterday" for the previous calendar day in the workspace zone', () => {
+    expect(formatRelativeTime(ago(12 * HOUR + 1), now, 'UTC')).toBe('Yesterday');
     expect(formatRelativeTime(ago(DAY), now, 'UTC')).toBe('Yesterday');
-    expect(formatRelativeTime(ago(2 * DAY - 1), now, 'UTC')).toBe('Yesterday');
+    expect(formatRelativeTime(ago(36 * HOUR), now, 'UTC')).toBe('Yesterday');
+    // 23:50 read at 00:10 the next day is Yesterday, not "20m".
+    const justAfterMidnight = Date.parse('2026-06-22T00:10:00Z');
+    expect(formatRelativeTime(Date.parse('2026-06-21T23:50:00Z'), justAfterMidnight, 'UTC')).toBe(
+      'Yesterday',
+    );
+    // The same instants are both Jun 22 in Mumbai (UTC+5:30): same day, so "20m".
+    expect(
+      formatRelativeTime(Date.parse('2026-06-21T23:50:00Z'), justAfterMidnight, 'Asia/Kolkata'),
+    ).toBe('20m');
   });
 
-  it('falls back to a short calendar date two days out and beyond', () => {
+  it('falls back to a short calendar date two calendar days out and beyond', () => {
+    expect(formatRelativeTime(ago(36 * HOUR + 1), now, 'UTC')).toBe('Jun 20');
     expect(formatRelativeTime(ago(2 * DAY), now, 'UTC')).toBe('Jun 20');
     expect(formatRelativeTime(ago(10 * DAY), now, 'UTC')).toBe('Jun 12');
   });

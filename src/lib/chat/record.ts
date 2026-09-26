@@ -13,6 +13,7 @@
 import type { Client } from '@srtdio/rpc';
 import type { Database, Json } from '@srtdio/schemas';
 import type { ChatMessageRow } from '@/lib/chat/thread';
+import type { AttachmentMetaMap } from '@/lib/chat/attachments';
 
 type Functions = Database['public']['Functions'];
 
@@ -28,6 +29,12 @@ export interface SendRecordParams {
   body: string;
   attachmentAssetIds: readonly string[];
   mentions?: Json;
+  /** Post uuids shared into the message; persisted so history renders the cards. */
+  sharedPostIds?: readonly string[];
+  /** The quoted message's id when this is a reply. */
+  replyToMessageId?: string | null;
+  /** Render metadata per attachment id (mime, name, size, duration, transcript). */
+  attachmentMeta?: AttachmentMetaMap;
   /** Override for tests; defaults to SEND_TIMEOUT_MS. */
   timeoutMs?: number;
 }
@@ -39,8 +46,9 @@ export type SendRecordResult =
 /**
  * Write the message to the record via chat_message_send with an abort timeout.
  * An empty body is omitted (the row's body is nullable and CHECKed non-empty
- * when present) and so is an empty attachment list, matching the proc's
- * defaults. Never throws: a timeout, transport error or proc exception resolves
+ * when present) and so are an empty attachment list, empty shared posts, no
+ * reply and empty attachment meta, matching the proc's defaults. A shared-posts
+ * only send (no body) is valid: the proc accepts body, attachments or posts. Never throws: a timeout, transport error or proc exception resolves
  * to { ok: false } so the caller can mark the bubble failed and offer Retry.
  */
 export async function sendMessageRecord(params: SendRecordParams): Promise<SendRecordResult> {
@@ -56,6 +64,15 @@ export async function sendMessageRecord(params: SendRecordParams): Promise<SendR
       ? { p_attachment_asset_ids: [...params.attachmentAssetIds] }
       : {}),
     ...(params.mentions !== undefined ? { p_mentions: params.mentions } : {}),
+    ...(params.sharedPostIds !== undefined && params.sharedPostIds.length > 0
+      ? { p_shared_post_ids: [...params.sharedPostIds] }
+      : {}),
+    ...(params.replyToMessageId != null && params.replyToMessageId !== ''
+      ? { p_reply_to_message_id: params.replyToMessageId }
+      : {}),
+    ...(params.attachmentMeta !== undefined && Object.keys(params.attachmentMeta).length > 0
+      ? { p_attachment_meta: params.attachmentMeta }
+      : {}),
   };
   const reason = (): 'timeout' | 'error' => (controller.signal.aborted ? 'timeout' : 'error');
   try {

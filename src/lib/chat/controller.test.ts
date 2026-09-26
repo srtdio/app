@@ -3,7 +3,6 @@ import type { AgoraChat } from 'agora-chat';
 import {
   backoffDelayMs,
   BACKOFF_CAP_MS,
-  MAX_CONSECUTIVE_FAILURES,
   runChatConnection,
   type RunChatConnectionParams,
 } from '@/lib/chat/controller';
@@ -61,6 +60,7 @@ interface Harness {
 function harness(
   fetchToken: () => Promise<ChatTokenResult>,
   build: () => FakeConnection = fakeConnection,
+  isVisible: () => boolean = () => true,
 ): Harness {
   const conns: FakeConnection[] = [];
   const createConnection = vi.fn(() => {
@@ -88,6 +88,7 @@ function harness(
         wakeHandler = handler;
         return removeWake;
       },
+      isVisible,
     },
     conns,
     latest: () => conns[conns.length - 1] as FakeConnection,
@@ -141,7 +142,7 @@ describe('runChatConnection open path', () => {
   it('retries a failed token fetch with backoff instead of going unavailable', async () => {
     const fetchToken = vi
       .fn<() => Promise<ChatTokenResult>>()
-      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: false, reason: 'error' })
       .mockResolvedValue(token);
     const h = harness(fetchToken);
 
@@ -206,7 +207,7 @@ describe('runChatConnection retry loop', () => {
     expect(h.setStatus).toHaveBeenLastCalledWith('connected');
   });
 
-  it('gives up with unavailable after MAX_CONSECUTIVE_FAILURES, and Retry restarts the loop', async () => {
+  it('never gives up: keeps retrying at the 30s cap long past ten failures', async () => {
     const h = harness(
       () => Promise.resolve(token),
       () => {
@@ -216,24 +217,111 @@ describe('runChatConnection retry loop', () => {
       },
     );
 
-    const handle = runChatConnection(h.params);
+    runChatConnection(h.params);
     await flush();
-    for (let i = 0; i < MAX_CONSECUTIVE_FAILURES; i += 1) {
+    for (let i = 0; i < 25; i += 1) {
       await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS);
       await flush();
     }
-    expect(h.createConnection).toHaveBeenCalledTimes(MAX_CONSECUTIVE_FAILURES);
-    expect(h.setStatus).toHaveBeenLastCalledWith('unavailable');
-    expect(h.setClient).toHaveBeenLastCalledWith(null);
+    expect(h.createConnection.mock.calls.length).toBeGreaterThan(25);
+    // Still armed at the cap: one more attempt 30s later.
+    const before = h.createConnection.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS);
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(before + 1);
+    expect(h.statuses()).not.toContain('unavailable');
+    expect(h.setStatus).toHaveBeenLastCalledWith('connecting');
+  });
 
-    // No further timers fire once it gave up.
-    await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS * 2);
-    expect(h.createConnection).toHaveBeenCalledTimes(MAX_CONSECUTIVE_FAILURES);
+  it('pauses the backoff while the tab is hidden and resumes on visible', async () => {
+    let visible = true;
+    const h = harness(
+      () => Promise.resolve(token),
+      () => {
+        const conn = fakeConnection();
+        conn.open = vi.fn().mockRejectedValue(new Error('down'));
+        return conn;
+      },
+      () => visible,
+    );
+
+    runChatConnection(h.params);
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(1);
+    visible = false;
+    // The 1s timer fires while hidden: no attempt, and nothing re-armed.
+    await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS * 10);
+    expect(h.createConnection).toHaveBeenCalledTimes(1);
+
+    visible = true;
+    h.wake();
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(2);
+    // And the backoff continues from there while visible (2nd failure: 2s).
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(h.createConnection).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports unavailable only for a 401/403 or unreachable token endpoint, and keeps retrying', async () => {
+    const fetchToken = vi
+      .fn<() => Promise<ChatTokenResult>>()
+      .mockResolvedValueOnce({ ok: false, reason: 'auth' })
+      .mockResolvedValueOnce({ ok: false, reason: 'network' })
+      .mockResolvedValueOnce({ ok: false, reason: 'error' })
+      .mockResolvedValue(token);
+    const h = harness(fetchToken);
+
+    runChatConnection(h.params);
+    await flush();
+    expect(h.setStatus).toHaveBeenLastCalledWith('unavailable');
+    await vi.advanceTimersByTimeAsync(1000);
+    await flush();
+    expect(h.setStatus).toHaveBeenLastCalledWith('unavailable');
+    await vi.advanceTimersByTimeAsync(2000);
+    await flush();
+    // A 5xx is transient: back to connecting, not unavailable.
+    expect(h.setStatus).toHaveBeenLastCalledWith('connecting');
+    await vi.advanceTimersByTimeAsync(4000);
+    await flush();
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
+  });
+
+  it('stops retrying after a multi-login kick until the user taps reconnect', async () => {
+    const h = harness(() => Promise.resolve(token));
+    const handle = runChatConnection(h.params);
+    await flush();
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
+
+    h.latest()
+      .handler()
+      ?.onDisconnected?.({ type: 206, message: 'logged in elsewhere' } as never);
+    expect(h.setStatus).toHaveBeenLastCalledWith('kicked');
+    expect(h.setClient).toHaveBeenLastCalledWith(null);
+    expect(h.latest().close).toHaveBeenCalledOnce();
+
+    // No backoff and no automatic wake reopens it.
+    await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS * 4);
+    h.wake();
+    await flush();
+    expect(h.createConnection).toHaveBeenCalledTimes(1);
 
     handle.retry();
     await flush();
-    expect(h.createConnection).toHaveBeenCalledTimes(MAX_CONSECUTIVE_FAILURES + 1);
-    expect(h.setStatus).toHaveBeenLastCalledWith('connecting');
+    expect(h.createConnection).toHaveBeenCalledTimes(2);
+    expect(h.setStatus).toHaveBeenLastCalledWith('connected');
+  });
+
+  it('treats an SDK onError kick (217) the same way', async () => {
+    const h = harness(() => Promise.resolve(token));
+    runChatConnection(h.params);
+    await flush();
+    h.latest()
+      .handler()
+      ?.onError?.({ type: 217, message: 'kicked' } as never);
+    expect(h.setStatus).toHaveBeenLastCalledWith('kicked');
   });
 
   it('retries immediately on a wake signal (tab visible / online) while waiting', async () => {

@@ -2,9 +2,12 @@
 // ChatProvider, the toast provider, and the router), it seeds the pure chat
 // store from the registry roster plus Postgres (chat_unread_counts for badges
 // and ordering, one bounded scan for the preview lines), then keeps it live off
-// the controller's global incoming-message fan-out. Unread counts are re-read
+// the controller's global incoming-message fan-out. Every live message is
+// verified against its chat_messages row before it counts (the shared verifier
+// logs a missing row once, for store and thread). Unread counts are re-read
 // on open, on every reconnect, and 2s after the last incoming live message, so
-// Postgres stays the truth for the badge. A message for a conversation the user
+// Postgres stays the truth for the badge. The store also holds the per-channel
+// outbox (unrecorded own sends), so a channel switch never drops a failed bubble. A message for a conversation the user
 // is not viewing fires a toast and stays unread; a message for the open
 // conversation is marked read locally (the thread writes the cursor). All store
 // mutation lives in the pure reducer (chat-store.ts); this file only wires that
@@ -31,11 +34,12 @@ import { Avatar } from '@/components/ui/Avatar';
 import { listChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
 import { useChat } from '@/lib/chat/chat-context';
 import { mapLiveTextMessage } from '@/lib/chat/thread';
+import { liveVerifierFor } from '@/lib/chat/live-verify';
 import { subscribeGlobalMessages } from '@/lib/chat/controller';
 import { loadConversationPreviews, loadUnreadCounts } from '@/lib/chat/history';
 import { createDebouncer, UNREAD_REFRESH_DEBOUNCE_MS } from '@/lib/chat/read-cursor';
 import * as store from '@/lib/chat/chat-store';
-import type { ChatStoreState } from '@/lib/chat/chat-store';
+import type { ChannelOutbox, ChatStoreState, Outbox } from '@/lib/chat/chat-store';
 
 /** The store plus the actions the chat UI uses to keep it in step. */
 export interface ChatStoreContextValue {
@@ -54,6 +58,8 @@ export interface ChatStoreContextValue {
   requestOpen: (channelId: string) => void;
   /** Clear the pending-open request once the chat page has acted on it. */
   clearPendingOpen: () => void;
+  /** Unrecorded own sends per channel; survives channel switches. */
+  outbox: ChannelOutbox;
 }
 
 const ChatStoreContext = createContext<ChatStoreContextValue | null>(null);
@@ -96,6 +102,8 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   const summariesRef = useRef<Map<string, ChannelSummary>>(new Map());
   const activeRef = useRef<string | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
+  const outboxRef = useRef<Outbox>({});
+  const outbox = useMemo(() => store.createChannelOutbox(outboxRef), []);
 
   useEffect(() => {
     activeRef.current = state.activeConversationId;
@@ -140,6 +148,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     if (!workspaceId || currentUserId === null) return;
     let cancelled = false;
     seenRef.current = new Set();
+    outboxRef.current = {};
     void (async (): Promise<void> => {
       const rosterRes = await listChannelSummaries(supabase, { workspaceId, currentUserId });
       if (cancelled) return;
@@ -201,37 +210,52 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       logger.warn('chat store: live message without sorted ids ignored', { agora_id: raw.id });
       return;
     }
-    const summary = summariesRef.current.get(mapped.channelId);
-    if (summary === undefined) return;
     if (mapped.message.mine) return;
     if (rememberSeen(seenRef.current, mapped.message.id)) return;
+    const forUser = currentUserId;
+    // Only a row the caller can read counts: badge, preview and toast all come
+    // from the verified row, never from the Agora payload.
+    void liveVerifierFor(supabase)
+      .verify(mapped.message.id)
+      .then((lookup) => {
+        if (!lookup.found) return;
+        const row = lookup.row;
+        if (row.sender_user_id === forUser) return;
+        const summary = summariesRef.current.get(row.channel_id);
+        if (summary === undefined) return;
+        const text = store.previewText({
+          body: row.body ?? '',
+          hasAttachments:
+            (row.attachment_asset_ids ?? []).length > 0 || (row.shared_post_ids ?? []).length > 0,
+        });
+        const ts = Date.parse(row.created_at);
+        setState((prev) =>
+          store.applyIncoming(prev, {
+            channelId: row.channel_id,
+            senderIsSelf: false,
+            text,
+            ts: Number.isNaN(ts) ? mapped.message.time : ts,
+          }),
+        );
+        debouncedRefresh.schedule(null);
 
-    setState((prev) =>
-      store.applyIncoming(prev, {
-        channelId: mapped.channelId,
-        senderIsSelf: false,
-        text: mapped.message.body,
-        ts: mapped.message.time,
-      }),
-    );
-    debouncedRefresh.schedule(null);
-
-    if (mapped.channelId === activeRef.current) return;
-    toast.show({
-      title: summary.title,
-      description: mapped.message.body,
-      icon: (
-        <Avatar
-          name={summary.title}
-          size="sm"
-          {...(summary.avatarUrl !== null ? { src: summary.avatarUrl } : {})}
-        />
-      ),
-      onPress: () => {
-        requestOpen(mapped.channelId);
-        navigate('/chat');
-      },
-    });
+        if (row.channel_id === activeRef.current) return;
+        toast.show({
+          title: summary.title,
+          description: text,
+          icon: (
+            <Avatar
+              name={summary.title}
+              size="sm"
+              {...(summary.avatarUrl !== null ? { src: summary.avatarUrl } : {})}
+            />
+          ),
+          onPress: () => {
+            requestOpen(row.channel_id);
+            navigate('/chat');
+          },
+        });
+      });
   };
 
   useEffect(() => subscribeGlobalMessages((message) => onIncomingRef.current(message)), []);
@@ -246,8 +270,10 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       refreshUnreadCounts,
       requestOpen,
       clearPendingOpen,
+      outbox,
     }),
     [
+      outbox,
       state,
       setActive,
       markConversationRead,

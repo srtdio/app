@@ -19,6 +19,7 @@ import { toAgoraUsername, userIdFromAgoraUsername } from '@/lib/chat/agora-ident
 import type { ChannelSummary } from '@/lib/chat-reads';
 import {
   buildMessageExt,
+  parseAttachmentMeta,
   parseAttachments,
   parseReply,
   parseSharedPostIds,
@@ -79,9 +80,9 @@ export interface ThreadMessage {
   provisionalTime: boolean;
   /** True when the current user sent it (own bubble). */
   mine: boolean;
-  /** Asset attachments; from the live `ext` meta or the row's bare asset ids. */
+  /** Asset attachments; from the row's ids + attachment_meta, or the live `ext`. */
   attachments: MessageAttachment[];
-  /** Shared post uuids read off the live `ext`; empty when there are none. */
+  /** Shared post uuids (row `shared_post_ids` or live `ext`); empty when there are none. */
   sharedPostIds: string[];
   /** The quoted message when this is a reply; null otherwise. */
   reply: ReplyQuote | null;
@@ -215,10 +216,12 @@ export interface LocalMessageContent {
 }
 
 /**
- * Map one chat_messages row to the rendered shape. The record stores bare asset
- * ids, so attachments render through the bare-id path unless the caller still
- * holds the richer local content (own send echo, or a live message being
- * replaced by its row on catch-up).
+ * Map one chat_messages row to the rendered shape. Attachments come from
+ * `attachment_asset_ids` enriched by `attachment_meta` (mime, name, transcript),
+ * shared posts from `shared_post_ids`, and a reply from `reply_to_message_id`,
+ * so a message read from Postgres renders exactly as it did live. The row keeps
+ * only the quoted id, so its quote starts unresolved (empty preview) until
+ * {@link hydrateReplies} fills it. Local content (own send echo) wins when set.
  */
 export function rowToThreadMessage(
   row: ChatMessageRow,
@@ -229,7 +232,16 @@ export function rowToThreadMessage(
   const attachments =
     local !== undefined && local.attachments.length > 0
       ? [...local.attachments]
-      : (row.attachment_asset_ids ?? []).map((assetId) => ({ assetId, name: '', mime: '' }));
+      : parseAttachmentMeta(row.attachment_meta, row.attachment_asset_ids ?? []);
+  const sharedPostIds =
+    local !== undefined && local.sharedPostIds.length > 0
+      ? [...local.sharedPostIds]
+      : [...(row.shared_post_ids ?? [])];
+  const reply =
+    local?.reply ??
+    (row.reply_to_message_id !== null && row.reply_to_message_id !== ''
+      ? { id: row.reply_to_message_id, authorUserId: null, preview: '' }
+      : null);
   return {
     id: row.id,
     senderUserId,
@@ -239,12 +251,71 @@ export function rowToThreadMessage(
     provisionalTime: false,
     mine: senderUserId !== null && senderUserId === currentUserId,
     attachments,
-    sharedPostIds: local !== undefined ? [...local.sharedPostIds] : [],
-    reply: local !== undefined ? local.reply : null,
+    sharedPostIds,
+    reply,
     state: 'sent',
     status: 'sent',
     reactions: [],
   };
+}
+
+/** Longest body snapshot a reply quote carries. */
+export const REPLY_PREVIEW_LIMIT = 120;
+
+/** The quote line for a message: its body (clipped), else a label for its content. */
+export function replyPreview(
+  message: Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds'>,
+): string {
+  const body = message.body.trim();
+  if (body !== '') {
+    return body.length > REPLY_PREVIEW_LIMIT ? `${body.slice(0, REPLY_PREVIEW_LIMIT)}…` : body;
+  }
+  if (message.attachments.length > 0) return 'Attachment';
+  if (message.sharedPostIds.length > 0) return 'Shared post';
+  return 'Message';
+}
+
+/** A reply read from a row whose quote has not been resolved yet. */
+function unresolvedReply(message: ThreadMessage): boolean {
+  return message.reply !== null && message.reply.preview === '';
+}
+
+/** Quoted ids that are unresolved and not in the list (to fetch in one read). */
+export function missingReplyIds(messages: readonly ThreadMessage[]): string[] {
+  const loaded = new Set(messages.map((m) => m.id));
+  const ids = new Set<string>();
+  for (const m of messages) {
+    if (m.reply !== null && unresolvedReply(m) && !loaded.has(m.reply.id)) ids.add(m.reply.id);
+  }
+  return [...ids];
+}
+
+/**
+ * Resolve unresolved reply quotes from the loaded list plus `sources` (quoted
+ * rows fetched separately). With `settle`, a quote whose message cannot be
+ * found (deleted, not visible) falls back to a generic label instead of staying
+ * blank. Resolved quotes are left untouched.
+ */
+export function hydrateReplies(
+  messages: ThreadMessage[],
+  sources: readonly ThreadMessage[],
+  settle = false,
+): ThreadMessage[] {
+  if (!messages.some(unresolvedReply)) return messages;
+  const byId = new Map<string, ThreadMessage>();
+  for (const m of sources) byId.set(m.id, m);
+  for (const m of messages) byId.set(m.id, m);
+  return messages.map((m) => {
+    if (m.reply === null || !unresolvedReply(m)) return m;
+    const quoted = byId.get(m.reply.id);
+    if (quoted === undefined) {
+      return settle ? { ...m, reply: { ...m.reply, preview: 'Message' } } : m;
+    }
+    return {
+      ...m,
+      reply: { id: quoted.id, authorUserId: quoted.senderUserId, preview: replyPreview(quoted) },
+    };
+  });
 }
 
 /**
@@ -309,8 +380,9 @@ export function mergeFetched(messages: ThreadMessage[], fetched: ThreadMessage[]
     byId.set(incoming.id, {
       ...incoming,
       attachments: existing.attachments.length > 0 ? existing.attachments : incoming.attachments,
-      sharedPostIds: existing.sharedPostIds,
-      reply: existing.reply,
+      sharedPostIds:
+        existing.sharedPostIds.length > 0 ? existing.sharedPostIds : incoming.sharedPostIds,
+      reply: existing.reply ?? incoming.reply,
       reactions: existing.reactions,
       status: existing.status,
     });
@@ -371,6 +443,43 @@ export function pendingMessage(params: {
     status: 'sent',
     reactions: [],
   };
+}
+
+/** An unrecorded own send as the outbox holds it (structural: see chat-store OutboxEntry). */
+export interface UnrecordedSend {
+  id: string;
+  text: string;
+  local: LocalMessageContent;
+  state: 'sending' | 'failed';
+}
+
+/**
+ * Lay a channel's unrecorded sends over its loaded list: each renders as an own
+ * bubble in its outbox state ('sending' or 'failed' with Retry), ordered after
+ * the newest loaded message. An id the list already holds as recorded is
+ * skipped (its row exists, so the send landed).
+ */
+export function withOutboxBubbles(
+  messages: ThreadMessage[],
+  entries: readonly UnrecordedSend[],
+  currentUserId: string,
+): ThreadMessage[] {
+  if (entries.length === 0) return messages;
+  const recordedIds = new Set(messages.filter((m) => m.state === 'sent').map((m) => m.id));
+  const outboxIds = new Set(entries.map((e) => e.id));
+  let list = messages.filter((m) => m.state === 'sent' || !outboxIds.has(m.id));
+  for (const entry of entries) {
+    if (recordedIds.has(entry.id)) continue;
+    const bubble = pendingMessage({
+      id: entry.id,
+      currentUserId,
+      text: entry.text,
+      local: entry.local,
+      after: list,
+    });
+    list = [...list, { ...bubble, state: entry.state }];
+  }
+  return list;
 }
 
 /** A keyset position: the (created_at, id) pair of one recorded message. */

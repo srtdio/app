@@ -26,11 +26,10 @@ export function chatUnavailableView(props: { onRetry: () => void }): ReactElemen
 }
 
 /**
- * Shown when the chat connection is unavailable: the availability gate is
- * closed (missing config, no session), signout, or the controller's retry loop
- * gave up after ten consecutive failures. The connection layer collapses every
- * failure to this state and never throws, so the rest of the app is unaffected;
- * Retry restarts the loop from a clean backoff.
+ * Shown only when there is no chat surface to render at all (no workspace or no
+ * signed-in user). A refused or unreachable token endpoint keeps the Postgres
+ * chat surface mounted under a "Chat unavailable" banner instead (ChatShell).
+ * Retry restarts the connection loop.
  */
 export function ChatUnavailable(): ReactElement {
   const { retry } = useChat();

@@ -37,14 +37,14 @@ describe('fetchChatToken', () => {
   it('returns ok:false without calling fetch when the URL is missing', async () => {
     const fetcher = vi.fn();
     const out = await fetchChatToken({ ...baseRequest(fetcher), url: undefined });
-    expect(out).toEqual({ ok: false });
+    expect(out).toEqual({ ok: false, reason: 'config' });
     expect(fetcher).not.toHaveBeenCalled();
   });
 
   it('returns ok:false without calling fetch when the session is missing', async () => {
     const fetcher = vi.fn();
     const out = await fetchChatToken({ ...baseRequest(fetcher), accessToken: undefined });
-    expect(out).toEqual({ ok: false });
+    expect(out).toEqual({ ok: false, reason: 'config' });
     expect(fetcher).not.toHaveBeenCalled();
   });
 
@@ -53,13 +53,22 @@ describe('fetchChatToken', () => {
       .fn()
       .mockResolvedValue(jsonResponse(401, { error: { code: 'unauthorized' } }));
     const out = await fetchChatToken(baseRequest(fetcher));
-    expect(out).toEqual({ ok: false });
+    expect(out).toEqual({ ok: false, reason: 'auth' });
   });
 
   it('returns ok:false (not throw) on a transport failure', async () => {
     const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
     const out = await fetchChatToken(baseRequest(fetcher));
-    expect(out).toEqual({ ok: false });
+    expect(out).toEqual({ ok: false, reason: 'network' });
+  });
+
+  it('reports a 5xx as a transient error, distinct from a 403 refusal', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(503, {}))
+      .mockResolvedValueOnce(jsonResponse(403, {}));
+    expect(await fetchChatToken(baseRequest(fetcher))).toEqual({ ok: false, reason: 'error' });
+    expect(await fetchChatToken(baseRequest(fetcher))).toEqual({ ok: false, reason: 'auth' });
   });
 
   it('returns ok:false when the body is missing a required field', async () => {
@@ -70,6 +79,6 @@ describe('fetchChatToken', () => {
     };
     const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, partial));
     const out = await fetchChatToken(baseRequest(fetcher));
-    expect(out).toEqual({ ok: false });
+    expect(out).toEqual({ ok: false, reason: 'error' });
   });
 });

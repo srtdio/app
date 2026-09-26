@@ -277,6 +277,7 @@ export function Composer(props: ComposerProps): ReactElement {
 
   async function stopSend(): Promise<void> {
     setVoiceBusy(true);
+    const durationMs = recorder.seconds * 1000;
     const rec = await recorder.stop();
     if (rec === null) {
       setVoiceBusy(false);
@@ -301,6 +302,8 @@ export function Composer(props: ComposerProps): ReactElement {
       assetId: up.versionId,
       name: file.name,
       mime: file.type,
+      size: file.size,
+      durationMs,
       ...(transcript !== undefined ? { transcript } : {}),
     };
     try {

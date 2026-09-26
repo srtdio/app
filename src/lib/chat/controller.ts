@@ -3,13 +3,17 @@
 // job without a DOM, with agora-chat, the network and the timers fully injected.
 //
 // Contract: runChatConnection starts the connection loop and returns a handle.
-// The loop owns its own retry: every failure (token fetch, open, disconnect)
-// schedules the next attempt with exponential backoff (1s doubling to a 30s cap,
-// reset once connected) and gives up with 'unavailable' only after
-// MAX_CONSECUTIVE_FAILURES in a row. A wake signal (tab visible, browser
-// online, the Retry button) attempts again immediately. Teardown (called by the
-// hook on workspace change, unmount, or signout) clears every timer, removes the
-// event handler, closes the connection, and drops the listeners, leaving nothing
+// The loop owns its own retry and never gives up: every failure (token fetch,
+// open, disconnect) schedules the next attempt with exponential backoff (1s
+// doubling to a 30s cap, reset once connected) for as long as the tab is
+// visible. While hidden the loop pauses (no timer runs); the wake signal (tab
+// visible, browser online) resumes it with an immediate attempt. Status reads
+// 'unavailable' only while the token endpoint refuses the caller (401/403) or
+// cannot be reached (CORS/network); the loop keeps trying underneath. A kick
+// (this account signed in on another device) stops retrying for the session
+// with status 'kicked' until the user taps reconnect (handle.retry). Teardown
+// (workspace change, unmount, or signout) clears every timer, removes the event
+// handler, closes the connection, and drops the listeners, leaving nothing
 // dangling. Nothing here throws; every failure is logged with the logger.
 
 import type { AgoraChat } from 'agora-chat';
@@ -26,8 +30,19 @@ import {
 export const BACKOFF_BASE_MS = 1_000;
 /** Longest wait between two attempts. */
 export const BACKOFF_CAP_MS = 30_000;
-/** Consecutive failures before the loop stops and reports 'unavailable'. */
-export const MAX_CONSECUTIVE_FAILURES = 10;
+/**
+ * SDK error types meaning another device took over this login (agora-chat
+ * 1.3.1 status.d.ts: WEBIM_CONNCTION_USER_LOGIN_ANOTHER_DEVICE = 206,
+ * WEBIM_CONNCTION_USER_KICKED_BY_OTHER_DEVICE = 217).
+ */
+export const KICKED_ERROR_TYPES: readonly number[] = [206, 217];
+
+/** Whether an SDK error/disconnect reason is a multi-login kick. */
+export function isKickReason(error: { type?: unknown } | undefined): boolean {
+  return (
+    error !== undefined && typeof error.type === 'number' && KICKED_ERROR_TYPES.includes(error.type)
+  );
+}
 
 /** The delay before attempt number `failures + 1`: 1s, 2s, 4s, ... capped at 30s. */
 export function backoffDelayMs(failures: number): number {
@@ -69,12 +84,14 @@ export interface RunChatConnectionParams {
   addSignoutListener: (handler: () => void) => () => void;
   /** Subscribe to wake signals (tab visible, browser online); returns the unsubscribe. */
   addWakeListener?: (handler: () => void) => () => void;
+  /** Whether the tab is visible; the backoff pauses while false. Defaults to always visible. */
+  isVisible?: () => boolean;
   /** Timer injection for tests; defaults to the platform timers. */
   setTimer?: (fn: () => void, delayMs: number) => unknown;
   clearTimer?: (handle: unknown) => void;
 }
 
-/** What the hook holds: stop everything, or attempt again right now. */
+/** What the hook holds: stop everything, or attempt again right now (also after a kick). */
 export interface ChatConnectionHandle {
   teardown: () => void;
   retry: () => void;
@@ -82,9 +99,11 @@ export interface ChatConnectionHandle {
 
 /**
  * Begin connecting and return the handle. Status goes 'connecting' immediately,
- * 'connected' once the SDK opens, 'reconnecting' on any later gap, and
- * 'unavailable' on signout or once the retry loop gives up. Renewal is driven by
- * the SDK's onTokenWillExpire callback; an expired token reopens with a fresh one.
+ * 'connected' once the SDK opens, 'reconnecting' on any later gap,
+ * 'unavailable' on signout or while the token endpoint refuses / is
+ * unreachable, and 'kicked' when another device takes over the login. Renewal
+ * is driven by the SDK's onTokenWillExpire callback; an expired token reopens
+ * with a fresh one.
  */
 export function runChatConnection(params: RunChatConnectionParams): ChatConnectionHandle {
   const { fetchToken, createConnection, setStatus, setClient, addSignoutListener } = params;
@@ -92,6 +111,7 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
     params.setTimer ?? ((fn: () => void, delayMs: number): unknown => setTimeout(fn, delayMs));
   const clearTimer =
     params.clearTimer ?? ((handle: unknown): void => clearTimeout(handle as number));
+  const isVisible = params.isVisible ?? ((): boolean => true);
 
   let connection: ChatConnection | null = null;
   let cancelled = false;
@@ -99,7 +119,8 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
   let live = false;
   let everConnected = false;
   let failures = 0;
-  let gaveUp = false;
+  let kicked = false;
+  let unreachable = false;
   let timer: unknown = null;
 
   setStatus('connecting');
@@ -126,34 +147,42 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
     setClient(null);
   };
 
-  const retryingStatus = (): ChatStatus => (everConnected ? 'reconnecting' : 'connecting');
+  const retryingStatus = (): ChatStatus => {
+    if (unreachable) return 'unavailable';
+    return everConnected ? 'reconnecting' : 'connecting';
+  };
 
   const scheduleRetry = (): void => {
-    if (cancelled || timer !== null) return;
+    if (cancelled || kicked || timer !== null) return;
     failures += 1;
-    if (failures >= MAX_CONSECUTIVE_FAILURES) {
-      gaveUp = true;
-      dropConnection();
-      setStatus('unavailable');
-      logger.error('chat: connection retry loop gave up', { failures });
-      return;
-    }
     setStatus(retryingStatus());
+    // Hidden: pause. The wake signal (tab visible) resumes with an attempt.
+    if (!isVisible()) return;
     timer = setTimer(() => {
       timer = null;
+      if (!isVisible()) return;
       void attempt();
     }, backoffDelayMs(failures));
   };
 
   const onConnected = (conn: ChatConnection): void => {
-    if (cancelled || connection !== conn || live) return;
+    if (cancelled || kicked || connection !== conn || live) return;
     live = true;
     everConnected = true;
     failures = 0;
-    gaveUp = false;
+    unreachable = false;
     clearPending();
     setClient(conn);
     setStatus('connected');
+  };
+
+  const onKicked = (reason: string): void => {
+    if (cancelled || kicked) return;
+    kicked = true;
+    clearPending();
+    dropConnection();
+    logger.warn('chat: signed in on another device, live delivery stopped', { reason });
+    setStatus('kicked');
   };
 
   const renew = async (conn: ChatConnection): Promise<void> => {
@@ -161,7 +190,7 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
     if (cancelled || connection !== conn) return;
     if (!next.ok) {
       // The SDK will report onTokenExpired, which reopens with backoff.
-      logger.warn('chat: token renewal fetch failed');
+      logger.warn('chat: token renewal fetch failed', { reason: next.reason });
       return;
     }
     try {
@@ -172,21 +201,23 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
   };
 
   const attempt = async (): Promise<void> => {
-    if (cancelled || opening || live) return;
+    if (cancelled || kicked || opening || live) return;
     opening = true;
     try {
       const result = await fetchToken();
-      if (cancelled) return;
+      if (cancelled || kicked) return;
       if (!result.ok) {
-        logger.warn('chat: token fetch failed', { failures: failures + 1 });
+        unreachable = result.reason === 'auth' || result.reason === 'network';
+        logger.warn('chat: token fetch failed', { reason: result.reason, failures: failures + 1 });
         scheduleRetry();
         return;
       }
+      unreachable = false;
 
       dropConnection();
       const conn = createConnection(result.app_key);
       connection = conn;
-      const isCurrent = (): boolean => !cancelled && connection === conn;
+      const isCurrent = (): boolean => !cancelled && !kicked && connection === conn;
       conn.addEventHandler(CHAT_EVENT_HANDLER_ID, {
         onConnected: () => onConnected(conn),
         onReconnecting: () => {
@@ -200,10 +231,14 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
           setStatus(retryingStatus());
         },
         onOnline: () => {
-          if (isCurrent() && !live) retry();
+          if (isCurrent() && !live) wake();
         },
         onDisconnected: (error) => {
           if (!isCurrent()) return;
+          if (isKickReason(error)) {
+            onKicked(error?.message ?? '');
+            return;
+          }
           live = false;
           logger.warn('chat: disconnected', { message: error?.message ?? '' });
           scheduleRetry();
@@ -215,10 +250,14 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
           if (!isCurrent()) return;
           logger.warn('chat: token expired, reopening');
           live = false;
-          retry();
+          wake();
         },
         onTextMessage: (message) => dispatchGlobalMessage(message),
         onError: (error) => {
+          if (isCurrent() && isKickReason(error)) {
+            onKicked(error.message);
+            return;
+          }
           logger.warn('chat: sdk error', { type: error.type, message: error.message });
         },
       });
@@ -226,7 +265,7 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
       try {
         await conn.open({ user: result.agora_username, accessToken: result.token });
       } catch (error) {
-        if (cancelled) return;
+        if (cancelled || kicked) return;
         logger.warn('chat: open failed', { error: String(error), failures: failures + 1 });
         if (connection === conn) dropConnection();
         scheduleRetry();
@@ -242,19 +281,22 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
     }
   };
 
-  const retry = (): void => {
-    if (cancelled || live || opening) return;
+  // Automatic wake (tab visible, online, token expired): never overrides a kick.
+  const wake = (): void => {
+    if (cancelled || kicked || live || opening) return;
     clearPending();
-    if (gaveUp) {
-      gaveUp = false;
-      failures = 0;
-    }
     setStatus(retryingStatus());
     void attempt();
   };
 
-  const removeWake =
-    params.addWakeListener !== undefined ? params.addWakeListener(retry) : () => {};
+  // The user's tap: also reconnects after a kick.
+  const retry = (): void => {
+    if (cancelled || live || opening) return;
+    kicked = false;
+    wake();
+  };
+
+  const removeWake = params.addWakeListener !== undefined ? params.addWakeListener(wake) : () => {};
 
   const teardown = (): void => {
     cancelled = true;

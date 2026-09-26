@@ -93,6 +93,7 @@ export function useChatClient(): ChatContextValue {
       setClient,
       addSignoutListener,
       addWakeListener,
+      isVisible: () => document.visibilityState === 'visible',
     });
     retryRef.current = handle.retry;
     return () => {
