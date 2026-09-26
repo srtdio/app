@@ -5,8 +5,8 @@
 // The worker contract is read verbatim from src/server/workers/chat-token.ts: a
 // 200 returns { token, expires_at, agora_username, app_key }. This never throws
 // on an expected failure (no URL, no session, network error, non-2xx); each of
-// those resolves to { ok: false } so the availability gate can stay closed
-// without breaking the rest of the app.
+// those resolves to { ok: false, reason } so the controller can tell a refusal
+// (401/403) or an unreachable endpoint (CORS/network) from a transient error.
 
 import type { ChatTokenResult } from '@/lib/chat/types';
 
@@ -26,7 +26,7 @@ export interface ChatTokenRequest {
  */
 export async function fetchChatToken(request: ChatTokenRequest): Promise<ChatTokenResult> {
   if (!request.url || !request.accessToken) {
-    return { ok: false };
+    return { ok: false, reason: 'config' };
   }
 
   let response: Response;
@@ -40,11 +40,15 @@ export async function fetchChatToken(request: ChatTokenRequest): Promise<ChatTok
       body: JSON.stringify({ workspace_id: request.workspaceId }),
     });
   } catch {
-    return { ok: false };
+    // fetch rejects only when the request itself failed: CORS, offline, DNS.
+    return { ok: false, reason: 'network' };
   }
 
+  if (response.status === 401 || response.status === 403) {
+    return { ok: false, reason: 'auth' };
+  }
   if (!response.ok) {
-    return { ok: false };
+    return { ok: false, reason: 'error' };
   }
   return parseTokenBody(await readJson(response));
 }
@@ -60,7 +64,7 @@ async function readJson(response: Response): Promise<unknown> {
 /** Accept a body only when all four worker fields are present strings. */
 function parseTokenBody(body: unknown): ChatTokenResult {
   if (typeof body !== 'object' || body === null) {
-    return { ok: false };
+    return { ok: false, reason: 'error' };
   }
   const fields = body as Record<string, unknown>;
   const token = fields.token;
@@ -73,7 +77,7 @@ function parseTokenBody(body: unknown): ChatTokenResult {
     typeof agoraUsername !== 'string' ||
     typeof appKey !== 'string'
   ) {
-    return { ok: false };
+    return { ok: false, reason: 'error' };
   }
   return {
     ok: true,

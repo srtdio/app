@@ -1,13 +1,15 @@
 // React adapter over thread.ts + history.ts + record.ts. Postgres is the record
 // and the read path: the thread loads its latest page from chat_messages, pages
 // older rows by keyset on scroll-to-top, and catches up (rows newer than the
-// newest loaded) on every transition to 'connected'. Agora is live delivery
-// only: incoming text for the open channel is appended by its Sorted id (deduped
-// against what is loaded), and reaction / read signals arrive as command
-// messages. Sends go to chat_message_send FIRST; the returned row (server
-// created_at) is what the thread shows, and the Agora publish that follows
-// cannot fail the send. The effect is keyed on the channel id, so switching
-// channels tears the previous subscription down before the next one registers.
+// newest loaded) on tab visible, browser online, every transition to
+// 'connected', and every 60s while visible, whatever the Agora state. Agora is
+// live delivery only: an incoming text for the open channel is verified against
+// its chat_messages row (RLS) and the ROW renders; an id with no row is
+// dropped. Reaction / read signals arrive as command messages. Sends go to
+// chat_message_send FIRST; the returned row (server created_at) is what the
+// thread shows, and the Agora publish that follows (capped at 5s) cannot fail
+// the send. Unrecorded sends live in the per-channel outbox, so switching
+// channels keeps a sending or failed bubble and its Retry payload.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Client } from '@srtdio/rpc';
@@ -18,11 +20,20 @@ import { newMessageId } from '@/lib/chat/message-id';
 import { createCmdMessage, createTextMessage } from '@/lib/chat/message-factory';
 import {
   loadLatestMessages,
+  loadMessagesByIds,
   loadNewerMessages,
   loadOlderMessages,
   loadPeerReadCursor,
   loadReactions,
 } from '@/lib/chat/history';
+import { browserCatchUpTriggers, catchUpRows } from '@/lib/chat/catch-up';
+import { liveVerifierFor, type LiveVerifier } from '@/lib/chat/live-verify';
+import {
+  createChannelOutbox,
+  type ChannelOutbox,
+  type Outbox,
+  type OutboxEntry,
+} from '@/lib/chat/chat-store';
 import {
   addReactionRecord,
   removeReactionRecord,
@@ -32,15 +43,19 @@ import {
 import { createDebouncer, READ_CURSOR_DEBOUNCE_MS } from '@/lib/chat/read-cursor';
 import { runSend } from '@/lib/chat/send-flow';
 import {
-  appendMessage,
+  createInFlightGuard,
+  recordThenSignal,
+  settleSendFailure,
+} from '@/lib/chat/thread-actions';
+import {
   applyReactionOp,
+  hydrateReplies,
   markReadUpTo,
   markReadUpToMessage,
   mergeFetched,
   mergeReactions,
   newestCursor,
   oldestCursor,
-  pendingMessage,
   reactionEventExt,
   readEventExt,
   rowToThreadMessage,
@@ -48,6 +63,7 @@ import {
   setMessageState,
   subscribeIncoming,
   upsertMessage,
+  withOutboxBubbles,
   type ChannelTarget,
   type LocalMessageContent,
   type ThreadConnection,
@@ -90,12 +106,6 @@ function asSignalConnection(client: ChatConnection): TypingConnection {
   return client as TypingConnection;
 }
 
-/** What a send needs to run again with the same id. */
-interface PendingSend {
-  text: string;
-  local: LocalMessageContent;
-}
-
 export function useChatThread(params: {
   client: ChatConnection | null;
   status: ChatStatus;
@@ -107,15 +117,25 @@ export function useChatThread(params: {
   /** The DM peer, for the seen ticks; null for groups. */
   peerUserId: string | null;
   /** Called after a successful record write so the live store can show 'You: ...'. */
-  onOwnMessage?: (text: string, ts: number) => void;
+  onOwnMessage?: (channelId: string, text: string, ts: number) => void;
   /** Called after each catch-up so the caller can refresh unread counts. */
   onCaughtUp?: () => void;
+  /** Per-channel unrecorded sends (the chat store's); a hook-local one when absent. */
+  outbox?: ChannelOutbox;
   /** Injected in tests; the app uses the shared Supabase client. */
   db?: Client;
+  /** Injected in tests; the app shares one verifier per client with the store. */
+  verifier?: LiveVerifier;
 }): UseChatThread {
   const { client, status, channelId, target, currentUserId, peerUserId, onOwnMessage, onCaughtUp } =
     params;
   const db: Client = params.db ?? supabase;
+  const verifier = params.verifier ?? liveVerifierFor(db);
+  const localOutboxRef = useRef<Outbox>({});
+  const localOutbox = useMemo(() => createChannelOutbox(localOutboxRef), []);
+  const outbox = params.outbox ?? localOutbox;
+  const outboxRef = useRef(outbox);
+  outboxRef.current = outbox;
 
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -135,7 +155,8 @@ export function useChatThread(params: {
   onOwnMessageRef.current = onOwnMessage;
   const onCaughtUpRef = useRef(onCaughtUp);
   onCaughtUpRef.current = onCaughtUp;
-  const pendingRef = useRef<Map<string, PendingSend>>(new Map());
+  const inFlight = useMemo(() => createInFlightGuard(), []);
+  const catchingUpRef = useRef(false);
   const loadingOlderRef = useRef(false);
   const lastCursorRef = useRef<string | null>(null);
 
@@ -172,16 +193,69 @@ export function useChatThread(params: {
     [db],
   );
 
-  // Load the latest page whenever the channel changes.
+  /**
+   * Fill the reply quotes of freshly fetched rows: from what is loaded, else
+   * one IN read for the quoted rows that are not.
+   */
+  const resolveReplies = useCallback(
+    async (fetched: readonly ThreadMessage[], forChannel: string): Promise<void> => {
+      const known = new Set([...messagesRef.current, ...fetched].map((m) => m.id));
+      const missing = [
+        ...new Set(
+          fetched
+            .filter((m) => m.reply !== null && m.reply.preview === '' && !known.has(m.reply.id))
+            .map((m) => m.reply?.id ?? ''),
+        ),
+      ];
+      if (missing.length === 0) {
+        setMessages((prev) => hydrateReplies(prev, [], true));
+        return;
+      }
+      const result = await loadMessagesByIds(db, missing);
+      if (channelRef.current !== forChannel) return;
+      if (!result.ok) {
+        logger.warn('chat: quoted messages load failed', { error: result.error.message });
+        setMessages((prev) => hydrateReplies(prev, []));
+        return;
+      }
+      const quoted = result.data.map((row) => rowToThreadMessage(row, currentUserId));
+      setMessages((prev) => hydrateReplies(prev, quoted, true));
+    },
+    [db, currentUserId],
+  );
+
+  /** Fold fetched rows in: merge, lay the outbox back on top, then reactions + quotes. */
+  const foldRows = useCallback(
+    (fetched: ThreadMessage[], forChannel: string): void => {
+      for (const m of fetched) {
+        // A failed send whose row landed anyway (timeout after commit) is done.
+        if (outboxRef.current.entries(forChannel).some((e) => e.id === m.id)) {
+          outboxRef.current.remove(forChannel, m.id);
+        }
+      }
+      const entries = outboxRef.current.entries(forChannel);
+      setMessages((prev) => withOutboxBubbles(mergeFetched(prev, fetched), entries, currentUserId));
+      if (fetched.length === 0) return;
+      void attachReactions(
+        fetched.map((m) => m.id),
+        forChannel,
+      );
+      void resolveReplies(fetched, forChannel);
+    },
+    [currentUserId, attachReactions, resolveReplies],
+  );
+
+  // Load the latest page whenever the channel changes. The channel's unrecorded
+  // sends (outbox) show at once and stay on top of whatever loads.
   useEffect(() => {
-    pendingRef.current = new Map();
     lastCursorRef.current = null;
-    setMessages([]);
     setHasMore(false);
     if (channelId === null) {
+      setMessages([]);
       setLoading(false);
       return;
     }
+    setMessages(withOutboxBubbles([], outboxRef.current.entries(channelId), currentUserId));
     let cancelled = false;
     setLoading(true);
     void (async (): Promise<void> => {
@@ -196,30 +270,33 @@ export function useChatThread(params: {
         return;
       }
       const fetched = page.data.rows.map((row) => rowToThreadMessage(row, currentUserId));
-      setMessages((prev) => mergeFetched(prev, fetched));
+      foldRows(fetched, channelId);
       setHasMore(page.data.hasMore);
       setLoading(false);
-      void attachReactions(
-        fetched.map((m) => m.id),
-        channelId,
-      );
       if (peerUserId !== null) void attachPeerCursor(channelId, peerUserId);
     })();
     return () => {
       cancelled = true;
     };
-  }, [db, channelId, currentUserId, peerUserId, attachReactions, attachPeerCursor]);
+  }, [db, channelId, currentUserId, peerUserId, foldRows, attachPeerCursor]);
 
-  // Live traffic for the open channel.
+  // Live traffic for the open channel. A text message renders only from its
+  // verified chat_messages row; the verifier logs a missing row once.
   useEffect(() => {
     if (client === null || channelId === null) return;
     const unsubscribe = subscribeIncoming({
       connection: asThreadConnection(client),
       channelId,
       currentUserId,
-      onMessage: (message) => setMessages((prev) => appendMessage(prev, message)),
-      onIgnored: (rawId) =>
-        logger.warn('chat: live message without sorted ids ignored', { agora_id: rawId }),
+      onMessage: (live) => {
+        void verifier.verify(live.id).then((lookup) => {
+          if (!lookup.found) return;
+          if (channelRef.current !== channelId || lookup.row.channel_id !== channelId) return;
+          foldRows([rowToThreadMessage(lookup.row, currentUserId)], channelId);
+        });
+      },
+      // The store reports ids-less messages (it sees every message); stay quiet here.
+      onIgnored: () => {},
       onReaction: ({ messageId, emoji, op, fromUserId }) =>
         setMessages((prev) =>
           applyReactionOp(prev, { messageId, emoji, op, mine: fromUserId === currentUserId }),
@@ -230,42 +307,61 @@ export function useChatThread(params: {
       },
     });
     return unsubscribe;
-  }, [client, channelId, currentUserId]);
+  }, [client, channelId, currentUserId, verifier, foldRows]);
 
-  // Catch-up on every transition to 'connected': rows newer than the newest
-  // loaded (created_at, id), then reactions for them, then the unread refresh.
-  const previousStatusRef = useRef<ChatStatus>(status);
-  useEffect(() => {
-    const previous = previousStatusRef.current;
-    previousStatusRef.current = status;
-    if (status !== 'connected' || previous === 'connected') return;
+  // Catch-up from Postgres, never gated on the Agora state: rows newer than the
+  // newest recorded message (paging past the 200 cap), or the latest page when
+  // nothing is recorded yet, then the unread refresh. One run at a time.
+  const catchUp = useCallback((): void => {
+    if (catchingUpRef.current) return;
     const forChannel = channelRef.current;
     if (forChannel === null) {
       onCaughtUpRef.current?.();
       return;
     }
+    catchingUpRef.current = true;
     const cursor = newestCursor(messagesRef.current);
     void (async (): Promise<void> => {
-      if (cursor !== undefined) {
-        const result = await loadNewerMessages(db, forChannel, cursor);
+      try {
+        const outcome = await catchUpRows(
+          {
+            loadLatest: () => loadLatestMessages(db, forChannel),
+            loadNewer: (from) => loadNewerMessages(db, forChannel, from),
+          },
+          cursor,
+        );
         if (channelRef.current !== forChannel) return;
-        if (!result.ok) {
+        if (!outcome.ok) {
           logger.warn('chat: catch-up load failed', {
             channel_id: forChannel,
-            error: result.error.message,
+            error: outcome.error,
           });
-        } else if (result.data.length > 0) {
-          const fetched = result.data.map((row) => rowToThreadMessage(row, currentUserId));
-          setMessages((prev) => mergeFetched(prev, fetched));
-          void attachReactions(
-            fetched.map((m) => m.id),
-            forChannel,
-          );
         }
+        const fetched = outcome.rows.map((row) => rowToThreadMessage(row, currentUserId));
+        if (fetched.length > 0) foldRows(fetched, forChannel);
+        if (outcome.ok && outcome.latestPage !== undefined) setHasMore(outcome.latestPage.hasMore);
+      } finally {
+        catchingUpRef.current = false;
+        onCaughtUpRef.current?.();
       }
-      onCaughtUpRef.current?.();
     })();
-  }, [status, db, currentUserId, attachReactions]);
+  }, [db, currentUserId, foldRows]);
+
+  const catchUpRef = useRef(catchUp);
+  catchUpRef.current = catchUp;
+
+  // Tab visible, browser online, and every 60s while visible (cleared while
+  // hidden and on unmount).
+  useEffect(() => browserCatchUpTriggers(() => catchUpRef.current()), []);
+
+  // Every transition to 'connected'.
+  const previousStatusRef = useRef<ChatStatus>(status);
+  useEffect(() => {
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = status;
+    if (status !== 'connected' || previous === 'connected') return;
+    catchUpRef.current();
+  }, [status]);
 
   const loadOlder = useCallback((): void => {
     const forChannel = channelRef.current;
@@ -286,18 +382,19 @@ export function useChatThread(params: {
         return;
       }
       const fetched = page.data.rows.map((row) => rowToThreadMessage(row, currentUserId));
-      setMessages((prev) => mergeFetched(prev, fetched));
+      foldRows(fetched, forChannel);
       setHasMore(page.data.hasMore);
-      void attachReactions(
-        fetched.map((m) => m.id),
-        forChannel,
-      );
     })();
-  }, [db, currentUserId, attachReactions]);
+  }, [db, currentUserId, foldRows]);
 
-  /** Record a message (Postgres first), then publish it live. */
+  /**
+   * Record a message (Postgres first), then publish it live. The outcome is
+   * written to the channel's outbox whatever channel is open now; the visible
+   * list is only touched while that channel is still open. A record failure is
+   * always logged.
+   */
   const deliver = useCallback(
-    async (id: string, forChannel: string, pending: PendingSend): Promise<void> => {
+    async (id: string, forChannel: string, entry: OutboxEntry): Promise<void> => {
       const traceId = generateTraceId();
       const connection = clientRef.current;
       const liveTarget = targetRef.current;
@@ -315,39 +412,47 @@ export function useChatThread(params: {
                 liveIds: { sorted_message_id: input.id, sorted_channel_id: input.channelId },
               })
           : undefined;
-      const outcome = await runSend(
-        {
-          recordMessage: (input) => sendMessageRecord({ client: db, ...input }),
-          publishLive,
-          // The row exists; receivers catch up from Postgres on reconnect.
-          onLiveWarning: (context) => logger.warn('chat: live publish did not complete', context),
-        },
-        {
+      try {
+        const outcome = await runSend(
+          {
+            recordMessage: (input) => sendMessageRecord({ client: db, ...input }),
+            publishLive,
+            // The row exists; receivers catch up from Postgres.
+            onLiveWarning: (context) => logger.warn('chat: live publish did not complete', context),
+            // The bubble goes 'sent' the moment the row exists, not after Agora.
+            onRecorded: (message) => {
+              outboxRef.current.remove(forChannel, id);
+              if (channelRef.current === forChannel) {
+                setMessages((prev) => upsertMessage(prev, message));
+              }
+              onOwnMessageRef.current?.(forChannel, entry.text, message.time);
+            },
+          },
+          {
+            id,
+            channelId: forChannel,
+            currentUserId,
+            traceId,
+            text: entry.text,
+            local: entry.local,
+          },
+        );
+        if (outcome.ok) return;
+        settleSendFailure({
+          outcome,
           id,
           channelId: forChannel,
-          currentUserId,
           traceId,
-          text: pending.text,
-          local: pending.local,
-        },
-      );
-      if (channelRef.current !== forChannel) return;
-      if (!outcome.ok) {
-        logger.error('chat: message record failed', {
-          trace_id: traceId,
-          message_id: id,
-          channel_id: forChannel,
-          reason: outcome.reason,
-          error: outcome.error,
+          outbox: outboxRef.current,
+          isOpen: () => channelRef.current === forChannel,
+          markFailed: () => setMessages((prev) => setMessageState(prev, id, 'failed')),
+          logError: (message, context) => logger.error(message, context),
         });
-        setMessages((prev) => setMessageState(prev, id, 'failed'));
-        return;
+      } finally {
+        inFlight.finish(id);
       }
-      pendingRef.current.delete(id);
-      setMessages((prev) => upsertMessage(prev, outcome.message));
-      onOwnMessageRef.current?.(pending.text, outcome.message.time);
     },
-    [db, currentUserId],
+    [db, currentUserId, inFlight],
   );
 
   const send = useCallback<UseChatThread['send']>(
@@ -360,31 +465,33 @@ export function useChatThread(params: {
       )
         return;
       const id = newMessageId();
-      const pending: PendingSend = {
+      const entry: OutboxEntry = {
+        id,
         text: trimmed,
         local: { attachments: [...attachments], sharedPostIds: [...sharedPostIds], reply },
+        state: 'sending',
       };
-      pendingRef.current.set(id, pending);
-      setMessages((prev) =>
-        appendMessage(
-          prev,
-          pendingMessage({ id, currentUserId, text: trimmed, local: pending.local, after: prev }),
-        ),
-      );
-      await deliver(id, forChannel, pending);
+      outboxRef.current.put(forChannel, entry);
+      setMessages((prev) => withOutboxBubbles(prev, [entry], currentUserId));
+      inFlight.tryStart(id);
+      await deliver(id, forChannel, entry);
     },
-    [currentUserId, deliver],
+    [currentUserId, deliver, inFlight],
   );
 
   const retry = useCallback(
     (messageId: string): void => {
       const forChannel = channelRef.current;
-      const pending = pendingRef.current.get(messageId);
-      if (forChannel === null || pending === undefined) return;
+      if (forChannel === null) return;
+      const entry = outboxRef.current.entries(forChannel).find((e) => e.id === messageId);
+      if (entry === undefined || entry.state !== 'failed') return;
+      // A second tap while the first retry is still recording is ignored.
+      if (!inFlight.tryStart(messageId)) return;
+      outboxRef.current.setState(forChannel, messageId, 'sending');
       setMessages((prev) => setMessageState(prev, messageId, 'sending'));
-      void deliver(messageId, forChannel, pending);
+      void deliver(messageId, forChannel, { ...entry, state: 'sending' });
     },
-    [deliver],
+    [deliver, inFlight],
   );
 
   const toggleReaction = useCallback(
@@ -395,14 +502,26 @@ export function useChatThread(params: {
       const traceId = generateTraceId();
       setMessages((prev) => applyReactionOp(prev, { messageId, emoji, op, mine: true }));
       const params = { client: db, channelId: forChannel, messageId, emoji, traceId };
-      void (currentlyMine ? removeReactionRecord(params) : addReactionRecord(params)).then(
-        (result) => {
-          if (result.ok) return;
+      void recordThenSignal({
+        record: () => (currentlyMine ? removeReactionRecord(params) : addReactionRecord(params)),
+        // Peers are signalled only once the record holds the reaction.
+        signal: async () => {
+          const connection = clientRef.current;
+          const liveTarget = targetRef.current;
+          if (connection === null || liveTarget === null) return;
+          await sendSignal({
+            connection: asSignalConnection(connection),
+            target: liveTarget,
+            createCmd: createCmdMessage,
+            ext: reactionEventExt({ messageId, emoji, op }),
+          });
+        },
+        onRecordFailed: (message) => {
           logger.warn('chat: reaction record failed', {
             trace_id: traceId,
             message_id: messageId,
             op,
-            error: result.message,
+            error: message,
           });
           if (channelRef.current !== forChannel) return;
           setMessages((prev) =>
@@ -414,18 +533,9 @@ export function useChatThread(params: {
             }),
           );
         },
-      );
-      const connection = clientRef.current;
-      const liveTarget = targetRef.current;
-      if (connection === null || liveTarget === null) return;
-      void sendSignal({
-        connection: asSignalConnection(connection),
-        target: liveTarget,
-        createCmd: createCmdMessage,
-        ext: reactionEventExt({ messageId, emoji, op }),
-      }).catch((error: unknown) =>
-        logger.warn('chat: reaction signal failed', { trace_id: traceId, error: String(error) }),
-      );
+        onSignalFailed: (error) =>
+          logger.warn('chat: reaction signal failed', { trace_id: traceId, error: String(error) }),
+      });
     },
     [db],
   );

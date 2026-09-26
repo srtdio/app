@@ -4,7 +4,14 @@ import {
   applyPreviews,
   applyUnreadCounts,
   clearPendingOpen,
+  createChannelOutbox,
   initialState,
+  outboxPut,
+  outboxRemove,
+  outboxSetState,
+  selectOutbox,
+  type Outbox,
+  type OutboxEntry,
   markRead,
   mergeInitial,
   previewText,
@@ -71,6 +78,51 @@ describe('mergeInitial + applyUnreadCounts', () => {
       lastMessageTs: 30,
       unread: 0,
     });
+  });
+});
+
+describe('applyUnreadCounts absent channels', () => {
+  it('sets a channel absent from the result to 0 (a stale live increment does not survive)', () => {
+    const state = applyUnreadCounts(seeded(), [
+      { channelId: 'b', unread: 4, lastMessageAt: '1970-01-01T00:00:00.040Z' },
+    ]);
+    expect(selectConversation(state, 'a')?.unread).toBe(0);
+    expect(selectConversation(state, 'a')?.lastMessageTs).toBe(10);
+    expect(selectConversation(state, 'b')?.unread).toBe(4);
+    expect(selectTotalUnread(applyUnreadCounts(seeded(), []))).toBe(0);
+  });
+});
+
+describe('outbox (per-channel unrecorded sends)', () => {
+  const entry = (id: string, state: OutboxEntry['state'] = 'sending'): OutboxEntry => ({
+    id,
+    text: id,
+    local: { attachments: [], sharedPostIds: [], reply: null },
+    state,
+  });
+
+  it("keeps each channel's sends apart, so switching channels loses nothing", () => {
+    let box: Outbox = {};
+    box = outboxPut(box, 'a', entry('a1'));
+    box = outboxPut(box, 'b', entry('b1'));
+    box = outboxSetState(box, 'a', 'a1', 'failed');
+    expect(selectOutbox(box, 'a')).toEqual([entry('a1', 'failed')]);
+    expect(selectOutbox(box, 'b')).toEqual([entry('b1')]);
+    box = outboxRemove(box, 'b', 'b1');
+    expect(selectOutbox(box, 'b')).toEqual([]);
+    expect(Object.keys(box)).toEqual(['a']);
+    expect(outboxSetState(box, 'a', 'unknown', 'failed')).toBe(box);
+  });
+
+  it('createChannelOutbox mutates one shared holder the thread reads back later', () => {
+    const holder = { current: {} as Outbox };
+    const outbox = createChannelOutbox(holder);
+    outbox.put('a', entry('a1'));
+    outbox.setState('a', 'a1', 'failed');
+    // A different view of the same holder (the thread after a channel switch).
+    expect(createChannelOutbox(holder).entries('a')).toEqual([entry('a1', 'failed')]);
+    outbox.remove('a', 'a1');
+    expect(outbox.entries('a')).toEqual([]);
   });
 });
 

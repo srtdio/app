@@ -11,6 +11,8 @@ import {
   parseSharedPostIds,
   precheckImage,
   toMessageAttachment,
+  buildAttachmentMeta,
+  parseAttachmentMeta,
   uploadChatAttachment,
   type MessageAttachment,
   type ReplyQuote,
@@ -348,5 +350,38 @@ describe('toMessageAttachment', () => {
       name: 'doc.pdf',
       mime: 'application/pdf',
     });
+  });
+});
+
+describe('buildAttachmentMeta / parseAttachmentMeta', () => {
+  it('round-trips mime, name, size, duration and a transcript up to 2000 chars', () => {
+    const meta = buildAttachmentMeta([
+      {
+        assetId: 'v1',
+        name: 'a.webm',
+        mime: 'audio/webm',
+        size: 9,
+        durationMs: 1500,
+        transcript: 'hi',
+      },
+      { assetId: 'v2', name: 'b.webm', mime: 'audio/webm', transcript: 'y'.repeat(2001) },
+    ]);
+    expect(meta).toEqual({
+      v1: { mime: 'audio/webm', name: 'a.webm', size: 9, duration_ms: 1500, transcript: 'hi' },
+      v2: { mime: 'audio/webm', name: 'b.webm', size: 0 },
+    });
+    expect(parseAttachmentMeta(meta, ['v1', 'v2', 'v3'])).toEqual([
+      {
+        assetId: 'v1',
+        name: 'a.webm',
+        mime: 'audio/webm',
+        size: 9,
+        durationMs: 1500,
+        transcript: 'hi',
+      },
+      { assetId: 'v2', name: 'b.webm', mime: 'audio/webm', size: 0 },
+      { assetId: 'v3', name: '', mime: '' },
+    ]);
+    expect(parseAttachmentMeta(null, ['v1'])).toEqual([{ assetId: 'v1', name: '', mime: '' }]);
   });
 });

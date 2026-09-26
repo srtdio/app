@@ -8,7 +8,13 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
-import { ChatShell, ConnectionBanner, connectionBannerText } from '@/components/chat/ChatShell';
+import {
+  ChatShell,
+  ChatStatusBanner,
+  ConnectionBanner,
+  connectionBannerAction,
+  connectionBannerText,
+} from '@/components/chat/ChatShell';
 import { ChatConnected } from '@/components/chat/ChatConnected';
 import { ChatUnavailable, chatUnavailableView } from '@/components/chat/ChatUnavailable';
 
@@ -33,11 +39,21 @@ function find(tree: ReactNode, predicate: (el: ReactElement) => boolean): ReactE
 }
 
 describe('ChatShell status dispatch', () => {
-  it('renders the unavailable panel and never throws when unavailable', () => {
+  it('renders the full unavailable panel only when there is no workspace or user', () => {
     const render = () =>
-      ChatShell({ status: 'unavailable', client: null, workspaceId: 'w', currentUserId: 'u' });
+      ChatShell({ status: 'unavailable', client: null, workspaceId: '', currentUserId: '' });
     expect(render).not.toThrow();
     expect(render().type).toBe(ChatUnavailable);
+  });
+
+  it('keeps the Postgres chat surface (list, history, sending) mounted when chat is unavailable or kicked', () => {
+    for (const status of ['unavailable', 'kicked'] as const) {
+      const view = ChatShell({ status, client: null, workspaceId: 'w', currentUserId: 'u' });
+      const connected = find(view, (el) => el.type === ChatConnected);
+      expect(connected).toHaveLength(1);
+      expect((connected[0]?.props as { client: unknown }).client).toBeNull();
+      expect(find(view, (el) => el.type === ChatStatusBanner)).toHaveLength(1);
+    }
   });
 
   it('keeps ChatConnected mounted under a banner while connecting and reconnecting', () => {
@@ -46,7 +62,7 @@ describe('ChatShell status dispatch', () => {
       const connected = find(view, (el) => el.type === ChatConnected);
       expect(connected).toHaveLength(1);
       expect((connected[0]?.props as { status: string }).status).toBe(status);
-      const banners = find(view, (el) => el.type === ConnectionBanner);
+      const banners = find(view, (el) => el.type === ChatStatusBanner);
       expect(banners).toHaveLength(1);
       expect(connectionBannerText(status)).not.toBe('');
     }
@@ -62,6 +78,33 @@ describe('ChatShell status dispatch', () => {
       currentUserId: 'u',
     });
     expect(find(view, (el) => el.type === ChatConnected)).toHaveLength(1);
+  });
+});
+
+describe('ConnectionBanner copy', () => {
+  it('distinguishes reconnecting live delivery from chat unavailable and a kick', () => {
+    expect(connectionBannerText('reconnecting')).toBe('Reconnecting live delivery');
+    expect(connectionBannerText('unavailable')).toMatch(/^Chat unavailable/);
+    expect(connectionBannerText('kicked')).toBe('Signed in on another device');
+    expect(connectionBannerAction('reconnecting')).toBe('');
+    for (const status of ['connecting', 'reconnecting', 'unavailable', 'kicked'] as const) {
+      expect(connectionBannerText(status)).not.toMatch(/\u2014/);
+    }
+  });
+
+  it('gives the kicked banner a 44px tap target that reconnects', () => {
+    const onRetry = vi.fn();
+    const view = ConnectionBanner({ status: 'kicked', onRetry });
+    const buttons = find(view, (el) => el.type === 'button');
+    expect(buttons).toHaveLength(1);
+    const props = buttons[0]?.props as { onClick: () => void; className: string; children: string };
+    expect(props.children).toBe('Reconnect');
+    expect(props.className).toContain('min-h-[44px]');
+    props.onClick();
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(
+      find(ConnectionBanner({ status: 'reconnecting', onRetry }), (el) => el.type === 'button'),
+    ).toHaveLength(0);
   });
 });
 

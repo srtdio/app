@@ -14,7 +14,7 @@ import { useLongPress, type LongPressHandlers } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import type { ChatProfile } from '@/lib/chat-reads';
-import type { MessageStatus, ThreadMessage } from '@/lib/chat/thread';
+import { replyPreview, type MessageStatus, type ThreadMessage } from '@/lib/chat/thread';
 import type { MessageAttachment, ReplyQuote } from '@/lib/chat/attachments';
 import { useChatAttachments } from '@/lib/chat/use-chat-attachments';
 import { formatMessageTime } from '@/lib/chat/time-format';
@@ -599,17 +599,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     null,
   );
   const handleReply = (message: ThreadMessage): void => {
-    const body = message.body.trim();
-    const preview =
-      body !== ''
-        ? body.length > 120
-          ? `${body.slice(0, 120)}…`
-          : body
-        : message.attachments.length > 0
-          ? 'Attachment'
-          : message.sharedPostIds.length > 0
-            ? 'Shared post'
-            : 'Message';
+    const preview = replyPreview(message);
     setReplyDraft({
       authorName: senderName(message, props.profiles),
       quote: { id: message.id, authorUserId: message.senderUserId, preview },

@@ -12,6 +12,7 @@ import {
   type ChatProfile,
 } from '@/lib/chat-reads';
 import { targetFromSummary, type ChannelTarget } from '@/lib/chat/thread';
+import { workspaceTimeZone } from '@/lib/chat/time-format';
 import { useChatThread } from '@/lib/chat/use-chat-thread';
 import { useChatTyping } from '@/lib/chat/use-chat-typing';
 import { useChatPresence } from '@/lib/chat/use-chat-presence';
@@ -46,8 +47,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const { client, status, workspaceId, currentUserId } = props;
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const { workspaces } = useWorkspace();
-  // The workspace civil clock every timestamp renders on (never the browser's).
-  const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
+  // The workspace civil clock every timestamp renders on; the browser's own zone
+  // only when the workspace has none.
+  const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
 
   const [channels, setChannels] = useState<ChannelSummary[]>([]);
   const [selected, setSelected] = useState<ChannelSummary | null>(null);
@@ -140,6 +142,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     updateOwnMessage,
     refreshUnreadCounts,
     clearPendingOpen,
+    outbox,
   } = useChatStore();
 
   // Keep the live store's active conversation in step with the open channel:
@@ -166,11 +169,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     clearPendingOpen();
   }, [pendingOpen, channels, clearPendingOpen]);
 
+  // Keyed on the channel the send was recorded in, which may no longer be open.
   const onOwnMessage = useCallback(
-    (text: string, ts: number) => {
-      if (selectedChannelId !== null) updateOwnMessage(selectedChannelId, text, ts);
-    },
-    [selectedChannelId, updateOwnMessage],
+    (channelId: string, text: string, ts: number) => updateOwnMessage(channelId, text, ts),
+    [updateOwnMessage],
   );
 
   const target = useMemo(() => safeTarget(selected), [selected]);
@@ -183,6 +185,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     peerUserId: selected?.peerUserId ?? null,
     onOwnMessage,
     onCaughtUp: refreshUnreadCounts,
+    outbox,
   });
   const typing = useChatTyping({ client, target, currentUserId });
   const presence = useChatPresence({ client, peerUserId: selected?.peerUserId ?? null });

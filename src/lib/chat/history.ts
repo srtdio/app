@@ -29,7 +29,7 @@ type ChatReadCursorRow = Database['public']['Tables']['chat_read_cursors']['Row'
 type UnreadCountRow = Database['public']['Functions']['chat_unread_counts']['Returns'][number];
 
 const MESSAGE_COLUMNS =
-  'id, channel_id, workspace_id, sender_user_id, body, mentions, attachment_asset_ids, agora_event_id, created_at, edited_at, deleted_at';
+  'id, channel_id, workspace_id, sender_user_id, body, mentions, attachment_asset_ids, shared_post_ids, reply_to_message_id, attachment_meta, agora_event_id, created_at, edited_at, deleted_at';
 
 function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };
@@ -111,6 +111,44 @@ export async function loadNewerMessages(
     .order('id', { ascending: true })
     .limit(CATCH_UP_LIMIT);
   if (res.error) return fail(`loadNewerMessages: ${res.error.message}`);
+  return { ok: true, data: (res.data ?? []) as ChatMessageRow[] };
+}
+
+/** One row looked up by id: found, or absent (never recorded, deleted, or not visible under RLS). */
+export type MessageLookup = { found: true; row: ChatMessageRow } | { found: false };
+
+/**
+ * One chat_messages row by its Sorted id, RLS-scoped. Used to verify a live
+ * Agora message against the record before it renders: only a row the caller
+ * can read is shown.
+ */
+export async function loadMessageById(
+  client: Client,
+  messageId: string,
+): Promise<Result<MessageLookup>> {
+  const res = await client
+    .from('chat_messages')
+    .select(MESSAGE_COLUMNS)
+    .eq('id', messageId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (res.error) return fail(`loadMessageById: ${res.error.message}`);
+  const row = res.data as ChatMessageRow | null;
+  return { ok: true, data: row === null ? { found: false } : { found: true, row } };
+}
+
+/** Rows for a batch of ids (quoted messages of replies); one IN query, empty in, empty out. */
+export async function loadMessagesByIds(
+  client: Client,
+  messageIds: readonly string[],
+): Promise<Result<ChatMessageRow[]>> {
+  if (messageIds.length === 0) return { ok: true, data: [] };
+  const res = await client
+    .from('chat_messages')
+    .select(MESSAGE_COLUMNS)
+    .in('id', [...messageIds])
+    .is('deleted_at', null);
+  if (res.error) return fail(`loadMessagesByIds: ${res.error.message}`);
   return { ok: true, data: (res.data ?? []) as ChatMessageRow[] };
 }
 

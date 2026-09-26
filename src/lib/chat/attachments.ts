@@ -32,6 +32,10 @@ export interface MessageAttachment {
   mime: string;
   /** Whisper transcript for a voice note; absent for non-audio attachments. */
   transcript?: string;
+  /** Byte size of the uploaded file, when known. */
+  size?: number;
+  /** Recorded length of a voice note in ms; absent for non-audio attachments. */
+  durationMs?: number;
 }
 
 /** The picker `accept` for the Photo item: the image subset of the shared allowlist. */
@@ -70,8 +74,76 @@ export function buildAttachmentExt(attachments: readonly MessageAttachment[]): A
       name: a.name,
       mime: a.mime,
       ...(a.transcript !== undefined ? { transcript: a.transcript } : {}),
+      ...(a.size !== undefined ? { size: a.size } : {}),
+      ...(a.durationMs !== undefined ? { durationMs: a.durationMs } : {}),
     })),
   };
+}
+
+/** Longest transcript persisted in chat_messages.attachment_meta; longer ones are dropped. */
+export const TRANSCRIPT_META_LIMIT = 2000;
+
+/** One attachment's render metadata as persisted in chat_messages.attachment_meta. */
+export type AttachmentMetaEntry = {
+  mime: string;
+  name: string;
+  size: number;
+  duration_ms?: number;
+  transcript?: string;
+};
+
+/** chat_messages.attachment_meta: render metadata keyed by asset (version) id. */
+export type AttachmentMetaMap = Record<string, AttachmentMetaEntry>;
+
+/**
+ * Build the p_attachment_meta payload for chat_message_send, so a message read
+ * back from Postgres renders exactly like the live one (image vs file vs voice
+ * note, name, transcript). A transcript over TRANSCRIPT_META_LIMIT is left out.
+ */
+export function buildAttachmentMeta(attachments: readonly MessageAttachment[]): AttachmentMetaMap {
+  const meta: AttachmentMetaMap = {};
+  for (const a of attachments) {
+    meta[a.assetId] = {
+      mime: a.mime,
+      name: a.name,
+      size: a.size ?? 0,
+      ...(a.durationMs !== undefined ? { duration_ms: a.durationMs } : {}),
+      ...(a.transcript !== undefined && a.transcript.length <= TRANSCRIPT_META_LIMIT
+        ? { transcript: a.transcript }
+        : {}),
+    };
+  }
+  return meta;
+}
+
+/**
+ * Read a row's attachments: one per id in `attachment_asset_ids` (the row's
+ * order), enriched from `attachment_meta` when it carries that id. An id with no
+ * (or malformed) meta renders through the bare-id path, as before the column.
+ */
+export function parseAttachmentMeta(
+  meta: unknown,
+  assetIds: readonly string[],
+): MessageAttachment[] {
+  const map =
+    typeof meta === 'object' && meta !== null && !Array.isArray(meta)
+      ? (meta as Record<string, unknown>)
+      : {};
+  return assetIds.map((assetId) => {
+    const raw = map[assetId];
+    if (typeof raw !== 'object' || raw === null) return { assetId, name: '', mime: '' };
+    const entry = raw as Record<string, unknown>;
+    const name = typeof entry.name === 'string' ? entry.name : '';
+    const mime = typeof entry.mime === 'string' ? entry.mime : '';
+    return {
+      assetId,
+      name,
+      mime,
+      ...(typeof entry.transcript === 'string' ? { transcript: entry.transcript } : {}),
+      ...(typeof entry.size === 'number' ? { size: entry.size } : {}),
+      ...(typeof entry.duration_ms === 'number' ? { durationMs: entry.duration_ms } : {}),
+    };
+  });
 }
 
 /**
@@ -162,7 +234,9 @@ function isMessageAttachment(value: unknown): value is MessageAttachment {
     typeof record.assetId === 'string' &&
     typeof record.name === 'string' &&
     typeof record.mime === 'string' &&
-    (record.transcript === undefined || typeof record.transcript === 'string')
+    (record.transcript === undefined || typeof record.transcript === 'string') &&
+    (record.size === undefined || typeof record.size === 'number') &&
+    (record.durationMs === undefined || typeof record.durationMs === 'number')
   );
 }
 
@@ -225,7 +299,7 @@ export function precheckImage(file: File): Precheck {
 /** Build the message attachment for a successfully uploaded file; `versionId` is
  * the asset VERSION id the render path presigns. */
 export function toMessageAttachment(file: File, versionId: string): MessageAttachment {
-  return { assetId: versionId, name: file.name, mime: file.type };
+  return { assetId: versionId, name: file.name, mime: file.type, size: file.size };
 }
 
 export interface ChatUploadParams {
