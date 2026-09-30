@@ -2,6 +2,11 @@ import type { Config } from 'tailwindcss';
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   darkMode: 'class',
+  // hover: styles apply only where the primary pointer can hover, so a tap on a
+  // touch screen never leaves a control stuck in its hover state.
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
       colors: {

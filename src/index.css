@@ -110,6 +110,10 @@
   --overlay-dot: rgba(244, 245, 246, 0.4);
 }
 @layer base {
+  /* No grey tap flash on touch screens; pressed and focus styles still show. */
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
   html,
   body,
   #root {
