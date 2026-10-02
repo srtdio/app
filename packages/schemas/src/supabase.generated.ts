@@ -7887,6 +7887,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      chat_message_search: {
+        Args: {
+          p_before_created_at?: string
+          p_before_id?: string
+          p_channel_id?: string
+          p_limit?: number
+          p_query: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          agora_event_id: string | null
+          attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          forwarded_from_message_id: string | null
+          id: string
+          mentions: Json | null
+          reply_to_message_id: string | null
+          sender_user_id: string | null
+          shared_brief_ids: string[] | null
+          shared_post_ids: string[] | null
+          workspace_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "chat_messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       chat_message_send: {
         Args: {
           p_attachment_asset_ids?: string[]
