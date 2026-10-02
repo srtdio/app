@@ -660,21 +660,3 @@ export function IconTickDouble(props: IconProps) {
     </Svg>
   );
 }
-
-export function IconSmile(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={12} r={9} />
-      <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" />
-      <path d="M9 9.5h.01M15 9.5h.01" />
-    </Svg>
-  );
-}
-
-export function IconArrowUp(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 19V5M6 11l6-6 6 6" />
-    </Svg>
-  );
-}

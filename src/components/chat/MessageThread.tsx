@@ -194,26 +194,6 @@ import {
   type PageGate,
 } from '@/lib/chat/post-refs';
 import { useWorkspace } from '@/lib/workspace-context';
-import type { ThreadReadState } from '@/lib/chat/use-chat-thread';
-import {
-  firstUnread,
-  readByLabel,
-  readByTarget,
-  readersOf,
-  seenLineTarget,
-  type FirstUnread,
-} from '@/lib/chat/read-receipts';
-import {
-  defaultWhoReactedLoad,
-  LatestButton,
-  MessageInfoSheet,
-  ReadByLine,
-  SeenLine,
-  UnreadDivider,
-  UnreadPill,
-  WhoReactedSheet,
-  type WhoReactedLoad,
-} from '@/components/chat/ReadingLayer';
 
 interface MessageThreadProps {
   title: string;
@@ -329,14 +309,6 @@ interface MessageThreadProps {
   initialMessageId?: string | null;
   /** The thread took initialMessageId (its jump runs, found or miss): the caller drops it. */
   onInitialJumpTaken?: () => void;
-  /** The channel's read cursors (Seen, Read by, the unread divider); absent: none of them. */
-  readState?: ThreadReadState;
-  /** The DM peer whose cursor drives the Seen line; absent or null for groups. */
-  peerUserId?: string | null;
-  /** The chat list's unread count when this chat opened (the pill's count past loaded history). */
-  unreadAtOpen?: number;
-  /** Who-reacted reader; defaults to Supabase. */
-  loadReactors?: WhoReactedLoad;
 }
 
 /** Users who asked for less motion: the swipe resets without a spring. */
@@ -2074,8 +2046,6 @@ function MessageRow(props: {
   /** Tap-to-transcribe on a received voice note; absent hides the link. */
   onTranscribe?: ((message: ThreadMessage) => void) | undefined;
   quoted?: ThreadMessage | undefined;
-  /** A reaction badge tap opens who reacted; absent opens the menu (as before). */
-  onOpenReactions?: (message: ThreadMessage) => void;
 }): ReactElement {
   const bubbleRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLSpanElement>(null);
@@ -2227,11 +2197,7 @@ function MessageRow(props: {
       {...(props.selection !== undefined ? { selection: props.selection } : {})}
       onOpenImage={(index) => props.onOpenImage(props.message, index)}
       postRefs={props.postRefs}
-      onBadgeClick={() => {
-        const onOpenReactions = props.onOpenReactions;
-        if (onOpenReactions !== undefined) onOpenReactions(props.message);
-        else props.onOpen(props.message, bubbleRect(), bubbleRef.current);
-      }}
+      onBadgeClick={() => props.onOpen(props.message, bubbleRect(), bubbleRef.current)}
     />
   );
 }
@@ -2510,19 +2476,6 @@ function ThreadBody(
     filterRef?: string | null;
     /** Menu "Transcribe" picked on a voice note; absent hides the row. */
     onTranscribe?: (message: ThreadMessage) => void;
-    /**
-     * The reading layer: the first unread (undefined until known), the DM Seen
-     * slot and the group Read by slot. Absent renders none of them.
-     */
-    reading?: {
-      unread: FirstUnread | null | undefined;
-      seen: { messageId: string; lastReadAt: string } | null;
-      readBy: { messageId: string; label: string } | null;
-    };
-    onJumpFirstUnread?: () => void;
-    onOpenReadInfo?: () => void;
-    /** A reaction badge tapped: the who-reacted sheet; absent keeps the menu. */
-    onOpenReactions?: (message: ThreadMessage) => void;
   },
 ): ReactElement {
   const { onNewestVisible, jumpRequest } = props;
@@ -2834,75 +2787,6 @@ function ThreadBody(
       observed.add(node);
     }
   });
-  // Scroll-to-latest: shown only while the thread is not stuck to the bottom,
-  // with a count of others' messages that arrived meanwhile. It only reads the
-  // stick intent; the rules above stay the only ones that change it.
-  const [showLatest, setShowLatest] = useState(false);
-  const [newCount, setNewCount] = useState(0);
-  const countedNewestRef = useRef<string | null>(null);
-  useLayoutEffect(() => {
-    const msgs = props.messages;
-    const last = msgs[msgs.length - 1];
-    const prevId = countedNewestRef.current;
-    countedNewestRef.current = last?.id ?? null;
-    setShowLatest(!stickRef.current);
-    if (stickRef.current) {
-      setNewCount(0);
-      return;
-    }
-    if (prevId === null || last === undefined || last.id === prevId) return;
-    const at = msgs.findIndex((m) => m.id === prevId);
-    if (at < 0) return;
-    const added = msgs.slice(at + 1).filter((m) => !m.mine).length;
-    if (added > 0) setNewCount((n) => n + added);
-  }, [props.messages]);
-  const toLatest = (): void => {
-    pendingJumpRef.current = null;
-    stickRef.current = true;
-    setNewCount(0);
-    setShowLatest(false);
-    // Decision 43: an instant pin, never a smooth scroll.
-    pin();
-    const last = props.messages[props.messages.length - 1];
-    if (last !== undefined && newestIdRef.current !== last.id) {
-      newestIdRef.current = last.id;
-      onNewestVisible?.();
-    }
-  };
-  // The jump pill: decided once the first unread is known and its divider has
-  // laid out (before paint, after the open pin): shown only when the run starts
-  // above the viewport, hidden for good once the divider has been on screen.
-  const unread = props.reading?.unread;
-  const [pill, setPill] = useState<'unknown' | 'show' | 'done'>('unknown');
-  const dividerWhere = (): 'above' | 'visible' | 'below' | 'missing' => {
-    const list = listRef.current;
-    const divider = list?.querySelector('[data-unread-divider]');
-    if (list == null || divider == null) return 'missing';
-    const lr = list.getBoundingClientRect();
-    const dr = divider.getBoundingClientRect();
-    if (lr.height > 0 && dr.bottom <= lr.top) return 'above';
-    if (lr.height > 0 && dr.top >= lr.bottom) return 'below';
-    return 'visible';
-  };
-  const updatePill = (): void => {
-    if (pill === 'done' || unread === undefined) return;
-    if (unread === null) {
-      setPill('done');
-      return;
-    }
-    const where = dividerWhere();
-    if (where === 'visible') {
-      setPill('done');
-      return;
-    }
-    if (pill === 'show') return;
-    if (unread.kind === 'beyond') setPill('show');
-    else if (where === 'above') setPill('show');
-    else if (where === 'below') setPill('done');
-  };
-  const updatePillRef = useRef(updatePill);
-  updatePillRef.current = updatePill;
-  useLayoutEffect(() => updatePillRef.current());
   // An older-page load that ended with no new rows (empty or failed) lets go of
   // the anchor, else size-change pinning would stay off for good.
   const loadingOlder = props.loadingOlder === true;
@@ -2970,156 +2854,127 @@ function ThreadBody(
       : null;
   return (
     <>
-      <div data-thread-viewport="" className="relative flex min-h-0 flex-1 flex-col">
-        <ul
-          ref={listRef}
-          onTouchStart={touchStart}
-          onTouchMove={userGesture}
-          onWheel={userGesture}
-          onKeyDown={(e) => {
-            if (isScrollKey(e.key)) userGesture();
-          }}
-          onPointerDown={(e) => {
-            // A press on the list itself (not a row) is its scrollbar.
-            if (e.target === e.currentTarget) userGesture();
-          }}
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            if (touchingRef.current || touchScrollAtRef.current !== null) {
-              touchScrollAtRef.current = Date.now();
-              if (!touchingRef.current) scheduleSettle();
+      <ul
+        ref={listRef}
+        onTouchStart={touchStart}
+        onTouchMove={userGesture}
+        onWheel={userGesture}
+        onKeyDown={(e) => {
+          if (isScrollKey(e.key)) userGesture();
+        }}
+        onPointerDown={(e) => {
+          // A press on the list itself (not a row) is its scrollbar.
+          if (e.target === e.currentTarget) userGesture();
+        }}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (touchingRef.current || touchScrollAtRef.current !== null) {
+            touchScrollAtRef.current = Date.now();
+            if (!touchingRef.current) scheduleSettle();
+          }
+          stickRef.current = intentAfterScroll({
+            intent: stickRef.current,
+            source: sourceRef.current,
+            distanceFromBottom: distanceFromBottom(el),
+          });
+          if (isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight)) {
+            const last = props.messages[props.messages.length - 1];
+            if (last !== undefined && newestIdRef.current !== last.id) {
+              newestIdRef.current = last.id;
+              props.onNewestVisible?.();
             }
-            stickRef.current = intentAfterScroll({
-              intent: stickRef.current,
-              source: sourceRef.current,
-              distanceFromBottom: distanceFromBottom(el),
-            });
-            setShowLatest(!stickRef.current);
-            if (stickRef.current) setNewCount(0);
-            updatePill();
-            if (isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight)) {
-              const last = props.messages[props.messages.length - 1];
-              if (last !== undefined && newestIdRef.current !== last.id) {
-                newestIdRef.current = last.id;
-                props.onNewestVisible?.();
+          }
+          if (
+            sourceRef.current === 'user' &&
+            el.scrollTop <= LOAD_OLDER_THRESHOLD_PX &&
+            props.hasMore === true &&
+            props.loadingOlder !== true &&
+            anchorHeightRef.current === null
+          ) {
+            anchorHeightRef.current = el.scrollHeight;
+            props.onLoadOlder?.();
+          }
+        }}
+        className={THREAD_LIST_CLASS}
+      >
+        {props.loadFailed === true && props.filtering !== true
+          ? threadLoadErrorRow(props.onRetryLoad)
+          : null}
+        {threadListItems(
+          threadRows(props.messages, nowMs, props.timeZone, { showTicks: props.showTicks }),
+          props.loadingOlder === true,
+          (row, afterLabel) => (
+            <MessageRow
+              key={row.message.id}
+              message={row.message}
+              profiles={props.profiles}
+              cache={props.cache}
+              presignEnabled={props.presignEnabled}
+              showTicks={props.showTicks}
+              isGroup={props.isGroup}
+              head={row.head}
+              tail={row.tail}
+              afterLabel={afterLabel}
+              timeZone={props.timeZone}
+              layout={props.layout}
+              viewerUserId={props.viewerUserId}
+              mentions={props.mentions}
+              workspaceId={props.workspaceId}
+              meta={row.meta}
+              onOpen={(m, rect, held, reactionsOnly) => {
+                if (m.deleted === true) return;
+                setMenu({
+                  message: m,
+                  rect,
+                  held,
+                  openedAt: serverNow(),
+                  reactionsOnly: reactionsOnly === true,
+                });
+              }}
+              onOpenImage={(m, index) => setViewer({ messageId: m.id, index })}
+              hoverMenu={hoverMenu}
+              coarsePointer={coarsePointer}
+              reducedMotion={reducedMotion}
+              onSwipeReply={props.onReply}
+              onJumpToMessage={scrollToMessage}
+              nextVoiceId={voiceNext.get(row.message.id) ?? null}
+              onTranscribe={props.onTranscribe}
+              quoted={
+                row.message.reply !== null ? messagesById.get(row.message.reply.id) : undefined
               }
-            }
-            if (
-              sourceRef.current === 'user' &&
-              el.scrollTop <= LOAD_OLDER_THRESHOLD_PX &&
-              props.hasMore === true &&
-              props.loadingOlder !== true &&
-              anchorHeightRef.current === null
-            ) {
-              anchorHeightRef.current = el.scrollHeight;
-              props.onLoadOlder?.();
-            }
-          }}
-          className={THREAD_LIST_CLASS}
-        >
-          {props.loadFailed === true && props.filtering !== true
-            ? threadLoadErrorRow(props.onRetryLoad)
-            : null}
-          {threadListItems(
-            threadRows(props.messages, nowMs, props.timeZone, { showTicks: props.showTicks }),
-            props.loadingOlder === true,
-            (row, afterLabel) => (
-              <Fragment key={row.message.id}>
-                {unread?.kind === 'loaded' && unread.firstId === row.message.id ? (
-                  <UnreadDivider count={unread.count} />
-                ) : null}
-                <MessageRow
-                  message={row.message}
-                  profiles={props.profiles}
-                  cache={props.cache}
-                  presignEnabled={props.presignEnabled}
-                  showTicks={props.showTicks}
-                  isGroup={props.isGroup}
-                  head={row.head}
-                  tail={row.tail}
-                  afterLabel={afterLabel}
-                  timeZone={props.timeZone}
-                  layout={props.layout}
-                  viewerUserId={props.viewerUserId}
-                  mentions={props.mentions}
-                  workspaceId={props.workspaceId}
-                  meta={row.meta}
-                  onOpen={(m, rect, held, reactionsOnly) => {
-                    if (m.deleted === true) return;
-                    setMenu({
-                      message: m,
-                      rect,
-                      held,
-                      openedAt: serverNow(),
-                      reactionsOnly: reactionsOnly === true,
-                    });
-                  }}
-                  onOpenImage={(m, index) => setViewer({ messageId: m.id, index })}
-                  hoverMenu={hoverMenu}
-                  coarsePointer={coarsePointer}
-                  reducedMotion={reducedMotion}
-                  onSwipeReply={props.onReply}
-                  onJumpToMessage={scrollToMessage}
-                  nextVoiceId={voiceNext.get(row.message.id) ?? null}
-                  onTranscribe={props.onTranscribe}
-                  quoted={
-                    row.message.reply !== null ? messagesById.get(row.message.reply.id) : undefined
+              postRefs={{
+                chip: props.chipFor?.(row.message),
+                onTalkAbout: props.onTalkAbout,
+                onShowPost: props.onShowPost,
+              }}
+              mark={props.marks.get(row.message.id)}
+              {...(props.onChangePriority !== undefined
+                ? { onChangePriority: props.onChangePriority }
+                : {})}
+              {...(props.selection !== undefined
+                ? {
+                    selection: rowSelection(row.message, props.selection),
                   }
-                  postRefs={{
-                    chip: props.chipFor?.(row.message),
-                    onTalkAbout: props.onTalkAbout,
-                    onShowPost: props.onShowPost,
-                  }}
-                  mark={props.marks.get(row.message.id)}
-                  {...(props.onChangePriority !== undefined
-                    ? { onChangePriority: props.onChangePriority }
-                    : {})}
-                  {...(props.selection !== undefined
-                    ? {
-                        selection: rowSelection(row.message, props.selection),
-                      }
-                    : {})}
-                  {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
-                  {...(props.onCancelUpload !== undefined
-                    ? { onCancelUpload: props.onCancelUpload }
-                    : {})}
-                  {...(props.onOpenReactions !== undefined && props.selection === undefined
-                    ? { onOpenReactions: props.onOpenReactions }
-                    : {})}
-                />
-                {props.reading?.seen?.messageId === row.message.id ? (
-                  <SeenLine lastReadAt={props.reading.seen.lastReadAt} timeZone={props.timeZone} />
-                ) : null}
-                {props.reading?.readBy?.messageId === row.message.id ? (
-                  <ReadByLine
-                    label={props.reading.readBy.label}
-                    onOpen={() => props.onOpenReadInfo?.()}
-                  />
-                ) : null}
-              </Fragment>
-            ),
-            props.filtering === true && props.hasMore === true
-              ? () => {
-                  const el = listRef.current;
-                  if (el === null || anchorHeightRef.current !== null) return;
-                  // The prepended page keeps the reader where they were.
-                  anchorHeightRef.current = el.scrollHeight;
-                  props.onLoadOlder?.();
-                }
-              : undefined,
-            props.filtering === true ? filterEmptyLabel(props.filterRef ?? null) : undefined,
-            props.layout,
-          )}
-        </ul>
-        {unread !== undefined && unread !== null && pill !== 'unknown' ? (
-          <UnreadPill
-            count={unread.count}
-            visible={pill === 'show'}
-            onJump={() => props.onJumpFirstUnread?.()}
-          />
-        ) : null}
-        <LatestButton visible={showLatest} count={newCount} onTap={toLatest} />
-      </div>
+                : {})}
+              {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
+              {...(props.onCancelUpload !== undefined
+                ? { onCancelUpload: props.onCancelUpload }
+                : {})}
+            />
+          ),
+          props.filtering === true && props.hasMore === true
+            ? () => {
+                const el = listRef.current;
+                if (el === null || anchorHeightRef.current !== null) return;
+                // The prepended page keeps the reader where they were.
+                anchorHeightRef.current = el.scrollHeight;
+                props.onLoadOlder?.();
+              }
+            : undefined,
+          props.filtering === true ? filterEmptyLabel(props.filterRef ?? null) : undefined,
+          props.layout,
+        )}
+      </ul>
       <MessageActionMenu
         open={menu !== null}
         onClose={() => setMenu(null)}
@@ -3922,12 +3777,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
   // the chat later never jumps again.
   const initialMessageId = props.initialMessageId ?? null;
   const initialJumpDone = useRef(false);
-  // The first page also waits for the channel's read cursors (5s bound), so
-  // the unread divider, Seen and Read by lines paint with it, never after.
-  const bodyLoading =
-    props.loading ||
-    (filterPostId === null &&
-      (holdingFirstPage(admitted.gate) || props.readState?.status === 'loading'));
+  const bodyLoading = props.loading || (filterPostId === null && holdingFirstPage(admitted.gate));
   const onInitialJumpTaken = props.onInitialJumpTaken;
   useEffect(() => {
     const id = initialMessageId;
@@ -3942,106 +3792,6 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     () => (filterPostId !== null ? filterRows(props.messages, filterPostId) : onScreen),
     [props.messages, onScreen, filterPostId],
   );
-  // Reading layer. Everything comes from the channel's cursors (one batched
-  // read) and renders only once they are in, so nothing paints then moves.
-  // Off while one post's conversation is filtered.
-  const readState = props.readState;
-  const readingOn = readState !== undefined && filterPostId === null;
-  const readsReady = readingOn && readState.status === 'ready';
-  const readPositions = readState?.positions;
-  const seenPeer = props.isGroup === true ? null : (props.peerUserId ?? null);
-  const seen = useMemo(
-    () =>
-      readsReady && seenPeer !== null && readPositions !== undefined
-        ? seenLineTarget(shownMessages, readPositions.get(seenPeer))
-        : null,
-    [readsReady, seenPeer, readPositions, shownMessages],
-  );
-  const groupMembers = props.isGroup === true ? (props.mentionMembers ?? null) : null;
-  const readBy = useMemo(() => {
-    if (!readsReady || groupMembers === null || readPositions === undefined) return null;
-    const target = readByTarget(shownMessages);
-    if (target === null) return null;
-    const readers = readersOf(
-      target,
-      readPositions,
-      groupMembers.map((m) => m.userId),
-    );
-    const label = readByLabel(readers.read.length, readers.read.length + readers.unread.length);
-    return label === null ? null : { message: target, ...readers, label };
-  }, [readsReady, groupMembers, readPositions, shownMessages]);
-  const [readInfoOpen, setReadInfoOpen] = useState(false);
-  // The first unread as the open cursor puts it, frozen once known (the divider
-  // stays put until the chat is left; live arrivals never move it). A run that
-  // starts above loaded history stays live until its pages load.
-  const computedUnread: FirstUnread | null | undefined =
-    !readingOn || bodyLoading || readState.status === 'loading'
-      ? undefined
-      : readState.status === 'failed'
-        ? null
-        : firstUnread({
-            messages: shownMessages,
-            open: readState.open,
-            hasMore: props.hasMore === true,
-            unreadAtOpen: props.unreadAtOpen ?? 0,
-          });
-  const [frozenUnread, setFrozenUnread] = useState<{ value: FirstUnread | null } | null>(null);
-  if (
-    frozenUnread === null &&
-    computedUnread !== undefined &&
-    (computedUnread === null || computedUnread.kind === 'loaded')
-  ) {
-    setFrozenUnread({ value: computedUnread });
-  }
-  const unread: FirstUnread | null | undefined = !readingOn
-    ? undefined
-    : frozenUnread !== null
-      ? frozenUnread.value
-      : computedUnread;
-  // Pill tap: a loaded run jumps through the marks jump path; a run above the
-  // loaded pages first pages back to the cursor message (5s bound), then jumps.
-  // A miss leaves the pill as it is and shows nothing else.
-  const [unreadJumpPending, setUnreadJumpPending] = useState(false);
-  const jumpFirstUnread = (): void => {
-    if (unread === undefined || unread === null) return;
-    if (unread.kind === 'loaded') {
-      jumpTo(unread.firstId);
-      return;
-    }
-    const ensure = props.onEnsureLoaded;
-    if (ensure === undefined) return;
-    void ensure(unread.cursorId).then((outcome) => {
-      if (outcome === 'found') setUnreadJumpPending(true);
-    });
-  };
-  const loadedFirstUnread = unread?.kind === 'loaded' ? unread.firstId : null;
-  useEffect(() => {
-    if (!unreadJumpPending || loadedFirstUnread === null) return;
-    setUnreadJumpPending(false);
-    setJumpRequest((prev) => ({ id: loadedFirstUnread, seq: (prev?.seq ?? 0) + 1 }));
-  }, [unreadJumpPending, loadedFirstUnread]);
-  // Who reacted: names from the loaded profiles and members first, the rest in
-  // one batched read.
-  const [reactionsFor, setReactionsFor] = useState<string | null>(null);
-  // Read through refs, so the reader stays the same across renders and an open
-  // sheet is never reloaded by a re-render.
-  const profilesForReactors = useRef(props.profiles);
-  profilesForReactors.current = props.profiles;
-  const membersForReactors = useRef(props.mentionMembers);
-  membersForReactors.current = props.mentionMembers;
-  const defaultReactorLoad = useMemo(
-    () =>
-      defaultWhoReactedLoad(workspaceId, (id) => {
-        const known = profilesForReactors.current.get(id);
-        if (known !== undefined) return known;
-        const member = membersForReactors.current?.find((m) => m.userId === id);
-        return member !== undefined
-          ? { userId: member.userId, displayName: member.displayName, avatarUrl: member.avatarUrl }
-          : undefined;
-      }),
-    [workspaceId],
-  );
-  const reactorLoad = props.loadReactors ?? defaultReactorLoad;
   useEffect(() => {
     const deadline = hydrationDeadline(admitted.gate, props.messages, parentIndex);
     if (deadline === null) return;
@@ -4341,36 +4091,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         {...(props.onToggleReaction !== undefined
           ? { onToggleReaction: props.onToggleReaction }
           : {})}
-        reading={{
-          unread,
-          seen,
-          readBy: readBy !== null ? { messageId: readBy.message.id, label: readBy.label } : null,
-        }}
-        onJumpFirstUnread={jumpFirstUnread}
-        onOpenReadInfo={() => setReadInfoOpen(true)}
-        {...(props.onToggleReaction !== undefined && !selecting
-          ? { onOpenReactions: (message: ThreadMessage) => setReactionsFor(message.id) }
-          : {})}
       />
-      <WhoReactedSheet
-        messageId={reactionsFor}
-        onClose={() => setReactionsFor(null)}
-        viewerId={props.currentUserId ?? null}
-        load={reactorLoad}
-        onRemove={(messageId, emoji) => props.onToggleReaction?.(messageId, emoji, true)}
-      />
-      {readBy !== null ? (
-        <MessageInfoSheet
-          open={readInfoOpen}
-          onClose={() => setReadInfoOpen(false)}
-          createdAt={readBy.message.createdAt}
-          timeZone={props.timeZone}
-          nowMs={serverNow()}
-          read={readBy.read}
-          unread={readBy.unread}
-          members={groupMembers ?? []}
-        />
-      ) : null}
       <TypingIndicator ids={props.typingUserIds} profiles={props.profiles} />
       {selecting && onDeleteMessages !== undefined ? (
         <SelectionBar

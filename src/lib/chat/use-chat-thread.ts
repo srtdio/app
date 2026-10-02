@@ -30,8 +30,6 @@ import {
   loadOlderMessages,
   loadPeerReadCursor,
   loadReactions,
-  loadReadPositions,
-  type ReadPositionsRead,
   type HistoryPage,
 } from '@/lib/chat/history';
 import {
@@ -58,12 +56,6 @@ import {
   setReadCursorRecord,
 } from '@/lib/chat/record';
 import { createDebouncer, READ_CURSOR_DEBOUNCE_MS } from '@/lib/chat/read-cursor';
-import {
-  openCursorFrom,
-  resolvePositions,
-  type OpenCursor,
-  type ReadPosition,
-} from '@/lib/chat/read-receipts';
 import { LIVE_PUBLISH_TIMEOUT_MS, publishWithTimeout } from '@/lib/chat/send-flow';
 import { forwardRecordInput, forwardableInOrder, runForward } from '@/lib/chat/forward';
 import { withLateRead, type ChannelSummary } from '@/lib/chat-reads';
@@ -107,21 +99,6 @@ import {
   type ReplyQuote,
 } from '@/lib/chat/attachments';
 import type { ChatConnection, ChatStatus } from '@/lib/chat/types';
-
-/**
- * The channel's read cursors for the reading layer: every member's position
- * (live as cursors change) and the viewer's own cursor as it stood on open,
- * read before this thread writes any cursor.
- */
-export interface ThreadReadState {
-  status: 'loading' | 'ready' | 'failed';
-  positions: ReadonlyMap<string, ReadPosition>;
-  open: OpenCursor;
-  /** Re-read the cursors (a sheet's Retry). */
-  retry: () => void;
-}
-
-const NO_READS: ReadPositionsRead = { rows: [], times: new Map() };
 
 /** The whole jump-to (every older page it reads) ends within this. */
 export const JUMP_BUDGET_MS = 5_000;
@@ -264,8 +241,6 @@ export interface UseChatThread {
   retry: (messageId: string) => void;
   /** Add or remove the current user's reaction: optimistic, recorded, signalled live. */
   toggleReaction: (messageId: string, emoji: string, currentlyMine: boolean) => void;
-  /** Every member's read cursor plus the viewer's cursor as it was on open. */
-  readState: ThreadReadState;
   /** The newest message is on screen: advance the read cursor (debounced). */
   markNewestVisible: () => void;
 }
@@ -512,21 +487,6 @@ export function useChatThread(params: {
   const catchingUpRef = useRef(false);
   const loadingOlderRef = useRef(false);
   const lastCursorRef = useRef<string | null>(null);
-  // The reading layer's cursors: the raw read, its status, and the viewer's
-  // cursor as captured on open. Until that first read settles (or fails at 5s)
-  // the thread writes no cursor, so the capture is never this open's own write.
-  const [reads, setReads] = useState<{
-    channelId: string | null;
-    status: ThreadReadState['status'];
-    read: ReadPositionsRead;
-    open: OpenCursor;
-  }>({ channelId: null, status: 'loading', read: NO_READS, open: { kind: 'unknown' } });
-  const [readAttempt, setReadAttempt] = useState(0);
-  const openReadRef = useRef<{ settled: boolean; pendingWrite: boolean }>({
-    settled: false,
-    pendingWrite: false,
-  });
-  const markNewestRef = useRef<() => void>(() => {});
 
   /** Merge the reactions for a batch of ids into the list (one IN query). */
   const attachReactions = useCallback(
@@ -672,81 +632,6 @@ export function useChatThread(params: {
     };
   }, [db, channelId, currentUserId, peerUserId, foldRows, attachPeerCursor, loadAttempt]);
 
-  // The channel's cursors, read once on open (in parallel with the latest
-  // page) and again after a peer's live read signal or a catch-up. Only the
-  // first read sets the open cursor; a Retry re-reads positions only.
-  useEffect(() => {
-    openReadRef.current = { settled: channelId === null, pendingWrite: false };
-    setReads({ channelId, status: 'loading', read: NO_READS, open: { kind: 'unknown' } });
-    if (channelId === null) return;
-    let cancelled = false;
-    void loadReadPositions(db, channelId).then((result) => {
-      if (cancelled) return;
-      const gate = openReadRef.current;
-      gate.settled = true;
-      if (!result.ok) {
-        logger.warn('chat: read cursors load failed', { error: result.error.message });
-        setReads((prev) => ({ ...prev, status: 'failed' }));
-      } else {
-        setReads({
-          channelId,
-          status: 'ready',
-          read: result.data,
-          open: openCursorFrom(result.data, currentUserId),
-        });
-      }
-      if (gate.pendingWrite) {
-        gate.pendingWrite = false;
-        markNewestRef.current();
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [db, channelId, currentUserId]);
-
-  /** Re-read every cursor (positions only; the open cursor stays as captured). */
-  const rereadPositions = useCallback((): void => {
-    const forChannel = channelRef.current;
-    if (forChannel === null) return;
-    void loadReadPositions(db, forChannel).then((result) => {
-      if (channelRef.current !== forChannel) return;
-      if (!result.ok) {
-        logger.warn('chat: read cursors re-read failed', { error: result.error.message });
-        setReads((prev) =>
-          prev.channelId === forChannel && prev.status !== 'ready'
-            ? { ...prev, status: 'failed' }
-            : prev,
-        );
-        return;
-      }
-      setReads((prev) =>
-        prev.channelId === forChannel
-          ? {
-              ...prev,
-              status: 'ready',
-              read: result.data,
-              open:
-                prev.open.kind === 'unknown'
-                  ? openCursorFrom(result.data, currentUserId)
-                  : prev.open,
-            }
-          : prev,
-      );
-    });
-  }, [db, currentUserId]);
-  const rereadRef = useRef(rereadPositions);
-  rereadRef.current = rereadPositions;
-  const rereadDebounced = useMemo(
-    () => createDebouncer<null>(() => rereadRef.current(), READ_CURSOR_DEBOUNCE_MS),
-    [],
-  );
-  useEffect(() => () => rereadDebounced.cancel(), [rereadDebounced]);
-  useEffect(() => {
-    if (readAttempt > 0) rereadRef.current();
-  }, [readAttempt]);
-  const retryReads = useCallback(() => setReadAttempt((n) => n + 1), []);
-
   // Live traffic for the open channel. A text message renders only from its
   // verified chat_messages row; the verifier logs a missing row once.
   useEffect(() => {
@@ -771,7 +656,6 @@ export function useChatThread(params: {
       onRead: ({ messageId, fromUserId }) => {
         if (fromUserId === currentUserId) return;
         setMessages((prev) => markReadUpToMessage(prev, messageId));
-        rereadDebounced.schedule(null);
       },
       // A sender can only delete or edit their own messages: ids of anyone
       // else's are ignored (the record is truth on the next load either way).
@@ -808,7 +692,7 @@ export function useChatThread(params: {
       },
     });
     return unsubscribe;
-  }, [db, client, channelId, currentUserId, verifier, foldRows, reportDeleted, rereadDebounced]);
+  }, [db, client, channelId, currentUserId, verifier, foldRows, reportDeleted]);
 
   // Catch-up from Postgres, never gated on the Agora state: rows newer than the
   // newest recorded message (paging past the 200 cap), or the latest page when
@@ -908,12 +792,10 @@ export function useChatThread(params: {
         } finally {
           catchingUpRef.current = false;
           onCaughtUpRef.current?.();
-          // Read signals missed while away: the cursors are re-read too.
-          if (reason !== 'interval') rereadDebounced.schedule(null);
         }
       })();
     },
-    [db, currentUserId, foldRows, reportDeleted, rereadDebounced],
+    [db, currentUserId, foldRows, reportDeleted],
   );
 
   const catchUpRef = useRef(catchUp);
@@ -1380,12 +1262,6 @@ export function useChatThread(params: {
   useEffect(() => () => readCursor.cancel(), [readCursor]);
 
   const markNewestVisible = useCallback((): void => {
-    // The open cursor is captured first: hold the write until that read settles.
-    const gate = openReadRef.current;
-    if (!gate.settled) {
-      gate.pendingWrite = true;
-      return;
-    }
     const forChannel = channelRef.current;
     if (forChannel === null) return;
     const recorded = messagesRef.current.filter((m) => m.state === 'sent' && m.createdAt !== '');
@@ -1393,23 +1269,6 @@ export function useChatThread(params: {
     if (newest === undefined) return;
     readCursor.schedule({ channelId: forChannel, messageId: newest.id });
   }, [readCursor]);
-
-  markNewestRef.current = markNewestVisible;
-
-  const readMessages = messages;
-  const positions = useMemo(() => {
-    const loaded = new Map(readMessages.map((m) => [m.id, m.time] as const));
-    return resolvePositions(reads.read.rows, (id) => reads.read.times.get(id) ?? loaded.get(id));
-  }, [reads.read, readMessages]);
-  const readState = useMemo<ThreadReadState>(
-    () => ({
-      status: reads.channelId === channelId ? reads.status : 'loading',
-      positions,
-      open: reads.channelId === channelId ? reads.open : { kind: 'unknown' },
-      retry: retryReads,
-    }),
-    [reads.channelId, reads.status, reads.open, channelId, positions, retryReads],
-  );
 
   return {
     messages,
@@ -1426,7 +1285,6 @@ export function useChatThread(params: {
     ensureLoaded,
     retry,
     toggleReaction,
-    readState,
     markNewestVisible,
   };
 }

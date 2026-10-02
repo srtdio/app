@@ -8,7 +8,6 @@ import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ChatStoreProvider } from '@/components/chat/ChatStoreProvider';
-import { ChatTabSignals } from '@/components/chat/ChatTabSignals';
 import { InboxStoreProvider } from '@/components/shell/InboxStoreProvider';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
@@ -150,7 +149,6 @@ export function AppLayout() {
   return (
     <ToastProvider>
       <ChatStoreProvider>
-        <ChatTabSignals />
         <InboxStoreProvider>
           <div className="flex h-full">
             <Sidebar workspaceName={workspaceName} />
