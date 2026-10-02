@@ -2,9 +2,8 @@
 // scroll-to-latest button, the DM "Seen" line, the group "Read by" line and
 // its Message info sheet, and the who-reacted sheet. Every element renders only
 // once its data is in (nothing appears and then moves or goes on first paint).
-// The floating surfaces (jump pill, scroll-to-latest) are the solid panel with a
-// hairline: no backdrop-filter, which WebKit fails to paint over the thread's
-// scroll container on iPhone (the message area stayed unpainted). Counts and
+// Glass surfaces are the panel at 80% (the --glass token) with an 18px blur and
+// a hairline, solid panel where backdrop-filter is unsupported. Counts and
 // times are JetBrains Mono. Motion: pill and button opacity only; the sheets
 // slide on translateY (the shared Sheet). Tokens only, light and dark at parity.
 
@@ -35,13 +34,11 @@ import {
 export const SHEET_LOAD_FAILED = "Couldn't load";
 
 /**
- * The floating surface for the jump pill and the scroll-to-latest button: the
- * solid panel token with a 1px hairline, the same in light and dark. Never a
- * backdrop-filter. On iOS WebKit a blurred layer over the thread's overflow
- * scroll container left the message area unpainted, showing stale composer
- * tiles.
+ * The glass surface: solid panel by default, the 80% panel with an 18px blur
+ * where backdrop-filter is supported; a 1px hairline either way.
  */
-export const FLOAT_SURFACE_CLASS = 'border border-border bg-panel';
+export const GLASS_CLASS =
+  'border border-border bg-panel supports-[backdrop-filter:blur(0)]:bg-[color:var(--glass)] supports-[backdrop-filter:blur(0)]:backdrop-blur-[18px]';
 
 /** Opacity-only fade for the pill and the latest button. */
 const FADE = 'transition-opacity duration-[160ms] motion-reduce:transition-none';
@@ -64,7 +61,7 @@ export function UnreadDivider({ count }: { count: number }): ReactElement {
   );
 }
 
-/** The floating jump-to-first-unread pill, top centre of the thread (solid panel). */
+/** The floating jump-to-first-unread pill, top centre of the thread. */
 export function UnreadPill(props: {
   count: number;
   visible: boolean;
@@ -82,7 +79,7 @@ export function UnreadPill(props: {
         onContextMenu={(e) => e.preventDefault()}
         className={cn(
           'flex h-11 items-center gap-1.5 rounded-full px-4 text-sm text-fg shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          FLOAT_SURFACE_CLASS,
+          GLASS_CLASS,
           NO_TOUCH_SELECT,
           FADE,
           props.visible ? 'pointer-events-auto opacity-100' : 'opacity-0',
@@ -96,7 +93,7 @@ export function UnreadPill(props: {
   );
 }
 
-/** The round scroll-to-latest button, bottom-right, with the new-message badge (solid panel). */
+/** The round scroll-to-latest button, bottom-right, with the new-message badge. */
 export function LatestButton(props: {
   visible: boolean;
   count: number;
@@ -113,7 +110,7 @@ export function LatestButton(props: {
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
         'absolute bottom-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full text-fg-2 shadow-lg hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        FLOAT_SURFACE_CLASS,
+        GLASS_CLASS,
         NO_TOUCH_SELECT,
         FADE,
         props.visible ? 'opacity-100' : 'pointer-events-none opacity-0',
