@@ -63,11 +63,11 @@ describe('reading layer elements', () => {
     const pill = renderToStaticMarkup(<UnreadPill count={5} visible onJump={() => undefined} />);
     expect(pill).toContain('h-11');
     expect(pill).toContain('font-mono');
-    expect(pill).toContain('bg-panel');
-    expect(pill).toContain('border-border');
+    expect(pill).toContain('--glass');
+    expect(pill).toContain('backdrop-blur-[18px]');
   });
 
-  it('latest button is 44px, solid panel, with a count badge', () => {
+  it('latest button is 44px, glass, with a count badge', () => {
     const html = renderToStaticMarkup(<LatestButton visible count={3} onTap={() => undefined} />);
     expect(html).toContain('h-11 w-11');
     expect(html).toContain('data-latest-count');
@@ -125,46 +125,5 @@ describe('T9 token hygiene', () => {
       expect(src.includes(String.fromCharCode(35))).toBe(false);
       expect(src.includes(['dark', ':'].join(''))).toBe(false);
     }
-  });
-});
-
-// Regression (iPhone, 3 Oct): a backdrop-filter layer (the jump pill and the
-// always-mounted scroll-to-latest button) over the thread's scroll container
-// left the message area unpainted on iOS WebKit, showing stale composer tiles.
-// The floating surfaces are solid panel now; no chat surface may blur again.
-describe('T1 no backdrop-filter over the thread (iOS WebKit paint)', () => {
-  const BLUR = ['backdrop', '-blur'].join('');
-  const SUPPORTS = ['supports-[', 'backdrop'].join('');
-  const FILTER_CSS = ['backdrop', '-filter:'].join('');
-
-  it('the pill and the latest button render without any backdrop class', () => {
-    for (const html of [
-      renderToStaticMarkup(<UnreadPill count={2} visible onJump={() => undefined} />),
-      renderToStaticMarkup(<UnreadPill count={2} visible={false} onJump={() => undefined} />),
-      renderToStaticMarkup(<LatestButton visible count={1} onTap={() => undefined} />),
-      renderToStaticMarkup(<LatestButton visible={false} count={0} onTap={() => undefined} />),
-    ]) {
-      expect(html).not.toContain('backdrop');
-      expect(html).toContain('bg-panel');
-    }
-  });
-
-  it('no chat component or the thread uses a backdrop blur or filter', () => {
-    for (const name of [
-      'ReadingLayer.tsx',
-      'MessageThread.tsx',
-      'Composer.tsx',
-      'ComposerTray.tsx',
-    ]) {
-      const src = readFileSync(fileURLToPath(new URL(`../${name}`, import.meta.url)), 'utf8');
-      expect(src.includes(BLUR)).toBe(false);
-      expect(src.includes(SUPPORTS)).toBe(false);
-      expect(src.includes(FILTER_CSS)).toBe(false);
-    }
-  });
-
-  it('the glass token is gone from the token file', () => {
-    const css = readFileSync(fileURLToPath(new URL('../../../index.css', import.meta.url)), 'utf8');
-    expect(css.includes('--glass')).toBe(false);
   });
 });

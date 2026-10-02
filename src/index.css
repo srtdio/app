@@ -23,6 +23,8 @@
   --accent-fg: #ffffff;
   --accent-soft: rgba(94, 106, 210, 0.1);
   --accent-line: rgba(94, 106, 210, 0.3);
+  /* Chat glass (jump pill, scroll-to-latest): the panel at 80%, under an 18px blur. */
+  --glass: rgba(255, 255, 255, 0.8);
   /* Own chat bubble fill. Light matches the accent; dark goes deeper than the
      accent so accent-fg ink clears 4.5:1 (#5560d0 on #ffffff is 5.3:1). */
   --bubble-own: #5e6ad2;
@@ -82,6 +84,7 @@
   --accent-fg: #ffffff;
   --accent-soft: rgba(111, 121, 227, 0.16);
   --accent-line: rgba(111, 121, 227, 0.34);
+  --glass: rgba(20, 21, 25, 0.8);
   --bubble-own: #5560d0;
   /* Peer meta on panel-2 6.5:1; own meta on bubble-own 5.3:1 (read tick 4.2:1). */
   --bubble-meta: #9aa0a8;
