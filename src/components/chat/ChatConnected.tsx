@@ -711,22 +711,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // opening one zeroes its badge locally (the thread records the read cursor);
   // leaving or unmounting clears it.
   const selectedChannelId = selected?.channelId ?? null;
-  // The chat list's unread count as this chat opened (before it is zeroed),
-  // for the reading layer's jump pill when the run starts above loaded history.
-  const [unreadAtOpen, setUnreadAtOpen] = useState<{ channelId: string | null; unread: number }>(
-    () => ({
-      channelId: selectedChannelId,
-      unread:
-        selectedChannelId !== null ? (chatStore.conversations[selectedChannelId]?.unread ?? 0) : 0,
-    }),
-  );
-  if (unreadAtOpen.channelId !== selectedChannelId) {
-    setUnreadAtOpen({
-      channelId: selectedChannelId,
-      unread:
-        selectedChannelId !== null ? (chatStore.conversations[selectedChannelId]?.unread ?? 0) : 0,
-    });
-  }
   // A pending Activity jump belongs to one chat: switching away or closing
   // before it ran drops it, so reopening that chat later never jumps.
   const jumpChannelRef = useRef(selectedChannelId);
@@ -1091,11 +1075,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                 initialMessageId={initialJumpFor(pendingJump, selected.channelId)}
                 onInitialJumpTaken={() => setPendingJump(null)}
                 showTicks={selected.channelType === 'dm'}
-                {...(threadCurrent ? { readState: thread.readState } : {})}
-                peerUserId={selected.channelType === 'dm' ? (selected.peerUserId ?? null) : null}
-                unreadAtOpen={
-                  unreadAtOpen.channelId === selected.channelId ? unreadAtOpen.unread : 0
-                }
                 {...(selected.peerUserId != null ? { presence } : {})}
                 {...(isDesktop ? {} : { onBack })}
                 {...(isGroup ? { onOpenInfo: () => setGroupInfoOpen(true) } : {})}

@@ -33,7 +33,6 @@ import {
   type MessageAttachment,
 } from '@/lib/chat/attachments';
 import type { ChatMessageRow, MessageCursor, MessageReaction } from '@/lib/chat/thread';
-import type { ReadCursorRow } from '@/lib/chat/read-receipts';
 
 /** History page size; also the "has more" probe (a full page means keep paging). */
 export const HISTORY_PAGE_SIZE = 50;
@@ -283,102 +282,6 @@ async function readPeerCursor(
       lastReadAt: row.last_read_at,
     },
   };
-}
-
-/**
- * Every member's read cursor in one channel: one select (RLS lets any channel
- * member read every member's cursor). Feeds the Seen line, Read by and the
- * first-unread divider. 5s timeout.
- */
-export function loadChannelReadCursors(
-  client: Client,
-  channelId: string,
-): Promise<Result<ReadCursorRow[]>> {
-  return withReadTimeout(async (signal) => {
-    const res = await abortable(
-      client
-        .from('chat_read_cursors')
-        .select('user_id, last_read_message_id, last_read_at')
-        .eq('channel_id', channelId),
-      signal,
-    );
-    if (res.error) return fail(`loadChannelReadCursors: ${res.error.message}`);
-    const rows = (res.data ?? []) as Pick<
-      ChatReadCursorRow,
-      'user_id' | 'last_read_message_id' | 'last_read_at'
-    >[];
-    return {
-      ok: true,
-      data: rows.map((row) => ({
-        userId: row.user_id,
-        lastReadMessageId: row.last_read_message_id,
-        lastReadAt: row.last_read_at,
-      })),
-    };
-  });
-}
-
-/** The channel's cursors plus each cursor message's created_at (ms), where readable. */
-export interface ReadPositionsRead {
-  rows: ReadCursorRow[];
-  times: Map<string, number>;
-}
-
-/**
- * The cursors (one select) and their messages' created_at (one IN select over
- * the distinct cursor ids), inside one 5s budget. A cursor whose message is not
- * readable keeps no time (resolvePositions falls back to last_read_at).
- */
-export function loadReadPositions(
-  client: Client,
-  channelId: string,
-): Promise<Result<ReadPositionsRead>> {
-  return withReadTimeout(async () => {
-    const cursors = await loadChannelReadCursors(client, channelId);
-    if (!cursors.ok) return cursors;
-    const ids = [...new Set(cursors.data.map((row) => row.lastReadMessageId))];
-    const looked = await loadMessagesByIds(client, ids);
-    if (!looked.ok) return looked;
-    const times = new Map<string, number>();
-    for (const row of looked.data) {
-      const ms = Date.parse(row.created_at);
-      if (!Number.isNaN(ms)) times.set(row.id, ms);
-    }
-    return { ok: true, data: { rows: cursors.data, times } };
-  });
-}
-
-/** One reaction on one message: who and which emoji. */
-export interface ReactorRow {
-  userId: string;
-  emoji: string;
-  createdAt: string;
-}
-
-/** Every reaction row on one message (who reacted), one select. 5s timeout. */
-export function loadMessageReactors(
-  client: Client,
-  messageId: string,
-  signal?: AbortSignal,
-): Promise<Result<ReactorRow[]>> {
-  return withReadTimeout(async (deadline) => {
-    const query = client
-      .from('chat_reactions')
-      .select('user_id, emoji, created_at')
-      .eq('message_id', messageId)
-      .order('created_at', { ascending: true });
-    const res = await withLinkedSignal(deadline, signal, async (s) => abortable(query, s));
-    if (res.error) return fail(`loadMessageReactors: ${res.error.message}`);
-    const rows = (res.data ?? []) as Pick<ChatReactionRow, 'user_id' | 'emoji' | 'created_at'>[];
-    return {
-      ok: true,
-      data: rows.map((row) => ({
-        userId: row.user_id,
-        emoji: row.emoji,
-        createdAt: row.created_at,
-      })),
-    };
-  });
 }
 
 /** One channel's unread count and last message time, as chat_unread_counts reports. */

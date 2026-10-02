@@ -8,6 +8,7 @@ import {
   IconBriefs,
   IconFile,
   IconMic,
+  IconPaperclip,
   IconPipeline,
   IconSend,
   IconTrash,
@@ -21,9 +22,7 @@ import {
 } from '@/lib/chat/use-audio-recorder';
 import { readHeader, rememberRecorderMime, voiceFileType } from '@/lib/chat/audio-sniff';
 import { voicePeaks } from '@/lib/chat/voice-peaks';
-import { ComposerTray } from '@/components/chat/ComposerTray';
-import { ComposerEmoji, showsEmojiButton } from '@/components/chat/ComposerEmoji';
-import { insertAtCaret } from '@/lib/chat/emoji-list';
+import { AttachmentMenu } from '@/components/chat/AttachmentMenu';
 import { PostPicker } from '@/components/chat/PostPicker';
 import { MentionPicker, stepActive } from '@/components/chat/MentionPicker';
 import { PendingChip } from '@/components/chat/PendingChip';
@@ -783,6 +782,7 @@ export function Composer(props: ComposerProps): ReactElement {
   const [pending, setPending] = useState<Pending[]>(initial.pendingFiles);
   const [sharedPosts, setSharedPosts] = useState<PostCardFields[]>(initial.sharedPosts);
   const [sharedBriefs, setSharedBriefs] = useState<BriefCardFields[]>(initial.sharedBriefs);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [resolvingLinks, setResolvingLinks] = useState(false);
@@ -806,7 +806,6 @@ export function Composer(props: ComposerProps): ReactElement {
   const formRef = useRef<HTMLFormElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const canAttach = props.uploadFile !== undefined && !props.disabled && editing === undefined;
   const canSend =
@@ -903,26 +902,6 @@ export function Composer(props: ComposerProps): ReactElement {
       accepted.push({ id: `att-${(pendingSeq += 1)}`, file, previewUrl });
     }
     if (accepted.length > 0) setPending((prev) => [...prev, ...accepted]);
-  }
-
-  // Laptop emoji: inserted at the caret (a selection is replaced), which then
-  // sits right after it.
-  function insertEmoji(emoji: string): void {
-    const el = textareaRef.current;
-    const at =
-      el !== null
-        ? { start: el.selectionStart, end: el.selectionEnd }
-        : { start: caret, end: caret };
-    const next = insertAtCaret(text, at, emoji);
-    setText(next.value);
-    setCaret(next.caret);
-    props.onTyping?.();
-    requestAnimationFrame(() => {
-      const area = textareaRef.current;
-      if (area === null) return;
-      area.focus();
-      area.setSelectionRange(next.caret, next.caret);
-    });
   }
 
   function removePending(id: string): void {
@@ -1348,15 +1327,21 @@ export function Composer(props: ComposerProps): ReactElement {
         ) : (
           <>
             {canAttach ? (
-              <ComposerTray
-                layout={layout}
-                onPick={(id) => {
-                  if (id === 'photos') photoInputRef.current?.click();
-                  else if (id === 'camera') cameraInputRef.current?.click();
-                  else if (id === 'file') fileInputRef.current?.click();
-                  else setPickerOpen(true);
-                }}
-              />
+              <div className="relative">
+                <IconButton
+                  label="Add attachment"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((open) => !open)}
+                >
+                  <IconPaperclip size={20} />
+                </IconButton>
+                <AttachmentMenu
+                  open={menuOpen}
+                  items={menuItems}
+                  onClose={() => setMenuOpen(false)}
+                />
+              </div>
             ) : null}
 
             <Textarea
@@ -1380,7 +1365,6 @@ export function Composer(props: ComposerProps): ReactElement {
               compact
               className={sized(COMPOSER_INPUT_TYPE, layout)}
             />
-            {showsEmojiButton(layout) && !held ? <ComposerEmoji onPick={insertEmoji} /> : null}
             {showMic ? (
               <Button
                 type="button"
@@ -1422,17 +1406,6 @@ export function Composer(props: ComposerProps): ReactElement {
         type="file"
         multiple
         accept={menuItems.find((item) => item.id === 'photo')?.accept}
-        className="sr-only"
-        onChange={(event) => {
-          addFiles(event.target.files, true);
-          event.target.value = '';
-        }}
-      />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
         className="sr-only"
         onChange={(event) => {
           addFiles(event.target.files, true);
