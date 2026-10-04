@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -78,6 +78,7 @@ import { useChatLayout } from '@/components/chat/chat-type';
 import { NewChatSheet } from '@/components/chat/NewChatSheet';
 import { GroupInfoSheet, type GroupInfoTabsWiring } from '@/components/chat/GroupInfoSheet';
 import { leaveSelectionThen } from '@/lib/chat/forward';
+import { hasPreviousEntry, HISTORY_STEP_KEYS, useHistoryStep } from '@/lib/chat/use-history-step';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { mentionGone, useChannelMembersState } from '@/components/chat/use-channel-members';
 import {
@@ -477,6 +478,38 @@ function safeTarget(
   }
 }
 
+/** How a chat's ?channel= is written: an open is a history step, a strip or auto-close is not. */
+export type ChannelWrite = 'push' | 'replace';
+
+/**
+ * Why ?channel= is written, and so how. An open (list, notes, search hit,
+ * starred row, @mention, new DM, saved line, toast) pushes one step; a toast's
+ * pending open takes the /chat entry its press already pushed; a chat closing
+ * on its own, a cold open's back arrow and an unknown link replace. Pure.
+ */
+export function channelWriteFor(
+  why: 'open' | 'pendingOpen' | 'autoClose' | 'coldBack' | 'unknown',
+): ChannelWrite {
+  return why === 'open' ? 'push' : 'replace';
+}
+
+/**
+ * Whether a ?channel= change closes the open chat: only present -> absent
+ * (back to the list), on every layout. Pure.
+ */
+export function closesOnParamLoss(prev: string | null, next: string | null): boolean {
+  return prev !== null && next === null;
+}
+
+/**
+ * The chat header's back arrow (and the opening skeleton's): the same as the
+ * back swipe while an in-app entry sits below, else (a cold open from an
+ * outside link) the chat list in place. Pure.
+ */
+export function chatBackAction(historyState: unknown): 'pop' | 'list' {
+  return hasPreviousEntry(historyState) ? 'pop' : 'list';
+}
+
 export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const { client, status, workspaceId, currentUserId } = props;
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
@@ -538,11 +571,16 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // links, search hit names, the bell), then the roster.
   const chatRoster = useMemo(() => withNotesFirst(roster, notesChat), [roster, notesChat]);
 
-  // The open thread lives in ?channel={channelId} (replace, never push), so the
-  // shell hides the mobile chrome in the same render the thread opens. Opening
-  // and closing set the state and the param in one batch; only 'channel' is
-  // touched, preserving any sibling deep-link param.
+  // The open thread lives in ?channel={channelId}, so the shell hides the
+  // mobile chrome in the same render the thread opens. Every open pushes one
+  // history step (back returns to where it was opened from); strips and a
+  // chat closing on its own replace. Opening and closing set the state and the
+  // param in one batch; only 'channel' is touched, preserving any sibling
+  // deep-link param. Layers inside a chat are steps of their own
+  // (lib/chat/use-history-step); leaveSelectionThen closes them before any
+  // open or close, so the param is always written from the chat's own entry.
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   // The latest workspace and ?channel=, and whether the page is still mounted,
@@ -559,24 +597,28 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     };
   }, []);
   const writeChannelParam = useCallback(
-    (channelId: string | null) => {
+    (channelId: string | null, mode: ChannelWrite) => {
+      // Already there: no entry (a push would leave a duplicate step).
+      if ((channelParamRef.current || null) === channelId) return;
+      channelParamRef.current = channelId;
       setSearchParams(
         (prev) => {
-          if ((prev.get('channel') ?? null) === channelId) return prev;
           const next = new URLSearchParams(prev);
           if (channelId === null) next.delete('channel');
           else next.set('channel', channelId);
           return next;
         },
-        { replace: true },
+        { replace: mode === 'replace' },
       );
     },
     [setSearchParams],
   );
   const openChannel = useCallback(
-    (channel: ChannelSummary) => {
-      setSelected(channel);
-      writeChannelParam(channel.channelId);
+    (channel: ChannelSummary, mode: ChannelWrite = channelWriteFor('open')) => {
+      leaveSelectionThen(() => {
+        setSelected(channel);
+        writeChannelParam(channel.channelId, mode);
+      });
     },
     [writeChannelParam],
   );
@@ -589,11 +631,15 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     seq: number;
     jumpOnly?: boolean;
   } | null>(null);
+  // The chat closing on its own (left, removed, deleted) or a cold open's back
+  // arrow: the chat list in place of the chat's entry, never a dead step.
   const closeChannel = useCallback(() => {
-    // A hit's jump not taken yet (backed out while loading) never fires later.
-    setSearchRequest(null);
-    setSelected(null);
-    writeChannelParam(null);
+    leaveSelectionThen(() => {
+      // A hit's jump not taken yet (backed out while loading) never fires later.
+      setSearchRequest(null);
+      setSelected(null);
+      writeChannelParam(null, channelWriteFor('autoClose'));
+    });
   }, [writeChannelParam]);
   // Only ever counts up: a taken request goes back to null, and the next tap
   // in the same open chat must still read as new.
@@ -634,7 +680,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const selectedFromParam = useRef<string | null>(null);
   const toastRef = useRef(toast);
   toastRef.current = toast;
-  useEffect(() => {
+  // A layout effect: back or forward onto another chat's entry selects it
+  // before the next paint (no frame of the old chat or a skeleton).
+  useLayoutEffect(() => {
     // Notes never wait on the roster: they open from the session-built id.
     if (loadStatus !== 'ready' && searchParams.get('channel') !== notesChat.channelId) return;
     const channel = searchParams.get('channel');
@@ -685,7 +733,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
           setSelected(again.open);
           return;
         }
-        writeChannelParam(null);
+        writeChannelParam(null, channelWriteFor('unknown'));
         toastRef.current.show({ title: CHAT_UNAVAILABLE_TOAST });
       },
     );
@@ -707,18 +755,19 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     selectedFromParam.current = null;
   }, [workspaceId]);
 
-  // A ?channel= that disappears by any route other than closeChannel (browser
-  // back, external navigation) closes the thread below md so the chrome returns.
-  // Only the present -> absent transition counts, so an open that sets state
-  // before its param lands never reads as a close. Desktop keeps its selection.
+  // A ?channel= that disappears by any route other than closeChannel (back,
+  // external navigation) closes the thread, on a laptop too, before the next
+  // paint (the list paints at once). Only the present -> absent transition
+  // counts, so an open that sets state before its param lands never reads as
+  // a close.
   const channelParam = searchParams.get('channel') || null;
   const prevChannelParam = useRef(channelParam);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const prev = prevChannelParam.current;
     prevChannelParam.current = channelParam;
-    if (prev === null || channelParam !== null || isDesktop) return;
+    if (!closesOnParamLoss(prev, channelParam)) return;
     if (selectedRef.current !== null) setSelected(null);
-  }, [channelParam, isDesktop]);
+  }, [channelParam]);
 
   // Re-read the store's roster after a mutation. When channelId is given, the
   // matching (possibly newly created) channel is selected and opened.
@@ -873,12 +922,13 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   }, [selectedChannelId, setActive, markConversationRead]);
 
   // A toast press asks the store to open a channel; consume it once the roster
-  // is ready by selecting that channel, then clear the request.
+  // is ready by selecting that channel, then clear the request. The press
+  // already pushed /chat: the chat takes that entry (one step, not two).
   const pendingOpen = chatStore.pendingOpenConversationId;
   useEffect(() => {
     if (pendingOpen === null || loadStatus !== 'ready') return;
     const found = chatRoster.find((channel) => channel.channelId === pendingOpen);
-    if (found !== undefined) openChannel(found);
+    if (found !== undefined) openChannel(found, channelWriteFor('pendingOpen'));
     clearPendingOpen();
   }, [pendingOpen, loadStatus, chatRoster, clearPendingOpen, openChannel]);
 
@@ -1279,6 +1329,14 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     if (gone.length > 0) starStore.drop(gone);
   }, [thread.messages, starStore]);
   const [scheduledListOpen, setScheduledListOpen] = useState(false);
+  // The chat's own sheets are history steps too: back closes only the sheet.
+  useHistoryStep(scheduledListOpen && selected !== null, HISTORY_STEP_KEYS.scheduledList, () =>
+    setScheduledListOpen(false),
+  );
+  useHistoryStep(groupInfoOpen && selected !== null, HISTORY_STEP_KEYS.groupInfo, () =>
+    setGroupInfoOpen(false),
+  );
+  useHistoryStep(newChatOpen, HISTORY_STEP_KEYS.newChat, () => setNewChatOpen(false));
   useEffect(() => setScheduledListOpen(false), [selectedChannelId]);
   // The last one sent or cancelled: nothing left to show.
   useEffect(() => {
@@ -1430,7 +1488,11 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     [workspaceId, onDmReady, toast],
   );
 
-  const onBack = closeChannel;
+  // The header arrow: back to where the chat was opened from (a cold open: the list).
+  const onBack = useCallback((): void => {
+    if (chatBackAction(window.history.state) === 'pop') navigate(-1);
+    else closeChannel();
+  }, [navigate, closeChannel]);
   // A hit's jump belongs to its chat: any route that leaves or switches the
   // chat (browser back, a toast, a deep link) drops it before it can fire later.
   const selectedChannelForSearch = selected?.channelId ?? null;
@@ -1513,15 +1575,16 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // The saved line's tap: the existing ?channel=&message= deep link.
   const openSavedSource = useCallback<SavedFromWiring['onOpen']>(
     (line) => {
-      setSearchParams(
-        (prev) => {
+      // An open: one step, back returns to notes.
+      leaveSelectionThen(() => {
+        channelParamRef.current = line.channelId;
+        setSearchParams((prev) => {
           const next = new URLSearchParams(prev);
           next.set('channel', line.channelId);
           next.set('message', line.messageId);
           return next;
-        },
-        { replace: true },
-      );
+        });
+      });
     },
     [setSearchParams],
   );
@@ -1556,7 +1619,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // Back out of a chat still opening: drop the link and any pending open.
   const onBackFromOpening = (): void => {
     clearPendingOpen();
-    closeChannel();
+    onBack();
   };
 
   const isGroup = selected?.channelType === 'group';

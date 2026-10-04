@@ -67,6 +67,7 @@ import {
   type ScheduledRow,
 } from '@/lib/chat/scheduled';
 import { BELL_OPEN_PARAM, chatMessageHref } from '@/lib/inbox/bell-types';
+import { HISTORY_STEP_KEYS, useHistoryStep } from '@/lib/chat/use-history-step';
 import { useToast } from '@/components/ui/toast';
 
 export type BellStatus = 'loading' | 'ready' | 'error';
@@ -423,6 +424,20 @@ export function BellProvider(props: {
     [reload],
   );
 
+  // The bell open is one history step (lib/chat/use-history-step): back closes
+  // it. Leaving it for a chat or its scheduled sheet keeps that step (detach),
+  // so back from there lands on it and the bell opens again; back once more
+  // closes it. The scheduled sheet is a step of its own.
+  const bellStep = useHistoryStep(
+    open,
+    HISTORY_STEP_KEYS.bell,
+    () => setOpenState(false),
+    () => setOpen(true),
+  );
+  useHistoryStep(scheduledSheet !== null, HISTORY_STEP_KEYS.bellScheduled, () =>
+    setScheduledSheet(null),
+  );
+
   // ?bell=1 (the missed-reminders toast): open the bell, then drop the param.
   useEffect(() => {
     if (searchParams.get(BELL_OPEN_PARAM) !== '1') return;
@@ -462,10 +477,11 @@ export function BellProvider(props: {
   const goToMessage = useCallback(
     (channelId: string | null, messageId: string | null): void => {
       if (channelId === null) return;
+      bellStep.detach();
       setOpenState(false);
       navigate(chatMessageHref(channelId, messageId));
     },
-    [navigate],
+    [navigate, bellStep],
   );
 
   const openChannelSheet = useCallback(
@@ -482,11 +498,12 @@ export function BellProvider(props: {
           reload();
           return;
         }
+        bellStep.detach();
         setOpenState(false);
         setScheduledSheet({ channelId, rows: res.data });
       });
     },
-    [toast, reload],
+    [toast, reload, bellStep],
   );
 
   const actions = useMemo(

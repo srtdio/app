@@ -191,6 +191,15 @@ import {
 } from '@/components/chat/NotesBits';
 import { canSaveToNotes, NOTES_PLACEHOLDER, NOTES_TILE_LINE } from '@/lib/chat/notes';
 import {
+  BURIED_STEPS_LIMIT,
+  buriedStepCount,
+  enterHistoryStep,
+  HISTORY_STEP_KEYS,
+  resetHistorySteps,
+  useHistoryStep,
+  type HistoryStepWindow,
+} from '@/lib/chat/use-history-step';
+import {
   FORWARDED_LABEL,
   canForward,
   clearSelectionLeave,
@@ -198,7 +207,6 @@ import {
   pruneThreadSelection,
   scheduleSelectionBoundary,
   selectedForForward,
-  setSelectionLeave,
   threadSelectable,
   threadSelectionRole,
 } from '@/lib/chat/forward';
@@ -3947,16 +3955,7 @@ export function markOutcomeCopy(result: WriteResult): string | null {
 export const SELECTION_HISTORY_KEY = 'chatSelection';
 
 /** The slice of window selection history needs (the real window, or a test fake). */
-export interface SelectionHistoryWindow {
-  history: {
-    readonly state: unknown;
-    pushState: (data: unknown, unused: string, url?: string | null) => void;
-    back: () => void;
-  };
-  location: { href: string };
-  addEventListener: (type: 'popstate', listener: () => void) => void;
-  removeEventListener: (type: 'popstate', listener: () => void) => void;
-}
+export type SelectionHistoryWindow = HistoryStepWindow;
 
 /** One selection mode's history entry; see enterSelectionHistory. */
 export interface SelectionHistory {
@@ -3970,141 +3969,35 @@ export interface SelectionHistory {
 }
 
 /** How many buried markers the guard remembers (the most recent ones). */
-export const BURIED_MARKERS_LIMIT = 20;
-
-let selectionMarkerSeq = 0;
-// Markers buried under a later navigation (the chat was left while selecting):
-// landing on one skips it, so no stale entry ever shows the chat twice. One
-// module-level listener; bounded to the most recent BURIED_MARKERS_LIMIT.
-const buriedMarkers = new Set<number>();
-let buriedGuard: (() => void) | null = null;
-
-function selectionMarkerOf(state: unknown): number | null {
-  if (typeof state !== 'object' || state === null) return null;
-  const marker = (state as Record<string, unknown>)[SELECTION_HISTORY_KEY];
-  return typeof marker === 'number' ? marker : null;
-}
-
-function buryMarker(win: SelectionHistoryWindow, marker: number): void {
-  buriedMarkers.add(marker);
-  if (buriedMarkers.size > BURIED_MARKERS_LIMIT) {
-    const oldest = buriedMarkers.values().next().value;
-    if (oldest !== undefined) buriedMarkers.delete(oldest);
-  }
-  if (buriedGuard !== null) return;
-  const guard = (): void => {
-    const landed = selectionMarkerOf(win.history.state);
-    if (landed === null || !buriedMarkers.has(landed)) return;
-    buriedMarkers.delete(landed);
-    win.history.back();
-  };
-  win.addEventListener('popstate', guard);
-  buriedGuard = () => win.removeEventListener('popstate', guard);
-}
+export const BURIED_MARKERS_LIMIT = BURIED_STEPS_LIMIT;
 
 /** How many markers are buried (tests). */
 export function buriedMarkerCount(): number {
-  return buriedMarkers.size;
+  return buriedStepCount();
 }
 
 /**
  * Selection mode's history entry (WhatsApp: system back and the iOS swipe-back
- * leave selection first). Entering pushes one entry at the same URL (the
- * ?channel= included) whose state carries a marker; a popstate off it exits
- * selection and stays in the chat. cancel() leaves through history.back(), so
- * the marker never lingers, and only once however often it is pressed;
- * dispose() pops it too when selection ended some other way, and a marker
- * buried under a navigation is skipped if ever landed on. While open, a
- * channel switch (leaveSelectionThen) goes through cancel() first; a dispose()
- * while that back() is pending still runs the switch once the pop lands.
+ * leave selection first): one step of the shared mechanism
+ * (lib/chat/use-history-step), under its own key. Entering pushes one entry
+ * at the same URL (the ?channel= included); a popstate off it exits selection
+ * and stays in the chat. cancel() leaves through history.back(), so the marker
+ * never lingers, and only once however often it is pressed; dispose() pops it
+ * too when selection ended some other way, and a marker buried under a
+ * navigation is skipped if ever landed on. While open, a channel switch
+ * (leaveSelectionThen) goes through cancel() first; a dispose() while that
+ * back() is pending still runs the switch once the pop lands.
  */
 export function enterSelectionHistory(
   win: SelectionHistoryWindow,
   onExit: () => void,
 ): SelectionHistory {
-  selectionMarkerSeq += 1;
-  const marker = selectionMarkerSeq;
-  const base = win.history.state;
-  win.history.pushState(
-    { ...(typeof base === 'object' && base !== null ? base : {}), [SELECTION_HISTORY_KEY]: marker },
-    '',
-    win.location.href,
-  );
-  let active = true;
-  let leaving = false;
-  let afterExit: (() => void) | null = null;
-  const leave = (then: () => void): void => handle.cancel(then);
-  const onTop = (): boolean => selectionMarkerOf(win.history.state) === marker;
-  const finish = (): void => {
-    active = false;
-    win.removeEventListener('popstate', onPop);
-    clearSelectionLeave(leave);
-    onExit();
-    const then = afterExit;
-    afterExit = null;
-    then?.();
-  };
-  function onPop(): void {
-    if (!active || onTop()) return;
-    finish();
-  }
-  win.addEventListener('popstate', onPop);
-  const handle: SelectionHistory = {
-    cancel: (then) => {
-      if (!active) {
-        then?.();
-        return;
-      }
-      if (then !== undefined) {
-        const prior = afterExit;
-        afterExit =
-          prior === null
-            ? then
-            : () => {
-                prior();
-                then();
-              };
-      }
-      if (leaving) return;
-      if (onTop()) {
-        leaving = true;
-        win.history.back();
-        return;
-      }
-      buryMarker(win, marker);
-      finish();
-    },
-    dispose: () => {
-      win.removeEventListener('popstate', onPop);
-      if (!active) return;
-      active = false;
-      const pending = afterExit;
-      afterExit = null;
-      clearSelectionLeave(leave);
-      if (leaving) {
-        // A switch waiting on history.back() still runs once that pop lands.
-        if (pending !== null) {
-          const onLanded = (): void => {
-            win.removeEventListener('popstate', onLanded);
-            pending();
-          };
-          win.addEventListener('popstate', onLanded);
-        }
-        return;
-      }
-      if (onTop()) win.history.back();
-      else buryMarker(win, marker);
-    },
-  };
-  setSelectionLeave(leave);
-  return handle;
+  return enterHistoryStep(win, SELECTION_HISTORY_KEY, onExit);
 }
 
-/** Test seam: forget buried markers and the guard. */
+/** Test seam: forget buried markers, open steps and the guard. */
 export function resetSelectionHistory(): void {
-  buriedMarkers.clear();
-  buriedGuard?.();
-  buriedGuard = null;
+  resetHistorySteps();
   clearSelectionLeave(null);
 }
 
@@ -4224,6 +4117,8 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     query: string;
     anchor: string | null;
     key: number;
+    /** Opened from the header (a history step), not by a search hit's open. */
+    manual: boolean;
   } | null>(null);
   const [searchWords, setSearchWords] = useState<readonly string[]>([]);
   const [forwardFor, setForwardFor] = useState<ThreadMessage[] | null>(null);
@@ -4518,7 +4413,8 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     if (searchSeqRef.current === searchRequest.seq) return;
     searchSeqRef.current = searchRequest.seq;
     const { messageId, query, seq } = searchRequest;
-    if (searchRequest.jumpOnly !== true) setChatSearch({ query, anchor: messageId, key: seq });
+    if (searchRequest.jumpOnly !== true)
+      setChatSearch({ query, anchor: messageId, key: seq, manual: false });
     setJumpRequest((prev) => ({ id: messageId, seq: (prev?.seq ?? 0) + 1 }));
     onSearchRequestTaken?.();
   }, [searchRequest, bodyLoading, onSearchRequestTaken]);
@@ -4766,6 +4662,22 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     setViewReply(null);
     threadView.close();
   };
+  // Each layer is one history step (lib/chat/use-history-step): back closes
+  // only that layer through its own close (the thread view through its Close,
+  // so the fade runs) and stays in the chat; its own close pops the step.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useHistoryStep(view !== null, HISTORY_STEP_KEYS.threadView, () => {
+    const close = rootRef.current?.querySelector<HTMLButtonElement>('[data-thread-view-close]');
+    if (close !== null && close !== undefined) close.click();
+    else closeThread();
+  });
+  useHistoryStep(contactOpen, HISTORY_STEP_KEYS.contact, () => setContactOpen(false));
+  useHistoryStep(starredOpen, HISTORY_STEP_KEYS.starred, () => setStarredOpen(false));
+  useHistoryStep(marksOpen, HISTORY_STEP_KEYS.marks, () => setMarksOpen(false));
+  useHistoryStep(readInfoOpen && readBy !== null, HISTORY_STEP_KEYS.readInfo, () =>
+    setReadInfoOpen(false),
+  );
+  useHistoryStep(chatSearch?.manual === true, HISTORY_STEP_KEYS.search, closeChatSearch);
   const threadPostOf = (rootId: string): PostRefPost | null => {
     const root = known.get(rootId);
     const postId =
@@ -5051,7 +4963,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
       : {}),
   };
   return (
-    <div className="relative flex h-full flex-col bg-bg">
+    <div ref={rootRef} className="relative flex h-full flex-col bg-bg">
       <div
         className={cn(
           'flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel',
@@ -5107,7 +5019,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
             {channelId !== undefined ? (
               <IconButton
                 label="Search this chat"
-                onClick={() => setChatSearch({ query: '', anchor: null, key: 0 })}
+                onClick={() => setChatSearch({ query: '', anchor: null, key: 0, manual: true })}
               >
                 <IconSearch size={20} />
               </IconButton>
