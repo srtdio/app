@@ -38,12 +38,11 @@ export function Sidebar({ workspaceName }: SidebarProps) {
           <IconChevronDown size={16} className="text-fg-3 shrink-0" />
         </button>
       </div>
-      <nav data-tour="primary-navigation" className="flex flex-col gap-0.5 px-2.5">
+      <nav className="flex flex-col gap-0.5 px-2.5">
         {PRIMARY_NAV.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
-            data-tour={`nav-${item.to.slice(1)}`}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-sm font-medium transition-colors',

@@ -161,7 +161,6 @@ Subscription is per workspace. No caps on workspaces per account.
 | Additional workspaces | From workspace switcher |
 | First-run state | Empty Pipeline, empty Activity, empty Assets |
 | Profile completion | Designation and avatar optional, added later. |
-| Dashboard tour | For accounts created after rollout, the first Pipeline visit introduces Pipeline, Briefs, Assets, Chat, Activity, Plan, Draft, Review, Parked, and Rejected without changing routes. Supabase stores the per-user completion timestamp; existing accounts are marked complete during migration. |
 
 ### Empty-state checklist
 

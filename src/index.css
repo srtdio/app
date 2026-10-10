@@ -4,7 +4,6 @@
 @import '@fontsource/inter/700.css';
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
-@import 'driver.js/dist/driver.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -181,76 +180,4 @@
     transition-duration: 1ms !important;
     animation-duration: 1ms !important;
   }
-}
-
-.driver-popover.sorted-dashboard-tour {
-  color: var(--fg);
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
-  background-color: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgb(0 0 0 / 24%);
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-title {
-  color: var(--fg);
-  font-size: 16px;
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-description {
-  color: var(--fg-2);
-  font-size: 13px;
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-progress-text {
-  color: var(--fg-3);
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-close-btn {
-  color: var(--fg-2);
-  width: auto;
-  min-width: 44px;
-  height: 44px;
-  padding: 0 6px;
-  font-size: 12px;
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-close-btn:hover,
-.driver-popover.sorted-dashboard-tour .driver-popover-close-btn:focus {
-  color: var(--fg);
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-footer-btn {
-  color: var(--fg);
-  min-height: 44px;
-  padding: 0 12px;
-  background-color: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font: inherit;
-  font-size: 13px;
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-footer-btn:hover,
-.driver-popover.sorted-dashboard-tour .driver-popover-footer-btn:focus {
-  background-color: var(--panel-2);
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-next-btn {
-  color: var(--accent-fg);
-  background-color: var(--accent);
-  border-color: var(--accent);
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-next-btn:hover,
-.driver-popover.sorted-dashboard-tour .driver-popover-next-btn:focus {
-  background-color: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-arrow-side-left {
-  border-right-color: var(--panel);
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-arrow-side-right {
-  border-left-color: var(--panel);
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-arrow-side-top {
-  border-bottom-color: var(--panel);
-}
-.driver-popover.sorted-dashboard-tour .driver-popover-arrow-side-bottom {
-  border-top-color: var(--panel);
 }

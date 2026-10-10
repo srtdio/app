@@ -15,7 +15,6 @@ import { PipelineSortControl } from '@/components/pages/pipeline/PipelineSortCon
 import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
 import { SetDateSheet } from '@/components/pages/pipeline/SetDateSheet';
 import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
-import { DashboardTour } from '@/components/onboarding/DashboardTour';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { dispatchSorted } from '@/lib/events';
@@ -804,7 +803,6 @@ export function PipelinePage() {
 
   return (
     <>
-      <DashboardTour />
       {pipelineHeader({
         search,
         onSearchChange: setSearch,

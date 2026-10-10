@@ -62,7 +62,6 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
           <button
             key={item.key}
             type="button"
-            data-tour={`pipeline-${item.key}`}
             aria-current={isActive ? 'true' : undefined}
             onClick={() => onChange(item.key)}
             className={cn(
