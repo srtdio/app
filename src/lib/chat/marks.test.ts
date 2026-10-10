@@ -7,7 +7,6 @@ import {
   indexMarks,
   loadChannelMarks,
   NOTHING_OPEN,
-  loopsStripLabel,
   markBadgeLabel,
   openPostsHeading,
   openPostsPart,
@@ -160,65 +159,12 @@ describe('strip counts', () => {
   });
 });
 
-describe('open loops strip label', () => {
-  const none = { commitments: 0, decisions: 0, pending: 0, p1: 0 };
-  const some = { commitments: 2, decisions: 1, pending: 2, p1: 1 };
-
-  it('client side: posts waiting on you lead, then the mark parts unchanged', () => {
-    expect(loopsStripLabel({ posts: 3, side: 'client', marks: some })).toEqual({
-      count: 8,
-      text: '3 posts waiting on you · 2 commitments · 1 decision · 2 pending (1 P1)',
-      empty: false,
-    });
-    expect(loopsStripLabel({ posts: 1, side: 'client', marks: none }).text).toBe(
-      '1 post waiting on you',
-    );
-  });
-
-  it('agency side reads waiting on client', () => {
-    expect(loopsStripLabel({ posts: 1, side: 'agency', marks: none })).toEqual({
-      count: 1,
-      text: '1 post waiting on client',
-      empty: false,
-    });
-    expect(loopsStripLabel({ posts: 2, side: 'agency', marks: some }).text).toBe(
-      '2 posts waiting on client · 2 commitments · 1 decision · 2 pending (1 P1)',
-    );
-  });
-
-  it('unknown side is neutral, never a guess', () => {
-    expect(loopsStripLabel({ posts: 2, side: 'unknown', marks: none }).text).toBe(
-      '2 posts in review',
-    );
+describe('open posts wording', () => {
+  it('posts part per side, never a guess', () => {
+    expect(openPostsPart(1, 'client')).toBe('1 post waiting on you');
+    expect(openPostsPart(2, 'agency')).toBe('2 posts waiting on client');
     expect(openPostsPart(1, 'unknown')).toBe('1 post in review');
-  });
-
-  it('zero posts leave only the mark parts, and the pill counts marks alone', () => {
-    const label = loopsStripLabel({ posts: 0, side: 'client', marks: some });
-    expect(label.text).toBe(markStripLabel(some));
-    expect(label.count).toBe(5);
-  });
-
-  it('nothing open reads the empty line, never an empty string', () => {
-    for (const side of ['client', 'agency', 'unknown'] as const) {
-      expect(loopsStripLabel({ posts: 0, side, marks: none })).toEqual({
-        count: 0,
-        text: NOTHING_OPEN,
-        empty: true,
-      });
-    }
     expect(NOTHING_OPEN).toBe('Nothing open between you');
-  });
-
-  it('failed posts read (posts null): marks-only, never Nothing open (B5)', () => {
-    expect(loopsStripLabel({ posts: null, side: 'client', marks: some })).toEqual({
-      count: 5,
-      text: markStripLabel(some),
-      empty: false,
-    });
-    const none0 = loopsStripLabel({ posts: null, side: 'agency', marks: none });
-    expect(none0).toEqual({ count: 0, text: '', empty: false });
-    expect(none0.text).not.toBe(NOTHING_OPEN);
   });
 
   it('sheet headings follow the side', () => {

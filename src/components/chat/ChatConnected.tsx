@@ -1419,6 +1419,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // switch closes both.
   const [planComposeOpen, setPlanComposeOpen] = useState(false);
   const [openPlan, setOpenPlan] = useState<OpenPlanRequest | null>(null);
+  // The item the Plan screen opens at (the status drawer's item rows); null: the plan.
+  const [openPlanItem, setOpenPlanItem] = useState<string | null>(null);
   const [planShown, setPlanShown] = useState(false);
   useHistoryStep(planComposeOpen && selected !== null, HISTORY_STEP_KEYS.planCompose, () =>
     setPlanComposeOpen(false),
@@ -1436,6 +1438,12 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   });
   const onOpenPlan = useCallback((request: OpenPlanRequest) => {
     setOpenPlan(request);
+    setOpenPlanItem(null);
+    setPlanShown(true);
+  }, []);
+  const onOpenPlanItem = useCallback((request: OpenPlanRequest & { itemId: string }) => {
+    setOpenPlan({ planId: request.planId, senderName: request.senderName });
+    setOpenPlanItem(request.itemId);
     setPlanShown(true);
   }, []);
   // The last one sent or cancelled: nothing left to show.
@@ -1837,6 +1845,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       }}
                       channelHasClient={hasClient}
                       {...(!notesOpen ? { onOpenPlanCompose: () => setPlanComposeOpen(true) } : {})}
+                      onOpenPlanItem={onOpenPlanItem}
+                      onNavigate={navigate}
                       initialMessageId={initialJumpFor(pendingJump, selected.channelId)}
                       onInitialJumpTaken={() => setPendingJump(null)}
                       searchRequest={
@@ -1912,8 +1922,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                 ) : null}
                 {openPlan !== null ? (
                   <PlanScreen
+                    key={`${openPlan.planId}:${openPlanItem ?? ''}`}
                     open={planShown}
                     planId={openPlan.planId}
+                    {...(openPlanItem !== null ? { initialItemId: openPlanItem } : {})}
                     senderName={openPlan.senderName}
                     chatTitle={(shown ?? selected).title}
                     onClose={() => setPlanShown(false)}
