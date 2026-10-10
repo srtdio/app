@@ -578,6 +578,8 @@ export const PLAN_POST_ITEM = '0190d100-0000-7000-8000-00000000d102';
 export const PLAN_TITLE = 'Week of 12 Oct';
 export const PLAN_CONCEPT_TITLE = 'Season opening reel';
 export const PLAN_MESSAGE_ID = '0190d200-0000-7000-8000-00000000d201';
+/** The Everyone comment seedClientPlan puts on the concept. */
+export const PLAN_CONCEPT_COMMENT_ID = '0190d300-0000-7000-8000-00000000d301';
 
 function planRow(id: string, title: string, audience: 'team' | 'client', by: string): Row {
   return {
@@ -646,6 +648,7 @@ export function seedClientPlan(
       title: PLAN_CONCEPT_TITLE,
       description: 'Short reel of the season starting. Morning light, 20 to 30 seconds.',
       post_id: null,
+      target_date: null,
       created_by: opts.sender,
       created_at: '2026-10-09T09:00:00Z',
       updated_at: '2026-10-09T09:00:00Z',
@@ -660,6 +663,7 @@ export function seedClientPlan(
       title: null,
       description: null,
       post_id: POST_IDS[0],
+      target_date: null,
       created_by: opts.sender,
       created_at: '2026-10-09T09:00:01Z',
       updated_at: '2026-10-09T09:00:01Z',
@@ -711,6 +715,7 @@ export function seedTeamAndHiddenPlans(
     title: 'Teaser countdown',
     description: null,
     post_id: null,
+    target_date: null,
     created_by: opts.sender,
     created_at: '2026-10-09T09:00:00Z',
     updated_at: '2026-10-09T09:00:00Z',
@@ -731,5 +736,138 @@ export function seedTeamAndHiddenPlans(
       [HIDDEN_PLAN_ID],
       now,
     ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// A dated plan: 15 items whose positions are out of date order
+// ---------------------------------------------------------------------------
+
+export const DATED_PLAN_ID = '0190d000-0000-7000-8000-00000000d004';
+export const DATED_PLAN_TITLE = 'Festive fortnight';
+export const DATED_PLAN_MESSAGE_ID = '0190d200-0000-7000-8000-00000000d204';
+
+/** One concept or post item of the dated plan, in position order (dates scrambled). */
+export interface DatedPlanItem {
+  id: string;
+  kind: 'concept' | 'post';
+  title: string;
+  /** "YYYY-MM-DD" (a concept's own date, or its post's day), or null. */
+  date: string | null;
+  team: 'approved' | null;
+  client: 'approved' | 'changes' | null;
+}
+
+const datedId = (n: number): string => `0190d500-0000-7000-8000-${String(n).padStart(12, '0')}`;
+const datedPostId = (n: number): string => `0190d600-0000-7000-8000-${String(n).padStart(12, '0')}`;
+
+/** 10 concepts (3 undated) and 5 posts (2 undated), listed in position order. */
+export const DATED_PLAN_ITEMS: DatedPlanItem[] = [
+  {
+    kind: 'concept',
+    title: 'Lamp lighting reel',
+    date: '2026-10-18',
+    team: 'approved',
+    client: 'approved',
+  },
+  { kind: 'concept', title: 'Recipe carousel', date: null, team: null, client: null },
+  { kind: 'post', title: 'Sweets flatlay', date: '2026-10-15', team: 'approved', client: null },
+  {
+    kind: 'concept',
+    title: 'Family portraits',
+    date: '2026-10-13',
+    team: 'approved',
+    client: 'changes',
+  },
+  { kind: 'concept', title: 'Rangoli timelapse', date: '2026-10-16', team: null, client: null },
+  { kind: 'post', title: 'Store hours card', date: null, team: null, client: null },
+  { kind: 'concept', title: 'Gift guide', date: null, team: null, client: null },
+  {
+    kind: 'concept',
+    title: 'Countdown story',
+    date: '2026-10-12',
+    team: 'approved',
+    client: 'approved',
+  },
+  { kind: 'post', title: 'Opening offer', date: '2026-10-12', team: null, client: 'approved' },
+  { kind: 'concept', title: 'Behind the scenes', date: '2026-10-17', team: null, client: null },
+  { kind: 'post', title: 'Thank you note', date: '2026-10-17', team: null, client: null },
+  { kind: 'concept', title: 'Customer stories', date: null, team: null, client: null },
+  { kind: 'concept', title: 'Lantern workshop', date: '2026-10-14', team: null, client: null },
+  { kind: 'post', title: 'Last call', date: null, team: null, client: null },
+  { kind: 'concept', title: 'Morning prayers', date: '2026-10-15', team: null, client: null },
+].map((it, k) => ({ ...it, id: datedId(k + 1) }) as DatedPlanItem);
+
+/**
+ * Seed the dated client plan shared by `sender` into `channelId`: 15 items
+ * whose positions run out of date order, with team and client reviews and
+ * post stages (a post's client approval is its stage).
+ */
+export function seedDatedPlan(
+  world: ChatWorld,
+  opts: { channelId: string; sender: string; now?: number },
+): void {
+  const t = world.tables;
+  (t.plans ??= []).push(planRow(DATED_PLAN_ID, DATED_PLAN_TITLE, 'client', opts.sender));
+  DATED_PLAN_ITEMS.forEach((it, position) => {
+    const postId = it.kind === 'post' ? datedPostId(position + 1) : null;
+    if (postId !== null) {
+      (t.posts ??= []).push({
+        id: postId,
+        number: 900 + position,
+        workspace_id: WORKSPACE_ID,
+        title: it.title,
+        caption: 'Fixture caption',
+        bucket_id: BUCKET_ID,
+        owner_user_id: opts.sender,
+        platform: 'instagram',
+        format: 'image',
+        stage: it.client === 'approved' ? 'approved' : 'review',
+        stage_entered_at: '2026-10-09T09:00:00Z',
+        approved_by: null,
+        approved_at: null,
+        target_date: it.date !== null ? `${it.date}T09:00:00Z` : null,
+        origin: 'manual',
+        brief_id: null,
+        row_version: 1,
+        created_by: opts.sender,
+        legacy_author_name: null,
+        created_at: '2026-10-09T09:00:00Z',
+        updated_at: '2026-10-09T09:00:00Z',
+        deleted_at: null,
+        post_versions: [],
+        post_annotations: [],
+      });
+    }
+    (t.plan_items ??= []).push({
+      id: it.id,
+      workspace_id: WORKSPACE_ID,
+      plan_id: DATED_PLAN_ID,
+      kind: it.kind,
+      position,
+      title: it.kind === 'concept' ? it.title : null,
+      description: it.kind === 'concept' ? 'Fixture concept.' : null,
+      post_id: postId,
+      target_date: it.kind === 'concept' ? it.date : null,
+      created_by: opts.sender,
+      created_at: '2026-10-09T09:00:00Z',
+      updated_at: '2026-10-09T09:00:00Z',
+      deleted_at: null,
+    });
+    const review = (side: 'team' | 'client', status: string): void => {
+      (t.plan_item_reviews ??= []).push({
+        item_id: it.id,
+        workspace_id: WORKSPACE_ID,
+        side,
+        status,
+        reviewed_by: opts.sender,
+        reviewed_at: '2026-10-09T10:00:00Z',
+      });
+    };
+    if (it.team !== null) review('team', it.team);
+    if (it.kind === 'concept' && it.client !== null) review('client', it.client);
+  });
+  (t.chat_messages ??= []).push(
+    planMessage(DATED_PLAN_MESSAGE_ID, opts.channelId, opts.sender, [DATED_PLAN_ID], opts.now),
   );
 }

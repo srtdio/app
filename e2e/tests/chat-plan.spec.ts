@@ -176,7 +176,7 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(card).toBeVisible();
   await expect(card.getByText('1 concept')).toBeVisible();
   await expect(card.getByText('1 post')).toBeVisible();
-  await expect(card.getByText('0 of 2 approved by client')).toBeVisible();
+  await expect(card.getByText('Team 0 of 2 · Client 0 of 2')).toBeVisible();
   await expect(card.locator('[data-plan-forward]')).toHaveCount(0);
   await page.waitForTimeout(400);
   await shot(page, `${prefix}-05-card-agency`);

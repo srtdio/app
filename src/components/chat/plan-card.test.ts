@@ -8,6 +8,8 @@ import {
   draftProblem,
   draftsButtonShown,
   teamPlanBlocked,
+  NO_DATE_LABEL,
+  itemDateLabel,
   itemKindLabel,
   itemPills,
   planChips,
@@ -76,14 +78,16 @@ const MIXED = bundle(
 
 describe('plan progress', () => {
   it('counts concept client reviews and post stages; team reviews never count', () => {
-    expect(planProgress(MIXED)).toEqual({ approved: 2, total: 5, changes: 1 });
-    expect(progressLabel(planProgress(MIXED))).toBe('2 of 5 approved by client · 1 change asked');
+    expect(planProgress(MIXED)).toEqual({ approved: 2, teamApproved: 1, total: 5, changes: 1 });
+    expect(progressLabel(planProgress(MIXED), 'client')).toBe(
+      '2 of 5 approved by client · 1 change asked',
+    );
     expect(progressPercent(planProgress(MIXED))).toBe(40);
   });
 
   it('no changes: the label stops after the approvals; an empty plan is 0%', () => {
     const empty = bundle([]);
-    expect(progressLabel(planProgress(empty))).toBe('0 of 0 approved by client');
+    expect(progressLabel(planProgress(empty), 'client')).toBe('0 of 0 approved by client');
     expect(progressPercent(planProgress(empty))).toBe(0);
     const two = bundle(
       [item({ id: 'a' }), item({ id: 'b' })],
@@ -92,7 +96,9 @@ describe('plan progress', () => {
         { item_id: 'b', side: 'client', status: 'changes' },
       ],
     );
-    expect(progressLabel(planProgress(two))).toBe('0 of 2 approved by client · 2 changes asked');
+    expect(progressLabel(planProgress(two), 'client')).toBe(
+      '0 of 2 approved by client · 2 changes asked',
+    );
   });
 });
 
@@ -207,5 +213,90 @@ describe('team only plan gating (F1)', () => {
     expect(src).toContain('if (busy || problem !== null || teamBlocked) return;');
     expect(src).toContain('disabled={busy || problem !== null || teamBlocked}');
     expect(src).toContain('{TEAM_PLAN_CLIENT_CHAT}');
+  });
+});
+
+describe('both progress counts (D1)', () => {
+  it('team counts team reviews on concepts and posts; client counts concept reviews and post stage', () => {
+    const b = bundle(
+      [
+        item({ id: 'c1' }),
+        item({ id: 'c2' }),
+        item({ id: 'p1', kind: 'post', title: null, post_id: 'post1' }),
+        item({ id: 'p2', kind: 'post', title: null, post_id: 'post2' }),
+      ],
+      [
+        { item_id: 'c1', side: 'team', status: 'approved' },
+        { item_id: 'c1', side: 'client', status: 'approved' },
+        { item_id: 'c2', side: 'team', status: 'changes' },
+        { item_id: 'p1', side: 'team', status: 'approved' },
+        { item_id: 'p2', side: 'team', status: 'approved' },
+      ],
+      { post1: 'approved', post2: 'review' },
+    );
+    const p = planProgress(b);
+    expect(p).toEqual({ approved: 2, teamApproved: 3, total: 4, changes: 0 });
+    expect(progressLabel(p, 'agency')).toBe('Team 3 of 4 · Client 2 of 4');
+    expect(progressPercent(p)).toBe(50);
+  });
+
+  it('a missing review row reads as waiting on both sides', () => {
+    const b = bundle([item({ id: 'a' }), item({ id: 'b' })]);
+    expect(planProgress(b)).toEqual({ approved: 0, teamApproved: 0, total: 2, changes: 0 });
+    expect(progressLabel(planProgress(b), 'agency')).toBe('Team 0 of 2 · Client 0 of 2');
+  });
+
+  it('an unreadable post counts in N and is never client approved', () => {
+    const b = bundle(
+      [item({ id: 'c' }), item({ id: 'p', kind: 'post', title: null, post_id: 'hidden' })],
+      [{ item_id: 'c', side: 'client', status: 'approved' }],
+      {},
+    );
+    expect(planProgress(b)).toMatchObject({ approved: 1, total: 2 });
+  });
+
+  it('the changes part follows the counts on the agency side when K > 0', () => {
+    expect(progressLabel(planProgress(MIXED), 'agency')).toBe(
+      'Team 1 of 5 · Client 2 of 5 · 1 change asked',
+    );
+  });
+
+  it('a client (or an unknown side) never sees a team count', () => {
+    for (const side of ['client', 'unknown'] as const) {
+      const label = progressLabel(planProgress(MIXED), side);
+      expect(label).toBe('2 of 5 approved by client · 1 change asked');
+      expect(label).not.toContain('Team');
+    }
+  });
+
+  it('one helper counts (no per-row reviews.find in plan-card.ts)', () => {
+    const src = readFileSync(fileURLToPath(new URL('./plan-card.ts', import.meta.url)), 'utf8');
+    expect(src).not.toMatch(/reviews\.find\(/);
+  });
+});
+
+describe('date labels (D3)', () => {
+  const posts = bundle([
+    item({ id: 'cd', target_date: '2026-10-14' }),
+    item({ id: 'cu' }),
+    item({ id: 'pd', kind: 'post', title: null, post_id: 'post1' }),
+    item({ id: 'pu', kind: 'post', title: null, post_id: 'post2' }),
+  ]);
+  posts.postInfo = {
+    post1: { title: 'A', target_date: '2026-10-13T08:00:00+00:00' },
+    post2: { title: 'B', target_date: null },
+  };
+  const at = (id: string): PlanItemRow => posts.items.find((i) => i.id === id) as PlanItemRow;
+
+  it('a dated concept shows its day', () => {
+    expect(itemDateLabel(posts, at('cd'))).toEqual({ label: '14 Oct', dated: true });
+  });
+  it('an undated concept shows "No date"', () => {
+    expect(itemDateLabel(posts, at('cu'))).toEqual({ label: NO_DATE_LABEL, dated: false });
+    expect(NO_DATE_LABEL).toBe('No date');
+  });
+  it('a post with a date shows its post day; without one "No date"', () => {
+    expect(itemDateLabel(posts, at('pd'))).toEqual({ label: '13 Oct', dated: true });
+    expect(itemDateLabel(posts, at('pu'))).toEqual({ label: NO_DATE_LABEL, dated: false });
   });
 });

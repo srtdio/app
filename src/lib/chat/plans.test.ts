@@ -8,15 +8,20 @@ import {
   PLAN_SHARE_FAILED,
   TEAM_PLAN_CLIENT_CHAT,
   assembleBundles,
+  conceptAddArgs,
+  conceptEditArgs,
   createShareEpoch,
   readItemFiles,
   createPlanCardCache,
   initialShareProgress,
   planChunks,
+  planItemDay,
   readPlanBundles,
   readPlanScreen,
   runPlanShare,
+  sortPlanItemsByDate,
   type PlanBundle,
+  type PlanItemRow,
   type PlanDraft,
   type PlanShareDeps,
 } from '@/lib/chat/plans';
@@ -35,9 +40,9 @@ const DRAFT: PlanDraft = {
   endsOn: '2026-10-18',
   audience: 'client',
   concepts: [
-    { key: 'k1', title: 'Reel', description: 'd1', versionIds: ['v1'] },
-    { key: 'k2', title: 'Carousel', description: 'd2', versionIds: [] },
-    { key: 'k3', title: 'Leaders', description: '', versionIds: [] },
+    { key: 'k1', title: 'Reel', description: 'd1', versionIds: ['v1'], targetDate: null },
+    { key: 'k2', title: 'Carousel', description: 'd2', versionIds: [], targetDate: '2026-10-14' },
+    { key: 'k3', title: 'Leaders', description: '', versionIds: [], targetDate: null },
   ],
   postIds: ['p1', 'p2'],
 };
@@ -504,5 +509,204 @@ describe('Forward into the open chat (G3)', () => {
     );
     expect(src).toContain('!here && connection !== null && target !== null');
     expect(src).toContain('if (here) planCards?.addRowHere(result.row, result.traceId);');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Date order (D2) and the concept date args (D4)
+// ---------------------------------------------------------------------------
+
+function row(over: Partial<PlanItemRow> & { id: string }): PlanItemRow {
+  return {
+    plan_id: 'plan',
+    kind: 'concept',
+    position: 0,
+    title: 'C',
+    description: null,
+    post_id: null,
+    created_at: '2026-10-09T10:00:00Z',
+    target_date: null,
+    ...over,
+  };
+}
+
+describe('plan items in date order', () => {
+  const info = {
+    pa: { title: 'A', target_date: '2026-10-13T09:00:00+00:00' },
+    pb: { title: 'B', target_date: null },
+    pc: { title: 'C', target_date: '2026-10-11' },
+  };
+
+  it('a concept takes its own date, a post its post date; unreadable or empty is undated', () => {
+    expect(planItemDay(row({ id: 'c', target_date: '2026-10-12' }), info)).toBe('2026-10-12');
+    expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'pa' }), info)).toBe('2026-10-13');
+    expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'pb' }), info)).toBeNull();
+    expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'gone' }), info)).toBeNull();
+    expect(planItemDay(row({ id: 'c' }), info)).toBeNull();
+  });
+
+  it('mixed dated concepts and posts ascending, undated last', () => {
+    const items = [
+      row({ id: 'undatedConcept', position: 0 }),
+      row({ id: 'post13', kind: 'post', post_id: 'pa', position: 1 }),
+      row({ id: 'concept12', target_date: '2026-10-12', position: 2 }),
+      row({ id: 'undatedPost', kind: 'post', post_id: 'pb', position: 3 }),
+      row({ id: 'post11', kind: 'post', post_id: 'pc', position: 4 }),
+      row({ id: 'concept20', target_date: '2026-10-20', position: 5 }),
+    ];
+    expect(sortPlanItemsByDate(items, info).map((i) => i.id)).toEqual([
+      'post11',
+      'concept12',
+      'post13',
+      'concept20',
+      'undatedConcept',
+      'undatedPost',
+    ]);
+  });
+
+  it('ties keep position, then creation, and the sort never mutates its input', () => {
+    const items = [
+      row({ id: 'b', target_date: '2026-10-12', position: 2 }),
+      row({ id: 'a2', target_date: '2026-10-12', position: 1, created_at: '2026-10-09T11:00:00Z' }),
+      row({ id: 'a1', target_date: '2026-10-12', position: 1, created_at: '2026-10-09T10:00:00Z' }),
+    ];
+    const before = items.map((i) => i.id);
+    expect(sortPlanItemsByDate(items, {}).map((i) => i.id)).toEqual(['a1', 'a2', 'b']);
+    expect(items.map((i) => i.id)).toEqual(before);
+  });
+
+  it('15+ items out of order come back by day, undated last in position order', () => {
+    const days = [9, 3, 15, 1, 12, 7, 14, 2, 11, 5, 13, 4, 10, 8, 6];
+    const items = days.map((d, k) =>
+      row({ id: `i${d}`, position: k, target_date: `2026-10-${String(d).padStart(2, '0')}` }),
+    );
+    items.push(row({ id: 'u1', position: 15 }), row({ id: 'u0', position: 3 }));
+    const sorted = sortPlanItemsByDate(items, {}).map((i) => i.id);
+    expect(sorted).toEqual([...Array.from({ length: 15 }, (_, k) => `i${k + 1}`), 'u0', 'u1']);
+  });
+
+  it('all undated: the plan position order', () => {
+    const items = [
+      row({ id: 'c', position: 2 }),
+      row({ id: 'a', position: 0 }),
+      row({ id: 'b', position: 1 }),
+    ];
+    expect(sortPlanItemsByDate(items, {}).map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('assembled bundles are already in date order (first paint, no reorder)', () => {
+    const plans = [
+      {
+        id: 'plan',
+        workspace_id: 'ws',
+        title: 'T',
+        starts_on: '2026-10-12',
+        ends_on: '2026-10-18',
+        audience: 'client' as const,
+        created_by: null,
+      },
+    ];
+    const items = [
+      row({ id: 'late', target_date: '2026-10-18', position: 0 }),
+      row({ id: 'none', position: 1 }),
+      row({ id: 'post', kind: 'post', post_id: 'p1', position: 2 }),
+    ];
+    const out = assembleBundles(
+      plans,
+      items,
+      [],
+      [{ id: 'p1', stage: 'review', title: 'P', target_date: '2026-10-12' }],
+    );
+    expect(out.get('plan')?.items.map((i) => i.id)).toEqual(['post', 'late', 'none']);
+  });
+
+  it('the item read selects plan_items.target_date', async () => {
+    const src = readFileSync(fileURLToPath(new URL('./plans.ts', import.meta.url)), 'utf8');
+    expect(src).toMatch(/ITEM_COLUMNS =\s*'[^']*\btarget_date\b/);
+  });
+});
+
+describe('concept date args', () => {
+  const concept = { key: 'k', title: 'Reel', description: 'd', versionIds: ['v1'] };
+
+  it('create with a date sends it', () => {
+    expect(conceptAddArgs('plan', { ...concept, targetDate: '2026-10-14' }, 't')).toEqual({
+      p_plan_id: 'plan',
+      p_title: 'Reel',
+      p_description: 'd',
+      p_attachment_version_ids: ['v1'],
+      p_target_date: '2026-10-14',
+      p_trace_id: 't',
+    });
+  });
+
+  it('create without a date leaves the key out (the column stays null)', () => {
+    const args = conceptAddArgs('plan', { ...concept, targetDate: null }, 't');
+    expect('p_target_date' in args).toBe(false);
+  });
+
+  const base = {
+    title: 'Reel',
+    description: '',
+    targetDate: '2026-10-14',
+    currentFiles: ['v1', 'v2'],
+    pickedFiles: null,
+  };
+
+  it('date-only edit sends the new date and null files (links kept)', () => {
+    expect(conceptEditArgs('i1', { ...base, targetDate: '2026-10-20' }, 't')).toEqual({
+      p_item_id: 'i1',
+      p_title: 'Reel',
+      p_description: '',
+      p_attachment_version_ids: null,
+      p_target_date: '2026-10-20',
+      p_trace_id: 't',
+    });
+    // Unread files and an untouched picker also keep the links.
+    expect(
+      conceptEditArgs('i1', { ...base, currentFiles: null }, 't').p_attachment_version_ids,
+    ).toBeNull();
+  });
+
+  it('title-only edit sends null files', () => {
+    const args = conceptEditArgs('i1', { ...base, title: 'Reel v2' }, 't');
+    expect(args.p_title).toBe('Reel v2');
+    expect(args.p_attachment_version_ids).toBeNull();
+    // Files picked again in the same order are unchanged: still null.
+    expect(
+      conceptEditArgs('i1', { ...base, title: 'Reel v2', pickedFiles: ['v1', 'v2'] }, 't')
+        .p_attachment_version_ids,
+    ).toBeNull();
+  });
+
+  it('a file change (added, removed or reordered) sends the picked array', () => {
+    const files = (picked: string[]) =>
+      conceptEditArgs('i1', { ...base, pickedFiles: picked }, 't').p_attachment_version_ids;
+    expect(files(['v1', 'v2', 'v3'])).toEqual(['v1', 'v2', 'v3']);
+    expect(files(['v2'])).toEqual(['v2']);
+    expect(files(['v2', 'v1'])).toEqual(['v2', 'v1']);
+    expect(files([])).toEqual([]);
+  });
+
+  it('edit clear sends null (never leaves the key out)', () => {
+    expect(conceptEditArgs('i1', { ...base, targetDate: null }, 't').p_target_date).toBeNull();
+    expect(conceptEditArgs('i1', { ...base, targetDate: '' }, 't').p_target_date).toBeNull();
+    expect('p_target_date' in conceptEditArgs('i1', { ...base, targetDate: null }, 't')).toBe(true);
+  });
+
+  it('edit keeps the date when unchanged (it is always sent)', () => {
+    expect(conceptEditArgs('i1', base, 't').p_target_date).toBe('2026-10-14');
+  });
+
+  it('the run sends each draft concept with its own date', async () => {
+    const seen: Array<string | null> = [];
+    const d = deps({
+      conceptAdd: async (_p, c) => {
+        seen.push(c.targetDate);
+        return { ok: true, data: c.key };
+      },
+    });
+    await runPlanShare(d, DRAFT, initialShareProgress('m1'), 't');
+    expect(seen).toEqual([null, '2026-10-14', null]);
   });
 });

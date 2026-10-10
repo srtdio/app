@@ -209,6 +209,7 @@ const PLAN_RPC: Record<string, RpcHandler> = {
       title: args.p_title,
       description: args.p_description === '' ? null : args.p_description,
       post_id: null,
+      target_date: args.p_target_date ?? null,
       created_by: ME,
       created_at: now,
       updated_at: now,
@@ -238,6 +239,35 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     if (item !== undefined) {
       item.title = args.p_title;
       item.description = args.p_description;
+      // The proc always writes the date (null clears) and resets both reviews.
+      item.target_date = args.p_target_date ?? null;
+      for (const r of tables.plan_item_reviews ?? []) {
+        if (r.item_id === item.id) r.status = 'waiting';
+      }
+      // Files: null keeps every link; an array soft-deletes and re-attaches them all.
+      if (Array.isArray(args.p_attachment_version_ids)) {
+        const now = new Date().toISOString();
+        const links = (tables.asset_attachments ??= []);
+        for (const a of links) {
+          if (a.entity_type === 'plan_item' && a.entity_id === item.id && a.deleted_at === null) {
+            a.deleted_at = now;
+          }
+        }
+        args.p_attachment_version_ids.forEach((versionId, position) =>
+          links.push({
+            id: crypto.randomUUID(),
+            asset_id: versionId,
+            asset_version_id: versionId,
+            entity_type: 'plan_item',
+            entity_id: item.id,
+            workspace_id: WORKSPACE_ID,
+            position,
+            attached_by: ME,
+            attached_at: now,
+            deleted_at: null,
+          }),
+        );
+      }
     }
     return null;
   },
@@ -257,6 +287,7 @@ const PLAN_RPC: Record<string, RpcHandler> = {
         title: null,
         description: null,
         post_id: postId,
+        target_date: null,
         created_by: ME,
         created_at: now,
         updated_at: now,

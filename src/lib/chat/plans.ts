@@ -8,7 +8,7 @@
 // items' reviews, then the post items' stages). Framework-free: the share
 // steps and the readers are injected, so the contract is unit-tested directly.
 
-import type { Client, Result } from '@srtdio/rpc';
+import type { Client, PlanConceptAddArgs, PlanConceptEditArgs, Result } from '@srtdio/rpc';
 import { abortable, withReadTimeout } from '@/lib/chat-reads';
 
 /** Ids per IN read (the PostgREST URL stays short). */
@@ -68,6 +68,8 @@ export interface PlanItemRow {
   description: string | null;
   post_id: string | null;
   created_at: string;
+  /** A concept's own date ("YYYY-MM-DD"); always null on a post (its post holds the date). */
+  target_date?: string | null;
 }
 
 export interface PlanReviewRow {
@@ -88,7 +90,7 @@ export interface PlanCommentRow {
 /** One plan with everything its card and screen show. */
 export interface PlanBundle {
   plan: PlanRow;
-  /** Live items the viewer can read, in position order. */
+  /** Live items the viewer can read, in date order (sortPlanItemsByDate). */
   items: PlanItemRow[];
   /** Reviews the viewer can read (team reviews only on the agency side). */
   reviews: PlanReviewRow[];
@@ -104,7 +106,8 @@ export interface PlanPostInfo {
 }
 
 const PLAN_COLUMNS = 'id, workspace_id, title, starts_on, ends_on, audience, created_by';
-const ITEM_COLUMNS = 'id, plan_id, kind, position, title, description, post_id, created_at';
+const ITEM_COLUMNS =
+  'id, plan_id, kind, position, title, description, post_id, created_at, target_date';
 const REVIEW_COLUMNS = 'item_id, side, status';
 const COMMENT_COLUMNS = 'id, item_id, author_user_id, body, visibility, created_at';
 
@@ -170,11 +173,42 @@ interface PlanTable {
   select: (columns: string) => PlanQuery;
 }
 
-/** Sort items by position, then creation (the plan's order). Pure. */
-export function sortPlanItems(items: readonly PlanItemRow[]): PlanItemRow[] {
-  return [...items].sort(
-    (a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at),
-  );
+/**
+ * An item's day ("YYYY-MM-DD"): a concept's own target_date, a post's
+ * target_date; null when undated or the post is not readable. Pure.
+ */
+export function planItemDay(
+  item: PlanItemRow,
+  postInfo: Readonly<Record<string, PlanPostInfo>>,
+): string | null {
+  const raw =
+    item.kind === 'concept'
+      ? (item.target_date ?? null)
+      : item.post_id !== null
+        ? (postInfo[item.post_id]?.target_date ?? null)
+        : null;
+  return raw === null || raw === '' ? null : raw.slice(0, 10);
+}
+
+/**
+ * The plan's order everywhere items are listed or numbered: dated items by day
+ * ascending, undated last, ties by position then creation. Pure.
+ */
+export function sortPlanItemsByDate(
+  items: readonly PlanItemRow[],
+  postInfo: Readonly<Record<string, PlanPostInfo>>,
+): PlanItemRow[] {
+  const days = new Map(items.map((i) => [i.id, planItemDay(i, postInfo)]));
+  return [...items].sort((a, b) => {
+    const da = days.get(a.id) ?? null;
+    const db = days.get(b.id) ?? null;
+    if (da !== db) {
+      if (da === null) return 1;
+      if (db === null) return -1;
+      return da < db ? -1 : 1;
+    }
+    return a.position - b.position || a.created_at.localeCompare(b.created_at);
+  });
 }
 
 /**
@@ -245,7 +279,7 @@ export function assembleBundles(
   for (const s of stages) byId.set(s.id, s);
   const out = new Map<string, PlanBundle>();
   for (const plan of plans) {
-    const own = sortPlanItems(items.filter((i) => i.plan_id === plan.id));
+    const own = items.filter((i) => i.plan_id === plan.id);
     const ids = new Set(own.map((i) => i.id));
     const postStages: Record<string, string> = {};
     const postInfo: Record<string, PlanPostInfo> = {};
@@ -258,7 +292,8 @@ export function assembleBundles(
     }
     out.set(plan.id, {
       plan,
-      items: own,
+      // Sorted here, once, so the first paint is already in date order.
+      items: sortPlanItemsByDate(own, postInfo),
       reviews: reviews.filter((r) => ids.has(r.item_id)),
       postStages,
       postInfo,
@@ -583,6 +618,8 @@ export interface DraftConcept {
   description: string;
   /** Library asset version ids, up to 20. */
   versionIds: string[];
+  /** Optional date ("YYYY-MM-DD"), null when none. */
+  targetDate: string | null;
 }
 
 export interface PlanDraft {
@@ -728,6 +765,63 @@ export async function runPlanShare(
   } catch (error) {
     return failed(step, String(error));
   }
+}
+
+/** plan_concept_add's args for a draft concept: no date leaves the column null. Pure. */
+export function conceptAddArgs(
+  planId: string,
+  concept: DraftConcept,
+  traceId: string,
+): PlanConceptAddArgs {
+  return {
+    p_plan_id: planId,
+    p_title: concept.title,
+    p_description: concept.description,
+    p_attachment_version_ids: concept.versionIds,
+    p_trace_id: traceId,
+    ...(concept.targetDate !== null ? { p_target_date: concept.targetDate } : {}),
+  };
+}
+
+/** Whether two file lists hold the same ids in the same order. Pure. */
+function sameFiles(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
+/** One concept edit: the fields as they will be saved. */
+export interface ConceptEdit {
+  title: string;
+  description: string;
+  /** "YYYY-MM-DD", or null / '' for no date. */
+  targetDate: string | null;
+  /** The concept's files as read (null when not read). */
+  currentFiles: readonly string[] | null;
+  /** The files as picked in the edit (null when the edit does not touch files). */
+  pickedFiles: readonly string[] | null;
+}
+
+/**
+ * plan_concept_edit's args. The date is always sent (null clears it). Files go
+ * as null ("keep files") unless the picked list differs from the current one
+ * (added, removed or reordered): an array makes the proc soft-delete and
+ * re-attach every link. Pure.
+ */
+export function conceptEditArgs(
+  itemId: string,
+  edit: ConceptEdit,
+  traceId: string,
+): PlanConceptEditArgs {
+  const picked = edit.pickedFiles;
+  const changed =
+    picked !== null && (edit.currentFiles === null || !sameFiles(edit.currentFiles, picked));
+  return {
+    p_item_id: itemId,
+    p_title: edit.title,
+    p_description: edit.description,
+    p_attachment_version_ids: changed ? [...picked] : null,
+    p_target_date: edit.targetDate === '' ? null : edit.targetDate,
+    p_trace_id: traceId,
+  };
 }
 
 // ---------------------------------------------------------------------------
