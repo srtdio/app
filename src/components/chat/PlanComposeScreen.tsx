@@ -15,17 +15,19 @@ import type { ReactElement } from 'react';
 import type { PostCardFields } from '@srtdio/posts';
 import { chatPlanShare, planConceptAdd, planCreate, planPostsAdd } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
-import { Sheet } from '@/components/ui/Sheet';
 import { IconX } from '@/components/ui/icons';
-import { Thumbnail } from '@/components/media/Thumbnail';
-import { AssetPicker } from '@/components/chat/AssetPicker';
+import {
+  ConceptSheet,
+  EMPTY_CONCEPT,
+  FIELD,
+  conceptFormValid,
+  type ConceptForm,
+} from '@/components/chat/ConceptSheet';
 import { PostPicker } from '@/components/chat/PostPicker';
 import { togglePost } from '@/components/chat/post-picker';
-import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
-import { ConceptDateField, PlanPage } from '@/components/chat/PlanScreen';
+import { PlanPage } from '@/components/chat/PlanScreen';
 import {
   AUDIENCE_HINTS,
-  CONCEPT_FILES_MAX,
   DRAFT_PROBLEM_COPY,
   NO_DATE_LABEL,
   PLAN_TITLE_MAX,
@@ -36,7 +38,6 @@ import {
   stageLabel,
   teamPlanBlocked,
 } from '@/components/chat/plan-card';
-import type { LibraryAsset } from '@/lib/chat/asset-picker';
 import { newMessageId } from '@/lib/chat/message-id';
 import {
   PLAN_SHARE_FAILED,
@@ -56,20 +57,6 @@ import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
-
-/** A concept being added in the sheet (files keep their names for the chips). */
-interface ConceptForm {
-  title: string;
-  description: string;
-  files: LibraryAsset[];
-  /** "YYYY-MM-DD", or '' for no date. */
-  date: string;
-}
-
-const EMPTY_CONCEPT: ConceptForm = { title: '', description: '', files: [], date: '' };
-
-const FIELD =
-  'min-h-[48px] w-full rounded-lg border border-border bg-panel px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60';
 
 export function PlanComposeScreen(props: {
   open: boolean;
@@ -95,7 +82,6 @@ export function PlanComposeScreen(props: {
   const [picker, setPicker] = useState<'posts' | 'drafts' | null>(null);
   const [conceptOpen, setConceptOpen] = useState(false);
   const [conceptForm, setConceptForm] = useState<ConceptForm>(EMPTY_CONCEPT);
-  const [assetsOpen, setAssetsOpen] = useState(false);
   const [progress, setProgress] = useState<ShareProgress>(() =>
     initialShareProgress(newMessageId()),
   );
@@ -133,7 +119,6 @@ export function PlanComposeScreen(props: {
     setPicker(null);
     setConceptOpen(false);
     setConceptForm(EMPTY_CONCEPT);
-    setAssetsOpen(false);
     setProgress(initialShareProgress(newMessageId()));
     setBusy(false);
     setError(null);
@@ -248,8 +233,7 @@ export function PlanComposeScreen(props: {
   };
 
   const addConcept = (): void => {
-    const t = conceptForm.title.trim();
-    if (t === '' || t.length > PLAN_TITLE_MAX) return;
+    if (!conceptFormValid(conceptForm)) return;
     setConcepts((prev) => [...prev, { ...conceptForm, key: newMessageId() }]);
     setConceptForm(EMPTY_CONCEPT);
     setConceptOpen(false);
@@ -478,95 +462,13 @@ export function PlanComposeScreen(props: {
         channelHasClient={audience === 'team' ? props.channelHasClient : true}
       />
 
-      <Sheet
+      <ConceptSheet
         open={props.open && conceptOpen}
+        mode="add"
+        form={conceptForm}
+        onChange={setConceptForm}
+        onSubmit={addConcept}
         onClose={() => setConceptOpen(false)}
-        title="Add concept"
-        footer={
-          <div className="grid w-full grid-cols-2 gap-2">
-            <Button size="lg" variant="ghost" onClick={() => setConceptOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              size="lg"
-              variant="primary"
-              data-plan-concept-save=""
-              disabled={conceptForm.title.trim() === ''}
-              onClick={addConcept}
-            >
-              Add
-            </Button>
-          </div>
-        }
-      >
-        <div className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-[13px] text-fg-3">Title</span>
-            <input
-              data-plan-concept-title=""
-              value={conceptForm.title}
-              maxLength={PLAN_TITLE_MAX}
-              autoComplete="off"
-              onChange={(e) => setConceptForm((f) => ({ ...f, title: e.target.value }))}
-              className={FIELD}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[13px] text-fg-3">Description</span>
-            <textarea
-              data-plan-concept-description=""
-              value={conceptForm.description}
-              maxLength={5000}
-              rows={3}
-              onChange={(e) => setConceptForm((f) => ({ ...f, description: e.target.value }))}
-              className={cn(FIELD, 'py-2.5')}
-            />
-          </label>
-          <ConceptDateField
-            value={conceptForm.date}
-            onChange={(date) => setConceptForm((f) => ({ ...f, date }))}
-          />
-          {conceptForm.files.length > 0 ? (
-            <div className="grid grid-cols-4 gap-1.5">
-              {conceptForm.files.map((f) => (
-                <div
-                  key={f.versionId}
-                  data-plan-concept-file=""
-                  className="relative overflow-hidden rounded-md border border-border bg-panel-2"
-                >
-                  <Thumbnail
-                    assetVersionId={f.versionId}
-                    cache={sharedCardPresignCache()}
-                    presignEnabled={PRESIGN_ENABLED}
-                    fallback={{ kind: 'glyph' }}
-                    alt={f.name}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : null}
-          <Button
-            size="lg"
-            data-plan-concept-files=""
-            disabled={conceptForm.files.length >= CONCEPT_FILES_MAX}
-            onClick={() => setAssetsOpen(true)}
-          >
-            Add files
-          </Button>
-        </div>
-      </Sheet>
-
-      <AssetPicker
-        open={props.open && assetsOpen}
-        onClose={() => setAssetsOpen(false)}
-        onConfirm={(picks) => {
-          setAssetsOpen(false);
-          setConceptForm((f) => {
-            const seen = new Set(f.files.map((x) => x.versionId));
-            const next = [...f.files, ...picks.filter((p) => !seen.has(p.versionId))];
-            return { ...f, files: next.slice(0, CONCEPT_FILES_MAX) };
-          });
-        }}
       />
     </>
   );

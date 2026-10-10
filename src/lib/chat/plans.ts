@@ -824,6 +824,23 @@ export function conceptEditArgs(
   };
 }
 
+/**
+ * Whether an edit leaves the concept as it is: same title, description and
+ * date, and files that would go as null (untouched or picked the same). Such a
+ * save sends nothing, so no review resets. Pure.
+ */
+export function conceptEditUnchanged(
+  item: Pick<PlanItemRow, 'title' | 'description' | 'target_date'>,
+  edit: ConceptEdit,
+): boolean {
+  return (
+    edit.title === (item.title ?? '') &&
+    edit.description === (item.description ?? '') &&
+    (edit.targetDate ?? '') === (item.target_date?.slice(0, 10) ?? '') &&
+    conceptEditArgs('', edit, '').p_attachment_version_ids === null
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Screen reads: one select per table per screen open
 // ---------------------------------------------------------------------------

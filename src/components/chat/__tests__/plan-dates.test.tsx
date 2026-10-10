@@ -9,8 +9,8 @@ vi.mock('agora-chat', () => ({
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ConceptDateField, rowSubline, screenProgressLabel } from '@/components/chat/PlanScreen';
 import {
-  CONCEPT_DATE_RESET_HINT,
-  canEditConceptDate,
+  CONCEPT_EDIT_RESET_HINT,
+  canEditConcept,
   statusRows,
 } from '@/components/chat/PlanItemScreen';
 import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
@@ -80,11 +80,11 @@ describe('rows and the item status box (D3)', () => {
 
 describe('concept date field (D4)', () => {
   it('only the agency edits, and only a concept', () => {
-    expect(canEditConceptDate('agency', { kind: 'concept' })).toBe(true);
-    expect(canEditConceptDate('agency', { kind: 'post' })).toBe(false);
-    expect(canEditConceptDate('client', { kind: 'concept' })).toBe(false);
-    expect(canEditConceptDate('unknown', { kind: 'concept' })).toBe(false);
-    expect(CONCEPT_DATE_RESET_HINT).not.toContain(String.fromCharCode(0x2014));
+    expect(canEditConcept('agency', { kind: 'concept' })).toBe(true);
+    expect(canEditConcept('agency', { kind: 'post' })).toBe(false);
+    expect(canEditConcept('client', { kind: 'concept' })).toBe(false);
+    expect(canEditConcept('unknown', { kind: 'concept' })).toBe(false);
+    expect(CONCEPT_EDIT_RESET_HINT).not.toContain(String.fromCharCode(0x2014));
   });
 
   it('empty by default (no clear button); a date shows a 44px clear button', () => {

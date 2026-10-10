@@ -235,6 +235,8 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     return id;
   },
   plan_concept_edit: (args, tables) => {
+    // Agency side only, like the proc.
+    if (roleOf(tables, ME) === 'client') throw new HarnessRpcError('forbidden_role');
     const item = (tables.plan_items ?? []).find((i) => i.id === args.p_item_id);
     if (item !== undefined) {
       item.title = args.p_title;
