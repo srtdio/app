@@ -2,7 +2,7 @@
 
 Decisions only. No rationale.
 
-Sorted v2 is a social-media approval tool. Client writes a brief; agency drafts a post; the post moves through review to approved, rejected, or parked. No publishing, no scheduling, no insights in the MVP. Plan is a read-only week view of the Pipeline grouped by target date; it is not scheduling.
+Sorted v2 is a social-media approval tool. Client writes a brief; agency drafts a post; the post moves through review to approved, rejected, or parked. No publishing, no scheduling, no insights in the MVP. Plans are in: a shared object in chat holding concepts and posts with team and client approval; a plan is not scheduling.
 
 ## Index
 
@@ -74,7 +74,7 @@ Any operation targeting ozptjplxbyswclolbxyn must say "v1" explicitly in the sam
 - Approval is per-post, deliberate. Inside Sorted only. No bulk approve.
 - Touch targets 44x44 minimum everywhere.
 - Email is out-of-app catch-up. Bundled, 9am-9pm workspace TZ.
-- No AI features. No publishing, scheduling, or insights in MVP. Plan is a read-only week grouping, not scheduling.
+- No AI features. No publishing, scheduling, or insights in MVP. Plans are in scope (chat plans with team and client approval), not scheduling.
 - All sensitive writes go through SECURITY DEFINER procs. INSERT/UPDATE/DELETE revoked from authenticated role on sensitive tables.
 - post_versions and post_annotations are immutable edit history. Never soft-deletable.
 - Users not hard-deleted from auth.users except for GDPR. public.users.deleted_at signals account removal; workspace_members.active=false signals workspace removal. Either surfaces as '(ex-member)' badge.
@@ -449,7 +449,7 @@ Schema is fully executed on v2 project movnexawfhsyuluspxoc (Postgres 17). v1 (o
 
 ### Not in schema
 
-- No dedicated publishing, scheduling, plan, or insights tables (schedule_jobs, plan_periods, plan_cells, approvals, share_tokens, post_insights, platform_accounts removed).
+- No dedicated publishing, scheduling, or insights tables (schedule_jobs, plan_periods, plan_cells, approvals, share_tokens, post_insights, platform_accounts removed). Plans use their own tables (plans, plan_items, plan_item_reviews) from 9 Oct 2026.
 - No AI tables (ai_usage, ai_memory, tool_invocations, workspace_brand_guides).
 - post_versions and post_annotations carry no deleted_at (immutable).
 
@@ -526,6 +526,8 @@ Chat messages never land in the Activity feed. Chat notification is Agora native
 | Reactions, read position | chat_reactions and chat_read_cursors, written through chat_reaction_add, chat_reaction_remove, chat_read_cursor_set. |
 | Group membership | Sorted is source of truth. Membership and rename changes to Agora flow through the chat_sync_events outbox, drained by the chat-agora-sync worker. |
 | Retired | chat_message_save and chat_webhook_ingest (drop pending). No webhook mirror, no reconciliation cron. |
+
+Plans: a shared object in chat holding concepts and posts with team and client approval. Schema step 3a applied 9 Oct 2026.
 
 ## 24. Compliance
 

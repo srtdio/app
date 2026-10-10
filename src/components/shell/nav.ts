@@ -5,6 +5,7 @@ import {
   IconBriefs,
   IconChat,
   IconPipeline,
+  IconScrollText,
 } from '@/components/ui/icons';
 
 export interface NavItem {
@@ -28,4 +29,5 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: '/assets', label: 'Assets', Icon: IconAssets },
   { to: '/chat', label: 'Chat', Icon: IconChat, showChatBadge: true },
   { to: '/activity', label: 'Activity', Icon: IconActivity, showActivityBadge: true },
+  { to: '/help', label: 'Help', Icon: IconScrollText },
 ];

@@ -156,11 +156,15 @@ import {
 import {
   BanGlyph,
   MessageActionMenu,
+  isPlanMessage,
   ownMessageActions,
+  selectionForwardable,
   scheduleWindowBoundary,
 } from '@/components/chat/MessageActionMenu';
 import { useCancelUpload, useServerNow } from '@/components/chat/ChatStoreProvider';
 import { SharedBriefCards } from '@/components/chat/BriefCard';
+import { SharedPlanCards } from '@/components/chat/PlanCard';
+import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { MarkBadge, SelectCheckbox, SelectLock } from '@/components/chat/MarkBits';
 import {
   MarkStrip,
@@ -395,6 +399,14 @@ interface MessageThreadProps {
    * Null while they load: the composer keeps a stored body's tokens untouched.
    */
   mentionMembers?: readonly MentionMember[] | null;
+  /**
+   * Whether this chat has a client among its other active members; null or
+   * absent while unknown. Passed to the composer only (the Draft tile and the
+   * hash picker's drafts).
+   */
+  channelHasClient?: boolean | null;
+  /** The main composer's Plan tile: opens the New plan screen. Absent: the tile stays off. */
+  onOpenPlanCompose?: () => void;
   /**
    * True for a stored mention's person a successful member read confirmed has
    * left; only those drop from a restored draft or an edit. Absent: none.
@@ -1634,10 +1646,14 @@ export function bodyText(layout: ChatLayout): string {
  * media with a caption). Videos render as file rows, so they take the row. Pure.
  */
 export function metaPlacement(
-  message: Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds' | 'sharedBriefIds'>,
+  message: Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds' | 'sharedBriefIds'> &
+    Partial<Pick<ThreadMessage, 'sharedPlanIds'>>,
 ): MetaPlacement {
   const hasBody = message.body.trim() !== '';
-  const hasCards = message.sharedPostIds.length > 0 || message.sharedBriefIds.length > 0;
+  const hasCards =
+    message.sharedPostIds.length > 0 ||
+    message.sharedBriefIds.length > 0 ||
+    (message.sharedPlanIds ?? []).length > 0;
   if (hasCards) return 'row';
   if (message.attachments.length === 0) return hasBody ? 'inline' : 'row';
   const { images, others } = splitAlbum(message.attachments);
@@ -1896,12 +1912,17 @@ export function MessageBubble(props: {
   // Album bubbles pad 3px around the album; the rest keeps the text inset.
   const albumInset = 'px-[9px] pt-[5px]';
   const hasBody = message.body.trim() !== '';
-  const hasCards = message.sharedPostIds.length > 0 || message.sharedBriefIds.length > 0;
+  const sharedPlanIds = message.sharedPlanIds ?? NO_PLAN_IDS;
+  const hasCards =
+    message.sharedPostIds.length > 0 ||
+    message.sharedBriefIds.length > 0 ||
+    sharedPlanIds.length > 0;
   const textOnly =
     message.body.trim() !== '' &&
     message.attachments.length === 0 &&
     message.sharedPostIds.length === 0 &&
-    message.sharedBriefIds.length === 0;
+    message.sharedBriefIds.length === 0 &&
+    sharedPlanIds.length === 0;
   const totalReactions = message.reactions.reduce((sum, r) => sum + r.count, 0);
   const distinctEmojis = message.reactions.map((r) => r.emoji).join('');
   const meta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
@@ -2168,6 +2189,7 @@ export function MessageBubble(props: {
                     <div className="flex flex-col px-[9px] pb-[5px]">
                       <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                       <SharedBriefCards briefIds={message.sharedBriefIds} />
+                      <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
                     </div>
                   ) : null}
                 </>
@@ -2182,6 +2204,7 @@ export function MessageBubble(props: {
                   />
                   <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                   <SharedBriefCards briefIds={message.sharedBriefIds} />
+                  <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
                 </>
               )}
             </div>
@@ -3006,6 +3029,7 @@ function ThreadBody(
   // The open menu: its message, anchor, held bubble and the server moment its
   // rows were judged at (the edit and delete windows). While it is open, one
   // timeout for the message's next window boundary re-judges them.
+  const planCards = usePlanCards();
   const [menu, setMenu] = useState<{
     message: ThreadMessage;
     rect: DOMRect | null;
@@ -3533,6 +3557,9 @@ function ThreadBody(
     );
   }
   const nowMs = Date.now();
+  // A plan card message: no Forward, Save to notes or Edit; Copy copies its title.
+  const menuPlan = menu !== null && isPlanMessage(menu.message);
+  const menuPlanTitle = menuPlan && menu !== null ? planTitleOf(planCards, menu.message) : null;
   const menuOwn =
     menu !== null
       ? ownMessageActions(
@@ -3784,7 +3811,7 @@ function ThreadBody(
         canReact={menu !== null && menu.message.state === 'sent'}
         reactionsOnly={menu?.reactionsOnly === true}
         markedAs={menu !== null ? (props.marks.get(menu.message.id)?.type ?? null) : null}
-        canEdit={props.onEditMessage !== undefined && menuOwn.canEdit}
+        canEdit={props.onEditMessage !== undefined && menuOwn.canEdit && !menuPlan}
         onEdit={() => {
           if (menu) props.onEditMessage?.(menu.message);
         }}
@@ -3797,13 +3824,16 @@ function ThreadBody(
         lockedByMark={menuOwn.lockedByMark}
         notes={props.notes === true}
         canSaveToNotes={
-          menu !== null && props.onSaveToNotes !== undefined && canSaveToNotes(menu.message)
+          menu !== null &&
+          props.onSaveToNotes !== undefined &&
+          canSaveToNotes(menu.message) &&
+          !menuPlan
         }
         onSaveToNotes={() => {
           if (menu) props.onSaveToNotes?.(menu.message);
         }}
         currentReaction={menu ? (menu.message.reactions.find((r) => r.mine)?.emoji ?? null) : null}
-        canCopy={menu ? menu.message.body.trim() !== '' : false}
+        canCopy={menu ? menu.message.body.trim() !== '' || menuPlanTitle !== null : false}
         canTranscribe={
           menu !== null &&
           props.onTranscribe !== undefined &&
@@ -3827,7 +3857,10 @@ function ThreadBody(
           if (menu) props.onMark?.(menu.message, type);
         }}
         canForward={
-          menu !== null && props.onForwardMessage !== undefined && canForward(menu.message)
+          menu !== null &&
+          props.onForwardMessage !== undefined &&
+          canForward(menu.message) &&
+          !menuPlan
         }
         onForward={() => {
           if (!menu) return;
@@ -3854,12 +3887,15 @@ function ThreadBody(
         }}
         onCopy={() => {
           if (menu) {
-            void navigator.clipboard?.writeText(
-              resolveMentionText(
-                menu.message.body,
-                profileNameOf(props.profiles, props.workspaceId ?? null),
-              ),
-            );
+            // A plan card with no text copies the plan's title.
+            const text =
+              menu.message.body.trim() === '' && menuPlanTitle !== null
+                ? menuPlanTitle
+                : resolveMentionText(
+                    menu.message.body,
+                    profileNameOf(props.profiles, props.workspaceId ?? null),
+                  );
+            void navigator.clipboard?.writeText(text);
             toast.show({ title: 'Message copied' });
           }
         }}
@@ -3969,20 +4005,26 @@ export function threadOpeningSkeleton(
   );
 }
 
-/** The distinct shared post and brief ids across a thread's messages (deleted ones skipped). Pure. */
+/** The distinct shared post, brief and plan ids across a thread's messages (deleted ones skipped). Pure. */
 export function threadCardIds(messages: readonly ThreadMessage[]): {
   postIds: string[];
   briefIds: string[];
+  planIds: string[];
 } {
   const posts = new Set<string>();
   const briefs = new Set<string>();
+  const plans = new Set<string>();
   for (const m of messages) {
     if (m.deleted === true) continue;
     for (const id of m.sharedPostIds) posts.add(id);
     for (const id of m.sharedBriefIds) briefs.add(id);
+    for (const id of m.sharedPlanIds ?? []) plans.add(id);
   }
-  return { postIds: [...posts], briefIds: [...briefs] };
+  return { postIds: [...posts], briefIds: [...briefs], planIds: [...plans] };
 }
+
+/** No plan ids: one shared empty list, so a bubble's props stay stable. */
+const NO_PLAN_IDS: string[] = [];
 
 /** Placeholder bubble widths for the loading thread, alternating sides. */
 export const THREAD_SKELETON_WIDTHS = ['w-[55%]', 'w-[40%]', 'w-[70%]', 'w-[45%]', 'w-[60%]'];
@@ -4406,7 +4448,8 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
       hasOtherContent:
         message.attachments.length > 0 ||
         message.sharedPostIds.length > 0 ||
-        message.sharedBriefIds.length > 0,
+        message.sharedBriefIds.length > 0 ||
+        isPlanMessage(message),
     });
   };
   const onForward = props.onForward;
@@ -5086,7 +5129,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         count={selected.size}
         block={deleteBlock}
         canDelete={selected.size > 0 && deleteBlock === null}
-        {...(canForwardHere
+        {...(canForwardHere && selectionForwardable(selected, selectable)
           ? { onForward: () => setForwardFor(selectedForForward(selected, selectable)) }
           : {})}
         {...(selectionStar !== null ? { star: selectionStar } : {})}
@@ -5109,6 +5152,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
    */
   const composerShared = (active: boolean): Omit<ComposerProps, 'onSend'> => ({
     disabled: !props.canSend,
+    channelHasClient: props.channelHasClient ?? null,
     viewerUserId: props.currentUserId,
     ...(canAttach ? { uploadFile } : {}),
     ...(active && editing !== null && onEditMessage !== undefined
@@ -5377,6 +5421,9 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           onCancelAbout={() => setAboutDraft(null)}
           sharedPostIds={sharedInChat}
           onBringPost={bringPost}
+          {...(props.onOpenPlanCompose !== undefined && !notes
+            ? { onOpenPlanCompose: props.onOpenPlanCompose }
+            : {})}
           {...composerShared(view === null)}
         />
       )}

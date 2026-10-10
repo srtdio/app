@@ -38,6 +38,8 @@ export const INBOX_EVENT_TYPES = [
   'reminder',
   'post_deleted',
   'assets_deleted',
+  'plan_comment',
+  'plan_review',
 ] as const;
 
 /** One inbox_entries.event_type value, derived from the canonical list. */
@@ -48,7 +50,7 @@ export const InboxEntrySchema = z.object({
   user_id: z.string().uuid(),
   workspace_id: z.string().uuid(),
   event_type: z.enum(INBOX_EVENT_TYPES),
-  entity_type: z.enum(['post', 'brief', 'chat_channel', 'workspace']).nullable(),
+  entity_type: z.enum(['post', 'brief', 'chat_channel', 'workspace', 'plan_item']).nullable(),
   entity_id: z.string().nullable(),
   scope: z.enum(['everything', 'posts', 'briefs', 'people', 'groups', 'clients']),
   scope_key: z.string().nullable(),

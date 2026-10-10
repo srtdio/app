@@ -31,6 +31,7 @@ export default {
         bad: 'var(--bad)',
         'good-soft': 'var(--good-soft)',
         'bad-soft': 'var(--bad-soft)',
+        'warn-soft': 'var(--warn-soft)',
         'annotation-bg': 'var(--annotation-bg)',
         'annotation-line': 'var(--annotation-line)',
         'stage-review': 'var(--stage-review)',

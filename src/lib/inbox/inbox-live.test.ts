@@ -301,6 +301,11 @@ describe('live toast labels for approve, reject, park and deletes', () => {
     expect(eventLabel('stage_change', 'approved')).toBe('Post approved');
   });
 
+  it('plan_comment and plan_review have their own labels', () => {
+    expect(eventLabel('plan_comment')).toBe('New plan comment');
+    expect(eventLabel('plan_review')).toBe('Plan item reviewed');
+  });
+
   it('post_deleted and assets_deleted have their own labels', () => {
     expect(eventLabel('post_deleted')).toBe('Post deleted');
     expect(eventLabel('assets_deleted')).toBe('Assets deleted');

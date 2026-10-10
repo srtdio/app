@@ -493,6 +493,30 @@ export function toMessageAttachment(file: File, versionId: string): MessageAttac
   return { assetId: versionId, name: file.name, mime: file.type, size: file.size };
 }
 
+/** The asset_versions columns a library pick carries (attachment meta is built from these). */
+export interface LibraryVersionRow {
+  id: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  duration_ms: number | null;
+}
+
+/**
+ * The message attachment for an existing library version: already uploaded, so
+ * it carries the version id and no local half (the outbox never uploads it).
+ * Name, mime and size match what an uploaded file of the same shape carries;
+ * duration only when the version has one. Pure.
+ */
+export function toLibraryAttachment(version: LibraryVersionRow, name: string): MessageAttachment {
+  return {
+    assetId: version.id,
+    name,
+    mime: version.mime_type ?? '',
+    size: version.size_bytes ?? 0,
+    ...(version.duration_ms !== null ? { durationMs: version.duration_ms } : {}),
+  };
+}
+
 export type ChatUploadParams = {
   file: File;
   workspaceId: string;

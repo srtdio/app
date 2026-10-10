@@ -200,6 +200,7 @@ describe('pure rules', () => {
       mentions: null,
       reply_to_message_id: null,
       shared_brief_ids: null,
+      shared_plan_ids: null,
       shared_post_ids: null,
       thread_root_message_id: null,
       workspace_id: WS,

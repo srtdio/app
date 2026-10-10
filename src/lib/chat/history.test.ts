@@ -24,6 +24,7 @@ import {
   loadUnreadCounts,
   newerThanFilter,
   olderThanFilter,
+  rowPreviewContent,
 } from '@/lib/chat/history';
 
 const ME = '11111111-1111-4111-8111-111111111111';
@@ -401,5 +402,39 @@ describe('deleted rows: returned where the thread renders them, filtered where t
     });
     expect(answer?.reply?.preview).toBe(DELETED_MESSAGE_LABEL);
     expect(answer?.parentDeleted).toBe(true);
+  });
+});
+
+describe('shared plans in reads and previews', () => {
+  it('the message and preview columns include shared_plan_ids', async () => {
+    const page = makeClient({ data: [], error: null });
+    await loadLatestMessages(page.client, CHANNEL);
+    expect(String(argsOf(page.calls, 'select')[0]?.[0])).toContain('shared_plan_ids');
+    const previews = makeClient({ data: [], error: null });
+    await loadConversationPreviews(previews.client, 'ws');
+    expect(String(argsOf(previews.calls, 'select')[0]?.[0])).toContain('shared_plan_ids');
+  });
+
+  it('a plan-only row previews as a share with one plan', () => {
+    const content = rowPreviewContent({
+      body: null,
+      attachment_asset_ids: null,
+      attachment_meta: null,
+      shared_post_ids: null,
+      shared_brief_ids: null,
+      shared_plan_ids: ['plan1'],
+    });
+    expect(content.hasAttachments).toBe(true);
+    expect(content.sharedPlanCount).toBe(1);
+    const latest = latestPerChannel([
+      {
+        id: 'm',
+        channel_id: CHANNEL,
+        sender_user_id: 'u',
+        created_at: '2026-10-09T10:00:00Z',
+        shared_plan_ids: ['plan1'],
+      },
+    ]);
+    expect(latest[0]?.sharedPlanCount).toBe(1);
   });
 });

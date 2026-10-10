@@ -790,7 +790,7 @@ export function PipelinePage() {
   // Default to HIDDEN while either signal is still loading or the member read
   // errored, so the card never flashes on a populated workspace. Manual dismiss
   // (X) and per-row Skip stay local-only and are unaffected.
-  const members = useWorkspaceMembers(workspaceId ?? '');
+  const members = useWorkspaceMembers(workspaceId);
   const signalsReady =
     workspaceId !== null && !postsLoading && !members.loading && members.error === null;
   const hasPosts = (counts.all ?? 0) >= 1;

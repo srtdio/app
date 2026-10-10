@@ -408,3 +408,22 @@ describe('bell writes send p_trace_id', () => {
     });
   });
 });
+
+describe('plan previews', () => {
+  it('a bodyless plan message previews as "Plan"', () => {
+    const base = {
+      id: 'm',
+      channelId: 'c',
+      senderUserId: 'u',
+      body: null,
+      hasAttachments: false,
+      hasPosts: false,
+      hasBriefs: false,
+    };
+    expect(messagePreview({ ...base, hasPlans: true }, () => undefined)).toBe('Plan');
+    expect(messagePreview(base, () => undefined)).toBe('Message');
+    expect(messagePreview({ ...base, body: 'see plan', hasPlans: true }, () => undefined)).toBe(
+      'see plan',
+    );
+  });
+});

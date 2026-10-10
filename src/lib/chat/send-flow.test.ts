@@ -18,7 +18,7 @@ import {
   type OutboxStorage,
 } from '@/lib/chat/chat-store';
 import { rowToThreadMessage, type ChatMessageRow } from '@/lib/chat/thread';
-import { uploadRing } from '@/lib/chat/attachments';
+import { buildAttachmentMeta, toLibraryAttachment, uploadRing } from '@/lib/chat/attachments';
 
 const ME = '11111111-1111-4111-8111-111111111111';
 const CHANNEL = 'group__ws__g1';
@@ -35,6 +35,7 @@ function row(over: Partial<ChatMessageRow> = {}): ChatMessageRow {
     attachment_asset_ids: null,
     shared_post_ids: null,
     shared_brief_ids: null,
+    shared_plan_ids: null,
     reply_to_message_id: null,
     thread_root_message_id: null,
     forwarded_from_message_id: null,
@@ -223,6 +224,25 @@ describe('runSend', () => {
         },
       }),
     );
+  });
+});
+
+describe('runSend library attachments', () => {
+  it('records library version ids with meta equal to an upload-sent file of the same shape', async () => {
+    const d = deps();
+    const library = toLibraryAttachment(
+      { id: 'ver-lib', mime_type: 'image/png', size_bytes: 1234, duration_ms: null },
+      'Hero.png',
+    );
+    // The same file sent through an upload: what toMessageAttachment builds.
+    const uploaded = { assetId: 'ver-lib', name: 'Hero.png', mime: 'image/png', size: 1234 };
+    await runSend(d, input({ local: { attachments: [library], sharedPostIds: [], reply: null } }));
+    const args = vi.mocked(d.recordMessage).mock.calls[0]?.[0];
+    expect(args?.attachmentAssetIds).toEqual(['ver-lib']);
+    expect(args?.attachmentMeta).toEqual(buildAttachmentMeta([uploaded]));
+    expect(args?.attachmentMeta).toEqual({
+      'ver-lib': { mime: 'image/png', name: 'Hero.png', size: 1234 },
+    });
   });
 });
 
@@ -541,6 +561,56 @@ describe('createOutboxSender (background send, retries, persistence)', () => {
       expect(recorded.map((a) => a.local?.progress)).toEqual([1, 1]);
       expect(sender.entries(CHANNEL)).toEqual([]);
       expect(events.at(-1)).toMatchObject({ type: 'recorded', channelId: CHANNEL });
+    });
+
+    it('library picks (version id, no local half) are never uploaded; a mixed send uploads only the picked file', async () => {
+      const { upload, files } = uploader();
+      const { sender, calls } = harness();
+      const mixed = withFiles('m1', ['roll.png'], upload);
+      const libraryImage = toLibraryAttachment(
+        { id: 'ver-lib-img', mime_type: 'image/png', size_bytes: 3, duration_ms: null },
+        'Hero.png',
+      );
+      const libraryPdf = toLibraryAttachment(
+        { id: 'ver-lib-pdf', mime_type: 'application/pdf', size_bytes: 9, duration_ms: null },
+        'Deck.pdf',
+      );
+      sender.enqueue(CHANNEL, {
+        ...mixed,
+        local: {
+          ...mixed.local,
+          attachments: [...mixed.local.attachments, libraryImage, libraryPdf],
+        },
+      });
+      await vi.waitFor(() => expect(calls).toHaveLength(1));
+      expect(files).toEqual(['roll.png']);
+      expect(upload).toHaveBeenCalledTimes(1);
+      expect(calls[0]?.entry.local.attachments.map((a) => a.assetId)).toEqual([
+        'ver-roll.png-1',
+        'ver-lib-img',
+        'ver-lib-pdf',
+      ]);
+    });
+
+    it('a library-only send records at once with no upload call', async () => {
+      const { upload } = uploader();
+      const { sender, calls } = harness();
+      const base = withFiles('m2', [], upload);
+      sender.enqueue(CHANNEL, {
+        ...base,
+        local: {
+          ...base.local,
+          attachments: [
+            toLibraryAttachment(
+              { id: 'ver-lib-img', mime_type: 'image/png', size_bytes: 3, duration_ms: null },
+              'Hero.png',
+            ),
+          ],
+        },
+      });
+      await vi.waitFor(() => expect(calls).toHaveLength(1));
+      expect(upload).not.toHaveBeenCalled();
+      expect(calls[0]?.entry.local.attachments.map((a) => a.assetId)).toEqual(['ver-lib-img']);
     });
 
     it('progress callbacks update the outbox entry and reach the thread as progress events', async () => {

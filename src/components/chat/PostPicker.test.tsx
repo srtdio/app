@@ -102,35 +102,99 @@ function sectionsClient(older: number) {
     if (stage === 'review') return { data: [row(1)] };
     if (stage === 'approved') return { data: [row(2, { stage: 'approved' })] };
     if (stage === 'draft') return { data: [row(3, { stage: 'draft' })] };
+    if (stage === 'parked') return { data: [row(4, { stage: 'parked' })] };
+    if (stage === 'rejected') return { data: [row(5, { stage: 'rejected' })] };
     return { data: [] };
   });
 }
 
 describe('loadPickerSections', () => {
-  it('agency side: 3 section reads + 1 head count, in order, no per-row reads', async () => {
-    const { client, reads } = sectionsClient(212);
-    const result = await loadPickerSections(client, {
-      workspaceId: WS,
-      role: agency,
-      now: new Date('2026-09-28T00:00:00Z'),
-    });
-    expect(reads).toHaveLength(4);
-    expect(reads.filter(isHead)).toHaveLength(1);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data.sections.map((s) => s.key)).toEqual(['review', 'approved', 'draft']);
-    expect(result.data.olderApprovedCount).toBe(212);
+  it('posts mode: review, approved (30d), parked, rejected + 1 head count; no draft read', async () => {
+    for (const role of [agency, nonAgency]) {
+      for (const allowDrafts of [true, false]) {
+        const { client, reads } = sectionsClient(212);
+        const now = new Date('2026-09-28T00:00:00Z');
+        const result = await loadPickerSections(client, {
+          workspaceId: WS,
+          role,
+          now,
+          mode: 'posts',
+          allowDrafts,
+        });
+        expect(reads).toHaveLength(5);
+        expect(reads.filter(isHead)).toHaveLength(1);
+        expect(reads.filter((r) => !isHead(r)).map(stageOf)).toEqual([
+          'review',
+          'approved',
+          'parked',
+          'rejected',
+        ]);
+        expect(reads.some((r) => stageOf(r) === 'draft')).toBe(false);
+        const approved = reads.find((r) => stageOf(r) === 'approved' && !isHead(r));
+        expect(approved?.filters).toContainEqual({
+          method: 'gte',
+          args: ['stage_entered_at', '2026-08-29T00:00:00.000Z'],
+        });
+        expect(result.ok && result.data.sections.map((s) => s.key)).toEqual([
+          'review',
+          'approved',
+          'parked',
+          'rejected',
+        ]);
+        expect(result.ok && result.data.olderApprovedCount).toBe(212);
+      }
+    }
   });
 
-  it('non-agency: no drafts read and no Drafts section', async () => {
+  it('drafts mode: exactly one read, stage draft, when drafts are allowed', async () => {
     const { client, reads } = sectionsClient(0);
     const result = await loadPickerSections(client, {
       workspaceId: WS,
-      role: nonAgency,
+      role: agency,
       now: new Date(),
+      mode: 'drafts',
+      allowDrafts: true,
     });
-    expect(reads).toHaveLength(3);
-    expect(reads.some((r) => stageOf(r) === 'draft')).toBe(false);
+    expect(reads).toHaveLength(1);
+    expect(stageOf(reads[0] as Read)).toBe('draft');
+    expect(result.ok && result.data.sections.map((s) => s.key)).toEqual(['draft']);
+  });
+
+  it('drafts mode: zero reads when drafts are not allowed (client viewer or client chat)', async () => {
+    for (const role of [agency, nonAgency]) {
+      const { client, reads } = sectionsClient(0);
+      const result = await loadPickerSections(client, {
+        workspaceId: WS,
+        role,
+        now: new Date(),
+        mode: 'drafts',
+        allowDrafts: false,
+      });
+      expect(reads).toHaveLength(0);
+      expect(result).toEqual({ ok: true, data: { sections: [], olderApprovedCount: 0 } });
+    }
+  });
+
+  it('inline: the drafts read only when drafts are allowed', async () => {
+    const allowed = sectionsClient(0);
+    await loadPickerSections(allowed.client, {
+      workspaceId: WS,
+      role: agency,
+      now: new Date(),
+      mode: 'inline',
+      allowDrafts: true,
+    });
+    expect(allowed.reads.some((r) => stageOf(r) === 'draft')).toBe(true);
+    const barred = sectionsClient(0);
+    const result = await loadPickerSections(barred.client, {
+      workspaceId: WS,
+      role: agency,
+      now: new Date(),
+      mode: 'inline',
+      allowDrafts: false,
+    });
+    expect(barred.reads).toHaveLength(3);
+    expect(barred.reads.some((r) => stageOf(r) === 'draft')).toBe(false);
     expect(result.ok && result.data.sections.map((s) => s.key)).toEqual(['review', 'approved']);
   });
 
@@ -140,6 +204,8 @@ describe('loadPickerSections', () => {
       workspaceId: WS,
       role: agency,
       now: new Date(),
+      mode: 'posts',
+      allowDrafts: false,
     });
     expect(result).toEqual({ ok: false, message: POSTS_LOAD_FAILED });
     expect(POSTS_LOAD_FAILED).toBe("Couldn't load posts, try again");
@@ -149,7 +215,8 @@ describe('loadPickerSections', () => {
     const { client } = makeClient(() => ({ data: null, error: { message: 'relation boom' } }));
     const page = await loadSearchPage(client, {
       workspaceId: WS,
-      role: agency,
+      mode: 'posts',
+      allowDrafts: false,
       query: { text: 'x', number: null },
       cursor: null,
     });
@@ -161,6 +228,67 @@ describe('loadPickerSections', () => {
   });
 });
 
+describe('search stage per mode', () => {
+  const query = { text: 'holi', number: null };
+
+  it('posts mode: neq stage draft even for an agency viewer with drafts allowed', async () => {
+    const { client, reads } = makeClient(() => ({ data: [], count: 0 }));
+    await loadSearchPage(client, {
+      workspaceId: WS,
+      mode: 'posts',
+      allowDrafts: true,
+      query,
+      cursor: null,
+    });
+    expect(reads[0]?.filters).toContainEqual({ method: 'neq', args: ['stage', 'draft'] });
+    expect(reads[0]?.filters.some((f) => f.method === 'eq' && f.args[0] === 'stage')).toBe(false);
+  });
+
+  it('drafts mode: eq stage draft only; no read at all when drafts are not allowed', async () => {
+    const allowed = makeClient(() => ({ data: [], count: 0 }));
+    await loadSearchPage(allowed.client, {
+      workspaceId: WS,
+      mode: 'drafts',
+      allowDrafts: true,
+      query,
+      cursor: null,
+    });
+    expect(allowed.reads).toHaveLength(1);
+    expect(stageOf(allowed.reads[0] as Read)).toBe('draft');
+    const barred = makeClient(() => ({ data: [], count: 0 }));
+    const result = await loadSearchPage(barred.client, {
+      workspaceId: WS,
+      mode: 'drafts',
+      allowDrafts: false,
+      query,
+      cursor: null,
+    });
+    expect(barred.reads).toHaveLength(0);
+    expect(result).toEqual({ ok: true, rows: [], count: 0 });
+  });
+
+  it('inline (hash picker): drafts excluded unless allowed (client chat or client viewer)', async () => {
+    const barred = makeClient(() => ({ data: [], count: 0 }));
+    await loadSearchPage(barred.client, {
+      workspaceId: WS,
+      mode: 'inline',
+      allowDrafts: false,
+      query,
+      cursor: null,
+    });
+    expect(barred.reads[0]?.filters).toContainEqual({ method: 'neq', args: ['stage', 'draft'] });
+    const allowed = makeClient(() => ({ data: [], count: 0 }));
+    await loadSearchPage(allowed.client, {
+      workspaceId: WS,
+      mode: 'inline',
+      allowDrafts: true,
+      query,
+      cursor: null,
+    });
+    expect(allowed.reads[0]?.filters.some((f) => f.method === 'neq')).toBe(false);
+  });
+});
+
 describe('sections render', () => {
   it('renders section headings in order with rows and the footer count', async () => {
     const { client } = sectionsClient(212);
@@ -168,12 +296,15 @@ describe('sections render', () => {
       workspaceId: WS,
       role: agency,
       now: new Date(),
+      mode: 'posts',
+      allowDrafts: true,
     });
     if (!result.ok) throw new Error('load failed');
     const html = renderToStaticMarkup(<PostSectionsView data={result.data} {...ctx} />);
-    const order = ['Waiting on client', 'Approved in the last 30 days', 'Drafts'].map((label) =>
-      html.indexOf(label),
+    const order = ['Waiting on client', 'Approved in the last 30 days', 'Parked', 'Rejected'].map(
+      (label) => html.indexOf(label),
     );
+    expect(html).not.toContain('Drafts');
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(html).toContain('GBL-1');
@@ -187,6 +318,8 @@ describe('sections render', () => {
       workspaceId: WS,
       role: agency,
       now: new Date(),
+      mode: 'posts',
+      allowDrafts: false,
     });
     if (!result.ok) throw new Error('load failed');
     const html = renderToStaticMarkup(<PostSectionsView data={result.data} {...ctx} />);
@@ -211,7 +344,8 @@ describe('search paging', () => {
     const query = { text: 'GBL-14', number: 14 };
     const first = await loadSearchPage(client, {
       workspaceId: WS,
-      role: nonAgency,
+      mode: 'posts',
+      allowDrafts: false,
       query,
       cursor: null,
     });
@@ -224,7 +358,8 @@ describe('search paging', () => {
     if (last === undefined) throw new Error('no rows');
     const next = await loadSearchPage(client, {
       workspaceId: WS,
-      role: agency,
+      mode: 'inline',
+      allowDrafts: true,
       query,
       cursor: { createdAt: last.created_at, id: last.id },
     });

@@ -38,6 +38,8 @@ import {
   markRead,
   mergeInitial,
   previewText,
+  messagePreviewContent,
+  PREVIEW_LABELS,
   requestOpen,
   selectConversation,
   selectTotalUnread,
@@ -881,5 +883,32 @@ describe('T3: voice note peaks survive an outbox reload', () => {
     const read = readPersistedOutbox(store, scope).c1?.[0]?.local.attachments[0];
     expect(read).toBeDefined();
     expect(read).not.toHaveProperty('peaks');
+  });
+});
+
+describe('shared plan previews', () => {
+  it('a plan-only message reads "Plan", after Post and Brief in the order', () => {
+    expect(PREVIEW_LABELS.plan).toBe('Plan');
+    expect(previewText({ body: '', hasAttachments: true, sharedPlanCount: 1 })).toBe('Plan');
+    expect(
+      previewText({ body: '', hasAttachments: true, sharedBriefCount: 1, sharedPlanCount: 1 }),
+    ).toBe('Brief');
+    expect(
+      previewText({ body: '', hasAttachments: true, sharedPostCount: 1, sharedPlanCount: 1 }),
+    ).toBe('Post');
+    expect(previewText({ body: 'hi', hasAttachments: true, sharedPlanCount: 1 })).toBe('hi');
+  });
+
+  it('messagePreviewContent counts plan ids', () => {
+    const content = messagePreviewContent({
+      body: '',
+      attachments: [],
+      sharedPostIds: [],
+      sharedBriefIds: [],
+      sharedPlanIds: ['plan1'],
+    });
+    expect(content.sharedPlanCount).toBe(1);
+    expect(content.hasAttachments).toBe(true);
+    expect(previewText(content)).toBe('Plan');
   });
 });

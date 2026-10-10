@@ -5,7 +5,7 @@
 // Only active memberships become options, one per user (a user can hold an
 // inactive row next to their active one).
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { listMembers } from '@srtdio/workspace';
 import type { Database } from '@srtdio/schemas';
 import type { Result } from '@srtdio/rpc';
@@ -58,33 +58,36 @@ export async function loadWorkspaceMembers(readers: MemberReaders): Promise<Work
   return { options: toMemberOptions(profiles.data), loading: false, error: null };
 }
 
-/** Resolve the active workspace's members to picker options. */
-export function useWorkspaceMembers(workspaceId: string): WorkspaceMembersState {
-  const [state, setState] = useState<WorkspaceMembersState>({
-    options: [],
-    loading: true,
-    error: null,
-  });
+/** The state before a workspace is known: nothing to show, nothing pending, no error. */
+const NO_WORKSPACE: WorkspaceMembersState = { options: [], loading: false, error: null };
 
-  const load = useCallback(
-    (): Promise<WorkspaceMembersState> =>
-      loadWorkspaceMembers({
-        members: () => listMembers(supabase, workspaceId),
-        profiles: (userIds) => readProfiles(supabase, userIds),
-      }),
-    [workspaceId],
+/**
+ * Resolve the active workspace's members to picker options. A null or empty
+ * workspace id (the workspace context has not resolved yet) issues no read:
+ * filtering workspace_members by an empty uuid is a guaranteed PostgREST 400.
+ */
+export function useWorkspaceMembers(workspaceId: string | null): WorkspaceMembersState {
+  const [state, setState] = useState<WorkspaceMembersState>(() =>
+    workspaceId ? { options: [], loading: true, error: null } : NO_WORKSPACE,
   );
 
   useEffect(() => {
+    if (!workspaceId) {
+      setState(NO_WORKSPACE);
+      return;
+    }
     let cancelled = false;
     setState({ options: [], loading: true, error: null });
-    void load().then((next) => {
+    void loadWorkspaceMembers({
+      members: () => listMembers(supabase, workspaceId),
+      profiles: (userIds) => readProfiles(supabase, userIds),
+    }).then((next) => {
       if (!cancelled) setState(next);
     });
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [workspaceId]);
 
   return state;
 }

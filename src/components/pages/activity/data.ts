@@ -162,6 +162,14 @@ export interface ActivityItem {
   assetCount?: number | null;
   /** assets_deleted only: up to 3 of the deleted filenames (payload.filenames). */
   filenames?: string[];
+  /** Plan events only (plan_comment / plan_review): the plan (payload.plan_id); null otherwise. */
+  planId?: string | null;
+  /** Plan events only: the plan's title, resolved by the batched plans read. */
+  planTitle?: string | null;
+  /** plan_review only: which side reviewed (payload.side, 'team' | 'client'). */
+  reviewSide?: string | null;
+  /** plan_review only: the review outcome (payload.status, 'approved' | 'changes'). */
+  reviewStatus?: string | null;
 }
 
 /**
@@ -173,6 +181,17 @@ export const ACTOR_ROW_EVENTS: ReadonlySet<string> = new Set([
   'post_deleted',
   'assets_deleted',
 ]);
+
+/** The plan event types: entity_type 'plan_item', entity_id the item, payload.plan_id the plan. */
+export const PLAN_EVENTS: ReadonlySet<string> = new Set(['plan_comment', 'plan_review']);
+
+/** The entity_type of a plan event row (entity_id is the plan item id). */
+export const PLAN_ITEM_ENTITY = 'plan_item';
+
+/** Whether a row is a plan comment or plan review. */
+export function isPlanEvent(item: Pick<ActivityItem, 'eventType'>): boolean {
+  return PLAN_EVENTS.has(item.eventType);
+}
 
 /** The name an actor-row line uses when the actor's name did not resolve. */
 export const UNKNOWN_ACTOR = 'Someone';
@@ -205,6 +224,8 @@ export function chatMentionPreview(
 /** Map a raw inbox_entries row into an ActivityItem. Pure; actorName stays null. */
 export function mapEntry(row: InboxEntryRow): ActivityItem {
   const payload: unknown = row.payload as Json;
+  const plan = PLAN_EVENTS.has(row.event_type);
+  const review = row.event_type === 'plan_review';
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -223,7 +244,8 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     title: payloadStr(payload, 'title'),
     actorId:
       isChatMention({ eventType: row.event_type, entityType: row.entity_type }) ||
-      ACTOR_ROW_EVENTS.has(row.event_type)
+      ACTOR_ROW_EVENTS.has(row.event_type) ||
+      plan
         ? (row.actor_user_id ?? null)
         : (payloadStr(payload, 'created_by') ?? payloadStr(payload, 'invited_by')),
     actorName: null,
@@ -241,6 +263,10 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     actorRole: payloadStr(payload, 'actor_role'),
     assetCount: row.event_type === 'assets_deleted' ? payloadNum(payload, 'count') : null,
     filenames: row.event_type === 'assets_deleted' ? payloadStrings(payload, 'filenames') : [],
+    planId: plan ? payloadStr(payload, 'plan_id') : null,
+    planTitle: null,
+    reviewSide: review ? payloadStr(payload, 'side') : null,
+    reviewStatus: review ? payloadStr(payload, 'status') : null,
   };
 }
 
@@ -278,6 +304,35 @@ function chatMentionLine(item: ActivityItem): string {
   const who = item.actorName;
   const inGroup = item.channelType === 'group' && item.title !== null ? ` in ${item.title}` : '';
   return who !== null ? `${who} mentioned you${inGroup}` : `New mention${inGroup}`;
+}
+
+/**
+ * A plan event's line: "<actor> commented on a plan item", "<actor> approved a
+ * plan item" / "<actor> asked changes on a plan item". A team-side review adds
+ * "(team review)"; the client side reads plain. A missing actor degrades to a
+ * name-free phrase. Null for any other event type.
+ */
+export function planEventLine(item: ActivityItem): string | null {
+  const who = item.actorName;
+  if (item.eventType === 'plan_comment') {
+    return who !== null ? `${who} commented on a plan item` : 'New comment on a plan item';
+  }
+  if (item.eventType !== 'plan_review') return null;
+  const team = item.reviewSide === 'team' ? ' (team review)' : '';
+  switch (item.reviewStatus) {
+    case 'approved':
+      return who !== null
+        ? `${who} approved a plan item${team}`
+        : `A plan item was approved${team}`;
+    case 'changes':
+      return who !== null
+        ? `${who} asked changes on a plan item${team}`
+        : `Changes asked on a plan item${team}`;
+    default:
+      return who !== null
+        ? `${who} reviewed a plan item${team}`
+        : `A plan item was reviewed${team}`;
+  }
 }
 
 /** KEY-N for a post row, a plain "post N" before the key resolves, else "a post". */
@@ -349,6 +404,8 @@ export function activityLine(item: ActivityItem, workspaceKey: string | null = n
   if (isChatMention(item)) return chatMentionLine(item);
   const actorRow = actorRowLine(item, workspaceKey);
   if (actorRow !== null) return actorRow;
+  const planLine = planEventLine(item);
+  if (planLine !== null) return planLine;
   switch (item.eventType) {
     case 'comment':
       return who !== null ? `${who} commented on ${target}` : `New comment on ${target}`;
@@ -397,6 +454,7 @@ export function cardTitle(item: ActivityItem): string {
   if (item.title !== null) return item.title;
   if (item.entityType === 'post') return 'Untitled post';
   if (item.entityType === 'brief') return 'Untitled brief';
+  if (item.entityType === PLAN_ITEM_ENTITY) return item.planTitle ?? 'Plan item';
   return activityLine(item);
 }
 
@@ -410,6 +468,8 @@ export function cardTitle(item: ActivityItem): string {
 export function shortLine(item: ActivityItem, workspaceKey: string | null = null): string {
   const actorRow = actorRowLine(item, workspaceKey);
   if (actorRow !== null) return actorRow;
+  const planLine = planEventLine(item);
+  if (planLine !== null) return planLine;
   switch (item.eventType) {
     case 'comment':
       return 'New comment';
@@ -449,7 +509,10 @@ function trimBody(text: string): string {
  * throws and never renders an empty string for a comment that has text.
  */
 export function cardBodyLine(item: ActivityItem, workspaceKey: string | null = null): string {
-  const showsBody = item.eventType === 'comment' || item.eventType === 'checkpoints_added';
+  const showsBody =
+    item.eventType === 'comment' ||
+    item.eventType === 'checkpoints_added' ||
+    item.eventType === 'plan_comment';
   if (showsBody && item.body !== null && item.body.trim().length > 0) {
     return trimBody(item.body);
   }
@@ -474,6 +537,14 @@ export function entityHref(item: ActivityItem, workspaceKey: string | null = nul
   // The assets are gone: open Assets itself. A deleted post has nowhere to go.
   if (item.eventType === 'assets_deleted') return '/assets';
   if (item.eventType === 'post_deleted') return null;
+  if (isPlanEvent(item)) {
+    // The standalone Plan page with the item open; a comment also scrolls to it.
+    if (item.planId == null || item.entityId === null) return null;
+    const base = `/plans/${item.planId}?item=${item.entityId}`;
+    return item.eventType === 'plan_comment' && item.commentId !== null
+      ? `${base}&comment=${item.commentId}`
+      : base;
+  }
   if (item.entityId === null) return null;
   if (item.entityType === 'post') {
     // Prefer the pretty link (/p/KEY-N) when the number and key are known; the
@@ -625,7 +696,12 @@ function startOfDay(ms: number): number {
  * it never threads with an unrelated row.
  */
 export function entityKey(item: ActivityItem): string {
-  if ((item.entityType === 'post' || item.entityType === 'brief') && item.entityId !== null) {
+  if (
+    (item.entityType === 'post' ||
+      item.entityType === 'brief' ||
+      item.entityType === PLAN_ITEM_ENTITY) &&
+    item.entityId !== null
+  ) {
     return `${item.entityType}:${item.entityId}`;
   }
   return `solo:${item.id}`;
@@ -764,6 +840,68 @@ async function readChatMentionSources(
   return { channels, bodies };
 }
 
+/** One plan item as the Activity card needs it. */
+interface PlanItemInfo {
+  planId: string;
+  kind: string;
+  title: string | null;
+  postId: string | null;
+}
+
+/**
+ * The plan items, plan titles and plan comment bodies behind a page's plan
+ * events: one plan_items IN read, one plans IN read and one plan_item_comments
+ * IN read (RLS hides what the viewer may not see), in parallel. Comment bodies
+ * come only from plan_item_comments, never from comments. Each is best-effort;
+ * a failure leaves its map empty (the row degrades, never fails).
+ */
+async function readPlanSources(
+  client: Client,
+  ids: { itemIds: string[]; planIds: string[]; commentIds: string[] },
+): Promise<{
+  items: Map<string, PlanItemInfo>;
+  planTitles: Map<string, string>;
+  comments: Map<string, { authorId: string | null; body: string }>;
+}> {
+  const [itemsRes, plansRes, commentsRes] = await Promise.all([
+    ids.itemIds.length > 0
+      ? client
+          .from('plan_items')
+          .select('id, plan_id, kind, title, post_id')
+          .in('id', ids.itemIds)
+          .is('deleted_at', null)
+      : Promise.resolve(null),
+    ids.planIds.length > 0
+      ? client.from('plans').select('id, title').in('id', ids.planIds).is('deleted_at', null)
+      : Promise.resolve(null),
+    ids.commentIds.length > 0
+      ? client
+          .from('plan_item_comments')
+          .select('id, author_user_id, body')
+          .in('id', ids.commentIds)
+          .is('deleted_at', null)
+      : Promise.resolve(null),
+  ]);
+  const items = new Map<string, PlanItemInfo>();
+  if (itemsRes !== null && itemsRes.error === null) {
+    for (const r of itemsRes.data ?? []) {
+      items.set(r.id, { planId: r.plan_id, kind: r.kind, title: r.title, postId: r.post_id });
+    }
+  }
+  const planTitles = new Map<string, string>();
+  if (plansRes !== null && plansRes.error === null) {
+    for (const r of plansRes.data ?? []) planTitles.set(r.id, r.title);
+  }
+  const comments = new Map<string, { authorId: string | null; body: string }>();
+  if (commentsRes !== null && commentsRes.error === null) {
+    for (const r of commentsRes.data ?? []) {
+      if (typeof r.body === 'string')
+        comments.set(r.id, { authorId: r.author_user_id, body: r.body });
+    }
+  }
+  return { items, planTitles, comments };
+}
+
 /** Group names by id, one IN read; empty on failure or no ids. */
 async function readGroupNames(client: Client, groupIds: string[]): Promise<Map<string, string>> {
   const names = new Map<string, string>();
@@ -839,7 +977,28 @@ export async function fetchActivityEntries(
   const messageIds = unique(
     chatMentions.flatMap((i) => (i.messageId !== null ? [i.messageId] : [])),
   );
-  const chatRes = await readChatMentionSources(client, { channelIds, messageIds });
+  // Plan events: the items, the plans and the plan comments, one IN read each,
+  // alongside the chat reads (the posts read below needs the post items' ids).
+  const planEvents = items.filter(isPlanEvent);
+  const [chatRes, planRes] = await Promise.all([
+    readChatMentionSources(client, { channelIds, messageIds }),
+    readPlanSources(client, {
+      itemIds: unique(planEvents.flatMap((i) => (i.entityId !== null ? [i.entityId] : []))),
+      planIds: unique(planEvents.flatMap((i) => (i.planId != null ? [i.planId] : []))),
+      commentIds: unique(
+        planEvents.flatMap((i) =>
+          i.eventType === 'plan_comment' && i.commentId !== null ? [i.commentId] : [],
+        ),
+      ),
+    }),
+  ]);
+  // A post item's title is its post's: folded into the one posts read.
+  const planPostIds = unique(
+    [...planRes.items.values()].flatMap((info) =>
+      info.kind === 'post' && info.postId !== null ? [info.postId] : [],
+    ),
+  );
+  const postReadIds = unique([...postIds, ...planPostIds]);
 
   // WAVE 1: resolve comment authors and entity titles. Each sub-query is fired
   // only when it has ids; a failed one yields an empty map (never fails the feed).
@@ -851,8 +1010,8 @@ export async function fetchActivityEntries(
     commentIds.length > 0
       ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
       : Promise.resolve(null),
-    postIds.length > 0
-      ? client.from('posts').select('id, title, format, caption, number').in('id', postIds)
+    postReadIds.length > 0
+      ? client.from('posts').select('id, title, format, caption, number').in('id', postReadIds)
       : Promise.resolve(null),
     briefIds.length > 0
       ? client.from('briefs').select('id, title, number').in('id', briefIds)
@@ -945,6 +1104,9 @@ export async function fetchActivityEntries(
     ...batchAuthors.values(),
     ...[...batchBodies.values()].flatMap((body) => parseMentions(body)),
     ...[...chatRes.bodies.values()].flatMap((body) => parseMentions(body)),
+    ...[...planRes.comments.values()].flatMap((c) =>
+      c.authorId !== null ? [c.authorId, ...parseMentions(c.body)] : parseMentions(c.body),
+    ),
   ]);
   const userNames = new Map<string, string>();
   const userAvatars = new Map<string, string>();
@@ -1002,10 +1164,46 @@ export async function fetchActivityEntries(
     } else if (ACTOR_ROW_EVENTS.has(item.eventType)) {
       // Approve / reject / park / review and the deletes: the row's own actor.
       actorUserId = item.actorId;
+    } else if (isPlanEvent(item)) {
+      // The row's own actor; a plan comment falls back to its author.
+      const comment =
+        item.eventType === 'plan_comment' && item.commentId !== null
+          ? planRes.comments.get(item.commentId)
+          : undefined;
+      actorUserId = item.actorId ?? comment?.authorId ?? null;
     }
     item.actorName = actorUserId !== null ? (userNames.get(actorUserId) ?? null) : null;
     item.actorAvatarUrl = actorUserId !== null ? (userAvatars.get(actorUserId) ?? null) : null;
     if (isChatMention(item)) return;
+
+    if (isPlanEvent(item)) {
+      // Card title: the item's title (a concept's own, a post item's post title).
+      const info = item.entityId !== null ? planRes.items.get(item.entityId) : undefined;
+      item.title =
+        info === undefined
+          ? null
+          : info.kind === 'post'
+            ? info.postId !== null
+              ? (postTitles.get(info.postId) ?? null)
+              : null
+            : info.title !== ''
+              ? info.title
+              : null;
+      item.planTitle = item.planId != null ? (planRes.planTitles.get(item.planId) ?? null) : null;
+      const comment =
+        item.eventType === 'plan_comment' && item.commentId !== null
+          ? planRes.comments.get(item.commentId)
+          : undefined;
+      item.body =
+        comment !== undefined
+          ? resolveBodyMentions(comment.body, (id) => userNames.get(id) ?? null)
+          : null;
+      item.format = null;
+      item.caption = null;
+      item.thumbnailAssetVersionId = null;
+      item.number = null;
+      return;
+    }
 
     // The preview body: a comment OR mention event shows its comment text (the
     // mention's comment_id is already joined via COMMENT_EVENTS, so this adds no

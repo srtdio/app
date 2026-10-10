@@ -10,8 +10,8 @@
 // can be unit-tested without a DOM; caret / selection behaviour lives only in the
 // component and is exercised in the browser, never in jsdom.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent, ReactElement } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 
@@ -128,6 +128,85 @@ export function buildInitialContent(
   return nodes;
 }
 
+/** A caret position in DOM Range terms: a node and an offset within it. */
+export interface CaretPoint {
+  node: Node;
+  offset: number;
+}
+
+/** The slice of `document` insertTextAtPoint needs (a fake in node tests). */
+interface TextFactory {
+  createTextNode(data: string): Text;
+}
+
+function isWithin(root: Node, node: Node | null): boolean {
+  for (let at = node; at !== null; at = at.parentNode) {
+    if (at === root) return true;
+  }
+  return false;
+}
+
+/** The mention chip holding `node`, if any: text never goes inside a chip. */
+function enclosingChip(root: Node, node: Node): Node | null {
+  for (let at: Node | null = node; at !== null && at !== root; at = at.parentNode) {
+    if (at.nodeType !== ELEMENT_NODE) continue;
+    const id = (at as HTMLElement).dataset?.mentionId;
+    if (id !== undefined && id !== '') return at;
+  }
+  return null;
+}
+
+function childIndex(parent: Node, child: Node): number {
+  return Array.from(parent.childNodes).indexOf(child as ChildNode);
+}
+
+/**
+ * Insert plain text at `point` inside the editor and return the caret just
+ * after it. A point inside a text node splices into that node; a point between
+ * children inserts a new text node there. A point inside a mention chip moves
+ * to just after the chip (the chip is never split). No point, or one outside
+ * the editor, means the end (before a trailing placeholder <br>). Mention chips
+ * are never touched, so serializeComposer still emits their @[uuid] tokens.
+ */
+export function insertTextAtPoint(
+  root: HTMLElement,
+  point: CaretPoint | null,
+  text: string,
+  factory: TextFactory,
+): CaretPoint {
+  let target: CaretPoint;
+  if (point === null || !isWithin(root, point.node)) {
+    const last = root.childNodes[root.childNodes.length - 1];
+    const trailingBr =
+      last !== undefined &&
+      last.nodeType === ELEMENT_NODE &&
+      (last as HTMLElement).tagName === 'BR';
+    target = { node: root, offset: root.childNodes.length - (trailingBr ? 1 : 0) };
+  } else {
+    const chip = enclosingChip(root, point.node);
+    const parent = chip?.parentNode ?? null;
+    target =
+      chip !== null && parent !== null
+        ? { node: parent, offset: childIndex(parent, chip) + 1 }
+        : point;
+  }
+  if (target.node.nodeType === TEXT_NODE) {
+    const value = target.node.nodeValue ?? '';
+    const at = Math.max(0, Math.min(target.offset, value.length));
+    target.node.nodeValue = value.slice(0, at) + text + value.slice(at);
+    return { node: target.node, offset: at + text.length };
+  }
+  const node = factory.createTextNode(text);
+  target.node.insertBefore(node, target.node.childNodes[target.offset] ?? null);
+  return { node, offset: text.length };
+}
+
+/** What a parent can do to the editor (the laptop emoji button inserts here). */
+export interface MentionInputHandle {
+  /** Insert text at the last caret in the editor (else the end), caret after it. */
+  insertText: (text: string) => void;
+}
+
 interface MentionInputProps {
   members: MentionCandidate[];
   placeholder: string;
@@ -150,15 +229,15 @@ function textBeforeCaret(root: HTMLElement): string | null {
   return normalizeSpaces(pre.toString());
 }
 
-export function MentionInput({
-  members,
-  placeholder,
-  autoFocus = false,
-  onChange,
-  initialBody,
-}: MentionInputProps): ReactElement {
+export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(function MentionInput(
+  { members, placeholder, autoFocus = false, onChange, initialBody },
+  ref,
+) {
   const editorRef = useRef<HTMLDivElement>(null);
   const seeded = useRef(false);
+  // The last selection inside the editor, kept while focus is elsewhere (the
+  // emoji picker's search field) so an insert lands where the caret was.
+  const savedRange = useRef<Range | null>(null);
   const [query, setQuery] = useState<string | null>(null);
   const [highlight, setHighlight] = useState(0);
 
@@ -194,6 +273,60 @@ export function MentionInput({
     if (initialBody !== undefined && initialBody !== '') return;
     if (autoFocus) editorRef.current?.focus();
   }, [autoFocus, initialBody]);
+
+  function saveSelection(): void {
+    const root = editorRef.current;
+    const sel = window.getSelection();
+    if (root === null || sel === null || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (root.contains(range.startContainer) && root.contains(range.endContainer)) {
+      savedRange.current = range.cloneRange();
+    }
+  }
+
+  useEffect(() => {
+    document.addEventListener('selectionchange', saveSelection);
+    return () => document.removeEventListener('selectionchange', saveSelection);
+  }, []);
+
+  function placeCaret(root: HTMLElement, caret: Range): void {
+    root.focus({ preventScroll: true });
+    const sel = window.getSelection();
+    if (sel === null) return;
+    sel.removeAllRanges();
+    sel.addRange(caret.cloneRange());
+  }
+
+  useImperativeHandle(ref, () => ({
+    insertText(text: string): void {
+      const root = editorRef.current;
+      if (root === null) return;
+      const saved = savedRange.current;
+      let point: CaretPoint | null = null;
+      if (
+        saved !== null &&
+        root.contains(saved.startContainer) &&
+        root.contains(saved.endContainer)
+      ) {
+        // A selected range is replaced, as typing would.
+        if (!saved.collapsed) saved.deleteContents();
+        point = { node: saved.startContainer, offset: saved.startOffset };
+      }
+      const at = insertTextAtPoint(root, point, text, document);
+      const caret = document.createRange();
+      caret.setStart(at.node, at.offset);
+      caret.collapse(true);
+      savedRange.current = caret.cloneRange();
+      placeCaret(root, caret);
+      // The picker hands focus back to its button as it closes; take it back
+      // on the next frame, caret after the insert.
+      requestAnimationFrame(() => {
+        if (root.isConnected) placeCaret(root, caret);
+      });
+      emit();
+      refreshQuery();
+    },
+  }));
 
   const matches = useMemo(() => {
     if (query === null) return [];
@@ -284,8 +417,15 @@ export function MentionInput({
           emit();
           refreshQuery();
         }}
-        onKeyUp={() => refreshQuery()}
-        onMouseUp={() => refreshQuery()}
+        onKeyUp={() => {
+          saveSelection();
+          refreshQuery();
+        }}
+        onMouseUp={() => {
+          saveSelection();
+          refreshQuery();
+        }}
+        onBlur={saveSelection}
         onKeyDown={onKeyDown}
         className="w-full whitespace-pre-wrap break-words rounded-md border border-border bg-panel-2 px-3 py-2.5 text-sm text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[74px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3"
       />
@@ -325,4 +465,4 @@ export function MentionInput({
       ) : null}
     </div>
   );
-}
+});

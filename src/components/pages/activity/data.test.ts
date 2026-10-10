@@ -1312,3 +1312,243 @@ describe('actor rows: who did what (approve, reject, park, review, deletes)', ()
     expect(old.actorId).toBe('u1');
   });
 });
+
+describe('plan comments and approvals', () => {
+  type QueryResult = { data: Record<string, unknown>[] | null; error: { message: string } | null };
+  type FakeClient = Parameters<typeof fetchActivityEntries>[0];
+  const PLAN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const ITEM = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const POST_ITEM = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const COMMENT = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+  /** A fake client that records every `.in()` per table and serves canned rows. */
+  function recordingClient(tables: Record<string, QueryResult>): {
+    client: FakeClient;
+    ins: { table: string; col: string; vals: unknown[] }[];
+  } {
+    const ins: { table: string; col: string; vals: unknown[] }[] = [];
+    const client = {
+      from(table: string) {
+        const result = tables[table] ?? { data: [], error: null };
+        const self = {
+          select: () => self,
+          eq: () => self,
+          is: () => self,
+          order: () => self,
+          limit: () => self,
+          lt: () => self,
+          like: () => self,
+          not: () => self,
+          or: () => self,
+          in: (col: string, vals: readonly unknown[]) => {
+            ins.push({ table, col, vals: [...vals] });
+            return self;
+          },
+          then(
+            onfulfilled?: (value: QueryResult) => unknown,
+            onrejected?: (reason: unknown) => unknown,
+          ) {
+            return Promise.resolve(result).then(onfulfilled, onrejected);
+          },
+        };
+        return self;
+      },
+    };
+    return { client: client as unknown as FakeClient, ins };
+  }
+
+  const ok = (data: Record<string, unknown>[]): QueryResult => ({ data, error: null });
+  const planRow = (over: Partial<InboxEntryRow>): Record<string, unknown> =>
+    row({
+      event_type: 'plan_comment',
+      entity_type: 'plan_item',
+      entity_id: ITEM,
+      scope: 'posts',
+      scope_key: PLAN,
+      actor_user_id: 'u-ana',
+      payload: { plan_id: PLAN, comment_id: COMMENT, visibility: 'everyone' },
+      ...over,
+    }) as unknown as Record<string, unknown>;
+
+  it('mapEntry reads plan_id, the actor and the review side and status for plan events only', () => {
+    const comment = mapEntry(
+      row({
+        event_type: 'plan_comment',
+        entity_type: 'plan_item',
+        entity_id: ITEM,
+        actor_user_id: 'u-ana',
+        payload: { plan_id: PLAN, comment_id: COMMENT, visibility: 'team' },
+      }),
+    );
+    expect(comment.planId).toBe(PLAN);
+    expect(comment.commentId).toBe(COMMENT);
+    expect(comment.actorId).toBe('u-ana');
+    expect(comment.reviewSide).toBeNull();
+    const review = mapEntry(
+      row({
+        event_type: 'plan_review',
+        entity_type: 'plan_item',
+        entity_id: ITEM,
+        actor_user_id: 'u-cy',
+        payload: { plan_id: PLAN, side: 'client', status: 'approved' },
+      }),
+    );
+    expect(review.reviewSide).toBe('client');
+    expect(review.reviewStatus).toBe('approved');
+    expect(review.actorId).toBe('u-cy');
+    // A post row never reads a plan_id, even when the payload carries one.
+    expect(mapEntry(row({ payload: { plan_id: PLAN } })).planId).toBeNull();
+  });
+
+  it('plan_comment reads "<actor> commented on a plan item"; the card title is the item title', () => {
+    const it1 = item({
+      eventType: 'plan_comment',
+      entityType: 'plan_item',
+      entityId: ITEM,
+      actorName: 'Ana',
+      title: 'Diwali reel',
+      planId: PLAN,
+    });
+    expect(activityLine(it1)).toBe('Ana commented on a plan item');
+    expect(shortLine(it1)).toBe('Ana commented on a plan item');
+    expect(cardTitle(it1)).toBe('Diwali reel');
+    expect(activityLine({ ...it1, actorName: null })).toBe('New comment on a plan item');
+    // The comment body is the card's body line when present.
+    expect(cardBodyLine({ ...it1, body: 'Love it' })).toBe('Love it');
+    expect(cardBodyLine({ ...it1, body: null })).toBe('Ana commented on a plan item');
+  });
+
+  it('plan_review is side-aware: client plain, team marked; approved and changes', () => {
+    const base = item({
+      eventType: 'plan_review',
+      entityType: 'plan_item',
+      entityId: ITEM,
+      actorName: 'Cy',
+      planId: PLAN,
+    });
+    expect(activityLine({ ...base, reviewSide: 'client', reviewStatus: 'approved' })).toBe(
+      'Cy approved a plan item',
+    );
+    expect(activityLine({ ...base, reviewSide: 'client', reviewStatus: 'changes' })).toBe(
+      'Cy asked changes on a plan item',
+    );
+    expect(activityLine({ ...base, reviewSide: 'team', reviewStatus: 'approved' })).toBe(
+      'Cy approved a plan item (team review)',
+    );
+    expect(shortLine({ ...base, reviewSide: 'team', reviewStatus: 'changes' })).toBe(
+      'Cy asked changes on a plan item (team review)',
+    );
+    expect(
+      activityLine({ ...base, actorName: null, reviewSide: 'client', reviewStatus: 'approved' }),
+    ).toBe('A plan item was approved');
+    // An unresolved item title falls back to the plan title, then "Plan item".
+    expect(cardTitle({ ...base, title: null, planTitle: 'October plan' })).toBe('October plan');
+    expect(cardTitle({ ...base, title: null, planTitle: null })).toBe('Plan item');
+  });
+
+  it('entityHref: comment with comment_id, review, missing plan_id, missing entity_id', () => {
+    const comment = item({
+      eventType: 'plan_comment',
+      entityType: 'plan_item',
+      entityId: ITEM,
+      planId: PLAN,
+      commentId: COMMENT,
+    });
+    expect(entityHref(comment)).toBe(`/plans/${PLAN}?item=${ITEM}&comment=${COMMENT}`);
+    expect(entityHref({ ...comment, commentId: null })).toBe(`/plans/${PLAN}?item=${ITEM}`);
+    const review = { ...comment, eventType: 'plan_review', commentId: null };
+    expect(entityHref(review)).toBe(`/plans/${PLAN}?item=${ITEM}`);
+    // A review never carries &comment= even if a comment id leaked in.
+    expect(entityHref({ ...review, commentId: COMMENT })).toBe(`/plans/${PLAN}?item=${ITEM}`);
+    expect(entityHref({ ...comment, planId: null })).toBeNull();
+    const noPlanField: ActivityItem = { ...comment };
+    delete noPlanField.planId;
+    expect(entityHref(noPlanField)).toBeNull();
+    expect(entityHref({ ...comment, entityId: null })).toBeNull();
+  });
+
+  it('entityKey threads plan events on the same item, never with an unrelated row', () => {
+    const a = item({ id: 'a', eventType: 'plan_comment', entityType: 'plan_item', entityId: ITEM });
+    const b = item({ id: 'b', eventType: 'plan_review', entityType: 'plan_item', entityId: ITEM });
+    expect(entityKey(a)).toBe(entityKey(b));
+    expect(entityKey(a)).not.toBe(entityKey(item({ entityId: ITEM })));
+  });
+
+  it('fetch: one IN read per table; titles from plan_items / posts; snippets only from plan_item_comments', async () => {
+    const { client, ins } = recordingClient({
+      inbox_entries: ok([
+        planRow({ id: 'e1' }),
+        planRow({
+          id: 'e2',
+          event_type: 'plan_review',
+          entity_id: POST_ITEM,
+          actor_user_id: 'u-cy',
+          payload: { plan_id: PLAN, side: 'client', status: 'approved' },
+        }),
+        planRow({
+          id: 'e3',
+          event_type: 'plan_review',
+          payload: { plan_id: PLAN, side: 'team', status: 'changes' },
+        }),
+      ]),
+      plan_items: ok([
+        { id: ITEM, plan_id: PLAN, kind: 'concept', title: 'Diwali reel', post_id: null },
+        { id: POST_ITEM, plan_id: PLAN, kind: 'post', title: null, post_id: 'post-1' },
+      ]),
+      plans: ok([{ id: PLAN, title: 'October plan' }]),
+      plan_item_comments: ok([{ id: COMMENT, author_user_id: 'u-ana', body: 'Love it' }]),
+      // A same-id row in comments must never feed the plan snippet.
+      comments: ok([{ id: COMMENT, author_user_id: 'u-x', body: 'WRONG TABLE' }]),
+      posts: ok([{ id: 'post-1', title: 'Launch post', format: 'text', caption: null, number: 4 }]),
+      users: ok([
+        { id: 'u-ana', display_name: 'Ana', avatar_url: null },
+        { id: 'u-cy', display_name: 'Cy', avatar_url: null },
+      ]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const [c, r, t] = res.data;
+    expect(c?.title).toBe('Diwali reel');
+    expect(c?.planTitle).toBe('October plan');
+    expect(c?.body).toBe('Love it');
+    expect(c?.actorName).toBe('Ana');
+    expect(c && activityLine(c)).toBe('Ana commented on a plan item');
+    expect(c && entityHref(c)).toBe(`/plans/${PLAN}?item=${ITEM}&comment=${COMMENT}`);
+    expect(r?.title).toBe('Launch post');
+    expect(r?.body).toBeNull();
+    expect(r && activityLine(r)).toBe('Cy approved a plan item');
+    expect(t && activityLine(t)).toBe('Ana asked changes on a plan item (team review)');
+
+    const perTable = (table: string) => ins.filter((call) => call.table === table);
+    expect(perTable('plan_items')).toHaveLength(1);
+    expect(perTable('plans')).toHaveLength(1);
+    expect(perTable('plan_item_comments')).toHaveLength(1);
+    expect(perTable('posts')).toHaveLength(1);
+    // The comments table is never read for a plan comment.
+    expect(perTable('comments')).toHaveLength(0);
+    expect(perTable('plan_items')[0]?.vals.sort()).toEqual([ITEM, POST_ITEM].sort());
+    expect(perTable('plans')[0]?.vals).toEqual([PLAN]);
+    expect(perTable('plan_item_comments')[0]?.vals).toEqual([COMMENT]);
+    expect(perTable('posts')[0]?.vals).toEqual(['post-1']);
+  });
+
+  it('fetch: no plan rows means no plan reads; failed plan reads degrade, never fail the feed', async () => {
+    const quiet = recordingClient({ inbox_entries: ok([]) });
+    await fetchActivityEntries(quiet.client, 'w1');
+    expect(quiet.ins.some((c) => c.table.startsWith('plan'))).toBe(false);
+
+    const failing = recordingClient({
+      inbox_entries: ok([planRow({ id: 'e1' })]),
+      plan_items: { data: null, error: { message: 'boom' } },
+      plans: { data: null, error: { message: 'boom' } },
+      plan_item_comments: { data: null, error: { message: 'boom' } },
+    });
+    const res = await fetchActivityEntries(failing.client, 'w1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data[0]?.title).toBeNull();
+    expect(res.data[0]?.body).toBeNull();
+    expect(res.data[0] && cardTitle(res.data[0])).toBe('Plan item');
+  });
+});

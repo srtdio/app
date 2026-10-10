@@ -19,6 +19,7 @@ import {
   markReadUpTo,
   markReadUpToMessage,
   mergeFetched,
+  replyPreview,
   mergeReactions,
   oldestCursor,
   parseLiveEvent,
@@ -90,6 +91,7 @@ function row(over: Partial<ChatMessageRow>): ChatMessageRow {
     attachment_asset_ids: null,
     shared_post_ids: null,
     shared_brief_ids: null,
+    shared_plan_ids: null,
     reply_to_message_id: null,
     thread_root_message_id: null,
     forwarded_from_message_id: null,
@@ -1145,5 +1147,53 @@ describe('edit and delete: mapping, merge and live events', () => {
     const tomb = markMessagesDeleted([a], ['a']);
     expect(applyEdit(tomb, { messageId: 'a', body: 'x', editedAt: 'e' })).toBe(tomb);
     expect(applyEdit([a], { messageId: 'nope', body: 'x', editedAt: 'e' })).toEqual([a]);
+  });
+});
+
+describe('shared plans (shared_plan_ids)', () => {
+  it('rowToThreadMessage keeps sharedPlanIds from the row', () => {
+    const card = rowToThreadMessage(row({ id: 'p', body: null, shared_plan_ids: ['plan1'] }), ME);
+    expect(card.sharedPlanIds).toEqual(['plan1']);
+    const plain = rowToThreadMessage(row({ id: 'q' }), ME);
+    expect(plain.sharedPlanIds ?? []).toEqual([]);
+  });
+
+  it('a tombstone row and a local delete both clear the plan ids', () => {
+    const tomb = rowToThreadMessage(
+      row({ id: 'p', body: null, shared_plan_ids: ['plan1'], deleted_at: '2026-09-22T10:05:00Z' }),
+      ME,
+    );
+    expect(tomb.deleted).toBe(true);
+    expect(tomb.sharedPlanIds ?? []).toEqual([]);
+    const loaded = rowToThreadMessage(row({ id: 'p', body: null, shared_plan_ids: ['plan1'] }), ME);
+    const [deleted] = markMessagesDeleted([loaded], ['p']);
+    expect(deleted?.deleted).toBe(true);
+    expect(deleted?.sharedPlanIds ?? []).toEqual([]);
+  });
+
+  it('replyPreview reads "Shared plan" for a bodyless plan card', () => {
+    expect(
+      replyPreview({ body: '', attachments: [], sharedPostIds: [], sharedPlanIds: ['plan1'] }),
+    ).toBe('Shared plan');
+    // Posts and briefs keep their own labels first.
+    expect(
+      replyPreview({
+        body: '',
+        attachments: [],
+        sharedPostIds: ['p1'],
+        sharedPlanIds: ['plan1'],
+      }),
+    ).toBe('Shared post');
+  });
+
+  it('mergeFetched keeps the non-empty plan ids (live provisional, then its row)', () => {
+    const live = mine({ id: 'm1', mine: false, provisionalTime: true, body: '' });
+    const fetched = rowToThreadMessage(row({ body: null, shared_plan_ids: ['plan1'] }), ME);
+    const [merged] = mergeFetched([live], [fetched]);
+    expect(merged?.sharedPlanIds).toEqual(['plan1']);
+    const withIds = mine({ id: 'm1', provisionalTime: true, sharedPlanIds: ['plan1'] });
+    const bare = rowToThreadMessage(row({ body: 'x' }), ME);
+    const [kept] = mergeFetched([withIds], [bare]);
+    expect(kept?.sharedPlanIds).toEqual(['plan1']);
   });
 });

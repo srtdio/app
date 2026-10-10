@@ -122,6 +122,25 @@ export function ownMessageActions(
   };
 }
 
+/**
+ * A plan card message (chat_plan_share): its menu hides Forward, Save to notes
+ * and Edit; Reply, Copy (the plan's title), Mark as and Delete stay. Pure.
+ */
+export function isPlanMessage(message: Pick<ThreadMessage, 'sharedPlanIds'>): boolean {
+  return (message.sharedPlanIds ?? []).length > 0;
+}
+
+/**
+ * Whether a selection can be forwarded: never when it holds a plan card (a
+ * plan is shared with chat_plan_share, not forwarded as a message). Pure.
+ */
+export function selectionForwardable(
+  selected: ReadonlySet<string>,
+  messages: ReadonlyArray<Pick<ThreadMessage, 'id' | 'sharedPlanIds'>>,
+): boolean {
+  return !messages.some((m) => selected.has(m.id) && isPlanMessage(m));
+}
+
 interface MessageActionMenuProps {
   open: boolean;
   onClose: () => void;

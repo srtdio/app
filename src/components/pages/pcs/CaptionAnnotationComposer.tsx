@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
+import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
 
 // F4 caption annotation composer: a bottom sheet that shows the quoted caption
 // selection and a comment field. It owns no RPC; PostDetailPage passes onSubmit,
@@ -25,6 +26,7 @@ export function CaptionAnnotationComposer({
   submitting = false,
 }: CaptionAnnotationComposerProps) {
   const [body, setBody] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Start each annotation from an empty field so a prior draft never leaks into
   // the next selection.
@@ -49,6 +51,10 @@ export function CaptionAnnotationComposer({
           >
             Cancel
           </Button>
+          <CommentEmojiButton
+            disabled={submitting}
+            onPick={(char) => insertIntoTextarea(() => textareaRef.current, body, char, setBody)}
+          />
           <Button
             size="lg"
             variant="primary"
@@ -66,6 +72,7 @@ export function CaptionAnnotationComposer({
           {quote}
         </div>
         <Textarea
+          ref={textareaRef}
           value={body}
           onChange={(event) => setBody(event.target.value)}
           placeholder="Add your comment"

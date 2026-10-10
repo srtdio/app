@@ -636,6 +636,7 @@ export function BellProvider(props: {
             hasAttachments: m.attachments.length > 0,
             hasPosts: m.sharedPostIds.length > 0,
             hasBriefs: m.sharedBriefIds.length > 0,
+            hasPlans: (m.sharedPlanIds ?? []).length > 0,
           },
           nameOf,
         );

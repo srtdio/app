@@ -3,7 +3,7 @@
 Generated from live database movnexawfhsyuluspxoc (srtdio-v2) after the MVP stripdown.
 This file is the human-readable design reference. The migrations folder is implementation truth.
 
-Sorted v2 MVP is a social-media approval tool: client writes a brief, agency drafts a post, post moves through review to approved, rejected, or parked. No publishing, no scheduling, no plan. Chat history is the Postgres record (chat_messages); Agora is live delivery only. Email is out-of-app catch-up.
+Sorted v2 MVP is a social-media approval tool: client writes a brief, agency drafts a post, post moves through review to approved, rejected, or parked. No publishing, no scheduling. Plans exist from 9 Oct 2026 (plans tables, step 3a). Chat history is the Postgres record (chat_messages); Agora is live delivery only. Email is out-of-app catch-up.
 
 All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` unless noted. Timestamps are `timestamptz`. `*_by` FK columns are SET NULL on delete except `workspaces.owner_user_id` (RESTRICT) and `asset_attachments` (NO ACTION).
 
@@ -132,6 +132,8 @@ The approval unit. stage is the only workflow state. No publish_status.
 
 Stage CHECK: draft, review, approved, parked, rejected. No publish/schedule/platform columns. Indexes: (workspace_id, stage, created_at desc), (workspace_id, target_date) where target_date not null, brief_id partial, owner partial. All where deleted_at null.
 
+posts_select_member: active member, not deleted; drafts only for owner/admin/agency. comments and asset_attachments on posts inherit this via EXISTS on posts.
+
 ### post_versions
 
 Immutable edit history. No deleted_at. PK id. Fields: post_id FK, workspace_id FK, version_number, snapshot jsonb, created_by FK users.id SET NULL, legacy_author_name (text, nullable: frozen original v1 author/creator name shown when the live created_by is null, used by the detail pages with an "(ex-member)" fallback), created_at. Unique (post_id, version_number).
@@ -227,6 +229,89 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 Indexes: (workspace_id, status, created_at desc), target_date partial, created_by, FTS on title+objective.
 
 brief_create(p_workspace_id, p_payload, p_trace_id) SECURITY DEFINER: client-only create gated on an active member with the brief.create capability. The payload also accepts an optional field attachment_asset_version_ids (an ordered array of asset_version ids, any kind: image / video / pdf / Office-doc / link). Because briefs are read-only after creation, creation is the only attach point: each id is written as an asset_attachments row with entity_type='brief', entity_id = the new brief id, and position = array order. A non-array value, a non-uuid element, or an id whose asset_version is missing or in another workspace raises invalid_payload and writes no brief and no attachments.
+
+## 4a. plans / plan_items / plan_item_reviews
+
+Applied 9 Oct 2026 (step 3a plans), restated in migration 20261009110000_plans_core.sql. A plan is a shared object in chat holding concepts and posts with team and client approval. RLS on all three; authenticated has SELECT only (no INSERT, UPDATE or DELETE); every write goes through the procs below. No proc hard-deletes a row.
+
+### plans
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK, default uuidv7() |
+| workspace_id | uuid | FK workspaces.id, CASCADE |
+| title | text | 1 to 200 |
+| starts_on / ends_on | date | ends_on >= starts_on, at most 92 days apart (plans_dates) |
+| audience | text | team / client |
+| shared_with_client_at | timestamptz | nullable |
+| shared_with_client_by | uuid | nullable, FK users.id, SET NULL |
+| created_by | uuid | nullable, FK users.id, SET NULL |
+| created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
+
+- plans_shared_consistency: audience team has both shared_with_client columns null; audience client has shared_with_client_at set.
+- plans_select_member: active member, not deleted; team plans only for owner/admin/agency.
+- Indexes: (workspace_id, starts_on desc) where not deleted; created_by and shared_with_client_by partial.
+
+### plan_items
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK, default uuidv7() |
+| workspace_id | uuid | FK workspaces.id, CASCADE |
+| plan_id | uuid | FK plans.id, CASCADE |
+| kind | text | concept / post |
+| position | int | default 0 |
+| title | text | concept only, 1 to 200 |
+| description | text | concept only, nullable, up to 5000 |
+| post_id | uuid | post only, FK posts.id, CASCADE |
+| created_by | uuid | nullable, FK users.id, SET NULL |
+| created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
+
+- plan_items_shape: a concept has a title and no post_id; a post item has post_id and no title or description.
+- plan_items_post_once: a post appears at most once per plan among live post items (partial unique on plan_id, post_id).
+- plan_items_select_member: not deleted, its plan readable, and for a post item its post readable (so a draft post item stays hidden from a client, via posts_select_member).
+- Concept files: asset_attachments rows with entity_type plan_item; asset_attachments_select_member checks the plan item is readable.
+
+### plan_item_reviews
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| item_id | uuid | PK part, FK plan_items.id, CASCADE |
+| workspace_id | uuid | FK workspaces.id, CASCADE |
+| side | text | PK part, team / client |
+| status | text | waiting / approved / changes |
+| reviewed_by | uuid | nullable, FK users.id, SET NULL |
+| reviewed_at | timestamptz | default now() |
+
+- plan_item_reviews_select_member: its item readable; team reviews only for owner/admin/agency, client reviews for every member who can read the item.
+
+### plan_item_comments
+
+Applied 9 Oct 2026 (step 3b plan comments), restated in migration 20261009205500_plan_item_comments.sql. RLS on; authenticated has SELECT only.
+
+- Columns: id uuid PK default uuidv7(); workspace_id FK workspaces.id CASCADE; item_id FK plan_items.id CASCADE; author_user_id nullable FK users.id SET NULL.
+- Content: body text, trimmed length 1 to 5000 (plan_item_comments_body_check); visibility text 'everyone' / 'team' (plan_item_comments_visibility_check).
+- Timestamps: created_at default now(); edited_at / deleted_at nullable.
+- Indexes: (item_id, created_at) where not deleted; workspace_id; author_user_id where not null.
+- plan_item_comments_select_member: not deleted, its item readable, and visibility 'everyone' or the caller is_agency_side_member.
+
+### Plan procs
+
+All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_trace_id and writes one audit_log row named after the proc on success. Owner/admin/agency only unless noted (forbidden_role otherwise).
+
+- is_agency_side_member(p_workspace_id): true when the caller is an active owner, admin or agency member.
+- plan_create(p_workspace_id, p_title, p_starts_on, p_ends_on, p_audience, p_trace_id) returns uuid: create a plan; a client plan is shared at once.
+- plan_update(p_plan_id, p_title, p_starts_on, p_ends_on, p_trace_id): rename or move dates.
+- plan_share_with_client(p_plan_id, p_trace_id): one-way team to client; plan_has_drafts while it holds a draft post.
+- plan_delete(p_plan_id, p_trace_id): soft-delete the plan.
+- plan_concept_add(p_plan_id, p_title, p_description, p_attachment_version_ids, p_trace_id) returns uuid: append a concept with up to 20 library files.
+- plan_concept_edit(p_item_id, p_title, p_description, p_attachment_version_ids, p_trace_id): edit a concept (null files keeps them); resets its reviews to waiting.
+- plan_posts_add(p_plan_id, p_post_ids, p_trace_id) returns integer: append 1 to 50 posts, skipping ones already in the plan; plan_has_drafts for a draft into a client plan.
+- plan_item_remove(p_item_id, p_trace_id): soft-delete an item.
+- plan_items_reorder(p_plan_id, p_item_ids, p_trace_id): set positions from the full, exact list of live item ids.
+- plan_item_review(p_item_id, p_side, p_status, p_trace_id): upsert a review; team side for owner/admin/agency, client side for an active client on a client plan's concepts only (use_stage_transition on a post item). A status other than waiting writes plan_review inbox rows via _plan_item_notify (team side to owner/admin/agency only).
+- plan_item_comment_create(p_item_id, p_body, p_visibility, p_trace_id) returns uuid: any active member; a client only on a client plan and only 'everyone' (forbidden_role otherwise); invalid_payload for a missing item, a bad visibility or an empty or over-5000 body; writes plan_comment inbox rows via _plan_item_notify ('team' to owner/admin/agency only).
+- Internal, no EXECUTE for authenticated: _plan_check_versions (same-workspace, library, not deleted; 'attachment not available' for chat-origin or deleted files), _plan_attach_versions, and _plan_item_notify(p_item_id, p_event_type, p_team_only, p_payload) (one inbox row per other active member: owner/admin/agency always, clients too when not team-only on a client plan; payload gains plan_id).
 
 ## 5. Assets
 
@@ -327,7 +412,7 @@ chat_messages carries shared_post_ids, reply_to_message_id and attachment_meta (
 Marks: chat_message_marks, one per message, types commitment/decision (commitment/decision/pending are all resolvable by any member (Delivered / Closed / Completed) via chat_mark_resolve; chat_mark_reopen (any member) returns a resolved mark to open; resolved rows stay as history; marks hidden by the caller's clear, same as messages.) and pending (resolvable by any member, optional priority 1 or 2). Delete: chat_message_delete soft-deletes the caller's own messages only, never marked ones. shared_brief_ids alongside shared_post_ids.
 
 chat_message_edit(p_message_id text, p_channel_id text, p_body text, p_trace_id uuid, p_mentions jsonb default null): own message only, body and mentions only, 15 min window from created_at, blocked when marked or deleted; sets edited_at.
-chat_message_delete: own messages only, 30 min window from created_at (none in a notes channel), blocked when marked.
+chat_message_delete: own messages only, 30 min window from created_at (none in a notes channel), blocked when marked. The tombstone also clears shared_plan_ids (20261009163000_chat_plan_share.sql).
 Notes channels (20261003170000_notes_channel_and_search_kind.sql): chat_message_delete has no time window for messages in a notes channel; DM and group messages keep the 30 minute window. Own-only and the marked block still apply.
 chat_message_search(p_workspace_id uuid, p_query text, p_trace_id uuid, p_channel_id text default null, p_before_created_at timestamptz default null, p_before_id text default null, p_limit integer default 30, p_kind text default null) RETURNS SETOF chat_messages, SQL STABLE SECURITY INVOKER (search_path public, pg_temp; EXECUTE to authenticated only), 8 args (the old 7-arg version is dropped). New p_kind filter: photo = an attachment_meta entry with mime image/*, voice = audio/*, file = any other attachment, link = body matches http(s)://. An empty query is allowed only together with p_kind; no query and no kind returns no rows. An unknown p_kind returns no rows. Rows stay limited by chat_messages RLS, so notes rows reach only their owner.
 Tombstone: delete sets deleted_at, wipes every content column (body, mentions, attachment_asset_ids, attachment_meta, shared_post_ids, shared_brief_ids set to null) and keeps the row, so members still read it and render "Message deleted". Existing deleted rows were wiped the same way. Recorded in 20260929120000_chat_delete_tombstone.sql.
@@ -352,11 +437,13 @@ chat_channel_member(p_channel_id text, p_user_id uuid) RETURNS boolean, SQL STAB
 
 ### chat_messages (partitioned by created_at, monthly)
 
-PK (id, created_at). Fields: id text (the client-generated uuid_v7, stored as text), channel_id FK chat_channels ON DELETE CASCADE, workspace_id FK, sender_user_id nullable FK auth.users.id, body nullable (1 to 5000 chars when present), mentions jsonb nullable (JSON array of user uuids, channel members only, max 50, null when none; CHECK chat_messages_mentions_is_array), attachment_asset_ids uuid[] nullable, thread_root_message_id text nullable (top-level message id of the reply's thread; null for non-replies; set only by trigger), agora_event_id text NULLABLE (null for every row written by chat_message_send; only legacy mirror rows carry a value), created_at (server-stamped now()), edited_at / deleted_at nullable. Unique (agora_event_id, created_at). Indexes: chat_messages_channel_created_idx (channel_id, created_at desc, id) for history pagination, chat_messages_id_idx (id) for the idempotent lookup, chat_messages_attachment_asset_ids_gin GIN (attachment_asset_ids) for the chat_attachment_readable containment lookup (created on the partitioned parent, present on every partition), chat_messages_thread_root_idx (channel_id, thread_root_message_id, created_at) WHERE thread_root_message_id IS NOT NULL for per-thread reads (parent + every partition), plus the baseline channel / sender / workspace indexes. Partitions: monthly through 2028_12 plus a DEFAULT (section 11).
+PK (id, created_at). Fields: id text (the client-generated uuid_v7, stored as text), channel_id FK chat_channels ON DELETE CASCADE, workspace_id FK, sender_user_id nullable FK auth.users.id, body nullable (1 to 5000 chars when present), mentions jsonb nullable (JSON array of user uuids, channel members only, max 50, null when none; CHECK chat_messages_mentions_is_array), attachment_asset_ids uuid[] nullable, shared_plan_ids uuid[] nullable (plans shared into the chat by chat_plan_share; added on the partitioned parent, present on every partition; 20261009163000_chat_plan_share.sql), thread_root_message_id text nullable (top-level message id of the reply's thread; null for non-replies; set only by trigger), agora_event_id text NULLABLE (null for every row written by chat_message_send; only legacy mirror rows carry a value), created_at (server-stamped now()), edited_at / deleted_at nullable. Unique (agora_event_id, created_at). Indexes: chat_messages_channel_created_idx (channel_id, created_at desc, id) for history pagination, chat_messages_id_idx (id) for the idempotent lookup, chat_messages_attachment_asset_ids_gin GIN (attachment_asset_ids) for the chat_attachment_readable containment lookup (created on the partitioned parent, present on every partition), chat_messages_thread_root_idx (channel_id, thread_root_message_id, created_at) WHERE thread_root_message_id IS NOT NULL for per-thread reads (parent + every partition), plus the baseline channel / sender / workspace indexes. Partitions: monthly through 2028_12 plus a DEFAULT (section 11).
 
 RLS: chat_messages_select_channel_member (SELECT to authenticated) USING chat_channel_member(channel_id, auth.uid()) AND created_at > chat_cleared_at(channel_id, auth.uid()). It no longer filters deleted_at: deleted rows stay readable to members as wiped tombstones (20260929120000_chat_delete_tombstone.sql); outsiders still read nothing. The former workspace-wide chat_messages_select_member policy is dropped. No direct INSERT/UPDATE/DELETE policies.
 
 chat_message_send(p_id uuid, p_channel_id text, p_trace_id uuid, p_body text default null, p_mentions jsonb default null, p_attachment_asset_ids uuid[] default null, p_shared_post_ids uuid[] default null, p_reply_to_message_id text default null, p_attachment_meta jsonb default null, p_shared_brief_ids uuid[] default null, p_forwarded_from_message_id text default null) RETURNS chat_messages, SECURITY DEFINER (search_path='', EXECUTE to authenticated only): the only write path, 11 args. Requires auth.uid(), p_id and p_trace_id; raises 'message has no body, attachments, shared posts or shared briefs' when the trimmed body is empty and all three arrays are empty, 'body exceeds 5000 characters' past the cap, and 'not a member of this chat' unless chat_channel_member. p_reply_to_message_id must be a message in the same channel ('reply target not in this chat'); p_forwarded_from_message_id must be a non-deleted message in the same workspace in a channel the sender is a member of ('forward source not accessible'). p_mentions is resolved to channel members by chat_mentions_resolve, and each mentioned user gets an urgent 'mention' inbox_entries row. p_attachment_asset_ids, p_attachment_meta, p_shared_post_ids and p_shared_brief_ids are stored as given (no existence or workspace check). Takes pg_advisory_xact_lock(hashtext(p_id)) and, when a row with that id already exists, returns it unchanged (idempotent retry); otherwise inserts with sender_user_id = auth.uid(), created_at = now(), agora_event_id null, and returns the new row.
+
+chat_plan_share(p_id uuid, p_channel_id text, p_plan_id uuid, p_trace_id uuid, p_body text default null) RETURNS chat_messages, SECURITY DEFINER (search_path='', EXECUTE to authenticated only): any active workspace member who is in the chat posts one message carrying shared_plan_ids = [p_plan_id] (and an optional body); a client plan may be shared into any chat the caller is in, a team plan only by the agency side ('plan not available' for a client caller or a plan from another workspace) and never into a chat with an active client member ('plan_not_shared_with_client'); 'not a member of this chat' for a non-member; idempotent on p_id; one audit_log row 'chat_plan_share' with by_client in the payload. Recorded in 20261009163000_chat_plan_share.sql.
 
 chat_attachment_readable(p_asset_version_id uuid, p_user_id uuid) RETURNS boolean, SQL STABLE SECURITY DEFINER (search_path=''; EXECUTE revoked from PUBLIC, anon, authenticated; granted to service_role only): true when the version has asset_versions.uploaded_by = p_user_id (20261005040000_chat_files_stay_in_chat.sql; was assets.uploaded_by), or a chat_messages row has attachment_asset_ids @> array[p_asset_version_id], deleted_at null, chat_channel_member(channel_id, p_user_id), and created_at > coalesce(chat_cleared_at(channel_id, p_user_id), '-infinity'). Recorded in 20260930160000_assets_origin_chat_private.sql.
 
@@ -444,7 +531,7 @@ Inbox is the only permanent in-app event surface. Email is out-of-app catch-up, 
 | actor_user_id | uuid | nullable, FK public.users.id ON DELETE SET NULL: the user who performed the event, distinct from user_id which is the recipient |
 | workspace_id | uuid | FK workspaces.id |
 | event_type | text | see enums (publish/approval/plan values removed) |
-| entity_type | text | nullable: post / brief / plan_cell / plan_period / chat_channel / workspace (see section 12) |
+| entity_type | text | nullable: post / brief / plan_cell / plan_period / chat_channel / workspace / plan_item (see section 12) |
 | entity_id | text | nullable, 1 to 200 |
 | scope | text | everything / posts / briefs / people / groups / clients |
 | scope_key | text | nullable |
@@ -462,6 +549,7 @@ Where inbox entries are shown:
 - Chat bell only, never Activity: mention with entity_type chat_channel, scheduled_sent, scheduled_failed, reminder.
 - Activity: everything else, including mentions on posts and briefs.
 - inbox_mark_all_read (Activity Mark all read) skips bell types.
+- plan_comment and plan_review (entity_type plan_item, entity_id = item id, tier active; 20261009205500_plan_item_comments.sql): plan events use scope 'posts', scope_key = plan id.
 
 Decision 3 Oct 2026 (Shubham): Activity is posts only; chat notifications live in the chat bell.
 
@@ -518,7 +606,7 @@ PK id. Fields: operator_user_id FK, flow_type (billing_override / sentry_inspect
 - workspace.subscription_state: trial, active, read_only, grace, soft_pause, full_pause, soft_delete
 - brief.status: open, closed
 - approval (table removed): n/a, approval is now a post.stage value
-- inbox_entries.event_type: comment, mention, stage_change, comment_resolved, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system, checkpoints_added, post_ready, scheduled_sent (tier active), scheduled_failed (tier urgent), reminder (tier urgent), post_deleted (tier active), assets_deleted (tier active) (canonical list: INBOX_EVENT_TYPES in @srtdio/schemas; 21 values)
+- inbox_entries.event_type: comment, mention, stage_change, comment_resolved, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system, checkpoints_added, post_ready, scheduled_sent (tier active), scheduled_failed (tier urgent), reminder (tier urgent), post_deleted (tier active), assets_deleted (tier active), plan_comment (tier active), plan_review (tier active) (canonical list: INBOX_EVENT_TYPES in @srtdio/schemas; 23 values)
 - inbox_entries.scope: everything, posts, briefs, people, groups, clients
 - inbox_entries.tier: urgent, active, ambient
 - chat_channels.channel_type: dm, group, notes

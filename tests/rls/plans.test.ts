@@ -1,0 +1,410 @@
+// Plans RLS (20261009110000_plans_core.sql). plans_select_member: active
+// member, not deleted; a team plan only for owner/admin/agency. plan_items:
+// readable when its plan is, and a post item only when its post is (so a draft
+// stays hidden from a client through posts_select_member, even once the plan
+// turns client-visible). plan_item_reviews: team reviews only for the agency
+// side; client reviews for everyone who can read the item. An inactive member
+// and another workspace's client see nothing. Authenticated has SELECT only:
+// INSERT, UPDATE and DELETE are refused at the grant (permission denied).
+//
+// The tables grant service_role no SELECT/INSERT (live parity), so fixtures go
+// through the procs as an agency member; the one direct change (a team plan
+// turned client-visible with a draft still inside) runs as postgres via psql
+// against the local container.
+
+import { execFileSync } from 'node:child_process';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { v7 as uuidv7 } from 'uuid';
+import {
+  asGeneric,
+  clientFor,
+  createAdminClient,
+  insertRow,
+  loadRlsEnv,
+  nextEntityNumber,
+  ownReadCount,
+  randomSuffix,
+  partitionTimestamp,
+  seedDmChannel,
+  seedMember,
+  seedUser,
+  seedWorkspace,
+  visibleRowCount,
+  type GenericClient,
+  type SeededUser,
+  type SeededWorkspace,
+} from '../../packages/test-utils/rls';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../../packages/schemas/src/supabase.generated';
+
+const RLS_SUITE = process.env.RLS_SUITE === '1';
+
+/**
+ * Typed pass-through for direct .rpc() args. Each proc here takes its own
+ * p_trace_id (a uuid v7, set at every call site). callRpc() is the app wrapper
+ * and does not apply to these direct test calls.
+ */
+function rpcArgs<T>(args: T): T {
+  return args;
+}
+
+/** Unwrap an rpc result or throw with the proc name and message. */
+function must<T>(proc: string, res: { data: T | null; error: { message: string } | null }): T {
+  if (res.error !== null || res.data === null) {
+    throw new Error(`${proc} failed: ${res.error?.message ?? 'no data'}`);
+  }
+  return res.data;
+}
+
+describe.runIf(RLS_SUITE)('plans RLS', () => {
+  let admin: SupabaseClient<Database>;
+  let g: GenericClient;
+  let dbUrl: string;
+  let owner: SeededUser;
+  let agency: SeededUser;
+  let client: SeededUser;
+  let inactive: SeededUser;
+  let outsider: SeededUser;
+  let outsiderClient: SeededUser;
+  let ws: SeededWorkspace;
+  let other: SeededWorkspace;
+  let draftPostId: string;
+  let reviewPostId: string;
+  let teamPlanId: string;
+  let clientPlanId: string;
+  let teamConceptId: string;
+  let teamDraftItemId: string;
+  let clientConceptId: string;
+  let clientPostItemId: string;
+
+  function as(user: SeededUser): SupabaseClient<Database> {
+    return clientFor(user.id);
+  }
+
+  function read(user: SeededUser, table: string, id: string, key = 'id'): Promise<number> {
+    return visibleRowCount(asGeneric(as(user)), table, [[key, id]]);
+  }
+
+  function own(user: SeededUser, table: string, id: string, key = 'id'): Promise<number> {
+    return ownReadCount(asGeneric(as(user)), table, [[key, id]]);
+  }
+
+  async function seedPost(stage: string, bucketId: string): Promise<string> {
+    const post = await insertRow(g, 'posts', {
+      workspace_id: ws.id,
+      number: await nextEntityNumber(g, ws.id),
+      title: `Post ${randomSuffix()}`,
+      bucket_id: bucketId,
+      owner_user_id: owner.id,
+      platform: 'linkedin',
+      format: 'text',
+      stage,
+      created_by: owner.id,
+    });
+    return String(post.id);
+  }
+
+  async function createPlan(audience: 'team' | 'client'): Promise<string> {
+    return must(
+      'plan_create',
+      await as(agency).rpc(
+        'plan_create',
+        rpcArgs({
+          p_workspace_id: ws.id,
+          p_title: `Plan ${randomSuffix()}`,
+          p_starts_on: '2026-11-01',
+          p_ends_on: '2026-11-30',
+          p_audience: audience,
+          p_trace_id: uuidv7(),
+        }),
+      ),
+    );
+  }
+
+  async function addConcept(planId: string): Promise<string> {
+    return must(
+      'plan_concept_add',
+      await as(agency).rpc(
+        'plan_concept_add',
+        rpcArgs({
+          p_plan_id: planId,
+          p_title: 'Concept',
+          p_description: 'A concept',
+          p_attachment_version_ids: [],
+          p_trace_id: uuidv7(),
+        }),
+      ),
+    );
+  }
+
+  async function addPost(planId: string, postId: string): Promise<void> {
+    must(
+      'plan_posts_add',
+      await as(agency).rpc(
+        'plan_posts_add',
+        rpcArgs({ p_plan_id: planId, p_post_ids: [postId], p_trace_id: uuidv7() }),
+      ),
+    );
+  }
+
+  async function postItemId(planId: string, postId: string): Promise<string> {
+    const res = await as(agency)
+      .from('plan_items')
+      .select('id')
+      .eq('plan_id', planId)
+      .eq('post_id', postId);
+    if (res.error !== null) throw new Error(`plan_items read failed: ${res.error.message}`);
+    const id = res.data[0]?.id;
+    if (id === undefined) throw new Error('post item not found');
+    return id;
+  }
+
+  async function review(
+    user: SeededUser,
+    itemId: string,
+    side: 'team' | 'client',
+    status: 'waiting' | 'approved' | 'changes',
+  ): Promise<void> {
+    const res = await as(user).rpc(
+      'plan_item_review',
+      rpcArgs({ p_item_id: itemId, p_side: side, p_status: status, p_trace_id: uuidv7() }),
+    );
+    if (res.error !== null) throw new Error(`plan_item_review failed: ${res.error.message}`);
+  }
+
+  /** Run one statement as postgres against the local container (fixture-only). */
+  function asPostgres(sql: string): void {
+    execFileSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql], {
+      encoding: 'utf8',
+    });
+  }
+
+  beforeAll(async () => {
+    const env = loadRlsEnv();
+    dbUrl = env.dbUrl;
+    admin = createAdminClient(env);
+    g = asGeneric(admin);
+    owner = await seedUser(env, admin);
+    agency = await seedUser(env, admin);
+    client = await seedUser(env, admin);
+    inactive = await seedUser(env, admin);
+    outsider = await seedUser(env, admin);
+    outsiderClient = await seedUser(env, admin);
+    ws = await seedWorkspace(admin, owner, `Plans ${owner.email}`);
+    other = await seedWorkspace(admin, outsider, `Plans other ${outsider.email}`);
+    await seedMember(g, ws, agency, 'agency');
+    await seedMember(g, ws, client, 'client');
+    await seedMember(g, other, outsiderClient, 'client');
+    // Inactive agency member: would see team plans if active.
+    await insertRow(g, 'workspace_members', {
+      workspace_id: ws.id,
+      user_id: inactive.id,
+      role: 'agency',
+      active: false,
+    });
+    const bucket = await insertRow(g, 'workspace_buckets', {
+      workspace_id: ws.id,
+      name: `Bucket ${randomSuffix()}`,
+      color_hex: '#112233',
+    });
+    draftPostId = await seedPost('draft', String(bucket.id));
+    reviewPostId = await seedPost('review', String(bucket.id));
+
+    teamPlanId = await createPlan('team');
+    teamConceptId = await addConcept(teamPlanId);
+    await addPost(teamPlanId, draftPostId);
+    teamDraftItemId = await postItemId(teamPlanId, draftPostId);
+
+    clientPlanId = await createPlan('client');
+    clientConceptId = await addConcept(clientPlanId);
+    await addPost(clientPlanId, reviewPostId);
+    clientPostItemId = await postItemId(clientPlanId, reviewPostId);
+    await review(agency, clientConceptId, 'team', 'approved');
+    await review(client, clientConceptId, 'client', 'changes');
+  });
+
+  // No teardown: this PR runs no DELETE anywhere; the container is ephemeral and
+  // every fixture is scoped to its own fresh workspace and users.
+
+  it('a team plan is invisible to the client and visible to agency and owner', async () => {
+    expect(await read(client, 'plans', teamPlanId)).toBe(0);
+    expect(await own(agency, 'plans', teamPlanId)).toBe(1);
+    expect(await own(owner, 'plans', teamPlanId)).toBe(1);
+    expect(await read(client, 'plan_items', teamConceptId)).toBe(0);
+    expect(await own(agency, 'plan_items', teamConceptId)).toBe(1);
+  });
+
+  it('a client plan and its items are visible to both sides', async () => {
+    expect(await own(client, 'plans', clientPlanId)).toBe(1);
+    expect(await own(agency, 'plans', clientPlanId)).toBe(1);
+    for (const user of [client, agency]) {
+      expect(await own(user, 'plan_items', clientConceptId)).toBe(1);
+      expect(await own(user, 'plan_items', clientPostItemId)).toBe(1);
+    }
+  });
+
+  it('team reviews are invisible to the client; client reviews are visible to both', async () => {
+    const team = (user: SeededUser) =>
+      visibleRowCount(asGeneric(as(user)), 'plan_item_reviews', [
+        ['item_id', clientConceptId],
+        ['side', 'team'],
+      ]);
+    const clientSide = (user: SeededUser) =>
+      ownReadCount(asGeneric(as(user)), 'plan_item_reviews', [
+        ['item_id', clientConceptId],
+        ['side', 'client'],
+      ]);
+    expect(await team(client)).toBe(0);
+    expect(await team(agency)).toBe(1);
+    expect(await clientSide(client)).toBe(1);
+    expect(await clientSide(agency)).toBe(1);
+  });
+
+  it('an inactive member and another workspace client see nothing', async () => {
+    for (const user of [inactive, outsiderClient]) {
+      expect(await read(user, 'plans', teamPlanId)).toBe(0);
+      expect(await read(user, 'plans', clientPlanId)).toBe(0);
+      expect(await read(user, 'plan_items', clientConceptId)).toBe(0);
+      expect(await read(user, 'plan_items', clientPostItemId)).toBe(0);
+      expect(await read(user, 'plan_item_reviews', clientConceptId, 'item_id')).toBe(0);
+    }
+  });
+
+  it('authenticated has no INSERT, UPDATE or DELETE on the plan tables (permission denied)', async () => {
+    const c = as(agency);
+    const denied = (error: { code?: string; message: string } | null): boolean =>
+      error !== null && (error.code === '42501' || /permission denied/i.test(error.message));
+    const inserts = await Promise.all([
+      c.from('plans').insert({
+        workspace_id: ws.id,
+        title: 'x',
+        starts_on: '2026-11-01',
+        ends_on: '2026-11-02',
+        audience: 'team',
+      }),
+      c.from('plan_items').insert({
+        workspace_id: ws.id,
+        plan_id: clientPlanId,
+        kind: 'concept',
+        title: 'x',
+      }),
+      c.from('plan_item_reviews').insert({
+        item_id: clientConceptId,
+        workspace_id: ws.id,
+        side: 'team',
+        status: 'approved',
+      }),
+    ]);
+    for (const res of inserts) expect(denied(res.error)).toBe(true);
+    const updates = await Promise.all([
+      c.from('plans').update({ title: 'renamed' }).eq('id', clientPlanId),
+      c.from('plan_items').update({ position: 9 }).eq('id', clientConceptId),
+      c.from('plan_item_reviews').update({ status: 'waiting' }).eq('item_id', clientConceptId),
+    ]);
+    for (const res of updates) expect(denied(res.error)).toBe(true);
+    const deletes = await Promise.all([
+      c.from('plans').delete().eq('id', clientPlanId),
+      c.from('plan_items').delete().eq('id', clientConceptId),
+      c.from('plan_item_reviews').delete().eq('item_id', clientConceptId),
+    ]);
+    for (const res of deletes) expect(denied(res.error)).toBe(true);
+    // Nothing changed.
+    expect(await own(agency, 'plans', clientPlanId)).toBe(1);
+    expect(await own(agency, 'plan_items', clientConceptId)).toBe(1);
+  });
+
+  async function comment(
+    user: SeededUser,
+    itemId: string,
+    visibility: 'everyone' | 'team',
+  ): Promise<string> {
+    return must(
+      'plan_item_comment_create',
+      await as(user).rpc(
+        'plan_item_comment_create',
+        rpcArgs({
+          p_item_id: itemId,
+          p_body: `Comment ${randomSuffix()}`,
+          p_visibility: visibility,
+          p_trace_id: uuidv7(),
+        }),
+      ),
+    );
+  }
+
+  it("a 'team' plan item comment is invisible to the client and visible to agency", async () => {
+    const commentId = await comment(agency, clientConceptId, 'team');
+    expect(await read(client, 'plan_item_comments', commentId)).toBe(0);
+    expect(await own(agency, 'plan_item_comments', commentId)).toBe(1);
+    expect(await own(owner, 'plan_item_comments', commentId)).toBe(1);
+  });
+
+  it("an 'everyone' comment on a client plan is visible to both sides", async () => {
+    const fromAgency = await comment(agency, clientConceptId, 'everyone');
+    const fromClient = await comment(client, clientPostItemId, 'everyone');
+    for (const user of [client, agency]) {
+      expect(await own(user, 'plan_item_comments', fromAgency)).toBe(1);
+      expect(await own(user, 'plan_item_comments', fromClient)).toBe(1);
+    }
+    expect(await read(outsiderClient, 'plan_item_comments', fromAgency)).toBe(0);
+  });
+
+  it('authenticated has no INSERT, UPDATE or DELETE on plan_item_comments (permission denied)', async () => {
+    const commentId = await comment(agency, clientConceptId, 'everyone');
+    const c = as(agency);
+    const denied = (error: { code?: string; message: string } | null): boolean =>
+      error !== null && (error.code === '42501' || /permission denied/i.test(error.message));
+    const insert = await c.from('plan_item_comments').insert({
+      workspace_id: ws.id,
+      item_id: clientConceptId,
+      author_user_id: agency.id,
+      body: 'x',
+      visibility: 'everyone',
+    });
+    expect(denied(insert.error)).toBe(true);
+    const update = await c
+      .from('plan_item_comments')
+      .update({ body: 'edited' })
+      .eq('id', commentId);
+    expect(denied(update.error)).toBe(true);
+    const del = await c.from('plan_item_comments').delete().eq('id', commentId);
+    expect(denied(del.error)).toBe(true);
+    // Nothing changed.
+    expect(await own(agency, 'plan_item_comments', commentId)).toBe(1);
+  });
+
+  it('a client in the chat reads a plan-share message row, but a team plan id on it is not readable', async () => {
+    // A team plan cannot be shared into a chat with a client (chat_plan_share
+    // refuses it), so the row is seeded through the service role to prove the
+    // plans read stays gated even when an id leaks into a message.
+    const hiddenTeamPlanId = await createPlan('team');
+    const channelId = await seedDmChannel(g, ws.id, agency, client);
+    const messageId = uuidv7();
+    await insertRow(g, 'chat_messages', {
+      id: messageId,
+      channel_id: channelId,
+      workspace_id: ws.id,
+      sender_user_id: agency.id,
+      body: 'Plans',
+      shared_plan_ids: [hiddenTeamPlanId, clientPlanId],
+      agora_event_id: null,
+      created_at: partitionTimestamp,
+    });
+    expect(await own(client, 'chat_messages', messageId)).toBe(1);
+    expect(await read(client, 'plans', hiddenTeamPlanId)).toBe(0);
+    expect(await own(client, 'plans', clientPlanId)).toBe(1);
+    expect(await own(agency, 'plans', hiddenTeamPlanId)).toBe(1);
+  });
+
+  // Runs last: it turns the team plan client-visible with its draft still inside.
+  it('a draft post in a team plan stays hidden from the client once the plan turns client-visible', async () => {
+    expect(await read(client, 'plan_items', teamDraftItemId)).toBe(0);
+    asPostgres(
+      `update public.plans set audience = 'client', shared_with_client_at = now() where id = '${teamPlanId}'`,
+    );
+    expect(await own(client, 'plans', teamPlanId)).toBe(1);
+    expect(await own(client, 'plan_items', teamConceptId)).toBe(1);
+    expect(await read(client, 'plan_items', teamDraftItemId)).toBe(0);
+    expect(await own(agency, 'plan_items', teamDraftItemId)).toBe(1);
+  });
+});

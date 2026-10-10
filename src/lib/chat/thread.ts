@@ -197,6 +197,11 @@ export interface ThreadMessage {
   sharedPostIds: string[];
   /** Shared brief uuids (row `shared_brief_ids`); empty when there are none. */
   sharedBriefIds: string[];
+  /**
+   * Shared plan uuids (row `shared_plan_ids`, written only by chat_plan_share);
+   * absent or empty when there are none. Never sent live or from the outbox.
+   */
+  sharedPlanIds?: string[];
   /** The quoted message when this is a reply; null otherwise. */
   reply: ReplyQuote | null;
   /**
@@ -494,6 +499,7 @@ export function rowToThreadMessage(
   const localBriefs = local?.sharedBriefIds ?? [];
   const sharedBriefIds =
     localBriefs.length > 0 ? [...localBriefs] : [...(row.shared_brief_ids ?? [])];
+  const sharedPlanIds = [...(row.shared_plan_ids ?? [])];
   const reply =
     local?.reply ??
     (row.reply_to_message_id !== null && row.reply_to_message_id !== ''
@@ -512,6 +518,7 @@ export function rowToThreadMessage(
     attachments,
     sharedPostIds,
     sharedBriefIds,
+    ...(sharedPlanIds.length > 0 ? { sharedPlanIds } : {}),
     reply,
     state: 'sent',
     status: 'sent',
@@ -685,13 +692,23 @@ export function summaryIconOfLine(line: string): AttachmentSummaryIcon | null {
   return null;
 }
 
+/** A merge keeps the non-empty plan ids (the row's, else what the list held). */
+function keptPlanIds(
+  existing: Pick<ThreadMessage, 'sharedPlanIds'>,
+  incoming: Pick<ThreadMessage, 'sharedPlanIds'>,
+): Pick<ThreadMessage, 'sharedPlanIds'> {
+  const kept =
+    (existing.sharedPlanIds ?? []).length > 0 ? existing.sharedPlanIds : incoming.sharedPlanIds;
+  return kept !== undefined && kept.length > 0 ? { sharedPlanIds: kept } : {};
+}
+
 /** Longest body snapshot a reply quote carries. */
 export const REPLY_PREVIEW_LIMIT = 120;
 
 /** The quote line for a message: its body (clipped), else a label for its content. */
 export function replyPreview(
   message: Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds'> &
-    Partial<Pick<ThreadMessage, 'sharedBriefIds'>>,
+    Partial<Pick<ThreadMessage, 'sharedBriefIds' | 'sharedPlanIds'>>,
 ): string {
   const body = message.body.trim();
   // Never cut through an @[uuid] token: the quote resolves it to "@Name" at render.
@@ -700,6 +717,7 @@ export function replyPreview(
   if (summary !== null) return attachmentSummaryText(summary);
   if (message.sharedPostIds.length > 0) return 'Shared post';
   if ((message.sharedBriefIds ?? []).length > 0) return 'Shared brief';
+  if ((message.sharedPlanIds ?? []).length > 0) return 'Shared plan';
   return 'Message';
 }
 
@@ -929,6 +947,7 @@ export function mergeFetched(messages: ThreadMessage[], fetched: ThreadMessage[]
         existing.sharedPostIds.length > 0 ? existing.sharedPostIds : incoming.sharedPostIds,
       sharedBriefIds:
         existing.sharedBriefIds.length > 0 ? existing.sharedBriefIds : incoming.sharedBriefIds,
+      ...keptPlanIds(existing, incoming),
       reply: existing.reply ?? incoming.reply,
       reactions: existing.reactions,
       status: existing.status,

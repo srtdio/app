@@ -9,7 +9,9 @@ import {
   olderApprovedFooter,
   parsePickerQuery,
   recentApprovedSince,
-  searchExcludeStage,
+  draftsAllowed,
+  pickerReads,
+  searchStageFilter,
   shownOfLabel,
   togglePost,
 } from '@/components/chat/post-picker';
@@ -64,36 +66,89 @@ describe('parsePickerQuery', () => {
 });
 
 describe('buildPickerSections', () => {
-  const rows = { review: ['r'], approved: ['a'], drafts: ['d'] };
+  const rows = { review: ['r'], approved: ['a'], parked: ['p'], rejected: ['x'], drafts: ['d'] };
 
-  it('orders waiting, approved (30 days), drafts for an agency-side viewer', () => {
-    const sections = buildPickerSections({ role: agency, ...rows });
-    expect(sections.map((s) => s.key)).toEqual(['review', 'approved', 'draft']);
+  it('posts mode: waiting, approved (30 days), parked, rejected; never drafts', () => {
+    const sections = buildPickerSections({ mode: 'posts', role: agency, ...rows });
+    expect(sections.map((s) => s.key)).toEqual(['review', 'approved', 'parked', 'rejected']);
     expect(sections.map((s) => s.label)).toEqual([
       'Waiting on client',
       'Approved in the last 30 days',
-      'Drafts',
+      'Parked',
+      'Rejected',
     ]);
   });
 
-  it('says "Waiting on you" and has no Drafts for the client', () => {
+  it('posts mode says "Waiting on you" for the client and still never lists drafts', () => {
     const client = roles.find((r) => isClient(r)) ?? null;
-    const sections = buildPickerSections({ role: client, ...rows });
-    expect(sections.map((s) => s.key)).toEqual(['review', 'approved']);
+    const sections = buildPickerSections({ mode: 'posts', role: client, ...rows });
+    expect(sections.map((s) => s.key)).toEqual(['review', 'approved', 'parked', 'rejected']);
     expect(sections[0]?.label).toBe('Waiting on you');
   });
 
+  it('drafts mode: one Drafts section, nothing else', () => {
+    const sections = buildPickerSections({ mode: 'drafts', role: agency, ...rows });
+    expect(sections.map((s) => [s.key, s.label])).toEqual([['draft', 'Drafts']]);
+    expect(buildPickerSections({ mode: 'drafts', role: agency, ...rows, drafts: null })).toEqual(
+      [],
+    );
+  });
+
+  it('inline: waiting, approved, then Drafts only when drafts were read', () => {
+    expect(
+      buildPickerSections({ mode: 'inline', role: agency, ...rows }).map((s) => s.key),
+    ).toEqual(['review', 'approved', 'draft']);
+    expect(
+      buildPickerSections({ mode: 'inline', role: agency, ...rows, drafts: null }).map(
+        (s) => s.key,
+      ),
+    ).toEqual(['review', 'approved']);
+  });
+
   it('drops empty sections', () => {
-    const sections = buildPickerSections({ role: agency, review: [], approved: ['a'], drafts: [] });
-    expect(sections.map((s) => s.key)).toEqual(['approved']);
+    const sections = buildPickerSections({
+      mode: 'posts',
+      role: agency,
+      review: [],
+      approved: ['a'],
+      parked: [],
+      rejected: ['x'],
+      drafts: null,
+    });
+    expect(sections.map((s) => s.key)).toEqual(['approved', 'rejected']);
   });
 });
 
-describe('search stage rule', () => {
-  it('excludes drafts only for a non-agency viewer or an unknown role', () => {
-    expect(searchExcludeStage(agency)).toBeUndefined();
-    expect(searchExcludeStage(nonAgency)).toBe('draft');
-    expect(searchExcludeStage(null)).toBe('draft');
+describe('pickerReads', () => {
+  it('brief mode reads briefs and never a post; post modes never read briefs', () => {
+    expect(pickerReads('briefs')).toEqual({ posts: false, briefs: true });
+    for (const mode of ['posts', 'drafts', 'inline'] as const) {
+      expect(pickerReads(mode)).toEqual({ posts: true, briefs: false });
+    }
+  });
+});
+
+describe('draft gate and search stage rule', () => {
+  it('drafts are allowed only for an agency-side viewer in a chat known to have no client', () => {
+    expect(draftsAllowed(agency, false)).toBe(true);
+    expect(draftsAllowed(agency, true)).toBe(false);
+    expect(draftsAllowed(agency, null)).toBe(false);
+    expect(draftsAllowed(nonAgency, false)).toBe(false);
+    expect(draftsAllowed(null, false)).toBe(false);
+  });
+
+  it('posts mode excludes drafts for everyone, agency included', () => {
+    expect(searchStageFilter('posts', true)).toEqual({ excludeStage: 'draft' });
+    expect(searchStageFilter('posts', false)).toEqual({ excludeStage: 'draft' });
+  });
+
+  it('drafts mode searches drafts only', () => {
+    expect(searchStageFilter('drafts', true)).toEqual({ stage: 'draft' });
+  });
+
+  it('inline excludes drafts unless they are allowed', () => {
+    expect(searchStageFilter('inline', false)).toEqual({ excludeStage: 'draft' });
+    expect(searchStageFilter('inline', true)).toEqual({});
   });
 });
 

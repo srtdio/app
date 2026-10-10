@@ -13,6 +13,8 @@ import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { MentionInput } from '@/components/comments/MentionInput';
+import type { MentionInputHandle } from '@/components/comments/MentionInput';
+import { CommentEmojiButton } from '@/components/comments/CommentEmojiButton';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 import { IconFile, IconX } from '@/components/ui/icons';
 import { IconPaperclip } from '@/components/chat/AttachmentIcons';
@@ -91,6 +93,7 @@ export function CommentComposer({
   const [error, setError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<MentionInputHandle>(null);
 
   const trimmed = body.trim();
   const tooLong = body.length > MAX_BODY;
@@ -164,6 +167,7 @@ export function CommentComposer({
     <div className="flex flex-col gap-2">
       <MentionInput
         key={composerKey}
+        ref={editorRef}
         members={members}
         placeholder={placeholder}
         autoFocus={autoFocus}
@@ -195,6 +199,11 @@ export function CommentComposer({
             <IconPaperclip size={20} />
           </IconButton>
         ) : null}
+
+        <CommentEmojiButton
+          disabled={submitting}
+          onPick={(char) => editorRef.current?.insertText(char)}
+        />
 
         <Button
           size="lg"

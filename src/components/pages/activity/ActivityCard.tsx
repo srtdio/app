@@ -6,11 +6,12 @@ import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
-import { IconClock } from '@/components/ui/icons';
+import { IconClock, IconPlan } from '@/components/ui/icons';
 import { useWorkspace } from '@/lib/workspace-context';
 import {
   ACTOR_ROW_EVENTS,
   MENTION_EVENT_TYPE,
+  PLAN_ITEM_ENTITY,
   UNKNOWN_ACTOR,
   activityLine,
   cardBodyLine,
@@ -162,6 +163,10 @@ function actorLine(item: ActivityItem, who: string | null): string {
       return who !== null ? `${who} reopened a point` : 'Point reopened';
     case 'post_ready':
       return 'Ready for review';
+    case 'plan_comment':
+      return who !== null ? `${who} commented` : 'New comment';
+    case 'plan_review':
+      return who ?? UNKNOWN_ACTOR;
     default:
       return who !== null ? who : activityLine(item);
   }
@@ -211,7 +216,8 @@ export function ActivityCard({
 
   const unread = lead.readAt === null;
   const snoozed = isSnoozed(lead, nowMs);
-  const hasEntity = lead.entityType === 'post' || lead.entityType === 'brief';
+  const planItem = lead.entityType === PLAN_ITEM_ENTITY;
+  const hasEntity = lead.entityType === 'post' || lead.entityType === 'brief' || planItem;
   // An assets_deleted card has no entity: a short title, and the who-did-what
   // line in the body so it is never cut off.
   const assetsDeleted = lead.eventType === 'assets_deleted';
@@ -300,14 +306,24 @@ export function ActivityCard({
           </div>
 
           <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg">
-            <Thumbnail
-              assetVersionId={lead.thumbnailAssetVersionId ?? null}
-              cache={cache}
-              presignEnabled={presignEnabled}
-              aspect="square"
-              fallback={leadFallback(lead)}
-              alt={title}
-            />
+            {planItem ? (
+              <div
+                data-activity-plan-icon=""
+                aria-hidden="true"
+                className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
+              >
+                <IconPlan size={28} />
+              </div>
+            ) : (
+              <Thumbnail
+                assetVersionId={lead.thumbnailAssetVersionId ?? null}
+                cache={cache}
+                presignEnabled={presignEnabled}
+                aspect="square"
+                fallback={leadFallback(lead)}
+                alt={title}
+              />
+            )}
           </div>
         </div>
 

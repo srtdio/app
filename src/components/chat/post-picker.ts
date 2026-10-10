@@ -54,14 +54,42 @@ export function parsePickerQuery(raw: string, workspaceKey: string | null): Pick
   return { text, number: toPostNumber(rest) };
 }
 
-/** Drafts are hidden from a non-agency viewer's search (same rule as the old Drafts chip). */
-export function searchExcludeStage(role: string | null): Stage | undefined {
-  return isAgencySide(role) ? undefined : 'draft';
+/**
+ * What the share picker lists. 'posts': the Post tile (review, approved, parked,
+ * rejected; never a draft). 'drafts': the Draft tile (drafts only). 'briefs':
+ * the Brief tile (briefs only, no post read). 'inline': the composer's hash
+ * picker (review, approved, and drafts only where drafts are allowed).
+ */
+export type PickerMode = 'posts' | 'drafts' | 'briefs' | 'inline';
+
+/**
+ * Which kinds a picker mode reads: brief mode reads briefs and never a post;
+ * every other mode reads posts and never a brief. Pure.
+ */
+export function pickerReads(mode: PickerMode): { posts: boolean; briefs: boolean } {
+  return mode === 'briefs' ? { posts: false, briefs: true } : { posts: true, briefs: false };
 }
 
-/** Whether the viewer gets the Drafts section. */
-export function showsDrafts(role: string | null): boolean {
-  return isAgencySide(role);
+/**
+ * Whether drafts may be read at all: an agency-side viewer in a chat with no
+ * client, both known. Unknown (null) is no. Pure.
+ */
+export function draftsAllowed(role: string | null, channelHasClient: boolean | null): boolean {
+  return isAgencySide(role) && channelHasClient === false;
+}
+
+/**
+ * The stage filter a search page carries: drafts mode searches drafts only;
+ * posts mode never matches a draft (for any viewer); the inline picker leaves
+ * drafts out unless they are allowed. Pure.
+ */
+export function searchStageFilter(
+  mode: Exclude<PickerMode, 'briefs'>,
+  allowDrafts: boolean,
+): { stage: Stage } | { excludeStage: Stage } | Record<string, never> {
+  if (mode === 'drafts') return { stage: 'draft' };
+  if (mode === 'inline' && allowDrafts) return {};
+  return { excludeStage: 'draft' };
 }
 
 /** The review section's label: the client is who review waits on. */
@@ -69,7 +97,7 @@ export function waitingLabel(role: string | null): string {
   return isClient(role) ? 'Waiting on you' : 'Waiting on client';
 }
 
-export type PickerSectionKey = 'review' | 'approved' | 'draft';
+export type PickerSectionKey = 'review' | 'approved' | 'parked' | 'rejected' | 'draft';
 
 export interface PickerSection<Row> {
   key: PickerSectionKey;
@@ -78,15 +106,25 @@ export interface PickerSection<Row> {
 }
 
 /**
- * The default view's sections, in display order: waiting (review), approved in
- * the last 30 days, then drafts (agency side only). Empty sections are dropped.
+ * The default view's sections, in display order, empty ones dropped. Posts
+ * mode: waiting (review), approved in the last 30 days, parked, rejected; never
+ * drafts. Drafts mode: Drafts alone. Inline: waiting, approved, then Drafts
+ * when they were read (null means not allowed, so no section).
  */
 export function buildPickerSections<Row>(input: {
+  mode: Exclude<PickerMode, 'briefs'>;
   role: string | null;
   review: Row[];
   approved: Row[];
+  parked?: Row[];
+  rejected?: Row[];
   drafts: Row[] | null;
 }): Array<PickerSection<Row>> {
+  if (input.mode === 'drafts') {
+    return input.drafts !== null && input.drafts.length > 0
+      ? [{ key: 'draft', label: 'Drafts', rows: input.drafts }]
+      : [];
+  }
   const sections: Array<PickerSection<Row>> = [
     { key: 'review', label: waitingLabel(input.role), rows: input.review },
     {
@@ -95,7 +133,12 @@ export function buildPickerSections<Row>(input: {
       rows: input.approved,
     },
   ];
-  if (showsDrafts(input.role) && input.drafts !== null) {
+  if (input.mode === 'posts') {
+    sections.push(
+      { key: 'parked', label: 'Parked', rows: input.parked ?? [] },
+      { key: 'rejected', label: 'Rejected', rows: input.rejected ?? [] },
+    );
+  } else if (input.drafts !== null) {
     sections.push({ key: 'draft', label: 'Drafts', rows: input.drafts });
   }
   return sections.filter((section) => section.rows.length > 0);

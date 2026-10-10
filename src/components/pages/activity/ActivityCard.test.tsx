@@ -455,4 +455,58 @@ describe('ActivityCard actor rows', () => {
     expect(many).toContain('Someone deleted 3 assets');
     expect(many).not.toContain('on behalf of client');
   });
+
+  it('a plan_comment card: item title as the header, the comment as the body, the plan icon tile', () => {
+    const html = renderCard([
+      item({
+        id: 'pc',
+        eventType: 'plan_comment',
+        entityType: 'plan_item',
+        entityId: 'i1',
+        title: 'Diwali reel',
+        actorName: 'Ana',
+        body: 'Love the hook',
+        planId: 'plan1',
+      }),
+    ]);
+    expect(count(html, 'Diwali reel')).toBe(1);
+    expect(html).toContain('Ana commented');
+    expect(html).toContain('Love the hook');
+    expect(html).toContain('data-activity-plan-icon');
+    // The neutral rail: approvals are not accented, and neither are plan events.
+    expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('a plan_review card reads who did what, side-aware, with no hardcoded names', () => {
+    const client = renderCard([
+      item({
+        id: 'pr',
+        eventType: 'plan_review',
+        entityType: 'plan_item',
+        entityId: 'i1',
+        title: 'Diwali reel',
+        actorName: 'Cy',
+        reviewSide: 'client',
+        reviewStatus: 'approved',
+      }),
+    ]);
+    expect(client).toContain('Cy approved a plan item');
+    expect(client).not.toContain('team review');
+    const team = renderCard([
+      item({
+        id: 'pr',
+        eventType: 'plan_review',
+        entityType: 'plan_item',
+        entityId: 'i1',
+        title: null,
+        actorName: null,
+        reviewSide: 'team',
+        reviewStatus: 'changes',
+      }),
+    ]);
+    expect(team).toContain('Changes asked on a plan item (team review)');
+    expect(team).toContain('Someone');
+    expect(team).toContain('Plan item');
+  });
 });

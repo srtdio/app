@@ -50,6 +50,7 @@ function row(id: string, channelId: string, over: Partial<DispatchedRow> = {}): 
     reply_to_message_id: null,
     sender_user_id: SENDER,
     shared_brief_ids: null,
+    shared_plan_ids: null,
     shared_post_ids: null,
     thread_root_message_id: null,
     workspace_id: WORKSPACE,

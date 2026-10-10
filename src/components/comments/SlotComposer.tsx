@@ -19,6 +19,7 @@ import { IconPaperclip } from '@/components/chat/AttachmentIcons';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
 import { PendingChip, doneVersionIds } from '@/components/comments/CommentComposer';
+import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
 import type { Pending } from '@/components/comments/CommentComposer';
 
 /** One point exactly as comment_batch_create expects it inside p_points. */
@@ -122,6 +123,8 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
   const fileInputRef = useRef<HTMLInputElement>(null);
   // The slot whose paperclip opened the shared hidden file input.
   const attachSlotId = useRef<string | null>(null);
+  // Each slot's textarea, so its emoji button inserts at that slot's caret.
+  const textareas = useRef(new Map<string, HTMLTextAreaElement>());
 
   useEffect(() => {
     const missing = slots.filter((slot) => !entered.has(slot.id));
@@ -265,9 +268,24 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                   placeholder={index === 0 ? 'Add a point' : 'Add another point'}
                   value={slot.body}
                   disabled={submitting}
+                  ref={(el) => {
+                    if (el !== null) textareas.current.set(slot.id, el);
+                    else textareas.current.delete(slot.id);
+                  }}
                   onChange={(event) => updateBody(slot.id, event.target.value)}
                   className="min-w-0 flex-1"
                   style={{ minHeight: '44px' }}
+                />
+                <CommentEmojiButton
+                  disabled={submitting}
+                  onPick={(char) =>
+                    insertIntoTextarea(
+                      () => textareas.current.get(slot.id) ?? null,
+                      slot.body,
+                      char,
+                      (next) => updateBody(slot.id, next),
+                    )
+                  }
                 />
                 {attachEnabled ? (
                   <IconButton

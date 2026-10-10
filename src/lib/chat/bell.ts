@@ -108,6 +108,8 @@ export interface BellMessage {
   hasAttachments: boolean;
   hasPosts: boolean;
   hasBriefs: boolean;
+  /** The message shares a plan (chat_plan_share); absent reads as none. */
+  hasPlans?: boolean;
 }
 
 /** Everything the bell renders. */
@@ -197,6 +199,7 @@ export function messagePreview(message: BellMessage | undefined, nameOf: NameOf)
   if (message.hasAttachments) return 'Attachment';
   if (message.hasBriefs && !message.hasPosts) return 'Shared brief';
   if (message.hasPosts) return 'Shared post';
+  if (message.hasPlans === true) return 'Plan';
   return 'Message';
 }
 
@@ -423,7 +426,7 @@ export async function readBellMessages(
       client
         .from('chat_messages')
         .select(
-          'id, channel_id, sender_user_id, body, attachment_asset_ids, shared_post_ids, shared_brief_ids',
+          'id, channel_id, sender_user_id, body, attachment_asset_ids, shared_post_ids, shared_brief_ids, shared_plan_ids',
         )
         .in('id', ids)
         .is('deleted_at', null),
@@ -440,6 +443,7 @@ export async function readBellMessages(
         hasAttachments: (r.attachment_asset_ids ?? []).length > 0,
         hasPosts: (r.shared_post_ids ?? []).length > 0,
         hasBriefs: (r.shared_brief_ids ?? []).length > 0,
+        hasPlans: (r.shared_plan_ids ?? []).length > 0,
       });
     }
   }

@@ -361,6 +361,9 @@ export const HISTORY_STEP_KEYS = {
   newChat: 'chatNewChat',
   bell: 'chatBell',
   bellScheduled: 'chatBellScheduled',
+  planCompose: 'chatPlanCompose',
+  plan: 'chatPlan',
+  planItem: 'chatPlanItem',
 } as const;
 
 // Every layer key is known from load, so an entry a layer left before a reload

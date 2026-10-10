@@ -79,6 +79,7 @@ function row(id: string, created: string): ChatMessageRow {
     attachment_asset_ids: null,
     shared_post_ids: null,
     shared_brief_ids: null,
+    shared_plan_ids: null,
     reply_to_message_id: null,
     thread_root_message_id: null,
     forwarded_from_message_id: null,
@@ -493,5 +494,19 @@ describe('mark reads and live signal', () => {
     expect(onMark).toHaveBeenCalledWith('m7');
     teardown();
     expect(connection.removeEventHandler).toHaveBeenCalledWith(MARKS_EVENT_HANDLER_ID);
+  });
+});
+
+describe('plan card rows', () => {
+  it('a bodyless plan message reads its card title, else "Shared plan"', () => {
+    const plan = {
+      body: '',
+      attachments: [],
+      sharedPostIds: [],
+      sharedBriefIds: [],
+      sharedPlanIds: ['plan1'],
+    };
+    expect(markRowText(plan, 'Week of 12 Oct')).toBe('Week of 12 Oct');
+    expect(markRowText(plan, undefined)).toBe('Shared plan');
   });
 });

@@ -2362,6 +2362,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2381,6 +2382,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2400,6 +2402,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2437,6 +2440,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2456,6 +2460,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2475,6 +2480,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2497,6 +2503,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2516,6 +2523,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2535,6 +2543,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2557,6 +2566,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2576,6 +2586,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2595,6 +2606,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2617,6 +2629,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2636,6 +2649,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2655,6 +2669,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2677,6 +2692,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2696,6 +2712,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2715,6 +2732,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2737,6 +2755,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2756,6 +2775,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2775,6 +2795,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2797,6 +2818,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2816,6 +2838,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2835,6 +2858,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2857,6 +2881,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2876,6 +2901,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2895,6 +2921,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2917,6 +2944,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2936,6 +2964,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -2955,6 +2984,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -2977,6 +3007,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -2996,6 +3027,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3015,6 +3047,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3037,6 +3070,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3056,6 +3090,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3075,6 +3110,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3097,6 +3133,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3116,6 +3153,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3135,6 +3173,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3157,6 +3196,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3176,6 +3216,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3195,6 +3236,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3217,6 +3259,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3236,6 +3279,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3255,6 +3299,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3277,6 +3322,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3296,6 +3342,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3315,6 +3362,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3337,6 +3385,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3356,6 +3405,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3375,6 +3425,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3397,6 +3448,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3416,6 +3468,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3435,6 +3488,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3457,6 +3511,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3476,6 +3531,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3495,6 +3551,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3517,6 +3574,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3536,6 +3594,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3555,6 +3614,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3577,6 +3637,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3596,6 +3657,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3615,6 +3677,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3637,6 +3700,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3656,6 +3720,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3675,6 +3740,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3697,6 +3763,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3716,6 +3783,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3735,6 +3803,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3757,6 +3826,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3776,6 +3846,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3795,6 +3866,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3817,6 +3889,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3836,6 +3909,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3855,6 +3929,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3877,6 +3952,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3896,6 +3972,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3915,6 +3992,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3937,6 +4015,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -3956,6 +4035,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -3975,6 +4055,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -3997,6 +4078,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -4016,6 +4098,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -4035,6 +4118,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -4057,6 +4141,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -4076,6 +4161,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -4095,6 +4181,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -4117,6 +4204,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -4136,6 +4224,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -4155,6 +4244,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -4177,6 +4267,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -4196,6 +4287,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -4215,6 +4307,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -4237,6 +4330,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -4256,6 +4350,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -4275,6 +4370,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -4297,6 +4393,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -4316,6 +4413,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -4335,6 +4433,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -4357,6 +4456,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -4376,6 +4476,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id: string
@@ -4395,6 +4496,7 @@ export type Database = {
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
+          shared_plan_ids?: string[] | null
           shared_post_ids?: string[] | null
           thread_root_message_id?: string | null
           workspace_id?: string
@@ -7241,6 +7343,254 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_item_comments: {
+        Row: {
+          author_user_id: string | null
+          body: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          item_id: string
+          visibility: string
+          workspace_id: string
+        }
+        Insert: {
+          author_user_id?: string | null
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          item_id: string
+          visibility: string
+          workspace_id: string
+        }
+        Update: {
+          author_user_id?: string | null
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          item_id?: string
+          visibility?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_item_comments_author_user_id_fkey"
+            columns: ["author_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_comments_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_comments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_item_reviews: {
+        Row: {
+          item_id: string
+          reviewed_at: string
+          reviewed_by: string | null
+          side: string
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          item_id: string
+          reviewed_at?: string
+          reviewed_by?: string | null
+          side: string
+          status: string
+          workspace_id: string
+        }
+        Update: {
+          item_id?: string
+          reviewed_at?: string
+          reviewed_by?: string | null
+          side?: string
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_item_reviews_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_reviews_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_reviews_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          kind: string
+          plan_id: string
+          position: number
+          post_id: string | null
+          title: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          kind: string
+          plan_id: string
+          position?: number
+          post_id?: string | null
+          title?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          kind?: string
+          plan_id?: string
+          position?: number
+          post_id?: string | null
+          title?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          audience: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          ends_on: string
+          id: string
+          shared_with_client_at: string | null
+          shared_with_client_by: string | null
+          starts_on: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          audience: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          ends_on: string
+          id?: string
+          shared_with_client_at?: string | null
+          shared_with_client_by?: string | null
+          starts_on: string
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          audience?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          ends_on?: string
+          id?: string
+          shared_with_client_at?: string | null
+          shared_with_client_by?: string | null
+          starts_on?: string
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plans_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plans_shared_with_client_by_fkey"
+            columns: ["shared_with_client_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plans_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_operators: {
         Row: {
           granted_at: string
@@ -8025,6 +8375,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _plan_attach_versions: {
+        Args: {
+          p_item_id: string
+          p_version_ids: string[]
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
+      _plan_check_versions: {
+        Args: { p_version_ids: string[]; p_workspace_id: string }
+        Returns: undefined
+      }
+      _plan_item_notify: {
+        Args: {
+          p_event_type: string
+          p_item_id: string
+          p_payload: Json
+          p_team_only: boolean
+        }
+        Returns: undefined
+      }
       _post_snapshot: { Args: { p_post_id: string }; Returns: Json }
       annotation_create: {
         Args: {
@@ -8150,6 +8521,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -8227,6 +8599,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -8267,6 +8640,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -8312,6 +8686,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -8321,6 +8696,41 @@ export type Database = {
           to: "chat_messages"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      chat_plan_share: {
+        Args: {
+          p_body?: string
+          p_channel_id: string
+          p_id: string
+          p_plan_id: string
+          p_trace_id: string
+        }
+        Returns: {
+          agora_event_id: string | null
+          attachment_asset_ids: string[] | null
+          attachment_meta: Json | null
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          forwarded_from_message_id: string | null
+          id: string
+          mentions: Json | null
+          reply_to_message_id: string | null
+          sender_user_id: string | null
+          shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
+          shared_post_ids: string[] | null
+          thread_root_message_id: string | null
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chat_messages"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       chat_reaction_add: {
@@ -8385,6 +8795,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -8422,6 +8833,7 @@ export type Database = {
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
+          shared_plan_ids: string[] | null
           shared_post_ids: string[] | null
           thread_root_message_id: string | null
           workspace_id: string
@@ -8639,6 +9051,10 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: boolean
       }
+      is_agency_side_member: {
+        Args: { p_workspace_id: string }
+        Returns: boolean
+      }
       is_group_member: { Args: { p_group_id: string }; Returns: boolean }
       member_accept: {
         Args: { p_invite_id: string; p_trace_id: string }
@@ -8660,6 +9076,85 @@ export type Database = {
       notes_channel_ensure: {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: string
+      }
+      plan_concept_add: {
+        Args: {
+          p_attachment_version_ids: string[]
+          p_description: string
+          p_plan_id: string
+          p_title: string
+          p_trace_id: string
+        }
+        Returns: string
+      }
+      plan_concept_edit: {
+        Args: {
+          p_attachment_version_ids: string[]
+          p_description: string
+          p_item_id: string
+          p_title: string
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
+      plan_create: {
+        Args: {
+          p_audience: string
+          p_ends_on: string
+          p_starts_on: string
+          p_title: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      plan_delete: {
+        Args: { p_plan_id: string; p_trace_id: string }
+        Returns: undefined
+      }
+      plan_item_comment_create: {
+        Args: {
+          p_body: string
+          p_item_id: string
+          p_trace_id: string
+          p_visibility: string
+        }
+        Returns: string
+      }
+      plan_item_remove: {
+        Args: { p_item_id: string; p_trace_id: string }
+        Returns: undefined
+      }
+      plan_item_review: {
+        Args: {
+          p_item_id: string
+          p_side: string
+          p_status: string
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
+      plan_items_reorder: {
+        Args: { p_item_ids: string[]; p_plan_id: string; p_trace_id: string }
+        Returns: undefined
+      }
+      plan_posts_add: {
+        Args: { p_plan_id: string; p_post_ids: string[]; p_trace_id: string }
+        Returns: number
+      }
+      plan_share_with_client: {
+        Args: { p_plan_id: string; p_trace_id: string }
+        Returns: undefined
+      }
+      plan_update: {
+        Args: {
+          p_ends_on: string
+          p_plan_id: string
+          p_starts_on: string
+          p_title: string
+          p_trace_id: string
+        }
+        Returns: undefined
       }
       post_caption_update: {
         Args: { p_caption: string; p_post_id: string; p_trace_id: string }

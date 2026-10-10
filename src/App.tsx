@@ -10,6 +10,7 @@ import { AssetsPage } from '@/components/pages/AssetsPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
 import { HelpPage } from '@/components/pages/HelpPage';
 import { DeletedPage } from '@/components/pages/DeletedPage';
+import { PlanPage } from '@/components/pages/PlanPage';
 import { SignInPage } from '@/components/auth/SignInPage';
 import { AuthCallbackPage } from '@/components/auth/AuthCallbackPage';
 import { LegalPolicyPage } from '@/components/auth/LegalPolicyPage';
@@ -67,6 +68,7 @@ export default function App() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/help" element={<HelpPage />} />
               <Route path="/deleted" element={<DeletedPage />} />
+              <Route path="/plans/:planId" element={<PlanPage />} />
               <Route path="*" element={<Navigate to="/pipeline" replace />} />
             </Route>
           </Route>

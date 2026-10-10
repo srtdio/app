@@ -151,13 +151,13 @@ test.describe('phone', () => {
     const network = await installHarnessNetwork(page);
     await openChat(page, PEER_NAME);
 
-    // S1: the tray shows Photos, File, Post, Schedule (no Camera).
+    // S1: the tray shows Photos, File, Assets, Brief, Post, Draft, Plan, Schedule (no Camera).
     await trayOrSkip(page);
     const tiles = page.locator('[data-tray-tile]');
-    await expect(tiles).toHaveCount(4);
+    await expect(tiles).toHaveCount(8);
     expect(
       await tiles.evaluateAll((els) => els.map((e) => e.getAttribute('data-tray-tile'))),
-    ).toEqual(['photos', 'file', 'post', 'schedule']);
+    ).toEqual(['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan', 'schedule']);
     await page.waitForTimeout(250);
     await shot(page, 'scheduled-1-tray');
 

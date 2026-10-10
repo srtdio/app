@@ -131,6 +131,10 @@ export function eventLabel(eventType: string, toStage: string | null = null): st
       return 'Points sent';
     case 'post_ready':
       return 'Ready for review';
+    case 'plan_comment':
+      return 'New plan comment';
+    case 'plan_review':
+      return 'Plan item reviewed';
     default:
       return 'New activity';
   }

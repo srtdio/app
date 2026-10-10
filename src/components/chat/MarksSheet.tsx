@@ -36,6 +36,7 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { readPostsByIds } from '@srtdio/posts';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { readBriefsByIds } from '@/lib/chat/briefs';
+import { readPlanTitles } from '@/lib/chat/plans';
 import { formatClockTime, formatShortDate } from '@/lib/chat/time-format';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { WriteResult } from '@/lib/chat/record';
@@ -282,14 +283,18 @@ function messageTime(mark: ChatMark, message: ThreadMessage | undefined): number
   return Number.isNaN(t) ? 0 : t;
 }
 
-/** Titles for shared posts and briefs of body-less marked messages, keyed by message id. */
+/** Titles for shared posts, briefs and plans of body-less marked messages, keyed by message id. */
 function useCardTitles(open: boolean, messages: readonly ThreadMessage[]): Map<string, string> {
   const { workspaceId } = useWorkspace();
   const [titles, setTitles] = useState<Map<string, string>>(new Map());
   const bodyless = useMemo(
     () =>
       messages.filter(
-        (m) => m.body.trim() === '' && (m.sharedPostIds.length > 0 || m.sharedBriefIds.length > 0),
+        (m) =>
+          m.body.trim() === '' &&
+          (m.sharedPostIds.length > 0 ||
+            m.sharedBriefIds.length > 0 ||
+            (m.sharedPlanIds ?? []).length > 0),
       ),
     [messages],
   );
@@ -299,17 +304,22 @@ function useCardTitles(open: boolean, messages: readonly ThreadMessage[]): Map<s
     let cancelled = false;
     const postIds = [...new Set(bodyless.flatMap((m) => m.sharedPostIds))];
     const briefIds = [...new Set(bodyless.flatMap((m) => m.sharedBriefIds))];
+    const planIds = [...new Set(bodyless.flatMap((m) => m.sharedPlanIds ?? []))];
     void Promise.all([
       readPostsByIds(supabase, { workspaceId, ids: postIds }),
       readBriefsByIds(supabase, { workspaceId, ids: briefIds }),
-    ]).then(([posts, briefs]) => {
+      readPlanTitles(supabase, planIds),
+    ]).then(([posts, briefs, plans]) => {
       if (cancelled) return;
       const byId = new Map<string, string>();
       if (posts.ok) for (const p of posts.data) byId.set(p.id, p.title);
       if (briefs.ok) for (const b of briefs.data) byId.set(b.id, b.title);
+      if (plans.ok) for (const p of plans.data) byId.set(p.id, p.title);
       const next = new Map<string, string>();
       for (const m of bodyless) {
-        const first = [...m.sharedPostIds, ...m.sharedBriefIds].find((id) => byId.has(id));
+        const first = [...m.sharedPostIds, ...m.sharedBriefIds, ...(m.sharedPlanIds ?? [])].find(
+          (id) => byId.has(id),
+        );
         if (first !== undefined) next.set(m.id, byId.get(first) ?? '');
       }
       setTitles(next);

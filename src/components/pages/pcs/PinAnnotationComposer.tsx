@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
+import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
 
 // F5 image-pin composer: the sibling of the F4 caption composer, pin-worded. It
 // shows the slide the pin landed on (filename or "Slide N") instead of a caption
@@ -26,6 +27,7 @@ export function PinAnnotationComposer({
   submitting = false,
 }: PinAnnotationComposerProps) {
   const [body, setBody] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Start each pin comment from an empty field so a prior draft never leaks in.
   useEffect(() => {
@@ -49,6 +51,10 @@ export function PinAnnotationComposer({
           >
             Cancel
           </Button>
+          <CommentEmojiButton
+            disabled={submitting}
+            onPick={(char) => insertIntoTextarea(() => textareaRef.current, body, char, setBody)}
+          />
           <Button
             size="lg"
             variant="primary"
@@ -66,6 +72,7 @@ export function PinAnnotationComposer({
           {context}
         </div>
         <Textarea
+          ref={textareaRef}
           value={body}
           onChange={(event) => setBody(event.target.value)}
           placeholder="Add your comment"

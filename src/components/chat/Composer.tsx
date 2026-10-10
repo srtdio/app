@@ -31,6 +31,7 @@ import {
   inSentence,
   SCHEDULE_FAILED_COPY,
   SCHEDULE_UPLOAD_FAILED_COPY,
+  scheduleAttachmentArgs,
   scheduleWithFiles,
   type ScheduleFile,
   type ScheduledRow,
@@ -42,7 +43,11 @@ import {
 } from '@/lib/chat/use-audio-recorder';
 import { readHeader, rememberRecorderMime, voiceFileType } from '@/lib/chat/audio-sniff';
 import { voicePeaks } from '@/lib/chat/voice-peaks';
-import { ComposerTray } from '@/components/chat/ComposerTray';
+import { ComposerTray, draftTileEnabled } from '@/components/chat/ComposerTray';
+import { planTileEnabled } from '@/components/chat/plan-card';
+import { AssetPicker } from '@/components/chat/AssetPicker';
+import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
+import { Thumbnail } from '@/components/media';
 import { ComposerEmoji, showsEmojiButton } from '@/components/chat/ComposerEmoji';
 import { insertAtCaret } from '@/lib/chat/emoji-list';
 import { PostPicker } from '@/components/chat/PostPicker';
@@ -57,13 +62,16 @@ import {
 import { cn } from '@/lib/cn';
 import { editFailureCopy } from '@/lib/chat/record';
 import { briefStatusLabel, toggleBrief, type BriefCardFields } from '@/lib/chat/briefs';
-import { togglePost } from '@/components/chat/post-picker';
+import { togglePost, type PickerMode } from '@/components/chat/post-picker';
+import { libraryAttachments, type LibraryAsset } from '@/lib/chat/asset-picker';
+import { useViewerSide } from '@/lib/chat/viewer-role';
 import { attachmentMenuItems } from '@/lib/chat/attachment-menu';
 import { caretHashQuery, stripHashToken } from '@/lib/chat/post-refs';
 import { fileExtension } from '@/lib/assets';
 import { precheckFile } from '@/lib/asset-upload';
 import {
   canSendAttachmentMessage,
+  classifyAttachment,
   precheckImage,
   toLocalAttachment,
   type AttachmentUploader,
@@ -122,6 +130,17 @@ export interface ComposerProps {
   inputRef?: MutableRefObject<HTMLTextAreaElement | null> | undefined;
   /** Personal notes: no Schedule tile (the hold and the chevron need schedule wiring). */
   noSchedule?: boolean | undefined;
+  /**
+   * Whether the open chat has a client among its other active members; null
+   * or absent while unknown. The Draft tile is live only when this is false
+   * and the viewer is agency side; the hash picker leaves drafts out otherwise.
+   */
+  channelHasClient?: boolean | null | undefined;
+  /**
+   * The tray's Plan tile: opens the New plan screen. The tile is live only for
+   * an agency-side viewer (and when this is set); otherwise faded and disabled.
+   */
+  onOpenPlanCompose?: (() => void) | undefined;
   /**
    * Queues the trimmed text plus any picked files (local attachments that upload
    * in the background) and shared posts and briefs. Synchronous: uploads,
@@ -864,6 +883,50 @@ export function pendingCounts(pending: readonly Pending[]): { photos: number; ot
   return { photos, others: pending.length - photos };
 }
 
+/**
+ * Library picks per chat for the session (they need no File, so they sit beside
+ * the draft store), so leaving a chat and coming back keeps them like picked files.
+ */
+const libraryDrafts = new Map<string, MessageAttachment[]>();
+
+/** Counts of picked photos and other files, library picks included. Pure. */
+export function draftFileCounts(
+  pending: readonly Pending[],
+  library: readonly MessageAttachment[],
+): { photos: number; others: number } {
+  const base = pendingCounts(pending);
+  const photos = library.filter((a) => classifyAttachment(a.mime) === 'image').length;
+  return { photos: base.photos + photos, others: base.others + library.length - photos };
+}
+
+/**
+ * The schedule write's attachment args: the uploaded files' args, then the
+ * library picks' (already uploaded), ids and meta built the same way. Pure.
+ */
+export function withLibraryArgs(
+  uploaded: ReturnType<typeof scheduleAttachmentArgs>,
+  library: readonly MessageAttachment[],
+): ReturnType<typeof scheduleAttachmentArgs> {
+  const lib = scheduleAttachmentArgs(library);
+  return {
+    attachmentAssetIds: [...uploaded.attachmentAssetIds, ...lib.attachmentAssetIds],
+    attachmentMeta: { ...uploaded.attachmentMeta, ...lib.attachmentMeta },
+  };
+}
+
+/** A send draft with the library picks after its picked files. Pure. */
+export function withLibraryAttachments<T extends { attachments: MessageAttachment[] }>(
+  draft: T,
+  library: readonly MessageAttachment[],
+): T {
+  return library.length === 0
+    ? draft
+    : { ...draft, attachments: [...draft.attachments, ...library] };
+}
+
+/** What a tray tile opens: the share picker in a mode, or the library picker. */
+type TrayPicker = Exclude<PickerMode, 'inline'> | 'assets';
+
 /** The scheduled strip's rows before the thread paints: none. */
 const NO_SCHEDULED_ROWS: readonly ScheduledRow[] = [];
 
@@ -967,7 +1030,13 @@ export function Composer(props: ComposerProps): ReactElement {
   const [pending, setPending] = useState<Pending[]>(initial.pendingFiles);
   const [sharedPosts, setSharedPosts] = useState<PostCardFields[]>(initial.sharedPosts);
   const [sharedBriefs, setSharedBriefs] = useState<BriefCardFields[]>(initial.sharedBriefs);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  // Which picker a tray tile opened (the share picker in a mode, or Assets).
+  const [picker, setPicker] = useState<TrayPicker | null>(null);
+  const [sheetMode, setSheetMode] = useState<Exclude<PickerMode, 'inline'>>('posts');
+  // Library picks: already uploaded attachments (version id, no local half).
+  const [library, setLibrary] = useState<MessageAttachment[]>(() =>
+    channelId !== undefined ? (libraryDrafts.get(channelId) ?? []) : [],
+  );
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [resolvingLinks, setResolvingLinks] = useState(false);
   // The caret, read on every change and selection, drives the hash picker.
@@ -994,6 +1063,16 @@ export function Composer(props: ComposerProps): ReactElement {
   const toast = useToast();
   // 17px on every touch device (never under 16, so iOS never zooms), 15px on a laptop.
   const layout = useChatLayout();
+  // The Draft tile and the hash picker's drafts: an agency-side viewer in a
+  // chat with no client, both known; unknown keeps drafts off from frame one.
+  const viewerSide = useViewerSide(workspaceId);
+  const draftEnabled = draftTileEnabled(
+    viewerSide.ready ? viewerSide.side : 'unknown',
+    props.channelHasClient ?? null,
+  );
+  const planEnabled =
+    props.onOpenPlanCompose !== undefined &&
+    planTileEnabled(viewerSide.ready ? viewerSide.side : 'unknown');
 
   const formRef = useRef<HTMLFormElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -1022,6 +1101,13 @@ export function Composer(props: ComposerProps): ReactElement {
     [channelId],
   );
 
+  // Keep this chat's library picks for the session (a chat switch remounts).
+  useEffect(() => {
+    if (channelId === undefined) return;
+    if (library.length === 0) libraryDrafts.delete(channelId);
+    else libraryDrafts.set(channelId, library);
+  }, [channelId, library]);
+
   const canAttach = props.uploadFile !== undefined && !props.disabled && editing === undefined;
   const canSend =
     editing !== undefined
@@ -1029,7 +1115,7 @@ export function Composer(props: ComposerProps): ReactElement {
       : composerCanSend({
           disabled: props.disabled || resolvingLinks || scheduleBusy,
           text,
-          fileCount: pending.length,
+          fileCount: pending.length + library.length,
           sharedPostCount: sharedPosts.length,
           sharedBriefCount: sharedBriefs.length,
         });
@@ -1106,7 +1192,7 @@ export function Composer(props: ComposerProps): ReactElement {
       attachmentMenuItems({
         onPickPhoto: () => photoInputRef.current?.click(),
         onPickFile: () => fileInputRef.current?.click(),
-        onSharePost: () => setPickerOpen(true),
+        onSharePost: () => openPicker('posts'),
       }),
     [],
   );
@@ -1163,6 +1249,24 @@ export function Composer(props: ComposerProps): ReactElement {
       if (target?.previewUrl != null) URL.revokeObjectURL(target.previewUrl);
       return prev.filter((item) => item.id !== id);
     });
+  }
+
+  /** Open a tray picker. The share picker keeps its mode through the exit. */
+  function openPicker(next: TrayPicker): void {
+    if (next !== 'assets') setSheetMode(next);
+    setPicker(next);
+  }
+
+  /** Add confirmed library picks as already uploaded attachment chips. */
+  function addLibrary(picks: LibraryAsset[]): void {
+    if (scheduleBusy) return;
+    setLibrary((prev) => [...prev, ...libraryAttachments(picks, prev)]);
+  }
+
+  function removeLibrary(versionId: string): void {
+    // Locked while a schedule runs.
+    if (scheduleBusy) return;
+    setLibrary((prev) => prev.filter((item) => item.assetId !== versionId));
   }
 
   function toggleSharedPost(post: PostCardFields): void {
@@ -1281,24 +1385,36 @@ export function Composer(props: ComposerProps): ReactElement {
   }
 
   function send(draft: LinkCardDraft): void {
-    const taken = dispatchSend(props.onSend, {
-      text: draft.text,
-      attachments: draftAttachments(pending, props.uploadFile),
-      sharedPostIds: draft.sharedPostIds,
-      reply: props.reply?.quote ?? null,
-      sharedBriefIds: draft.sharedBriefIds,
-    });
+    // Picked files go as local attachments (uploaded by the outbox); library
+    // picks follow, already uploaded, so the outbox never uploads them.
+    const taken = dispatchSend(
+      props.onSend,
+      withLibraryAttachments(
+        {
+          text: draft.text,
+          attachments: draftAttachments(pending, props.uploadFile),
+          sharedPostIds: draft.sharedPostIds,
+          reply: props.reply?.quote ?? null,
+          sharedBriefIds: draft.sharedBriefIds,
+        },
+        library,
+      ),
+    );
     if (!taken) {
       // Keep the draft (text + chips + shared posts) so it is not lost.
       toast.show({ title: 'Could not send the message. Your draft is kept.' });
       return;
     }
     // The preview URLs now belong to the bubble (revoked when it goes).
-    if (channelId !== undefined) clearDraft(channelId);
+    if (channelId !== undefined) {
+      clearDraft(channelId);
+      libraryDrafts.delete(channelId);
+    }
     setText('');
     setPicks([]);
     setCaret(0);
     setPending([]);
+    setLibrary([]);
     setSharedPosts([]);
     setSharedBriefs([]);
     props.onCancelReply?.();
@@ -1311,7 +1427,7 @@ export function Composer(props: ComposerProps): ReactElement {
       schedulableRef.current
         ? {
             purpose: 'draft',
-            preview: schedulePreview(schedule.chatName, text, pendingCounts(pending)),
+            preview: schedulePreview(schedule.chatName, text, draftFileCounts(pending, library)),
           }
         : { purpose: 'mode', preview: null },
     );
@@ -1339,6 +1455,7 @@ export function Composer(props: ComposerProps): ReactElement {
     scheduleRunRef.current = run;
     setScheduleBusy(true);
     const picked = pending;
+    const pickedLibrary = library;
     const files = scheduleFilesFor(picked, scheduleUploads);
     setScheduleUploads((prev) =>
       files.reduce(
@@ -1368,7 +1485,9 @@ export function Composer(props: ComposerProps): ReactElement {
           setScheduleUploads((prev) =>
             withScheduleUpload(prev, key, { versionId, progress: 1, uploading: false }),
           ),
-        write: async (attachmentArgs) => {
+        write: async (uploadedArgs) => {
+          // The uploaded files' ids and meta, then the library picks' (already up).
+          const attachmentArgs = withLibraryArgs(uploadedArgs, pickedLibrary);
           const origin = currentOrigin();
           const draft =
             workspaceId === null || !hasLinkCards(body, workspaceKey, origin)
@@ -1429,7 +1548,10 @@ export function Composer(props: ComposerProps): ReactElement {
     const outcome = result.result;
     if (outcome === null) return;
     if (outcome.ok) {
-      if (channelId !== undefined) clearDraft(channelId);
+      if (channelId !== undefined) {
+        clearDraft(channelId);
+        libraryDrafts.delete(channelId);
+      }
       // The previews belong to no bubble: the message sends later from storage.
       // After leaving the chat they are left alone: a composer that came back
       // may already show them again from the draft.
@@ -1453,6 +1575,7 @@ export function Composer(props: ComposerProps): ReactElement {
     setPicks([]);
     setCaret(0);
     setPending([]);
+    setLibrary([]);
     setScheduleUploads({});
     setSharedPosts([]);
     setSharedBriefs([]);
@@ -1612,7 +1735,7 @@ export function Composer(props: ComposerProps): ReactElement {
       hasUpload: props.uploadFile !== undefined && editing === undefined,
       disabled: props.disabled,
       text,
-      attachmentCount: pending.length,
+      attachmentCount: pending.length + library.length,
       sharedPostCount: sharedPosts.length + sharedBriefs.length,
       recording: recorder.recording,
       voiceBusy,
@@ -1669,6 +1792,7 @@ export function Composer(props: ComposerProps): ReactElement {
               selectedBriefs={[]}
               onToggleBrief={() => undefined}
               sharedPostIds={props.sharedPostIds}
+              channelHasClient={props.channelHasClient ?? null}
             />
           </div>
         ) : null}
@@ -1705,7 +1829,10 @@ export function Composer(props: ComposerProps): ReactElement {
         ) : null}
 
         {editing === undefined &&
-        (pending.length > 0 || sharedPosts.length > 0 || sharedBriefs.length > 0) ? (
+        (pending.length > 0 ||
+          library.length > 0 ||
+          sharedPosts.length > 0 ||
+          sharedBriefs.length > 0) ? (
           <ul className="flex flex-wrap gap-2">
             {pending.map((item) => (
               <PendingChip
@@ -1721,6 +1848,15 @@ export function Composer(props: ComposerProps): ReactElement {
                 }
                 error={scheduleUploads[item.id]?.failed === true}
                 onRemove={() => removePending(item.id)}
+              />
+            ))}
+            {library.map((item) => (
+              <PendingChip
+                key={item.assetId}
+                thumb={<LibraryThumb attachment={item} />}
+                title={item.name}
+                meta={fileExtension(item.name) || 'File'}
+                onRemove={() => removeLibrary(item.assetId)}
               />
             ))}
             {sharedPosts.map((post) => (
@@ -1796,12 +1932,36 @@ export function Composer(props: ComposerProps): ReactElement {
                 <ComposerTray
                   layout={layout}
                   schedule={props.noSchedule !== true}
+                  draft={draftEnabled}
+                  plan={planEnabled}
                   onPick={(id) => {
                     if (scheduleBusy) return;
-                    if (id === 'photos') photoInputRef.current?.click();
-                    else if (id === 'file') fileInputRef.current?.click();
-                    else if (id === 'schedule') openSchedule();
-                    else setPickerOpen(true);
+                    switch (id) {
+                      case 'photos':
+                        photoInputRef.current?.click();
+                        return;
+                      case 'file':
+                        fileInputRef.current?.click();
+                        return;
+                      case 'assets':
+                        openPicker('assets');
+                        return;
+                      case 'brief':
+                        openPicker('briefs');
+                        return;
+                      case 'post':
+                        openPicker('posts');
+                        return;
+                      case 'draft':
+                        if (draftEnabled) openPicker('drafts');
+                        return;
+                      case 'plan':
+                        if (planEnabled) props.onOpenPlanCompose?.();
+                        return;
+                      case 'schedule':
+                        openSchedule();
+                        return;
+                    }
                   }}
                 />
               ) : null}
@@ -1940,17 +2100,38 @@ export function Composer(props: ComposerProps): ReactElement {
         />
 
         <PostPicker
-          open={pickerOpen}
-          onClose={() => setPickerOpen(false)}
+          open={picker !== null && picker !== 'assets'}
+          onClose={() => setPicker(null)}
+          mode={sheetMode}
           selected={sharedPosts}
           onToggle={toggleSharedPost}
           selectedBriefs={sharedBriefs}
           onToggleBrief={toggleSharedBrief}
           sharedPostIds={props.sharedPostIds}
+          channelHasClient={props.channelHasClient ?? null}
+        />
+        <AssetPicker
+          open={picker === 'assets'}
+          onClose={() => setPicker(null)}
+          onConfirm={addLibrary}
         />
         {scheduleSurface}
       </form>
     </>
+  );
+}
+
+/** A library pick's chip thumb: the image through the shared presign cache, else the file glyph. */
+function LibraryThumb(props: { attachment: MessageAttachment }): ReactElement {
+  const image = classifyAttachment(props.attachment.mime) === 'image';
+  return (
+    <Thumbnail
+      assetVersionId={image ? props.attachment.assetId : null}
+      cache={sharedCardPresignCache()}
+      presignEnabled={PRESIGN_ENABLED}
+      fallback={{ kind: 'glyph' }}
+      alt={props.attachment.name}
+    />
   );
 }
 

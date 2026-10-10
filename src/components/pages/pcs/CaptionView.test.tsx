@@ -145,8 +145,14 @@ describe('caption selection offsets', () => {
 
 describe('caption clamp', () => {
   it('clamps to 3 lines while collapsed and removes the clamp when expanded', () => {
-    expect(captionClampClass(false)).toBe('line-clamp-3');
+    expect(captionClampClass(false)).toContain('line-clamp-3');
     expect(captionClampClass(true)).toBe('');
+  });
+
+  it('never clamps from md up, where comments sit beside the caption', () => {
+    expect(captionClampClass(false)).toContain('md:line-clamp-none');
+    const toggle = captionToggleView({ expanded: false, onToggle: vi.fn() });
+    expect((toggle.props as Record<string, unknown>)['className']).toContain('md:hidden');
   });
 
   it('renders a 44px More/Less toggle that flips the clamp', () => {

@@ -1,27 +1,33 @@
-// The share picker Sheet, opened by the composer's "Share a post or brief" menu
-// item. Two tabs: Posts and Briefs.
+// The share picker Sheet, opened from the composer tray in one of three modes,
+// plus the composer's inline hash picker. No tabs: each mode lists one kind.
 //
-// Posts tab, empty search: sections replace the old stage chips. "Waiting on
-// you" / "Waiting on client" (review), "Approved in the last 30 days", and
-// Drafts (agency side only), each one RLS-scoped read on the (workspace_id,
-// stage, created_at) index, plus one head-only count of older approved posts for
-// the footer. All section reads run together and render once every one has
-// landed, so the first paint is final. Parked and rejected only show in search.
+// Post mode (the Post tile), empty search: "Waiting on you" / "Waiting on
+// client" (review), "Approved in the last 30 days", Parked and Rejected, each
+// one RLS-scoped read on the (workspace_id, stage, created_at) index, plus one
+// head-only count of older approved posts for the footer. Never a draft, for
+// any viewer. All section reads run together and render once every one has
+// landed, so the first paint is final.
 //
-// Posts tab, any search text: one keyset-paged read over the whole workspace
+// Draft mode (the Draft tile): one Drafts section and search over drafts only.
+// It reads only for an agency-side viewer in a chat with no client (both
+// known); otherwise nothing is read and the list is empty. The tray already
+// disables the tile then; this is the second gate.
+//
+// Search (post and draft modes): one keyset-paged read over the workspace
 // (title or caption ILIKE, plus an exact number match for "14" / "KEY-14"),
-// newest first, 50 a page, with count:'exact' on the first page for the header.
-// Input is debounced 200 ms and a response whose text no longer matches the box
-// is dropped. Selection is controlled by the composer.
+// newest first, 50 a page, with count:'exact' on the first page for the
+// header. Post mode leaves drafts out; draft mode keeps drafts only. Input is
+// debounced 200 ms and a response whose text no longer matches the box is
+// dropped. Selection is controlled by the composer.
 //
-// The Briefs tab reads the workspace's briefs (title, objective, Open/Closed,
-// target and raised dates, live post count) through listBriefsForPicker,
-// filtered by status chips, and toggles brief chips the same way.
+// Brief mode (the Brief tile): the workspace's briefs (title, objective,
+// Open/Closed, target and raised dates, live post count) through
+// listBriefsForPicker, filtered by status chips; no post is ever read.
 //
-// Inline mode (the composer's hash picker): no sheet, no tabs and no search box;
-// the posts list alone, in a panel the composer anchors, with the search text
-// controlled by the composer (the text after the hash). Sections and search
-// behave exactly as in the sheet.
+// Inline mode (the composer's hash picker): no sheet and no search box; the
+// posts list alone, in a panel the composer anchors, with the search text
+// controlled by the composer (the text after the hash). Waiting, approved and,
+// only where drafts are allowed, Drafts; search leaves drafts out otherwise.
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -73,9 +79,11 @@ import {
   olderApprovedFooter,
   parsePickerQuery,
   recentApprovedSince,
-  searchExcludeStage,
-  showsDrafts,
+  draftsAllowed,
+  pickerReads,
+  searchStageFilter,
   shownOfLabel,
+  type PickerMode,
   type PickerQuery,
   type PickerSection,
 } from '@/components/chat/post-picker';
@@ -96,13 +104,26 @@ interface PostPickerProps {
   onToggleBrief: (brief: BriefCardFields) => void;
   /** Post ids already shared in this chat; those rows say "in this chat". */
   sharedPostIds?: ReadonlySet<string> | undefined;
-  /** Render the posts list alone (no sheet, tabs or search box), for the composer popover. */
+  /** Render the posts list alone (no sheet or search box), for the composer popover. */
   inline?: boolean;
   /** Controlled search text; the search box is not rendered when set inline. */
   query?: string | undefined;
+  /** The sheet's mode (the tray tile that opened it). Ignored inline. Absent is 'posts'. */
+  mode?: Exclude<PickerMode, 'inline'>;
+  /**
+   * Whether the open chat has a client among its other members; null or absent
+   * while unknown. Drafts are read only when this is false and the viewer is on
+   * the agency side.
+   */
+  channelHasClient?: boolean | null | undefined;
 }
 
-type ShareTab = 'posts' | 'briefs';
+/** The sheet title per mode. */
+export const PICKER_TITLES: Record<Exclude<PickerMode, 'inline'>, string> = {
+  posts: 'Share a post',
+  drafts: 'Share a draft',
+  briefs: 'Share a brief',
+};
 
 /** The default view's data: the sections plus the older-approved count. */
 export interface PickerSectionsData {
@@ -125,46 +146,86 @@ export function briefsLoadError(
   return BRIEFS_LOAD_FAILED;
 }
 
+/** The modes that read posts. */
+export type PostListMode = Exclude<PickerMode, 'briefs'>;
+
+const EMPTY_SECTIONS: PickerSectionsData = { sections: [], olderApprovedCount: 0 };
+
 /**
- * Load the default view: review, recent approved and (agency side) drafts, one
- * read each, plus one head-only count of older approved posts, all in parallel.
- * Never one read per row. The first failure surfaces as the error.
+ * Load the default view for a mode, one read per section, all in parallel,
+ * never one read per row. Posts: review, recent approved, parked, rejected plus
+ * one head-only count of older approved posts. Inline: review, recent approved,
+ * drafts only when `allowDrafts`, plus the count. Drafts: one drafts read when
+ * `allowDrafts`, else no read at all. The first failure surfaces as the error.
  */
 export async function loadPickerSections(
   client: Client,
-  params: { workspaceId: string; role: string | null; now: Date },
+  params: {
+    workspaceId: string;
+    role: string | null;
+    now: Date;
+    mode: PostListMode;
+    allowDrafts: boolean;
+  },
 ): Promise<{ ok: true; data: PickerSectionsData } | { ok: false; message: string }> {
-  const { workspaceId, role } = params;
+  const { workspaceId, role, mode, allowDrafts } = params;
+  const page = (stage: 'review' | 'parked' | 'rejected' | 'draft') =>
+    listPostsForPickerPage(client, { workspaceId, stage, limit: PICKER_PAGE_SIZE });
+  if (mode === 'drafts') {
+    if (!allowDrafts) return { ok: true, data: EMPTY_SECTIONS };
+    const drafts = await page('draft');
+    if (!drafts.ok) {
+      logger.warn('post picker: drafts load failed', { error: drafts.error.message });
+      return { ok: false, message: POSTS_LOAD_FAILED };
+    }
+    return {
+      ok: true,
+      data: {
+        sections: buildPickerSections({
+          mode,
+          role,
+          review: [],
+          approved: [],
+          drafts: drafts.data.rows,
+        }),
+        olderApprovedCount: 0,
+      },
+    };
+  }
   const since = recentApprovedSince(params.now);
-  const [review, approved, drafts, older] = await Promise.all([
-    listPostsForPickerPage(client, { workspaceId, stage: 'review', limit: PICKER_PAGE_SIZE }),
+  const posts = mode === 'posts';
+  const [review, approved, parked, rejected, drafts, older] = await Promise.all([
+    page('review'),
     listPostsForPickerPage(client, {
       workspaceId,
       stage: 'approved',
       enteredSince: since,
       limit: PICKER_PAGE_SIZE,
     }),
-    showsDrafts(role)
-      ? listPostsForPickerPage(client, { workspaceId, stage: 'draft', limit: PICKER_PAGE_SIZE })
-      : Promise.resolve(null),
+    posts ? page('parked') : Promise.resolve(null),
+    posts ? page('rejected') : Promise.resolve(null),
+    !posts && allowDrafts ? page('draft') : Promise.resolve(null),
     countPostsForPicker(client, { workspaceId, stage: 'approved', enteredBefore: since }),
   ]);
-  for (const result of [review, approved, drafts, older]) {
+  for (const result of [review, approved, parked, rejected, drafts, older]) {
     if (result !== null && !result.ok) {
       logger.warn('post picker: sections load failed', { error: result.error.message });
       return { ok: false, message: POSTS_LOAD_FAILED };
     }
   }
-  if (!review.ok || !approved.ok || !older.ok || (drafts !== null && !drafts.ok)) {
-    return { ok: false, message: POSTS_LOAD_FAILED };
-  }
+  if (!review.ok || !approved.ok || !older.ok) return { ok: false, message: POSTS_LOAD_FAILED };
+  const rows = (result: typeof parked): PostPickerPageRow[] =>
+    result !== null && result.ok ? result.data.rows : [];
   return {
     ok: true,
     data: {
       sections: buildPickerSections({
+        mode,
         role,
         review: review.data.rows,
         approved: approved.data.rows,
+        parked: rows(parked),
+        rejected: rows(rejected),
         drafts: drafts !== null && drafts.ok ? drafts.data.rows : null,
       }),
       olderApprovedCount: older.data,
@@ -174,26 +235,30 @@ export async function loadPickerSections(
 
 /**
  * One search page over the whole workspace: title/caption ILIKE plus an exact
- * number match, drafts excluded for a non-agency viewer. The first page (no
+ * number match, with the mode's stage filter (searchStageFilter). Drafts mode
+ * without drafts allowed reads nothing and finds nothing. The first page (no
  * cursor) carries count:'exact' for the header; later pages do not.
  */
 export async function loadSearchPage(
   client: Client,
   params: {
     workspaceId: string;
-    role: string | null;
+    mode: PostListMode;
+    allowDrafts: boolean;
     query: PickerQuery;
     cursor: PostPickerCursor | null;
   },
 ): Promise<
   { ok: true; rows: PostPickerPageRow[]; count: number | null } | { ok: false; message: string }
 > {
-  const exclude = searchExcludeStage(params.role);
+  if (params.mode === 'drafts' && !params.allowDrafts) {
+    return { ok: true, rows: [], count: params.cursor === null ? 0 : null };
+  }
   const result = await listPostsForPickerPage(client, {
     workspaceId: params.workspaceId,
     text: params.query.text,
     ...(params.query.number !== null ? { number: params.query.number } : {}),
-    ...(exclude !== undefined ? { excludeStage: exclude } : {}),
+    ...searchStageFilter(params.mode, params.allowDrafts),
     ...(params.cursor !== null ? { cursor: params.cursor } : {}),
     limit: PICKER_PAGE_SIZE,
     withCount: params.cursor === null,
@@ -223,7 +288,10 @@ function rowClass(active: boolean): string {
 export function PostPicker(props: PostPickerProps): ReactElement {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
-  const [tab, setTab] = useState<ShareTab>('posts');
+  const sheetMode = props.mode ?? 'posts';
+  const mode: PickerMode = props.inline === true ? 'inline' : sheetMode;
+  const reads = pickerReads(mode);
+  const listMode: PostListMode | null = reads.posts && mode !== 'briefs' ? mode : null;
   const [briefs, setBriefs] = useState<BriefPickerRow[]>([]);
   const [briefFilter, setBriefFilter] = useState<BriefFilter>(DEFAULT_BRIEF_FILTER);
   const [briefLoadedKey, setBriefLoadedKey] = useState<string | null>(null);
@@ -238,9 +306,10 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   const userId = session?.user.id ?? null;
   // The viewer's role, read once per open through fetchMemberRole (the
   // workspace context does not carry it). No post read starts until it lands,
-  // so drafts never appear and then vanish.
+  // so drafts never appear and then vanish. Brief mode reads no post, so no role.
   const [role, setRole] = useState<string | null>(null);
   const [roleLoaded, setRoleLoaded] = useState(false);
+  const allowDrafts = roleLoaded && draftsAllowed(role, props.channelHasClient ?? null);
   // The live search box text, read by async handlers to drop stale responses.
   const queryRef = useRef('');
   queryRef.current = query;
@@ -251,7 +320,6 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   // Reset to the default view and empty search each time the picker opens.
   useEffect(() => {
     if (props.open) {
-      setTab('posts');
       setBriefFilter(DEFAULT_BRIEF_FILTER);
       setQuery('');
       setDebounced('');
@@ -259,10 +327,10 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       setSearch(null);
       setPostError(null);
     }
-  }, [props.open]);
+  }, [props.open, mode]);
 
   useEffect(() => {
-    if (!props.open || workspaceId === null || userId === null) return;
+    if (!props.open || listMode === null || workspaceId === null || userId === null) return;
     let cancelled = false;
     setRole(null);
     setRoleLoaded(false);
@@ -274,19 +342,25 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [props.open, workspaceId, userId]);
+  }, [props.open, listMode, workspaceId, userId]);
 
   useEffect(() => {
     const handle = setTimeout(() => setDebounced(query.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
   }, [query]);
 
-  // Default sections: one batch per open (and per role), never per row. Not
-  // refetched on tab switches, so a shown list never swaps under the viewer.
+  // Default sections: one batch per open (and per role and mode), never per
+  // row, so a shown list never swaps under the viewer.
   useEffect(() => {
-    if (!props.open || workspaceId === null || !roleLoaded) return;
+    if (!props.open || listMode === null || workspaceId === null || !roleLoaded) return;
     let cancelled = false;
-    void loadPickerSections(supabase, { workspaceId, role, now: new Date() }).then((result) => {
+    void loadPickerSections(supabase, {
+      workspaceId,
+      role,
+      now: new Date(),
+      mode: listMode,
+      allowDrafts,
+    }).then((result) => {
       if (cancelled) return;
       if (result.ok) setSections(result.data);
       else setPostError(result.message);
@@ -294,22 +368,24 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [props.open, workspaceId, role, roleLoaded]);
+  }, [props.open, listMode, workspaceId, role, roleLoaded, allowDrafts]);
 
   // Search first page: one read (with count) per settled search text.
   useEffect(() => {
-    if (!props.open || tab !== 'posts' || workspaceId === null || !roleLoaded) return;
+    if (!props.open || listMode === null || workspaceId === null || !roleLoaded) return;
     const parsed = parsePickerQuery(debounced, workspaceKey);
     if (parsed === null) return;
     const text = parsed.text;
     const number = parsed.number;
+    let cancelled = false;
     void loadSearchPage(supabase, {
       workspaceId,
-      role,
+      mode: listMode,
+      allowDrafts,
       query: { text, number },
       cursor: null,
     }).then((result) => {
-      if (queryRef.current.trim() !== text) return;
+      if (cancelled || queryRef.current.trim() !== text) return;
       if (!result.ok) {
         setPostError(result.message);
         return;
@@ -317,17 +393,35 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       setPostError(null);
       setSearch({ text, rows: result.rows, count: result.count ?? 0, loadingMore: false });
     });
-  }, [props.open, tab, workspaceId, role, roleLoaded, debounced, workspaceKey]);
+    return () => {
+      cancelled = true;
+    };
+  }, [props.open, listMode, workspaceId, allowDrafts, roleLoaded, debounced, workspaceKey]);
+
+  // A Load-more answer that lands after the picker closed or unmounted is dropped.
+  const liveRef = useRef(true);
+  useEffect(() => {
+    liveRef.current = true;
+    return () => {
+      liveRef.current = false;
+    };
+  }, []);
 
   function loadMore(): void {
-    if (workspaceId === null || search === null || search.loadingMore) return;
+    if (workspaceId === null || listMode === null || search === null || search.loadingMore) return;
     const cursor = cursorAfter(search.rows);
     const current = parsePickerQuery(search.text, workspaceKey);
     if (cursor === null || current === null) return;
     const text = search.text;
     setSearch({ ...search, loadingMore: true });
-    void loadSearchPage(supabase, { workspaceId, role, query: current, cursor }).then((result) => {
-      if (queryRef.current.trim() !== text) return;
+    void loadSearchPage(supabase, {
+      workspaceId,
+      mode: listMode,
+      allowDrafts,
+      query: current,
+      cursor,
+    }).then((result) => {
+      if (!liveRef.current || queryRef.current.trim() !== text) return;
       setSearch((prev) => {
         if (prev === null || prev.text !== text) return prev;
         if (!result.ok) return { ...prev, loadingMore: false };
@@ -339,7 +433,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
 
   // Briefs: one RLS-scoped read per (workspace, filter, search) change.
   useEffect(() => {
-    if (!props.open || workspaceId === null || tab !== 'briefs') return;
+    if (!props.open || workspaceId === null || !reads.briefs) return;
     let cancelled = false;
     const status = filterBriefStatus(briefFilter);
     void listBriefsForPicker(supabase, {
@@ -355,9 +449,9 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [props.open, workspaceId, briefFilter, query, tab, briefRequestKey]);
+  }, [props.open, workspaceId, briefFilter, query, reads.briefs, briefRequestKey]);
 
-  const count = props.selected.length + props.selectedBriefs.length;
+  const count = mode === 'briefs' ? props.selectedBriefs.length : props.selected.length;
   const rowProps: PostRowContext = {
     selected: props.selected,
     onToggle: props.onToggle,
@@ -371,7 +465,11 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     postBody = <PickerError message={postError} />;
   } else if (trimmed === '') {
     postBody =
-      sections === null ? <PickerSkeleton /> : <PostSectionsView data={sections} {...rowProps} />;
+      sections === null ? (
+        <PickerSkeleton />
+      ) : (
+        <PostSectionsView data={sections} mode={mode} {...rowProps} />
+      );
   } else if (search === null || search.text !== trimmed) {
     postBody = <PickerSkeleton />;
   } else {
@@ -394,28 +492,14 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     <Sheet
       open={props.open}
       onClose={props.onClose}
-      title="Share a post or brief"
+      title={PICKER_TITLES[sheetMode]}
       footer={
         <Button variant="primary" size="lg" className="ml-auto" onClick={props.onClose}>
           {count > 0 ? `Done (${count})` : 'Done'}
         </Button>
       }
     >
-      <div className="flex flex-col gap-3">
-        <div className="flex gap-2" role="tablist">
-          <Chip
-            label="Posts"
-            size="tap"
-            selected={tab === 'posts'}
-            onClick={() => setTab('posts')}
-          />
-          <Chip
-            label="Briefs"
-            size="tap"
-            selected={tab === 'briefs'}
-            onClick={() => setTab('briefs')}
-          />
-        </div>
+      <div className="flex flex-col gap-3" data-picker-mode={sheetMode}>
         <Field label="Search">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
@@ -424,13 +508,13 @@ export function PostPicker(props: PostPickerProps): ReactElement {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={tab === 'posts' ? 'Search by word or number' : 'Search all briefs'}
+              placeholder={mode === 'briefs' ? 'Search all briefs' : 'Search by word or number'}
               className="pl-9"
             />
           </div>
         </Field>
 
-        {tab === 'posts' ? (
+        {mode !== 'briefs' ? (
           postBody
         ) : (
           <>
@@ -536,17 +620,12 @@ function SectionHeading({ label }: { label: string }): ReactElement {
 
 /** The default view: sections in order, then the older-approved footer. */
 export function PostSectionsView(
-  props: PostRowContext & { data: PickerSectionsData },
+  props: PostRowContext & { data: PickerSectionsData; mode?: PickerMode },
 ): ReactElement {
   const footer = olderApprovedFooter(props.data.olderApprovedCount);
   if (props.data.sections.length === 0 && footer === null) {
-    return (
-      <EmptyState
-        icon={<IconPipeline size={22} />}
-        title="No posts"
-        description="Nothing is waiting, recently approved or in draft."
-      />
-    );
+    const empty = sectionsEmptyCopy(props.mode ?? 'posts');
+    return <EmptyState icon={<IconPipeline size={22} />} {...empty} />;
   }
   return (
     <ul className={LIST_CLASS}>
@@ -563,6 +642,18 @@ export function PostSectionsView(
       {footer !== null ? <li className="px-4 py-3 text-xs text-fg-3">{footer}</li> : null}
     </ul>
   );
+}
+
+/** The empty default view's copy per mode. */
+export function sectionsEmptyCopy(mode: PickerMode): { title: string; description: string } {
+  if (mode === 'drafts') return { title: 'No drafts', description: 'No post is in draft.' };
+  if (mode === 'inline') {
+    return { title: 'No posts', description: 'Nothing is waiting or recently approved.' };
+  }
+  return {
+    title: 'No posts',
+    description: 'Nothing is waiting, approved, parked or rejected.',
+  };
 }
 
 /** Search results: "<N> matches", the rows, and a "Load 50 more" row while more remain. */

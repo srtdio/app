@@ -315,3 +315,102 @@ export function userProfileUpdate(
 ): Promise<Result<ProcReturns<'user_profile_update'>>> {
   return callProc(client, 'user_profile_update', args);
 }
+
+// Plans in chat (migrations 20261009110000_plans_core, 20261009163000_chat_plan_share,
+// 20261009205500_plan_item_comments). Every proc takes p_trace_id.
+
+export type PlanCreateArgs = ProcArgs<'plan_create'>;
+export function planCreate(
+  client: Client,
+  args: PlanCreateArgs,
+): Promise<Result<ProcReturns<'plan_create'>>> {
+  return callProc(client, 'plan_create', args);
+}
+
+export type PlanUpdateArgs = ProcArgs<'plan_update'>;
+export function planUpdate(
+  client: Client,
+  args: PlanUpdateArgs,
+): Promise<Result<ProcReturns<'plan_update'>>> {
+  return callProc(client, 'plan_update', args);
+}
+
+export type PlanShareWithClientArgs = ProcArgs<'plan_share_with_client'>;
+export function planShareWithClient(
+  client: Client,
+  args: PlanShareWithClientArgs,
+): Promise<Result<ProcReturns<'plan_share_with_client'>>> {
+  return callProc(client, 'plan_share_with_client', args);
+}
+
+export type PlanDeleteArgs = ProcArgs<'plan_delete'>;
+export function planDelete(
+  client: Client,
+  args: PlanDeleteArgs,
+): Promise<Result<ProcReturns<'plan_delete'>>> {
+  return callProc(client, 'plan_delete', args);
+}
+
+export type PlanConceptAddArgs = ProcArgs<'plan_concept_add'>;
+export function planConceptAdd(
+  client: Client,
+  args: PlanConceptAddArgs,
+): Promise<Result<ProcReturns<'plan_concept_add'>>> {
+  return callProc(client, 'plan_concept_add', args);
+}
+
+export type PlanConceptEditArgs = ProcArgs<'plan_concept_edit'>;
+export function planConceptEdit(
+  client: Client,
+  args: PlanConceptEditArgs,
+): Promise<Result<ProcReturns<'plan_concept_edit'>>> {
+  return callProc(client, 'plan_concept_edit', args);
+}
+
+export type PlanPostsAddArgs = ProcArgs<'plan_posts_add'>;
+export function planPostsAdd(
+  client: Client,
+  args: PlanPostsAddArgs,
+): Promise<Result<ProcReturns<'plan_posts_add'>>> {
+  return callProc(client, 'plan_posts_add', args);
+}
+
+export type PlanItemRemoveArgs = ProcArgs<'plan_item_remove'>;
+export function planItemRemove(
+  client: Client,
+  args: PlanItemRemoveArgs,
+): Promise<Result<ProcReturns<'plan_item_remove'>>> {
+  return callProc(client, 'plan_item_remove', args);
+}
+
+export type PlanItemsReorderArgs = ProcArgs<'plan_items_reorder'>;
+export function planItemsReorder(
+  client: Client,
+  args: PlanItemsReorderArgs,
+): Promise<Result<ProcReturns<'plan_items_reorder'>>> {
+  return callProc(client, 'plan_items_reorder', args);
+}
+
+export type PlanItemReviewArgs = ProcArgs<'plan_item_review'>;
+export function planItemReview(
+  client: Client,
+  args: PlanItemReviewArgs,
+): Promise<Result<ProcReturns<'plan_item_review'>>> {
+  return callProc(client, 'plan_item_review', args);
+}
+
+export type PlanItemCommentCreateArgs = ProcArgs<'plan_item_comment_create'>;
+export function planItemCommentCreate(
+  client: Client,
+  args: PlanItemCommentCreateArgs,
+): Promise<Result<ProcReturns<'plan_item_comment_create'>>> {
+  return callProc(client, 'plan_item_comment_create', args);
+}
+
+export type ChatPlanShareArgs = ProcArgs<'chat_plan_share'>;
+export function chatPlanShare(
+  client: Client,
+  args: ChatPlanShareArgs,
+): Promise<Result<ProcReturns<'chat_plan_share'>>> {
+  return callProc(client, 'chat_plan_share', args);
+}

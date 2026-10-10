@@ -202,9 +202,13 @@ export function captionView({
   return out;
 }
 
-/** The clamp class for the caption body; collapsed hides everything past 3 lines. */
+/**
+ * The clamp class for the caption body; collapsed hides everything past 3 lines
+ * on mobile only. From md up the comments column sits beside the post, so the
+ * caption always shows in full.
+ */
 export function captionClampClass(expanded: boolean): string {
-  return expanded ? '' : 'line-clamp-3';
+  return expanded ? '' : 'line-clamp-3 md:line-clamp-none';
 }
 
 /** The shape of a flashed DOM node the auto-expand check reads from. */
@@ -232,7 +236,7 @@ export function hiddenFlashTargetId(
   return target.id === '' ? null : target.id;
 }
 
-/** Hookless More/Less toggle: a 44px target that flips the caption clamp. */
+/** Hookless More/Less toggle: a 44px target that flips the caption clamp (mobile only). */
 export function captionToggleView({
   expanded,
   onToggle,
@@ -245,7 +249,7 @@ export function captionToggleView({
       type="button"
       aria-expanded={expanded}
       onClick={onToggle}
-      className="inline-flex min-h-[44px] min-w-[44px] items-center rounded text-sm font-medium text-accent hover:text-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="inline-flex min-h-[44px] min-w-[44px] items-center rounded md:hidden text-sm font-medium text-accent hover:text-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       {expanded ? 'Less' : 'More'}
     </button>

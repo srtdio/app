@@ -547,6 +547,11 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
     comments: [],
     assets: [],
     asset_attachments: [],
+    // Plans in chat (RLS is not emulated: specs seed only what the viewer reads).
+    plans: [],
+    plan_items: [],
+    plan_item_reviews: [],
+    plan_item_comments: [],
     folders: [],
     workspace_buckets: [
       {
@@ -558,4 +563,173 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
     ],
   };
   return { tables, dmMessages, groupMessages, threadDmMessages, threadGroupMessages };
+}
+
+// ---------------------------------------------------------------------------
+// Plans in chat
+// ---------------------------------------------------------------------------
+
+export const PLAN_ID = '0190d000-0000-7000-8000-00000000d001';
+export const TEAM_PLAN_ID = '0190d000-0000-7000-8000-00000000d002';
+/** A plan id with no row: the viewer cannot read it ("Plan not available"). */
+export const HIDDEN_PLAN_ID = '0190d000-0000-7000-8000-00000000d003';
+export const PLAN_CONCEPT_ITEM = '0190d100-0000-7000-8000-00000000d101';
+export const PLAN_POST_ITEM = '0190d100-0000-7000-8000-00000000d102';
+export const PLAN_TITLE = 'Week of 12 Oct';
+export const PLAN_CONCEPT_TITLE = 'Season opening reel';
+export const PLAN_MESSAGE_ID = '0190d200-0000-7000-8000-00000000d201';
+
+function planRow(id: string, title: string, audience: 'team' | 'client', by: string): Row {
+  return {
+    id,
+    workspace_id: WORKSPACE_ID,
+    title,
+    starts_on: '2026-10-12',
+    ends_on: '2026-10-18',
+    audience,
+    shared_with_client_at: audience === 'client' ? '2026-10-09T09:00:00Z' : null,
+    shared_with_client_by: audience === 'client' ? by : null,
+    created_by: by,
+    created_at: '2026-10-09T09:00:00Z',
+    updated_at: '2026-10-09T09:00:00Z',
+    deleted_at: null,
+  };
+}
+
+/** One plan-card message in a chat (shared by `sender`), newest in the thread. */
+export function planMessage(
+  id: string,
+  channelId: string,
+  sender: string,
+  planIds: string[],
+  now: number = Date.now(),
+): Row {
+  return {
+    id,
+    channel_id: channelId,
+    workspace_id: WORKSPACE_ID,
+    sender_user_id: sender,
+    body: null,
+    mentions: null,
+    attachment_asset_ids: null,
+    shared_post_ids: null,
+    shared_brief_ids: null,
+    shared_plan_ids: planIds,
+    reply_to_message_id: null,
+    forwarded_from_message_id: null,
+    attachment_meta: null,
+    agora_event_id: null,
+    created_at: iso(now - 60_000),
+    edited_at: null,
+    deleted_at: null,
+    thread_root_message_id: null,
+  };
+}
+
+/**
+ * Seed a client plan (one concept with one library file, one post item, an
+ * Everyone comment on the concept) shared by `sender` into `channelId`.
+ */
+export function seedClientPlan(
+  world: ChatWorld,
+  opts: { channelId: string; sender: string; fileVersionId: string; now?: number },
+): void {
+  const t = world.tables;
+  (t.plans ??= []).push(planRow(PLAN_ID, PLAN_TITLE, 'client', opts.sender));
+  (t.plan_items ??= []).push(
+    {
+      id: PLAN_CONCEPT_ITEM,
+      workspace_id: WORKSPACE_ID,
+      plan_id: PLAN_ID,
+      kind: 'concept',
+      position: 0,
+      title: PLAN_CONCEPT_TITLE,
+      description: 'Short reel of the season starting. Morning light, 20 to 30 seconds.',
+      post_id: null,
+      created_by: opts.sender,
+      created_at: '2026-10-09T09:00:00Z',
+      updated_at: '2026-10-09T09:00:00Z',
+      deleted_at: null,
+    },
+    {
+      id: PLAN_POST_ITEM,
+      workspace_id: WORKSPACE_ID,
+      plan_id: PLAN_ID,
+      kind: 'post',
+      position: 1,
+      title: null,
+      description: null,
+      post_id: POST_IDS[0],
+      created_by: opts.sender,
+      created_at: '2026-10-09T09:00:01Z',
+      updated_at: '2026-10-09T09:00:01Z',
+      deleted_at: null,
+    },
+  );
+  (t.plan_item_comments ??= []).push({
+    id: '0190d300-0000-7000-8000-00000000d301',
+    workspace_id: WORKSPACE_ID,
+    item_id: PLAN_CONCEPT_ITEM,
+    author_user_id: opts.sender,
+    body: 'Can we keep it under 30 seconds?',
+    visibility: 'everyone',
+    created_at: '2026-10-09T09:30:00Z',
+    edited_at: null,
+    deleted_at: null,
+  });
+  (t.asset_attachments ??= []).push({
+    id: '0190d400-0000-7000-8000-00000000d401',
+    asset_id: opts.fileVersionId,
+    asset_version_id: opts.fileVersionId,
+    entity_type: 'plan_item',
+    entity_id: PLAN_CONCEPT_ITEM,
+    workspace_id: WORKSPACE_ID,
+    position: 0,
+    attached_by: opts.sender,
+    attached_at: '2026-10-09T09:00:00Z',
+    deleted_at: null,
+  });
+  (t.chat_messages ??= []).push(
+    planMessage(PLAN_MESSAGE_ID, opts.channelId, opts.sender, [PLAN_ID], opts.now),
+  );
+}
+
+/** Seed a team only plan card and a card whose plan the viewer cannot read into a chat. */
+export function seedTeamAndHiddenPlans(
+  world: ChatWorld,
+  opts: { channelId: string; sender: string; now?: number },
+): void {
+  const t = world.tables;
+  const now = opts.now ?? Date.now();
+  (t.plans ??= []).push(planRow(TEAM_PLAN_ID, 'Launch week drafts', 'team', opts.sender));
+  (t.plan_items ??= []).push({
+    id: '0190d100-0000-7000-8000-00000000d103',
+    workspace_id: WORKSPACE_ID,
+    plan_id: TEAM_PLAN_ID,
+    kind: 'concept',
+    position: 0,
+    title: 'Teaser countdown',
+    description: null,
+    post_id: null,
+    created_by: opts.sender,
+    created_at: '2026-10-09T09:00:00Z',
+    updated_at: '2026-10-09T09:00:00Z',
+    deleted_at: null,
+  });
+  (t.chat_messages ??= []).push(
+    planMessage(
+      '0190d200-0000-7000-8000-00000000d202',
+      opts.channelId,
+      opts.sender,
+      [TEAM_PLAN_ID],
+      now - 120_000,
+    ),
+    planMessage(
+      '0190d200-0000-7000-8000-00000000d203',
+      opts.channelId,
+      opts.sender,
+      [HIDDEN_PLAN_ID],
+      now,
+    ),
+  );
 }

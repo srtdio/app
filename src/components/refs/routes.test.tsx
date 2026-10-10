@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -15,6 +17,9 @@ vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 vi.mock('@/components/pages/PostDetailPage', () => ({
   PostDetailPage: ({ postId }: { postId?: string }) => <div>post-detail:{postId ?? 'param'}</div>,
 }));
+vi.mock('@/components/pages/PlanPage', () => ({
+  PlanPage: () => <div>plan-page</div>,
+}));
 vi.mock('@/components/pages/BriefDetailPage', () => ({
   BriefDetailPage: ({ briefId }: { briefId?: string }) => (
     <div>brief-detail:{briefId ?? 'param'}</div>
@@ -23,6 +28,7 @@ vi.mock('@/components/pages/BriefDetailPage', () => ({
 
 import { PostDetailPage } from '@/components/pages/PostDetailPage';
 import { BriefDetailPage } from '@/components/pages/BriefDetailPage';
+import { PlanPage } from '@/components/pages/PlanPage';
 import { PostRefResolver } from '@/components/refs/PostRefResolver';
 import { BriefRefResolver } from '@/components/refs/BriefRefResolver';
 
@@ -36,6 +42,7 @@ function render(path: string): string {
         <Route path="/p/:ref" element={<PostRefResolver />} />
         <Route path="/briefs/:briefId" element={<BriefDetailPage />} />
         <Route path="/b/:ref" element={<BriefRefResolver />} />
+        <Route path="/plans/:planId" element={<PlanPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -52,6 +59,15 @@ describe('entity route regression', () => {
 
   it('mounts the /p/:ref resolver (loading before resolution)', () => {
     expect(render('/p/gbl-1')).toContain('Loading post');
+  });
+
+  it('mounts the standalone /plans/:planId page (Activity plan rows)', () => {
+    expect(render('/plans/plan1?item=i1')).toContain('plan-page');
+  });
+
+  it('App declares the /plans/:planId route exactly once', () => {
+    const app = readFileSync(fileURLToPath(new URL('../../App.tsx', import.meta.url)), 'utf8');
+    expect(app.split('path="/plans/:planId" element={<PlanPage />}').length - 1).toBe(1);
   });
 
   it('mounts the /b/:ref resolver (loading before resolution)', () => {

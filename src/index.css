@@ -44,6 +44,8 @@
      tint from them; these explicit low-alpha fills give light/dark parity. */
   --good-soft: rgba(62, 125, 84, 0.12);
   --bad-soft: rgba(194, 57, 43, 0.1);
+  /* Team only plan rows and chips: a warm tint behind warn ink. */
+  --warn-soft: #f6ecd9;
   --annotation-bg: #ffe9b8;
   --annotation-line: #d9a93c;
   --stage-review: #b45309;
@@ -95,6 +97,7 @@
   --bad: #e0685a;
   --good-soft: rgba(95, 176, 125, 0.16);
   --bad-soft: rgba(224, 104, 90, 0.14);
+  --warn-soft: #2e2610;
   --annotation-bg: #4a3a14;
   --annotation-line: #d9a93c;
   --stage-review: #e0954a;
