@@ -250,6 +250,15 @@ export function HelpPage() {
           )}
         </section>
       </div>
+      <div className="mb-10 text-center text-md">
+        For any queries or support, please contact our team at{' '}
+        <a
+          href="mailto:support@srtd.io"
+          className="text-accent underline underline-offset-2 transition-colors hover:text-accent/80"
+        >
+          support@srtd.io
+        </a>
+      </div>
     </>
   );
 }

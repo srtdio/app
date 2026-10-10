@@ -3,6 +3,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { MenuItem } from '@/components/shell/MenuItem';
 import {
   IconMoon,
+  IconScrollText,
   IconSettings,
   IconSignOut,
   IconSun,
@@ -59,6 +60,7 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
         label="Appearance"
         onClick={toggle}
       />
+      <MenuItem icon={<IconScrollText size={18} />} label="Help" onClick={() => go('/help')} />
       <div className="my-1 h-px bg-border" />
       <MenuItem
         icon={<IconSignOut size={18} />}

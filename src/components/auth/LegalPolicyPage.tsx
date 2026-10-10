@@ -13,7 +13,7 @@ const policies = {
 function PrivacyPolicyContent() {
   return (
     <div className="space-y-6 text-sm leading-6 text-fg-2">
-      <p>Last Updated 08 Oct 2026</p>
+      <p>Last Updated: 08 Oct 2026</p>
       <p>
         This Privacy Policy explains how we collect, use, share and protect your personal data when
         you use srtd.io and the Sorted app. Sorted is a tool for social media agencies and their
@@ -133,6 +133,18 @@ function PrivacyPolicyContent() {
             email, payment details you enter with them.
           </li>
         </ul>
+      </section>
+      <section>
+        <h2 className="mb-2 text-base font-semibold text-fg">7. How to contact Us</h2>
+        <p className="mb-3">
+          If you have questions or concerns about this Privacy Policy, please contact us at{' '}
+          <a
+            href="mailto:support@srtd.io"
+            className="text-accent underline underline-offset-2 transition-colors hover:text-accent/80"
+          >
+            support@srtd.io
+          </a>
+        </p>
       </section>
     </div>
   );
