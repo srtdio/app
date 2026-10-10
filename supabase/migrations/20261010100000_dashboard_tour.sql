@@ -1,4 +1,4 @@
--- Prepared for v2; not applied to the live project.
+-- Prepared for v2; not applied to any database.
 -- Dashboard tour: only accounts created after rollout are eligible for the tour.
 -- Existing accounts are backfilled as already seen; newly created public.users
 -- rows keep the null default until the user skips or completes the tour.

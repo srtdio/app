@@ -137,7 +137,7 @@ function PrivacyPolicyContent() {
       <section>
         <h2 className="mb-2 text-base font-semibold text-fg">7. How to contact Us</h2>
         <p className="mb-3">
-          If you have questions or concerns about this Privacy Policy, please contact us at{" "}
+          If you have questions or concerns about this Privacy Policy, please contact us at{' '}
           <a
             href="mailto:support@srtd.io"
             className="text-accent underline underline-offset-2 transition-colors hover:text-accent/80"
