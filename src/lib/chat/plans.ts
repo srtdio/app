@@ -783,23 +783,43 @@ export function conceptAddArgs(
   };
 }
 
+/** Whether two file lists hold the same ids in the same order. Pure. */
+function sameFiles(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
+/** One concept edit: the fields as they will be saved. */
+export interface ConceptEdit {
+  title: string;
+  description: string;
+  /** "YYYY-MM-DD", or null / '' for no date. */
+  targetDate: string | null;
+  /** The concept's files as read (null when not read). */
+  currentFiles: readonly string[] | null;
+  /** The files as picked in the edit (null when the edit does not touch files). */
+  pickedFiles: readonly string[] | null;
+}
+
 /**
- * plan_concept_edit's args: the concept's current title, description and files
- * with the date as it is now. The proc always writes the date, so it is always
- * sent (null clears it). Pure.
+ * plan_concept_edit's args. The date is always sent (null clears it). Files go
+ * as null ("keep files") unless the picked list differs from the current one
+ * (added, removed or reordered): an array makes the proc soft-delete and
+ * re-attach every link. Pure.
  */
 export function conceptEditArgs(
-  item: Pick<PlanItemRow, 'id' | 'title' | 'description'>,
-  versionIds: readonly string[],
-  targetDate: string | null,
+  itemId: string,
+  edit: ConceptEdit,
   traceId: string,
 ): PlanConceptEditArgs {
+  const picked = edit.pickedFiles;
+  const changed =
+    picked !== null && (edit.currentFiles === null || !sameFiles(edit.currentFiles, picked));
   return {
-    p_item_id: item.id,
-    p_title: item.title ?? '',
-    p_description: item.description ?? '',
-    p_attachment_version_ids: [...versionIds],
-    p_target_date: targetDate === '' ? null : targetDate,
+    p_item_id: itemId,
+    p_title: edit.title,
+    p_description: edit.description,
+    p_attachment_version_ids: changed ? [...picked] : null,
+    p_target_date: edit.targetDate === '' ? null : edit.targetDate,
     p_trace_id: traceId,
   };
 }

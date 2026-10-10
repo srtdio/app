@@ -12,6 +12,7 @@ import {
   PLAN_ID,
   seedClientPlan,
   seedDatedPlan,
+  WORKSPACE_ID,
 } from '../fixtures/chat-data';
 
 // Plan dates and progress: a 15-item plan seeded out of date order renders in
@@ -129,6 +130,22 @@ test.describe('phone', () => {
     // Set a date on an undated concept: it moves to the front.
     const target = undated[1];
     if (target === undefined) throw new Error('fixture');
+    // One library link on the concept: a date-only edit must keep it as is.
+    const link = {
+      id: '0190d700-0000-7000-8000-000000000001',
+      asset_id: PLAN_ID,
+      asset_version_id: PLAN_ID,
+      entity_type: 'plan_item',
+      entity_id: target.id,
+      workspace_id: WORKSPACE_ID,
+      position: 0,
+      attached_by: ME,
+      attached_at: '2026-10-09T09:00:00Z',
+      deleted_at: null,
+    };
+    (network.world.tables.asset_attachments ??= []).push(link);
+    const linksOf = () =>
+      (network.world.tables.asset_attachments ?? []).filter((a) => a.entity_id === target.id);
     await plan.locator(`[data-plan-row="${target.id}"]`).click();
     await expect(item).toBeVisible();
     await expect(item.locator('[data-plan-item-date]')).toHaveText('No date');
@@ -151,6 +168,8 @@ test.describe('phone', () => {
     await expect(item.locator('[data-plan-item-date]')).toHaveText('11 Oct');
     const row = (network.world.tables.plan_items ?? []).find((i) => i.id === target.id);
     expect(row?.target_date).toBe('2026-10-11');
+    // Files went as null: the one link is untouched (not re-attached).
+    expect(linksOf()).toEqual([link]);
     await expect(item.getByText(`Concept 1 of ${conceptCount}`)).toBeVisible();
     await page.waitForTimeout(300);
     await shot(page, 'dates-07-item-dated');
@@ -172,6 +191,7 @@ test.describe('phone', () => {
     expect(
       (network.world.tables.plan_items ?? []).find((i) => i.id === target.id)?.target_date,
     ).toBeNull();
+    expect(linksOf()).toEqual([link]);
     await page.goBack();
     await expect(item).toBeHidden();
     await expect.poll(() => rowTitles(page)).toEqual(expectedTitles('concept'));

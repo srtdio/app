@@ -274,20 +274,29 @@ export function PlanItemScreen(props: {
     dispatchPlanChanged(window, bundle.plan.id);
   };
 
-  // The concept's date: the edit resends the current title, description and
-  // files (read with the screen), so it waits for that read.
+  // The concept's date: a date-only edit keeps the title and description and
+  // sends no files (null keeps every link as it is).
   const date = itemDateLabel(bundle, item);
   const editDate = canEditConceptDate(side, item);
-  const files = read.status === 'ready' ? read.data.files : null;
   const saveDate = async (): Promise<void> => {
-    if (files === null || dateBusy) return;
+    if (dateBusy) return;
     const forItem = item.id;
     setDateBusy(true);
     setDateError(null);
     const traceId = generateTraceId();
     const result = await planConceptEdit(
       supabase,
-      conceptEditArgs(item, files, dateDraft === '' ? null : dateDraft, traceId),
+      conceptEditArgs(
+        item.id,
+        {
+          title: item.title ?? '',
+          description: item.description ?? '',
+          targetDate: dateDraft === '' ? null : dateDraft,
+          currentFiles: null,
+          pickedFiles: null,
+        },
+        traceId,
+      ),
     );
     setDateBusy(false);
     if (!stillOn(forItem)) {
@@ -502,7 +511,6 @@ export function PlanItemScreen(props: {
                     type="button"
                     data-plan-edit-date=""
                     aria-label="Edit date"
-                    disabled={files === null}
                     onClick={() => {
                       setDateDraft(item.target_date?.slice(0, 10) ?? '');
                       setDateError(null);
@@ -639,7 +647,7 @@ export function PlanItemScreen(props: {
                 size="lg"
                 variant="primary"
                 data-plan-date-save=""
-                disabled={dateBusy || files === null}
+                disabled={dateBusy}
                 onClick={() => void saveDate()}
               >
                 Save

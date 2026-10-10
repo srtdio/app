@@ -645,27 +645,57 @@ describe('concept date args', () => {
     expect('p_target_date' in args).toBe(false);
   });
 
-  const item = { id: 'i1', title: 'Reel', description: null };
+  const base = {
+    title: 'Reel',
+    description: '',
+    targetDate: '2026-10-14',
+    currentFiles: ['v1', 'v2'],
+    pickedFiles: null,
+  };
 
-  it('edit sends a changed date with the current title, description and files', () => {
-    expect(conceptEditArgs(item, ['v1', 'v2'], '2026-10-20', 't')).toEqual({
+  it('date-only edit sends the new date and null files (links kept)', () => {
+    expect(conceptEditArgs('i1', { ...base, targetDate: '2026-10-20' }, 't')).toEqual({
       p_item_id: 'i1',
       p_title: 'Reel',
       p_description: '',
-      p_attachment_version_ids: ['v1', 'v2'],
+      p_attachment_version_ids: null,
       p_target_date: '2026-10-20',
       p_trace_id: 't',
     });
+    // Unread files and an untouched picker also keep the links.
+    expect(
+      conceptEditArgs('i1', { ...base, currentFiles: null }, 't').p_attachment_version_ids,
+    ).toBeNull();
+  });
+
+  it('title-only edit sends null files', () => {
+    const args = conceptEditArgs('i1', { ...base, title: 'Reel v2' }, 't');
+    expect(args.p_title).toBe('Reel v2');
+    expect(args.p_attachment_version_ids).toBeNull();
+    // Files picked again in the same order are unchanged: still null.
+    expect(
+      conceptEditArgs('i1', { ...base, title: 'Reel v2', pickedFiles: ['v1', 'v2'] }, 't')
+        .p_attachment_version_ids,
+    ).toBeNull();
+  });
+
+  it('a file change (added, removed or reordered) sends the picked array', () => {
+    const files = (picked: string[]) =>
+      conceptEditArgs('i1', { ...base, pickedFiles: picked }, 't').p_attachment_version_ids;
+    expect(files(['v1', 'v2', 'v3'])).toEqual(['v1', 'v2', 'v3']);
+    expect(files(['v2'])).toEqual(['v2']);
+    expect(files(['v2', 'v1'])).toEqual(['v2', 'v1']);
+    expect(files([])).toEqual([]);
   });
 
   it('edit clear sends null (never leaves the key out)', () => {
-    expect(conceptEditArgs(item, [], null, 't').p_target_date).toBeNull();
-    expect(conceptEditArgs(item, [], '', 't').p_target_date).toBeNull();
-    expect('p_target_date' in conceptEditArgs(item, [], null, 't')).toBe(true);
+    expect(conceptEditArgs('i1', { ...base, targetDate: null }, 't').p_target_date).toBeNull();
+    expect(conceptEditArgs('i1', { ...base, targetDate: '' }, 't').p_target_date).toBeNull();
+    expect('p_target_date' in conceptEditArgs('i1', { ...base, targetDate: null }, 't')).toBe(true);
   });
 
   it('edit keeps the date when unchanged (it is always sent)', () => {
-    expect(conceptEditArgs(item, [], '2026-10-14', 't').p_target_date).toBe('2026-10-14');
+    expect(conceptEditArgs('i1', base, 't').p_target_date).toBe('2026-10-14');
   });
 
   it('the run sends each draft concept with its own date', async () => {

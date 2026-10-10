@@ -359,16 +359,26 @@ export function planConceptAdd(
   return callProc(client, 'plan_concept_add', args);
 }
 
-/** plan_concept_edit always writes the date, so it is always sent: null clears it. */
-export type PlanConceptEditArgs = Omit<ProcArgs<'plan_concept_edit'>, 'p_target_date'> & {
+/**
+ * plan_concept_edit always writes the date, so it is always sent: null clears
+ * it. Files: null keeps the concept's links as they are; an array replaces
+ * them (every link is soft-deleted and re-attached), so send one only when the
+ * files changed.
+ */
+export type PlanConceptEditArgs = Omit<
+  ProcArgs<'plan_concept_edit'>,
+  'p_target_date' | 'p_attachment_version_ids'
+> & {
   p_target_date: string | null;
+  p_attachment_version_ids: string[] | null;
 };
 export function planConceptEdit(
   client: Client,
   args: PlanConceptEditArgs,
 ): Promise<Result<ProcReturns<'plan_concept_edit'>>> {
-  // The generated Args type p_target_date as an optional string, but the proc
-  // takes null to clear the date: the one cast that lets null through.
+  // The generated Args type p_target_date as an optional string and
+  // p_attachment_version_ids as a string array, but the proc takes null for
+  // both (clear the date; keep the files): the one cast that lets null through.
   return callProc(client, 'plan_concept_edit', args as ProcArgs<'plan_concept_edit'>);
 }
 
