@@ -359,12 +359,17 @@ export function planConceptAdd(
   return callProc(client, 'plan_concept_add', args);
 }
 
-export type PlanConceptEditArgs = ProcArgs<'plan_concept_edit'>;
+/** plan_concept_edit always writes the date, so it is always sent: null clears it. */
+export type PlanConceptEditArgs = Omit<ProcArgs<'plan_concept_edit'>, 'p_target_date'> & {
+  p_target_date: string | null;
+};
 export function planConceptEdit(
   client: Client,
   args: PlanConceptEditArgs,
 ): Promise<Result<ProcReturns<'plan_concept_edit'>>> {
-  return callProc(client, 'plan_concept_edit', args);
+  // The generated Args type p_target_date as an optional string, but the proc
+  // takes null to clear the date: the one cast that lets null through.
+  return callProc(client, 'plan_concept_edit', args as ProcArgs<'plan_concept_edit'>);
 }
 
 export type PlanPostsAddArgs = ProcArgs<'plan_posts_add'>;

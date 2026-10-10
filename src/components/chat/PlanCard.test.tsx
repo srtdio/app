@@ -81,7 +81,7 @@ describe('PlanCardBody', () => {
     expect(html).toContain('12 Oct - 18 Oct');
     expect(html).toContain('1 concept');
     expect(html).toContain('1 post');
-    expect(html).toContain('1 of 2 approved by client · 1 change asked');
+    expect(html).toContain('Team 0 of 2 · Client 1 of 2 · 1 change asked');
     expect(html).toContain('width:50%');
     expect(html).toContain('Open plan');
     expect(html).not.toContain('Forward');

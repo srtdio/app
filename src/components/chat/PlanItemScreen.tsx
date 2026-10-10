@@ -12,8 +12,9 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { FormEvent, ReactElement, RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { planItemCommentCreate, planItemReview } from '@srtdio/rpc';
+import { planConceptEdit, planItemCommentCreate, planItemReview } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { Sheet } from '@/components/ui/Sheet';
 import { IconArrowUp, IconLock } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import {
@@ -32,13 +33,14 @@ import {
   TEAM_ONLY_LABEL,
   clientApproveConfirm,
   clientStatus,
+  itemDateLabel,
   itemKindLabel,
   reviewStatus,
   stageLabel,
-  shortDay,
   type PillTone,
 } from '@/components/chat/plan-card';
 import {
+  ConceptDateField,
   PlanConfirmSheet,
   PlanPage,
   PlanPill,
@@ -48,6 +50,7 @@ import {
 } from '@/components/chat/PlanScreen';
 import { readProfiles } from '@/lib/chat-reads';
 import {
+  conceptEditArgs,
   dispatchPlanChanged,
   readItemScreen,
   type CommentVisibility,
@@ -127,14 +130,9 @@ export function statusRows(
 ): Array<{ label: string; value: string; tone: PillTone }> {
   const rows: Array<{ label: string; value: string; tone: PillTone }> = [];
   if (item.kind === 'post' && item.post_id !== null) {
-    const info = bundle.postInfo[item.post_id];
-    const date =
-      info?.target_date !== null && info?.target_date !== undefined
-        ? ` · ${shortDay(info.target_date.slice(0, 10))}`
-        : '';
     rows.push({
       label: 'Pipeline',
-      value: `${stageLabel(bundle.postStages[item.post_id])}${date}`,
+      value: stageLabel(bundle.postStages[item.post_id]),
       tone: 'neutral',
     });
   }
@@ -151,6 +149,14 @@ export function statusRows(
   rows.push({ label: 'Client', value: STATUS_LABELS[client], tone: tone(client) });
   return rows;
 }
+
+/** Whether the viewer can change this item's date: the agency, on a concept. Pure. */
+export function canEditConceptDate(side: ViewerSide, item: Pick<PlanItemRow, 'kind'>): boolean {
+  return side === 'agency' && item.kind === 'concept';
+}
+
+/** Copy in the concept date sheet. */
+export const CONCEPT_DATE_RESET_HINT = 'Saving sets the team and client reviews back to Waiting.';
 
 /** A comment shown in the list: a recorded row, or a pending own one. */
 interface ShownComment {
@@ -198,6 +204,10 @@ export function PlanItemScreen(props: {
   const [pending, setPending] = useState<ShownComment[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [dateDraft, setDateDraft] = useState('');
+  const [dateBusy, setDateBusy] = useState(false);
+  const [dateError, setDateError] = useState<string | null>(null);
 
   // A new item (or a fresh bundle) drops the local overrides and drafts.
   useEffect(() => setOverrides({}), [bundle]);
@@ -210,6 +220,7 @@ export function PlanItemScreen(props: {
     setVisibility('everyone');
     setPending([]);
     setSendError(null);
+    setDateOpen(false);
   }, [props.open, item.id]);
 
   // A write that lands after the viewer moved on (another item, or closed)
@@ -225,6 +236,7 @@ export function PlanItemScreen(props: {
     setActionError(null);
     setConfirmOpen(false);
     setOverrides({});
+    setDateOpen(false);
   }, [item.id]);
 
   const actions = itemActions(side, item, bundle.plan.audience);
@@ -259,6 +271,39 @@ export function PlanItemScreen(props: {
     }
     setConfirmOpen(false);
     setOverrides((prev) => ({ ...prev, [actions.side]: status }));
+    dispatchPlanChanged(window, bundle.plan.id);
+  };
+
+  // The concept's date: the edit resends the current title, description and
+  // files (read with the screen), so it waits for that read.
+  const date = itemDateLabel(bundle, item);
+  const editDate = canEditConceptDate(side, item);
+  const files = read.status === 'ready' ? read.data.files : null;
+  const saveDate = async (): Promise<void> => {
+    if (files === null || dateBusy) return;
+    const forItem = item.id;
+    setDateBusy(true);
+    setDateError(null);
+    const traceId = generateTraceId();
+    const result = await planConceptEdit(
+      supabase,
+      conceptEditArgs(item, files, dateDraft === '' ? null : dateDraft, traceId),
+    );
+    setDateBusy(false);
+    if (!stillOn(forItem)) {
+      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      return;
+    }
+    if (!result.ok) {
+      logger.warn('chat: plan concept date edit failed', {
+        trace_id: traceId,
+        item_id: forItem,
+        error: result.error.message,
+      });
+      setDateError("Couldn't save. Try again.");
+      return;
+    }
+    setDateOpen(false);
     dispatchPlanChanged(window, bundle.plan.id);
   };
 
@@ -434,6 +479,33 @@ export function PlanItemScreen(props: {
             data-plan-status=""
             className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel p-3"
           >
+            <div className="flex min-h-[28px] items-center justify-between gap-2">
+              <span className="text-sm text-fg-3">Date</span>
+              <span className="flex items-center gap-1">
+                <span
+                  data-plan-item-date={date.dated ? 'dated' : 'none'}
+                  className={cn('text-[13px]', date.dated ? 'font-mono text-fg-2' : 'text-fg-3')}
+                >
+                  {date.label}
+                </span>
+                {editDate ? (
+                  <button
+                    type="button"
+                    data-plan-edit-date=""
+                    aria-label="Edit date"
+                    disabled={files === null}
+                    onClick={() => {
+                      setDateDraft(item.target_date?.slice(0, 10) ?? '');
+                      setDateError(null);
+                      setDateOpen(true);
+                    }}
+                    className="min-h-[44px] min-w-[44px] rounded-md px-2 text-[13px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                  >
+                    Edit
+                  </button>
+                ) : null}
+              </span>
+            </div>
             {statusRows(bundle, item, side, overrides).map((row) => (
               <div key={row.label} className="flex min-h-[28px] items-center justify-between gap-2">
                 <span className="text-sm text-fg-3">{row.label}</span>
@@ -539,6 +611,44 @@ export function PlanItemScreen(props: {
         onConfirm={() => void review('approved')}
         onCancel={() => setConfirmOpen(false)}
       />
+      {editDate ? (
+        <Sheet
+          open={props.open && dateOpen}
+          onClose={() => setDateOpen(false)}
+          title="Concept date"
+          footer={
+            <div className="grid w-full grid-cols-2 gap-2">
+              <Button
+                size="lg"
+                variant="ghost"
+                disabled={dateBusy}
+                onClick={() => setDateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="lg"
+                variant="primary"
+                data-plan-date-save=""
+                disabled={dateBusy || files === null}
+                onClick={() => void saveDate()}
+              >
+                Save
+              </Button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-2">
+            <ConceptDateField value={dateDraft} onChange={setDateDraft} disabled={dateBusy} />
+            <p className="text-[13px] leading-[18px] text-fg-3">{CONCEPT_DATE_RESET_HINT}</p>
+            {dateError !== null ? (
+              <p role="alert" className="text-[13px] text-bad">
+                {dateError}
+              </p>
+            ) : null}
+          </div>
+        </Sheet>
+      ) : null}
       {actions.kind === 'open-post' && item.post_id !== null ? (
         <ItemPostSheet
           open={postSheetOpen}

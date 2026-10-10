@@ -2,6 +2,7 @@
 // progress maths, chips, status pills, kind labels, the default week and the
 // draft checks. No React, no reads, so every rule is unit-tested directly.
 
+import { planItemDay } from '@/lib/chat/plans';
 import type {
   PlanAudience,
   PlanBundle,
@@ -46,9 +47,25 @@ function plural(n: number, one: string): string {
   return `${n} ${one}${n === 1 ? '' : 's'}`;
 }
 
+const REVIEW_INDEX = new WeakMap<PlanBundle, Map<string, ReviewStatus>>();
+
+/**
+ * The bundle's reviews keyed by item id and side, built once per bundle (a
+ * fresh read is a fresh bundle), so no row scans the review list. Pure.
+ */
+function reviewIndex(bundle: PlanBundle): Map<string, ReviewStatus> {
+  let index = REVIEW_INDEX.get(bundle);
+  if (index === undefined) {
+    index = new Map();
+    for (const r of bundle.reviews) index.set(`${r.item_id}:${r.side}`, r.status);
+    REVIEW_INDEX.set(bundle, index);
+  }
+  return index;
+}
+
 /** One review's status for an item and side, 'waiting' when none is on record. Pure. */
 export function reviewStatus(bundle: PlanBundle, itemId: string, side: ReviewSide): ReviewStatus {
-  return bundle.reviews.find((r) => r.item_id === itemId && r.side === side)?.status ?? 'waiting';
+  return reviewIndex(bundle).get(`${itemId}:${side}`) ?? 'waiting';
 }
 
 /** Whether the client has approved this item: a concept's client review, or a post's stage. Pure. */
@@ -65,30 +82,48 @@ export function clientChanges(bundle: PlanBundle, item: PlanItemRow): boolean {
 }
 
 export interface PlanProgress {
+  /** Client approved: a concept's client review, or a post at stage approved. */
   approved: number;
+  /** Team approved: the item's team review (concepts and posts). */
+  teamApproved: number;
+  /** Every item; a post the viewer cannot read counts here, never as approved. */
   total: number;
+  /** Client changes asked (concepts). */
   changes: number;
 }
 
-/** Client approval across the plan's items. Pure. */
+/** Team and client approval across the plan's items, one pass. Pure. */
 export function planProgress(bundle: PlanBundle): PlanProgress {
   let approved = 0;
+  let teamApproved = 0;
   let changes = 0;
   for (const item of bundle.items) {
     if (clientApproved(bundle, item)) approved += 1;
+    if (reviewStatus(bundle, item.id, 'team') === 'approved') teamApproved += 1;
     if (clientChanges(bundle, item)) changes += 1;
   }
-  return { approved, total: bundle.items.length, changes };
+  return { approved, teamApproved, total: bundle.items.length, changes };
 }
 
-/** "N of M approved by client · K changes asked" (the changes part only when K > 0). Pure. */
-export function progressLabel(progress: PlanProgress): string {
-  const base = `${progress.approved} of ${progress.total} approved by client`;
-  if (progress.changes === 0) return base;
-  return `${base} · ${progress.changes} ${progress.changes === 1 ? 'change' : 'changes'} asked`;
+function changesPart(changes: number): string {
+  return changes === 0 ? '' : ` · ${changes} ${changes === 1 ? 'change' : 'changes'} asked`;
 }
 
-/** The bar's fill, 0..100. Pure. */
+/**
+ * The progress line. Agency: "Team A of N · Client B of N", then
+ * "· K changes asked" when K > 0. Anyone else (client, unknown) sees the
+ * client count only, never a team status. Pure.
+ */
+export function progressLabel(progress: PlanProgress, side: ViewerSide): string {
+  const n = progress.total;
+  const base =
+    side === 'agency'
+      ? `Team ${progress.teamApproved} of ${n} · Client ${progress.approved} of ${n}`
+      : `${progress.approved} of ${n} approved by client`;
+  return `${base}${changesPart(progress.changes)}`;
+}
+
+/** The bar's fill (client approval), 0..100. Pure. */
 export function progressPercent(progress: PlanProgress): number {
   if (progress.total === 0) return 0;
   return Math.round((progress.approved / progress.total) * 100);
@@ -128,6 +163,20 @@ export function shortDay(isoDate: string): string {
 /** "12 Oct - 18 Oct". Pure. */
 export function planRangeLabel(startsOn: string, endsOn: string): string {
   return `${shortDay(startsOn)} - ${shortDay(endsOn)}`;
+}
+
+/** The label of an item with no date. */
+export const NO_DATE_LABEL = 'No date';
+
+/** An item's date label: its day ("12 Oct"), or "No date" (muted). Pure. */
+export function itemDateLabel(
+  bundle: Pick<PlanBundle, 'postInfo'>,
+  item: PlanItemRow,
+): { label: string; dated: boolean } {
+  const day = planItemDay(item, bundle.postInfo);
+  return day === null
+    ? { label: NO_DATE_LABEL, dated: false }
+    : { label: shortDay(day), dated: true };
 }
 
 /** Status pill copy. */
@@ -188,7 +237,10 @@ export function itemPills(bundle: PlanBundle, item: PlanItemRow, side: ViewerSid
   ];
 }
 
-/** "Concept 1 of 3" / "Post 2 of 4": the item's place among its kind. Pure. */
+/**
+ * "Concept 1 of 3" / "Post 2 of 4": the item's place among its kind, in the
+ * bundle's date order (plans.ts sorts items by date when it assembles). Pure.
+ */
 export function itemKindLabel(items: readonly PlanItemRow[], item: PlanItemRow): string {
   const same = items.filter((i) => i.kind === item.kind);
   const at = same.findIndex((i) => i.id === item.id) + 1;

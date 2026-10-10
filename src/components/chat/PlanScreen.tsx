@@ -18,16 +18,18 @@ import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import { useLongPress } from '@/components/ui';
-import { IconChevronLeft, IconPlan } from '@/components/ui/icons';
+import { IconChevronLeft, IconPlan, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import {
   PLAN_HAS_DRAFTS_COPY,
   PLAN_NOT_AVAILABLE,
+  itemDateLabel,
   itemPills,
   planProgress,
   planRangeLabel,
   planSharedLine,
-  shortDay,
+  progressLabel,
+  progressPercent,
   type StatusPill,
 } from '@/components/chat/plan-card';
 import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
@@ -216,6 +218,45 @@ export function PlanConfirmSheet(props: {
   );
 }
 
+/**
+ * A concept's optional date: the native date input the plan's From and To use,
+ * empty by default, with a 44px clear button while it holds a date. Any date is
+ * allowed (inside or outside the plan's range).
+ */
+export function ConceptDateField(props: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}): ReactElement {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[13px] text-fg-3">Date (optional)</span>
+      <span className="flex items-center gap-1.5">
+        <input
+          type="date"
+          data-plan-concept-date=""
+          value={props.value}
+          disabled={props.disabled === true}
+          onChange={(e) => props.onChange(e.target.value)}
+          className="min-h-[48px] w-full min-w-0 flex-1 rounded-lg border border-border bg-panel px-3.5 font-mono text-[15px] text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+        />
+        {props.value !== '' ? (
+          <button
+            type="button"
+            aria-label="Clear date"
+            data-plan-concept-date-clear=""
+            disabled={props.disabled === true}
+            onClick={() => props.onChange('')}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+          >
+            <IconX size={18} />
+          </button>
+        ) : null}
+      </span>
+    </label>
+  );
+}
+
 const PILL_TONES: Record<StatusPill['tone'], string> = {
   good: 'bg-good-soft text-good',
   review: 'bg-panel-2 text-stage-review',
@@ -237,17 +278,25 @@ export function PlanPill(props: { pill: StatusPill }): ReactElement {
   );
 }
 
-/** The progress bar and its count. */
-export function PlanProgressRow(props: { bundle: PlanBundle }): ReactElement {
-  const p = planProgress(props.bundle);
-  const pct = p.total === 0 ? 0 : Math.round((p.approved / p.total) * 100);
+/**
+ * The progress line beside the bar: the agency sees team and client counts
+ * (planProgress, shared with the card); anyone else the client count only. Pure.
+ */
+export function screenProgressLabel(bundle: PlanBundle, side: ViewerSide): string {
+  const p = planProgress(bundle);
+  return side === 'agency' ? progressLabel(p, side) : `${p.approved}/${p.total} approved`;
+}
+
+/** The progress bar (client approval) and its count. */
+export function PlanProgressRow(props: { bundle: PlanBundle; side: ViewerSide }): ReactElement {
+  const pct = progressPercent(planProgress(props.bundle));
   return (
     <div className="flex items-center gap-2.5 px-4 pb-1 pt-3">
       <span className="block h-1.5 flex-1 overflow-hidden rounded-full bg-panel-3">
         <span className="block h-1.5 bg-good" style={{ width: `${pct}%` }} />
       </span>
-      <span className="font-mono text-[13px] text-fg-3">
-        {p.approved}/{p.total} approved
+      <span data-plan-screen-progress="" className="font-mono text-[13px] text-fg-3">
+        {screenProgressLabel(props.bundle, props.side)}
       </span>
     </div>
   );
@@ -541,13 +590,9 @@ export function rowTitle(bundle: PlanBundle | null, item: PlanItemRow): string {
   return info?.title ?? 'Post';
 }
 
-/** A row's second line: a concept's description, or its post's date. Pure. */
-export function rowSubline(bundle: PlanBundle, item: PlanItemRow): string {
-  if (item.kind === 'concept') return item.description ?? '';
-  const info = item.post_id !== null ? bundle.postInfo[item.post_id] : undefined;
-  return info?.target_date !== null && info?.target_date !== undefined
-    ? shortDay(info.target_date.slice(0, 10))
-    : '';
+/** A row's second line: a concept's description (the date has its own line). Pure. */
+export function rowSubline(item: PlanItemRow): string {
+  return item.kind === 'concept' ? (item.description ?? '') : '';
 }
 
 function PlanBody(props: {
@@ -568,7 +613,7 @@ function PlanBody(props: {
   const list = props.tab === 'concept' ? concepts : posts;
   return (
     <>
-      <PlanProgressRow bundle={bundle} />
+      <PlanProgressRow bundle={bundle} side={side} />
       <p className="px-4 font-mono text-[13px] text-fg-3">
         {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
       </p>
@@ -653,7 +698,8 @@ function PlanRow(props: {
 }): ReactElement {
   const onRemove = props.onRemove;
   const hold = useLongPress(() => onRemove?.());
-  const sub = rowSubline(props.bundle, props.item);
+  const sub = rowSubline(props.item);
+  const date = itemDateLabel(props.bundle, props.item);
   return (
     <button
       type="button"
@@ -687,16 +733,13 @@ function PlanRow(props: {
           <span className="truncate text-[15px] font-semibold text-fg">
             {rowTitle(props.bundle, props.item)}
           </span>
-          {sub !== '' ? (
-            <span
-              className={cn(
-                'line-clamp-2 text-[13px] text-fg-3',
-                props.item.kind === 'post' && 'font-mono',
-              )}
-            >
-              {sub}
-            </span>
-          ) : null}
+          {sub !== '' ? <span className="line-clamp-2 text-[13px] text-fg-3">{sub}</span> : null}
+          <span
+            data-plan-row-date={date.dated ? 'dated' : 'none'}
+            className={cn('text-[13px] text-fg-3', date.dated && 'font-mono')}
+          >
+            {date.label}
+          </span>
         </span>
       </span>
       <span className="flex w-full flex-wrap items-center gap-1.5">

@@ -22,15 +22,17 @@ import { AssetPicker } from '@/components/chat/AssetPicker';
 import { PostPicker } from '@/components/chat/PostPicker';
 import { togglePost } from '@/components/chat/post-picker';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
-import { PlanPage } from '@/components/chat/PlanScreen';
+import { ConceptDateField, PlanPage } from '@/components/chat/PlanScreen';
 import {
   AUDIENCE_HINTS,
   CONCEPT_FILES_MAX,
   DRAFT_PROBLEM_COPY,
+  NO_DATE_LABEL,
   PLAN_TITLE_MAX,
   defaultPlanRange,
   draftProblem,
   draftsButtonShown,
+  shortDay,
   stageLabel,
   teamPlanBlocked,
 } from '@/components/chat/plan-card';
@@ -39,6 +41,7 @@ import { newMessageId } from '@/lib/chat/message-id';
 import {
   PLAN_SHARE_FAILED,
   TEAM_PLAN_CLIENT_CHAT,
+  conceptAddArgs,
   createShareEpoch,
   initialShareProgress,
   runPlanShare,
@@ -59,9 +62,11 @@ interface ConceptForm {
   title: string;
   description: string;
   files: LibraryAsset[];
+  /** "YYYY-MM-DD", or '' for no date. */
+  date: string;
 }
 
-const EMPTY_CONCEPT: ConceptForm = { title: '', description: '', files: [] };
+const EMPTY_CONCEPT: ConceptForm = { title: '', description: '', files: [], date: '' };
 
 const FIELD =
   'min-h-[48px] w-full rounded-lg border border-border bg-panel px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60';
@@ -171,6 +176,7 @@ export function PlanComposeScreen(props: {
           title: c.title.trim(),
           description: c.description.trim(),
           versionIds: c.files.map((f) => f.versionId),
+          targetDate: c.date !== '' ? c.date : null,
         }),
       ),
       postIds: shownPosts.map((p) => p.id),
@@ -188,13 +194,7 @@ export function PlanComposeScreen(props: {
             p_trace_id: trace,
           }),
         conceptAdd: (planId, c, trace) =>
-          planConceptAdd(supabase, {
-            p_plan_id: planId,
-            p_title: c.title,
-            p_description: c.description,
-            p_attachment_version_ids: c.versionIds,
-            p_trace_id: trace,
-          }),
+          planConceptAdd(supabase, conceptAddArgs(planId, c, trace)),
         postsAdd: (planId, ids, trace) =>
           planPostsAdd(supabase, { p_plan_id: planId, p_post_ids: ids, p_trace_id: trace }),
         share: async (planId, channelId, messageId, trace) => {
@@ -375,6 +375,12 @@ export function PlanComposeScreen(props: {
                       ? c.description
                       : `${c.files.length} ${c.files.length === 1 ? 'file' : 'files'}`}
                   </span>
+                  <span
+                    data-plan-draft-concept-date={c.date !== '' ? 'dated' : 'none'}
+                    className={cn('text-[13px] text-fg-3', c.date !== '' && 'font-mono')}
+                  >
+                    {c.date !== '' ? shortDay(c.date) : NO_DATE_LABEL}
+                  </span>
                 </span>
                 {!locked ? (
                   <button
@@ -501,6 +507,10 @@ export function PlanComposeScreen(props: {
               className={cn(FIELD, 'py-2.5')}
             />
           </label>
+          <ConceptDateField
+            value={conceptForm.date}
+            onChange={(date) => setConceptForm((f) => ({ ...f, date }))}
+          />
           {conceptForm.files.length > 0 ? (
             <div className="grid grid-cols-4 gap-1.5">
               {conceptForm.files.map((f) => (

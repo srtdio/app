@@ -209,7 +209,7 @@ export function PlanCardBody(props: {
           />
         </span>
         <span data-plan-progress="" className="text-xs text-fg-3">
-          {progressLabel(progress)}
+          {progressLabel(progress, props.side)}
         </span>
       </div>
       <div className="flex border-t border-border">

@@ -209,6 +209,7 @@ const PLAN_RPC: Record<string, RpcHandler> = {
       title: args.p_title,
       description: args.p_description === '' ? null : args.p_description,
       post_id: null,
+      target_date: args.p_target_date ?? null,
       created_by: ME,
       created_at: now,
       updated_at: now,
@@ -238,6 +239,11 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     if (item !== undefined) {
       item.title = args.p_title;
       item.description = args.p_description;
+      // The proc always writes the date (null clears) and resets both reviews.
+      item.target_date = args.p_target_date ?? null;
+      for (const r of tables.plan_item_reviews ?? []) {
+        if (r.item_id === item.id) r.status = 'waiting';
+      }
     }
     return null;
   },
@@ -257,6 +263,7 @@ const PLAN_RPC: Record<string, RpcHandler> = {
         title: null,
         description: null,
         post_id: postId,
+        target_date: null,
         created_by: ME,
         created_at: now,
         updated_at: now,
