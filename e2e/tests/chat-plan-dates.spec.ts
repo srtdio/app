@@ -152,7 +152,7 @@ test.describe('phone', () => {
     await page.waitForTimeout(300);
     await shot(page, 'dates-05-item-no-date');
     await item.locator('[data-plan-edit-date]').click();
-    const sheet = page.getByRole('dialog', { name: 'Concept date' });
+    const sheet = page.getByRole('dialog', { name: 'Edit concept' });
     await expect(sheet).toBeVisible();
     await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue('');
     await expect(sheet.locator('[data-plan-concept-date-clear]')).toHaveCount(0);
@@ -163,7 +163,7 @@ test.describe('phone', () => {
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
     await page.waitForTimeout(300);
     await shot(page, 'dates-06-edit-sheet');
-    await sheet.locator('[data-plan-date-save]').click();
+    await sheet.locator('[data-plan-concept-save]').click();
     await expect(sheet).toBeHidden();
     await expect(item.locator('[data-plan-item-date]')).toHaveText('11 Oct');
     const row = (network.world.tables.plan_items ?? []).find((i) => i.id === target.id);
@@ -185,7 +185,7 @@ test.describe('phone', () => {
     await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue('2026-10-11');
     await sheet.locator('[data-plan-concept-date-clear]').click();
     await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue('');
-    await sheet.locator('[data-plan-date-save]').click();
+    await sheet.locator('[data-plan-concept-save]').click();
     await expect(sheet).toBeHidden();
     await expect(item.locator('[data-plan-item-date]')).toHaveText('No date');
     expect(

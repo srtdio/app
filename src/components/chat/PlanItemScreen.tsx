@@ -14,7 +14,7 @@ import type { FormEvent, ReactElement, RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { planConceptEdit, planItemCommentCreate, planItemReview } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
-import { Sheet } from '@/components/ui/Sheet';
+import { useToast } from '@/components/ui/toast';
 import { IconArrowUp, IconLock } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import {
@@ -25,6 +25,7 @@ import {
   useThreadCardCache,
 } from '@/components/chat/PostCard';
 import { PostSheet } from '@/components/chat/PostSheet';
+import { ConceptSheet, EMPTY_CONCEPT, type ConceptForm } from '@/components/chat/ConceptSheet';
 import { indexPostsById, postRoute, sharedPostViews } from '@/components/chat/post-card';
 import {
   COMMENT_FAILED,
@@ -40,7 +41,6 @@ import {
   type PillTone,
 } from '@/components/chat/plan-card';
 import {
-  ConceptDateField,
   PlanConfirmSheet,
   PlanPage,
   PlanPill,
@@ -51,6 +51,7 @@ import {
 import { readProfiles } from '@/lib/chat-reads';
 import {
   conceptEditArgs,
+  conceptEditUnchanged,
   dispatchPlanChanged,
   readItemScreen,
   type CommentVisibility,
@@ -150,13 +151,38 @@ export function statusRows(
   return rows;
 }
 
-/** Whether the viewer can change this item's date: the agency, on a concept. Pure. */
-export function canEditConceptDate(side: ViewerSide, item: Pick<PlanItemRow, 'kind'>): boolean {
+/**
+ * Whether the viewer can edit this item: the agency, on a concept. A client
+ * never can; a post is edited in the post itself. Pure.
+ */
+export function canEditConcept(side: ViewerSide, item: Pick<PlanItemRow, 'kind'>): boolean {
   return side === 'agency' && item.kind === 'concept';
 }
 
-/** Copy in the concept date sheet. */
-export const CONCEPT_DATE_RESET_HINT = 'Saving sets the team and client reviews back to Waiting.';
+/** The muted line above Save when an edit would reset a review. */
+export const CONCEPT_EDIT_RESET_HINT = 'Saving sends this back to waiting for team and client.';
+
+/** Toasts after an Edit concept save. */
+export const CONCEPT_UPDATED = 'Concept updated';
+export const CONCEPT_SAVE_FAILED = "Couldn't save. Try again.";
+
+/** Whether saving an edit resets a review: the team or client one is not waiting. Pure. */
+export function conceptEditResets(team: ReviewStatus, client: ReviewStatus): boolean {
+  return team !== 'waiting' || client !== 'waiting';
+}
+
+/** The Edit concept sheet's prefill from the item and its read files (none when unread). Pure. */
+export function conceptEditForm(
+  item: Pick<PlanItemRow, 'title' | 'description' | 'target_date'>,
+  files: readonly string[] | null,
+): ConceptForm {
+  return {
+    title: item.title ?? '',
+    description: item.description ?? '',
+    date: item.target_date?.slice(0, 10) ?? '',
+    files: (files ?? []).map((versionId, i) => ({ versionId, name: `File ${i + 1}` })),
+  };
+}
 
 /** A comment shown in the list: a recorded row, or a pending own one. */
 interface ShownComment {
@@ -204,10 +230,12 @@ export function PlanItemScreen(props: {
   const [pending, setPending] = useState<ShownComment[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [dateOpen, setDateOpen] = useState(false);
-  const [dateDraft, setDateDraft] = useState('');
-  const [dateBusy, setDateBusy] = useState(false);
-  const [dateError, setDateError] = useState<string | null>(null);
+  const toast = useToast();
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<ConceptForm>(EMPTY_CONCEPT);
+  // The concept's files when the sheet opened; null when not read yet.
+  const [editFiles, setEditFiles] = useState<string[] | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
 
   // A new item (or a fresh bundle) drops the local overrides and drafts.
   useEffect(() => setOverrides({}), [bundle]);
@@ -220,7 +248,7 @@ export function PlanItemScreen(props: {
     setVisibility('everyone');
     setPending([]);
     setSendError(null);
-    setDateOpen(false);
+    setEditOpen(false);
   }, [props.open, item.id]);
 
   // A write that lands after the viewer moved on (another item, or closed)
@@ -236,7 +264,7 @@ export function PlanItemScreen(props: {
     setActionError(null);
     setConfirmOpen(false);
     setOverrides({});
-    setDateOpen(false);
+    setEditOpen(false);
   }, [item.id]);
 
   const actions = itemActions(side, item, bundle.plan.audience);
@@ -274,45 +302,55 @@ export function PlanItemScreen(props: {
     dispatchPlanChanged(window, bundle.plan.id);
   };
 
-  // The concept's date: a date-only edit keeps the title and description and
-  // sends no files (null keeps every link as it is).
+  // Edit concept: one sheet (the Add concept one) for every field; the Date
+  // row's Edit opens it too. Save sends the full title, description and date;
+  // files go as null unless they changed. An unchanged form sends nothing.
   const date = itemDateLabel(bundle, item);
-  const editDate = canEditConceptDate(side, item);
-  const saveDate = async (): Promise<void> => {
-    if (dateBusy) return;
+  const editable = canEditConcept(side, item);
+  const editResets = conceptEditResets(
+    overrides.team ?? reviewStatus(bundle, item.id, 'team'),
+    overrides.client ?? reviewStatus(bundle, item.id, 'client'),
+  );
+  const openEdit = (): void => {
+    const files = read.status === 'ready' ? read.data.files : null;
+    setEditFiles(files);
+    setEditForm(conceptEditForm(item, files));
+    setEditOpen(true);
+  };
+  const saveEdit = async (): Promise<void> => {
+    if (editBusy) return;
+    const edit = {
+      title: editForm.title.trim(),
+      description: editForm.description.trim(),
+      targetDate: editForm.date === '' ? null : editForm.date,
+      currentFiles: editFiles,
+      pickedFiles: editFiles !== null ? editForm.files.map((f) => f.versionId) : null,
+    };
+    if (conceptEditUnchanged(item, edit)) {
+      setEditOpen(false);
+      return;
+    }
     const forItem = item.id;
-    setDateBusy(true);
-    setDateError(null);
+    setEditBusy(true);
     const traceId = generateTraceId();
-    const result = await planConceptEdit(
-      supabase,
-      conceptEditArgs(
-        item.id,
-        {
-          title: item.title ?? '',
-          description: item.description ?? '',
-          targetDate: dateDraft === '' ? null : dateDraft,
-          currentFiles: null,
-          pickedFiles: null,
-        },
-        traceId,
-      ),
-    );
-    setDateBusy(false);
+    const result = await planConceptEdit(supabase, conceptEditArgs(forItem, edit, traceId));
+    setEditBusy(false);
     if (!stillOn(forItem)) {
       if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
       return;
     }
     if (!result.ok) {
-      logger.warn('chat: plan concept date edit failed', {
+      logger.warn('chat: plan concept edit failed', {
         trace_id: traceId,
         item_id: forItem,
         error: result.error.message,
       });
-      setDateError("Couldn't save. Try again.");
+      toast.show({ title: CONCEPT_SAVE_FAILED });
       return;
     }
-    setDateOpen(false);
+    setEditOpen(false);
+    toast.show({ title: CONCEPT_UPDATED });
+    reload();
     dispatchPlanChanged(window, bundle.plan.id);
   };
 
@@ -486,7 +524,21 @@ export function PlanItemScreen(props: {
         <div className="flex flex-col gap-3.5 p-4">
           <ItemMedia item={item} read={read} />
           <div className="flex flex-col gap-1.5">
-            <h3 className="text-xl font-semibold leading-[26px] text-fg">{title}</h3>
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="min-w-0 break-words pt-[9px] text-xl font-semibold leading-[26px] text-fg">
+                {title}
+              </h3>
+              {editable ? (
+                <button
+                  type="button"
+                  data-plan-edit-concept=""
+                  onClick={openEdit}
+                  className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  Edit
+                </button>
+              ) : null}
+            </div>
             {description !== '' ? (
               <p className="whitespace-pre-wrap text-[15px] leading-[21px] text-fg-2">
                 {description}
@@ -506,16 +558,12 @@ export function PlanItemScreen(props: {
                 >
                   {date.label}
                 </span>
-                {editDate ? (
+                {editable ? (
                   <button
                     type="button"
                     data-plan-edit-date=""
                     aria-label="Edit date"
-                    onClick={() => {
-                      setDateDraft(item.target_date?.slice(0, 10) ?? '');
-                      setDateError(null);
-                      setDateOpen(true);
-                    }}
+                    onClick={openEdit}
                     className="min-h-[44px] min-w-[44px] rounded-md px-2 text-[13px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
                   >
                     Edit
@@ -628,43 +676,21 @@ export function PlanItemScreen(props: {
         onConfirm={() => void review('approved')}
         onCancel={() => setConfirmOpen(false)}
       />
-      {editDate ? (
-        <Sheet
-          open={props.open && dateOpen}
-          onClose={() => setDateOpen(false)}
-          title="Concept date"
-          footer={
-            <div className="grid w-full grid-cols-2 gap-2">
-              <Button
-                size="lg"
-                variant="ghost"
-                disabled={dateBusy}
-                onClick={() => setDateOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="lg"
-                variant="primary"
-                data-plan-date-save=""
-                disabled={dateBusy}
-                onClick={() => void saveDate()}
-              >
-                Save
-              </Button>
-            </div>
-          }
-        >
-          <div className="flex flex-col gap-2">
-            <ConceptDateField value={dateDraft} onChange={setDateDraft} disabled={dateBusy} />
-            <p className="text-[13px] leading-[18px] text-fg-3">{CONCEPT_DATE_RESET_HINT}</p>
-            {dateError !== null ? (
-              <p role="alert" className="text-[13px] text-bad">
-                {dateError}
-              </p>
-            ) : null}
-          </div>
-        </Sheet>
+      {editable ? (
+        <ConceptSheet
+          open={props.open && editOpen}
+          mode="edit"
+          form={editForm}
+          onChange={setEditForm}
+          onSubmit={() => void saveEdit()}
+          onClose={() => {
+            // A save in flight keeps the sheet (and the typed values) open.
+            if (!editBusy) setEditOpen(false);
+          }}
+          busy={editBusy}
+          note={editResets ? CONCEPT_EDIT_RESET_HINT : null}
+          filesReady={editFiles !== null}
+        />
       ) : null}
       {actions.kind === 'open-post' && item.post_id !== null ? (
         <ItemPostSheet
