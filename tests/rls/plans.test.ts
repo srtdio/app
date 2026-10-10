@@ -396,6 +396,129 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
     expect(await own(agency, 'plans', hiddenTeamPlanId)).toBe(1);
   });
 
+  async function conceptDate(itemId: string): Promise<string | null> {
+    const res = await as(agency).from('plan_items').select('target_date').eq('id', itemId);
+    if (res.error !== null) throw new Error(`plan_items read failed: ${res.error.message}`);
+    const row = res.data[0];
+    if (row === undefined) throw new Error('concept not found');
+    return row.target_date;
+  }
+
+  async function editConcept(itemId: string, targetDate?: string | null): Promise<void> {
+    const res = await as(agency).rpc(
+      'plan_concept_edit',
+      rpcArgs({
+        p_item_id: itemId,
+        p_title: 'Concept',
+        p_description: 'A concept',
+        p_attachment_version_ids: [],
+        p_trace_id: uuidv7(),
+        ...(targetDate === undefined ? {} : { p_target_date: targetDate as string }),
+      }),
+    );
+    if (res.error !== null) throw new Error(`plan_concept_edit failed: ${res.error.message}`);
+  }
+
+  /** Run one statement as postgres and return its error text ('' when it succeeds). */
+  function postgresError(sql: string): string {
+    try {
+      asPostgres(sql);
+      return '';
+    } catch (err: unknown) {
+      const stderr = (err as { stderr?: unknown }).stderr;
+      return typeof stderr === 'string' ? stderr : String(err);
+    }
+  }
+
+  // 20261010120000_plan_items_concept_date.sql: concepts carry an optional
+  // target_date; post items never do (plan_items_target_date_concept_only).
+  it('plan_concept_add with a date stores it; without one stores null', async () => {
+    const dated = must(
+      'plan_concept_add',
+      await as(agency).rpc(
+        'plan_concept_add',
+        rpcArgs({
+          p_plan_id: clientPlanId,
+          p_title: 'Dated concept',
+          p_description: 'A concept',
+          p_attachment_version_ids: [],
+          p_trace_id: uuidv7(),
+          p_target_date: '2026-11-12',
+        }),
+      ),
+    );
+    expect(await conceptDate(dated)).toBe('2026-11-12');
+    const undated = await addConcept(clientPlanId);
+    expect(await conceptDate(undated)).toBeNull();
+  });
+
+  it('plan_concept_edit sets, changes and clears the date', async () => {
+    const itemId = await addConcept(clientPlanId);
+    await editConcept(itemId, '2026-11-03');
+    expect(await conceptDate(itemId)).toBe('2026-11-03');
+    await editConcept(itemId, '2026-11-20');
+    expect(await conceptDate(itemId)).toBe('2026-11-20');
+    await editConcept(itemId, null);
+    expect(await conceptDate(itemId)).toBeNull();
+  });
+
+  it('a date-only concept edit resets an approved team review to waiting', async () => {
+    const itemId = await addConcept(clientPlanId);
+    await review(agency, itemId, 'team', 'approved');
+    const status = async (): Promise<string | undefined> => {
+      const res = await as(agency)
+        .from('plan_item_reviews')
+        .select('status')
+        .eq('item_id', itemId)
+        .eq('side', 'team');
+      if (res.error !== null)
+        throw new Error(`plan_item_reviews read failed: ${res.error.message}`);
+      return res.data[0]?.status;
+    };
+    expect(await status()).toBe('approved');
+    await editConcept(itemId, '2026-11-15');
+    expect(await status()).toBe('waiting');
+  });
+
+  it('a post item with a target_date is refused by plan_items_target_date_concept_only', async () => {
+    const insertErr = postgresError(
+      `insert into public.plan_items (workspace_id, plan_id, kind, post_id, target_date) values ('${ws.id}', '${clientPlanId}', 'post', '${draftPostId}', '2026-11-05')`,
+    );
+    expect(insertErr).toMatch(/plan_items_target_date_concept_only/);
+    const updateErr = postgresError(
+      `update public.plan_items set target_date = '2026-11-05' where id = '${clientPostItemId}'`,
+    );
+    expect(updateErr).toMatch(/plan_items_target_date_concept_only/);
+    const res = await as(agency)
+      .from('plan_items')
+      .select('target_date')
+      .eq('id', clientPostItemId);
+    expect(res.error).toBeNull();
+    expect(res.data?.[0]?.target_date).toBeNull();
+  });
+
+  it('a client member calling plan_concept_add with a date is refused (forbidden_role)', async () => {
+    const res = await as(client).rpc(
+      'plan_concept_add',
+      rpcArgs({
+        p_plan_id: clientPlanId,
+        p_title: 'Client concept',
+        p_description: 'A concept',
+        p_attachment_version_ids: [],
+        p_trace_id: uuidv7(),
+        p_target_date: '2026-11-10',
+      }),
+    );
+    expect(res.data).toBeNull();
+    expect(res.error?.message).toMatch(/forbidden_role/);
+  });
+
+  it('named-arg calls without p_target_date still work for add and edit', async () => {
+    const itemId = await addConcept(clientPlanId);
+    await editConcept(itemId);
+    expect(await conceptDate(itemId)).toBeNull();
+  });
+
   // Runs last: it turns the team plan client-visible with its draft still inside.
   it('a draft post in a team plan stays hidden from the client once the plan turns client-visible', async () => {
     expect(await read(client, 'plan_items', teamDraftItemId)).toBe(0);

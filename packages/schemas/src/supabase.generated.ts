@@ -7461,6 +7461,7 @@ export type Database = {
           plan_id: string
           position: number
           post_id: string | null
+          target_date: string | null
           title: string | null
           updated_at: string
           workspace_id: string
@@ -7475,6 +7476,7 @@ export type Database = {
           plan_id: string
           position?: number
           post_id?: string | null
+          target_date?: string | null
           title?: string | null
           updated_at?: string
           workspace_id: string
@@ -7489,6 +7491,7 @@ export type Database = {
           plan_id?: string
           position?: number
           post_id?: string | null
+          target_date?: string | null
           title?: string | null
           updated_at?: string
           workspace_id?: string
@@ -9082,6 +9085,7 @@ export type Database = {
           p_attachment_version_ids: string[]
           p_description: string
           p_plan_id: string
+          p_target_date?: string
           p_title: string
           p_trace_id: string
         }
@@ -9092,6 +9096,7 @@ export type Database = {
           p_attachment_version_ids: string[]
           p_description: string
           p_item_id: string
+          p_target_date?: string
           p_title: string
           p_trace_id: string
         }
