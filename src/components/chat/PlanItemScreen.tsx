@@ -68,6 +68,7 @@ import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import { logger } from '@/lib/logger';
+import { DUR_SLOW_MS } from '@/lib/motion';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
@@ -384,12 +385,25 @@ export function PlanItemScreen(props: {
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const highlightDone = useRef(false);
   const listed = read.status === 'ready' && shown.some((c) => c.id === highlightId);
+  // The page slides in on translateY: scroll only once it rests, so the
+  // scroll never lands mid-slide on a fractional offset.
+  const [rested, setRested] = useState(false);
   useEffect(() => {
-    if (highlightId === null || !props.open || !listed || highlightDone.current) return;
+    if (!props.open) {
+      setRested(false);
+      return;
+    }
+    const timer = setTimeout(() => setRested(true), DUR_SLOW_MS);
+    return () => clearTimeout(timer);
+  }, [props.open]);
+  useEffect(() => {
+    if (highlightId === null || !props.open || !rested || !listed || highlightDone.current) {
+      return;
+    }
     highlightDone.current = true;
     setHighlighted(highlightId);
     highlightRef.current?.scrollIntoView({ block: 'center' });
-  }, [highlightId, props.open, listed]);
+  }, [highlightId, props.open, rested, listed]);
   useEffect(() => {
     if (highlighted === null) return;
     const timer = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
