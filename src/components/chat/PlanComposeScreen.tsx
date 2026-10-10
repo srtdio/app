@@ -155,6 +155,21 @@ export function PlanComposeScreen(props: {
     [audience, posts],
   );
 
+  // Drafts list in the plan's order: dated by day, undated last (stable).
+  const shownConcepts = useMemo(
+    () =>
+      concepts
+        .map((c, at) => ({ c, at }))
+        .sort(
+          (a, b) =>
+            (a.c.date === '' ? 1 : 0) - (b.c.date === '' ? 1 : 0) ||
+            a.c.date.localeCompare(b.c.date) ||
+            a.at - b.at,
+        )
+        .map(({ c }) => c),
+    [concepts],
+  );
+
   const share = async (): Promise<void> => {
     setTriedShare(true);
     if (busy || problem !== null || teamBlocked) return;
@@ -361,7 +376,7 @@ export function PlanComposeScreen(props: {
               <h3 className="text-[15px] font-semibold text-fg">Concepts</h3>
               <span className="text-[13px] text-fg-3">Ideas before they are posts</span>
             </div>
-            {concepts.map((c) => (
+            {shownConcepts.map((c) => (
               <div
                 key={c.key}
                 data-plan-draft-concept=""
