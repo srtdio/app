@@ -69,12 +69,34 @@ export function PlanPage(props: {
   backLabel: string;
   backIcon?: ReactNode;
   onBack: () => void;
+  /** The slide in has ended (at once when there is no slide, as under reduced motion). */
+  onEntered?: () => void;
   footer?: ReactNode;
   children: ReactNode;
   testId: string;
 }): ReactElement | null {
   const [rendered, setRendered] = useState(props.open);
   const [entered, setEntered] = useState(false);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const onEnteredRef = useRef(props.onEntered);
+  onEnteredRef.current = props.onEntered;
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!entered || el === null) return;
+    if (parseFloat(getComputedStyle(el).transitionDuration) === 0) {
+      onEnteredRef.current?.();
+      return;
+    }
+    const done = (event: TransitionEvent): void => {
+      if (event.target === el && event.propertyName === 'transform') onEnteredRef.current?.();
+    };
+    el.addEventListener('transitionend', done);
+    el.addEventListener('transitioncancel', done);
+    return () => {
+      el.removeEventListener('transitionend', done);
+      el.removeEventListener('transitioncancel', done);
+    };
+  }, [entered]);
   useEffect(() => {
     if (props.open) {
       setRendered(true);
@@ -88,6 +110,7 @@ export function PlanPage(props: {
   if (!rendered) return null;
   return createPortal(
     <div
+      ref={pageRef}
       role="dialog"
       aria-modal="true"
       aria-label={props.title}

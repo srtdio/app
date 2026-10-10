@@ -7,6 +7,10 @@ import {
   ME,
   PEER,
   PEER_NAME,
+  PLAN_CONCEPT_COMMENT_ID,
+  PLAN_CONCEPT_ITEM,
+  PLAN_ID,
+  seedClientPlan,
   seedDatedPlan,
 } from '../fixtures/chat-data';
 
@@ -205,4 +209,31 @@ test.describe('phone', () => {
     await shot(page, 'dates-10-plan-client');
     expectClean(network);
   });
+});
+
+test('a linked comment lights up only once the item page has slid in', async ({ page }) => {
+  test.setTimeout(60_000);
+  const network = await installHarnessNetwork(page);
+  seedClientPlan(network.world, { channelId: DM_CHANNEL, sender: ME, fileVersionId: PLAN_ID });
+  // Record the item page's transform at the moment the highlight lands.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __highlightTransform?: string };
+    new MutationObserver(() => {
+      if (w.__highlightTransform !== undefined) return;
+      if (document.querySelector('[data-plan-comment-highlight]') === null) return;
+      const item = document.querySelector('[data-plan-page="item"]');
+      w.__highlightTransform = item !== null ? getComputedStyle(item).transform : 'missing';
+    }).observe(document, { subtree: true, childList: true, attributes: true });
+  });
+  await page.goto(`/plans/${PLAN_ID}?item=${PLAN_CONCEPT_ITEM}&comment=${PLAN_CONCEPT_COMMENT_ID}`);
+  const item = page_(page, 'item');
+  await expect(item.locator('[data-plan-comment-highlight]')).toBeVisible();
+  const transform = await page.evaluate(
+    () => (window as unknown as { __highlightTransform?: string }).__highlightTransform,
+  );
+  // At rest: no translate (identity, or none).
+  expect(['none', 'matrix(1, 0, 0, 1, 0, 0)']).toContain(transform);
+  const box = await item.getByRole('button', { name: 'Back', exact: true }).boundingBox();
+  expect(box?.height).toBe(44);
+  expectClean(network);
 });

@@ -578,6 +578,8 @@ export const PLAN_POST_ITEM = '0190d100-0000-7000-8000-00000000d102';
 export const PLAN_TITLE = 'Week of 12 Oct';
 export const PLAN_CONCEPT_TITLE = 'Season opening reel';
 export const PLAN_MESSAGE_ID = '0190d200-0000-7000-8000-00000000d201';
+/** The Everyone comment seedClientPlan puts on the concept. */
+export const PLAN_CONCEPT_COMMENT_ID = '0190d300-0000-7000-8000-00000000d301';
 
 function planRow(id: string, title: string, audience: 'team' | 'client', by: string): Row {
   return {

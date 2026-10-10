@@ -68,7 +68,6 @@ import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import { logger } from '@/lib/logger';
-import { DUR_SLOW_MS } from '@/lib/motion';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
@@ -385,16 +384,11 @@ export function PlanItemScreen(props: {
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const highlightDone = useRef(false);
   const listed = read.status === 'ready' && shown.some((c) => c.id === highlightId);
-  // The page slides in on translateY: scroll only once it rests, so the
-  // scroll never lands mid-slide on a fractional offset.
+  // The page slides in on translateY: the linked comment scrolls and lights
+  // up once the slide has ended (PlanPage's onEntered), never mid-slide.
   const [rested, setRested] = useState(false);
   useEffect(() => {
-    if (!props.open) {
-      setRested(false);
-      return;
-    }
-    const timer = setTimeout(() => setRested(true), DUR_SLOW_MS);
-    return () => clearTimeout(timer);
+    if (!props.open) setRested(false);
   }, [props.open]);
   useEffect(() => {
     if (highlightId === null || !props.open || !rested || !listed || highlightDone.current) {
@@ -420,6 +414,7 @@ export function PlanItemScreen(props: {
         subtitle={bundle.plan.title}
         backLabel={props.backLabel ?? 'Back to plan'}
         onBack={props.onClose}
+        onEntered={() => setRested(true)}
         footer={
           <form
             onSubmit={(e) => void send(e)}
