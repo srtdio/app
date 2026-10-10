@@ -31,8 +31,8 @@ import {
 import {
   PRESIGN_ENABLED,
   sharedCardPresignCache,
-  useThreadCardCache,
   approverRolesOf,
+  type ThreadCardCache,
 } from '@/components/chat/PostCard';
 import { PostSheet } from '@/components/chat/PostSheet';
 import { indexPostsById, sharedPostViews } from '@/components/chat/post-card';
@@ -361,6 +361,8 @@ export function StatusDrawerList(
     StatusDrawerActions & {
       open: boolean;
       postsExpanded: boolean;
+      /** The post row whose tap waits on its read (pressed, busy). */
+      busyPostId?: string | null;
       onExpandPosts: () => void;
     },
 ): ReactElement {
@@ -452,20 +454,25 @@ export function StatusDrawerList(
             <>
               {shown.map((post) => {
                 const lines = openPostLines(post, props.workspaceKey, false, props.timeZone);
+                const busy = props.busyPostId === post.id;
                 return (
                   <button
                     key={post.id}
                     type="button"
                     data-status-post={post.id}
+                    aria-busy={busy}
                     onClick={() => props.onOpenPost(post.id)}
-                    className={ROW}
+                    // Waiting on its read: pressed tint and a pulsing chevron, same box.
+                    className={cn(ROW, busy && 'bg-panel-2')}
                   >
                     <span className={DATE_COL}>{drawerDay(post.target_date, props.timeZone)}</span>
                     <span className="min-w-0 flex-1">
                       <span className={ROW_TITLE}>{lines.title}</span>
                       <span className={ROW_SUB}>{formatLabel(post.format)}</span>
                     </span>
-                    <Chevron />
+                    <span className={cn('flex shrink-0', busy && 'animate-pulse')}>
+                      <Chevron />
+                    </span>
                   </button>
                 );
               })}
@@ -629,11 +636,12 @@ const sheetPresignDeps = {
 };
 
 /**
- * The PostSheet for one post in review, resolved through the thread's card
- * cache (one batched read; the same sheet a PostCard tap opens). Mounts on
- * first open and stays so its exit animates.
+ * The PostSheet for one post in review, from the thread's card cache (the
+ * same sheet a PostCard tap opens). The ticker opens it only once the post
+ * is in the cache. Mounts on first open and stays so its exit animates.
  */
 export function DrawerPostSheet(props: {
+  cache: ThreadCardCache | null;
   postId: string | null;
   open: boolean;
   side: ViewerSide;
@@ -641,11 +649,7 @@ export function DrawerPostSheet(props: {
   timeZone: string;
   onClose: () => void;
 }): ReactElement | null {
-  const cache = useThreadCardCache();
-  const { postId } = props;
-  useEffect(() => {
-    if (postId !== null) cache?.request({ postIds: [postId] });
-  }, [cache, postId]);
+  const { cache, postId } = props;
   if (postId === null || cache === null) return null;
   const snap = cache.posts([postId]);
   const [view] = sharedPostViews(

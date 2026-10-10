@@ -101,8 +101,18 @@ function seedBriefs(network: HarnessNetwork, count: number): void {
       workspace_id: WORKSPACE_ID,
       title: `Brief ${i + 1}`,
       objective: 'Fixture objective',
+      format_requested: null,
+      brand_requirements: null,
+      target_date: null,
+      reference_links: null,
       status: 'open',
+      closed_at: null,
+      closed_by: null,
       created_by: PEER,
+      legacy_author_name: null,
+      created_via: 'app',
+      row_version: 1,
+      updated_at: new Date(Date.now() - (i + 1) * 3_600_000).toISOString(),
       created_at: new Date(Date.now() - (i + 1) * 3_600_000).toISOString(),
       deleted_at: null,
     });
@@ -330,5 +340,92 @@ test.describe('chat status ticker', () => {
     await bar.dispatchEvent('pointerup', { ...base, ...at });
     expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('');
     expect(network.blocked).toEqual([]);
+  });
+
+  test('a post row tap opens the post sheet', async ({ page }) => {
+    await installHarnessNetwork(page);
+    const bar = await openDm(page);
+    await bar.locator('[data-status-item="posts"]').click();
+    await drawerOpen(page);
+    await page.locator('[data-status-post]').first().click();
+    await expect(page.locator('[data-sheet-title]')).toBeVisible();
+    await shot(page, 'post-sheet');
+  });
+
+  test('a post still loading shows its row busy, then opens', async ({ page }) => {
+    await installHarnessNetwork(page);
+    // The card read (posts by id) lands 2s late; the review list is untouched.
+    await page.route(/\/rest\/v1\/posts\?.*id=in\./, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await route.fallback();
+    });
+    const bar = await openDm(page);
+    await bar.locator('[data-status-item="posts"]').click();
+    await drawerOpen(page);
+    const row = page.locator('[data-status-post]').first();
+    const before = await row.boundingBox();
+    await row.click();
+    await expect(row).toHaveAttribute('aria-busy', 'true');
+    const during = await row.boundingBox();
+    expect(during?.height).toBe(before?.height);
+    await expect(page.locator('[data-sheet-title]')).toBeVisible({ timeout: 6000 });
+    await expect(row).toHaveAttribute('aria-busy', 'false');
+  });
+
+  test('a post read that fails clears busy and says so', async ({ page }) => {
+    await installHarnessNetwork(page);
+    await page.route(/\/rest\/v1\/posts\?.*id=in\./, async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 500,
+        headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'XX000', message: 'boom', details: null, hint: null }),
+      });
+    });
+    const bar = await openDm(page);
+    await bar.locator('[data-status-item="posts"]').click();
+    await drawerOpen(page);
+    const row = page.locator('[data-status-post]').first();
+    await row.click();
+    await expect(row).toHaveAttribute('aria-busy', 'true');
+    await expect(page.getByText("Couldn't open this post")).toBeVisible({ timeout: 9000 });
+    await expect(row).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator('[data-sheet-title]')).toHaveCount(0);
+  });
+
+  test('brief tap then Back restores the drawer as it was left', async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    seedBriefs(network, 2);
+    const bar = await openDm(page);
+    await bar.locator('[data-status-item="briefs"]').click();
+    await drawerOpen(page);
+    await page.locator('[data-status-brief]').first().click();
+    await expect(page).toHaveURL(/\/briefs\//);
+    await page.goBack();
+    await expect(page.locator('[data-status-drawer="open"]')).toHaveCount(1, { timeout: 8000 });
+    await expect(page.locator('[data-status-section="briefs"]')).toBeVisible();
+    await shot(page, 'drawer-restored');
+  });
+
+  test('brief tap, another tab, then Chat again: the drawer starts closed', async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    seedBriefs(network, 2);
+    const bar = await openDm(page);
+    await bar.locator('[data-status-item="briefs"]').click();
+    await drawerOpen(page);
+    await page.locator('[data-status-brief]').first().click();
+    await expect(page).toHaveURL(/\/briefs\//);
+    await page.getByRole('link', { name: 'Pipeline' }).first().click();
+    await expect(page).toHaveURL(/\/pipeline/);
+    await page.getByRole('link', { name: 'Chat' }).first().click();
+    const row = page.getByText(PEER_NAME, { exact: true }).first();
+    await row.waitFor({ state: 'visible' });
+    await row.click();
+    await page.locator('[data-loops-strip="open"]').waitFor({ state: 'visible', timeout: 8000 });
+    await page.waitForTimeout(500);
+    await expect(page.locator('[data-status-panel]')).toHaveCount(0);
   });
 });

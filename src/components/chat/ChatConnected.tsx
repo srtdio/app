@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -603,6 +603,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // open or close, so the param is always written from the chat's own entry.
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  // The status drawer restores only on a Back to this history entry.
+  const locationKey = useLocation().key;
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   // The latest workspace and ?channel=, and whether the page is still mounted,
@@ -1847,6 +1849,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       {...(!notesOpen ? { onOpenPlanCompose: () => setPlanComposeOpen(true) } : {})}
                       onOpenPlanItem={onOpenPlanItem}
                       onNavigate={navigate}
+                      locationKey={locationKey}
                       initialMessageId={initialJumpFor(pendingJump, selected.channelId)}
                       onInitialJumpTaken={() => setPendingJump(null)}
                       searchRequest={

@@ -14,8 +14,18 @@ import {
   type StatusDrawerData,
 } from '@/components/chat/StatusDrawer';
 import {
+  POST_OPEN_FAILED,
   StatusTickerBar,
   barTap,
+  postTapOutcome,
+  prefetchPosts,
+  rememberDrawer,
+  renderedPostIds,
+  resetDrawerMemory,
+  settleBusyPost,
+  takeDrawerMemory,
+  tapPost,
+  type PostTapCache,
   needsCompact,
   snapOpen,
   snapShut,
@@ -266,5 +276,152 @@ describe('the drawer list', () => {
     const asking = renderToStaticMarkup(<StatusMarkRow {...base} confirming />);
     expect(asking).toContain('data-mark-confirm="resolve"');
     expect(asking).toContain('Mark this decision as closed?');
+  });
+});
+
+describe('post rows never fail silently', () => {
+  /** A fake card cache: `state` per id, every request and retry recorded. */
+  function fakeCache(state: Record<string, 'cached' | 'loading' | 'failed' | 'hidden'>) {
+    const requests: string[][] = [];
+    const retries: string[][] = [];
+    const cache: PostTapCache = {
+      posts: (ids) => ({
+        loading: ids.some((id) => state[id] === 'loading'),
+        posts: ids.filter((id) => state[id] === 'cached').map((id) => ({ id })),
+        failed: ids.filter((id) => state[id] === 'failed'),
+      }),
+      request: (ids) => requests.push([...(ids.postIds ?? [])]),
+      retry: (ids) => retries.push([...(ids.postIds ?? [])]),
+    };
+    return { cache, requests, retries, state };
+  }
+
+  it('opening the drawer asks for every rendered post id in one batched request', () => {
+    const rows = Array.from({ length: 8 }, (_, i) => ({ id: `p${i}` }));
+    const { cache, requests } = fakeCache({});
+    prefetchPosts(cache, true, renderedPostIds(rows, false));
+    expect(requests).toEqual([['p0', 'p1', 'p2', 'p3', 'p4']]);
+    prefetchPosts(cache, true, renderedPostIds(rows, true));
+    expect(requests[1]).toHaveLength(8);
+    prefetchPosts(cache, false, renderedPostIds(rows, false));
+    prefetchPosts(cache, true, []);
+    prefetchPosts(null, true, ['p0']);
+    expect(requests).toHaveLength(2);
+  });
+
+  it('a cached post opens at once', () => {
+    const { cache, requests } = fakeCache({ a: 'cached' });
+    expect(tapPost(cache, 'a')).toBe('open');
+    expect(requests).toEqual([]);
+  });
+
+  it('an uncached post goes busy, then opens once its read lands', () => {
+    const { cache, requests, state } = fakeCache({ a: 'loading' });
+    expect(tapPost(cache, 'a')).toBe('busy');
+    expect(requests).toEqual([['a']]);
+    expect(settleBusyPost(cache, 'a')).toBeNull();
+    state.a = 'cached';
+    expect(settleBusyPost(cache, 'a')).toBe('open');
+  });
+
+  it('a failed or hidden read clears busy with the toast', () => {
+    const { cache, retries, state } = fakeCache({ a: 'loading', h: 'hidden', f: 'failed' });
+    expect(tapPost(cache, 'a')).toBe('busy');
+    state.a = 'failed';
+    expect(settleBusyPost(cache, 'a')).toBe('toast');
+    state.a = 'hidden';
+    expect(settleBusyPost(cache, 'a')).toBe('toast');
+    expect(tapPost(cache, 'h')).toBe('toast');
+    // A read that gave up earlier gets a fresh try instead of a dead tap.
+    expect(tapPost(cache, 'f')).toBe('busy');
+    expect(retries).toEqual([['f']]);
+    expect(tapPost(null, 'a')).toBe('toast');
+    expect(POST_OPEN_FAILED).toBe("Couldn't open this post");
+  });
+
+  it('outcomes read the snapshot: open, failed, pending, not visible', () => {
+    const snap = (over: object) => ({ loading: false, posts: [], failed: [], ...over });
+    expect(postTapOutcome(snap({ posts: [{ id: 'a' }] }), 'a')).toBe('open');
+    expect(postTapOutcome(snap({ failed: ['a'] }), 'a')).toBe('failed');
+    expect(postTapOutcome(snap({ loading: true }), 'a')).toBe('pending');
+    expect(postTapOutcome(snap({}), 'a')).toBe('not_visible');
+  });
+
+  it('the busy row keeps its box: same classes plus a tint and a pulsing chevron', () => {
+    const post = {
+      id: 'p1',
+      number: 1,
+      title: 'Launch teaser',
+      format: 'carousel',
+      target_date: null,
+      stage_entered_at: '2026-10-01T00:00:00Z',
+      thumbnailAssetVersionId: null,
+    };
+    const render = (busy: string | null): string => {
+      function Probe(): ReactElement {
+        return StatusDrawerList({
+          keys: ['posts'],
+          side: 'agency',
+          timeZone: 'UTC',
+          workspaceKey: null,
+          plans: [],
+          posts: { heading: 'Posts waiting on client', rows: [post], count: 1 },
+          briefs: { rows: [], count: 0 },
+          marks: new Map(),
+          messageFor: () => undefined,
+          profiles: new Map(),
+          onOpenPlan: () => {},
+          onOpenPlanItem: () => {},
+          onOpenPost: () => {},
+          onOpenBrief: () => {},
+          onSeeAllBriefs: () => {},
+          onJumpMark: () => {},
+          onSeeAllMarks: () => {},
+          open: true,
+          postsExpanded: false,
+          onExpandPosts: () => {},
+          busyPostId: busy,
+        });
+      }
+      return renderToStaticMarkup(
+        <ToastProvider>
+          <Probe />
+        </ToastProvider>,
+      );
+    };
+    const idle = render(null);
+    const busy = render('p1');
+    expect(idle).toContain('aria-busy="false"');
+    expect(busy).toContain('aria-busy="true"');
+    expect(busy).toContain('bg-panel-2');
+    expect(busy).toContain('animate-pulse');
+    expect(busy.match(/min-h-\[44px\]/g)?.length).toBe(idle.match(/min-h-\[44px\]/g)?.length);
+  });
+});
+
+describe('drawer memory restores only on Back', () => {
+  const state = { scrollTop: 120, postsExpanded: true };
+
+  it('saved at key K restores when the chat mounts at K', () => {
+    resetDrawerMemory();
+    rememberDrawer('c1', 'K', state);
+    expect(takeDrawerMemory('c1', 'K')).toEqual({ locationKey: 'K', ...state });
+    expect(takeDrawerMemory('c1', 'K')).toBeNull();
+  });
+
+  it('a different key clears it and the drawer stays closed', () => {
+    resetDrawerMemory();
+    rememberDrawer('c1', 'K', state);
+    expect(takeDrawerMemory('c1', 'L')).toBeNull();
+    expect(takeDrawerMemory('c1', 'K')).toBeNull();
+  });
+
+  it('no router key remembers nothing; other channels are untouched', () => {
+    resetDrawerMemory();
+    rememberDrawer('c1', undefined, state);
+    expect(takeDrawerMemory('c1', undefined)).toBeNull();
+    rememberDrawer('c2', 'K', state);
+    expect(takeDrawerMemory('c1', 'K')).toBeNull();
+    expect(takeDrawerMemory('c2', 'K')).not.toBeNull();
   });
 });

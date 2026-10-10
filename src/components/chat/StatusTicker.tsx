@@ -29,9 +29,13 @@ import {
   type StatusDrawerActions,
   type StatusDrawerData,
 } from '@/components/chat/StatusDrawer';
+import { useThreadCardCache } from '@/components/chat/PostCard';
+import { useToast } from '@/components/ui/toast';
+import { READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import { cn } from '@/lib/cn';
 import {
   NOTHING_OPEN_LINE,
+  SECTION_ROWS,
   STATUS_ORDER,
   drawerShouldClose,
   type StatusBar,
@@ -251,12 +255,114 @@ export function StatusTickerBar(props: {
   );
 }
 
-/** Where the drawer was when the chat navigated away (a brief), per channel. */
-const drawerMemory = new Map<string, { scrollTop: number; postsExpanded: boolean }>();
+/** Where the drawer was when the chat navigated away (a brief, the Briefs page). */
+export interface DrawerMemory {
+  /** The router location key the chat was at when it left. */
+  locationKey: string;
+  scrollTop: number;
+  postsExpanded: boolean;
+}
+
+/** Per channel; a Back to the same history entry restores it, any other arrival drops it. */
+const drawerMemory = new Map<string, DrawerMemory>();
 
 /** Test hook: forget every remembered drawer. */
 export function resetDrawerMemory(): void {
   drawerMemory.clear();
+}
+
+/** Remember the drawer as the chat leaves; no location key (no router) remembers nothing. */
+export function rememberDrawer(
+  channelId: string,
+  locationKey: string | undefined,
+  state: { scrollTop: number; postsExpanded: boolean },
+): void {
+  if (locationKey === undefined || locationKey === '') return;
+  drawerMemory.set(channelId, { locationKey, ...state });
+}
+
+/**
+ * The chat mounted at `mountKey`: the channel's memory is taken (removed) and
+ * returned only when it was saved at that same key (Back to the same history
+ * entry); any other arrival drops it and the drawer starts closed.
+ */
+export function takeDrawerMemory(
+  channelId: string,
+  mountKey: string | undefined,
+): DrawerMemory | null {
+  const remembered = drawerMemory.get(channelId);
+  if (remembered === undefined) return null;
+  drawerMemory.delete(channelId);
+  return mountKey !== undefined && remembered.locationKey === mountKey ? remembered : null;
+}
+
+/** The copy when a tapped post cannot be opened. */
+export const POST_OPEN_FAILED = "Couldn't open this post";
+
+/** How long a tapped post may wait on its read before the tap gives up (ms). */
+export const POST_TAP_WAIT_MS = READ_TIMEOUT_MS + 1_000;
+
+/**
+ * What a post row tap does with the card cache's snapshot of that post: open
+ * the sheet, wait on the read in flight, or say it cannot (a failed read, or
+ * a post RLS hides). Pure.
+ */
+export function postTapOutcome(
+  snapshot: { loading: boolean; posts: ReadonlyArray<{ id: string }>; failed: readonly string[] },
+  postId: string,
+): 'open' | 'pending' | 'failed' | 'not_visible' {
+  if (snapshot.posts.some((p) => p.id === postId)) return 'open';
+  if (snapshot.failed.includes(postId)) return 'failed';
+  if (snapshot.loading) return 'pending';
+  return 'not_visible';
+}
+
+/** The slice of the thread card cache a post tap uses. */
+export interface PostTapCache {
+  posts: (ids: readonly string[]) => {
+    loading: boolean;
+    posts: ReadonlyArray<{ id: string }>;
+    failed: string[];
+  };
+  request: (ids: { postIds?: readonly string[] }) => void;
+  retry: (ids: { postIds?: readonly string[] }) => void;
+}
+
+/**
+ * A post row tap: open at once when the post is cached; else ask the cache
+ * (a fresh try for a read that gave up) and wait busy; a post RLS hides says
+ * so at once. No cache at all cannot open.
+ */
+export function tapPost(cache: PostTapCache | null, postId: string): 'open' | 'busy' | 'toast' {
+  if (cache === null) return 'toast';
+  const outcome = postTapOutcome(cache.posts([postId]), postId);
+  if (outcome === 'open') return 'open';
+  if (outcome === 'not_visible') return 'toast';
+  if (outcome === 'failed') cache.retry({ postIds: [postId] });
+  else cache.request({ postIds: [postId] });
+  return 'busy';
+}
+
+/** A busy post after a cache change: open, still waiting (null), or toast. */
+export function settleBusyPost(cache: PostTapCache, postId: string): 'open' | 'toast' | null {
+  const outcome = postTapOutcome(cache.posts([postId]), postId);
+  if (outcome === 'pending') return null;
+  return outcome === 'open' ? 'open' : 'toast';
+}
+
+/** Ask the cache, in one batch, for every post the open drawer renders. */
+export function prefetchPosts(
+  cache: Pick<PostTapCache, 'request'> | null,
+  open: boolean,
+  postIds: readonly string[],
+): void {
+  if (!open || postIds.length === 0 || cache === null) return;
+  cache.request({ postIds });
+}
+
+/** The post ids the Posts section renders right now (first five, or all once expanded). Pure. */
+export function renderedPostIds(rows: ReadonlyArray<{ id: string }>, expanded: boolean): string[] {
+  return (expanded ? rows : rows.slice(0, SECTION_ROWS)).map((r) => r.id);
 }
 
 /**
@@ -330,8 +436,14 @@ export function ChatStatus(props: {
   /** In-app navigation (a brief, the Briefs page). */
   navigate: (to: string) => void;
   briefRoute: (id: string) => string;
+  /** The router location key (absent outside a router: nothing is remembered). */
+  locationKey?: string | undefined;
 }): ReactElement {
   const { bar, channelId } = props;
+  // The key this chat mounted at: memory restores only for that history entry.
+  const mountKey = useRef(props.locationKey).current;
+  const toast = useToast();
+  const cardCache = useThreadCardCache();
   const interactive = bar !== null && bar.kind === 'items';
   const [shown, setShown] = useState(false);
   const [target, setTarget] = useState<'open' | 'closed'>('closed');
@@ -433,15 +545,71 @@ export function ChatStatus(props: {
     if (shown && bar !== null && drawerShouldClose(bar)) close();
   }, [bar, shown, close]);
 
-  // Back from a brief: the drawer comes back as it was left.
+  // Back to the same history entry: the drawer comes back as it was left.
+  // Any other arrival drops the memory on mount and the drawer starts closed.
+  const restore = useRef<DrawerMemory | null | undefined>(undefined);
   useEffect(() => {
-    if (!interactive || channelId === undefined) return;
-    const remembered = drawerMemory.get(channelId);
-    if (remembered === undefined) return;
-    drawerMemory.delete(channelId);
+    // Taken once per mount (the ref survives StrictMode's effect replay).
+    if (restore.current === undefined) {
+      restore.current = channelId !== undefined ? takeDrawerMemory(channelId, mountKey) : null;
+    }
+    const remembered = restore.current;
+    if (!interactive || remembered === null) return;
+    restore.current = null;
     setPostsExpanded(remembered.postsExpanded);
     openAt(null, { instant: true, scrollTop: remembered.scrollTop });
-  }, [interactive, channelId, openAt]);
+  }, [interactive, openAt, channelId, mountKey]);
+
+  // Open (or expanded): every rendered post row asked of the card cache in one
+  // batch, so a tap opens its sheet at once.
+  const postsShown = props.drawer.keys.includes('posts');
+  const postIdsKey = postsShown
+    ? renderedPostIds(props.drawer.posts.rows, postsExpanded).join(',')
+    : '';
+  useEffect(() => {
+    prefetchPosts(cardCache, target === 'open', postIdsKey === '' ? [] : postIdsKey.split(','));
+  }, [target, postIdsKey, cardCache]);
+
+  // A tapped post not in the cache yet: its row is busy until the read lands
+  // (open), fails or is hidden (toast), or the wait runs out (toast).
+  const [busyPost, setBusyPost] = useState<string | null>(null);
+  // The toast api is a fresh object each render: read it through a ref so the
+  // wait timer below is not restarted by every re-render.
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+  const failPost = useCallback((): void => {
+    setBusyPost(null);
+    toastRef.current.show({ title: POST_OPEN_FAILED });
+  }, []);
+  const cacheVersion = cardCache?.version() ?? 0;
+  useEffect(() => {
+    if (busyPost === null || cardCache === null) return;
+    const settled = settleBusyPost(cardCache, busyPost);
+    if (settled === null) return;
+    if (settled === 'open') {
+      setBusyPost(null);
+      setPostSheet({ id: busyPost, open: true });
+    } else failPost();
+  }, [busyPost, cardCache, cacheVersion, failPost]);
+  useEffect(() => {
+    if (busyPost === null) return;
+    const timer = setTimeout(failPost, POST_TAP_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [busyPost, failPost]);
+  const openPost = (postId: string): void => {
+    if (busyPost !== null) return;
+    const action = tapPost(cardCache, postId);
+    if (action === 'open') setPostSheet({ id: postId, open: true });
+    else if (action === 'busy') setBusyPost(postId);
+    else failPost();
+  };
+  const remember = (): void => {
+    if (channelId === undefined) return;
+    rememberDrawer(channelId, props.locationKey, {
+      scrollTop: listRef.current?.scrollTop ?? 0,
+      postsExpanded,
+    });
+  };
 
   // Escape closes.
   useEffect(() => {
@@ -600,17 +768,16 @@ export function ChatStatus(props: {
             open={target === 'open'}
             postsExpanded={postsExpanded}
             onExpandPosts={() => setPostsExpanded(true)}
-            onOpenPost={(postId) => setPostSheet({ id: postId, open: true })}
+            busyPostId={busyPost}
+            onOpenPost={openPost}
             onOpenBrief={(briefId) => {
-              if (channelId !== undefined) {
-                drawerMemory.set(channelId, {
-                  scrollTop: listRef.current?.scrollTop ?? 0,
-                  postsExpanded,
-                });
-              }
+              remember();
               props.navigate(props.briefRoute(briefId));
             }}
-            onSeeAllBriefs={() => props.navigate('/briefs')}
+            onSeeAllBriefs={() => {
+              remember();
+              props.navigate('/briefs');
+            }}
             onJumpMark={(messageId) => {
               close();
               props.actions.onJumpMark(messageId);
@@ -619,6 +786,7 @@ export function ChatStatus(props: {
         </StatusDrawerPanel>
       ) : null}
       <DrawerPostSheet
+        cache={cardCache}
         postId={postSheet?.id ?? null}
         open={postSheet?.open === true}
         side={props.drawer.side}

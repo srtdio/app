@@ -418,6 +418,8 @@ interface MessageThreadProps {
   onOpenPlanCompose?: () => void;
   /** In-app navigation for the status drawer (a brief, the Briefs page). */
   onNavigate?: (to: string) => void;
+  /** The router location key: the status drawer restores only on a Back to it. */
+  locationKey?: string;
   /** The status drawer's plan item rows: open the Plan screen at that item. */
   onOpenPlanItem?: (request: { planId: string; senderName: string; itemId: string }) => void;
   /**
@@ -5432,6 +5434,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
             else window.location.assign(to);
           }}
           briefRoute={briefRoute}
+          locationKey={props.locationKey}
         />
       ) : null}
       <SearchHighlightContext.Provider value={searchWords}>
