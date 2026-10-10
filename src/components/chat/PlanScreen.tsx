@@ -100,7 +100,7 @@ export function PlanPage(props: {
           type="button"
           aria-label={props.backLabel}
           onClick={props.onBack}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="flex h-11 min-h-[45px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {props.backIcon ?? <IconChevronLeft size={22} />}
         </button>

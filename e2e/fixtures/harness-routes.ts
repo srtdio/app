@@ -358,6 +358,7 @@ const PLAN_RPC: Record<string, RpcHandler> = {
 };
 
 const RPC: Record<string, RpcHandler> = {
+  ...PLAN_RPC,
   user_dashboard_tour_state: () => true,
   chat_unread_counts: (_args, tables) => {
     const cursors = tables.chat_read_cursors ?? [];
