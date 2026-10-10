@@ -264,10 +264,12 @@ Applied 9 Oct 2026 (step 3a plans), restated in migration 20261009110000_plans_c
 | title | text | concept only, 1 to 200 |
 | description | text | concept only, nullable, up to 5000 |
 | post_id | uuid | post only, FK posts.id, CASCADE |
+| target_date | date | concept only, nullable (null = no date); post items take their date from posts.target_date |
 | created_by | uuid | nullable, FK users.id, SET NULL |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
 
 - plan_items_shape: a concept has a title and no post_id; a post item has post_id and no title or description.
+- plan_items_target_date_concept_only: kind = concept or target_date is null.
 - plan_items_post_once: a post appears at most once per plan among live post items (partial unique on plan_id, post_id).
 - plan_items_select_member: not deleted, its plan readable, and for a post item its post readable (so a draft post item stays hidden from a client, via posts_select_member).
 - Concept files: asset_attachments rows with entity_type plan_item; asset_attachments_select_member checks the plan item is readable.
@@ -304,8 +306,8 @@ All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_tra
 - plan_update(p_plan_id, p_title, p_starts_on, p_ends_on, p_trace_id): rename or move dates.
 - plan_share_with_client(p_plan_id, p_trace_id): one-way team to client; plan_has_drafts while it holds a draft post.
 - plan_delete(p_plan_id, p_trace_id): soft-delete the plan.
-- plan_concept_add(p_plan_id, p_title, p_description, p_attachment_version_ids, p_trace_id) returns uuid: append a concept with up to 20 library files.
-- plan_concept_edit(p_item_id, p_title, p_description, p_attachment_version_ids, p_trace_id): edit a concept (null files keeps them); resets its reviews to waiting.
+- plan_concept_add(p_plan_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null) returns uuid: append a concept with up to 20 library files and an optional date.
+- plan_concept_edit(p_item_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null): edit a concept (null files keeps them); always writes target_date (null clears it); any edit, a date-only one included, resets its team and client reviews to waiting.
 - plan_posts_add(p_plan_id, p_post_ids, p_trace_id) returns integer: append 1 to 50 posts, skipping ones already in the plan; plan_has_drafts for a draft into a client plan.
 - plan_item_remove(p_item_id, p_trace_id): soft-delete an item.
 - plan_items_reorder(p_plan_id, p_item_ids, p_trace_id): set positions from the full, exact list of live item ids.

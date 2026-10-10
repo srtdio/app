@@ -9,6 +9,7 @@ export const PlanItemSchema = z.object({
   title: z.string().min(1).max(200).nullable(),
   description: z.string().max(5000).nullable(),
   post_id: z.string().uuid().nullable(),
+  target_date: z.string().nullable(),
   created_by: z.string().uuid().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
