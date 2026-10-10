@@ -70,7 +70,7 @@ describe('one concept sheet (E2, E5)', () => {
       title: 'Reel',
       description: 'Morning light',
       date: '2026-10-14',
-      files: [{ versionId: 'v1', name: 'Concept file' }],
+      files: [{ versionId: 'v1', name: 'File 1' }],
     });
     expect(conceptEditForm({ title: null, description: null, target_date: null }, null)).toEqual({
       title: '',
@@ -142,6 +142,11 @@ describe('save (E4, E6)', () => {
     expect(conceptEditUnchanged(item, { ...same, targetDate: null })).toBe(false);
     expect(conceptEditUnchanged(item, { ...same, targetDate: '2026-10-15' })).toBe(false);
     expect(conceptEditUnchanged(item, { ...same, pickedFiles: ['v2', 'v1'] })).toBe(false);
+  });
+
+  it('a save in flight never closes the sheet (Escape, backdrop, X)', () => {
+    const src = read('PlanItemScreen.tsx');
+    expect(src).toMatch(/onClose=\{\(\) => \{[\s\S]*?if \(!editBusy\) setEditOpen\(false\);/);
   });
 
   it('the save path returns early on an unchanged form, before any RPC', () => {

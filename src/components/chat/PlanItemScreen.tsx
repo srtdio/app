@@ -180,7 +180,7 @@ export function conceptEditForm(
     title: item.title ?? '',
     description: item.description ?? '',
     date: item.target_date?.slice(0, 10) ?? '',
-    files: (files ?? []).map((versionId) => ({ versionId, name: 'Concept file' })),
+    files: (files ?? []).map((versionId, i) => ({ versionId, name: `File ${i + 1}` })),
   };
 }
 
@@ -683,7 +683,10 @@ export function PlanItemScreen(props: {
           form={editForm}
           onChange={setEditForm}
           onSubmit={() => void saveEdit()}
-          onClose={() => setEditOpen(false)}
+          onClose={() => {
+            // A save in flight keeps the sheet (and the typed values) open.
+            if (!editBusy) setEditOpen(false);
+          }}
           busy={editBusy}
           note={editResets ? CONCEPT_EDIT_RESET_HINT : null}
           filesReady={editFiles !== null}
