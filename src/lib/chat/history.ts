@@ -209,19 +209,18 @@ export function loadNewerMessages(
   client: Client,
   channelId: string,
   cursor: MessageCursor,
+  signal?: AbortSignal,
 ): Promise<Result<ChatMessageRow[]>> {
-  return withReadTimeout(async (signal) => {
-    const res = await abortable(
-      client
-        .from('chat_messages')
-        .select(MESSAGE_COLUMNS)
-        .eq('channel_id', channelId)
-        .or(newerThanFilter(cursor))
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true })
-        .limit(CATCH_UP_LIMIT),
-      signal,
-    );
+  return withReadTimeout(async (deadline) => {
+    const query = client
+      .from('chat_messages')
+      .select(MESSAGE_COLUMNS)
+      .eq('channel_id', channelId)
+      .or(newerThanFilter(cursor))
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(CATCH_UP_LIMIT);
+    const res = await withLinkedSignal(deadline, signal, async (s) => abortable(query, s));
     if (res.error) return fail(`loadNewerMessages: ${res.error.message}`);
     return { ok: true, data: (res.data ?? []) as ChatMessageRow[] };
   });
@@ -258,16 +257,15 @@ export function loadMessageById(client: Client, messageId: string): Promise<Resu
 export async function loadMessagesByIds(
   client: Client,
   messageIds: readonly string[],
+  signal?: AbortSignal,
 ): Promise<Result<ChatMessageRow[]>> {
   if (messageIds.length === 0) return { ok: true, data: [] };
-  return withReadTimeout(async (signal) => {
-    const res = await abortable(
-      client
-        .from('chat_messages')
-        .select(MESSAGE_COLUMNS)
-        .in('id', [...messageIds]),
-      signal,
-    );
+  return withReadTimeout(async (deadline) => {
+    const query = client
+      .from('chat_messages')
+      .select(MESSAGE_COLUMNS)
+      .in('id', [...messageIds]);
+    const res = await withLinkedSignal(deadline, signal, async (s) => abortable(query, s));
     if (res.error) return fail(`loadMessagesByIds: ${res.error.message}`);
     return { ok: true, data: (res.data ?? []) as ChatMessageRow[] };
   });
