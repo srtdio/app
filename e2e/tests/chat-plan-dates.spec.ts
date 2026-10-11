@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   DATED_PLAN_ID,
@@ -159,8 +160,7 @@ test.describe('phone', () => {
     await sheet.locator('[data-plan-concept-date]').fill('2026-10-11');
     const clear = sheet.locator('[data-plan-concept-date-clear]');
     const box = await clear.boundingBox();
-    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expectMinTouchTarget(box);
     await page.waitForTimeout(300);
     await shot(page, 'dates-06-edit-sheet');
     await sheet.locator('[data-plan-concept-save]').click();

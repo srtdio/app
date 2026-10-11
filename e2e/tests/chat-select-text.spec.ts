@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { MENTION_PREVIEW, PEER_NAME } from '../fixtures/chat-data';
 
@@ -116,7 +117,7 @@ async function expectMenuStyle(page: Page): Promise<void> {
       refBorder: ref.borderTopColor,
       fg: ref.color,
       icons,
-      cells: cells.map((r) => [r.width, r.height]),
+      cells: cells.map((r) => ({ width: r.width, height: r.height })),
     };
     probe.remove();
     return out;
@@ -129,13 +130,10 @@ async function expectMenuStyle(page: Page): Promise<void> {
     expect(icon.icon).toBe(icon.row);
     expect(icon.row).toBe(style.fg);
     expect(icon.width).toBe('22');
-    expect(icon.height).toBeGreaterThanOrEqual(44);
+    expectMinTouchTarget({ height: icon.height }, { dimension: 'height' });
   }
   expect(style.cells).toHaveLength(6);
-  for (const [w, h] of style.cells) {
-    expect(w).toBeGreaterThanOrEqual(44);
-    expect(h).toBeGreaterThanOrEqual(44);
-  }
+  for (const cell of style.cells) expectMinTouchTarget(cell);
 }
 
 test.describe('iPhone', () => {

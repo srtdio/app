@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, solidPng, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   DM_CHANNEL,
@@ -376,8 +377,7 @@ test.describe('laptop', () => {
     await composer(page).locator('textarea').fill('Draft for Monday');
     await expect(chevron).toBeVisible();
     const size = await chevron.boundingBox();
-    expect(size?.width).toBeGreaterThanOrEqual(44);
-    expect(size?.height).toBeGreaterThanOrEqual(44);
+    expectMinTouchTarget(size);
     await chevron.click();
     const menu = page.locator('[data-schedule-menu]');
     await expect(menu).toBeVisible();

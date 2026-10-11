@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectMinTouchTarget } from '../helpers/touch-target';
 import {
   ACTIVITY_PLAN_COMMENT_BODY,
   ACTIVITY_PLAN_COMMENT_ID,
@@ -92,8 +93,7 @@ test('agency: a plan_comment row opens the item with the comment highlighted; Ba
   // The back control is 44x44.
   const back = item.getByRole('button', { name: 'Back', exact: true });
   const box = await back.boundingBox();
-  expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expectMinTouchTarget(box);
   await page.waitForTimeout(300);
   await shot(page, 'activity-plan-02-agency-item-highlight');
   // The highlight is brief.
