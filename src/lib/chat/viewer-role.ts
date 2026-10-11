@@ -75,7 +75,7 @@ export function resolveViewerSide(
   return next;
 }
 
-/** Test-only: forget every cached side. */
+/** Forget every cached side (the open cache's clear: sign-out, user or workspace change; tests). */
 export function resetViewerSideCache(): void {
   resolved.clear();
   inFlight.clear();

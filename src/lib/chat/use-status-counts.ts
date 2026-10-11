@@ -23,9 +23,11 @@ import {
   createPlanCardCache,
   planChangedId,
   readPlanBundles,
+  sameReadValue,
   type PlanBundle,
   type PlanCardCache,
 } from '@/lib/chat/plans';
+import { chatKey, openCache, type ChatKey } from '@/lib/chat/open-cache';
 import { distinctPlanIds } from '@/lib/chat/status-bar';
 import { supabase } from '@/lib/supabase';
 
@@ -147,19 +149,66 @@ const READS: StatusReads = {
   briefCount: countOpenBriefs,
 };
 
+/** How a round's reads start: `join` lets an open's first round join the tap's reads. */
+export interface StatusRoundOptions {
+  join?: <K extends 'planIds' | 'briefs' | 'briefCount'>(
+    name: K,
+    start: () => Promise<StatusReadResults[K]>,
+  ) => Promise<StatusReadResults[K]>;
+  /** The plan ids as soon as they are in, before the briefs reads settle. */
+  onPlanIds?: (ids: string[]) => void;
+}
+
+/** Each of a round's reads' results, by name. */
+export interface StatusReadResults {
+  planIds: Result<string[]>;
+  briefs: Result<OpenBriefRow[]>;
+  briefCount: Result<number>;
+}
+
+/** Each of a round's reads, started and bounded at 5s (tests and the tap's kickoff). */
+export function startStatusReads(
+  client: Client,
+  key: { workspaceId: string; channelId: string },
+  reads: StatusReads = READS,
+): { [K in keyof StatusReadResults]: () => Promise<StatusReadResults[K]> } {
+  return {
+    planIds: () => withReadTimeout((signal) => reads.planIds(client, key.channelId, signal)),
+    briefs: () => withReadTimeout((signal) => reads.briefs(client, key.workspaceId, signal)),
+    briefCount: () =>
+      withReadTimeout((signal) => reads.briefCount(client, key.workspaceId, signal)),
+  };
+}
+
 /** One round, every read in parallel and bounded at 5s. Never throws. */
 export async function fetchStatusRound(
   client: Client,
   key: { workspaceId: string; channelId: string | null },
   reads: StatusReads = READS,
+  opts: StatusRoundOptions = {},
 ): Promise<StatusRound> {
   const channelId = key.channelId;
-  const [planIds, briefs, briefCount] = await Promise.all([
+  const run = <K extends keyof StatusReadResults>(
+    name: K,
+    start: () => Promise<StatusReadResults[K]>,
+  ): Promise<StatusReadResults[K]> => (opts.join !== undefined ? opts.join(name, start) : start());
+  const start = startStatusReads(
+    client,
+    { workspaceId: key.workspaceId, channelId: channelId ?? '' },
+    reads,
+  );
+  const planRead =
     channelId !== null
-      ? withReadTimeout((signal) => reads.planIds(client, channelId, signal))
-      : Promise.resolve<Result<string[]>>({ ok: true, data: [] }),
-    withReadTimeout((signal) => reads.briefs(client, key.workspaceId, signal)),
-    withReadTimeout((signal) => reads.briefCount(client, key.workspaceId, signal)),
+      ? run('planIds', start.planIds)
+      : Promise.resolve<Result<string[]>>({ ok: true, data: [] });
+  // The plan bundles start as soon as the ids are in, never after the briefs.
+  void planRead.then((result) => {
+    if (result.ok && result.data.length > 0) opts.onPlanIds?.(result.data);
+  });
+  const [planIds, briefs, briefCount] = await Promise.all([
+    planRead,
+    run('briefs', start.briefs),
+    run('briefCount', start.briefCount),
   ]);
   return {
     planIds: planIds.ok ? planIds.data : null,
@@ -189,6 +238,21 @@ export function mergeStatusRound(prev: StatusRoundView | null, next: StatusRound
     briefs,
     briefCount: briefs !== null ? briefCount : null,
   };
+}
+
+/**
+ * Fold a settled round into the held state. A round that brings the same data
+ * returns `prev` itself, so a background revalidation changes nothing on
+ * screen (no re-render). Pure.
+ */
+export function settleStatusRound(
+  prev: { key: string; view: StatusRoundView } | null,
+  key: string,
+  data: StatusRound,
+): { key: string; view: StatusRoundView } {
+  const view = mergeStatusRound(prev !== null && prev.key === key ? prev.view : null, data);
+  if (prev !== null && prev.key === key && sameReadValue(prev.view, view)) return prev;
+  return { key, view };
 }
 
 /**
@@ -281,11 +345,16 @@ function parseKey(key: string): { workspaceId: string; channelId: string | null 
 /**
  * The ticker's plans and briefs for the open chat. `livePlanIds` are the plan
  * ids on the loaded thread's messages (a live share shows without a round).
+ * With `userId` the chat's last settled view shows at once (the open's round
+ * revalidates it; a same-data round changes nothing) and the open's first
+ * round joins the reads the tap started (kickoffChatOpen).
  */
 export function useStatusCounts(params: {
   workspaceId: string | null;
   channelId: string | null;
   livePlanIds?: readonly string[];
+  /** The viewer (the chat memory's key); absent: no memory, no join. */
+  userId?: string | null;
   client?: Client;
   reads?: StatusReads;
   /** The plan bundle read behind a local cache (outside a chat; tests). */
@@ -296,19 +365,48 @@ export function useStatusCounts(params: {
   const key = params.workspaceId !== null ? keyOf(params.workspaceId, params.channelId) : null;
   const keyRef = useRef(key);
   keyRef.current = key;
-  const [state, setState] = useState<{ key: string; view: StatusRoundView } | null>(null);
+  const memoKey = chatKey(params.userId, params.workspaceId, params.channelId);
+  const memoRef = useRef<ChatKey | null>(memoKey);
+  memoRef.current = memoKey;
+  const [state, setState] = useState<{ key: string; view: StatusRoundView } | null>(() => {
+    const remembered = memoKey !== null ? openCache.recall(memoKey, 'status') : undefined;
+    return remembered !== undefined && key !== null ? { key, view: remembered } : null;
+  });
   const runnerRef = useRef<ReturnType<typeof createRoundRunner<string, StatusRound>> | null>(null);
   const readsRef = useRef(reads);
   readsRef.current = reads;
+  // The next round is an open's first: it joins the tap's reads.
+  const openRoundRef = useRef(false);
+  // The plan cache the ids go to the moment they are in (set below).
+  const cacheRef = useRef<PlanCardCache | null>(null);
 
   useEffect(() => {
     const runner = createRoundRunner<string, StatusRound>({
-      fetch: (k) => fetchStatusRound(client, parseKey(k), readsRef.current),
+      fetch: (k) => {
+        const where = parseKey(k);
+        const memo = memoRef.current;
+        const open =
+          openRoundRef.current &&
+          memo !== null &&
+          memo.workspaceId === where.workspaceId &&
+          memo.channelId === where.channelId;
+        openRoundRef.current = false;
+        return fetchStatusRound(client, where, readsRef.current, {
+          ...(open ? { join: (name, start) => openCache.joinOrStart(memo, name, start) } : {}),
+          onPlanIds: (ids) => {
+            if (keyRef.current === k) cacheRef.current?.request(ids);
+          },
+        });
+      },
       onSettle: (k, data) =>
-        setState((prev) => ({
-          key: k,
-          view: mergeStatusRound(prev !== null && prev.key === k ? prev.view : null, data),
-        })),
+        setState((prev) => {
+          const next = settleStatusRound(prev, k, data);
+          const memo = memoRef.current;
+          if (memo !== null && keyOf(memo.workspaceId, memo.channelId) === k) {
+            openCache.remember(memo, 'status', next.view);
+          }
+          return next;
+        }),
       now: () => Date.now(),
     });
     runnerRef.current = runner;
@@ -333,7 +431,9 @@ export function useStatusCounts(params: {
   }, [client]);
 
   useEffect(() => {
-    if (key !== null) runnerRef.current?.request(key);
+    if (key === null) return;
+    openRoundRef.current = true;
+    runnerRef.current?.request(key);
   }, [key, client]);
 
   // The plan bundles: the thread's card cache, else one of this hook's own.
@@ -353,6 +453,7 @@ export function useStatusCounts(params: {
     return () => local?.dispose();
   }, [local]);
   const cache = planCards?.cache ?? local;
+  cacheRef.current = cache;
   const version = cache?.version ?? NO_VERSION;
   useSyncExternalStore(cache?.subscribe ?? NO_SUBSCRIBE, version, version);
 

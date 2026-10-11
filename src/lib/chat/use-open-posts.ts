@@ -16,6 +16,8 @@ import {
   type FreshnessTargets,
 } from '@/components/chat/post-card';
 import { withReadTimeout } from '@/lib/chat-reads';
+import { sameReadValue } from '@/lib/chat/plans';
+import { chatKey, openCache, type ChatKey } from '@/lib/chat/open-cache';
 import { supabase } from '@/lib/supabase';
 import { countOpenPosts, listOpenPosts, type OpenPostRow } from '../../../packages/posts/src/reads';
 
@@ -163,6 +165,29 @@ export interface UseOpenPosts extends OpenPostsView {
   ready: boolean;
 }
 
+/** What the hook holds: the round's workspace and key and the view shown. */
+export interface OpenPostsState {
+  workspaceId: string;
+  key: string;
+  view: OpenPostsView;
+}
+
+/**
+ * Fold a settled round (key `workspace\nthread`) into the held state. A round
+ * that brings the same data returns `prev` itself, so a background
+ * revalidation changes nothing on screen (no re-render). Pure.
+ */
+export function settleOpenPosts(
+  prev: OpenPostsState | null,
+  key: string,
+  data: OpenPostsData,
+): OpenPostsState {
+  const ws = key.slice(0, key.indexOf('\n'));
+  const view = mergeOpenPosts(prev !== null && prev.workspaceId === ws ? prev.view : null, data);
+  if (prev !== null && prev.key === key && sameReadValue(prev.view, view)) return prev;
+  return { workspaceId: ws, key, view };
+}
+
 /** The (workspace, thread) a round is for. */
 function roundKey(workspaceId: string, threadKey: string): string {
   return `${workspaceId}\n${threadKey}`;
@@ -171,34 +196,55 @@ function roundKey(workspaceId: string, threadKey: string): string {
 /**
  * Posts in review for the open thread. A thread switch (`threadKey`) is not
  * ready until the new thread's round settles; a failed round keeps what the
- * same workspace already showed (see {@link mergeOpenPosts}).
+ * same workspace already showed (see {@link mergeOpenPosts}). With `memory`
+ * (the viewer and the chat), the chat's last settled view shows at once and
+ * the open's round revalidates it (a same-data round changes nothing), and the
+ * open's first round joins the read the tap started (kickoffChatOpen).
  */
 export function useOpenPosts(
   workspaceId: string | null,
   threadKey: string,
   client: Client = supabase,
+  memory?: { userId: string | null; channelId: string | null },
 ): UseOpenPosts {
-  const [state, setState] = useState<{
-    workspaceId: string;
-    key: string;
-    view: OpenPostsView;
-  } | null>(null);
+  const key = workspaceId !== null ? roundKey(workspaceId, threadKey) : null;
+  const memoKey = chatKey(memory?.userId, workspaceId, memory?.channelId);
+  const memoRef = useRef<ChatKey | null>(memoKey);
+  memoRef.current = memoKey;
+  const [state, setState] = useState<OpenPostsState | null>(() => {
+    const remembered = memoKey !== null ? openCache.recall(memoKey, 'openPosts') : undefined;
+    return remembered !== undefined && workspaceId !== null && key !== null
+      ? { workspaceId, key, view: remembered }
+      : null;
+  });
   const runnerRef = useRef<ReturnType<typeof createOpenPostsRunner<string>> | null>(null);
   const keyRef = useRef<string | null>(null);
-  const key = workspaceId !== null ? roundKey(workspaceId, threadKey) : null;
   keyRef.current = key;
+  // The next round is an open's first: it joins the tap's read.
+  const openRoundRef = useRef(false);
 
   // One runner per client; its rounds are keyed so a switch never overlaps them.
   useEffect(() => {
     const runner = createOpenPostsRunner<string>({
-      fetch: (k) => fetchOpenPosts(client, k.slice(0, k.indexOf('\n'))),
+      fetch: (k) => {
+        const ws = k.slice(0, k.indexOf('\n'));
+        const memo = memoRef.current;
+        const open = openRoundRef.current && memo !== null && memo.workspaceId === ws;
+        openRoundRef.current = false;
+        return open
+          ? openCache.joinOrStart(memo, 'openPosts', () => fetchOpenPosts(client, ws))
+          : fetchOpenPosts(client, ws);
+      },
       onSettle: (k, data) => {
         const ws = k.slice(0, k.indexOf('\n'));
-        setState((prev) => ({
-          workspaceId: ws,
-          key: k,
-          view: mergeOpenPosts(prev !== null && prev.workspaceId === ws ? prev.view : null, data),
-        }));
+        setState((prev) => {
+          const next = settleOpenPosts(prev, k, data);
+          const memo = memoRef.current;
+          if (memo !== null && memo.workspaceId === ws && !next.view.failed) {
+            openCache.remember(memo, 'openPosts', next.view);
+          }
+          return next;
+        });
       },
       now: () => Date.now(),
     });
@@ -221,7 +267,9 @@ export function useOpenPosts(
   }, [client]);
 
   useEffect(() => {
-    if (key !== null) runnerRef.current?.request(key);
+    if (key === null) return;
+    openRoundRef.current = true;
+    runnerRef.current?.request(key);
   }, [key, client]);
 
   if (key === null) return { posts: null, count: null, failed: false, ready: true };

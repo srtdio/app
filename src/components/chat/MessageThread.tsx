@@ -173,6 +173,7 @@ import { planProgress, todayInZone } from '@/components/chat/plan-card';
 import { briefRoute } from '@/lib/chat/briefs';
 import { useOpenPosts, type UseOpenPosts } from '@/lib/chat/use-open-posts';
 import { useStatusCounts, type UseStatusCounts } from '@/lib/chat/use-status-counts';
+import { chatKey, openCache, OPEN_HOLD_MS } from '@/lib/chat/open-cache';
 import type { PlanBundle } from '@/lib/chat/plans';
 import {
   openPlans,
@@ -568,6 +569,20 @@ export function tickerBar(input: {
     side: input.side.side,
   };
   return statusBar(counts);
+}
+
+/**
+ * Whether a chat open's parts that paint with its first page have settled:
+ * this channel's marks, the viewer side, the ticker's inputs and the bundles
+ * of the plan cards on the page (each ok or failed). Pure.
+ */
+export function openHoldSettled(parts: {
+  marks: boolean;
+  side: boolean;
+  ticker: boolean;
+  cards: boolean;
+}): boolean {
+  return parts.marks && parts.side && parts.ticker && parts.cards;
 }
 
 /**
@@ -4416,7 +4431,10 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
   const marks = props.marks ?? NO_MARKS;
   // Open loops: posts in review (two reads per thread open) and the viewer's side.
   const viewerSide = useViewerSide(workspaceId);
-  const openPosts = useOpenPosts(workspaceId, channelKey);
+  const openPosts = useOpenPosts(workspaceId, channelKey, undefined, {
+    userId: props.currentUserId ?? null,
+    channelId: channelId ?? null,
+  });
   // The status ticker's plans and briefs (only where the thread has marks).
   const livePlanIds = useMemo(
     () => [...new Set(props.messages.flatMap((m) => m.sharedPlanIds ?? []))],
@@ -4426,8 +4444,44 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     workspaceId: props.marks !== undefined ? workspaceId : null,
     channelId: channelId ?? null,
     livePlanIds,
+    userId: props.currentUserId ?? null,
   });
   const statusPlanCards = usePlanCards();
+  // Chat open, paint together: the first page waits (at most OPEN_HOLD_MS from
+  // the tap, else from this mount) for the marks, the viewer side, the ticker's
+  // inputs and the bundles of the plan cards on it, so they all paint in one
+  // frame. Once released it never holds again; whatever is still loading then
+  // keeps its same-size placeholder and fills in place.
+  const [openAt] = useState(() => {
+    const key = chatKey(props.currentUserId, workspaceId, channelId);
+    const tapped = key !== null ? openCache.openedAt(key) : null;
+    const now = Date.now();
+    return tapped !== null && now - tapped < OPEN_HOLD_MS ? tapped : now;
+  });
+  const [openHoldDone, setOpenHoldDone] = useState(false);
+  // A reopen: the ticker's last settled state is remembered, so it paints at
+  // once (never the inert slot) while the page loads.
+  const [tickerRemembered] = useState(() => {
+    const key = chatKey(props.currentUserId, workspaceId, channelId);
+    return key !== null && openCache.recall(key, 'status') !== undefined;
+  });
+  const pageCards = useMemo(() => threadCardIds(props.messages), [props.messages]);
+  const pagePlanIds = pageCards.planIds;
+  const openPartsSettled = openHoldSettled({
+    marks: props.marks === undefined || props.marksLoaded || props.marksFailed === true,
+    // The side words the ticker and the post and plan cards: only they wait on it.
+    side:
+      viewerSide.ready ||
+      (props.marks === undefined && pagePlanIds.length === 0 && pageCards.postIds.length === 0),
+    ticker:
+      props.marks === undefined ||
+      (openPosts.ready && statusCounts.plans.ready && statusCounts.briefs.ready),
+    cards:
+      statusPlanCards === null ||
+      pagePlanIds.length === 0 ||
+      !statusPlanCards.cache.snapshot(pagePlanIds).loading,
+  });
+  const openHeld = !openHoldDone && !openPartsSettled;
   const onOpenPlanCompose = props.onOpenPlanCompose;
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -4728,8 +4782,26 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
   const initialJumpDone = useRef(false);
   // The first page also waits for the channel's read cursors (5s bound), so
   // the unread divider, Seen and Read by lines paint with it, never after.
-  const bodyLoading =
+  const pageLoading =
     props.loading || holdingFirstPage(admitted.gate) || props.readState?.status === 'loading';
+  const bodyLoading = pageLoading || openHeld;
+  // The hold's cap, and its release latched once the first page is out.
+  useEffect(() => {
+    if (openHoldDone) return;
+    if (!pageLoading && !openHeld) {
+      paintLog(`open hold released, all settled, ${Date.now() - openAt}ms after the tap`);
+      setOpenHoldDone(true);
+      return;
+    }
+    const timer = setTimeout(
+      () => {
+        paintLog(`open hold capped at ${OPEN_HOLD_MS}ms (page ${pageLoading ? 'loading' : 'in'})`);
+        setOpenHoldDone(true);
+      },
+      Math.max(0, openAt + OPEN_HOLD_MS - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [openHoldDone, pageLoading, openHeld, openAt]);
   const onInitialJumpTaken = props.onInitialJumpTaken;
   useEffect(() => {
     const id = initialMessageId;
@@ -5405,7 +5477,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
       ) : stripSlot === 'loops' ? (
         <ChatStatus
           channelId={channelId}
-          bar={statusBarState}
+          bar={openHeld || (pageLoading && !tickerRemembered) ? null : statusBarState}
           drawer={{
             keys:
               statusBarState !== null && statusBarState.kind === 'items'

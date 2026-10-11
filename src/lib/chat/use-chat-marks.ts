@@ -10,13 +10,15 @@
 // that one mark row. Counts are derived client-side from the loaded rows.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Client } from '@srtdio/rpc';
+import type { Client, Result } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
 import { createCmdMessage } from '@/lib/chat/message-factory';
 import { withLinkedSignal, withReadTimeout } from '@/lib/chat-reads';
 import { loadMessagesByIds } from '@/lib/chat/history';
+import { chatKey, openCache } from '@/lib/chat/open-cache';
+import { sameReadValue } from '@/lib/chat/plans';
 import {
   applyTransition,
   indexMarks,
@@ -90,6 +92,34 @@ export function marksReadSettled(loadedFor: string | null, channelId: string | n
   return channelId !== null && loadedFor === channelId;
 }
 
+/** Whether two marks maps hold the same marks (a same-data re-read). Pure. */
+export function sameMarks(
+  a: ReadonlyMap<string, ChatMark>,
+  b: ReadonlyMap<string, ChatMark>,
+): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [id, mark] of a) {
+    const other = b.get(id);
+    if (other === undefined || !sameReadValue(mark, other)) return false;
+  }
+  return true;
+}
+
+/** The read, or a failure as soon as `cancel` aborts (the read itself runs on). */
+function waitUnlessCancelled<T>(read: Promise<Result<T>>, cancel: AbortSignal): Promise<Result<T>> {
+  const cancelled: Result<T> = { ok: false, error: { code: 'unknown', message: 'read cancelled' } };
+  if (cancel.aborted) return Promise.resolve(cancelled);
+  return new Promise((resolve) => {
+    const onAbort = (): void => resolve(cancelled);
+    cancel.addEventListener('abort', onAbort, { once: true });
+    void read.then((result) => {
+      cancel.removeEventListener('abort', onAbort);
+      resolve(result);
+    });
+  });
+}
+
 /**
  * One stamp or reopen: apply the optimistic mark, write it through the record
  * with a fresh uuid_v7 trace id (the actor is auth.uid() server-side), and
@@ -125,11 +155,16 @@ export function useChatMarks(params: {
   channelId: string | null;
   target: ChannelTarget | null;
   currentUserId: string;
+  /** The open workspace: keys the chat memory and the tap's marks read (absent: neither). */
+  workspaceId?: string | null;
   /** Injected in tests; the app uses the shared Supabase client. */
   db?: Client;
 }): UseChatMarks {
   const { client, channelId, target, currentUserId } = params;
   const db: Client = params.db ?? supabase;
+  // The workspace the chat memory and the tap's reads are keyed by.
+  const workspaceRef = useRef(params.workspaceId ?? null);
+  workspaceRef.current = params.workspaceId ?? null;
   const [marks, setMarks] = useState<Map<string, ChatMark>>(new Map());
   const [markedMessages, setMarkedMessages] = useState<Map<string, ThreadMessage>>(new Map());
   // The channel whose marks read has settled (ok or not); null until one has.
@@ -160,6 +195,11 @@ export function useChatMarks(params: {
       setMarkedMessages((prev) => {
         const next = new Map(prev);
         for (const row of result.data) next.set(row.id, rowToThreadMessage(row, currentUserId));
+        const memo = chatKey(currentUserId, workspaceRef.current, forChannel);
+        const remembered = memo !== null ? openCache.recall(memo, 'marks') : undefined;
+        if (memo !== null && remembered !== undefined) {
+          openCache.remember(memo, 'marks', { marks: remembered.marks, markedMessages: next });
+        }
         return next;
       });
     },
@@ -167,14 +207,27 @@ export function useChatMarks(params: {
   );
 
   const load = useCallback(
-    async (forChannel: string): Promise<void> => {
+    async (forChannel: string, open = false): Promise<void> => {
       // Bounded at 5s: a hung read settles as failed, so the strip never holds.
-      // A channel switch or unmount aborts it (channelAbortRef).
+      // A channel switch or unmount aborts it (channelAbortRef). An open's
+      // first read joins the one the tap started (kickoffChatOpen); a switch
+      // or unmount then stops waiting on it.
       const cancel = channelAbortRef.current.signal;
-      const result = await withReadTimeout((deadline) =>
-        withLinkedSignal(deadline, cancel, (signal) => loadChannelMarks(db, forChannel, signal)),
-      );
-      if (channelRef.current !== forChannel) return;
+      const memo = chatKey(currentUserId, workspaceRef.current, forChannel);
+      const result =
+        open && memo !== null
+          ? await waitUnlessCancelled(
+              openCache.joinOrStart(memo, 'marks', () =>
+                withReadTimeout((signal) => loadChannelMarks(db, forChannel, signal)),
+              ),
+              cancel,
+            )
+          : await withReadTimeout((deadline) =>
+              withLinkedSignal(deadline, cancel, (signal) =>
+                loadChannelMarks(db, forChannel, signal),
+              ),
+            );
+      if (channelRef.current !== forChannel || cancel.aborted) return;
       if (!result.ok) {
         logger.warn('chat: marks load failed', {
           channel_id: forChannel,
@@ -185,27 +238,40 @@ export function useChatMarks(params: {
         setLoadedFor(forChannel);
         return;
       }
-      setMarks(indexMarks(result.data));
+      const next = indexMarks(result.data);
+      // A same-data read keeps the map (nothing re-renders).
+      setMarks((prev) => (sameMarks(prev, next) ? prev : next));
       setReadOkFor(forChannel);
       setLoadedFor(forChannel);
+      if (memo !== null) {
+        const remembered = openCache.recall(memo, 'marks');
+        openCache.remember(memo, 'marks', {
+          marks: next,
+          markedMessages: remembered?.markedMessages ?? new Map(),
+        });
+      }
       await loadMarkedMessages(
         result.data.map((m) => m.messageId),
         forChannel,
       );
     },
-    [db, loadMarkedMessages],
+    [db, loadMarkedMessages, currentUserId],
   );
 
   useEffect(() => {
-    setMarks(new Map());
-    setMarkedMessages(new Map());
-    setLoadedFor(null);
-    setReadOkFor(null);
+    // A chat opened before in this session shows its last marks at once; the
+    // open's read revalidates them.
+    const memo = chatKey(currentUserId, workspaceRef.current, channelId);
+    const remembered = memo !== null ? openCache.recall(memo, 'marks') : undefined;
+    setMarks(remembered?.marks ?? new Map());
+    setMarkedMessages(remembered?.markedMessages ?? new Map());
+    setLoadedFor(remembered !== undefined ? channelId : null);
+    setReadOkFor(remembered !== undefined ? channelId : null);
     const abort = new AbortController();
     channelAbortRef.current = abort;
-    if (channelId !== null) void load(channelId);
+    if (channelId !== null) void load(channelId, true);
     return () => abort.abort();
-  }, [channelId, load]);
+  }, [channelId, load, currentUserId]);
 
   const refetch = useCallback((): void => {
     const forChannel = channelRef.current;
