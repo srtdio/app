@@ -39,6 +39,7 @@ import {
   stageLabel,
   teamPlanBlocked,
 } from '@/components/chat/plan-card';
+import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { newMessageId } from '@/lib/chat/message-id';
 import {
   PLAN_SHARE_FAILED,
@@ -79,10 +80,12 @@ export function PlanComposeScreen(props: {
   const [title, setTitle] = useState('');
   const [range, setRange] = useState(() => defaultPlanRange(new Date(), props.timeZone));
   const [audience, setAudience] = useState<PlanAudience>('client');
-  const [concepts, setConcepts] = useState<Array<ConceptForm & { key: string }>>([]);
+  const [concepts, setConcepts] = useState<DraftConceptItem[]>([]);
   const [posts, setPosts] = useState<PostCardFields[]>([]);
   const [picker, setPicker] = useState<'posts' | 'drafts' | null>(null);
   const [conceptOpen, setConceptOpen] = useState(false);
+  // The draft concept the sheet edits; null while it adds a new one.
+  const [editKey, setEditKey] = useState<string | null>(null);
   // Concept uploads go as comments' do (library origin).
   const { canAttach, uploadFile } = useCommentAttachments();
   const [conceptForm, setConceptForm] = useState<ConceptForm>(EMPTY_CONCEPT);
@@ -122,6 +125,7 @@ export function PlanComposeScreen(props: {
     setPosts([]);
     setPicker(null);
     setConceptOpen(false);
+    setEditKey(null);
     setConceptForm(EMPTY_CONCEPT);
     setProgress(initialShareProgress(newMessageId()));
     setBusy(false);
@@ -236,11 +240,28 @@ export function PlanComposeScreen(props: {
     if (row !== null) props.onShared(row, traceId, false);
   };
 
-  const addConcept = (): void => {
+  // Add appends a new concept; Edit replaces the draft in place (same key,
+  // same position). Local only: nothing is written until Share.
+  const submitConcept = (): void => {
     if (!conceptFormValid(conceptForm)) return;
-    setConcepts((prev) => [...prev, { ...conceptForm, key: newMessageId() }]);
+    const form = conceptForm;
+    setConcepts((prev) =>
+      editKey !== null
+        ? replaceDraftConcept(prev, editKey, form)
+        : [...prev, { ...form, key: newMessageId() }],
+    );
     setConceptForm(EMPTY_CONCEPT);
+    setEditKey(null);
     setConceptOpen(false);
+  };
+
+  const editConcept = (key: string): void => {
+    if (locked) return;
+    const form = draftConceptForm(concepts, key);
+    if (form === null) return;
+    setConceptForm(form);
+    setEditKey(key);
+    setConceptOpen(true);
   };
 
   const footer = (
@@ -300,7 +321,7 @@ export function PlanComposeScreen(props: {
                   ['endsOn', 'To'],
                 ] as const
               ).map(([field, label]) => (
-                <label key={field} className="flex flex-col gap-1">
+                <label key={field} className="flex w-full min-w-0 flex-col gap-1">
                   <span className="text-[13px] text-fg-3">{label}</span>
                   <input
                     type="date"
@@ -308,7 +329,7 @@ export function PlanComposeScreen(props: {
                     value={range[field]}
                     disabled={locked}
                     onChange={(e) => setRange((r) => ({ ...r, [field]: e.target.value }))}
-                    className={cn(FIELD, 'font-mono text-[15px]')}
+                    className={DATE_FIELD}
                   />
                 </label>
               ))}
@@ -365,37 +386,13 @@ export function PlanComposeScreen(props: {
               <span className="text-[13px] text-fg-3">Ideas before they are posts</span>
             </div>
             {shownConcepts.map((c) => (
-              <div
+              <DraftConceptRow
                 key={c.key}
-                data-plan-draft-concept=""
-                className="flex items-start gap-3 rounded-lg border border-border bg-panel p-3"
-              >
-                <span className="h-12 w-12 shrink-0 rounded-md border border-dashed border-border-strong bg-panel-3" />
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-[15px] font-semibold text-fg">{c.title}</span>
-                  <span className="line-clamp-2 text-[13px] text-fg-3">
-                    {c.description !== ''
-                      ? c.description
-                      : `${c.files.length} ${c.files.length === 1 ? 'file' : 'files'}`}
-                  </span>
-                  <span
-                    data-plan-draft-concept-date={c.date !== '' ? 'dated' : 'none'}
-                    className={cn('text-[13px] text-fg-3', c.date !== '' && 'font-mono')}
-                  >
-                    {c.date !== '' ? shortDay(c.date) : NO_DATE_LABEL}
-                  </span>
-                </span>
-                {!locked ? (
-                  <button
-                    type="button"
-                    aria-label={`Remove ${c.title}`}
-                    onClick={() => setConcepts((prev) => prev.filter((x) => x.key !== c.key))}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 hover:bg-panel-2"
-                  >
-                    <IconX size={18} />
-                  </button>
-                ) : null}
-              </div>
+                concept={c}
+                locked={locked}
+                onEdit={() => editConcept(c.key)}
+                onRemove={() => setConcepts((prev) => removeDraftConcept(prev, c.key))}
+              />
             ))}
             <button
               type="button"
@@ -403,6 +400,7 @@ export function PlanComposeScreen(props: {
               disabled={locked}
               onClick={() => {
                 setConceptForm(EMPTY_CONCEPT);
+                setEditKey(null);
                 setConceptOpen(true);
               }}
               className="min-h-[44px] rounded-lg border border-dashed border-border-strong text-[15px] font-medium text-accent disabled:opacity-60"
@@ -468,14 +466,123 @@ export function PlanComposeScreen(props: {
 
       <ConceptSheet
         open={props.open && conceptOpen}
-        mode="add"
+        mode={editKey !== null ? 'edit' : 'add'}
         form={conceptForm}
         onChange={setConceptForm}
-        onSubmit={addConcept}
+        onSubmit={submitConcept}
         onClose={() => setConceptOpen(false)}
         {...(canAttach ? { uploadFile } : {})}
       />
     </>
+  );
+}
+
+/** A concept added on the New plan screen, before the plan exists. */
+export type DraftConceptItem = ConceptForm & { key: string };
+
+/**
+ * The From / To inputs shrink to their half of the row: WebKit's date input
+ * keeps an intrinsic min width (and centres its value) unless its native look
+ * is reset, which on a 320px iPhone pushed To past the screen edge.
+ */
+export const DATE_FIT =
+  'block min-w-0 appearance-none [-webkit-appearance:none] [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-calendar-picker-indicator]:m-0';
+
+/** The date inputs: the field look with a slimmer side padding so the date fits at 320px. */
+export const DATE_FIELD = cn(
+  FIELD.replace(' px-3.5 ', ' px-2.5 '),
+  DATE_FIT,
+  'font-mono text-[15px]',
+);
+
+/** The sheet's form for a draft concept (its fields and files); null when gone. Pure. */
+export function draftConceptForm(
+  concepts: readonly DraftConceptItem[],
+  key: string,
+): ConceptForm | null {
+  const c = concepts.find((x) => x.key === key);
+  if (c === undefined) return null;
+  return { title: c.title, description: c.description, date: c.date, files: [...c.files] };
+}
+
+/** The list with the draft at `key` replaced in place (same key, same position). Pure. */
+export function replaceDraftConcept(
+  concepts: readonly DraftConceptItem[],
+  key: string,
+  form: ConceptForm,
+): DraftConceptItem[] {
+  return concepts.map((c) => (c.key === key ? { ...form, key } : c));
+}
+
+/** The list without the draft at `key`. Pure. */
+export function removeDraftConcept(
+  concepts: readonly DraftConceptItem[],
+  key: string,
+): DraftConceptItem[] {
+  return concepts.filter((c) => c.key !== key);
+}
+
+/**
+ * A draft concept on the New plan screen: the whole row (but the X) opens it
+ * in the concept sheet; the X removes it. Both are off while the screen is
+ * locked (a share is running or the plan exists).
+ */
+export function DraftConceptRow(props: {
+  concept: DraftConceptItem;
+  locked: boolean;
+  onEdit: () => void;
+  onRemove: () => void;
+}): ReactElement {
+  const c = props.concept;
+  return (
+    <div
+      data-plan-draft-concept=""
+      className="flex items-start rounded-lg border border-border bg-panel"
+    >
+      <button
+        type="button"
+        data-plan-draft-concept-edit=""
+        aria-label={`Edit ${c.title}`}
+        disabled={props.locked}
+        onClick={props.onEdit}
+        onContextMenu={(event) => event.preventDefault()}
+        className={cn(
+          'flex min-h-[44px] min-w-0 flex-1 items-start gap-3 rounded-lg p-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:hover:bg-transparent',
+          NO_TOUCH_SELECT,
+        )}
+      >
+        <span className="h-12 w-12 shrink-0 rounded-md border border-dashed border-border-strong bg-panel-3" />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span
+            data-plan-draft-concept-title=""
+            className="truncate text-[15px] font-semibold text-fg"
+          >
+            {c.title}
+          </span>
+          <span className="line-clamp-2 text-[13px] text-fg-3">
+            {c.description !== ''
+              ? c.description
+              : `${c.files.length} ${c.files.length === 1 ? 'file' : 'files'}`}
+          </span>
+          <span
+            data-plan-draft-concept-date={c.date !== '' ? 'dated' : 'none'}
+            className={cn('text-[13px] text-fg-3', c.date !== '' && 'font-mono')}
+          >
+            {c.date !== '' ? shortDay(c.date) : NO_DATE_LABEL}
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        data-plan-draft-concept-remove=""
+        aria-label={`Remove ${c.title}`}
+        disabled={props.locked}
+        onClick={props.onRemove}
+        className="m-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60 disabled:hover:bg-transparent"
+      >
+        <IconX size={18} />
+      </button>
+    </div>
   );
 }
 

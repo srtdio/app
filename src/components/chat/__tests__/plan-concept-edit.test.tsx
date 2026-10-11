@@ -57,7 +57,7 @@ describe('one concept sheet (E2, E5)', () => {
     const compose = read('PlanComposeScreen.tsx');
     const itemSrc = read('PlanItemScreen.tsx');
     expect(compose).toContain('<ConceptSheet');
-    expect(compose).toContain('mode="add"');
+    expect(compose).toContain("mode={editKey !== null ? 'edit' : 'add'}");
     expect(itemSrc).toContain('<ConceptSheet');
     expect(itemSrc).toContain('mode="edit"');
     expect(compose).not.toContain('<Sheet');
