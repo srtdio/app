@@ -199,7 +199,10 @@ export function PlanCardBody(props: {
           <IconPlan size={16} />
           {PLAN_EYEBROW}
         </span>
-        <span className="truncate text-[17px] font-semibold leading-[22px] text-fg">
+        <span
+          data-plan-title=""
+          className="truncate text-[17px] font-semibold leading-[22px] text-fg"
+        >
           {bundle.plan.title}
         </span>
         <span data-plan-range="" className="truncate font-mono text-[13px] leading-5 text-fg-3">

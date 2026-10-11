@@ -87,11 +87,80 @@ export function loadLatestMessages(
   client: Client,
   channelId: string,
 ): Promise<Result<HistoryPage>> {
-  return withReadTimeout((signal) => readLatestMessages(client, channelId, signal));
+  return withReadTimeout((signal) => queryLatestMessages(client, channelId, signal));
 }
 
-/** The latest-page read itself, unbounded; `signal` cancels it. */
-export async function readLatestMessages(
+/** How long after it settles a page prefetched at the tap can still be joined. */
+export const PREFETCH_JOIN_MS = 2_000;
+
+interface Prefetch {
+  client: Client;
+  promise: Promise<Result<HistoryPage>>;
+  settledAt: number | null;
+}
+
+/** Latest pages started at a chat tap, by channel (joined by the thread's open). */
+const prefetched = new Map<string, Prefetch>();
+
+function joinablePrefetch(client: Client, channelId: string, now: number): Prefetch | null {
+  const hit = prefetched.get(channelId);
+  if (hit === undefined) return null;
+  if (hit.settledAt !== null && now - hit.settledAt >= PREFETCH_JOIN_MS) {
+    prefetched.delete(channelId);
+    return null;
+  }
+  return hit.client === client ? hit : null;
+}
+
+/**
+ * Start a channel's latest page at the tap (bounded at 5s), before the thread
+ * mounts: the thread's open joins it instead of reading again. A page already
+ * started and still joinable is not read twice.
+ */
+export function prefetchLatestMessages(client: Client, channelId: string): void {
+  if (joinablePrefetch(client, channelId, Date.now()) !== null) return;
+  const entry: Prefetch = {
+    client,
+    promise: withReadTimeout((signal) => queryLatestMessages(client, channelId, signal)),
+    settledAt: null,
+  };
+  prefetched.set(channelId, entry);
+  void entry.promise.then(() => {
+    entry.settledAt = Date.now();
+  });
+}
+
+/** Forget every prefetched page (sign-out, user or workspace change). */
+export function clearMessagePrefetch(): void {
+  prefetched.clear();
+}
+
+/**
+ * The thread's open read of the latest page: the page the tap prefetched when
+ * there is one to join, else the read itself (unbounded; `signal` cancels the
+ * wait, and the read when it is this call's own).
+ */
+export function readLatestMessages(
+  client: Client,
+  channelId: string,
+  signal?: AbortSignal,
+): Promise<Result<HistoryPage>> {
+  const hit = joinablePrefetch(client, channelId, Date.now());
+  if (hit === null) return queryLatestMessages(client, channelId, signal);
+  if (signal === undefined) return hit.promise;
+  if (signal.aborted) return Promise.resolve(fail('loadLatestMessages: aborted'));
+  return new Promise((resolve) => {
+    const onAbort = (): void => resolve(fail('loadLatestMessages: aborted'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    void hit.promise.then((result) => {
+      signal.removeEventListener('abort', onAbort);
+      resolve(result);
+    });
+  });
+}
+
+/** The latest-page select itself, unbounded; `signal` cancels it. */
+async function queryLatestMessages(
   client: Client,
   channelId: string,
   signal?: AbortSignal,

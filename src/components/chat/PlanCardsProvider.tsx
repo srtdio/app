@@ -1,26 +1,24 @@
 // The thread's plan cards, read in batches: every plan id across the loaded
-// messages (threadCardIds) is asked of ONE cache per chat, which reads plans,
-// then their items, then the items' reviews, then the post items' stages, each
-// a plain select by an id list in chunks of 100 (plans.ts). Cards never read on
-// their own. Failed reads retry like the shared post cards (tab visible,
-// online, connected, on their own after 5s, up to 3 tries). A plan write
-// anywhere dispatches PLAN_CHANGED_EVENT and the plan is re-read here; a post
-// change re-reads every plan holding that post (its stage feeds progress).
-// The provider also carries the chat's open-plan action and its title, so a
-// card can open the Plan screen without props threaded through every bubble.
+// messages (threadCardIds) is asked of ONE cache per chat: the chat's
+// remembered one in open-cache, so a reopen paints its cards at once and
+// re-reads them in the background, and the tap's kickoff feeds it the chat's
+// shared plan ids before the messages are in. It reads the plans, their items
+// and their draft rows together, then (once the items are in) the items'
+// reviews and the post items' stages, each a plain select by an id list in
+// chunks of 100 (plans.ts). Cards never read on their own. Failed reads retry
+// like the shared post cards (tab visible, online, connected, on their own
+// after 5s, up to 3 tries). A plan write anywhere dispatches
+// PLAN_CHANGED_EVENT and the plan is re-read here; a post change re-reads
+// every plan holding that post (its stage feeds progress). The provider also
+// carries the chat's open-plan action and its title, so a card can open the
+// Plan screen without props threaded through every bubble.
 
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { watchCardRetries } from '@/components/chat/PostCard';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
-import {
-  PLAN_CHANGED_EVENT,
-  createPlanCardCache,
-  planChangedId,
-  readPlanBundles,
-  type PlanCardCache,
-} from '@/lib/chat/plans';
-import { supabase } from '@/lib/supabase';
+import { PLAN_CHANGED_EVENT, planChangedId, type PlanCardCache } from '@/lib/chat/plans';
+import { chatKey, makePlanCardCache, openCache, openChatPlans } from '@/lib/chat/open-cache';
 import type { ChatMessageRow } from '@/lib/chat/thread';
 
 /** What the Plan screen needs to open from a card. */
@@ -74,6 +72,8 @@ export function planTitleOf(
 export function PlanCardsProvider(props: {
   workspaceId: string | null;
   channelId: string | null;
+  /** The viewer: the cache is the chat's remembered one (kept for reopens) when set. */
+  userId?: string | null;
   planIds: readonly string[];
   chatTitle: string;
   onOpenPlan: (request: OpenPlanRequest) => void;
@@ -84,18 +84,33 @@ export function PlanCardsProvider(props: {
   children: ReactNode;
 }): ReactElement {
   const { workspaceId, channelId } = props;
+  const userId = props.userId ?? null;
+  // The chat's remembered cache (made at the tap or here), so a reopen paints
+  // its cards at once; without a viewer, one for this mount.
+  const memo = useMemo(
+    () => chatKey(userId, workspaceId, channelId),
+    [userId, workspaceId, channelId],
+  );
   const cache = useMemo(
     () =>
-      workspaceId !== null && channelId !== null
-        ? createPlanCardCache((ids, signal) => readPlanBundles(supabase, ids, signal))
-        : null,
-    [workspaceId, channelId],
+      memo !== null
+        ? openCache.planCache(memo, makePlanCardCache)
+        : workspaceId !== null && channelId !== null
+          ? makePlanCardCache()
+          : null,
+    [memo, workspaceId, channelId],
   );
-  // StrictMode runs this cleanup and the effect again with the same cache.
+  // StrictMode runs this cleanup and the effect again with the same cache. A
+  // remembered cache is kept (and its reads run on) after the chat closes; a
+  // fresh open of it re-reads what it holds in the background.
   useEffect(() => {
-    cache?.resume();
-    return () => cache?.dispose();
-  }, [cache]);
+    if (cache === null) return;
+    cache.resume();
+    if (memo !== null) openChatPlans(memo);
+    return () => {
+      if (memo === null) cache.dispose();
+    };
+  }, [cache, memo]);
   const key = props.planIds.join(',');
   const idsRef = useRef(props.planIds);
   idsRef.current = props.planIds;

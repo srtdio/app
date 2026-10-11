@@ -242,9 +242,12 @@ export function sortPlanItemsByDate(
 }
 
 /**
- * Read plans by id with their items, reviews, draft rows and post stages:
- * selects in sequence (each chunked at 100), never an embed. A plan absent
- * under RLS is absent from the map. Never throws.
+ * Read plans by id with their items, reviews, draft rows and post stages,
+ * each a select by an id list (chunked at 100), never an embed. The plans,
+ * their items and their draft rows start together (all keyed by plan id);
+ * the items' reviews and the post items' stages start the moment the items
+ * are in (not after the plans or the draft rows). A plan absent under RLS is
+ * absent from the map (its items and draft rows are dropped). Never throws.
  */
 export async function readPlanBundles(
   client: Client,
@@ -252,17 +255,37 @@ export async function readPlanBundles(
   signal?: AbortSignal,
 ): Promise<Result<Map<string, PlanBundle>>> {
   try {
-    const plans = await selectIn<PlanRow>(client, 'plans', PLAN_COLUMNS, 'id', planIds, signal);
+    const ids = [...new Set(planIds)];
+    if (ids.length === 0) return { ok: true, data: new Map() };
+    const [plans, drafts, items] = await Promise.all([
+      selectIn<PlanRow>(client, 'plans', PLAN_COLUMNS, 'id', ids, signal),
+      readDraftRows(client, ids),
+      readItemsWithReviews(client, ids, signal),
+    ]);
     if (!plans.ok) return plans;
-    return await readBundlesOf(client, plans.data, signal);
+    if (!drafts.ok) return drafts;
+    if (!items.ok) return items;
+    const readable = new Set(plans.data.map((p) => p.id));
+    return {
+      ok: true,
+      data: assembleBundles(
+        plans.data,
+        mergeDraftRows(
+          items.data.items.filter((i) => readable.has(i.plan_id)),
+          drafts.data.filter((d) => readable.has(d.plan_id)),
+        ),
+        items.data.reviews,
+        items.data.stages,
+      ),
+    };
   } catch (error) {
     return fail(String(error));
   }
 }
 
 /**
- * The bundles of plans already read: their items, then the items' reviews and
- * the plans' draft rows together, then the post items' stages. Never throws.
+ * The bundles of plans already read: their draft rows, and their items then
+ * (as soon as the items are in) the reviews and post stages. Never throws.
  */
 async function readBundlesOf(
   client: Client,
@@ -271,16 +294,40 @@ async function readBundlesOf(
 ): Promise<Result<Map<string, PlanBundle>>> {
   if (plans.length === 0) return { ok: true, data: new Map() };
   const ids = plans.map((p) => p.id);
+  const [drafts, items] = await Promise.all([
+    readDraftRows(client, ids),
+    readItemsWithReviews(client, ids, signal),
+  ]);
+  if (!drafts.ok) return drafts;
+  if (!items.ok) return items;
+  return {
+    ok: true,
+    data: assembleBundles(
+      plans,
+      mergeDraftRows(items.data.items, drafts.data),
+      items.data.reviews,
+      items.data.stages,
+    ),
+  };
+}
+
+/** The plans' items, then their reviews and post stages together. Never throws. */
+async function readItemsWithReviews(
+  client: Client,
+  planIds: readonly string[],
+  signal: AbortSignal | undefined,
+): Promise<Result<{ items: PlanItemRow[]; reviews: PlanReviewRow[]; stages: PlanPostRow[] }>> {
   const items = await selectIn<PlanItemRow>(
     client,
     'plan_items',
     ITEM_COLUMNS,
     'plan_id',
-    ids,
+    planIds,
     signal,
   );
   if (!items.ok) return items;
-  const [reviews, drafts] = await Promise.all([
+  const postIds = items.data.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
+  const [reviews, stages] = await Promise.all([
     selectIn<PlanReviewRow>(
       client,
       'plan_item_reviews',
@@ -289,29 +336,11 @@ async function readBundlesOf(
       items.data.map((i) => i.id),
       signal,
     ),
-    readDraftRows(client, ids),
+    selectIn<PlanPostRow>(client, 'posts', 'id, stage, title, target_date', 'id', postIds, signal),
   ]);
   if (!reviews.ok) return reviews;
-  if (!drafts.ok) return drafts;
-  const postIds = items.data.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
-  const stages = await selectIn<PlanPostRow>(
-    client,
-    'posts',
-    'id, stage, title, target_date',
-    'id',
-    postIds,
-    signal,
-  );
   if (!stages.ok) return stages;
-  return {
-    ok: true,
-    data: assembleBundles(
-      plans,
-      mergeDraftRows(items.data, drafts.data),
-      reviews.data,
-      stages.data,
-    ),
-  };
+  return { ok: true, data: { items: items.data, reviews: reviews.data, stages: stages.data } };
 }
 
 /** plan_draft_rows over the plan ids: one call per chunk of 100. Never throws. */
@@ -570,6 +599,11 @@ export interface PlanCardCache {
   snapshot: (ids: readonly string[]) => PlanCardsSnapshot;
   /** Whether any of these ids is known to the cache (read or asked). */
   knows: (id: string) => boolean;
+  /**
+   * A reopen: re-read every settled plan (shown or absent) in the background;
+   * the cards stay as they are and change only when the data did.
+   */
+  revalidate: () => void;
   subscribe: (listener: () => void) => () => void;
   version: () => number;
   dispose: () => void;
@@ -749,6 +783,15 @@ export function createPlanCardCache(
       return { loading, bundles, failed };
     },
     knows: (id) => entries.has(id),
+    revalidate() {
+      const settled = [...entries.entries()]
+        .filter(([, e]) => e.state === 'ok' || e.state === 'absent')
+        .map(([id]) => id);
+      for (const id of settled) {
+        if (inFlight.has(id)) refreshAfter.add(id);
+      }
+      enqueue(settled.filter((id) => !inFlight.has(id)));
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

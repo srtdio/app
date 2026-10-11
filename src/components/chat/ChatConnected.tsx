@@ -40,6 +40,12 @@ import { runClearChannels, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { workspaceTimeZone } from '@/lib/chat/time-format';
 import { useChatThread } from '@/lib/chat/use-chat-thread';
 import { useChatMarks } from '@/lib/chat/use-chat-marks';
+import { chatKey, kickoffChatOpen } from '@/lib/chat/open-cache';
+import { prefetchLatestMessages } from '@/lib/chat/history';
+import { loadChannelMarks } from '@/lib/chat/marks';
+import { fetchOpenPosts } from '@/lib/chat/use-open-posts';
+import { startStatusReads } from '@/lib/chat/use-status-counts';
+import { resolveViewerSide } from '@/lib/chat/viewer-role';
 import { createStarStore, StarStoreContext, useChannelStars } from '@/lib/chat/stars';
 import { useChatTyping } from '@/lib/chat/use-chat-typing';
 import { visibleTypingIds } from '@/lib/chat/typing';
@@ -135,6 +141,26 @@ const NO_MESSAGES: ThreadMessage[] = [];
 const NO_PLAN_IDS: readonly string[] = [];
 
 const NO_SCHEDULED: ScheduledRow[] = [];
+
+/**
+ * A chat tap: start every read the open needs now, together (open-cache's
+ * kickoff over the app's reads), so none waits for the thread to mount or for
+ * the messages page. The hooks' first rounds join these reads.
+ */
+export function startChatOpen(userId: string, workspaceId: string, channelId: string): void {
+  const key = chatKey(userId, workspaceId, channelId);
+  if (key === null) return;
+  const status = startStatusReads(supabase, { workspaceId, channelId });
+  kickoffChatOpen(key, {
+    messages: (id) => prefetchLatestMessages(supabase, id),
+    viewerSide: () => void resolveViewerSide(supabase, workspaceId, userId),
+    marks: (id) => withReadTimeout((signal) => loadChannelMarks(supabase, id, signal)),
+    openPosts: (ws) => fetchOpenPosts(supabase, ws),
+    planIds: status.planIds,
+    briefs: status.briefs,
+    briefCount: status.briefCount,
+  });
+}
 
 const NO_TYPING: string[] = [];
 
@@ -1105,6 +1131,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     channelId: notesOpen ? null : selectedChannelId,
     target,
     currentUserId,
+    workspaceId,
   });
   const refetchMarks = marks.refetch;
   // Stars: one store per workspace (nothing carries across), the open chat's
@@ -1757,6 +1784,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             onSelect={(channel: ChannelSummary) => {
               // A plain open drops any hit's jump not taken yet.
               setSearchRequest(null);
+              // Every read the open needs starts now, before the thread mounts.
+              if (selected?.channelId !== channel.channelId && !isNotes(channel)) {
+                startChatOpen(currentUserId, workspaceId, channel.channelId);
+              }
               openChannel(channel);
             }}
             onNewChat={() => setNewChatOpen(true)}
@@ -1784,6 +1815,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
               <PlanCardsProvider
                 workspaceId={workspaceId}
                 channelId={selected.channelId}
+                userId={currentUserId}
                 planIds={cardIds.planIds}
                 chatTitle={(shown ?? selected).title}
                 onOpenPlan={onOpenPlan}

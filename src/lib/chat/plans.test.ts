@@ -270,8 +270,77 @@ describe('plan reads', () => {
       ['plan_item_reviews', 'item_id'],
       ['posts', 'id'],
     ]);
-    expect(rpc).toHaveBeenCalledWith('plan_draft_rows', { p_plan_ids: ['a'] });
+    // The draft rows start with the plans (by plan id; an invisible id returns nothing).
+    expect(rpc).toHaveBeenCalledWith('plan_draft_rows', { p_plan_ids: ['a', 'hidden'] });
     for (const l of log) expect(l.select).not.toMatch(/[()]/);
+  });
+
+  it('starts the plans, items and draft rows together; reviews and stages once the items are in', async () => {
+    const started: string[] = [];
+    const gates = new Map<string, () => void>();
+    const from = vi.fn((table: string) => {
+      const q: Record<string, unknown> = {};
+      for (const m of ['select', 'in', 'is', 'eq', 'order', 'abortSignal']) q[m] = () => q;
+      q.then = (resolve: (v: unknown) => unknown) => {
+        started.push(table);
+        const rows =
+          table === 'plans'
+            ? [
+                {
+                  id: 'a',
+                  workspace_id: 'ws',
+                  title: 'T',
+                  starts_on: '2026-10-12',
+                  ends_on: '2026-10-18',
+                  audience: 'client',
+                  created_by: null,
+                },
+              ]
+            : table === 'plan_items'
+              ? [
+                  {
+                    id: 'i1',
+                    plan_id: 'a',
+                    kind: 'post',
+                    position: 0,
+                    title: null,
+                    description: null,
+                    post_id: 'p1',
+                    created_at: '1',
+                  },
+                ]
+              : [];
+        return new Promise((done) =>
+          gates.set(table, () => done({ data: rows, error: null })),
+        ).then(resolve);
+      };
+      return q;
+    });
+    let draftsDone: () => void = () => {};
+    const rpc = vi.fn(
+      () =>
+        new Promise((done) => {
+          started.push('plan_draft_rows');
+          draftsDone = () => done({ data: [], error: null });
+        }),
+    );
+    const client = { from, rpc } as unknown as Client;
+    const read = readPlanBundles(client, ['a']);
+    await new Promise((r) => setTimeout(r, 0));
+    // The first wave: all three keyed by plan id, none waiting on another.
+    expect(started.sort()).toEqual(['plan_draft_rows', 'plan_items', 'plans']);
+    // The items alone in: their reviews and the post stages start now, while
+    // the plans and the draft rows are still out.
+    gates.get('plan_items')?.();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(started).toContain('plan_item_reviews');
+    expect(started).toContain('posts');
+    gates.get('plans')?.();
+    draftsDone();
+    gates.get('plan_item_reviews')?.();
+    gates.get('posts')?.();
+    const result = await read;
+    expect(result.ok && [...result.data.keys()]).toEqual(['a']);
   });
 
   it('chunks id lists at 100', async () => {
