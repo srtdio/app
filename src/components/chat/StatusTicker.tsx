@@ -43,6 +43,7 @@ import {
   type StatusKey,
   type StatusTone,
 } from '@/lib/chat/status-bar';
+import { paintLog, paintLogOn } from '@/components/chat/PaintLog';
 
 /** Snap open past this share of the panel's height. */
 export const SNAP_SHARE = 0.4;
@@ -156,7 +157,19 @@ export function StatusTickerBar(props: {
     if (area === null || measure === null) return;
     // Full mode keeps a 12px space before the chevron (the area's right padding).
     setCompact(needsCompact(measure.offsetWidth + FULL_CHEVRON_GAP, area.clientWidth));
+    if (paintLogOn()) {
+      paintLog(`ticker measure ${measure.offsetWidth} in ${area.clientWidth} (tick ${sizeTick})`);
+    }
   }, [itemsKey, sizeTick]);
+
+  // ?paintlog=1 only: each state the bar commits.
+  const logState =
+    bar === null
+      ? 'pending'
+      : bar.kind === 'items'
+        ? `${compact ? 'compact' : 'full'} ${itemsKey}`
+        : bar.kind;
+  useEffect(() => paintLog(`ticker ${logState}`), [logState]);
 
   // Re-measure on resize and when web fonts land.
   useEffect(() => {

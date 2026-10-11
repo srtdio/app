@@ -21,6 +21,7 @@ import { useToast } from '@/components/ui/toast';
 import { IconChat, IconPlan } from '@/components/ui/icons';
 import { CouldntLoadCard, SHARED_CARD } from '@/components/chat/PostCard';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
+import { usePaintLogCommit } from '@/components/chat/PaintLog';
 import { ShareFirstFlow, type ShareFirstRequest } from '@/components/chat/PlanShareConfirm';
 import {
   HAS_CLIENT_TAG,
@@ -106,8 +107,14 @@ export function SharedPlanCards(props: { planIds: string[]; senderName: string }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cache, key, version],
   );
+  const skeleton = snapshot.loading || !ready;
+  // ?paintlog=1 only: this message's cards, every mount, unmount and commit.
+  usePaintLogCommit(
+    `plan cards ${key}`,
+    skeleton ? `skeleton (loading ${snapshot.loading}, side ready ${ready})` : `cards v${version}`,
+  );
   if (props.planIds.length === 0) return <></>;
-  if (snapshot.loading || !ready) {
+  if (skeleton) {
     return (
       <div className="mt-1.5 flex flex-col items-start gap-1.5">
         {props.planIds.map((id) => (
@@ -144,6 +151,7 @@ function PlanCardItem(props: {
 }): ReactElement {
   const [forwardOpen, setForwardOpen] = useState(false);
   const bundle = props.view.kind === 'plan' ? props.view.bundle : null;
+  usePaintLogCommit(`plan card ${bundle?.plan.id ?? 'unavailable'}`, props.side);
   return (
     <>
       <PlanCardBody
