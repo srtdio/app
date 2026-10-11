@@ -21,8 +21,11 @@ import { useLongPress } from '@/components/ui';
 import { IconChevronLeft, IconPlan, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import {
-  PLAN_HAS_DRAFTS_COPY,
+  DRAFT_LABEL,
+  DRAFT_NOT_READY,
   PLAN_NOT_AVAILABLE,
+  draftLocked,
+  isDraftPost,
   itemDateLabel,
   itemPills,
   planProgress,
@@ -469,11 +472,7 @@ export function PlanScreen(props: {
         plan_id: planId,
         error: result.error.message,
       });
-      setError(
-        result.error.message.includes('plan_has_drafts')
-          ? PLAN_HAS_DRAFTS_COPY
-          : "Couldn't share. Try again.",
-      );
+      setError("Couldn't share. Try again.");
       return;
     }
     toast.show({ title: 'Shared with the client' });
@@ -500,7 +499,10 @@ export function PlanScreen(props: {
     dispatchPlanChanged(window, planId);
   };
 
-  const item = bundle?.items.find((i) => i.id === itemId) ?? null;
+  const found = bundle?.items.find((i) => i.id === itemId) ?? null;
+  // A draft the viewer can see by name only never opens (a drawer row included).
+  const item =
+    found !== null && bundle !== null && !draftLocked(bundle, found, side) ? found : null;
   return (
     <>
       <PlanPage
@@ -606,9 +608,10 @@ export function droppedLayer(input: {
   return null;
 }
 
-/** A row's title: a concept's own, or its post's. Pure. */
+/** A row's title: a concept's own, a draft row's, or its post's. Pure. */
 export function rowTitle(bundle: PlanBundle | null, item: PlanItemRow): string {
   if (item.kind === 'concept') return item.title ?? '';
+  if (item.draft_row === true) return item.title ?? 'Post';
   const info = item.post_id !== null ? bundle?.postInfo[item.post_id] : undefined;
   return info?.title ?? 'Post';
 }
@@ -644,7 +647,7 @@ function PlanBody(props: {
         <div className="flex flex-col gap-1.5 px-4 pt-3">
           <div className="flex items-center gap-2 rounded-lg border border-warn bg-warn-soft px-3 py-2">
             <span className="flex-1 text-[13px] text-warn">
-              Team only. The client can&apos;t see it yet.
+              Agency only. The client can&apos;t see it yet.
             </span>
             <Button
               size="sm"
@@ -711,6 +714,21 @@ function PlanBody(props: {
   );
 }
 
+/** A draft post's pill: grey for the agency, outlined for anyone else. */
+export function DraftPill(props: { locked: boolean }): ReactElement {
+  return (
+    <span
+      data-plan-pill="draft"
+      className={cn(
+        'inline-flex min-h-[24px] items-center rounded-md px-2 text-[13px]',
+        props.locked ? 'border border-border text-fg-3' : 'bg-panel-2 text-fg-2',
+      )}
+    >
+      {DRAFT_LABEL}
+    </span>
+  );
+}
+
 function PlanRow(props: {
   bundle: PlanBundle;
   item: PlanItemRow;
@@ -723,10 +741,47 @@ function PlanRow(props: {
   const hold = useLongPress(() => onRemove?.());
   const sub = rowSubline(props.item);
   const date = itemDateLabel(props.bundle, props.item);
+  const draft = isDraftPost(props.bundle, props.item);
+  if (draftLocked(props.bundle, props.item, props.side)) {
+    // Name only: no open, no hover, no chevron.
+    return (
+      <div
+        role="button"
+        aria-disabled="true"
+        data-plan-row={props.item.id}
+        data-plan-row-draft="locked"
+        onContextMenu={(event) => event.preventDefault()}
+        className={cn(
+          'flex w-full cursor-default flex-col gap-2 rounded-lg border border-border bg-panel p-3 text-left',
+          NO_TOUCH_SELECT,
+        )}
+      >
+        <span className="flex w-full gap-3">
+          <span className="h-12 w-12 shrink-0 rounded-md border border-dashed border-border bg-panel-2" />
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="truncate text-[15px] font-semibold text-fg-2">
+              {rowTitle(props.bundle, props.item)}
+            </span>
+            <span className="text-[13px] text-fg-3">{DRAFT_NOT_READY}</span>
+            <span
+              data-plan-row-date={date.dated ? 'dated' : 'none'}
+              className={cn('text-[13px] text-fg-3', date.dated && 'font-mono')}
+            >
+              {date.label}
+            </span>
+          </span>
+        </span>
+        <span className="flex w-full flex-wrap items-center gap-1.5">
+          <DraftPill locked />
+        </span>
+      </div>
+    );
+  }
   return (
     <button
       type="button"
       data-plan-row={props.item.id}
+      {...(draft ? { 'data-plan-row-draft': 'open' } : {})}
       {...(onRemove !== undefined ? hold.handlers : {})}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -766,6 +821,7 @@ function PlanRow(props: {
         </span>
       </span>
       <span className="flex w-full flex-wrap items-center gap-1.5">
+        {draft ? <DraftPill locked={false} /> : null}
         {itemPills(props.bundle, props.item, props.side).map((pill) => (
           <PlanPill key={pill.side} pill={pill} />
         ))}

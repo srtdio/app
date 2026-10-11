@@ -1,7 +1,10 @@
 // The plan shared into a message, as a card (modelled on BriefCard): eyebrow
-// PLAN, title, the date range in mono, count chips ("Team only" on a team
+// PLAN, title, the date range in mono, count chips ("Agency only" on a team
 // plan), the client's approval progress, and a footer with Open plan (and
-// Forward for a client on a client plan). Ids resolve through the thread's
+// Forward: the agency on every plan, a client on a client plan). Forwarding an
+// Agency only plan into a chat with a client asks "Share with client first?"
+// (when the chat is known to have one, or when the server refuses it for that
+// reason). Ids resolve through the thread's
 // plan card cache (PlanCardsProvider), so every plan across the loaded thread
 // comes back in one batch, never one read per bubble. A plan the viewer cannot
 // read (RLS) renders the neutral "not visible" box with "Plan not available";
@@ -13,35 +16,42 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
-import { IconPlan } from '@/components/ui/icons';
+import { IconChat, IconPlan } from '@/components/ui/icons';
 import { CouldntLoadCard, SHARED_CARD } from '@/components/chat/PostCard';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
+import { ShareFirstFlow, type ShareFirstRequest } from '@/components/chat/PlanShareConfirm';
 import {
+  HAS_CLIENT_TAG,
   PLAN_EYEBROW,
   PLAN_NOT_AVAILABLE,
   canForwardPlan,
   forwardedToast,
+  planShareDecision,
   planChips,
   planProgress,
   planRangeLabel,
   progressLabel,
   progressPercent,
+  summaryHasClient,
 } from '@/components/chat/plan-card';
 import { conversationPickerBody, type LoadState } from '@/components/pages/pcs/ConversationPicker';
 import { useChat } from '@/lib/chat';
 import { listChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
 import { createTextMessage } from '@/lib/chat/message-factory';
 import { newMessageId } from '@/lib/chat/message-id';
-import type { PlanBundle } from '@/lib/chat/plans';
+import { refusedForClient, type PlanBundle } from '@/lib/chat/plans';
 import { forwardLandsInOpenChat, sharePlanToChannel } from '@/lib/chat/share-plan';
 import {
   sendText,
   targetFromSummary,
   type ChannelTarget,
+  type ChatMessageRow,
+  type LiveMessageIds,
   type ThreadConnection,
 } from '@/lib/chat/thread';
 import { createInFlightGuard } from '@/lib/chat/thread-actions';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
+import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
 import { useSession } from '@/lib/session-context';
@@ -126,7 +136,7 @@ function PlanCardItem(props: {
   onOpen: () => void;
 }): ReactElement {
   const [forwardOpen, setForwardOpen] = useState(false);
-  const planId = props.view.kind === 'plan' ? props.view.bundle.plan.id : null;
+  const bundle = props.view.kind === 'plan' ? props.view.bundle : null;
   return (
     <>
       <PlanCardBody
@@ -135,10 +145,11 @@ function PlanCardItem(props: {
         onOpen={props.onOpen}
         onForward={() => setForwardOpen(true)}
       />
-      {planId !== null ? (
+      {bundle !== null ? (
         <PlanForwardSheet
           open={forwardOpen}
-          planId={planId}
+          bundle={bundle}
+          side={props.side}
           onClose={() => setForwardOpen(false)}
         />
       ) : null}
@@ -240,22 +251,29 @@ export function PlanCardBody(props: {
  * Forward: pick one of my chats and share the plan into it with a fresh
  * message id (chat_plan_share), then publish it live when connected. The list
  * is the Chat page's own read; the body keeps one fixed height in every state.
+ * An Agency only plan gets a "Has client" tag on chats known to have a client
+ * (a DM with a client), and picking one, or one the server refuses for that
+ * reason, asks "Share with client first?". No read per chat.
  */
 function PlanForwardSheet(props: {
   open: boolean;
-  planId: string;
+  bundle: PlanBundle;
+  side: ViewerSide;
   onClose: () => void;
 }): ReactElement {
   const { client } = useChat();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaceName } = useWorkspace();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const toast = useToast();
   const [load, setLoad] = useState<LoadState>({ status: 'loading' });
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [guard] = useState(createInFlightGuard);
+  const [confirm, setConfirm] = useState<ShareFirstRequest | null>(null);
   const planCards = usePlanCards();
   const open = props.open;
+  const planId = props.bundle.plan.id;
+  const agencyOnly = props.bundle.plan.audience === 'team';
 
   useEffect(() => {
     if (!open || workspaceId === null || userId === null) return;
@@ -274,7 +292,10 @@ function PlanForwardSheet(props: {
     };
   }, [open, workspaceId, userId]);
 
-  async function forward(channel: ChannelSummary): Promise<void> {
+  /** The live publish for a forward: none into the open chat (the thread adds it) or offline. */
+  function publishOf(
+    channel: ChannelSummary,
+  ): ((liveIds: LiveMessageIds) => Promise<unknown>) | null {
     let target: ChannelTarget | null = null;
     try {
       target = targetFromSummary(channel);
@@ -282,9 +303,53 @@ function PlanForwardSheet(props: {
       target = null;
     }
     const connection = client;
-    // Into the open chat: the thread adds (and publishes) the row itself.
     const here =
       planCards !== null && forwardLandsInOpenChat(channel.channelId, planCards.channelId);
+    return !here && connection !== null && target !== null
+      ? (liveIds) =>
+          sendText({
+            connection: connection as ThreadConnection,
+            target: target as ChannelTarget,
+            text: '',
+            attachments: [],
+            sharedPostIds: [],
+            reply: null,
+            createMessage: createTextMessage,
+            liveIds,
+          })
+      : null;
+  }
+
+  function landed(
+    channel: { channelId: string; title: string },
+    row: ChatMessageRow,
+    traceId: string,
+  ): void {
+    if (planCards !== null && forwardLandsInOpenChat(channel.channelId, planCards.channelId)) {
+      planCards.addRowHere(row, traceId);
+    }
+    toast.show({ title: forwardedToast(channel.title) });
+  }
+
+  function askFirst(channel: ChannelSummary): void {
+    setConfirm({
+      bundle: props.bundle,
+      channelId: channel.channelId,
+      chatName: channel.title,
+      group: channel.channelType === 'group',
+      publish: publishOf(channel),
+    });
+    props.onClose();
+  }
+
+  async function forward(channel: ChannelSummary): Promise<void> {
+    if (
+      props.side === 'agency' &&
+      planShareDecision(props.bundle.plan.audience, summaryHasClient(channel)) === 'confirm'
+    ) {
+      askFirst(channel);
+      return;
+    }
     const result = await sharePlanToChannel(
       {
         guard,
@@ -297,20 +362,7 @@ function PlanForwardSheet(props: {
             p_trace_id: input.traceId,
           });
         },
-        publish:
-          !here && connection !== null && target !== null
-            ? (liveIds) =>
-                sendText({
-                  connection: connection as ThreadConnection,
-                  target: target as ChannelTarget,
-                  text: '',
-                  attachments: [],
-                  sharedPostIds: [],
-                  reply: null,
-                  createMessage: createTextMessage,
-                  liveIds,
-                })
-            : null,
+        publish: publishOf(channel),
         newMessageId,
         newTraceId: generateTraceId,
         onPublishFailed: ({ error, traceId, messageId }) =>
@@ -320,27 +372,93 @@ function PlanForwardSheet(props: {
             error,
           }),
       },
-      { channelId: channel.channelId, planId: props.planId },
+      { channelId: channel.channelId, planId },
     );
     if (!result.ok && result.reason === 'busy') return;
     setSendingId(null);
     if (result.ok) {
-      if (here) planCards?.addRowHere(result.row, result.traceId);
-      toast.show({ title: forwardedToast(channel.title) });
+      landed(channel, result.row, result.traceId);
       props.onClose();
+      return;
+    }
+    if (props.side === 'agency' && refusedForClient(result.message)) {
+      askFirst(channel);
       return;
     }
     logger.error('chat: plan forward failed', {
       channel_id: channel.channelId,
-      plan_id: props.planId,
+      plan_id: planId,
       error: result.message,
     });
     toast.show({ title: result.copy });
   }
 
   return (
-    <Sheet open={props.open} onClose={props.onClose} title="Forward plan">
-      {conversationPickerBody(load, sendingId, (channel) => void forward(channel))}
-    </Sheet>
+    <>
+      <Sheet open={props.open} onClose={props.onClose} title="Forward plan">
+        {load.status === 'ready' && load.channels.length > 0
+          ? forwardList(load.channels, sendingId, agencyOnly, (channel) => void forward(channel))
+          : conversationPickerBody(load, sendingId, (channel) => void forward(channel))}
+      </Sheet>
+      <ShareFirstFlow
+        request={confirm}
+        workspaceName={workspaceName ?? ''}
+        onCancel={() => setConfirm(null)}
+        onSent={(row, traceId, request) => {
+          setConfirm(null);
+          landed({ channelId: request.channelId, title: request.chatName }, row, traceId);
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * The Forward list: the conversation picker's rows (same box, same fixed body
+ * height), with "Has client" on chats known to have a client when the plan is
+ * Agency only. Hook-free.
+ */
+function forwardList(
+  channels: readonly ChannelSummary[],
+  sendingId: string | null,
+  agencyOnly: boolean,
+  onPick: (channel: ChannelSummary) => void,
+): ReactElement {
+  return (
+    <div className="h-[288px] overflow-y-auto">
+      <div className={cn('flex flex-col gap-1', NO_TOUCH_SELECT)}>
+        {channels.map((channel) => (
+          <button
+            key={channel.channelId}
+            type="button"
+            data-plan-forward-target={channel.channelId}
+            onClick={() => onPick(channel)}
+            className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <span className="flex shrink-0 items-center justify-center text-fg-2">
+              <IconChat size={18} />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium leading-snug">{channel.title}</span>
+              <span className="truncate text-xs leading-snug text-fg-3">
+                {sendingId === channel.channelId
+                  ? 'Sending'
+                  : channel.channelType === 'group'
+                    ? 'Group'
+                    : 'Direct message'}
+              </span>
+            </span>
+            {agencyOnly && summaryHasClient(channel) === true ? (
+              <span
+                data-plan-has-client=""
+                className="shrink-0 whitespace-nowrap rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-semibold leading-4 text-warn"
+              >
+                {HAS_CLIENT_TAG}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -5,11 +5,16 @@
 // read is simply absent ("Plan not available"). Cards never read per message:
 // the thread's plan card cache (createPlanCardCache) coalesces every plan id
 // asked in the same tick into one batch (plans, then their items, then the
-// items' reviews, then the post items' stages). Framework-free: the share
+// items' reviews and the plans' draft rows, then the post items' stages).
+// A client never reads a draft post item from plan_items (RLS): its row comes
+// from plan_draft_rows (one call per 100 plan ids) and is merged in as a post
+// item at stage draft, name only. Framework-free: the share
 // steps and the readers are injected, so the contract is unit-tested directly.
 
 import type { Client, PlanConceptAddArgs, PlanConceptEditArgs, Result } from '@srtdio/rpc';
+import { planDraftRows } from '@srtdio/rpc';
 import { abortable, withReadTimeout } from '@/lib/chat-reads';
+import { openPlans } from '@/lib/chat/status-bar';
 
 /** Ids per IN read (the PostgREST URL stays short). */
 export const PLAN_READ_CHUNK = 100;
@@ -68,8 +73,28 @@ export interface PlanItemRow {
   description: string | null;
   post_id: string | null;
   created_at: string;
-  /** A concept's own date ("YYYY-MM-DD"); always null on a post (its post holds the date). */
+  /**
+   * A concept's own date ("YYYY-MM-DD"); null on a post read from plan_items
+   * (its post holds the date), the post's date on a draft row.
+   */
   target_date?: string | null;
+  /**
+   * A draft post item read from plan_draft_rows (the viewer cannot read the
+   * item or its post): the title, number and date come from that row.
+   */
+  draft_row?: true;
+  /** The post's number, on a draft row. */
+  post_number?: number;
+}
+
+/** One row of plan_draft_rows: a draft post item the caller may see by name. */
+export interface PlanDraftRow {
+  plan_id: string;
+  item_id: string;
+  item_position: number;
+  post_number: number;
+  title: string;
+  target_date: string | null;
 }
 
 export interface PlanReviewRow {
@@ -167,7 +192,9 @@ interface PlanQuery extends PromiseLike<SelectResult> {
   in: (column: string, values: readonly string[]) => PlanQuery;
   is: (column: string, value: null) => PlanQuery;
   eq: (column: string, value: string) => PlanQuery;
+  gte: (column: string, value: string) => PlanQuery;
   order: (column: string, opts?: { ascending?: boolean }) => PlanQuery;
+  limit: (count: number) => PlanQuery;
 }
 interface PlanTable {
   select: (columns: string) => PlanQuery;
@@ -175,14 +202,15 @@ interface PlanTable {
 
 /**
  * An item's day ("YYYY-MM-DD"): a concept's own target_date, a post's
- * target_date; null when undated or the post is not readable. Pure.
+ * target_date (a draft row's own); null when undated or the post is not
+ * readable. Pure.
  */
 export function planItemDay(
   item: PlanItemRow,
   postInfo: Readonly<Record<string, PlanPostInfo>>,
 ): string | null {
   const raw =
-    item.kind === 'concept'
+    item.kind === 'concept' || item.draft_row === true
       ? (item.target_date ?? null)
       : item.post_id !== null
         ? (postInfo[item.post_id]?.target_date ?? null)
@@ -212,49 +240,155 @@ export function sortPlanItemsByDate(
 }
 
 /**
- * Read plans by id with their items, reviews and post stages: four selects in
- * sequence (each chunked at 100), never an embed. A plan absent under RLS is
- * absent from the map. Never throws.
+ * Read plans by id with their items, reviews, draft rows and post stages:
+ * selects in sequence (each chunked at 100), never an embed. A plan absent
+ * under RLS is absent from the map. Never throws.
  */
 export async function readPlanBundles(
   client: Client,
   planIds: readonly string[],
   signal?: AbortSignal,
 ): Promise<Result<Map<string, PlanBundle>>> {
-  const out = new Map<string, PlanBundle>();
   try {
     const plans = await selectIn<PlanRow>(client, 'plans', PLAN_COLUMNS, 'id', planIds, signal);
     if (!plans.ok) return plans;
-    if (plans.data.length === 0) return { ok: true, data: out };
-    const items = await selectIn<PlanItemRow>(
-      client,
-      'plan_items',
-      ITEM_COLUMNS,
-      'plan_id',
-      plans.data.map((p) => p.id),
-      signal,
-    );
-    if (!items.ok) return items;
-    const reviews = await selectIn<PlanReviewRow>(
+    return await readBundlesOf(client, plans.data, signal);
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/**
+ * The bundles of plans already read: their items, then the items' reviews and
+ * the plans' draft rows together, then the post items' stages. Never throws.
+ */
+async function readBundlesOf(
+  client: Client,
+  plans: readonly PlanRow[],
+  signal: AbortSignal | undefined,
+): Promise<Result<Map<string, PlanBundle>>> {
+  if (plans.length === 0) return { ok: true, data: new Map() };
+  const ids = plans.map((p) => p.id);
+  const items = await selectIn<PlanItemRow>(
+    client,
+    'plan_items',
+    ITEM_COLUMNS,
+    'plan_id',
+    ids,
+    signal,
+  );
+  if (!items.ok) return items;
+  const [reviews, drafts] = await Promise.all([
+    selectIn<PlanReviewRow>(
       client,
       'plan_item_reviews',
       REVIEW_COLUMNS,
       'item_id',
       items.data.map((i) => i.id),
       signal,
-    );
-    if (!reviews.ok) return reviews;
-    const postIds = items.data.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
-    const stages = await selectIn<PlanPostRow>(
-      client,
-      'posts',
-      'id, stage, title, target_date',
-      'id',
-      postIds,
-      signal,
-    );
-    if (!stages.ok) return stages;
-    return { ok: true, data: assembleBundles(plans.data, items.data, reviews.data, stages.data) };
+    ),
+    readDraftRows(client, ids),
+  ]);
+  if (!reviews.ok) return reviews;
+  if (!drafts.ok) return drafts;
+  const postIds = items.data.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
+  const stages = await selectIn<PlanPostRow>(
+    client,
+    'posts',
+    'id, stage, title, target_date',
+    'id',
+    postIds,
+    signal,
+  );
+  if (!stages.ok) return stages;
+  return {
+    ok: true,
+    data: assembleBundles(
+      plans,
+      mergeDraftRows(items.data, drafts.data),
+      reviews.data,
+      stages.data,
+    ),
+  };
+}
+
+/** plan_draft_rows over the plan ids: one call per chunk of 100. Never throws. */
+async function readDraftRows(
+  client: Client,
+  planIds: readonly string[],
+): Promise<Result<PlanDraftRow[]>> {
+  const unique = [...new Set(planIds)];
+  if (unique.length === 0) return { ok: true, data: [] };
+  const results = await Promise.all(
+    planChunks(unique).map((chunk) => planDraftRows(client, { p_plan_ids: chunk })),
+  );
+  const rows: PlanDraftRow[] = [];
+  for (const res of results) {
+    if (!res.ok) return fail(`plan_draft_rows: ${res.error.message}`);
+    rows.push(...((res.data ?? []) as PlanDraftRow[]));
+  }
+  return { ok: true, data: rows };
+}
+
+/**
+ * The items plus every draft row whose item is not already among them (the
+ * agency reads those items itself), as a post item at stage draft: name,
+ * number and date from the row, no post id. Pure.
+ */
+export function mergeDraftRows(
+  items: readonly PlanItemRow[],
+  drafts: readonly PlanDraftRow[],
+): PlanItemRow[] {
+  const have = new Set(items.map((i) => i.id));
+  const out = [...items];
+  for (const row of drafts) {
+    if (have.has(row.item_id)) continue;
+    have.add(row.item_id);
+    out.push({
+      id: row.item_id,
+      plan_id: row.plan_id,
+      kind: 'post',
+      position: row.item_position,
+      title: row.title,
+      description: null,
+      post_id: null,
+      created_at: '',
+      target_date: row.target_date,
+      draft_row: true,
+      post_number: row.post_number,
+    });
+  }
+  return out;
+}
+
+/** Plans the Plan tile lists: this many at most. */
+export const UPCOMING_PLANS_LIMIT = 100;
+
+/**
+ * The workspace's upcoming plans (not deleted, ending on `today` or later in
+ * the workspace zone), ending soonest first, at most 100: one plans select,
+ * then their bundles through the batched reads. Never throws.
+ */
+export async function readUpcomingPlans(
+  client: Client,
+  workspaceId: string,
+  today: string,
+  signal?: AbortSignal,
+): Promise<Result<PlanBundle[]>> {
+  try {
+    const query = (client.from('plans') as unknown as PlanTable)
+      .select(PLAN_COLUMNS)
+      .eq('workspace_id', workspaceId)
+      .is('deleted_at', null)
+      .gte('ends_on', today)
+      .order('ends_on', { ascending: true })
+      .limit(UPCOMING_PLANS_LIMIT);
+    const res = (await abortable(query, signal)) as SelectResult;
+    if (res.error !== null) return fail(`plans: ${res.error.message}`);
+    const plans = (res.data ?? []) as PlanRow[];
+    const bundles = await readBundlesOf(client, plans, signal);
+    if (!bundles.ok) return bundles;
+    return { ok: true, data: openPlans(bundles.data.values(), today) };
   } catch (error) {
     return fail(String(error));
   }
@@ -691,8 +825,8 @@ export interface PlanShareDeps {
 
 /** Shown inline when a share step fails. */
 export const PLAN_SHARE_FAILED = "Couldn't share. Try again.";
-/** Shown when a team only plan meets a chat with a client. */
-export const TEAM_PLAN_CLIENT_CHAT = "Team only plans can't be shared in chats with clients.";
+/** Shown when an Agency only plan meets a chat with a client. */
+export const TEAM_PLAN_CLIENT_CHAT = "Agency only plans can't be sent in chats with clients.";
 
 export type PlanShareResult =
   | { ok: true; progress: ShareProgress }
@@ -706,11 +840,14 @@ export type PlanShareResult =
       message: string;
     };
 
+/** Whether a share was refused because the plan is Agency only and the chat has a client. Pure. */
+export function refusedForClient(message: string): boolean {
+  return message.includes('plan_not_shared_with_client');
+}
+
 /** The inline copy for a failed step's raw error. Pure. */
 export function shareFailureCopy(message: string): string {
-  return message.includes('plan_not_shared_with_client')
-    ? TEAM_PLAN_CLIENT_CHAT
-    : PLAN_SHARE_FAILED;
+  return refusedForClient(message) ? TEAM_PLAN_CLIENT_CHAT : PLAN_SHARE_FAILED;
 }
 
 /**

@@ -89,12 +89,14 @@ describe('one concept sheet (E2, E5)', () => {
 });
 
 describe('reset line (E3)', () => {
-  it('shows only when the team or client review is not waiting', () => {
+  it('shows only when the agency or client review is not waiting', () => {
     expect(conceptEditResets('waiting', 'waiting')).toBe(false);
     expect(conceptEditResets('approved', 'waiting')).toBe(true);
     expect(conceptEditResets('waiting', 'changes')).toBe(true);
     expect(conceptEditResets('approved', 'approved')).toBe(true);
-    expect(CONCEPT_EDIT_RESET_HINT).toBe('Saving sends this back to waiting for team and client.');
+    expect(CONCEPT_EDIT_RESET_HINT).toBe(
+      'Saving sends this back to waiting for agency and client.',
+    );
   });
 });
 

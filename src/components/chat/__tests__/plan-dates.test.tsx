@@ -55,10 +55,10 @@ const BUNDLE: PlanBundle = {
 describe('Plan screen progress (D1)', () => {
   it('agency: both counts and the changes part; client: the client count only', () => {
     expect(screenProgressLabel(BUNDLE, 'agency')).toBe(
-      'Team 1 of 2 · Client 1 of 2 · 1 change asked',
+      'Agency 1 of 2 · Client 1 of 2 · 1 change asked',
     );
     expect(screenProgressLabel(BUNDLE, 'client')).toBe('1/2 approved');
-    expect(screenProgressLabel(BUNDLE, 'unknown')).not.toContain('Team');
+    expect(screenProgressLabel(BUNDLE, 'unknown')).not.toContain('Agency');
   });
 });
 

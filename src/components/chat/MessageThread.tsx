@@ -414,8 +414,11 @@ interface MessageThreadProps {
    * hash picker's drafts).
    */
   channelHasClient?: boolean | null;
-  /** The main composer's Plan tile: opens the New plan screen. Absent: the tile stays off. */
-  onOpenPlanCompose?: () => void;
+  /**
+   * The main composer's Plan tile: opens "Share a plan" with the plans this
+   * chat already holds a card for (loaded thread and ticker). Absent: the tile stays off.
+   */
+  onOpenPlanCompose?: (inChatPlanIds: readonly string[]) => void;
   /** In-app navigation for the status drawer (a brief, the Briefs page). */
   onNavigate?: (to: string) => void;
   /** The router location key: the status drawer restores only on a Back to it. */
@@ -4421,6 +4424,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     livePlanIds,
   });
   const statusPlanCards = usePlanCards();
+  const onOpenPlanCompose = props.onOpenPlanCompose;
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Bumped when the selection's Delete window boundary passes (a re-render).
@@ -5514,8 +5518,16 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           onCancelAbout={() => setAboutDraft(null)}
           sharedPostIds={sharedInChat}
           onBringPost={bringPost}
-          {...(props.onOpenPlanCompose !== undefined && !notes
-            ? { onOpenPlanCompose: props.onOpenPlanCompose }
+          {...(onOpenPlanCompose !== undefined && !notes
+            ? {
+                onOpenPlanCompose: () =>
+                  onOpenPlanCompose([
+                    ...new Set([
+                      ...livePlanIds,
+                      ...statusCounts.plans.bundles.map((b) => b.plan.id),
+                    ]),
+                  ]),
+              }
             : {})}
           {...composerShared(view === null)}
         />

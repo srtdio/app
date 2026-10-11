@@ -76,6 +76,7 @@ import { newMessageId } from '@/lib/chat/message-id';
 import { SharedCardsProvider } from '@/components/chat/PostCard';
 import { PlanCardsProvider, type OpenPlanRequest } from '@/components/chat/PlanCardsProvider';
 import { PlanComposeScreen, PlanSharedNotice } from '@/components/chat/PlanComposeScreen';
+import { PlanPickerSheet } from '@/components/chat/PlanPickerSheet';
 import { PlanScreen } from '@/components/chat/PlanScreen';
 import { PLAN_SHARED_TOAST } from '@/components/chat/plan-card';
 import { useChatLayout } from '@/components/chat/chat-type';
@@ -131,6 +132,7 @@ interface ChatConnectedProps {
 const DESKTOP_QUERY = '(min-width: 768px)';
 
 const NO_MESSAGES: ThreadMessage[] = [];
+const NO_PLAN_IDS: readonly string[] = [];
 
 const NO_SCHEDULED: ScheduledRow[] = [];
 
@@ -1420,6 +1422,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // Plan screen's own step). Each open layer is one history step; a chat
   // switch closes both.
   const [planComposeOpen, setPlanComposeOpen] = useState(false);
+  // "Share a plan" (the Plan tile), with the plans this chat already holds.
+  const [planPicker, setPlanPicker] = useState<{ inChat: readonly string[] } | null>(null);
   const [openPlan, setOpenPlan] = useState<OpenPlanRequest | null>(null);
   // The item the Plan screen opens at (the status drawer's item rows); null: the plan.
   const [openPlanItem, setOpenPlanItem] = useState<string | null>(null);
@@ -1430,6 +1434,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   useHistoryStep(planShown && selected !== null, HISTORY_STEP_KEYS.plan, () => setPlanShown(false));
   useEffect(() => {
     setPlanComposeOpen(false);
+    setPlanPicker(null);
     setPlanShown(false);
   }, [selectedChannelId]);
   // "Plan shared" shows above the composer (never over a plan page header).
@@ -1846,7 +1851,12 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                         onOpen: onOpenMention,
                       }}
                       channelHasClient={hasClient}
-                      {...(!notesOpen ? { onOpenPlanCompose: () => setPlanComposeOpen(true) } : {})}
+                      {...(!notesOpen
+                        ? {
+                            onOpenPlanCompose: (inChat: readonly string[]) =>
+                              setPlanPicker({ inChat }),
+                          }
+                        : {})}
                       onOpenPlanItem={onOpenPlanItem}
                       onNavigate={navigate}
                       locationKey={locationKey}
@@ -1903,6 +1913,28 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                   nameOf={scheduleNameOf}
                   {...scheduledActions}
                 />
+                {!notesOpen ? (
+                  <PlanPickerSheet
+                    open={planPicker !== null}
+                    workspaceId={workspaceId}
+                    workspaceName={workspace?.name ?? ''}
+                    channelId={selected.channelId}
+                    chatName={(shown ?? selected).title}
+                    group={isGroup}
+                    timeZone={timeZone}
+                    hasClient={hasClient}
+                    inChatPlanIds={planPicker?.inChat ?? NO_PLAN_IDS}
+                    onClose={() => setPlanPicker(null)}
+                    onNewPlan={() => setPlanComposeOpen(true)}
+                    onSent={(row, traceId) => {
+                      void thread.addSentRow(row, traceId);
+                      setPlanShares((prev) => ({
+                        channelId: row.channel_id,
+                        count: prev.count + 1,
+                      }));
+                    }}
+                  />
+                ) : null}
                 {!notesOpen ? (
                   <PlanComposeScreen
                     open={planComposeOpen}

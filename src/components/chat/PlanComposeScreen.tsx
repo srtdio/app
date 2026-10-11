@@ -1,6 +1,6 @@
 // The New plan screen (full page, one history step), opened from the tray's
 // Plan tile. Title, From and To (this Monday to Sunday in the workspace zone
-// by default, at most 92 days), who can see it (Client and team, or Team only),
+// by default, at most 92 days), who can see it (Agency and client, or Agency only),
 // concepts (title, description, up to 20 library files) and posts from
 // Pipeline (drafts too, for a team plan in a chat with no client). Nothing is
 // written until "Share in chat": then plan_create, each concept in order, the
@@ -31,6 +31,7 @@ import {
   DRAFT_PROBLEM_COPY,
   NO_DATE_LABEL,
   PLAN_TITLE_MAX,
+  TEAM_ONLY_LABEL,
   defaultPlanRange,
   draftProblem,
   draftsButtonShown,
@@ -130,7 +131,7 @@ export function PlanComposeScreen(props: {
   const locked = progress.planId !== null || busy;
   const problem = draftProblem({ title, startsOn: range.startsOn, endsOn: range.endsOn });
   const showDrafts = draftsButtonShown(audience, props.channelHasClient);
-  // A Team only plan is never shared into a chat that has (or may have) a
+  // An Agency only plan is never shared into a chat that has (or may have) a
   // client: Share stays off and nothing is written. The server check stays as
   // the fallback.
   const teamBlocked = teamPlanBlocked(audience, props.channelHasClient);
@@ -323,8 +324,8 @@ export function PlanComposeScreen(props: {
             >
               {(
                 [
-                  ['client', 'Client and team'],
-                  ['team', 'Team only'],
+                  ['client', 'Agency and client'],
+                  ['team', TEAM_ONLY_LABEL],
                 ] as const
               ).map(([value, label]) => (
                 <button

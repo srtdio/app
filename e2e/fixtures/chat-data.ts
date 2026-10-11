@@ -871,3 +871,177 @@ export function seedDatedPlan(
     planMessage(DATED_PLAN_MESSAGE_ID, opts.channelId, opts.sender, [DATED_PLAN_ID], opts.now),
   );
 }
+
+// ---------------------------------------------------------------------------
+// "Share a plan" (the Plan tile): upcoming plans, an ended one, and drafts
+// ---------------------------------------------------------------------------
+
+export const UPCOMING_TEAM_PLAN_ID = '0190d000-0000-7000-8000-00000000d005';
+export const UPCOMING_TEAM_PLAN_TITLE = 'Internal sprint';
+export const UPCOMING_CLIENT_PLAN_ID = '0190d000-0000-7000-8000-00000000d006';
+export const UPCOMING_CLIENT_PLAN_TITLE = 'Festive week';
+export const ENDED_PLAN_ID = '0190d000-0000-7000-8000-00000000d007';
+export const ENDED_PLAN_TITLE = 'Last month';
+export const DRAFT_PLAN_ID = '0190d000-0000-7000-8000-00000000d008';
+export const DRAFT_PLAN_TITLE = 'Launch fortnight';
+export const DRAFT_PLAN_MESSAGE_ID = '0190d200-0000-7000-8000-00000000d208';
+/** The draft post item (Product teaser at stage draft). */
+export const DRAFT_ITEM_ID = '0190d100-0000-7000-8000-00000000d1d1';
+
+/** "YYYY-MM-DD" `days` from `now` in UTC (the fixture workspace's zone). */
+function dayFrom(now: number, days: number): string {
+  return new Date(now + days * 24 * HOUR).toISOString().slice(0, 10);
+}
+
+function planOn(
+  id: string,
+  title: string,
+  audience: 'team' | 'client',
+  by: string,
+  startsOn: string,
+  endsOn: string,
+): Row {
+  return { ...planRow(id, title, audience, by), starts_on: startsOn, ends_on: endsOn };
+}
+
+function itemRow(
+  id: string,
+  planId: string,
+  kind: 'concept' | 'post',
+  position: number,
+  fields: { title?: string; postId?: string | undefined },
+  by: string,
+): Row {
+  return {
+    id,
+    workspace_id: WORKSPACE_ID,
+    plan_id: planId,
+    kind,
+    position,
+    title: fields.title ?? null,
+    description: null,
+    post_id: fields.postId ?? null,
+    target_date: null,
+    created_by: by,
+    created_at: '2026-10-09T09:00:00Z',
+    updated_at: '2026-10-09T09:00:00Z',
+    deleted_at: null,
+  };
+}
+
+/** Product teaser (the third post) as a draft. */
+function makeDraftPost(world: ChatWorld): void {
+  const post = (world.tables.posts ?? []).find((p) => p.id === POST_IDS[2]);
+  if (post !== undefined) post.stage = 'draft';
+}
+
+/**
+ * The workspace's plans for the Plan tile: an Agency only plan ending soonest
+ * (a concept and a draft post), a client plan after it (one concept), and a
+ * plan that ended yesterday (never listed). No card is shared anywhere.
+ */
+export function seedUpcomingPlans(world: ChatWorld, opts: { sender: string; now?: number }): void {
+  const now = opts.now ?? Date.now();
+  const t = world.tables;
+  makeDraftPost(world);
+  (t.plans ??= []).push(
+    planOn(
+      UPCOMING_CLIENT_PLAN_ID,
+      UPCOMING_CLIENT_PLAN_TITLE,
+      'client',
+      opts.sender,
+      dayFrom(now, 3),
+      dayFrom(now, 9),
+    ),
+    planOn(
+      ENDED_PLAN_ID,
+      ENDED_PLAN_TITLE,
+      'client',
+      opts.sender,
+      dayFrom(now, -30),
+      dayFrom(now, -1),
+    ),
+    planOn(
+      UPCOMING_TEAM_PLAN_ID,
+      UPCOMING_TEAM_PLAN_TITLE,
+      'team',
+      opts.sender,
+      dayFrom(now, 0),
+      dayFrom(now, 2),
+    ),
+  );
+  (t.plan_items ??= []).push(
+    itemRow(
+      '0190d100-0000-7000-8000-00000000d1a1',
+      UPCOMING_TEAM_PLAN_ID,
+      'concept',
+      0,
+      { title: 'Founder story' },
+      opts.sender,
+    ),
+    itemRow(
+      '0190d100-0000-7000-8000-00000000d1a2',
+      UPCOMING_TEAM_PLAN_ID,
+      'post',
+      1,
+      { postId: POST_IDS[2] },
+      opts.sender,
+    ),
+    itemRow(
+      '0190d100-0000-7000-8000-00000000d1b1',
+      UPCOMING_CLIENT_PLAN_ID,
+      'concept',
+      0,
+      { title: 'Lights montage' },
+      opts.sender,
+    ),
+    itemRow(
+      '0190d100-0000-7000-8000-00000000d1c1',
+      ENDED_PLAN_ID,
+      'concept',
+      0,
+      { title: 'Old idea' },
+      opts.sender,
+    ),
+  );
+}
+
+/**
+ * A client plan shared by `sender` into `channelId` holding a concept and a
+ * draft post. The draft item sits in hidden_plan_items: a client cannot read
+ * it from plan_items (RLS), only by name through plan_draft_rows.
+ */
+export function seedClientPlanWithDraft(
+  world: ChatWorld,
+  opts: { channelId: string; sender: string; now?: number },
+): void {
+  const now = opts.now ?? Date.now();
+  const t = world.tables;
+  makeDraftPost(world);
+  (t.plans ??= []).push(
+    planOn(
+      DRAFT_PLAN_ID,
+      DRAFT_PLAN_TITLE,
+      'client',
+      opts.sender,
+      dayFrom(now, 0),
+      dayFrom(now, 13),
+    ),
+  );
+  (t.plan_items ??= []).push(
+    itemRow(
+      '0190d100-0000-7000-8000-00000000d1d0',
+      DRAFT_PLAN_ID,
+      'concept',
+      0,
+      { title: 'Countdown reel' },
+      opts.sender,
+    ),
+  );
+  (t.hidden_plan_items ??= []).push(
+    itemRow(DRAFT_ITEM_ID, DRAFT_PLAN_ID, 'post', 1, { postId: POST_IDS[2] }, opts.sender),
+  );
+  (t.chat_messages ??= []).push(
+    planMessage(DRAFT_PLAN_MESSAGE_ID, opts.channelId, opts.sender, [DRAFT_PLAN_ID], now),
+  );
+}

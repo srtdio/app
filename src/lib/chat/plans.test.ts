@@ -212,12 +212,14 @@ function fakeClient(tables: Record<string, (column: string, ids: string[]) => un
     };
     return q;
   });
-  return { client: { from } as unknown as Client, log };
+  // plan_draft_rows: none (every item is readable here).
+  const rpc = vi.fn(async () => ({ data: [], error: null }));
+  return { client: { from, rpc } as unknown as Client, log, rpc };
 }
 
 describe('plan reads', () => {
   it('reads plans, items, reviews and post stages by id lists, never an embed', async () => {
-    const { client, log } = fakeClient({
+    const { client, log, rpc } = fakeClient({
       plans: (_c, ids) =>
         ids
           .filter((id) => id !== 'hidden')
@@ -267,6 +269,7 @@ describe('plan reads', () => {
       ['plan_item_reviews', 'item_id'],
       ['posts', 'id'],
     ]);
+    expect(rpc).toHaveBeenCalledWith('plan_draft_rows', { p_plan_ids: ['a'] });
     for (const l of log) expect(l.select).not.toMatch(/[()]/);
   });
 
@@ -508,7 +511,7 @@ describe('Forward into the open chat (G3)', () => {
       'utf8',
     );
     expect(src).toContain('!here && connection !== null && target !== null');
-    expect(src).toContain('if (here) planCards?.addRowHere(result.row, result.traceId);');
+    expect(src).toContain('planCards.addRowHere(row, traceId);');
   });
 });
 

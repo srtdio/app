@@ -1,0 +1,267 @@
+import { expect, test, type Page } from '@playwright/test';
+import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
+import {
+  DM_CHANNEL,
+  DRAFT_ITEM_ID,
+  DRAFT_PLAN_ID,
+  ENDED_PLAN_TITLE,
+  GROUP_CHANNEL,
+  GROUP_NAME,
+  ME,
+  PEER,
+  PEER_NAME,
+  TEAM_PLAN_ID,
+  UPCOMING_CLIENT_PLAN_ID,
+  UPCOMING_CLIENT_PLAN_TITLE,
+  UPCOMING_TEAM_PLAN_ID,
+  UPCOMING_TEAM_PLAN_TITLE,
+  seedClientPlanWithDraft,
+  seedTeamAndHiddenPlans,
+  seedUpcomingPlans,
+} from '../fixtures/chat-data';
+import { expectMinTouchTarget } from '../helpers/touch-target';
+
+// Share an existing plan: the agency's Plan tile lists upcoming plans ("Share
+// a plan"), a client plan is sent at once, an Agency only plan in a chat with
+// a client asks "Share with client first?" (plan_share_with_client, then
+// chat_plan_share, one trace id), Cancel sends nothing, the agency's Forward
+// goes through the same confirm, a client sees a draft post by name only, and
+// the empty list. Runs in both colour schemes (the dark and light projects).
+
+async function openChat(page: Page, name: string): Promise<void> {
+  await page.goto('/chat');
+  const row = page.getByText(name, { exact: true }).first();
+  await row.waitFor({ state: 'visible' });
+  await row.click();
+  await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
+  await page.waitForTimeout(300);
+}
+
+async function shot(page: Page, name: string): Promise<void> {
+  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
+}
+
+function expectClean(network: HarnessNetwork): void {
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+  expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
+}
+
+async function openPicker(page: Page): Promise<ReturnType<Page['getByRole']>> {
+  const plus = page.getByRole('button', { name: 'Add attachment' });
+  test.skip((await plus.count()) === 0, 'no upload endpoint in this env: the plus tray is off');
+  await plus.click();
+  await expect(page.locator('[data-tray]')).toBeVisible();
+  await page.waitForTimeout(250);
+  await page.locator('[data-tray-tile="plan"]').click();
+  const picker = page.getByRole('dialog', { name: 'Share a plan' });
+  await expect(picker).toBeVisible();
+  return picker;
+}
+
+function sharedPlans(network: HarnessNetwork, channelId: string): unknown[] {
+  return (network.world.tables.chat_messages ?? [])
+    .filter((m) => m.channel_id === channelId && Array.isArray(m.shared_plan_ids))
+    .map((m) => m.shared_plan_ids);
+}
+
+function viewAsClient(network: HarnessNetwork): void {
+  for (const m of network.world.tables.workspace_members ?? []) {
+    if (m.user_id === ME) m.role = 'client';
+    if (m.user_id === PEER) m.role = 'agency';
+  }
+}
+
+test('agency: Plan tile lists upcoming plans; client plan sends; Agency only asks first', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const network = await installHarnessNetwork(page);
+  seedUpcomingPlans(network.world, { sender: ME });
+  await openChat(page, PEER_NAME);
+
+  const picker = await openPicker(page);
+  await expect(picker.getByText('Upcoming plans in Harness Studio')).toBeVisible();
+  const rows = picker.locator('[data-plan-pick]');
+  await expect(rows).toHaveCount(2);
+  // Ending soonest first; the ended plan never shows.
+  expect(
+    await rows.evaluateAll((els) => els.map((el) => el.getAttribute('data-plan-pick'))),
+  ).toEqual([UPCOMING_TEAM_PLAN_ID, UPCOMING_CLIENT_PLAN_ID]);
+  await expect(picker.getByText(ENDED_PLAN_TITLE)).toHaveCount(0);
+  const teamRow = picker.locator(`[data-plan-pick="${UPCOMING_TEAM_PLAN_ID}"]`);
+  await expect(teamRow.locator('[data-plan-chip="warn"]')).toHaveText('Agency only');
+  await expect(teamRow.getByText('1 concept')).toBeVisible();
+  await expect(teamRow.getByText('1 post')).toBeVisible();
+  await expect(picker.locator('[data-plan-chip="accent"]')).toHaveCount(0);
+  await expect(picker.getByText(UPCOMING_CLIENT_PLAN_TITLE)).toBeVisible();
+  await expect(picker.locator('[data-plan-pick-new]')).toHaveText(/New plan/);
+  expectMinTouchTarget(await teamRow.boundingBox());
+  expectMinTouchTarget(await picker.locator('[data-plan-pick-new]').boundingBox());
+  await page.waitForTimeout(300);
+  await shot(page, 'share-01-picker');
+
+  // A client plan: sent at once (one chat_plan_share), the card lands.
+  await picker.locator(`[data-plan-pick="${UPCOMING_CLIENT_PLAN_ID}"]`).click();
+  await expect(picker).toBeHidden();
+  const clientCard = page.locator(`[data-plan-card="${UPCOMING_CLIENT_PLAN_ID}"]`);
+  await clientCard.scrollIntoViewIfNeeded();
+  await expect(clientCard).toBeVisible();
+  // The agency's Forward shows on every card.
+  await expect(clientCard.locator('[data-plan-forward]')).toBeVisible();
+  expect(sharedPlans(network, DM_CHANNEL)).toEqual([[UPCOMING_CLIENT_PLAN_ID]]);
+  expect(network.rpcCalls.filter((c) => c.name === 'plan_share_with_client')).toHaveLength(0);
+
+  // Again: the shared plan now reads "In this chat".
+  const again = await openPicker(page);
+  await expect(
+    again.locator(`[data-plan-pick="${UPCOMING_CLIENT_PLAN_ID}"] [data-plan-chip="accent"]`),
+  ).toHaveText('In this chat');
+
+  // The Agency only plan in a chat with a client: the confirm, then Cancel.
+  await again.locator(`[data-plan-pick="${UPCOMING_TEAM_PLAN_ID}"]`).click();
+  const confirm = page.getByRole('dialog', { name: 'Share with client first?' });
+  await expect(confirm).toBeVisible();
+  await expect(
+    confirm.getByText(
+      `is Agency only. ${PEER_NAME} has a client in it, so the plan has to be shared with the client to send it here.`,
+    ),
+  ).toBeVisible();
+  await expect(confirm.getByText(UPCOMING_TEAM_PLAN_TITLE)).toBeVisible();
+  await expect(
+    confirm.getByText(
+      "Every client in Harness Studio will be able to open it, from any chat it's in.",
+    ),
+  ).toBeVisible();
+  await expect(confirm.locator('[data-plan-share-first-drafts]')).toHaveText(
+    "1 draft shows to clients as name only. They can't open it until it goes to review.",
+  );
+  await expect(
+    confirm.getByText("This can't be undone. The plan stays shared with client."),
+  ).toBeVisible();
+  expectMinTouchTarget(await confirm.locator('[data-plan-share-first]').boundingBox());
+  expectMinTouchTarget(await confirm.locator('[data-plan-share-first-cancel]').boundingBox());
+  await page.waitForTimeout(300);
+  await shot(page, 'share-02-confirm');
+  const callsBefore = network.rpcCalls.length;
+  await confirm.locator('[data-plan-share-first-cancel]').click();
+  await expect(confirm).toBeHidden();
+  await page.waitForTimeout(300);
+  expect(network.rpcCalls.slice(callsBefore).map((c) => c.name)).toEqual([]);
+  expect(sharedPlans(network, DM_CHANNEL)).toEqual([[UPCOMING_CLIENT_PLAN_ID]]);
+
+  // Share with client and send: both calls in order, one trace id.
+  const third = await openPicker(page);
+  await third.locator(`[data-plan-pick="${UPCOMING_TEAM_PLAN_ID}"]`).click();
+  await expect(confirm).toBeVisible();
+  const from = network.rpcCalls.length;
+  await confirm.locator('[data-plan-share-first]').click();
+  await expect(confirm).toBeHidden();
+  const calls = network.rpcCalls
+    .slice(from)
+    .filter((c) => c.name === 'plan_share_with_client' || c.name === 'chat_plan_share');
+  expect(calls.map((c) => c.name)).toEqual(['plan_share_with_client', 'chat_plan_share']);
+  expect(calls[0]?.args.p_trace_id).toBe(calls[1]?.args.p_trace_id);
+  expect(calls[0]?.args.p_plan_id).toBe(UPCOMING_TEAM_PLAN_ID);
+  expect(
+    (network.world.tables.plans ?? []).find((p) => p.id === UPCOMING_TEAM_PLAN_ID)?.audience,
+  ).toBe('client');
+  expect(sharedPlans(network, DM_CHANNEL)).toEqual([
+    [UPCOMING_CLIENT_PLAN_ID],
+    [UPCOMING_TEAM_PLAN_ID],
+  ]);
+  const teamCard = page.locator(`[data-plan-card="${UPCOMING_TEAM_PLAN_ID}"]`);
+  await teamCard.scrollIntoViewIfNeeded();
+  await expect(teamCard).toBeVisible();
+  // Shared with client: no "Agency only" chip any more.
+  await expect(teamCard.locator('[data-plan-chip="warn"]')).toHaveCount(0);
+  // The ticker's plan: the soonest ending, now shared here (Plan A/N).
+  const tickerPlan = page.locator('[data-loops-strip="open"] [data-status-item="plan"]');
+  await expect(tickerPlan).toBeVisible();
+  await expect(tickerPlan).toHaveAttribute('aria-label', 'Plan 0 of 2 approved by client');
+  await page.waitForTimeout(400);
+  await shot(page, 'share-03-sent');
+  expectClean(network);
+});
+
+test('agency: Forward an Agency only plan from a chat with no client into a client chat', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page);
+  seedTeamAndHiddenPlans(network.world, { channelId: GROUP_CHANNEL, sender: ME });
+  await openChat(page, GROUP_NAME);
+  const card = page.locator(`[data-plan-card="${TEAM_PLAN_ID}"]`);
+  await card.scrollIntoViewIfNeeded();
+  await expect(card.locator('[data-plan-chip="warn"]')).toHaveText('Agency only');
+  await card.locator('[data-plan-forward]').click();
+  const forward = page.getByRole('dialog', { name: 'Forward plan' });
+  await expect(forward).toBeVisible();
+  const target = forward.locator(`[data-plan-forward-target="${DM_CHANNEL}"]`);
+  await expect(target.locator('[data-plan-has-client]')).toHaveText('Has client');
+  await expect(
+    forward.locator(`[data-plan-forward-target="${GROUP_CHANNEL}"] [data-plan-has-client]`),
+  ).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await shot(page, 'share-04-forward');
+  const from = network.rpcCalls.length;
+  await target.click();
+  const confirm = page.getByRole('dialog', { name: 'Share with client first?' });
+  await expect(confirm).toBeVisible();
+  await expect(confirm.locator('[data-plan-share-first-drafts]')).toHaveCount(0);
+  // Nothing is sent before the confirm.
+  expect(network.rpcCalls.slice(from).map((c) => c.name)).toEqual([]);
+  await confirm.locator('[data-plan-share-first]').click();
+  await expect(page.getByText(`Forwarded to ${PEER_NAME}`)).toBeVisible();
+  const calls = network.rpcCalls
+    .slice(from)
+    .filter((c) => c.name === 'plan_share_with_client' || c.name === 'chat_plan_share');
+  expect(calls.map((c) => c.name)).toEqual(['plan_share_with_client', 'chat_plan_share']);
+  expect(calls[0]?.args.p_trace_id).toBe(calls[1]?.args.p_trace_id);
+  expect(sharedPlans(network, DM_CHANNEL)).toEqual([[TEAM_PLAN_ID]]);
+  expectClean(network);
+});
+
+test('client: a draft post in a client plan shows by name only and does nothing', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page);
+  viewAsClient(network);
+  seedClientPlanWithDraft(network.world, { channelId: DM_CHANNEL, sender: PEER });
+  await openChat(page, PEER_NAME);
+  const card = page.locator(`[data-plan-card="${DRAFT_PLAN_ID}"]`);
+  await card.scrollIntoViewIfNeeded();
+  // The draft counts: 1 concept, 1 post, 0 of 2.
+  await expect(card.getByText('1 post')).toBeVisible();
+  await expect(card.locator('[data-plan-progress]')).toHaveText('0 of 2 approved by client');
+  await card.locator('[data-plan-open]').click();
+  const plan = page.locator('[data-plan-page="plan"]');
+  await expect(plan).toBeVisible();
+  await plan.locator('[data-plan-tab="post"]').click();
+  const row = plan.locator(`[data-plan-row="${DRAFT_ITEM_ID}"]`);
+  await expect(row).toHaveAttribute('aria-disabled', 'true');
+  await expect(row.getByText('Not ready to view yet')).toBeVisible();
+  await expect(row.getByText('Product teaser')).toBeVisible();
+  await expect(row.locator('[data-plan-pill="draft"]')).toHaveText('Draft');
+  // aria-disabled: a forced tap still lands on it and opens nothing.
+  await row.click({ force: true });
+  await page.waitForTimeout(400);
+  await expect(page.locator('[data-plan-page="item"]')).toHaveCount(0);
+  await shot(page, 'share-05-client-draft');
+  expectClean(network);
+});
+
+test('agency: no upcoming plans shows the empty line and New plan', async ({ page }) => {
+  test.setTimeout(60_000);
+  const network = await installHarnessNetwork(page);
+  await openChat(page, PEER_NAME);
+  const picker = await openPicker(page);
+  await expect(picker.locator('[data-plan-picker-empty]')).toContainText('No upcoming plans');
+  await expect(picker.getByText("Plans that have ended don't show here.")).toBeVisible();
+  await expect(picker.locator('[data-plan-pick]')).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await shot(page, 'share-06-empty');
+  await picker.locator('[data-plan-pick-new]').click();
+  await expect(page.locator('[data-plan-page="compose"]')).toBeVisible();
+  expectClean(network);
+});
