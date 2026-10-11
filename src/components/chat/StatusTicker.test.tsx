@@ -277,6 +277,24 @@ describe('the drawer list', () => {
     expect(asking).toContain('data-mark-confirm="resolve"');
     expect(asking).toContain('Mark this decision as closed?');
   });
+
+  it("the confirm's primary button calls onResolveMark once with the row's message id", async () => {
+    const { tree, onResolveMark } = drawer();
+    const row = tree.find(
+      (el) => el.type === StatusMarkRow && (el.props as { mark: ChatMark }).mark.messageId === 'p',
+    );
+    expect(row).toBeDefined();
+    // The row as it renders once asked: its confirm's primary button is the write.
+    const asking = walk(
+      StatusMarkRow({ ...(row?.props as Parameters<typeof StatusMarkRow>[0]), confirming: true }),
+    );
+    const primary = asking.find((el) => (el.props as { variant?: string }).variant === 'primary');
+    expect((primary?.props as { children?: ReactNode }).children).toBe('Completed');
+    (primary?.props as { onClick: () => void }).onClick();
+    await Promise.resolve();
+    expect(onResolveMark).toHaveBeenCalledTimes(1);
+    expect(onResolveMark).toHaveBeenCalledWith('p');
+  });
 });
 
 describe('post rows never fail silently', () => {
