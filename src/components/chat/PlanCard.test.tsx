@@ -146,29 +146,23 @@ describe('PlanCardBody', () => {
 });
 
 describe('Item screen rules', () => {
-  it('agency reviews as team; a post item also opens in Pipeline', () => {
-    expect(itemActions('agency', { kind: 'concept' }, 'client')).toMatchObject({
+  it('agency reviews a concept as team; a post item has no actions', () => {
+    expect(itemActions('agency', { kind: 'concept' }, 'client')).toEqual({
       kind: 'review',
       side: 'team',
       approveLabel: 'Agency approve',
-      openInPipeline: false,
     });
-    expect(itemActions('agency', { kind: 'post' }, 'client')).toMatchObject({
-      side: 'team',
-      openInPipeline: true,
-    });
+    expect(itemActions('agency', { kind: 'post' }, 'client')).toEqual({ kind: 'none' });
+    expect(itemActions('agency', { kind: 'post' }, 'team')).toEqual({ kind: 'none' });
   });
 
-  it('agency on a post item: "Open in pipeline" and "Agency approve" only (no Ask changes)', () => {
-    expect(actionLabels(itemActions('agency', { kind: 'post' }, 'client'))).toEqual([
-      'Open in pipeline',
-      'Agency approve',
-    ]);
+  it('labels: "Ask changes" then the approve on a concept; none on a post', () => {
+    expect(actionLabels(itemActions('agency', { kind: 'post' }, 'client'))).toEqual([]);
     expect(actionLabels(itemActions('agency', { kind: 'concept' }, 'client'))).toEqual([
       'Ask changes',
       'Agency approve',
     ]);
-    expect(actionLabels(itemActions('client', { kind: 'post' }, 'client'))).toEqual(['Open post']);
+    expect(actionLabels(itemActions('client', { kind: 'post' }, 'client'))).toEqual([]);
     const src = readFileSync(
       fileURLToPath(new URL('./PlanItemScreen.tsx', import.meta.url)),
       'utf8',
@@ -176,13 +170,36 @@ describe('Item screen rules', () => {
     expect(src.match(/data-plan-ask=""/g)).toHaveLength(1);
   });
 
-  it('client approves a concept on a client plan; on a post only "Open post"', () => {
-    expect(itemActions('client', { kind: 'concept' }, 'client')).toMatchObject({
+  it('a post item embeds the pipeline post view with an Open in pipeline overflow', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./PlanItemScreen.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toContain('<PostDetailPage');
+    expect(src).toMatch(/postId=\{item\.post_id\}\s+embedded/);
+    expect(src).toContain('onNavigateAway={props.onClose}');
+    expect(src).toContain('<IconMore');
+    expect(src).toContain('label="Open in pipeline"');
+    expect(src).toContain('navigate(postRoute(item.post_id))');
+    for (const gone of [
+      'data-plan-pipeline',
+      'data-plan-open-post',
+      'data-plan-media="post"',
+      'ItemPostSheet',
+      'SharedPostCards',
+    ]) {
+      expect(src).not.toContain(gone);
+    }
+  });
+
+  it('client approves a concept on a client plan; a post item has no actions', () => {
+    expect(itemActions('client', { kind: 'concept' }, 'client')).toEqual({
       kind: 'review',
       side: 'client',
       approveLabel: 'Approve',
     });
-    expect(itemActions('client', { kind: 'post' }, 'client')).toEqual({ kind: 'open-post' });
+    expect(itemActions('client', { kind: 'post' }, 'client')).toEqual({ kind: 'none' });
+    expect(itemActions('client', { kind: 'concept' }, 'team')).toEqual({ kind: 'none' });
     expect(itemActions('unknown', { kind: 'concept' }, 'client')).toEqual({ kind: 'none' });
   });
 

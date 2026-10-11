@@ -242,7 +242,23 @@ export function PcsApproveConfirm(props: {
   );
 }
 
-export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {}) {
+export function PostDetailPage({
+  postId: postIdProp,
+  embedded = false,
+  focusCommentId: focusCommentIdProp,
+  onNavigateAway,
+}: {
+  postId?: string;
+  /**
+   * Shown inside another screen (the plan item): no page header or back button,
+   * no URL reads or writes, and both panels stacked.
+   */
+  embedded?: boolean;
+  /** Embedded only: the comment to focus, in place of the ?comment= deep link. */
+  focusCommentId?: string;
+  /** Replaces every hard navigation to /pipeline (back, not found, after delete). */
+  onNavigateAway?: () => void;
+} = {}) {
   const params = useParams();
   // The pretty-link resolver (/p/:ref) passes the resolved id as a prop; the
   // classic /posts/:postId route supplies it via the URL. The prop wins so the
@@ -260,6 +276,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
   const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
   const handledCommentParam = useRef<string | null>(null);
   useEffect(() => {
+    if (embedded) return;
     const comment = searchParams.get('comment');
     if (comment === null || comment === '') return;
     if (handledCommentParam.current === comment) return;
@@ -271,7 +288,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     const next = withPcsTab(searchParams, 'feedback');
     next.delete('comment');
     setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [embedded, searchParams, setSearchParams]);
 
   // Mobile PCS tab (F-layout): below md the post/comment split becomes two
   // tabs whose active value lives in ?tab= so the back button restores the
@@ -688,8 +705,9 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
   // Scroll to (and briefly flash) a DOM node by id, switching to the tab that
   // hosts it first when the mobile layout has it hidden. Desktop flashes
   // directly (both columns visible) so cross-links never touch the URL there.
+  // Embedded shows both panels stacked, so it always flashes in place.
   function flashTo(tab: PcsTab, elementId: string): void {
-    if (!isDesktop && activeTab !== tab) {
+    if (!embedded && !isDesktop && activeTab !== tab) {
       setSearchParams(withPcsTab(searchParams, tab));
       setPendingFlash({ tab, elementId });
       return;
@@ -835,6 +853,12 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
     });
   });
 
+  // Leaving the post: the host's own close when embedded, else the pipeline.
+  function leave(): void {
+    if (onNavigateAway !== undefined) onNavigateAway();
+    else navigate('/pipeline');
+  }
+
   // Soft-delete the whole post (owner, admin or agency via canDeletePost; the proc re-checks the
   // capability). On success leave PCS for the pipeline; a failure stays put with
   // a toast, mirroring handleTransition's friendly-error shape.
@@ -845,7 +869,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
       push('Could not delete this post. Please try again.');
       return;
     }
-    navigate('/pipeline');
+    leave();
   }
 
   // One field at a time through post_update; the proc bumps row_version itself
@@ -1038,7 +1062,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
   }
 
   const backButton = (
-    <IconButton label="Back" className="shrink-0" onClick={() => navigate('/pipeline')}>
+    <IconButton label="Back" className="shrink-0" onClick={leave}>
       <IconChevronLeft size={20} />
     </IconButton>
   );
@@ -1046,9 +1070,11 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
   if (loading) {
     return (
       <>
-        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
-          {backButton}
-        </div>
+        {embedded ? null : (
+          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+            {backButton}
+          </div>
+        )}
         <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading post</div>
       </>
     );
@@ -1057,9 +1083,11 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
   if (loadError !== null) {
     return (
       <>
-        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
-          {backButton}
-        </div>
+        {embedded ? null : (
+          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+            {backButton}
+          </div>
+        )}
         <div className="px-4 md:px-6 mt-4">
           <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
             Could not load this post. {loadError}
@@ -1072,15 +1100,17 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
   if (notFound || detail === null) {
     return (
       <>
-        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
-          {backButton}
-        </div>
+        {embedded ? null : (
+          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+            {backButton}
+          </div>
+        )}
         <EmptyState
           icon={<IconPipeline size={22} />}
           title="Post not found"
           description="This post may have been removed, or you may not have access to it."
           action={
-            <Button variant="primary" size="lg" onClick={() => navigate('/pipeline')}>
+            <Button variant="primary" size="lg" onClick={leave}>
               Back to pipeline
             </Button>
           }
@@ -1144,30 +1174,32 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
 
   return (
     <>
-      <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
-        {backButton}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span
-            aria-hidden
-            className={`h-[7px] w-[7px] shrink-0 rounded-full ${STAGE_DOT[currentStage]}`}
-          />
-          <span className="truncate text-[15px] font-semibold">
-            {postStatusLine(currentStage, post.updated_at, post.stage_entered_at, new Date())}
-          </span>
+      {embedded ? null : (
+        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+          {backButton}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <span
+              aria-hidden
+              className={`h-[7px] w-[7px] shrink-0 rounded-full ${STAGE_DOT[currentStage]}`}
+            />
+            <span className="truncate text-[15px] font-semibold">
+              {postStatusLine(currentStage, post.updated_at, post.stage_entered_at, new Date())}
+            </span>
+          </div>
+          {!readOnly ? (
+            <button
+              type="button"
+              aria-label="Post actions"
+              onClick={() => setActionsOpen(true)}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <IconMoreVertical size={18} />
+            </button>
+          ) : (
+            <div className="h-11 w-11 shrink-0" />
+          )}
         </div>
-        {!readOnly ? (
-          <button
-            type="button"
-            aria-label="Post actions"
-            onClick={() => setActionsOpen(true)}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <IconMoreVertical size={18} />
-          </button>
-        ) : (
-          <div className="h-11 w-11 shrink-0" />
-        )}
-      </div>
+      )}
 
       <div className="flex flex-col gap-3 px-4 md:px-6 pt-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -1285,10 +1317,16 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
           onBack={() => setViewingVersionId(null)}
         />
       ) : (
-        <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div
+          className={
+            embedded
+              ? 'px-4 md:px-6 py-6 grid grid-cols-1 gap-6'
+              : 'px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6'
+          }
+        >
           <div
             id={pcsTabPanelId('post')}
-            className={cn('md:col-span-2', pcsTabPanelClass(true, true))}
+            className={cn(embedded ? undefined : 'md:col-span-2', pcsTabPanelClass(true, true))}
           >
             <section>
               <PostGallery
@@ -1440,7 +1478,9 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
           <aside
             id={pcsTabPanelId('feedback')}
             className={cn(
-              'md:sticky md:top-14 md:max-h-[calc(100vh-3.5rem)] md:self-start md:overflow-y-auto',
+              embedded
+                ? undefined
+                : 'md:sticky md:top-14 md:max-h-[calc(100vh-3.5rem)] md:self-start md:overflow-y-auto',
               pcsTabPanelClass(true, true),
             )}
           >
@@ -1481,7 +1521,7 @@ export function PostDetailPage({ postId: postIdProp }: { postId?: string } = {})
                     flashTo('post', `caption-mark-${commentId}`)
                   }
                   refreshSignal={commentsRefresh}
-                  focusCommentId={focusCommentId}
+                  focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
                   viewerIsClient={clientRole}
                 />
               ) : (

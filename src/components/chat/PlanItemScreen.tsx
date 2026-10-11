@@ -1,37 +1,33 @@
-// One plan item, full page over the Plan screen (its own history step): the
-// kind and place ("Concept 1 of 3"), the media (a concept's library files, or
-// the post's own card), title and description, a status box (Pipeline for a
-// post, Agency for the agency side, Client), the viewer's actions, and the
-// comments with a composer. The agency marks agency approval (confirmed) or asks
-// changes; a client approves or asks changes on a concept; on a post a client
-// only opens the post (its sheet approves, unchanged). Comments: the agency
-// sees all and picks Everyone or Agency only; a client sees Everyone ones (RLS).
-// A comment appends at once and keeps its text on failure. One read per table
-// per open, bounded at 5s; the body paints once it settles. Tokens only.
+// One plan item, full page over the Plan screen (its own history step), headed
+// by the kind and place ("Concept 1 of 3"). A post item is the pipeline post
+// view embedded as is, with a header overflow that opens it in Pipeline. A
+// concept shows its library files, title and description, a status box (Agency
+// for the agency side, Client), the viewer's actions, and the comments with a
+// composer. The agency marks agency approval (confirmed) or asks changes; a
+// client approves or asks changes on a concept. Comments: the agency sees all
+// and picks Everyone or Agency only; a client sees Everyone ones (RLS). A
+// comment appends at once and keeps its text on failure. One read per table per
+// open, bounded at 5s; the body paints once it settles. Tokens only.
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement, RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { planConceptEdit, planItemCommentCreate, planItemReview } from '@srtdio/rpc';
+import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
+// Named apart from the concept sheet: this is only the post item's overflow menu.
+import { Sheet as OverflowSheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
-import { IconArrowUp, IconLock } from '@/components/ui/icons';
+import { IconArrowUp, IconLock, IconMore, IconPipeline } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
-import {
-  PRESIGN_ENABLED,
-  SharedPostCards,
-  approverRolesOf,
-  sharedCardPresignCache,
-  useThreadCardCache,
-} from '@/components/chat/PostCard';
-import { PostSheet } from '@/components/chat/PostSheet';
+import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
   ConceptSheet,
   EMPTY_CONCEPT,
   useConceptFilesRead,
   type ConceptForm,
 } from '@/components/chat/ConceptSheet';
-import { indexPostsById, postRoute, sharedPostViews } from '@/components/chat/post-card';
+import { postRoute } from '@/components/chat/post-card';
 import {
   COMMENT_FAILED,
   STATUS_LABELS,
@@ -71,15 +67,18 @@ import {
 } from '@/lib/chat/plans';
 import { formatClockTime, workspaceTimeZone } from '@/lib/chat/time-format';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
-import type { PresignDeps } from '@/lib/asset-presign';
 import { cn } from '@/lib/cn';
-import { env } from '@/lib/env';
-import { fetchWithTrace } from '@/lib/fetch';
 import { logger } from '@/lib/logger';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
+
+// Loaded on first post item open: the post view's graph (PCS, the chat SDK)
+// stays out of the chat bundle and out of node imports of this module.
+const PostDetailPage = lazy(() =>
+  import('@/components/pages/PostDetailPage').then((m) => ({ default: m.PostDetailPage })),
+);
 
 /** Whether a write started on `itemId` still belongs to the screen as it is now. Pure. */
 export function isLiveItem(live: { itemId: string; open: boolean }, itemId: string): boolean {
@@ -88,45 +87,33 @@ export function isLiveItem(live: { itemId: string; open: boolean }, itemId: stri
 
 /** What the action row offers. Pure. */
 export type ItemActions =
-  | { kind: 'review'; side: ReviewSide; approveLabel: string; openInPipeline: boolean }
-  | { kind: 'open-post' }
+  | { kind: 'review'; side: ReviewSide; approveLabel: string }
   | { kind: 'none' };
 
 /**
- * The viewer's actions on an item: the agency reviews as the team (a post item
- * also opens in Pipeline); a client reviews a concept on a client plan, and
- * only opens a post item. An unknown side gets none. Pure.
+ * The viewer's actions on an item: a post item has none (the embedded post
+ * view carries its own); on a concept the agency reviews as the team and a
+ * client reviews on a client plan. An unknown side gets none. Pure.
  */
 export function itemActions(
   side: ViewerSide,
   item: Pick<PlanItemRow, 'kind'>,
   audience: PlanBundle['plan']['audience'],
 ): ItemActions {
+  if (item.kind === 'post') return { kind: 'none' };
   if (side === 'agency') {
-    return {
-      kind: 'review',
-      side: 'team',
-      approveLabel: 'Agency approve',
-      openInPipeline: item.kind === 'post',
-    };
+    return { kind: 'review', side: 'team', approveLabel: 'Agency approve' };
   }
-  if (side === 'client') {
-    if (item.kind === 'post') return { kind: 'open-post' };
-    if (audience === 'client') {
-      return { kind: 'review', side: 'client', approveLabel: 'Approve', openInPipeline: false };
-    }
+  if (side === 'client' && audience === 'client') {
+    return { kind: 'review', side: 'client', approveLabel: 'Approve' };
   }
   return { kind: 'none' };
 }
 
-/**
- * The action buttons in order: the agency on a post item gets "Open in
- * pipeline" and "Agency approve" only (changes are asked in Pipeline). Pure.
- */
+/** The action buttons in order: "Ask changes", then the approve. Pure. */
 export function actionLabels(actions: ItemActions): string[] {
-  if (actions.kind === 'open-post') return ['Open post'];
   if (actions.kind === 'none') return [];
-  return [actions.openInPipeline ? 'Open in pipeline' : 'Ask changes', actions.approveLabel];
+  return ['Ask changes', actions.approveLabel];
 }
 
 /** The agency's status row label (the review side stays 'team'). */
@@ -204,12 +191,6 @@ interface ShownComment {
   pending: boolean;
 }
 
-const presignDeps: PresignDeps = {
-  endpoint: env.VITE_ASSET_READ_URL ?? null,
-  getAccessToken: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null,
-  fetcher: (input, init) => fetchWithTrace(input, init),
-};
-
 export function PlanItemScreen(props: {
   open: boolean;
   bundle: PlanBundle;
@@ -227,14 +208,17 @@ export function PlanItemScreen(props: {
   const { session } = useSession();
   const me = session?.user.id ?? null;
   const navigate = useNavigate();
-  const { read, reload } = useScreenRead<ItemScreenData>(props.open, item.id, (signal) =>
-    readItemScreen(supabase, item, (ids, s) => readProfiles(supabase, ids, s), signal),
+  // A post item reads nothing here: the embedded post view does its own reads.
+  const { read, reload } = useScreenRead<ItemScreenData>(
+    props.open && item.kind === 'concept',
+    item.id,
+    (signal) => readItemScreen(supabase, item, (ids, s) => readProfiles(supabase, ids, s), signal),
   );
   const [overrides, setOverrides] = useState<Partial<Record<ReviewSide, ReviewStatus>>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [postSheetOpen, setPostSheetOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<CommentVisibility>('everyone');
   const [pending, setPending] = useState<ShownComment[]>([]);
@@ -263,7 +247,7 @@ export function PlanItemScreen(props: {
   useEffect(() => {
     if (props.open) return;
     setConfirmOpen(false);
-    setPostSheetOpen(false);
+    setMoreOpen(false);
     setActionError(null);
     setText('');
     setVisibility('everyone');
@@ -286,6 +270,7 @@ export function PlanItemScreen(props: {
     setConfirmOpen(false);
     setOverrides({});
     setEditOpen(false);
+    setMoreOpen(false);
   }, [item.id]);
 
   const actions = itemActions(side, item, bundle.plan.audience);
@@ -484,141 +469,164 @@ export function PlanItemScreen(props: {
         onBack={props.onClose}
         onEntered={() => setRested(true)}
         footer={
-          <form
-            onSubmit={(e) => void send(e)}
-            className="flex flex-col gap-1.5"
-            aria-label="Add a comment"
-          >
-            {side === 'agency' ? (
-              <div className="flex gap-1.5" role="group" aria-label="Who sees the comment">
-                {(['everyone', 'team'] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    aria-pressed={visibility === v}
-                    data-plan-visibility={v}
-                    onClick={() => setVisibility(v)}
-                    className={cn(
-                      'min-h-[44px] rounded-full border px-3 text-[13px] font-medium',
-                      visibility === v
-                        ? v === 'team'
-                          ? 'border-warn bg-warn-soft text-warn'
-                          : 'border-accent bg-accent-soft text-accent'
-                        : 'border-border text-fg-2',
-                    )}
-                  >
-                    {v === 'everyone' ? 'Everyone' : TEAM_ONLY_LABEL}
-                  </button>
-                ))}
+          item.kind === 'post' ? undefined : (
+            <form
+              onSubmit={(e) => void send(e)}
+              className="flex flex-col gap-1.5"
+              aria-label="Add a comment"
+            >
+              {side === 'agency' ? (
+                <div className="flex gap-1.5" role="group" aria-label="Who sees the comment">
+                  {(['everyone', 'team'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={visibility === v}
+                      data-plan-visibility={v}
+                      onClick={() => setVisibility(v)}
+                      className={cn(
+                        'min-h-[44px] rounded-full border px-3 text-[13px] font-medium',
+                        visibility === v
+                          ? v === 'team'
+                            ? 'border-warn bg-warn-soft text-warn'
+                            : 'border-accent bg-accent-soft text-accent'
+                          : 'border-border text-fg-2',
+                      )}
+                    >
+                      {v === 'everyone' ? 'Everyone' : TEAM_ONLY_LABEL}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {sendError !== null ? (
+                <p role="alert" className="text-[13px] text-bad">
+                  {sendError}
+                </p>
+              ) : null}
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  aria-label="Comment"
+                  autoComplete="off"
+                  maxLength={5000}
+                  placeholder={teamNote ? 'Note for the agency only' : 'Comment for everyone'}
+                  className={cn(
+                    'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    teamNote ? 'border-warn' : 'border-border',
+                  )}
+                />
+                <button
+                  type="submit"
+                  aria-label="Send comment"
+                  disabled={text.trim() === '' || sending}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg disabled:opacity-50"
+                >
+                  <IconArrowUp size={20} />
+                </button>
               </div>
-            ) : null}
-            {sendError !== null ? (
-              <p role="alert" className="text-[13px] text-bad">
-                {sendError}
-              </p>
-            ) : null}
-            <div className="flex items-center gap-1.5">
-              <input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                aria-label="Comment"
-                autoComplete="off"
-                maxLength={5000}
-                placeholder={teamNote ? 'Note for the agency only' : 'Comment for everyone'}
-                className={cn(
-                  'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  teamNote ? 'border-warn' : 'border-border',
-                )}
-              />
-              <button
-                type="submit"
-                aria-label="Send comment"
-                disabled={text.trim() === '' || sending}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg disabled:opacity-50"
-              >
-                <IconArrowUp size={20} />
-              </button>
-            </div>
-          </form>
+            </form>
+          )
         }
       >
-        <div className="flex flex-col gap-3.5 p-4">
-          <ItemMedia item={item} read={read} />
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="min-w-0 break-words pt-[9px] text-xl font-semibold leading-[26px] text-fg">
-                {title}
-              </h3>
-              {editable ? (
-                <button
-                  type="button"
-                  data-plan-edit-concept=""
-                  onClick={openEdit}
-                  className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  Edit
-                </button>
-              ) : null}
-            </div>
-            {description !== '' ? (
-              <p className="whitespace-pre-wrap text-[15px] leading-[21px] text-fg-2">
-                {description}
-              </p>
+        {item.kind === 'post' ? (
+          <>
+            {/* PlanPage's header has no action slot: the overflow sits over its
+                right end, positioned against the page (not the scroll body). */}
+            <button
+              type="button"
+              aria-label="More actions"
+              data-plan-more=""
+              onClick={() => setMoreOpen(true)}
+              className="absolute right-3 top-[calc(env(safe-area-inset-top)+8px)] flex h-11 w-11 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <IconMore size={22} />
+            </button>
+            {item.post_id !== null ? (
+              <Suspense
+                fallback={<div className="m-4 h-[170px] animate-pulse rounded-lg bg-panel-2" />}
+              >
+                <PostDetailPage
+                  postId={item.post_id}
+                  embedded
+                  {...(props.highlightCommentId !== undefined
+                    ? { focusCommentId: props.highlightCommentId }
+                    : {})}
+                  onNavigateAway={props.onClose}
+                />
+              </Suspense>
             ) : null}
-          </div>
-          <div
-            data-plan-status=""
-            className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel p-3"
-          >
-            <div className="flex min-h-[28px] items-center justify-between gap-2">
-              <span className="text-sm text-fg-3">Date</span>
-              <span className="flex items-center gap-1">
-                <span
-                  data-plan-item-date={date.dated ? 'dated' : 'none'}
-                  className={cn('text-[13px]', date.dated ? 'font-mono text-fg-2' : 'text-fg-3')}
-                >
-                  {date.label}
-                </span>
+          </>
+        ) : (
+          <div className="flex flex-col gap-3.5 p-4">
+            <ItemMedia read={read} />
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="min-w-0 break-words pt-[9px] text-xl font-semibold leading-[26px] text-fg">
+                  {title}
+                </h3>
                 {editable ? (
                   <button
                     type="button"
-                    data-plan-edit-date=""
-                    aria-label="Edit date"
+                    data-plan-edit-concept=""
                     onClick={openEdit}
-                    className="min-h-[44px] min-w-[44px] rounded-md px-2 text-[13px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                    className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     Edit
                   </button>
                 ) : null}
-              </span>
-            </div>
-            {statusRows(bundle, item, side, overrides).map((row) => (
-              <div key={row.label} className="flex min-h-[28px] items-center justify-between gap-2">
-                <span className="text-sm text-fg-3">{row.label}</span>
-                <PlanPill
-                  pill={{
-                    label: row.value,
-                    tone: row.tone,
-                    side: row.label === AGENCY_ROW ? 'team' : 'client',
-                  }}
-                />
               </div>
-            ))}
-          </div>
-          {actions.kind === 'review' ? (
-            <div className="flex flex-col gap-2">
-              <div className="grid grid-cols-2 gap-2">
-                {actions.openInPipeline ? (
-                  <Button
-                    size="lg"
-                    data-plan-pipeline=""
-                    onClick={() => {
-                      if (item.post_id !== null) navigate(postRoute(item.post_id));
-                    }}
+              {description !== '' ? (
+                <p className="whitespace-pre-wrap text-[15px] leading-[21px] text-fg-2">
+                  {description}
+                </p>
+              ) : null}
+            </div>
+            <div
+              data-plan-status=""
+              className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel p-3"
+            >
+              <div className="flex min-h-[28px] items-center justify-between gap-2">
+                <span className="text-sm text-fg-3">Date</span>
+                <span className="flex items-center gap-1">
+                  <span
+                    data-plan-item-date={date.dated ? 'dated' : 'none'}
+                    className={cn('text-[13px]', date.dated ? 'font-mono text-fg-2' : 'text-fg-3')}
                   >
-                    Open in pipeline
-                  </Button>
-                ) : (
+                    {date.label}
+                  </span>
+                  {editable ? (
+                    <button
+                      type="button"
+                      data-plan-edit-date=""
+                      aria-label="Edit date"
+                      onClick={openEdit}
+                      className="min-h-[44px] min-w-[44px] rounded-md px-2 text-[13px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                    >
+                      Edit
+                    </button>
+                  ) : null}
+                </span>
+              </div>
+              {statusRows(bundle, item, side, overrides).map((row) => (
+                <div
+                  key={row.label}
+                  className="flex min-h-[28px] items-center justify-between gap-2"
+                >
+                  <span className="text-sm text-fg-3">{row.label}</span>
+                  <PlanPill
+                    pill={{
+                      label: row.value,
+                      tone: row.tone,
+                      side: row.label === AGENCY_ROW ? 'team' : 'client',
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            {actions.kind === 'review' ? (
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     size="lg"
                     data-plan-ask=""
@@ -627,61 +635,52 @@ export function PlanItemScreen(props: {
                   >
                     Ask changes
                   </Button>
-                )}
-                <Button
-                  size="lg"
-                  variant="primary"
-                  data-plan-approve=""
-                  disabled={busy}
-                  onClick={() => {
-                    setActionError(null);
-                    setConfirmOpen(true);
-                  }}
-                >
-                  {actions.approveLabel}
-                </Button>
+                  <Button
+                    size="lg"
+                    variant="primary"
+                    data-plan-approve=""
+                    disabled={busy}
+                    onClick={() => {
+                      setActionError(null);
+                      setConfirmOpen(true);
+                    }}
+                  >
+                    {actions.approveLabel}
+                  </Button>
+                </div>
+                {actionError !== null && !confirmOpen ? (
+                  <p role="alert" className="text-[13px] text-bad">
+                    {actionError}
+                  </p>
+                ) : null}
               </div>
-              {actionError !== null && !confirmOpen ? (
-                <p role="alert" className="text-[13px] text-bad">
-                  {actionError}
-                </p>
-              ) : null}
-            </div>
-          ) : actions.kind === 'open-post' ? (
-            <Button
-              size="lg"
-              variant="primary"
-              data-plan-open-post=""
-              onClick={() => setPostSheetOpen(true)}
-            >
-              Open post
-            </Button>
-          ) : null}
-          <section className="flex flex-col gap-2.5" aria-label="Comments">
-            <h4 className="text-[15px] font-semibold text-fg">Comments</h4>
-            {read.status === 'loading' ? (
-              <div className="h-[72px] animate-pulse rounded-lg bg-panel-2" />
-            ) : read.status === 'error' ? (
-              <ScreenFailed onRetry={reload} />
-            ) : shown.length === 0 ? (
-              <p className="text-[13px] text-fg-3">No comments yet.</p>
-            ) : (
-              shown.map((c) =>
-                c.id === highlightId ? (
-                  <CommentRow
-                    key={c.id}
-                    comment={c}
-                    timeZone={timeZone}
-                    highlighted={highlighted === c.id}
-                    rowRef={highlightRef}
-                  />
-                ) : (
-                  <CommentRow key={c.id} comment={c} timeZone={timeZone} />
-                ),
-              )
-            )}
-          </section>
-        </div>
+            ) : null}
+            <section className="flex flex-col gap-2.5" aria-label="Comments">
+              <h4 className="text-[15px] font-semibold text-fg">Comments</h4>
+              {read.status === 'loading' ? (
+                <div className="h-[72px] animate-pulse rounded-lg bg-panel-2" />
+              ) : read.status === 'error' ? (
+                <ScreenFailed onRetry={reload} />
+              ) : shown.length === 0 ? (
+                <p className="text-[13px] text-fg-3">No comments yet.</p>
+              ) : (
+                shown.map((c) =>
+                  c.id === highlightId ? (
+                    <CommentRow
+                      key={c.id}
+                      comment={c}
+                      timeZone={timeZone}
+                      highlighted={highlighted === c.id}
+                      rowRef={highlightRef}
+                    />
+                  ) : (
+                    <CommentRow key={c.id} comment={c} timeZone={timeZone} />
+                  ),
+                )
+              )}
+            </section>
+          </div>
+        )}
       </PlanPage>
       <PlanConfirmSheet
         open={confirmOpen}
@@ -717,31 +716,29 @@ export function PlanItemScreen(props: {
           {...(canAttach ? { uploadFile } : {})}
         />
       ) : null}
-      {actions.kind === 'open-post' && item.post_id !== null ? (
-        <ItemPostSheet
-          open={postSheetOpen}
-          postId={item.post_id}
-          side={side}
-          timeZone={timeZone}
-          onClose={() => setPostSheetOpen(false)}
-        />
+      {item.kind === 'post' && item.post_id !== null ? (
+        <OverflowSheet
+          open={props.open && moreOpen}
+          onClose={() => setMoreOpen(false)}
+          title="Post"
+        >
+          <ActionRow
+            icon={<IconPipeline size={20} />}
+            label="Open in pipeline"
+            onClick={() => {
+              if (item.post_id !== null) navigate(postRoute(item.post_id));
+            }}
+          />
+        </OverflowSheet>
       ) : null}
     </>
   );
 }
 
 function ItemMedia(props: {
-  item: PlanItemRow;
   read: ReturnType<typeof useScreenRead<ItemScreenData>>['read'];
 }): ReactElement {
-  const { item, read } = props;
-  if (item.kind === 'post' && item.post_id !== null) {
-    return (
-      <div data-plan-media="post" className="flex justify-center">
-        <SharedPostCards postIds={[item.post_id]} />
-      </div>
-    );
-  }
+  const { read } = props;
   if (read.status !== 'ready') {
     return (
       <div data-plan-media="loading" className="h-[170px] animate-pulse rounded-lg bg-panel-2" />
@@ -813,55 +810,5 @@ function CommentRow(props: {
       </div>
       <p className="whitespace-pre-wrap text-[15px] leading-[21px] text-fg">{c.body}</p>
     </div>
-  );
-}
-
-const NO_SUBSCRIBE = (): (() => void) => () => {};
-const NO_VERSION = (): number => 0;
-
-/** The client's "Open post": the post's existing sheet (approve and comment there). */
-function ItemPostSheet(props: {
-  open: boolean;
-  postId: string;
-  side: ViewerSide;
-  timeZone: string;
-  onClose: () => void;
-}): ReactElement | null {
-  const cache = useThreadCardCache();
-  const { workspaceKey } = useWorkspace();
-  const postId = props.postId;
-  useEffect(() => {
-    cache?.request({ postIds: [postId] });
-  }, [cache, postId]);
-  const version = useSyncExternalStore(
-    cache?.subscribe ?? NO_SUBSCRIBE,
-    cache?.version ?? NO_VERSION,
-  );
-  const view = useMemo(() => {
-    if (cache === null) return null;
-    const snap = cache.posts([postId]);
-    const [first] = sharedPostViews(
-      [postId],
-      indexPostsById(snap.posts),
-      snap.names,
-      approverRolesOf(cache),
-    );
-    return first !== undefined && first.kind === 'post' ? first : null;
-    // Keyed by the id and the cache version.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cache, postId, version]);
-  if (view === null) return null;
-  return (
-    <PostSheet
-      open={props.open}
-      onClose={props.onClose}
-      view={view}
-      side={props.side}
-      workspaceKey={workspaceKey}
-      timeZone={props.timeZone}
-      cache={sharedCardPresignCache()}
-      deps={presignDeps}
-      presignEnabled={PRESIGN_ENABLED}
-    />
   );
 }
