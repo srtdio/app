@@ -13,7 +13,9 @@
 
 import type { Client, PlanConceptAddArgs, PlanConceptEditArgs, Result } from '@srtdio/rpc';
 import { planDraftRows } from '@srtdio/rpc';
-import { abortable, withReadTimeout } from '@/lib/chat-reads';
+import { abortable, READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
+import type { Precheck } from '@/lib/asset-upload';
+import type { AttachmentUploader } from '@/lib/chat/attachments';
 import { openPlans } from '@/lib/chat/status-bar';
 
 /** Ids per IN read (the PostgREST URL stays short). */
@@ -1047,4 +1049,201 @@ export async function readItemScreen(
 export interface NameRow {
   userId: string;
   displayName: string;
+}
+
+// ---------------------------------------------------------------------------
+// The concept sheet: its files read (edit) and its fresh uploads
+// ---------------------------------------------------------------------------
+
+/**
+ * A concept's files for the Edit concept sheet, capped at 5s: a slow read
+ * resolves to a failure at the cap (the sheet then sends files as null).
+ * `cancel` (the sheet closed, a Retry) aborts the request. Never throws.
+ */
+export function readConceptFiles(
+  client: Client,
+  itemId: string,
+  cancel: AbortSignal,
+  timeoutMs: number = READ_TIMEOUT_MS,
+): Promise<Result<string[]>> {
+  return withReadTimeout((signal) => {
+    const linked = new AbortController();
+    const abort = (): void => linked.abort();
+    if (cancel.aborted) linked.abort();
+    signal.addEventListener('abort', abort, { once: true });
+    cancel.addEventListener('abort', abort, { once: true });
+    return readItemFiles(client, itemId, linked.signal).finally(() => {
+      signal.removeEventListener('abort', abort);
+      cancel.removeEventListener('abort', abort);
+    });
+  }, timeoutMs);
+}
+
+/** The Edit concept sheet's files section while the files are not known. */
+export type ConceptFilesReadState = 'loading' | 'failed';
+
+/** One files read per start or retry; the previous one is aborted. */
+export interface ConceptFilesRead {
+  start: () => void;
+  stop: () => void;
+}
+
+/**
+ * The files read behind the Edit concept sheet. start() (also Retry) aborts
+ * any read in flight, reports 'loading' and runs `load`; a success goes to
+ * onLoaded, anything else reports 'failed'. stop() aborts, after which nothing
+ * is reported. Framework-free.
+ */
+export function createConceptFilesRead(deps: {
+  load: (cancel: AbortSignal) => Promise<Result<string[]>>;
+  onState: (state: ConceptFilesReadState) => void;
+  onLoaded: (files: string[]) => void;
+}): ConceptFilesRead {
+  let current: AbortController | null = null;
+  const stop = (): void => {
+    current?.abort();
+    current = null;
+  };
+  const start = (): void => {
+    stop();
+    const cancel = new AbortController();
+    current = cancel;
+    deps.onState('loading');
+    void deps
+      .load(cancel.signal)
+      .catch((error: unknown) => fail<string[]>(String(error)))
+      .then((result) => {
+        if (cancel.signal.aborted) return;
+        current = null;
+        if (result.ok) deps.onLoaded(result.data);
+        else deps.onState('failed');
+      });
+  };
+  return { start, stop };
+}
+
+/** The toast when Save meets a failed upload. */
+export const CONCEPT_UPLOAD_FAILED = "Couldn't upload. Try again.";
+
+/** A fresh upload in the concept sheet, until it lands in the file list. */
+export interface ConceptUpload {
+  id: string;
+  file: File;
+  /** An object URL for an image's chip; null otherwise. */
+  previewUrl: string | null;
+  status: { state: 'uploading' } | { state: 'error'; message: string };
+}
+
+/**
+ * Whether Save may go: 'wait' while any upload is in flight, 'refuse' while
+ * any failed upload is neither retried nor removed, else 'go'. Pure.
+ */
+export function conceptSaveGate(uploads: readonly ConceptUpload[]): 'go' | 'wait' | 'refuse' {
+  if (uploads.some((u) => u.status.state === 'uploading')) return 'wait';
+  if (uploads.some((u) => u.status.state === 'error')) return 'refuse';
+  return 'go';
+}
+
+/** The concept sheet's uploads. */
+export interface ConceptUploads {
+  /** Start one upload per file, all at once. */
+  add: (files: readonly File[]) => void;
+  /** Upload a failed file again. */
+  retry: (id: string) => void;
+  /** Drop one file (aborting it when in flight). */
+  remove: (id: string) => void;
+  /** Abort every upload and drop the list (the sheet closed). */
+  abortAll: () => void;
+}
+
+let conceptUploadSeq = 0;
+
+/**
+ * Fresh uploads for a concept, through the comments' upload path (`upload`,
+ * library origin) after the same precheck. Every file starts at once; a
+ * finished one leaves the list and goes to onUploaded (the sheet's file list);
+ * a failed one stays with its message until retried or removed. A dropped or
+ * aborted upload reports nothing. Framework-free.
+ */
+export function createConceptUploads(deps: {
+  upload: AttachmentUploader;
+  precheck: (file: File) => Precheck;
+  onChange: (uploads: readonly ConceptUpload[]) => void;
+  onUploaded: (versionId: string, name: string) => void;
+  preview?: (file: File) => string | null;
+  revoke?: (url: string) => void;
+}): ConceptUploads {
+  let list: ConceptUpload[] = [];
+  const inFlight = new Map<string, AbortController>();
+  const publish = (next: ConceptUpload[]): void => {
+    list = next;
+    deps.onChange(list);
+  };
+  const setStatus = (id: string, status: ConceptUpload['status']): void =>
+    publish(list.map((u) => (u.id === id ? { ...u, status } : u)));
+  const release = (upload: ConceptUpload): void => {
+    if (upload.previewUrl !== null) deps.revoke?.(upload.previewUrl);
+  };
+
+  const run = (upload: ConceptUpload): void => {
+    const check = deps.precheck(upload.file);
+    if (!check.ok) {
+      setStatus(upload.id, { state: 'error', message: check.message });
+      return;
+    }
+    const controller = new AbortController();
+    inFlight.set(upload.id, controller);
+    setStatus(upload.id, { state: 'uploading' });
+    void deps
+      .upload(upload.file, undefined, controller.signal)
+      .catch(() => ({ ok: false as const, message: CONCEPT_UPLOAD_FAILED }))
+      .then((outcome) => {
+        if (inFlight.get(upload.id) !== controller || controller.signal.aborted) return;
+        inFlight.delete(upload.id);
+        if (!outcome.ok) {
+          setStatus(upload.id, { state: 'error', message: outcome.message });
+          return;
+        }
+        const done = list.find((u) => u.id === upload.id);
+        if (done !== undefined) release(done);
+        publish(list.filter((u) => u.id !== upload.id));
+        deps.onUploaded(outcome.versionId, upload.file.name);
+      });
+  };
+
+  return {
+    add: (files) => {
+      const added = files.map(
+        (file): ConceptUpload => ({
+          id: `concept-upload-${(conceptUploadSeq += 1)}`,
+          file,
+          previewUrl: deps.preview?.(file) ?? null,
+          status: { state: 'uploading' },
+        }),
+      );
+      if (added.length === 0) return;
+      publish([...list, ...added]);
+      for (const upload of added) run(upload);
+    },
+    retry: (id) => {
+      const upload = list.find((u) => u.id === id);
+      if (upload === undefined || upload.status.state !== 'error') return;
+      run(upload);
+    },
+    remove: (id) => {
+      inFlight.get(id)?.abort();
+      inFlight.delete(id);
+      const upload = list.find((u) => u.id === id);
+      if (upload === undefined) return;
+      release(upload);
+      publish(list.filter((u) => u.id !== id));
+    },
+    abortAll: () => {
+      for (const controller of inFlight.values()) controller.abort();
+      inFlight.clear();
+      if (list.length === 0) return;
+      for (const upload of list) release(upload);
+      publish([]);
+    },
+  };
 }

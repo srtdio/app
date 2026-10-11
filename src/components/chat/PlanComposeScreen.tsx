@@ -54,6 +54,7 @@ import {
   type ShareProgress,
 } from '@/lib/chat/plans';
 import type { ChatMessageRow } from '@/lib/chat/thread';
+import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
@@ -82,6 +83,8 @@ export function PlanComposeScreen(props: {
   const [posts, setPosts] = useState<PostCardFields[]>([]);
   const [picker, setPicker] = useState<'posts' | 'drafts' | null>(null);
   const [conceptOpen, setConceptOpen] = useState(false);
+  // Concept uploads go as comments' do (library origin).
+  const { canAttach, uploadFile } = useCommentAttachments();
   const [conceptForm, setConceptForm] = useState<ConceptForm>(EMPTY_CONCEPT);
   const [progress, setProgress] = useState<ShareProgress>(() =>
     initialShareProgress(newMessageId()),
@@ -470,6 +473,7 @@ export function PlanComposeScreen(props: {
         onChange={setConceptForm}
         onSubmit={addConcept}
         onClose={() => setConceptOpen(false)}
+        {...(canAttach ? { uploadFile } : {})}
       />
     </>
   );
