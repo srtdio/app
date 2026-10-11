@@ -164,6 +164,7 @@ import {
 import { useCancelUpload, useServerNow } from '@/components/chat/ChatStoreProvider';
 import { SharedBriefCards } from '@/components/chat/BriefCard';
 import { SharedPlanCards } from '@/components/chat/PlanCard';
+import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { MarkBadge, SelectCheckbox, SelectLock } from '@/components/chat/MarkBits';
 import { MarksSheet, PrioritySheet } from '@/components/chat/MarksSheet';
@@ -3216,7 +3217,10 @@ function ThreadBody(
     const el = listRef.current;
     if (el === null) return;
     sourceRef.current = 'program';
+    // ?paintlog=1 only: the scrolls the thread makes itself.
+    const before = paintLogOn() ? Math.round(el.scrollTop) : null;
     scroll(el);
+    if (before !== null) paintLog(`thread program scroll ${before} -> ${Math.round(el.scrollTop)}`);
   }, []);
   const pin = useCallback((): void => {
     programScroll((el) => {
@@ -5690,6 +5694,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           )}
         </ThreadViewFrame>
       ) : null}
+      <PaintLogOverlay />
     </div>
   );
 }

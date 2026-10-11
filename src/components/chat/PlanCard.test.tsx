@@ -27,6 +27,13 @@ import { droppedLayer, planHeaderTitle } from '@/components/chat/PlanScreen';
 import { PlanSharedNotice, composerFormIn, noticeShown } from '@/components/chat/PlanComposeScreen';
 import { isPlanMessage, selectionForwardable } from '@/components/chat/MessageActionMenu';
 import { threadCardIds } from '@/components/chat/MessageThread';
+import {
+  PaintLogOverlay,
+  createPaintLog,
+  formatPaintLog,
+  paintLogOn,
+  paintLogWanted,
+} from '@/components/chat/PaintLog';
 import { PLAN_CHANGED_EVENT, dispatchPlanChanged, planChangedId } from '@/lib/chat/plans';
 import type { PlanBundle } from '@/lib/chat/plans';
 import type { ThreadMessage } from '@/lib/chat/thread';
@@ -350,5 +357,50 @@ describe('fix round 2', () => {
       droppedLayer({ status: 'loading', bundle: null, itemId: 'i1', hadPlan: true }),
     ).toBeNull();
     expect(droppedLayer({ status: 'error', bundle: null, itemId: 'i1', hadPlan: true })).toBeNull();
+  });
+});
+
+describe('the opt-in paint log (?paintlog=1)', () => {
+  it('is on only for ?paintlog=1, or a tab that turned it on, and ?paintlog=0 turns it off', () => {
+    expect(paintLogWanted('', null)).toBe(false);
+    expect(paintLogWanted('?paintlog=1', null)).toBe(true);
+    expect(paintLogWanted('?x=2&paintlog=1', null)).toBe(true);
+    expect(paintLogWanted('', '1')).toBe(true);
+    expect(paintLogWanted('?paintlog=0', '1')).toBe(false);
+    expect(paintLogWanted('?paintlog=true', null)).toBe(false);
+  });
+
+  it('is off by default: no entries, no notifications, no overlay', () => {
+    expect(paintLogOn()).toBe(false);
+    const log = createPaintLog({ enabled: false, now: () => 1 });
+    const listener = vi.fn();
+    log.subscribe(listener);
+    log.push('plan card mount');
+    expect(log.entries()).toEqual([]);
+    expect(listener).not.toHaveBeenCalled();
+    expect(renderToStaticMarkup(<PaintLogOverlay />)).toBe('');
+  });
+
+  it('keeps the newest entries with their times, oldest first, and formats one per line', () => {
+    let t = 0;
+    const log = createPaintLog({ enabled: true, now: () => (t += 1.25), limit: 2 });
+    const listener = vi.fn();
+    log.subscribe(listener);
+    log.push('a');
+    log.push('b');
+    log.push('c');
+    expect(log.entries().map((e) => e.what)).toEqual(['b', 'c']);
+    expect(listener).toHaveBeenCalledTimes(3);
+    expect(formatPaintLog(log.entries(), ['head'])).toBe('head\n2.5 b\n3.8 c');
+    log.clear();
+    expect(log.entries()).toEqual([]);
+  });
+
+  it('is wired into the card, the ticker and the thread', () => {
+    const src = (f: string): string =>
+      readFileSync(fileURLToPath(new URL(`./${f}`, import.meta.url)), 'utf8');
+    expect(src('PlanCard.tsx')).toContain('usePaintLogCommit(');
+    expect(src('StatusTicker.tsx')).toContain('paintLog(`ticker ${logState}`)');
+    expect(src('MessageThread.tsx')).toContain('<PaintLogOverlay />');
   });
 });
