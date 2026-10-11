@@ -3,6 +3,7 @@ import {
   assetDelete,
   assetDeleteMany,
   memberRemove,
+  planDraftRows,
   postSoftDelete,
   userProfileUpdate,
   type Client,
@@ -183,5 +184,43 @@ describe('userProfileUpdate', () => {
       ok: false,
       error: { code: 'invalid_payload', message: 'invalid_payload' },
     });
+  });
+});
+
+describe('planDraftRows', () => {
+  const args = {
+    p_plan_ids: ['11111111-1111-1111-1111-111111111111', '44444444-4444-4444-4444-444444444444'],
+  };
+  const rows = [
+    {
+      plan_id: '11111111-1111-1111-1111-111111111111',
+      item_id: '33333333-3333-3333-3333-333333333333',
+      item_position: 0,
+      post_number: 7,
+      title: 'Launch teaser',
+      target_date: '2026-10-20T00:00:00+00:00',
+    },
+  ];
+
+  it('returns ok with the rows and forwards the proc name + args on success', async () => {
+    const { client, rpc } = makeClient({ data: rows, error: null });
+    const result = await planDraftRows(client, args);
+    expect(result).toEqual({ ok: true, data: rows });
+    expect(rpc).toHaveBeenCalledWith('plan_draft_rows', args);
+  });
+
+  it('maps the invalid_payload exception (over 100 ids) to a domain error', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'invalid_payload' } });
+    const result = await planDraftRows(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'invalid_payload', message: 'invalid_payload' },
+    });
+  });
+
+  it('maps an unexpected transport error to code "unknown"', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'network down' } });
+    const result = await planDraftRows(client, args);
+    expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
   });
 });

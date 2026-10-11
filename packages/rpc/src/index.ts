@@ -317,7 +317,10 @@ export function userProfileUpdate(
 }
 
 // Plans in chat (migrations 20261009110000_plans_core, 20261009163000_chat_plan_share,
-// 20261009205500_plan_item_comments). Every proc takes p_trace_id.
+// 20261009205500_plan_item_comments, 20261011011500_plan_drafts_in_client_plans).
+// Every write proc takes p_trace_id; plan_draft_rows is a read-only, batched
+// helper (no trace id, no audit) listing the draft post rows of up to 100
+// plans. plan_draft_items is retired (no EXECUTE) and has no wrapper.
 
 export type PlanCreateArgs = ProcArgs<'plan_create'>;
 export function planCreate(
@@ -388,6 +391,14 @@ export function planPostsAdd(
   args: PlanPostsAddArgs,
 ): Promise<Result<ProcReturns<'plan_posts_add'>>> {
   return callProc(client, 'plan_posts_add', args);
+}
+
+export type PlanDraftRowsArgs = ProcArgs<'plan_draft_rows'>;
+export function planDraftRows(
+  client: Client,
+  args: PlanDraftRowsArgs,
+): Promise<Result<ProcReturns<'plan_draft_rows'>>> {
+  return callProc(client, 'plan_draft_rows', args);
 }
 
 export type PlanItemRemoveArgs = ProcArgs<'plan_item_remove'>;

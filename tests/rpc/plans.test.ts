@@ -3,10 +3,10 @@
 // reads audit_log back; the plan tables grant service_role no SELECT (live
 // parity), so plan state is read back as an agency member through RLS.
 //
-// Covered: a client cannot create a plan (forbidden_role); a draft cannot go
-// into a client plan (plan_has_drafts); sharing a team plan that holds a draft
-// fails until the draft is removed, then succeeds and is one-way; a client
-// review on a post item says use_stage_transition; a client review on a team
+// Covered: a client cannot create a plan (forbidden_role); a draft goes into a
+// client plan and is audited (20261011011500_plan_drafts_in_client_plans
+// dropped plan_has_drafts); sharing a team plan that holds a draft succeeds, is
+// one-way and stays forbidden_role for a client; a client review on a post item says use_stage_transition; a client review on a team
 // plan is forbidden_role; a concept edit resets both reviews to waiting;
 // reorder rejects a wrong-length list; a chat-origin file is 'attachment not
 // available'; every success writes one audit_log row named after the proc.
@@ -204,23 +204,16 @@ describe.runIf(RPC_SUITE)('plan procs (authenticated role)', () => {
     );
   });
 
-  it('plan_posts_add: a draft into a client plan is plan_has_drafts; a review post is added and audited', async () => {
+  it('plan_posts_add: a draft into a client plan is added and audited', async () => {
     const planId = await newPlan('client');
     const draft = await seedPost('draft');
-    refusedWith(
-      await call(agency, 'plan_posts_add', { p_plan_id: planId, p_post_ids: [draft] }),
-      'plan_has_drafts',
-    );
-    expect(await itemsOf(planId)).toHaveLength(0);
-    const added = await call(agency, 'plan_posts_add', {
-      p_plan_id: planId,
-      p_post_ids: [await seedPost('review')],
-    });
+    const added = await call(agency, 'plan_posts_add', { p_plan_id: planId, p_post_ids: [draft] });
     await expectAudited('plan_posts_add', added);
     expect(added.data).toBe(1);
+    expect((await itemsOf(planId)).map((i) => i.post_id)).toEqual([draft]);
   });
 
-  it('plan_share_with_client: plan_has_drafts while a draft is inside; succeeds after removal and is one-way', async () => {
+  it('plan_share_with_client: succeeds while a draft is inside, is one-way, and is forbidden_role for a client', async () => {
     const planId = await newPlan('team');
     const draft = await seedPost('draft');
     ok(
@@ -228,17 +221,11 @@ describe.runIf(RPC_SUITE)('plan procs (authenticated role)', () => {
       await call(agency, 'plan_posts_add', { p_plan_id: planId, p_post_ids: [draft] }),
     );
     refusedWith(
-      await call(agency, 'plan_share_with_client', { p_plan_id: planId }),
-      'plan_has_drafts',
+      await call(client, 'plan_share_with_client', { p_plan_id: planId }),
+      'forbidden_role',
     );
     expect((await planRow(planId)).audience).toBe('team');
 
-    const [item] = await itemsOf(planId);
-    if (item === undefined) throw new Error('no item');
-    await expectAudited(
-      'plan_item_remove',
-      await call(agency, 'plan_item_remove', { p_item_id: item.id }),
-    );
     await expectAudited(
       'plan_share_with_client',
       await call(agency, 'plan_share_with_client', { p_plan_id: planId }),
@@ -246,16 +233,17 @@ describe.runIf(RPC_SUITE)('plan procs (authenticated role)', () => {
     const shared = await planRow(planId);
     expect(shared.audience).toBe('client');
     expect(shared.shared_with_client_at).not.toBeNull();
+    expect((await itemsOf(planId)).map((i) => i.post_id)).toEqual([draft]);
 
     // One-way: a second share is a no-op (no audit row) and the plan stays shared.
     const again = await call(agency, 'plan_share_with_client', { p_plan_id: planId });
     expect(again.error).toBeNull();
     expect(await countWhere(g, 'audit_log', [['trace_id', again.traceId]])).toBe(0);
     expect(await planRow(planId)).toEqual(shared);
-    // And a draft can no longer go in.
+    // A client still cannot share (or reshare) it.
     refusedWith(
-      await call(agency, 'plan_posts_add', { p_plan_id: planId, p_post_ids: [draft] }),
-      'plan_has_drafts',
+      await call(client, 'plan_share_with_client', { p_plan_id: planId }),
+      'forbidden_role',
     );
   });
 

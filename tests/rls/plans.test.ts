@@ -6,6 +6,11 @@
 // side; client reviews for everyone who can read the item. An inactive member
 // and another workspace's client see nothing. Authenticated has SELECT only:
 // INSERT, UPDATE and DELETE are refused at the grant (permission denied).
+// plan_draft_rows (20261011011500_plan_drafts_in_client_plans) lists the draft
+// post rows (plan id, number, title, date) of up to 100 plans to whoever can
+// read each plan, so a client sees a draft row in a client plan without posts
+// SELECT on the draft. plan_draft_items (its single-plan predecessor) is
+// retired: no EXECUTE for authenticated.
 //
 // The tables grant service_role no SELECT/INSERT (live parity), so fixtures go
 // through the procs as an agency member; the one direct change (a team plan
@@ -19,6 +24,7 @@ import {
   asGeneric,
   clientFor,
   createAdminClient,
+  createAnonClient,
   insertRow,
   loadRlsEnv,
   nextEntityNumber,
@@ -40,8 +46,9 @@ import type { Database } from '../../packages/schemas/src/supabase.generated';
 const RLS_SUITE = process.env.RLS_SUITE === '1';
 
 /**
- * Typed pass-through for direct .rpc() args. Each proc here takes its own
- * p_trace_id (a uuid v7, set at every call site). callRpc() is the app wrapper
+ * Typed pass-through for direct .rpc() args. Each write proc here takes its
+ * own p_trace_id (a uuid v7, set at every call site); the read-only
+ * plan_draft_rows takes none. callRpc() is the app wrapper
  * and does not apply to these direct test calls.
  */
 function rpcArgs<T>(args: T): T {
@@ -68,6 +75,7 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
   let outsiderClient: SeededUser;
   let ws: SeededWorkspace;
   let other: SeededWorkspace;
+  let bucketId: string;
   let draftPostId: string;
   let reviewPostId: string;
   let teamPlanId: string;
@@ -89,7 +97,11 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
     return ownReadCount(asGeneric(as(user)), table, [[key, id]]);
   }
 
-  async function seedPost(stage: string, bucketId: string): Promise<string> {
+  async function seedPost(
+    stage: string,
+    bucketId: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<string> {
     const post = await insertRow(g, 'posts', {
       workspace_id: ws.id,
       number: await nextEntityNumber(g, ws.id),
@@ -100,6 +112,7 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
       format: 'text',
       stage,
       created_by: owner.id,
+      ...extra,
     });
     return String(post.id);
   }
@@ -207,8 +220,9 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
       name: `Bucket ${randomSuffix()}`,
       color_hex: '#112233',
     });
-    draftPostId = await seedPost('draft', String(bucket.id));
-    reviewPostId = await seedPost('review', String(bucket.id));
+    bucketId = String(bucket.id);
+    draftPostId = await seedPost('draft', bucketId);
+    reviewPostId = await seedPost('review', bucketId);
 
     teamPlanId = await createPlan('team');
     teamConceptId = await addConcept(teamPlanId);
@@ -517,6 +531,80 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
     const itemId = await addConcept(clientPlanId);
     await editConcept(itemId);
     expect(await conceptDate(itemId)).toBeNull();
+  });
+
+  async function draftRows(user: SeededUser, planIds: string[]) {
+    const res = await as(user).rpc('plan_draft_rows', rpcArgs({ p_plan_ids: planIds }));
+    if (res.error !== null) throw new Error(`plan_draft_rows failed: ${res.error.message}`);
+    return res.data;
+  }
+
+  it('plan_draft_rows: agency gets the team plan draft row with its plan_id; the client gets none', async () => {
+    const rows = await draftRows(agency, [teamPlanId]);
+    expect(rows.map((r) => [r.plan_id, r.item_id])).toEqual([[teamPlanId, teamDraftItemId]]);
+    expect(await draftRows(client, [teamPlanId])).toHaveLength(0);
+  });
+
+  it('plan_draft_rows: a client gets the draft row in a client plan while posts stays hidden', async () => {
+    const targetDate = '2026-11-18T09:30:00+00:00';
+    const datedDraftId = await seedPost('draft', bucketId, { target_date: targetDate });
+    await addPost(clientPlanId, datedDraftId);
+    const itemId = await postItemId(clientPlanId, datedDraftId);
+    const post = await admin.from('posts').select('number, title').eq('id', datedDraftId).single();
+    if (post.error !== null) throw new Error(`posts read failed: ${post.error.message}`);
+
+    const rows = await draftRows(client, [clientPlanId]);
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
+    expect(row?.plan_id).toBe(clientPlanId);
+    expect(row?.item_id).toBe(itemId);
+    expect(row?.post_number).toBe(post.data.number);
+    expect(row?.title).toBe(post.data.title);
+    expect(new Date(row?.target_date ?? '').toISOString()).toBe(new Date(targetDate).toISOString());
+    // The review post in the same plan is not a draft, so it is not listed.
+    expect(rows.map((r) => r.item_id)).not.toContain(clientPostItemId);
+    // The post itself stays hidden from the client.
+    expect(await read(client, 'posts', datedDraftId)).toBe(0);
+  });
+
+  it('plan_draft_rows: an inactive member and another workspace member get none', async () => {
+    for (const user of [inactive, outsider, outsiderClient]) {
+      expect(await draftRows(user, [teamPlanId, clientPlanId])).toHaveLength(0);
+    }
+  });
+
+  it('plan_draft_rows: a mixed list returns only the visible plans rows', async () => {
+    const unknownId = uuidv7();
+    const visible = await draftRows(client, [clientPlanId]);
+    const mixed = await draftRows(client, [teamPlanId, clientPlanId, unknownId]);
+    expect(mixed.length).toBeGreaterThan(0);
+    expect(new Set(mixed.map((r) => r.plan_id))).toEqual(new Set([clientPlanId]));
+    expect(mixed.map((r) => r.item_id).sort()).toEqual(visible.map((r) => r.item_id).sort());
+    const agencyRows = await draftRows(agency, [teamPlanId, unknownId]);
+    expect(agencyRows.map((r) => r.item_id)).toEqual([teamDraftItemId]);
+  });
+
+  it('plan_draft_rows: an empty list returns none; 101 ids is invalid_payload', async () => {
+    expect(await draftRows(agency, [])).toHaveLength(0);
+    const tooMany = [teamPlanId, ...Array.from({ length: 100 }, () => uuidv7())];
+    const res = await as(agency).rpc('plan_draft_rows', rpcArgs({ p_plan_ids: tooMany }));
+    expect(res.data).toBeNull();
+    expect(res.error?.message).toMatch(/invalid_payload/);
+  });
+
+  it('plan_draft_rows: anon cannot execute it', async () => {
+    const anon = createAnonClient(loadRlsEnv());
+    const res = await anon.rpc('plan_draft_rows', rpcArgs({ p_plan_ids: [clientPlanId] }));
+    expect(res.error).not.toBeNull();
+    expect(res.data).toBeNull();
+  });
+
+  it('plan_draft_items is retired: authenticated cannot execute it', async () => {
+    for (const user of [agency, client]) {
+      const res = await as(user).rpc('plan_draft_items', rpcArgs({ p_plan_id: clientPlanId }));
+      expect(res.data).toBeNull();
+      expect(res.error?.message).toMatch(/permission denied/i);
+    }
   });
 
   // Runs last: it turns the team plan client-visible with its draft still inside.
