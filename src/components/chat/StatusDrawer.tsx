@@ -37,8 +37,11 @@ import {
 import { PostSheet } from '@/components/chat/PostSheet';
 import { indexPostsById, sharedPostViews } from '@/components/chat/post-card';
 import {
+  DRAFT_LABEL,
   clientApproved,
   clientChanges,
+  draftLocked,
+  isDraftPost,
   itemDateLabel,
   planProgress,
   planRangeLabel,
@@ -196,7 +199,12 @@ function itemSegment(bundle: PlanBundle, item: PlanItemRow, side: ViewerSide): P
 
 function itemTitle(bundle: PlanBundle, item: PlanItemRow): string {
   if (item.kind === 'post') {
-    const title = item.post_id !== null ? bundle.postInfo[item.post_id]?.title : undefined;
+    const title =
+      item.draft_row === true
+        ? (item.title ?? undefined)
+        : item.post_id !== null
+          ? bundle.postInfo[item.post_id]?.title
+          : undefined;
     return title !== undefined && title !== '' ? title : 'Post';
   }
   return item.title !== null && item.title.trim() !== '' ? item.title : 'Concept';
@@ -258,9 +266,23 @@ export function PlanBlock(props: {
               <span className={ROW_TITLE}>{itemTitle(bundle, item)}</span>
               <span className={ROW_SUB}>{item.kind === 'post' ? 'Post' : 'Concept'}</span>
             </span>
-            <span data-pill={seg} className={cn(PILL, PILL_CLASS[seg])}>
-              {SEGMENT_PILL[seg]}
-            </span>
+            {isDraftPost(bundle, item) ? (
+              <span
+                data-pill="draft"
+                className={cn(
+                  PILL,
+                  draftLocked(bundle, item, side)
+                    ? 'text-fg-3 ring-1 ring-inset ring-border'
+                    : 'bg-panel-2 text-fg-2',
+                )}
+              >
+                {DRAFT_LABEL}
+              </span>
+            ) : (
+              <span data-pill={seg} className={cn(PILL, PILL_CLASS[seg])}>
+                {SEGMENT_PILL[seg]}
+              </span>
+            )}
             <Chevron />
           </button>
         );

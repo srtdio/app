@@ -74,18 +74,19 @@ function render(view: PlanCardView, side: 'agency' | 'client' | 'unknown'): stri
 }
 
 describe('PlanCardBody', () => {
-  it('agency: eyebrow, title, mono range, counts, progress, Open plan only', () => {
+  it('agency: eyebrow, title, mono range, counts, progress, Open plan and Forward', () => {
     const html = render({ kind: 'plan', bundle: bundle('client') }, 'agency');
     expect(html).toContain('PLAN');
     expect(html).toContain('Week of 12 Oct');
     expect(html).toContain('12 Oct - 18 Oct');
     expect(html).toContain('1 concept');
     expect(html).toContain('1 post');
-    expect(html).toContain('Team 0 of 2 · Client 1 of 2 · 1 change asked');
+    expect(html).toContain('Agency 0 of 2 · Client 1 of 2 · 1 change asked');
     expect(html).toContain('width:50%');
     expect(html).toContain('Open plan');
-    expect(html).not.toContain('Forward');
-    expect(html).not.toContain('Team only');
+    expect(html).toContain('data-plan-forward');
+    expect(html).not.toContain('Agency only');
+    expect(html).not.toContain('Team');
   });
 
   it('client on a client plan also gets Forward', () => {
@@ -94,10 +95,11 @@ describe('PlanCardBody', () => {
     expect(html).toContain('Forward');
   });
 
-  it('a team plan shows the warn "Team only" chip (tokens only) and no Forward', () => {
+  it('a team plan shows the warn "Agency only" chip (tokens only); Forward for the agency only', () => {
     const html = render({ kind: 'plan', bundle: bundle('team') }, 'agency');
     const chip = /<span[^>]*data-plan-chip="warn"[^>]*>[^<]*<\/span>/.exec(html)?.[0] ?? '';
-    expect(chip).toContain('Team only');
+    expect(chip).toContain('Agency only');
+    expect(html).toContain('data-plan-forward');
     expect(chip).toContain('bg-warn-soft');
     expect(chip).toContain('border-warn');
     expect(chip).toContain('text-warn');
@@ -118,7 +120,7 @@ describe('Item screen rules', () => {
     expect(itemActions('agency', { kind: 'concept' }, 'client')).toMatchObject({
       kind: 'review',
       side: 'team',
-      approveLabel: 'Team approve',
+      approveLabel: 'Agency approve',
       openInPipeline: false,
     });
     expect(itemActions('agency', { kind: 'post' }, 'client')).toMatchObject({
@@ -127,14 +129,14 @@ describe('Item screen rules', () => {
     });
   });
 
-  it('agency on a post item: "Open in pipeline" and "Team approve" only (no Ask changes)', () => {
+  it('agency on a post item: "Open in pipeline" and "Agency approve" only (no Ask changes)', () => {
     expect(actionLabels(itemActions('agency', { kind: 'post' }, 'client'))).toEqual([
       'Open in pipeline',
-      'Team approve',
+      'Agency approve',
     ]);
     expect(actionLabels(itemActions('agency', { kind: 'concept' }, 'client'))).toEqual([
       'Ask changes',
-      'Team approve',
+      'Agency approve',
     ]);
     expect(actionLabels(itemActions('client', { kind: 'post' }, 'client'))).toEqual(['Open post']);
     const src = readFileSync(
@@ -154,14 +156,14 @@ describe('Item screen rules', () => {
     expect(itemActions('unknown', { kind: 'concept' }, 'client')).toEqual({ kind: 'none' });
   });
 
-  it('status rows: Pipeline for a post, Team only for the agency, Client always', () => {
+  it('status rows: Pipeline for a post, Agency for the agency only, Client always', () => {
     const b = bundle('client');
     const post = b.items[1];
     const concept = b.items[0];
     if (post === undefined || concept === undefined) throw new Error('fixture');
     expect(statusRows(b, post, 'agency').map((r) => r.label)).toEqual([
       'Pipeline',
-      'Team',
+      'Agency',
       'Client',
     ]);
     expect(statusRows(b, post, 'client').map((r) => r.label)).toEqual(['Pipeline', 'Client']);
@@ -170,7 +172,7 @@ describe('Item screen rules', () => {
     ]);
     // A saved review shows at once (before the re-read lands).
     expect(statusRows(b, concept, 'agency', { team: 'approved' })[0]).toEqual({
-      label: 'Team',
+      label: 'Agency',
       value: 'Approved',
       tone: 'good',
     });

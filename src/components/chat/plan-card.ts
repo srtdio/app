@@ -16,14 +16,20 @@ import type { ViewerSide } from '@/lib/chat/viewer-role';
 export const PLAN_EYEBROW = 'PLAN';
 export const PLAN_NOT_AVAILABLE = 'Plan not available';
 export const PLAN_SHARED_TOAST = 'Plan shared';
-export const TEAM_ONLY_LABEL = 'Team only';
-export const PLAN_HAS_DRAFTS_COPY = 'Remove the draft posts first.';
+export const TEAM_ONLY_LABEL = 'Agency only';
 export const AUDIENCE_HINTS: Record<PlanAudience, string> = {
   client: "Client sees concepts, posts and Everyone comments. Drafts can't be added.",
-  team: 'Only your team sees this plan. Drafts allowed. Share with the client later, once no drafts are left.',
+  team: 'Only your agency sees this plan. Drafts allowed. Share with the client later.',
 };
 export const TEAM_APPROVE_CONFIRM =
-  'Mark as team approved? Only the team sees this. The client still approves separately.';
+  'Mark as agency approved? Only the agency sees this. The client still approves separately.';
+/** The "In this chat" chip on a plan already shared here (Plan tile list). */
+export const IN_THIS_CHAT_LABEL = 'In this chat';
+/** The Forward list's tag on a chat known to have a client (Agency only plan). */
+export const HAS_CLIENT_TAG = 'Has client';
+/** A draft post's pill, and a client's sub line on its row. */
+export const DRAFT_LABEL = 'Draft';
+export const DRAFT_NOT_READY = 'Not ready to view yet';
 export const COMMENT_FAILED = "Couldn't send. Try again.";
 
 /** The longest plan, in days between From and To (plans_dates). */
@@ -35,7 +41,7 @@ export const CONCEPT_FILES_MAX = 20;
 
 /** The client confirm for approving a concept. Pure. */
 export function clientApproveConfirm(title: string): string {
-  return `Approve "${title}"? The team will go ahead and make this into a post.`;
+  return `Approve "${title}"? The agency will go ahead and make this into a post.`;
 }
 
 /** The toast after a forward. Pure. */
@@ -110,7 +116,7 @@ function changesPart(changes: number): string {
 }
 
 /**
- * The progress line. Agency: "Team A of N · Client B of N", then
+ * The progress line. Agency: "Agency A of N · Client B of N", then
  * "· K changes asked" when K > 0. Anyone else (client, unknown) sees the
  * client count only, never a team status. Pure.
  */
@@ -118,7 +124,7 @@ export function progressLabel(progress: PlanProgress, side: ViewerSide): string 
   const n = progress.total;
   const base =
     side === 'agency'
-      ? `Team ${progress.teamApproved} of ${n} · Client ${progress.approved} of ${n}`
+      ? `Agency ${progress.teamApproved} of ${n} · Client ${progress.approved} of ${n}`
       : `${progress.approved} of ${n} approved by client`;
   return `${base}${changesPart(progress.changes)}`;
 }
@@ -131,10 +137,10 @@ export function progressPercent(progress: PlanProgress): number {
 
 export interface PlanChip {
   label: string;
-  tone: 'neutral' | 'warn';
+  tone: 'neutral' | 'warn' | 'accent';
 }
 
-/** Count chips, then "Team only" for a team plan. Pure. */
+/** Count chips, then "Agency only" for a team plan. Pure. */
 export function planChips(bundle: PlanBundle): PlanChip[] {
   const concepts = bundle.items.filter((i) => i.kind === 'concept').length;
   const posts = bundle.items.filter((i) => i.kind === 'post').length;
@@ -146,9 +152,92 @@ export function planChips(bundle: PlanBundle): PlanChip[] {
   return chips;
 }
 
-/** Forward shows only for a client viewer on a client plan. Pure. */
+/** The Plan tile list's chips: the card's, then "In this chat" when shared here. Pure. */
+export function pickerChips(bundle: PlanBundle, inThisChat: boolean): PlanChip[] {
+  const chips = planChips(bundle);
+  if (inThisChat) chips.push({ label: IN_THIS_CHAT_LABEL, tone: 'accent' });
+  return chips;
+}
+
+/** Forward shows on every plan for the agency, and on a client plan for a client. Pure. */
 export function canForwardPlan(side: ViewerSide, audience: PlanAudience): boolean {
+  if (side === 'agency') return true;
   return side === 'client' && audience === 'client';
+}
+
+/**
+ * What sending a plan into a chat does: an Agency only plan into a chat known
+ * to have a client asks "Share with client first?"; anything else is sent at
+ * once (an unknown chat is sent, and the server's refusal opens the confirm). Pure.
+ */
+export function planShareDecision(
+  audience: PlanAudience,
+  hasClient: boolean | null,
+): 'send' | 'confirm' {
+  return audience === 'team' && hasClient === true ? 'confirm' : 'send';
+}
+
+/**
+ * Whether a chat is known, from data already loaded, to have a client: a DM
+ * whose other person is a client. Groups are unknown here (null). Pure.
+ */
+export function summaryHasClient(channel: {
+  channelType: string;
+  role?: string | null;
+}): boolean | null {
+  if (channel.channelType === 'dm' && channel.role !== undefined && channel.role !== null) {
+    return channel.role === 'client';
+  }
+  return null;
+}
+
+/** Whether an item is a draft post (a draft row, or a readable post at stage draft). Pure. */
+export function isDraftPost(bundle: Pick<PlanBundle, 'postStages'>, item: PlanItemRow): boolean {
+  if (item.kind !== 'post') return false;
+  if (item.draft_row === true) return true;
+  return item.post_id !== null && bundle.postStages[item.post_id] === 'draft';
+}
+
+/** A draft post is inert for anyone but the agency: name only, no open. Pure. */
+export function draftLocked(
+  bundle: Pick<PlanBundle, 'postStages'>,
+  item: PlanItemRow,
+  side: ViewerSide,
+): boolean {
+  return side !== 'agency' && isDraftPost(bundle, item);
+}
+
+/** Draft posts in the plan. Pure. */
+export function draftCount(bundle: Pick<PlanBundle, 'items' | 'postStages'>): number {
+  return bundle.items.filter((i) => isDraftPost(bundle, i)).length;
+}
+
+/** The "Share with client first?" sheet's copy. */
+export const SHARE_FIRST_TITLE = 'Share with client first?';
+export const SHARE_FIRST_CONFIRM = 'Share with client and send';
+export const SHARE_FIRST_UNDO = "This can't be undone. The plan stays shared with client.";
+
+/** The confirm's body after the plan title (the sheet sets the title in bold). Pure. */
+export function shareFirstRest(chatName: string, group: boolean): string {
+  const who = group ? 'has clients in it' : 'has a client in it';
+  return ` is Agency only. ${chatName} ${who}, so the plan has to be shared with the client to send it here.`;
+}
+
+/** The confirm's body. Pure. */
+export function shareFirstBody(planTitle: string, chatName: string, group: boolean): string {
+  return `${planTitle}${shareFirstRest(chatName, group)}`;
+}
+
+/** The confirm's first fact. Pure. */
+export function shareFirstAudience(workspaceName: string): string {
+  return `Every client in ${workspaceName} will be able to open it, from any chat it's in.`;
+}
+
+/** The confirm's drafts fact, or null with none. Pure. */
+export function shareFirstDrafts(drafts: number): string | null {
+  if (drafts <= 0) return null;
+  const lead = drafts === 1 ? '1 draft shows' : `${drafts} drafts show`;
+  return `${lead} to clients as name only. They can't open it until it goes to review.`;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -203,7 +292,7 @@ export function stageLabel(stage: string | undefined): string {
 export type PillTone = 'good' | 'review' | 'neutral';
 
 export interface StatusPill {
-  /** "Team · Approved" for the agency side, "Approved" alone for a client. */
+  /** "Agency · Approved" for the agency side, "Approved" alone for a client. */
   label: string;
   tone: PillTone;
   side: ReviewSide;
@@ -232,7 +321,7 @@ export function itemPills(bundle: PlanBundle, item: PlanItemRow, side: ViewerSid
   }
   const team = reviewStatus(bundle, item.id, 'team');
   return [
-    { label: `Team · ${STATUS_LABELS[team]}`, tone: toneOf(team), side: 'team' },
+    { label: `Agency · ${STATUS_LABELS[team]}`, tone: toneOf(team), side: 'team' },
     { label: `Client · ${STATUS_LABELS[client]}`, tone: toneOf(client), side: 'client' },
   ];
 }

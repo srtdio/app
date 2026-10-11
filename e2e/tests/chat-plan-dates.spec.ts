@@ -81,7 +81,7 @@ test.describe('phone', () => {
     const card = page.locator(`[data-plan-card="${DATED_PLAN_ID}"]`);
     await card.scrollIntoViewIfNeeded();
     await expect(card.locator('[data-plan-progress]')).toHaveText(
-      `Team ${c.team} of ${c.total} · Client ${c.client} of ${c.total} · ${c.changes} change asked`,
+      `Agency ${c.team} of ${c.total} · Client ${c.client} of ${c.total} · ${c.changes} change asked`,
     );
     await page.waitForTimeout(300);
     await shot(page, 'dates-01-card-agency');
@@ -93,7 +93,7 @@ test.describe('phone', () => {
     // First paint is already in date order (the list paints once, sorted).
     expect(await rowTitles(page)).toEqual(expectedTitles('concept'));
     await expect(plan.locator('[data-plan-screen-progress]')).toHaveText(
-      `Team ${c.team} of ${c.total} · Client ${c.client} of ${c.total} · ${c.changes} change asked`,
+      `Agency ${c.team} of ${c.total} · Client ${c.client} of ${c.total} · ${c.changes} change asked`,
     );
     const dates = plan.locator('[data-plan-row-date]');
     const undated = DATED_PLAN_ITEMS.filter((it) => it.kind === 'concept' && it.date === null);
@@ -215,7 +215,7 @@ test.describe('phone', () => {
     await expect(card.locator('[data-plan-progress]')).toHaveText(
       `${c.client} of ${c.total} approved by client · ${c.changes} change asked`,
     );
-    await expect(card.getByText(/Team \d/)).toHaveCount(0);
+    await expect(card.getByText(/Agency \d/)).toHaveCount(0);
     await page.waitForTimeout(300);
     await shot(page, 'dates-09-card-client');
     await card.locator('[data-plan-open]').click();

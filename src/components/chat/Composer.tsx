@@ -137,7 +137,7 @@ export interface ComposerProps {
    */
   channelHasClient?: boolean | null | undefined;
   /**
-   * The tray's Plan tile: opens the New plan screen. The tile is live only for
+   * The tray's Plan tile: opens "Share a plan". The tile is live only for
    * an agency-side viewer (and when this is set); otherwise faded and disabled.
    */
   onOpenPlanCompose?: (() => void) | undefined;

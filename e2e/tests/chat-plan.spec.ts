@@ -18,9 +18,10 @@ import {
   seedTeamAndHiddenPlans,
 } from '../fixtures/chat-data';
 
-// Plan in chat (D1 to D8): the tray's Plan tile, the New plan screen and its
-// share sequence, the plan card (agency, client, team only, not available),
-// the Plan and Item screens with team and client approval and Team only
+// Plan in chat (D1 to D8): the tray's Plan tile ("Share a plan", then New
+// plan), the New plan screen and its share sequence, the plan card (agency,
+// client, Agency only, not available), the Plan and Item screens with agency
+// and client approval and Agency only
 // comments, Forward for a client, and back closing one layer at a time. Runs in
 // both colour schemes (the dark and light projects), on the iPhone viewport and
 // on a laptop. Linux WebKit approximates iOS WebKit.
@@ -89,6 +90,14 @@ async function openTray(page: Page): Promise<void> {
 
 const page_ = (page: Page, id: string) => page.locator(`[data-plan-page="${id}"]`);
 
+/** The Plan tile opens "Share a plan"; its last row opens the New plan screen. */
+async function newPlanFromTile(page: Page): Promise<void> {
+  await page.locator('[data-tray-tile="plan"]').click();
+  const picker = page.getByRole('dialog', { name: 'Share a plan' });
+  await expect(picker).toBeVisible();
+  await picker.locator('[data-plan-pick-new]').click();
+}
+
 async function agencyFlow(page: Page, prefix: string): Promise<void> {
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
@@ -100,7 +109,7 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   const tile = page.locator('[data-tray-tile="plan"]');
   await expect(tile).toBeEnabled();
   await shot(page, `${prefix}-01-tray-agency`);
-  await tile.click();
+  await newPlanFromTile(page);
 
   // D2: the New plan screen.
   const compose = page_(page, 'compose');
@@ -176,8 +185,9 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(card).toBeVisible();
   await expect(card.getByText('1 concept')).toBeVisible();
   await expect(card.getByText('1 post')).toBeVisible();
-  await expect(card.getByText('Team 0 of 2 · Client 0 of 2')).toBeVisible();
-  await expect(card.locator('[data-plan-forward]')).toHaveCount(0);
+  await expect(card.getByText('Agency 0 of 2 · Client 0 of 2')).toBeVisible();
+  // The agency's Forward shows on every card.
+  await expect(card.locator('[data-plan-forward]')).toBeVisible();
   await page.waitForTimeout(400);
   await shot(page, `${prefix}-05-card-agency`);
 
@@ -189,11 +199,11 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(plan.locator('[data-plan-tab="concept"]')).toHaveText('Concepts 1');
   await expect(plan.locator('[data-plan-tab="post"]')).toHaveText('Posts 1');
   const row = plan.locator('[data-plan-row]').first();
-  await expect(row.getByText('Team · Waiting')).toBeVisible();
+  await expect(row.getByText('Agency · Waiting')).toBeVisible();
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-06-plan-screen-agency`);
 
-  // D5: the Item screen, team approve with its confirm.
+  // D5: the Item screen, agency approve with its confirm.
   await row.click();
   const item = page_(page, 'item');
   await expect(item).toBeVisible();
@@ -202,22 +212,22 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-07-item-concept-agency`);
   await item.locator('[data-plan-approve]').click();
-  const confirm = page.getByRole('dialog', { name: 'Team approve' });
+  const confirm = page.getByRole('dialog', { name: 'Agency approve' });
   await expect(confirm).toBeVisible();
-  await expect(confirm.getByText(/Only the team sees this/)).toBeVisible();
+  await expect(confirm.getByText(/Only the agency sees this/)).toBeVisible();
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-08-confirm-team-approve`);
   await confirm.locator('[data-plan-confirm]').click();
   await expect(confirm).toBeHidden();
   await expect(item.locator('[data-plan-status] [data-plan-pill="team"]')).toHaveText('Approved');
 
-  // A Team only comment: tinted, with the lock label.
+  // An Agency only comment: tinted, with the lock label.
   await item.locator('[data-plan-visibility="team"]').click();
   await item.getByRole('textbox', { name: 'Comment' }).fill('Need drone shots, checking Tuesday.');
   await item.getByRole('button', { name: 'Send comment' }).click();
   const note = item.locator('[data-plan-comment="team"]');
   await expect(note).toBeVisible();
-  await expect(note.getByText('Team only')).toBeVisible();
+  await expect(note.getByText('Agency only')).toBeVisible();
   await expect(note).toHaveClass(/bg-warn-soft/);
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-09-team-comment`);
@@ -226,16 +236,18 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await page.goBack();
   await expect(item).toBeHidden();
   await expect(plan).toBeVisible();
-  await expect(plan.locator('[data-plan-row]').first().getByText('Team · Approved')).toBeVisible();
+  await expect(
+    plan.locator('[data-plan-row]').first().getByText('Agency · Approved'),
+  ).toBeVisible();
   await expect(plan.locator('[data-plan-row]').first().getByText('1 comment')).toBeVisible();
 
-  // A post item for the agency: Open in pipeline and Team approve.
+  // A post item for the agency: Open in pipeline and Agency approve.
   await plan.locator('[data-plan-tab="post"]').click();
   await plan.locator('[data-plan-row]').first().click();
   await expect(item).toBeVisible();
   await expect(item.getByText('Post 1 of 1')).toBeVisible();
   await expect(item.locator('[data-plan-pipeline]')).toBeVisible();
-  await expect(item.locator('[data-plan-approve]')).toHaveText('Team approve');
+  await expect(item.locator('[data-plan-approve]')).toHaveText('Agency approve');
   await expect(item.locator('[data-plan-ask]')).toHaveCount(0);
   await page.waitForTimeout(400);
   await shot(page, `${prefix}-10-item-post-agency`);
@@ -343,7 +355,9 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   const confirm = page.getByRole('dialog', { name: 'Approve' });
   await expect(confirm).toBeVisible();
   await expect(
-    confirm.getByText(`Approve "${PLAN_CONCEPT_TITLE}"? The team will go ahead`, { exact: false }),
+    confirm.getByText(`Approve "${PLAN_CONCEPT_TITLE}"? The agency will go ahead`, {
+      exact: false,
+    }),
   ).toBeVisible();
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-06-confirm-client-approve`);
@@ -383,14 +397,14 @@ async function teamAndHidden(page: Page, prefix: string): Promise<void> {
   await hidden.scrollIntoViewIfNeeded();
   await expect(hidden).toHaveText('Plan not available');
   const team = page.locator('[data-plan-chip="warn"]');
-  await expect(team).toHaveText('Team only');
+  await expect(team).toHaveText('Agency only');
   await team.scrollIntoViewIfNeeded();
   await page.waitForTimeout(400);
   await shot(page, `${prefix}-01-cards-team-and-hidden`);
 
-  // An agency-only group: a Team only plan offers "Add drafts".
+  // An agency-only group: an Agency only plan offers "Add drafts".
   await openTray(page);
-  await page.locator('[data-tray-tile="plan"]').click();
+  await newPlanFromTile(page);
   const compose = page_(page, 'compose');
   await expect(compose).toBeVisible();
   await compose.locator('[data-plan-audience="team"]').click();
@@ -400,17 +414,17 @@ async function teamAndHidden(page: Page, prefix: string): Promise<void> {
   await page.goBack();
   await expect(compose).toBeHidden();
 
-  // A Team only plan into a chat with a client: refused inline, screen stays open.
+  // An Agency only plan into a chat with a client: refused inline, screen stays open.
   await openChat(page, PEER_NAME);
   await openTray(page);
-  await page.locator('[data-tray-tile="plan"]').click();
+  await newPlanFromTile(page);
   await expect(compose).toBeVisible();
   await compose.locator('[data-plan-title]').fill('Internal week');
   await expect(compose.locator('[data-plan-share]')).toBeEnabled();
   await compose.locator('[data-plan-audience="team"]').click();
-  // Team only in a chat with a client: Share is off and says why; nothing is written.
+  // Agency only in a chat with a client: Share is off and says why; nothing is written.
   await expect(compose.locator('[data-plan-team-blocked]')).toHaveText(
-    "Team only plans can't be shared in chats with clients.",
+    "Agency only plans can't be sent in chats with clients.",
   );
   await expect(compose.locator('[data-plan-share]')).toBeDisabled();
   const plansBefore = (network.world.tables.plans ?? []).length;

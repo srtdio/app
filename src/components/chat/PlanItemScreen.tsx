@@ -1,11 +1,11 @@
 // One plan item, full page over the Plan screen (its own history step): the
 // kind and place ("Concept 1 of 3"), the media (a concept's library files, or
 // the post's own card), title and description, a status box (Pipeline for a
-// post, Team for the agency side, Client), the viewer's actions, and the
-// comments with a composer. The agency marks team approval (confirmed) or asks
+// post, Agency for the agency side, Client), the viewer's actions, and the
+// comments with a composer. The agency marks agency approval (confirmed) or asks
 // changes; a client approves or asks changes on a concept; on a post a client
 // only opens the post (its sheet approves, unchanged). Comments: the agency
-// sees all and picks Everyone or Team only; a client sees Everyone ones (RLS).
+// sees all and picks Everyone or Agency only; a client sees Everyone ones (RLS).
 // A comment appends at once and keeps its text on failure. One read per table
 // per open, bounded at 5s; the body paints once it settles. Tokens only.
 
@@ -99,7 +99,7 @@ export function itemActions(
     return {
       kind: 'review',
       side: 'team',
-      approveLabel: 'Team approve',
+      approveLabel: 'Agency approve',
       openInPipeline: item.kind === 'post',
     };
   }
@@ -114,7 +114,7 @@ export function itemActions(
 
 /**
  * The action buttons in order: the agency on a post item gets "Open in
- * pipeline" and "Team approve" only (changes are asked in Pipeline). Pure.
+ * pipeline" and "Agency approve" only (changes are asked in Pipeline). Pure.
  */
 export function actionLabels(actions: ItemActions): string[] {
   if (actions.kind === 'open-post') return ['Open post'];
@@ -122,7 +122,10 @@ export function actionLabels(actions: ItemActions): string[] {
   return [actions.openInPipeline ? 'Open in pipeline' : 'Ask changes', actions.approveLabel];
 }
 
-/** The status box rows: Pipeline (post), Team (agency), Client. Pure. */
+/** The agency's status row label (the review side stays 'team'). */
+export const AGENCY_ROW = 'Agency';
+
+/** The status box rows: Pipeline (post), Agency, Client. Pure. */
 export function statusRows(
   bundle: PlanBundle,
   item: PlanItemRow,
@@ -141,7 +144,7 @@ export function statusRows(
     s === 'approved' ? 'good' : s === 'changes' ? 'review' : 'neutral';
   if (side === 'agency') {
     const team = overrides.team ?? reviewStatus(bundle, item.id, 'team');
-    rows.push({ label: 'Team', value: STATUS_LABELS[team], tone: tone(team) });
+    rows.push({ label: AGENCY_ROW, value: STATUS_LABELS[team], tone: tone(team) });
   }
   const client =
     item.kind === 'concept' && overrides.client !== undefined
@@ -160,7 +163,7 @@ export function canEditConcept(side: ViewerSide, item: Pick<PlanItemRow, 'kind'>
 }
 
 /** The muted line above Save when an edit would reset a review. */
-export const CONCEPT_EDIT_RESET_HINT = 'Saving sends this back to waiting for team and client.';
+export const CONCEPT_EDIT_RESET_HINT = 'Saving sends this back to waiting for agency and client.';
 
 /** Toasts after an Edit concept save. */
 export const CONCEPT_UPDATED = 'Concept updated';
@@ -503,7 +506,7 @@ export function PlanItemScreen(props: {
                 aria-label="Comment"
                 autoComplete="off"
                 maxLength={5000}
-                placeholder={teamNote ? 'Note for the team only' : 'Comment for everyone'}
+                placeholder={teamNote ? 'Note for the agency only' : 'Comment for everyone'}
                 className={cn(
                   'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                   teamNote ? 'border-warn' : 'border-border',
@@ -578,7 +581,7 @@ export function PlanItemScreen(props: {
                   pill={{
                     label: row.value,
                     tone: row.tone,
-                    side: row.label === 'Team' ? 'team' : 'client',
+                    side: row.label === AGENCY_ROW ? 'team' : 'client',
                   }}
                 />
               </div>
@@ -664,7 +667,9 @@ export function PlanItemScreen(props: {
       </PlanPage>
       <PlanConfirmSheet
         open={confirmOpen}
-        title={actions.kind === 'review' && actions.side === 'client' ? 'Approve' : 'Team approve'}
+        title={
+          actions.kind === 'review' && actions.side === 'client' ? 'Approve' : 'Agency approve'
+        }
         message={
           actions.kind === 'review' && actions.side === 'client'
             ? clientApproveConfirm(title)

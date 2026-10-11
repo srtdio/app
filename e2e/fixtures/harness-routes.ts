@@ -183,14 +183,38 @@ const PLAN_RPC: Record<string, RpcHandler> = {
   plan_share_with_client: (args, tables) => {
     const plan = (tables.plans ?? []).find((p) => p.id === args.p_plan_id);
     if (plan === undefined) throw new HarnessRpcError('plan not available');
-    const drafts = planItemsOf(tables, plan.id).some(
-      (i) => (tables.posts ?? []).find((post) => post.id === i.post_id)?.stage === 'draft',
-    );
-    if (drafts) throw new HarnessRpcError('plan_has_drafts');
+    // Agency side only; drafts never block it; one-way and idempotent.
+    if (roleOf(tables, ME) === 'client') throw new HarnessRpcError('forbidden_role');
+    if (plan.audience === 'client') return null;
     plan.audience = 'client';
     plan.shared_with_client_at = new Date().toISOString();
     plan.shared_with_client_by = ME;
     return null;
+  },
+  // The draft post items of up to 100 plans the caller may see by name: a
+  // client gets them on client plans only. Items a client cannot read from
+  // plan_items sit in hidden_plan_items (the fixture's stand-in for RLS).
+  plan_draft_rows: (args, tables) => {
+    const ids = new Set(Array.isArray(args.p_plan_ids) ? args.p_plan_ids.map(String) : []);
+    const client = roleOf(tables, ME) === 'client';
+    const items = [...(tables.plan_items ?? []), ...(tables.hidden_plan_items ?? [])];
+    return items.flatMap((i) => {
+      if (i.kind !== 'post' || i.deleted_at !== null || !ids.has(String(i.plan_id))) return [];
+      const plan = (tables.plans ?? []).find((p) => p.id === i.plan_id && p.deleted_at === null);
+      if (plan === undefined || (client && plan.audience !== 'client')) return [];
+      const post = (tables.posts ?? []).find((p) => p.id === i.post_id);
+      if (post === undefined || post.stage !== 'draft') return [];
+      return [
+        {
+          plan_id: i.plan_id,
+          item_id: i.id,
+          item_position: i.position,
+          post_number: post.number,
+          title: post.title,
+          target_date: post.target_date === null ? null : String(post.target_date).slice(0, 10),
+        },
+      ];
+    });
   },
   plan_delete: (args, tables) => {
     const plan = (tables.plans ?? []).find((p) => p.id === args.p_plan_id);

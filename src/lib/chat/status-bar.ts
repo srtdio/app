@@ -323,7 +323,7 @@ export function planSegment(
 export const SEGMENT_PILL: Record<PlanSegment, string> = {
   client: 'Client approved',
   changes: 'Changes asked',
-  team: 'Team approved',
+  team: 'Agency approved',
   waiting: 'Waiting',
 };
 

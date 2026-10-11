@@ -103,13 +103,13 @@ describe('plan progress', () => {
 });
 
 describe('plan chips and forward', () => {
-  it('counts concepts and posts; "Team only" only on a team plan', () => {
+  it('counts concepts and posts; "Agency only" only on a team plan', () => {
     expect(planChips(MIXED).map((c) => c.label)).toEqual(['3 concepts', '2 posts']);
     const team = { ...MIXED, plan: { ...MIXED.plan, audience: 'team' as const } };
     expect(planChips(team)).toEqual([
       { label: '3 concepts', tone: 'neutral' },
       { label: '2 posts', tone: 'neutral' },
-      { label: 'Team only', tone: 'warn' },
+      { label: 'Agency only', tone: 'warn' },
     ]);
     expect(planChips(bundle([item({ id: 'x' })])).map((c) => c.label)).toEqual([
       '1 concept',
@@ -117,19 +117,30 @@ describe('plan chips and forward', () => {
     ]);
   });
 
-  it('Forward only for a client viewer on a client plan', () => {
-    expect(canForwardPlan('client', 'client')).toBe(true);
-    expect(canForwardPlan('client', 'team')).toBe(false);
-    expect(canForwardPlan('agency', 'client')).toBe(false);
-    expect(canForwardPlan('unknown', 'client')).toBe(false);
+  it('Forward: the agency on every plan, a client on a client plan only', () => {
+    const matrix = (['agency', 'client', 'unknown'] as const).flatMap((side) =>
+      (['client', 'team'] as const).map((audience) => [
+        side,
+        audience,
+        canForwardPlan(side, audience),
+      ]),
+    );
+    expect(matrix).toEqual([
+      ['agency', 'client', true],
+      ['agency', 'team', true],
+      ['client', 'client', true],
+      ['client', 'team', false],
+      ['unknown', 'client', false],
+      ['unknown', 'team', false],
+    ]);
   });
 });
 
 describe('rows and labels', () => {
-  it('agency sees Team and Client pills; a client sees one pill with no side prefix', () => {
+  it('agency sees Agency and Client pills; a client sees one pill with no side prefix', () => {
     const c1 = MIXED.items[0] as PlanItemRow;
     expect(itemPills(MIXED, c1, 'agency').map((p) => p.label)).toEqual([
-      'Team · Waiting',
+      'Agency · Waiting',
       'Client · Approved',
     ]);
     expect(itemPills(MIXED, c1, 'client').map((p) => p.label)).toEqual(['Approved']);
@@ -154,7 +165,7 @@ describe('rows and labels', () => {
     expect(planSharedLine('agency', 'Manisha Thakur')).toBe('Shared with Manisha Thakur');
     expect(planSharedLine('client', 'Chitra')).toBe('Shared by Chitra');
     expect(clientApproveConfirm('Reel')).toBe(
-      'Approve "Reel"? The team will go ahead and make this into a post.',
+      'Approve "Reel"? The agency will go ahead and make this into a post.',
     );
   });
 });
@@ -236,14 +247,14 @@ describe('both progress counts (D1)', () => {
     );
     const p = planProgress(b);
     expect(p).toEqual({ approved: 2, teamApproved: 3, total: 4, changes: 0 });
-    expect(progressLabel(p, 'agency')).toBe('Team 3 of 4 · Client 2 of 4');
+    expect(progressLabel(p, 'agency')).toBe('Agency 3 of 4 · Client 2 of 4');
     expect(progressPercent(p)).toBe(50);
   });
 
   it('a missing review row reads as waiting on both sides', () => {
     const b = bundle([item({ id: 'a' }), item({ id: 'b' })]);
     expect(planProgress(b)).toEqual({ approved: 0, teamApproved: 0, total: 2, changes: 0 });
-    expect(progressLabel(planProgress(b), 'agency')).toBe('Team 0 of 2 · Client 0 of 2');
+    expect(progressLabel(planProgress(b), 'agency')).toBe('Agency 0 of 2 · Client 0 of 2');
   });
 
   it('an unreadable post counts in N and is never client approved', () => {
@@ -257,7 +268,7 @@ describe('both progress counts (D1)', () => {
 
   it('the changes part follows the counts on the agency side when K > 0', () => {
     expect(progressLabel(planProgress(MIXED), 'agency')).toBe(
-      'Team 1 of 5 · Client 2 of 5 · 1 change asked',
+      'Agency 1 of 5 · Client 2 of 5 · 1 change asked',
     );
   });
 
@@ -265,7 +276,7 @@ describe('both progress counts (D1)', () => {
     for (const side of ['client', 'unknown'] as const) {
       const label = progressLabel(planProgress(MIXED), side);
       expect(label).toBe('2 of 5 approved by client · 1 change asked');
-      expect(label).not.toContain('Team');
+      expect(label).not.toContain('Agency');
     }
   });
 
