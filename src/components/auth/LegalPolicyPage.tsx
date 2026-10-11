@@ -171,7 +171,10 @@ function TermsAndConditionsContent() {
         <h2 className="mb-2 text-base font-semibold text-fg">2. Account responsibilities</h2>
         <ul className="list-disc space-y-1 pl-6">
           <li>You are responsible for the accuracy of the information you provide.</li>
-          <li>You must keep your login credentials secure and notify us immediately of misuse. One person per login. Do note share credentials.</li>
+          <li>
+            You must keep your login credentials secure and notify us immediately of misuse. One
+            person per login. Do not share credentials.
+          </li>
           <li>You are responsible for all activity that occurs under your account.</li>
         </ul>
       </section>
@@ -264,11 +267,7 @@ export function LegalPolicyPage() {
         </Link>
       }
     >
-      {policy === 'privacy-policy' ? (
-        <PrivacyPolicyContent />
-      ) : (
-        <TermsAndConditionsContent />
-      )}
+      {policy === 'privacy-policy' ? <PrivacyPolicyContent /> : <TermsAndConditionsContent />}
     </AuthShell>
   );
 }
