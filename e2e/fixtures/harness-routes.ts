@@ -408,6 +408,21 @@ const RPC: Record<string, RpcHandler> = {
     });
   },
   chat_read_cursor_set: () => null,
+  // Mark stamps: resolve / reopen the fixture mark row (the proc returns void).
+  chat_mark_resolve: (args, tables) => {
+    const row = (tables.chat_message_marks ?? []).find((m) => m.message_id === args.p_message_id);
+    if (row === undefined) throw new HarnessRpcError('mark not found');
+    row.resolved_by = ME;
+    row.resolved_at = new Date().toISOString();
+    return null;
+  },
+  chat_mark_reopen: (args, tables) => {
+    const row = (tables.chat_message_marks ?? []).find((m) => m.message_id === args.p_message_id);
+    if (row === undefined) throw new HarnessRpcError('mark not found');
+    row.resolved_by = null;
+    row.resolved_at = null;
+    return null;
+  },
   inbox_mark_read: () => null,
   // Bell read state: snooze one entry, or mark every unread entry of the types read.
   inbox_snooze: (args, tables) => {
@@ -689,6 +704,10 @@ export interface HarnessNetwork {
   uploads: string[];
   /** Gate asset uploads until release() so a test can see them in flight. */
   holdUploads: () => { release: () => void };
+  /** Every RPC the page called, in order, with its JSON args. */
+  rpcCalls: Array<{ name: string; args: Record<string, unknown> }>;
+  /** RPC names the fixture refuses (400, the proc raised) until removed. */
+  refuseRpc: Set<string>;
 }
 
 export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork> {
@@ -698,6 +717,8 @@ export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork>
   let historyGate: Promise<void> | null = null;
   const uploads: string[] = [];
   let uploadGate: Promise<void> | null = null;
+  const rpcCalls: HarnessNetwork['rpcCalls'] = [];
+  const refuseRpc = new Set<string>();
 
   await page.addInitScript((session) => {
     window.localStorage.setItem('sb-harness-auth-token', session);
@@ -720,7 +741,8 @@ export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork>
         const handler = RPC[name];
         if (!handler) unmatched.push(`rpc ${name}`);
         const args = (request.postDataJSON() ?? {}) as Record<string, unknown>;
-        if (refusedSend(name, args)) {
+        rpcCalls.push({ name, args });
+        if (refusedSend(name, args) || refuseRpc.has(name)) {
           await route.fulfill({
             status: 400,
             headers: { ...CORS, 'content-type': 'application/json' },
@@ -894,6 +916,8 @@ export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork>
       });
       return { release };
     },
+    rpcCalls,
+    refuseRpc,
   };
 }
 
