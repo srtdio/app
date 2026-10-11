@@ -912,11 +912,13 @@ export function useChatThread(params: {
     let cancelled = false;
     const abort = new AbortController();
     // This thread owns the chat's remembered page while it shows the chat.
-    const owner = memoryKey !== null ? memory.attach(memoryKey) : null;
+    let owner = memoryKey !== null ? memory.attach(memoryKey) : null;
     const remembered = memoryKey !== null ? memory.recall(memoryKey, 'thread') : undefined;
     // Rows on screen came from this effect (a page or the memory): only then
     // is the page left behind on leaving.
     let shown = false;
+    // Remembered rows whose quotes and roots are not resolved yet.
+    const pendingResolve = new Set<string>();
     const applyPage = (page: HistoryPage): void => {
       const fetched = page.rows.map((row) => rowToThreadMessage(row, currentUserId));
       foldRows(fetched, channelId);
@@ -971,21 +973,29 @@ export function useChatThread(params: {
       seededRef.current = undefined;
       contiguity.catchUpApplied(epoch, page.through);
       shown = true;
-      const unresolved = new Set(page.unresolved);
-      if (unresolved.size > 0) {
+      for (const id of page.unresolved) pendingResolve.add(id);
+      if (pendingResolve.size > 0) {
         void resolveReplies(
-          page.rows.filter((m) => unresolved.has(m.id)),
+          page.rows.filter((m) => pendingResolve.has(m.id)),
           channelId,
-        );
+        ).then(() => {
+          if (!cancelled) pendingResolve.clear();
+        });
       }
       if (peerUserId !== null) void attachPeerCursor(channelId, peerUserId);
       const reactionsFrom = reactionTouchesRef.current.seq;
       void revalidateRemembered(
         {
           loadNewer: (cursor, signal) => loadNewerMessages(db, channelId, cursor, signal),
-          loadLatest: (signal) => readLatestMessages(db, channelId, signal),
+          // Bounded at 5s like every catch-up read.
+          loadLatest: () => loadLatestMessages(db, channelId),
           loadByIds: (ids, signal) => loadMessagesByIds(db, ids, signal),
-          loadReactions: (ids, signal) => loadReactions(db, ids, currentUserId, signal),
+          // The catch-up's batched reactions re-read (chunks of 100, 5s each).
+          loadReactions: (ids) =>
+            rereadReactions(
+              (chunk, signal) => loadReactions(db, chunk, currentUserId, signal),
+              ids,
+            ),
         },
         page,
         abort.signal,
@@ -993,7 +1003,13 @@ export function useChatThread(params: {
         if (cancelled || contiguity.epoch() !== epoch) return;
         if (read.kind === 'gap') {
           // Too much happened while away: today's fresh open, never a gap.
-          if (memoryKey !== null) memory.forget(memoryKey, 'thread');
+          // The fresh page this open loads is what it leaves behind (a new owner:
+          // the forget voided the old one's write-back).
+          if (memoryKey !== null) {
+            memory.forget(memoryKey, 'thread');
+            owner?.release();
+            owner = memory.attach(memoryKey);
+          }
           shown = false;
           openFresh();
           return;
@@ -1055,7 +1071,8 @@ export function useChatThread(params: {
           hasMore: window.hasMore,
           through: contiguity.through(),
           reads: readsLeft,
-          unresolved: [],
+          // Quotes and roots still resolving are resolved on the next reopen.
+          unresolved: [...pendingResolve].filter((id) => window.rows.some((m) => m.id === id)),
         });
       }
       owner.release();

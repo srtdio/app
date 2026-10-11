@@ -40,7 +40,7 @@ import { runClearChannels, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { workspaceTimeZone } from '@/lib/chat/time-format';
 import { useChatThread } from '@/lib/chat/use-chat-thread';
 import { useChatMarks } from '@/lib/chat/use-chat-marks';
-import { chatKey, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
+import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
 import { prefetchLatestMessages } from '@/lib/chat/history';
 import { loadChannelMarks } from '@/lib/chat/marks';
 import { fetchOpenPosts } from '@/lib/chat/use-open-posts';
@@ -956,6 +956,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   }, [refreshChannels]);
 
   const onGroupLeft = useCallback(() => {
+    // A chat left is forgotten now, so the page this thread leaves is never kept.
+    forgetRememberedThread(
+      chatKey(currentUserIdRef.current, workspaceIdRef.current, selectedRef.current?.channelId),
+    );
     setGroupInfoOpen(false);
     closeChannel();
     void refreshChannels(null);
@@ -1062,6 +1066,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     const step = openChannelAfterRoster(selectedRef.current, chatRoster, reloaded);
     if (step.kind === 'update') setSelected(step.channel);
     else if (step.kind === 'close') {
+      // Removed or gone: forgotten before the thread leaves, so it keeps nothing.
+      forgetRememberedThread(
+        chatKey(currentUserIdRef.current, workspaceIdRef.current, selectedRef.current?.channelId),
+      );
       setGroupInfoOpen(false);
       closeChannel();
     }
@@ -1369,8 +1377,15 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     const key = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
     void withReadTimeout((signal) => readScheduledMessages(supabase, { channelId, signal })).then(
       (result) => {
-        if (key !== null && result.ok) openCache.remember(key, 'scheduled', result.data);
         if (!mountedRef.current || seq !== scheduledSeq.current) return;
+        // Remembered only for the user and workspace still open (a late answer
+        // never re-scopes the memory).
+        const current = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
+        if (key !== null && current !== null && result.ok && current.userId === key.userId) {
+          if (current.workspaceId === key.workspaceId) {
+            openCache.remember(key, 'scheduled', result.data);
+          }
+        }
         if (!result.ok) {
           logger.warn('chat: scheduled read failed', {
             channel_id: channelId,

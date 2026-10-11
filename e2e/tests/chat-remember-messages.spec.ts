@@ -335,7 +335,9 @@ async function runLiveWhileClosed(page: Page): Promise<void> {
   // The record answers slowly now: what the first frame shows came from memory.
   delays.setDelay((name) => (name === 'chat_messages' || name === 'chat_reactions' ? 2_500 : 300));
   const tap = await tapChat(page, PEER_NAME);
-  await page.locator(`[data-msg-id="${changed.sent}"]`).waitFor({ timeout: 1_000 });
+  // The record answers in 2.5s: rows on screen before then came from memory,
+  // and the first frame (below) must already hold them.
+  await page.locator(`[data-msg-id="${changed.sent}"]`).waitFor({ timeout: 2_000 });
   const atFirst = framesSince(await logOf(page), tap);
   const first = atFirst.find((f) => f.count > 0);
   expect(first?.last, show(atFirst)).toBe(changed.sent);

@@ -1521,9 +1521,6 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     if (store.selectLoadStatus(stateRef.current, scope) !== 'ready') return;
     reloaderRef.current?.request();
   };
-  // A delete signal for any chat, open or not, strips its drafts, queued quotes
-  // and list line once its rows read back deleted (the open thread also turns
-  // the rows into tombstones itself).
   // Reaction, read, delete and edit signals for a remembered chat no thread shows.
   const onRememberedCmdRef = useRef<(message: AgoraChat.CmdMsgBody) => void>(() => {});
   onRememberedCmdRef.current = (message) => {
@@ -1534,6 +1531,9 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       fromUserId: from !== null && from.ok ? from.userId : undefined,
     });
   };
+  // A delete signal for any chat, open or not, strips its drafts, queued quotes
+  // and list line once its rows read back deleted (the open thread also turns
+  // the rows into tombstones itself).
   useEffect(
     () =>
       subscribeGlobalCmds((message) => {
