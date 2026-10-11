@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   DATED_PLAN_ID,
@@ -79,8 +80,7 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   const edit = item.locator('[data-plan-edit-concept]');
   await expect(edit).toHaveText('Edit');
   const box = await edit.boundingBox();
-  expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expectMinTouchTarget(box);
   await expect(item.locator('[data-plan-pill="team"]')).toHaveText(/Approved/);
   await page.waitForTimeout(300);
   await shot(page, 'edit-01-item-approved');

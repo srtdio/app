@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { DM_CHANNEL, ME, MENTION_PREVIEW, PEER_NAME, WORKSPACE_ID } from '../fixtures/chat-data';
 
@@ -64,8 +65,7 @@ test('bell: between Select and +, chat mention in Now, Activity shows no chat me
   });
   expect(order).toBe(true);
   const size = await bell.boundingBox();
-  expect(size?.width).toBeGreaterThanOrEqual(44);
-  expect(size?.height).toBeGreaterThanOrEqual(44);
+  expectMinTouchTarget(size);
   await expect(page.locator('[data-bell-badge]')).toHaveText('1');
   await shot(page, 'bell-2-home');
 

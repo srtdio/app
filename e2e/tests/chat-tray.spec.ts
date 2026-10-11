@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { DM_CHANNEL, GROUP_NAME, PEER_NAME, WORKSPACE_ID, ME } from '../fixtures/chat-data';
 
@@ -109,8 +110,7 @@ async function trayAndPickers(page: Page, prefix: string): Promise<void> {
   for (const box of await page
     .locator('[data-tray-tile]')
     .evaluateAll((els) => els.map((e) => e.getBoundingClientRect()))) {
-    expect(box.width).toBeGreaterThanOrEqual(44);
-    expect(box.height).toBeGreaterThanOrEqual(44);
+    expectMinTouchTarget(box);
   }
   await expect(page.locator('[data-tray-tile="plan"]')).toBeEnabled();
   await shot(page, `${prefix}-1-tray-client-dm`);

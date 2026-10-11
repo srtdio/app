@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { MAYA_NAME, REFUSED_SEND, THREAD_GROUP_NAME, THREAD_IDS } from '../fixtures/chat-data';
 
@@ -83,7 +84,7 @@ test('DM: runs, chips, the left root card and the deleted root', async ({ page }
   const replies = page.locator('[data-thread-open="replies"]', { hasText: '4 replies' });
   await expect(replies).toHaveCount(1);
   await expect(replies).toHaveCSS('font-size', '13px');
-  expect((await replies.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expectMinTouchTarget(await replies.boundingBox(), { dimension: 'height' });
   await snap(page, info, 'r1b', 'dm-i1-own-root');
 
   // A plain row breaks the run; the next member starts a chip-headed run.
@@ -99,7 +100,7 @@ test('DM: runs, chips, the left root card and the deleted root', async ({ page }
   // i3: the root is beyond the first page; the chip names it with the record's count.
   const chip = page.locator('[data-thread-chip]', { hasText: 'Product teaser' });
   await expect(chip).toContainText('· 4 replies');
-  expect((await chip.locator('button').boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expectMinTouchTarget(await chip.locator('button').boundingBox(), { dimension: 'height' });
   await snap(page, info, 'i3b', 'dm-i3-chip');
 
   // A deleted root card: its reply falls back to the plain quote, no rail.
@@ -123,7 +124,7 @@ test('DM: the thread view opens, sends "Reply in thread", and shows a refused re
   await expect(view.locator('[data-thread-view-title]')).toContainText('Monday carousel');
   await expect(view.locator('[data-thread-separator]')).toHaveText('4 replies');
   const close = view.locator('[data-thread-view-close]');
-  expect((await close.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expectMinTouchTarget(await close.boundingBox(), { dimension: 'height' });
   await expect(view).toHaveCSS('opacity', '1');
   const input = view.getByPlaceholder('Reply in thread');
   await expect(input).toBeVisible();
