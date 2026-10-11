@@ -420,10 +420,19 @@ async function runScrolledUp(page: Page): Promise<void> {
   delays.setDelay((name) => (name === 'chat_messages' ? 2_000 : 250));
   await tapChat(page, PEER_NAME);
   await page.locator('[data-msg-id]').first().waitFor();
-  const scroller = page.locator('[data-thread-viewport] > ul');
-  await scroller.hover();
-  await page.mouse.wheel(0, -900);
-  await page.waitForTimeout(300);
+  // Scroll up as a reader's finger would (mobile WebKit has no wheel): a touch
+  // on the list, the list moves, the touch ends; the thread lets go of the bottom.
+  await page.evaluate(() => {
+    const list = document.querySelector('[data-thread-viewport] > ul');
+    if (list === null) return;
+    list.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true }));
+    list.scrollTop = Math.max(0, list.scrollTop - 900);
+  });
+  await page.waitForTimeout(100);
+  await page.evaluate(() => {
+    window.dispatchEvent(new TouchEvent('touchend', { bubbles: true }));
+  });
+  await page.waitForTimeout(500);
   const anchorId = await page.evaluate(() => {
     const list = document.querySelector('[data-thread-viewport] > ul');
     const box = list?.getBoundingClientRect();
