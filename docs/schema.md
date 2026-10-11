@@ -299,7 +299,7 @@ Applied 9 Oct 2026 (step 3b plan comments), restated in migration 20261009205500
 
 ### Plan procs
 
-All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_trace_id and writes one audit_log row named after the proc on success (except the read-only plan_draft_items). Owner/admin/agency only unless noted (forbidden_role otherwise).
+All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_trace_id and writes one audit_log row named after the proc on success (except the read-only plan_draft_rows). Owner/admin/agency only unless noted (forbidden_role otherwise).
 
 - is_agency_side_member(p_workspace_id): true when the caller is an active owner, admin or agency member.
 - plan_create(p_workspace_id, p_title, p_starts_on, p_ends_on, p_audience, p_trace_id) returns uuid: create a plan; a client plan is shared at once.
@@ -313,7 +313,8 @@ All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_tra
 - plan_items_reorder(p_plan_id, p_item_ids, p_trace_id): set positions from the full, exact list of live item ids.
 - plan_item_review(p_item_id, p_side, p_status, p_trace_id): upsert a review; team side for owner/admin/agency, client side for an active client on a client plan's concepts only (use_stage_transition on a post item). A status other than waiting writes plan_review inbox rows via _plan_item_notify (team side to owner/admin/agency only).
 - plan_item_comment_create(p_item_id, p_body, p_visibility, p_trace_id) returns uuid: any active member; a client only on a client plan and only 'everyone' (forbidden_role otherwise); invalid_payload for a missing item, a bad visibility or an empty or over-5000 body; writes plan_comment inbox rows via _plan_item_notify ('team' to owner/admin/agency only).
-- plan_draft_items(p_plan_id) returns table(item_id, item_position, post_number, title, target_date): read-only helper, STABLE, no p_trace_id, no audit; EXECUTE to authenticated only (not anon). Lists the plan's live post items whose post is stage 'draft' (not deleted). Empty when the plan is missing or deleted, the caller is not an active workspace member, or the plan is 'team' and the caller is not agency-side; so a client sees draft rows in a client plan without posts SELECT on the draft.
+- plan_draft_rows(p_plan_ids) returns table(plan_id, item_id, item_position, post_number, title, target_date): batched read-only helper, STABLE, no p_trace_id, no audit; EXECUTE to authenticated only (not anon). Lists the live post items whose post is stage 'draft' (not deleted) across the given plans. Empty or null list returns nothing; more than 100 ids is invalid_payload. Per plan: not deleted, the caller is an active member of its workspace, and the plan is 'client' or the caller is agency-side; unknown or invisible ids return nothing. So a client sees draft rows in a client plan without posts SELECT on the draft.
+- plan_draft_items(p_plan_id): retired 11 Oct, no EXECUTE for anyone, drop pending.
 - Internal, no EXECUTE for authenticated: _plan_check_versions (same-workspace, library, not deleted; 'attachment not available' for chat-origin or deleted files), _plan_attach_versions, and _plan_item_notify(p_item_id, p_event_type, p_team_only, p_payload) (one inbox row per other active member: owner/admin/agency always, clients too when not team-only on a client plan; payload gains plan_id).
 
 ## 5. Assets

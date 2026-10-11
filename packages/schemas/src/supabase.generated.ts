@@ -9127,6 +9127,17 @@ export type Database = {
           title: string
         }[]
       }
+      plan_draft_rows: {
+        Args: { p_plan_ids: string[] }
+        Returns: {
+          item_id: string
+          item_position: number
+          plan_id: string
+          post_number: number
+          target_date: string
+          title: string
+        }[]
+      }
       plan_item_comment_create: {
         Args: {
           p_body: string

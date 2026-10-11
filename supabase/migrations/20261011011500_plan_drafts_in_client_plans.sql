@@ -10,7 +10,15 @@
 --     when the plan is missing or deleted, the caller is not an active member,
 --     or the plan is 'team' and the caller is not agency-side. Lets a client
 --     see draft rows in a client plan without posts SELECT on the draft.
--- Privileges mirror live: EXECUTE to authenticated only. No DROP.
+--     Retired the same day in favour of the batched plan_draft_rows: no
+--     EXECUTE for anyone (owner only); the drop is pending a later cleanup.
+--   plan_draft_rows (new): batched read-only helper; the same draft rows
+--     plus plan_id for up to 100 plan ids. Empty or null list returns
+--     nothing; more than 100 ids is invalid_payload. Per plan: not deleted,
+--     caller an active member of its workspace, and the plan is 'client' or
+--     the caller is agency-side. Unknown or invisible ids return nothing.
+-- Privileges mirror live: plan_draft_rows EXECUTE to authenticated only;
+-- plan_draft_items owner-only. No DROP.
 
 CREATE OR REPLACE FUNCTION public.plan_share_with_client(p_plan_id uuid, p_trace_id uuid)
  RETURNS void
@@ -77,5 +85,27 @@ begin
        and p.deleted_at is null and p.stage = 'draft';
 end $function$;
 
+-- Retired 11 Oct 2026 (superseded by plan_draft_rows); drop pending.
 REVOKE ALL ON FUNCTION public.plan_draft_items(uuid) FROM PUBLIC, anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.plan_draft_items(uuid) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.plan_draft_rows(p_plan_ids uuid[])
+ RETURNS TABLE(plan_id uuid, item_id uuid, item_position integer, post_number integer, title text, target_date timestamp with time zone)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+  if p_plan_ids is null or cardinality(p_plan_ids) = 0 then return; end if;
+  if cardinality(p_plan_ids) > 100 then raise exception 'invalid_payload'; end if;
+  return query
+    select i.plan_id, i.id, i.position, p.number, p.title, p.target_date
+      from public.plans pl
+      join public.plan_items i on i.plan_id = pl.id and i.deleted_at is null and i.kind = 'post'
+      join public.posts p on p.id = i.post_id and p.deleted_at is null and p.stage = 'draft'
+     where pl.id = any (p_plan_ids) and pl.deleted_at is null
+       and public.is_active_workspace_member(pl.workspace_id)
+       and (pl.audience = 'client' or public.is_agency_side_member(pl.workspace_id));
+end $function$;
+
+REVOKE ALL ON FUNCTION public.plan_draft_rows(uuid[]) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.plan_draft_rows(uuid[]) TO authenticated;
