@@ -19,6 +19,7 @@ import {
   readPlanBundles,
   readPlanScreen,
   runPlanShare,
+  sameReadValue,
   sortPlanItemsByDate,
   type PlanBundle,
   type PlanItemRow,
@@ -378,7 +379,9 @@ describe('createPlanCardCache', () => {
   it('refresh re-reads a known plan; a failed refresh keeps the card', async () => {
     let fail = false;
     let title = 'one';
+    let reads = 0;
     const cache = createPlanCardCache(async (ids) => {
+      reads += 1;
       if (fail) return err<Map<string, PlanBundle>>('down');
       return ok(
         new Map(ids.map((id) => [id, { ...bundle(id), plan: { ...bundle(id).plan, title } }])),
@@ -390,10 +393,89 @@ describe('createPlanCardCache', () => {
     cache.refresh(['a']);
     await vi.waitFor(() => expect(cache.snapshot(['a']).bundles.get('a')?.plan.title).toBe('two'));
     fail = true;
+    const shown = cache.snapshot(['a']).bundles.get('a');
     const v = cache.version();
     cache.refresh(['a']);
-    await vi.waitFor(() => expect(cache.version()).toBeGreaterThan(v));
-    expect(cache.snapshot(['a']).bundles.get('a')?.plan.title).toBe('two');
+    await vi.waitFor(() => expect(reads).toBe(3));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(cache.version()).toBe(v);
+    expect(cache.snapshot(['a']).loading).toBe(false);
+    expect(cache.snapshot(['a']).bundles.get('a')).toBe(shown);
+  });
+
+  it('a background re-read with identical data changes nothing and notifies nobody', async () => {
+    let reads = 0;
+    const cache = createPlanCardCache(async (ids) => {
+      reads += 1;
+      // A fresh read: new objects every time, same data.
+      return ok(new Map(ids.map((id) => [id, bundle(id)])));
+    });
+    cache.request(['a']);
+    await vi.waitFor(() => expect(cache.snapshot(['a']).loading).toBe(false));
+    const shown = cache.snapshot(['a']).bundles.get('a');
+    const v = cache.version();
+    const heard = vi.fn();
+    cache.subscribe(heard);
+    cache.refresh(['a']);
+    await vi.waitFor(() => expect(reads).toBe(2));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(heard).not.toHaveBeenCalled();
+    expect(cache.version()).toBe(v);
+    expect(cache.snapshot(['a']).bundles.get('a')).toBe(shown);
+    cache.dispose();
+  });
+
+  it('a background re-read with changed data updates in place, never through loading', async () => {
+    let posts = 5;
+    const read = (id: string): PlanBundle => {
+      const b = bundle(id);
+      const items = Array.from({ length: posts }, (_, n) => ({
+        id: `${id}-i${n}`,
+        plan_id: id,
+        kind: 'post' as const,
+        position: n,
+        title: null,
+        description: null,
+        post_id: null,
+        created_at: '2026-10-09T09:00:00Z',
+      }));
+      return { ...b, items };
+    };
+    const cache = createPlanCardCache(async (ids) => ok(new Map(ids.map((id) => [id, read(id)]))));
+    cache.request(['a']);
+    await vi.waitFor(() => expect(cache.snapshot(['a']).loading).toBe(false));
+    const seen: Array<{ loading: boolean; items: number | undefined }> = [];
+    cache.subscribe(() => {
+      const snap = cache.snapshot(['a']);
+      seen.push({ loading: snap.loading, items: snap.bundles.get('a')?.items.length });
+    });
+    posts = 6;
+    cache.refresh(['a']);
+    expect(cache.snapshot(['a']).loading).toBe(false);
+    await vi.waitFor(() => expect(cache.snapshot(['a']).bundles.get('a')?.items).toHaveLength(6));
+    expect(seen).toEqual([{ loading: false, items: 6 }]);
+    cache.dispose();
+  });
+
+  it('retry on an id that has not failed notifies nobody', () => {
+    const cache = createPlanCardCache(async () => ok(new Map()));
+    const heard = vi.fn();
+    cache.subscribe(heard);
+    cache.retry(['never-asked']);
+    expect(heard).not.toHaveBeenCalled();
+    cache.dispose();
+  });
+});
+
+describe('sameReadValue', () => {
+  it('compares plain read data structurally', () => {
+    expect(sameReadValue(bundle('a'), bundle('a'))).toBe(true);
+    expect(sameReadValue(bundle('a'), bundle('b'))).toBe(false);
+    expect(sameReadValue({ a: [1, 2] }, { a: [1, 2] })).toBe(true);
+    expect(sameReadValue({ a: [1, 2] }, { a: [2, 1] })).toBe(false);
+    expect(sameReadValue({ a: 1 }, { a: 1, b: undefined })).toBe(false);
+    expect(sameReadValue([], {})).toBe(false);
+    expect(sameReadValue(null, {})).toBe(false);
   });
 });
 

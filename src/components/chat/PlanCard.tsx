@@ -9,8 +9,10 @@
 // comes back in one batch, never one read per bubble. A plan the viewer cannot
 // read (RLS) renders the neutral "not visible" box with "Plan not available";
 // a read that failed keeps the skeleton and is re-read, then shows "Couldn't
-// load" with a tap to retry. The card waits for the viewer's side before its
-// first paint, so the footer never flips. Tokens only (light and dark parity).
+// load" with a tap to retry. The card waits for the viewer's side and its whole
+// bundle (plan, items, reviews, post stages, draft rows) before its first
+// paint, at the skeleton's exact height, so it paints once and the footer never
+// flips. Tokens only (light and dark parity).
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement } from 'react';
@@ -63,13 +65,18 @@ import { chatPlanShare } from '@srtdio/rpc';
 /** What one card shows. */
 export type PlanCardView = { kind: 'plan'; bundle: PlanBundle } | { kind: 'unavailable' };
 
-/** The plan card frame (same width as the prototype's card, tokens only). */
+/**
+ * The plan card frame (same width as the prototype's card, tokens only). Its
+ * height is fixed and every line inside is one line (explicit line heights,
+ * truncated text, chips that never wrap), so the card is always exactly the
+ * skeleton's height: the swap from skeleton to card never moves the thread.
+ */
 export const PLAN_CARD =
-  'flex w-[284px] max-w-full flex-col overflow-hidden rounded-lg border border-border bg-panel text-left';
+  'flex h-[217px] w-[284px] max-w-full flex-col overflow-hidden rounded-lg border border-border bg-panel text-left';
 
-/** A loading plan card: the height of a card with one title line. */
+/** A loading plan card: exactly the card's height. */
 export const PLAN_CARD_SKELETON =
-  'h-[214px] w-[284px] max-w-full rounded-lg border border-border bg-panel-2';
+  'h-[217px] w-[284px] max-w-full rounded-lg border border-border bg-panel-2';
 
 const NO_SUBSCRIBE = (): (() => void) => () => {};
 const NO_VERSION = (): number => 0;
@@ -179,24 +186,24 @@ export function PlanCardBody(props: {
   const forward = canForwardPlan(props.side, bundle.plan.audience);
   return (
     <div data-plan-card={bundle.plan.id} className={PLAN_CARD}>
-      <div className="flex flex-col gap-2 px-3.5 pb-2.5 pt-3">
-        <span className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-accent">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 px-3.5 pb-2.5 pt-3">
+        <span className="flex h-4 items-center gap-1.5 text-xs font-semibold leading-4 tracking-wide text-accent">
           <IconPlan size={16} />
           {PLAN_EYEBROW}
         </span>
-        <span className="text-[17px] font-semibold leading-[22px] text-fg">
+        <span className="truncate text-[17px] font-semibold leading-[22px] text-fg">
           {bundle.plan.title}
         </span>
-        <span data-plan-range="" className="font-mono text-[13px] text-fg-3">
+        <span data-plan-range="" className="truncate font-mono text-[13px] leading-5 text-fg-3">
           {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
         </span>
-        <span className="flex flex-wrap gap-1.5">
+        <span className="flex h-6 gap-1.5 overflow-hidden">
           {planChips(bundle).map((chip) => (
             <span
               key={chip.label}
               data-plan-chip={chip.tone}
               className={cn(
-                'inline-flex min-h-[24px] items-center rounded-md border px-2 text-[13px]',
+                'inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-md border px-2 text-[13px]',
                 chip.tone === 'warn'
                   ? 'border-warn bg-warn-soft text-warn'
                   : 'border-transparent bg-panel-2 text-fg-2',
@@ -219,11 +226,11 @@ export function PlanCardBody(props: {
             style={{ width: `${progressPercent(progress)}%` }}
           />
         </span>
-        <span data-plan-progress="" className="text-xs text-fg-3">
+        <span data-plan-progress="" className="truncate text-xs leading-4 text-fg-3">
           {progressLabel(progress, props.side)}
         </span>
       </div>
-      <div className="flex border-t border-border">
+      <div className="flex shrink-0 border-t border-border">
         <button
           type="button"
           data-plan-open=""

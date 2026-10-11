@@ -10,7 +10,12 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { renderToStaticMarkup } from 'react-dom/server';
-import { PlanCardBody, type PlanCardView } from '@/components/chat/PlanCard';
+import {
+  PLAN_CARD,
+  PLAN_CARD_SKELETON,
+  PlanCardBody,
+  type PlanCardView,
+} from '@/components/chat/PlanCard';
 import {
   actionLabels,
   isLiveItem,
@@ -74,6 +79,24 @@ function render(view: PlanCardView, side: 'agency' | 'client' | 'unknown'): stri
 }
 
 describe('PlanCardBody', () => {
+  it('the skeleton is exactly the card height; every card line is one line', () => {
+    const height = (cls: string): string | undefined => /(?:^| )(h-\[\d+px\])/.exec(cls)?.[1];
+    expect(height(PLAN_CARD)).toBeDefined();
+    expect(height(PLAN_CARD_SKELETON)).toBe(height(PLAN_CARD));
+    const long = bundle('team');
+    const html = render(
+      {
+        kind: 'plan',
+        bundle: { ...long, plan: { ...long.plan, title: 'A very long plan title '.repeat(6) } },
+      },
+      'agency',
+    );
+    expect(html).not.toContain('flex-wrap');
+    expect(html).toMatch(/class="truncate text-\[17px\][^"]*leading-\[22px\]/);
+    expect(html).toMatch(/data-plan-progress="" class="truncate text-xs leading-4/);
+    expect(html).toMatch(/data-plan-range="" class="truncate font-mono text-\[13px\] leading-5/);
+  });
+
   it('agency: eyebrow, title, mono range, counts, progress, Open plan and Forward', () => {
     const html = render({ kind: 'plan', bundle: bundle('client') }, 'agency');
     expect(html).toContain('PLAN');
