@@ -299,20 +299,21 @@ Applied 9 Oct 2026 (step 3b plan comments), restated in migration 20261009205500
 
 ### Plan procs
 
-All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_trace_id and writes one audit_log row named after the proc on success. Owner/admin/agency only unless noted (forbidden_role otherwise).
+All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_trace_id and writes one audit_log row named after the proc on success (except the read-only plan_draft_items). Owner/admin/agency only unless noted (forbidden_role otherwise).
 
 - is_agency_side_member(p_workspace_id): true when the caller is an active owner, admin or agency member.
 - plan_create(p_workspace_id, p_title, p_starts_on, p_ends_on, p_audience, p_trace_id) returns uuid: create a plan; a client plan is shared at once.
 - plan_update(p_plan_id, p_title, p_starts_on, p_ends_on, p_trace_id): rename or move dates.
-- plan_share_with_client(p_plan_id, p_trace_id): one-way team to client; plan_has_drafts while it holds a draft post.
+- plan_share_with_client(p_plan_id, p_trace_id): one-way team to client; drafts inside do not block it (20261011011500_plan_drafts_in_client_plans).
 - plan_delete(p_plan_id, p_trace_id): soft-delete the plan.
 - plan_concept_add(p_plan_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null) returns uuid: append a concept with up to 20 library files and an optional date.
 - plan_concept_edit(p_item_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null): edit a concept (null files keeps them); always writes target_date (null clears it); any edit, a date-only one included, resets its team and client reviews to waiting.
-- plan_posts_add(p_plan_id, p_post_ids, p_trace_id) returns integer: append 1 to 50 posts, skipping ones already in the plan; plan_has_drafts for a draft into a client plan.
+- plan_posts_add(p_plan_id, p_post_ids, p_trace_id) returns integer: append 1 to 50 posts, skipping ones already in the plan; drafts are allowed in any plan, client plans included.
 - plan_item_remove(p_item_id, p_trace_id): soft-delete an item.
 - plan_items_reorder(p_plan_id, p_item_ids, p_trace_id): set positions from the full, exact list of live item ids.
 - plan_item_review(p_item_id, p_side, p_status, p_trace_id): upsert a review; team side for owner/admin/agency, client side for an active client on a client plan's concepts only (use_stage_transition on a post item). A status other than waiting writes plan_review inbox rows via _plan_item_notify (team side to owner/admin/agency only).
 - plan_item_comment_create(p_item_id, p_body, p_visibility, p_trace_id) returns uuid: any active member; a client only on a client plan and only 'everyone' (forbidden_role otherwise); invalid_payload for a missing item, a bad visibility or an empty or over-5000 body; writes plan_comment inbox rows via _plan_item_notify ('team' to owner/admin/agency only).
+- plan_draft_items(p_plan_id) returns table(item_id, item_position, post_number, title, target_date): read-only helper, STABLE, no p_trace_id, no audit; EXECUTE to authenticated only (not anon). Lists the plan's live post items whose post is stage 'draft' (not deleted). Empty when the plan is missing or deleted, the caller is not an active workspace member, or the plan is 'team' and the caller is not agency-side; so a client sees draft rows in a client plan without posts SELECT on the draft.
 - Internal, no EXECUTE for authenticated: _plan_check_versions (same-workspace, library, not deleted; 'attachment not available' for chat-origin or deleted files), _plan_attach_versions, and _plan_item_notify(p_item_id, p_event_type, p_team_only, p_payload) (one inbox row per other active member: owner/admin/agency always, clients too when not team-only on a client plan; payload gains plan_id).
 
 ## 5. Assets

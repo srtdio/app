@@ -3,6 +3,7 @@ import {
   assetDelete,
   assetDeleteMany,
   memberRemove,
+  planDraftItems,
   postSoftDelete,
   userProfileUpdate,
   type Client,
@@ -183,5 +184,31 @@ describe('userProfileUpdate', () => {
       ok: false,
       error: { code: 'invalid_payload', message: 'invalid_payload' },
     });
+  });
+});
+
+describe('planDraftItems', () => {
+  const args = { p_plan_id: '11111111-1111-1111-1111-111111111111' };
+  const rows = [
+    {
+      item_id: '33333333-3333-3333-3333-333333333333',
+      item_position: 0,
+      post_number: 7,
+      title: 'Launch teaser',
+      target_date: '2026-10-20T00:00:00+00:00',
+    },
+  ];
+
+  it('returns ok with the rows and forwards the proc name + args on success', async () => {
+    const { client, rpc } = makeClient({ data: rows, error: null });
+    const result = await planDraftItems(client, args);
+    expect(result).toEqual({ ok: true, data: rows });
+    expect(rpc).toHaveBeenCalledWith('plan_draft_items', args);
+  });
+
+  it('maps an unexpected transport error to code "unknown"', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'network down' } });
+    const result = await planDraftItems(client, args);
+    expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
   });
 });
