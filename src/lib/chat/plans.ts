@@ -588,12 +588,30 @@ type Entry =
   | { state: 'absent' }
   | { state: 'failed'; tries: number };
 
+/** Whether two read values (plain JSON data: rows, lists, records) are equal. Pure. */
+export function sameReadValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  const ra = a as Record<string, unknown>;
+  const rb = b as Record<string, unknown>;
+  return ka.every(
+    (k) => Object.prototype.hasOwnProperty.call(rb, k) && sameReadValue(ra[k], rb[k]),
+  );
+}
+
 /**
  * The batched plan reads for one thread. Asks in one tick coalesce into one
  * readPlanBundles per 100 ids, each chunk bounded at `timeoutMs`. A failed read
  * keeps the skeleton and is re-read on the next trigger or on its own after
  * `retryDelayMs`, up to PLAN_READ_TRIES; a refresh asked while a read is in
- * flight runs once more after it; a failed refresh keeps what is shown.
+ * flight runs once more after it; a failed refresh keeps what is shown. A
+ * settled card never goes back to loading on a background re-read, and a
+ * re-read that returns the same data keeps the entry (same bundle object) and
+ * notifies nobody, so a painted card only changes when its data did.
  */
 export function createPlanCardCache(
   read: (ids: string[], signal: AbortSignal) => Promise<Result<Map<string, PlanBundle>>>,
@@ -637,10 +655,19 @@ export function createPlanCardCache(
       void withReadTimeout((signal) => read(chunk, signal), timeoutMs).then((result) => {
         if (disposed || gen !== generation) return;
         for (const id of chunk) inFlight.delete(id);
+        let changed = false;
         if (result.ok) {
           for (const id of chunk) {
             const bundle = result.data.get(id);
-            entries.set(id, bundle !== undefined ? { state: 'ok', bundle } : { state: 'absent' });
+            const prev = entries.get(id);
+            if (bundle === undefined) {
+              if (prev?.state === 'absent') continue;
+              entries.set(id, { state: 'absent' });
+            } else {
+              if (prev?.state === 'ok' && sameReadValue(prev.bundle, bundle)) continue;
+              entries.set(id, { state: 'ok', bundle });
+            }
+            changed = true;
           }
         } else {
           for (const id of chunk) {
@@ -650,6 +677,7 @@ export function createPlanCardCache(
             const tries =
               (prev?.state === 'pending' || prev?.state === 'failed' ? prev.tries : 0) + 1;
             entries.set(id, { state: 'failed', tries });
+            changed = true;
           }
           const again = chunk.filter((id) => {
             const e = entries.get(id);
@@ -665,7 +693,7 @@ export function createPlanCardCache(
         }
         const rerun = chunk.filter((id) => refreshAfter.delete(id));
         if (rerun.length > 0) enqueue(rerun);
-        emit();
+        if (changed) emit();
       });
     }
   }
@@ -694,11 +722,15 @@ export function createPlanCardCache(
     },
     retryFailed,
     retry(ids) {
+      let changed = false;
       for (const id of ids) {
         const e = entries.get(id);
-        if (e?.state === 'failed') entries.set(id, { state: 'pending', tries: 0 });
+        if (e?.state === 'failed') {
+          entries.set(id, { state: 'pending', tries: 0 });
+          changed = true;
+        }
       }
-      emit();
+      if (changed) emit();
       enqueue(ids.filter((id) => entries.get(id)?.state === 'pending'));
     },
     snapshot(ids) {
