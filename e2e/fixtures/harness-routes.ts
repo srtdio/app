@@ -732,6 +732,10 @@ export interface HarnessNetwork {
   rpcCalls: Array<{ name: string; args: Record<string, unknown> }>;
   /** RPC names the fixture refuses (400, the proc raised) until removed. */
   refuseRpc: Set<string>;
+  /** Gate GET reads of one REST table until release() (a slow read). */
+  holdTable: (table: string) => { release: () => void };
+  /** REST tables whose reads fail (500) until removed. */
+  failTable: Set<string>;
 }
 
 export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork> {
@@ -743,6 +747,8 @@ export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork>
   let uploadGate: Promise<void> | null = null;
   const rpcCalls: HarnessNetwork['rpcCalls'] = [];
   const refuseRpc = new Set<string>();
+  const tableGates = new Map<string, Promise<void>>();
+  const failTable = new Set<string>();
 
   await page.addInitScript((session) => {
     window.localStorage.setItem('sb-harness-auth-token', session);
@@ -807,6 +813,16 @@ export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork>
         }
         if (!(table in world.tables)) unmatched.push(`table ${table}`);
         if (table === 'chat_messages' && historyGate) await historyGate;
+        const tableGate = tableGates.get(table);
+        if (tableGate !== undefined) await tableGate;
+        if (failTable.has(table)) {
+          await route.fulfill({
+            status: 500,
+            headers: { ...CORS, 'content-type': 'application/json' },
+            body: JSON.stringify({ code: 'XX000', message: 'failed', details: null, hint: null }),
+          });
+          return;
+        }
         const answer = answerRest(world.tables, table, url.searchParams, method, request.headers());
         await route.fulfill({
           status: answer.status,
@@ -942,6 +958,20 @@ export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork>
     },
     rpcCalls,
     refuseRpc,
+    holdTable: (table) => {
+      let release = (): void => {};
+      tableGates.set(
+        table,
+        new Promise<void>((resolve) => {
+          release = () => {
+            tableGates.delete(table);
+            resolve();
+          };
+        }),
+      );
+      return { release };
+    },
+    failTable,
   };
 }
 

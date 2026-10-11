@@ -25,7 +25,12 @@ import {
   useThreadCardCache,
 } from '@/components/chat/PostCard';
 import { PostSheet } from '@/components/chat/PostSheet';
-import { ConceptSheet, EMPTY_CONCEPT, type ConceptForm } from '@/components/chat/ConceptSheet';
+import {
+  ConceptSheet,
+  EMPTY_CONCEPT,
+  useConceptFilesRead,
+  type ConceptForm,
+} from '@/components/chat/ConceptSheet';
 import { indexPostsById, postRoute, sharedPostViews } from '@/components/chat/post-card';
 import {
   COMMENT_FAILED,
@@ -49,10 +54,12 @@ import {
   useScreenRead,
 } from '@/components/chat/PlanScreen';
 import { readProfiles } from '@/lib/chat-reads';
+import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import {
   conceptEditArgs,
   conceptEditUnchanged,
   dispatchPlanChanged,
+  readConceptFiles,
   readItemScreen,
   type CommentVisibility,
   type ItemScreenData,
@@ -239,6 +246,17 @@ export function PlanItemScreen(props: {
   // The concept's files when the sheet opened; null when not read yet.
   const [editFiles, setEditFiles] = useState<string[] | null>(null);
   const [editBusy, setEditBusy] = useState(false);
+  // Uploads go as comments' do (library origin).
+  const { canAttach, uploadFile } = useCommentAttachments();
+  // Files not read when the sheet opened: the sheet reads them (5s cap).
+  const filesRead = useConceptFilesRead(
+    props.open && editOpen && editFiles === null,
+    (cancel) => readConceptFiles(supabase, item.id, cancel),
+    (files) => {
+      setEditFiles(files);
+      setEditForm((f) => ({ ...f, files: conceptEditForm(item, files).files }));
+    },
+  );
 
   // A new item (or a fresh bundle) drops the local overrides and drafts.
   useEffect(() => setOverrides({}), [bundle]);
@@ -694,7 +712,9 @@ export function PlanItemScreen(props: {
           }}
           busy={editBusy}
           note={editResets ? CONCEPT_EDIT_RESET_HINT : null}
-          filesReady={editFiles !== null}
+          filesState={editFiles !== null ? 'ready' : filesRead.state}
+          onRetryFiles={filesRead.retry}
+          {...(canAttach ? { uploadFile } : {})}
         />
       ) : null}
       {actions.kind === 'open-post' && item.post_id !== null ? (
