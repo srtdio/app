@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -603,6 +603,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // open or close, so the param is always written from the chat's own entry.
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  // The status drawer restores only on a Back to this history entry.
+  const locationKey = useLocation().key;
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   // The latest workspace and ?channel=, and whether the page is still mounted,
@@ -1419,6 +1421,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // switch closes both.
   const [planComposeOpen, setPlanComposeOpen] = useState(false);
   const [openPlan, setOpenPlan] = useState<OpenPlanRequest | null>(null);
+  // The item the Plan screen opens at (the status drawer's item rows); null: the plan.
+  const [openPlanItem, setOpenPlanItem] = useState<string | null>(null);
   const [planShown, setPlanShown] = useState(false);
   useHistoryStep(planComposeOpen && selected !== null, HISTORY_STEP_KEYS.planCompose, () =>
     setPlanComposeOpen(false),
@@ -1436,6 +1440,12 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   });
   const onOpenPlan = useCallback((request: OpenPlanRequest) => {
     setOpenPlan(request);
+    setOpenPlanItem(null);
+    setPlanShown(true);
+  }, []);
+  const onOpenPlanItem = useCallback((request: OpenPlanRequest & { itemId: string }) => {
+    setOpenPlan({ planId: request.planId, senderName: request.senderName });
+    setOpenPlanItem(request.itemId);
     setPlanShown(true);
   }, []);
   // The last one sent or cancelled: nothing left to show.
@@ -1837,6 +1847,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       }}
                       channelHasClient={hasClient}
                       {...(!notesOpen ? { onOpenPlanCompose: () => setPlanComposeOpen(true) } : {})}
+                      onOpenPlanItem={onOpenPlanItem}
+                      onNavigate={navigate}
+                      locationKey={locationKey}
                       initialMessageId={initialJumpFor(pendingJump, selected.channelId)}
                       onInitialJumpTaken={() => setPendingJump(null)}
                       searchRequest={
@@ -1912,8 +1925,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                 ) : null}
                 {openPlan !== null ? (
                   <PlanScreen
+                    key={`${openPlan.planId}:${openPlanItem ?? ''}`}
                     open={planShown}
                     planId={openPlan.planId}
+                    {...(openPlanItem !== null ? { initialItemId: openPlanItem } : {})}
                     senderName={openPlan.senderName}
                     chatTitle={(shown ?? selected).title}
                     onClose={() => setPlanShown(false)}

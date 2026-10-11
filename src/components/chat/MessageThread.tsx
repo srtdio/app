@@ -166,13 +166,21 @@ import { SharedBriefCards } from '@/components/chat/BriefCard';
 import { SharedPlanCards } from '@/components/chat/PlanCard';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { MarkBadge, SelectCheckbox, SelectLock } from '@/components/chat/MarkBits';
-import {
-  MarkStrip,
-  MarksSheet,
-  PrioritySheet,
-  type StripLoops,
-} from '@/components/chat/MarksSheet';
+import { MarksSheet, PrioritySheet } from '@/components/chat/MarksSheet';
+import { ChatStatus } from '@/components/chat/StatusTicker';
+import { planProgress, todayInZone } from '@/components/chat/plan-card';
+import { briefRoute } from '@/lib/chat/briefs';
 import { useOpenPosts, type UseOpenPosts } from '@/lib/chat/use-open-posts';
+import { useStatusCounts, type UseStatusCounts } from '@/lib/chat/use-status-counts';
+import type { PlanBundle } from '@/lib/chat/plans';
+import {
+  openPlans,
+  planSummary,
+  statusBar,
+  statusReady,
+  type StatusBar,
+  type StatusInput,
+} from '@/lib/chat/status-bar';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { ContactSheet } from '@/components/chat/ContactSheet';
 import type { GroupInfoTabsWiring } from '@/components/chat/GroupInfoSheet';
@@ -218,6 +226,7 @@ import {
   threadSelectionRole,
 } from '@/lib/chat/forward';
 import {
+  markCounts,
   markMenuOptions,
   openPostsHeading,
   toggleSelected,
@@ -407,6 +416,12 @@ interface MessageThreadProps {
   channelHasClient?: boolean | null;
   /** The main composer's Plan tile: opens the New plan screen. Absent: the tile stays off. */
   onOpenPlanCompose?: () => void;
+  /** In-app navigation for the status drawer (a brief, the Briefs page). */
+  onNavigate?: (to: string) => void;
+  /** The router location key: the status drawer restores only on a Back to it. */
+  locationKey?: string;
+  /** The status drawer's plan item rows: open the Plan screen at that item. */
+  onOpenPlanItem?: (request: { planId: string; senderName: string; itemId: string }) => void;
   /**
    * True for a stored mention's person a successful member read confirmed has
    * left; only those drop from a restored draft or an edit. Absent: none.
@@ -519,20 +534,36 @@ export function threadStripSlot(input: { hasMarks: boolean; selecting: boolean }
 }
 
 /**
- * The open-loops strip input. Ready only when the posts round, the viewer side
- * and this channel's marks read have all settled, so the first painted label
- * is final.
+ * The status ticker's bar: null (the inert empty slot) until the posts round,
+ * the viewer side, this channel's marks, the shared plans and the open briefs
+ * have all settled, so the first painted bar is final; then each read that
+ * failed is left out (null) and the rest are counted. `open` are the plans
+ * still open today, ending soonest first.
  */
-export function stripLoops(input: {
+export function tickerBar(input: {
   openPosts: Pick<UseOpenPosts, 'ready' | 'count' | 'failed'>;
   side: { side: ViewerSide; ready: boolean };
+  marks: Map<string, ChatMark>;
   marksLoaded: boolean;
-}): StripLoops {
-  return {
-    ready: input.openPosts.ready && input.side.ready && input.marksLoaded,
+  status: UseStatusCounts;
+  open: readonly PlanBundle[];
+}): StatusBar | null {
+  const ready = statusReady({
+    posts: input.openPosts.ready,
+    side: input.side.ready,
+    marks: input.marksLoaded,
+    plans: input.status.plans.ready,
+    briefs: input.status.briefs.ready,
+  });
+  if (!ready) return null;
+  const counts: StatusInput = {
+    plan: input.status.plans.failed ? null : planSummary(input.open, planProgress),
     posts: input.openPosts.failed ? null : input.openPosts.count,
+    briefs: input.status.briefs.failed ? null : input.status.briefs.count,
+    marks: markCounts(input.marks.values()),
     side: input.side.side,
   };
+  return statusBar(counts);
 }
 
 /**
@@ -4379,6 +4410,17 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
   // Open loops: posts in review (two reads per thread open) and the viewer's side.
   const viewerSide = useViewerSide(workspaceId);
   const openPosts = useOpenPosts(workspaceId, channelKey);
+  // The status ticker's plans and briefs (only where the thread has marks).
+  const livePlanIds = useMemo(
+    () => [...new Set(props.messages.flatMap((m) => m.sharedPlanIds ?? []))],
+    [props.messages],
+  );
+  const statusCounts = useStatusCounts({
+    workspaceId: props.marks !== undefined ? workspaceId : null,
+    channelId: channelId ?? null,
+    livePlanIds,
+  });
+  const statusPlanCards = usePlanCards();
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Bumped when the selection's Delete window boundary passes (a re-render).
@@ -5097,6 +5139,25 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     ? deleteSelectionBlock(selected, selectable, marks, serverNow(), notes)
     : null;
   const stripSlot = threadStripSlot({ hasMarks: props.marks !== undefined, selecting });
+  // The status ticker: open plans today on the workspace clock, then the bar.
+  const statusOpenPlans = openPlans(
+    statusCounts.plans.bundles,
+    todayInZone(new Date(), props.timeZone),
+  );
+  const statusBarState = tickerBar({
+    openPosts,
+    side: viewerSide,
+    marks,
+    marksLoaded: props.marksLoaded,
+    status: statusCounts,
+    open: statusOpenPlans,
+  });
+  const planSender = (planId: string): string => {
+    const shared = props.messages.find((m) => (m.sharedPlanIds ?? []).includes(planId));
+    return shared !== undefined ? senderName(shared, props.profiles) : '';
+  };
+  const openPlanHere = (planId: string): void =>
+    statusPlanCards?.openPlan({ planId, senderName: planSender(planId) });
   // Star or Unstar the selection: Unstar only when every one is starred. One
   // write for the batch; selection ends once it is accepted, as Forward does.
   const starTargets =
@@ -5325,23 +5386,55 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         )}
       </div>
       {stripSlot === 'loops' && props.marksFailed === true ? (
-        // Marks never read (failed or timed out): the strip's 44px slot stays,
-        // empty and inert (no layout jump, nothing to open, never "Nothing
-        // open"), until a re-read (visible, online, connected) lands.
+        // Marks never read (failed or timed out): the ticker's 36px slot
+        // stays, empty and inert (no layout jump, nothing to open, never
+        // "Nothing open"), until a re-read (visible, online, connected) lands.
         <div
           data-loops-strip="unread"
           aria-hidden="true"
-          className="min-h-[44px] w-full shrink-0 border-b border-border bg-panel-2"
+          className="h-9 w-full shrink-0 border-b border-border bg-panel"
         />
       ) : stripSlot === 'loops' ? (
-        <MarkStrip
-          marks={marks}
-          loops={stripLoops({
-            openPosts,
-            side: viewerSide,
-            marksLoaded: props.marksLoaded,
-          })}
-          onOpen={() => setMarksOpen(true)}
+        <ChatStatus
+          channelId={channelId}
+          bar={statusBarState}
+          drawer={{
+            keys:
+              statusBarState !== null && statusBarState.kind === 'items'
+                ? statusBarState.items.map((item) => item.key)
+                : [],
+            side: viewerSide.side,
+            timeZone: props.timeZone,
+            workspaceKey,
+            plans: statusOpenPlans,
+            posts: {
+              heading: openPostsHeading(viewerSide.side),
+              rows: openPosts.posts ?? [],
+              count: openPosts.count ?? 0,
+            },
+            briefs: { rows: statusCounts.briefs.rows, count: statusCounts.briefs.count },
+            marks,
+            messageFor,
+            profiles: props.profiles,
+            onResolveMark: props.onResolveMark,
+            onReopenMark: props.onReopenMark,
+          }}
+          actions={{
+            onOpenPlan: openPlanHere,
+            onOpenPlanItem: (planId, itemId) => {
+              if (props.onOpenPlanItem !== undefined) {
+                props.onOpenPlanItem({ planId, senderName: planSender(planId), itemId });
+              } else openPlanHere(planId);
+            },
+            onJumpMark: jumpTo,
+            onSeeAllMarks: () => setMarksOpen(true),
+          }}
+          navigate={(to) => {
+            if (props.onNavigate !== undefined) props.onNavigate(to);
+            else window.location.assign(to);
+          }}
+          briefRoute={briefRoute}
+          locationKey={props.locationKey}
         />
       ) : null}
       <SearchHighlightContext.Provider value={searchWords}>

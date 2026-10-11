@@ -5,9 +5,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   confirmMarkTransition,
-  LOOPS_STRIP_ARIA,
   MarkSheetRow,
-  MarkStrip,
   MarksList,
   marksListBody,
   NO_OPEN_MARKS,
@@ -212,97 +210,6 @@ function openPost(over: Partial<OpenPostRow> = {}): OpenPostRow {
     ...over,
   };
 }
-
-describe('MarkStrip: open loops', () => {
-  const marks = new Map([['m1', mark()]]);
-
-  it('holds an empty 44px slot until posts and side are known (first paint final)', () => {
-    const html = renderToStaticMarkup(
-      <MarkStrip
-        marks={marks}
-        loops={{ ready: false, posts: null, side: 'unknown' }}
-        onOpen={() => {}}
-      />,
-    );
-    expect(html).toContain('data-loops-strip="pending"');
-    expect(html).toContain('min-h-[44px]');
-    expect(html).not.toContain('commitment');
-    expect(html).not.toContain('Nothing open');
-  });
-
-  it('leads with the count pill and the side wording once ready', () => {
-    const client = renderToStaticMarkup(
-      <MarkStrip
-        marks={marks}
-        loops={{ ready: true, posts: 2, side: 'client' }}
-        onOpen={() => {}}
-      />,
-    );
-    expect(client).not.toContain('aria-label=');
-    expect(client).toContain(`<span class="sr-only">${LOOPS_STRIP_ARIA}</span>`);
-    expect(client).toMatch(/data-loops-count=""[^>]*>3</);
-    expect(client).toContain('posts waiting on you');
-    expect(client).toContain('commitment');
-    const agency = renderToStaticMarkup(
-      <MarkStrip
-        marks={marks}
-        loops={{ ready: true, posts: 1, side: 'agency' }}
-        onOpen={() => {}}
-      />,
-    );
-    expect(agency).toContain('post waiting on client');
-  });
-
-  it('never disappears: nothing open reads the muted line with a check', () => {
-    const html = renderToStaticMarkup(
-      <MarkStrip
-        marks={new Map()}
-        loops={{ ready: true, posts: 0, side: 'client' }}
-        onOpen={() => {}}
-      />,
-    );
-    expect(html).toContain('data-loops-strip="empty"');
-    expect(html).toContain('Nothing open between you');
-    expect(html).toContain('text-fg-3');
-    expect(html).not.toContain('data-loops-count');
-  });
-
-  it('name = visible line plus the sr-only suffix Open loops in this chat (B4)', () => {
-    expect(LOOPS_STRIP_ARIA).toBe('Open loops in this chat');
-    const pending = renderToStaticMarkup(
-      <MarkStrip
-        marks={marks}
-        loops={{ ready: false, posts: null, side: 'unknown' }}
-        onOpen={() => {}}
-      />,
-    );
-    expect(pending).not.toContain('aria-label=');
-    expect(pending).toContain('sr-only');
-  });
-
-  it('a failed first posts read never shows Nothing open (B5)', () => {
-    const noMarks = renderToStaticMarkup(
-      <MarkStrip
-        marks={new Map()}
-        loops={{ ready: true, posts: null, side: 'client' }}
-        onOpen={() => {}}
-      />,
-    );
-    expect(noMarks).toContain('data-loops-strip="unknown"');
-    expect(noMarks).not.toContain('Nothing open');
-    expect(noMarks).toContain('min-h-[44px]');
-    const withMarks = renderToStaticMarkup(
-      <MarkStrip
-        marks={marks}
-        loops={{ ready: true, posts: null, side: 'client' }}
-        onOpen={() => {}}
-      />,
-    );
-    expect(withMarks).toContain('commitment');
-    expect(withMarks).not.toContain('waiting');
-    expect(withMarks).not.toContain('Nothing open');
-  });
-});
 
 describe('Open tab posts section', () => {
   it('row lines: KEY · title, then format · target date · where it is', () => {

@@ -1,5 +1,6 @@
-// Marks surfaces for the open thread: the count strip under the header, the
-// pin board it opens (Open and History tabs), and the pending priority chooser.
+// Marks surfaces for the open thread: the pin board (Open and History tabs,
+// opened from the status drawer's "See all" and the chat info pages) and the
+// pending priority chooser.
 // Rows come from the channel's mark rows (one read per open) plus the marked
 // messages; a body-less message shows its shared post or brief title, resolved
 // in ONE batched read per kind while the sheet is open. Tapping a row closes the
@@ -7,9 +8,8 @@
 // (Delivered / Closed / Completed) and every History row a 44x44 Reopen; both
 // ask first in an inline confirm inside the row (a height change only, no
 // browser dialog). Colours are design tokens only, so light and dark match.
-// The strip leads with the open-loops count (posts waiting in review plus open
-// marks) and never hides; the Open tab lists those posts above the marks, each
-// with Jump (a card is in this chat) or Share here.
+// The Open tab lists the posts waiting in review above the marks, each with
+// Jump (a card is in this chat) or Share here.
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
@@ -17,13 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Sheet } from '@/components/ui/Sheet';
-import {
-  IconBookmark,
-  IconCheck,
-  IconChevronRight,
-  IconPipeline,
-  IconRotateCcw,
-} from '@/components/ui/icons';
+import { IconBookmark, IconCheck, IconPipeline, IconRotateCcw } from '@/components/ui/icons';
 import { Tag } from '@/components/ui/Tag';
 import { useToast } from '@/components/ui/toast';
 import { MARK_TONE } from '@/components/chat/MarkBits';
@@ -46,109 +40,21 @@ import {
   MARK_UPDATE_FAILED,
   STAMP_WORD,
   TYPE_LABEL,
-  loopsStripLabel,
   markConfirmAction,
   markConfirmCopy,
-  markCounts,
   markRowText,
   markTabCounts,
   marksForTab,
   priorityLabel,
   resolverName,
   type ChatMark,
-  type LoopsSide,
   type MarkPriority,
   type MarkTab,
   type MarkTransition,
 } from '@/lib/chat/marks';
 
-/** Split a strip label so each standalone count renders in primary ink ("P1" stays plain). */
-export function stripLabelParts(label: string): Array<{ text: string; count: boolean }> {
-  return label
-    .split(/(\b\d+\b)/)
-    .filter((part) => part !== '')
-    .map((part) => ({ text: part, count: /^\d+$/.test(part) }));
-}
-
-/** What the strip knows about posts in review; not ready holds the first paint. */
-export interface StripLoops {
-  ready: boolean;
-  /**
-   * Posts waiting in review; null when the list read failed with nothing to
-   * fall back on (the posts part is left out, never "Nothing open").
-   */
-  posts: number | null;
-  side: LoopsSide;
-}
-
-const NO_LOOPS: StripLoops = { ready: true, posts: 0, side: 'unknown' };
-
-/** The strip's name suffix (screen readers hear it after the visible line). */
-export const LOOPS_STRIP_ARIA = 'Open loops in this chat';
-
 /** The marks section body when posts are listed but no mark is open. */
 export const NO_OPEN_MARKS = 'No open marks';
-
-/**
- * The open-loops strip: a count pill (posts waiting plus open marks), then the
- * parts; "Nothing open between you" with a check when nothing is. It always
- * keeps its 44px slot, and holds an empty body until the posts read and the
- * viewer side have settled so the first painted label is final.
- */
-export function MarkStrip(props: {
-  marks: Map<string, ChatMark>;
-  loops?: StripLoops;
-  onOpen: () => void;
-}): ReactElement {
-  const loops = props.loops ?? NO_LOOPS;
-  const label = loopsStripLabel({
-    posts: loops.posts,
-    side: loops.side,
-    marks: markCounts(props.marks.values()),
-  });
-  return (
-    <button
-      type="button"
-      aria-busy={!loops.ready}
-      data-loops-strip={
-        !loops.ready ? 'pending' : label.empty ? 'empty' : label.text === '' ? 'unknown' : 'open'
-      }
-      onClick={props.onOpen}
-      className="flex min-h-[44px] w-full shrink-0 items-center gap-2 border-b border-border bg-panel-2 px-4 text-left text-xs text-fg-2 transition-colors hover:bg-panel-3"
-    >
-      {!loops.ready || (!label.empty && label.text === '') ? (
-        <span className="min-w-0 flex-1" />
-      ) : label.empty ? (
-        <>
-          <IconCheck size={14} className="shrink-0 text-fg-3" />
-          <span className="min-w-0 flex-1 truncate text-fg-3">{label.text}</span>
-        </>
-      ) : (
-        <>
-          <span
-            data-loops-count=""
-            className="shrink-0 rounded-full bg-panel-3 px-2 py-0.5 font-semibold text-fg"
-          >
-            {label.count}
-          </span>
-          <span className="min-w-0 flex-1 truncate">
-            {stripLabelParts(label.text).map((part, i) =>
-              part.count ? (
-                <span key={i} className="font-semibold text-fg">
-                  {part.text}
-                </span>
-              ) : (
-                part.text
-              ),
-            )}
-          </span>
-        </>
-      )}
-      <IconChevronRight size={16} className="shrink-0 text-fg-3" />
-      <span className="sr-only">{LOOPS_STRIP_ARIA}</span>
-    </button>
-  );
-}
 
 /** The 44px cover of an open post (lazy, same presign path as the cards); KEY tile without one. */
 function OpenPostThumb(props: { assetVersionId: string | null; monogram: string | null }) {
@@ -277,14 +183,17 @@ export function OpenPostsList(props: OpenPostsSection & { timeZone: string }): R
   );
 }
 
-function messageTime(mark: ChatMark, message: ThreadMessage | undefined): number {
+export function messageTime(mark: ChatMark, message: ThreadMessage | undefined): number {
   if (message !== undefined && message.createdAt !== '') return message.time;
   const t = Date.parse(mark.markedAt);
   return Number.isNaN(t) ? 0 : t;
 }
 
 /** Titles for shared posts, briefs and plans of body-less marked messages, keyed by message id. */
-function useCardTitles(open: boolean, messages: readonly ThreadMessage[]): Map<string, string> {
+export function useCardTitles(
+  open: boolean,
+  messages: readonly ThreadMessage[],
+): Map<string, string> {
   const { workspaceId } = useWorkspace();
   const [titles, setTitles] = useState<Map<string, string>>(new Map());
   const bodyless = useMemo(
