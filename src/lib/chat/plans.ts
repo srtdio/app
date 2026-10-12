@@ -17,6 +17,7 @@ import { abortable, READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
 import type { Precheck } from '@/lib/asset-upload';
 import type { AttachmentUploader } from '@/lib/chat/attachments';
 import { openPlans } from '@/lib/chat/status-bar';
+import { civilDayOf } from '@/lib/plan-week';
 
 /** Ids per IN read (the PostgREST URL stays short). */
 export const PLAN_READ_CHUNK = 100;
@@ -130,6 +131,8 @@ export interface PlanBundle {
 export interface PlanPostInfo {
   title: string;
   target_date: string | null;
+  /** The post's format (the Plan screen row's meta line); null when not read. */
+  format?: string | null;
 }
 
 const PLAN_COLUMNS = 'id, workspace_id, title, starts_on, ends_on, audience, created_by';
@@ -218,6 +221,25 @@ export function planItemDay(
         ? (postInfo[item.post_id]?.target_date ?? null)
         : null;
   return raw === null || raw === '' ? null : raw.slice(0, 10);
+}
+
+/**
+ * An item's civil day in the workspace zone (the Plan screen's day groups): a
+ * concept's own date as is, a post's target_date instant read in the zone;
+ * null when undated or the post is not readable. Pure.
+ */
+export function planItemDayInZone(
+  item: PlanItemRow,
+  postInfo: Readonly<Record<string, PlanPostInfo>>,
+  timeZone: string,
+): string | null {
+  const raw =
+    item.kind === 'concept' || item.draft_row === true
+      ? (item.target_date ?? null)
+      : item.post_id !== null
+        ? (postInfo[item.post_id]?.target_date ?? null)
+        : null;
+  return civilDayOf(raw, timeZone);
 }
 
 /**
@@ -336,7 +358,14 @@ async function readItemsWithReviews(
       items.data.map((i) => i.id),
       signal,
     ),
-    selectIn<PlanPostRow>(client, 'posts', 'id, stage, title, target_date', 'id', postIds, signal),
+    selectIn<PlanPostRow>(
+      client,
+      'posts',
+      'id, stage, title, target_date, format',
+      'id',
+      postIds,
+      signal,
+    ),
   ]);
   if (!reviews.ok) return reviews;
   if (!stages.ok) return stages;
@@ -431,6 +460,7 @@ export interface PlanPostRow {
   stage: string;
   title?: string | null;
   target_date?: string | null;
+  format?: string | null;
 }
 
 /** Group the four reads into bundles by plan id. Pure. */
@@ -452,7 +482,11 @@ export function assembleBundles(
       const post = item.post_id !== null ? byId.get(item.post_id) : undefined;
       if (item.post_id !== null && post !== undefined) {
         postStages[item.post_id] = post.stage;
-        postInfo[item.post_id] = { title: post.title ?? '', target_date: post.target_date ?? null };
+        postInfo[item.post_id] = {
+          title: post.title ?? '',
+          target_date: post.target_date ?? null,
+          format: post.format ?? null,
+        };
       }
     }
     out.set(plan.id, {
@@ -1063,9 +1097,61 @@ export function conceptEditUnchanged(
 export interface PlanScreenData {
   bundle: PlanBundle | null;
   commentCounts: Record<string, number>;
+  /** Each post's first image (asset version id), for the row thumbnails. */
+  thumbs: Record<string, string>;
 }
 
-/** Read the Plan screen (plans, items, reviews, posts, then comment counts). Never throws. */
+interface ThumbRow {
+  entity_id: string;
+  asset_version_id: string;
+  asset_versions: { mime_type: string | null } | Array<{ mime_type: string | null }> | null;
+}
+
+/**
+ * Each post's first image (the live image attachment with the lowest
+ * position, then the earliest attached): one asset_attachments select per
+ * chunk of 100 post ids with the version mime embedded (no read per post).
+ * Posts with no image are absent. Never throws.
+ */
+export async function readPostThumbs(
+  client: Client,
+  postIds: readonly string[],
+  signal?: AbortSignal,
+): Promise<Result<Record<string, string>>> {
+  try {
+    const rows = await selectIn<ThumbRow>(
+      client,
+      'asset_attachments',
+      'entity_id, asset_version_id, asset_versions!inner(mime_type)',
+      'entity_id',
+      postIds,
+      signal,
+      (q) =>
+        q
+          .eq('entity_type', 'post')
+          .is('deleted_at', null)
+          .order('entity_id', { ascending: true })
+          .order('position', { ascending: true })
+          .order('attached_at', { ascending: true }),
+    );
+    if (!rows.ok) return rows;
+    const out: Record<string, string> = {};
+    for (const row of rows.data) {
+      if (out[row.entity_id] !== undefined) continue;
+      const version = Array.isArray(row.asset_versions)
+        ? row.asset_versions[0]
+        : row.asset_versions;
+      if (version?.mime_type?.startsWith('image/') === true) {
+        out[row.entity_id] = row.asset_version_id;
+      }
+    }
+    return { ok: true, data: out };
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/** Read the Plan screen (plans, items, reviews, posts, then comment counts and thumbnails). Never throws. */
 export async function readPlanScreen(
   client: Client,
   planId: string,
@@ -1074,14 +1160,22 @@ export async function readPlanScreen(
   const bundles = await readPlanBundles(client, [planId], signal);
   if (!bundles.ok) return bundles;
   const bundle = bundles.data.get(planId) ?? null;
-  if (bundle === null) return { ok: true, data: { bundle, commentCounts: {} } };
-  const counts = await readCommentCounts(
-    client,
-    bundle.items.map((i) => i.id),
-    signal,
-  );
+  if (bundle === null) return { ok: true, data: { bundle, commentCounts: {}, thumbs: {} } };
+  const postIds = bundle.items.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
+  const [counts, thumbs] = await Promise.all([
+    readCommentCounts(
+      client,
+      bundle.items.map((i) => i.id),
+      signal,
+    ),
+    readPostThumbs(client, postIds, signal),
+  ]);
   if (!counts.ok) return counts;
-  return { ok: true, data: { bundle, commentCounts: counts.data } };
+  // A failed thumbnail read keeps the screen: those rows show their text tile.
+  return {
+    ok: true,
+    data: { bundle, commentCounts: counts.data, thumbs: thumbs.ok ? thumbs.data : {} },
+  };
 }
 
 /** The Item screen: comments (oldest first), a concept's files, and author names. */
@@ -1321,4 +1415,92 @@ export function createConceptUploads(deps: {
       publish([]);
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// A post's live plans (the delete confirm)
+// ---------------------------------------------------------------------------
+
+/** One live plan a post sits in. */
+export interface PostPlanRef {
+  planId: string;
+  title: string;
+}
+
+interface PostPlanRow {
+  plan_id: string;
+  plans: { title: string } | Array<{ title: string }> | null;
+}
+
+/**
+ * The live plans holding a post: ONE select of its live plan_items joined to
+ * their live plans (title), capped at 5s. A plan listed twice counts once.
+ * Never throws; a failure or the cap is a failed Result.
+ */
+export function readPostPlans(
+  client: Client,
+  postId: string,
+  timeoutMs: number = READ_TIMEOUT_MS,
+): Promise<Result<PostPlanRef[]>> {
+  return withReadTimeout(async (signal) => {
+    try {
+      const query = (client.from('plan_items') as unknown as PlanTable)
+        .select('plan_id, plans!inner(title)')
+        .eq('post_id', postId)
+        .is('deleted_at', null)
+        .is('plans.deleted_at', null);
+      const res = (await abortable(query, signal)) as SelectResult;
+      if (res.error !== null) return fail(`plan_items: ${res.error.message}`);
+      const seen = new Set<string>();
+      const out: PostPlanRef[] = [];
+      for (const row of (res.data ?? []) as PostPlanRow[]) {
+        const plan = Array.isArray(row.plans) ? row.plans[0] : row.plans;
+        if (plan === undefined || plan === null || seen.has(row.plan_id)) continue;
+        seen.add(row.plan_id);
+        out.push({ planId: row.plan_id, title: plan.title });
+      }
+      return { ok: true, data: out };
+    } catch (error) {
+      return fail(String(error));
+    }
+  }, timeoutMs);
+}
+
+/**
+ * The delete confirm's plan line: none for no plan, "It's in <title> and will
+ * leave that plan." for one, "It's in <title> and N other plans and will leave
+ * them." for more. Pure.
+ */
+export function postPlansLine(plans: readonly PostPlanRef[]): string | null {
+  const first = plans[0];
+  if (first === undefined) return null;
+  if (plans.length === 1) return `It's in ${first.title} and will leave that plan.`;
+  const others = plans.length - 1;
+  return `It's in ${first.title} and ${others} other ${others === 1 ? 'plan' : 'plans'} and will leave them.`;
+}
+
+// ---------------------------------------------------------------------------
+// A slot write (the Plan screen's checkbox)
+// ---------------------------------------------------------------------------
+
+/**
+ * One optimistic slot write: `apply` the new status at once, run the write,
+ * and on failure `apply` the previous status back. Returns the write's
+ * Result. Never throws (a thrown write is a failure, reverted).
+ */
+export async function runSlotWrite(input: {
+  status: ReviewStatus;
+  previous: ReviewStatus;
+  apply: (status: ReviewStatus) => void;
+  write: (status: ReviewStatus) => Promise<Result<unknown>>;
+}): Promise<Result<unknown>> {
+  input.apply(input.status);
+  let result: Result<unknown>;
+  try {
+    result = await input.write(input.status);
+  } catch (error) {
+    result = fail(String(error));
+  }
+  if (!result.ok) input.apply(input.previous);
+  return result;
 }

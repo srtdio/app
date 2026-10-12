@@ -16,7 +16,12 @@ import {
   initialShareProgress,
   planChunks,
   planItemDay,
+  planItemDayInZone,
+  postPlansLine,
   readPlanBundles,
+  readPostPlans,
+  readPostThumbs,
+  runSlotWrite,
   readPlanScreen,
   runPlanShare,
   sameReadValue,
@@ -862,5 +867,170 @@ describe('concept date args', () => {
     });
     await runPlanShare(d, DRAFT, initialShareProgress('m1'), 't');
     expect(seen).toEqual([null, '2026-10-14', null]);
+  });
+});
+
+describe("a post's live plans (W10)", () => {
+  function query(result: { data: unknown; error: { message: string } | null }, delayMs = 0) {
+    const calls: Array<[string, unknown[]]> = [];
+    const q: Record<string, unknown> = {};
+    for (const m of ['select', 'eq', 'is', 'abortSignal']) {
+      q[m] = (...args: unknown[]) => {
+        calls.push([m, args]);
+        return q;
+      };
+    }
+    q.then = (resolve: (v: unknown) => unknown) =>
+      new Promise((r) => setTimeout(() => r(result), delayMs)).then(resolve);
+    const from = vi.fn(() => q);
+    return { client: { from } as unknown as Client, calls, from };
+  }
+
+  it('one select: live items of the post joined to live plans, one row per plan', async () => {
+    const { client, calls, from } = query({
+      data: [
+        { plan_id: 'a', plans: { title: 'Week 42' } },
+        { plan_id: 'a', plans: { title: 'Week 42' } },
+        { plan_id: 'b', plans: [{ title: 'Diwali' }] },
+      ],
+      error: null,
+    });
+    const result = await readPostPlans(client, 'post1');
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith('plan_items');
+    expect(calls).toContainEqual(['select', ['plan_id, plans!inner(title)']]);
+    expect(calls).toContainEqual(['eq', ['post_id', 'post1']]);
+    expect(calls).toContainEqual(['is', ['deleted_at', null]]);
+    expect(calls).toContainEqual(['is', ['plans.deleted_at', null]]);
+    expect(result).toEqual({
+      ok: true,
+      data: [
+        { planId: 'a', title: 'Week 42' },
+        { planId: 'b', title: 'Diwali' },
+      ],
+    });
+  });
+
+  it('an error or the 5s cap is a failure', async () => {
+    expect(
+      (await readPostPlans(query({ data: null, error: { message: 'x' } }).client, 'p')).ok,
+    ).toBe(false);
+    vi.useFakeTimers();
+    try {
+      const pending = readPostPlans(query({ data: [], error: null }, 60_000).client, 'p');
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect((await pending).ok).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the confirm line: none, one plan, two or more', () => {
+    expect(postPlansLine([])).toBeNull();
+    expect(postPlansLine([{ planId: 'a', title: 'Week 42' }])).toBe(
+      "It's in Week 42 and will leave that plan.",
+    );
+    expect(
+      postPlansLine([
+        { planId: 'a', title: 'Week 42' },
+        { planId: 'b', title: 'B' },
+        { planId: 'c', title: 'C' },
+      ]),
+    ).toBe("It's in Week 42 and 2 other plans and will leave them.");
+  });
+});
+
+describe('slot write (W4)', () => {
+  it('applies at once, keeps it on success', async () => {
+    const applied: string[] = [];
+    const result = await runSlotWrite({
+      status: 'approved',
+      previous: 'waiting',
+      apply: (s) => applied.push(s),
+      write: () => Promise.resolve({ ok: true, data: null }),
+    });
+    expect(result.ok).toBe(true);
+    expect(applied).toEqual(['approved']);
+  });
+
+  it('reverts to the previous status on failure or a throw', async () => {
+    const applied: string[] = [];
+    const failed = await runSlotWrite({
+      status: 'approved',
+      previous: 'changes',
+      apply: (s) => applied.push(s),
+      write: () =>
+        Promise.resolve({ ok: false, error: { code: 'unknown', message: 'post_not_ready' } }),
+    });
+    expect(failed.ok).toBe(false);
+    expect(applied).toEqual(['approved', 'changes']);
+    const thrown = await runSlotWrite({
+      status: 'waiting',
+      previous: 'approved',
+      apply: (s) => applied.push(s),
+      write: () => Promise.reject(new Error('boom')),
+    });
+    expect(thrown.ok).toBe(false);
+    expect(applied.slice(2)).toEqual(['waiting', 'approved']);
+  });
+
+  it('day in the workspace zone: a concept date as is, a post instant read in the zone', () => {
+    const concept = {
+      id: 'c',
+      plan_id: 'p',
+      kind: 'concept' as const,
+      position: 0,
+      title: 'C',
+      description: null,
+      post_id: null,
+      created_at: '',
+      target_date: '2026-10-14',
+    };
+    const post = { ...concept, id: 'p1', kind: 'post' as const, post_id: 'x', target_date: null };
+    const info = { x: { title: 'X', target_date: '2026-10-13T20:00:00+00:00' } };
+    expect(planItemDayInZone(concept, info, 'Asia/Kolkata')).toBe('2026-10-14');
+    expect(planItemDayInZone(post, info, 'Asia/Kolkata')).toBe('2026-10-14');
+    expect(planItemDayInZone(post, info, 'UTC')).toBe('2026-10-13');
+    expect(planItemDayInZone({ ...post, post_id: 'gone' }, info, 'UTC')).toBeNull();
+  });
+});
+
+describe('row thumbnails (L2)', () => {
+  it('one select per chunk; the first live image per post wins; non-images skipped', async () => {
+    const calls: Array<[string, unknown[]]> = [];
+    const q: Record<string, unknown> = {};
+    for (const m of ['select', 'in', 'eq', 'is', 'order', 'abortSignal']) {
+      q[m] = (...args: unknown[]) => {
+        calls.push([m, args]);
+        return q;
+      };
+    }
+    q.then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({
+        data: [
+          {
+            entity_id: 'a',
+            asset_version_id: 'v-video',
+            asset_versions: { mime_type: 'video/mp4' },
+          },
+          { entity_id: 'a', asset_version_id: 'v-a1', asset_versions: { mime_type: 'image/png' } },
+          { entity_id: 'a', asset_version_id: 'v-a2', asset_versions: { mime_type: 'image/png' } },
+          {
+            entity_id: 'b',
+            asset_version_id: 'v-b',
+            asset_versions: [{ mime_type: 'image/jpeg' }],
+          },
+        ],
+        error: null,
+      }).then(resolve);
+    const from = vi.fn(() => q);
+    const result = await readPostThumbs({ from } as unknown as Client, ['a', 'b', 'c']);
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith('asset_attachments');
+    expect(calls).toContainEqual(['eq', ['entity_type', 'post']]);
+    expect(calls).toContainEqual(['is', ['deleted_at', null]]);
+    expect(result).toEqual({ ok: true, data: { a: 'v-a1', b: 'v-b' } });
+    expect((await readPostThumbs({ from } as unknown as Client, [])).ok).toBe(true);
+    expect(from).toHaveBeenCalledTimes(1);
   });
 });

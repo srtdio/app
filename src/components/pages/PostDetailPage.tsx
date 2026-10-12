@@ -247,6 +247,9 @@ export function PostDetailPage({
   embedded = false,
   focusCommentId: focusCommentIdProp,
   onNavigateAway,
+  actionsOpen: actionsOpenProp,
+  onActionsOpenChange,
+  onOpenInPipeline,
 }: {
   postId?: string;
   /**
@@ -258,6 +261,15 @@ export function PostDetailPage({
   focusCommentId?: string;
   /** Replaces every hard navigation to /pipeline (back, not found, after delete). */
   onNavigateAway?: () => void;
+  /**
+   * Embedded only: the host owns the post action sheet's open state (its own
+   * header button opens this same sheet). Absent: the page owns it.
+   */
+  actionsOpen?: boolean;
+  /** Embedded only: the sheet asks to open or close. */
+  onActionsOpenChange?: (open: boolean) => void;
+  /** Embedded only: the sheet's first row, Open in pipeline. */
+  onOpenInPipeline?: () => void;
 } = {}) {
   const params = useParams();
   // The pretty-link resolver (/p/:ref) passes the resolved id as a prop; the
@@ -367,7 +379,12 @@ export function PostDetailPage({
   const [buckets, setBuckets] = useState<BucketOption[]>([]);
   // F8 post action sheet (Send to chat / Copy link / Download all images). Live
   // PCS only; the trigger is suppressed in read-only mode below.
-  const [actionsOpen, setActionsOpen] = useState(false);
+  const [ownActionsOpen, setOwnActionsOpen] = useState(false);
+  const actionsOpen = actionsOpenProp ?? ownActionsOpen;
+  const setActionsOpen = (next: boolean): void => {
+    if (actionsOpenProp === undefined) setOwnActionsOpen(next);
+    onActionsOpenChange?.(next);
+  };
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [savingMeta, setSavingMeta] = useState(false);
@@ -603,6 +620,14 @@ export function PostDetailPage({
   // Both history surfaces suppress every write affordance below; they are
   // mutually exclusive, enforced by the handlers that enter each mode.
   const readOnly = viewingVersion !== null || comparing;
+  // A host-owned open (the plan item's header button) while the sheet cannot
+  // mount (loading, not found, an old version) closes again at once, so the
+  // sheet never pops open later on its own.
+  const sheetMountable =
+    !loading && !notFound && loadError === null && detail !== null && !readOnly;
+  useEffect(() => {
+    if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);
+  }, [actionsOpenProp, sheetMountable, onActionsOpenChange]);
 
   // Resolve a version's createdBy to a display name via the same members read PCS
   // already uses; a null author or one who is no longer a current member reads
@@ -1667,6 +1692,7 @@ export function PostDetailPage({
           onToast={push}
           canDelete={canDelete}
           onDeletePost={handleDeletePost}
+          {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
         />
       ) : null}
 

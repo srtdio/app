@@ -248,4 +248,23 @@ describe('PostDetailPage embedded', () => {
     // Every hard navigation to the pipeline goes through leave().
     expect(src.match(/navigate\('\/pipeline'\)/g)).toHaveLength(1);
   });
+
+  it('embedded: the host can own the action sheet open state and add Open in pipeline', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./PostDetailPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toContain('const actionsOpen = actionsOpenProp ?? ownActionsOpen;');
+    expect(src).toContain('onActionsOpenChange?.(next);');
+    expect(src).toContain('{...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}');
+    // A host open while the sheet cannot mount closes at once (never pops open later).
+    expect(src).toContain(
+      '!loading && !notFound && loadError === null && detail !== null && !readOnly;',
+    );
+    expect(src).toContain(
+      'if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);',
+    );
+    // One sheet: the page mounts exactly one PostActionSheet.
+    expect(src.match(/<PostActionSheet/g)).toHaveLength(1);
+  });
 });

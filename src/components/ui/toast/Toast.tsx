@@ -1,4 +1,4 @@
-import { IconX } from '@/components/ui/icons';
+import { IconCheck, IconX } from '@/components/ui/icons';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
 
 interface ToastProps {
@@ -12,11 +12,14 @@ interface ToastProps {
  * One presentational toast card. Hookless so it can be unit-tested by walking
  * its element tree (the codebase convention for pure components). The whole
  * content area is the press target when `onPress` is set; the dismiss control
- * is always a separate 44x44 button so the two never nest. Enter glides up and
+ * is always a separate 44x44 button so the two never nest. An optional action
+ * (e.g. Undo) is its own 44px button at the card's right end, after the dismiss; pressing it runs the
+ * action and dismisses the toast. Enter glides up and
  * fades in (--dur-slow); exit fades down (--dur-base); axis is translateY only.
  */
 export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
-  const { id, title, description, icon, onPress } = toast;
+  const { id, title, description, icon, onPress, action, tone } = toast;
+  const success = tone === 'success';
 
   // Motion via keyframes (defined once in the viewport) so the card stays
   // hookless. Durations/easings read from the motion tokens, never hardcoded.
@@ -28,6 +31,10 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
     <>
       {icon !== undefined ? (
         <span className="flex h-6 w-6 shrink-0 items-center justify-center text-fg-2">{icon}</span>
+      ) : success ? (
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-good">
+          <IconCheck size={16} />
+        </span>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-medium text-fg">{title}</span>
@@ -41,7 +48,12 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
   return (
     <div
       style={{ animation }}
-      className="pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border border-border bg-panel pr-1 shadow-lg"
+      {...(success ? { 'data-toast-tone': 'success' } : {})}
+      className={`pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border pr-1 shadow-lg ${
+        success
+          ? 'border-good bg-panel [background-image:linear-gradient(var(--good-soft),var(--good-soft))]'
+          : 'border-border bg-panel'
+      }`}
     >
       {onPress !== undefined ? (
         <button
@@ -62,6 +74,19 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
       >
         <IconX />
       </button>
+      {action !== undefined ? (
+        <button
+          type="button"
+          data-toast-action=""
+          onClick={() => {
+            action.onPress();
+            onDismiss(id);
+          }}
+          className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-3 text-sm font-semibold text-accent transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          {action.label}
+        </button>
+      ) : null}
     </div>
   );
 }

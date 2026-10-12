@@ -203,6 +203,8 @@ export async function enrichNewRows(
       title,
       mentionNames,
       toStage: leadItem.toStage,
+      reviewWithdrawn: leadItem.reviewWithdrawn ?? false,
+      reviewPrevious: leadItem.reviewPrevious ?? null,
     },
   };
 }

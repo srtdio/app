@@ -39,7 +39,7 @@ function expectClean(network: HarnessNetwork): void {
 }
 
 async function rowTitles(page: Page): Promise<string[]> {
-  return page_(page, 'plan').locator('[data-plan-row] span.truncate').allInnerTexts();
+  return page_(page, 'plan').locator('[data-plan-row] [data-plan-row-title]').allInnerTexts();
 }
 
 async function openPlan(page: Page): Promise<void> {

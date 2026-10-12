@@ -42,11 +42,9 @@ function expectClean(network: HarnessNetwork): void {
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
 }
 
-/** The fixture's titles of one kind in the expected order: by day, undated last by position. */
-function expectedTitles(kind: 'concept' | 'post'): string[] {
-  const own = DATED_PLAN_ITEMS.map((it, position) => ({ ...it, position })).filter(
-    (it) => it.kind === kind,
-  );
+/** The fixture's titles in the one list's order: by day, undated last by position. */
+function expectedTitles(): string[] {
+  const own = DATED_PLAN_ITEMS.map((it, position) => ({ ...it, position }));
   const dated = own.filter((it) => it.date !== null);
   dated.sort(
     (a, b) => (a.date as string).localeCompare(b.date as string) || a.position - b.position,
@@ -57,7 +55,10 @@ function expectedTitles(kind: 'concept' | 'post'): string[] {
 function counts(): { team: number; client: number; changes: number; total: number } {
   return {
     team: DATED_PLAN_ITEMS.filter((it) => it.team === 'approved').length,
-    client: DATED_PLAN_ITEMS.filter((it) => it.client === 'approved').length,
+    // Client progress is the client review row: the fixture's approved post
+    // sits at stage approved with no client slot review, so it does not count.
+    client: DATED_PLAN_ITEMS.filter((it) => it.kind === 'concept' && it.client === 'approved')
+      .length,
     changes: DATED_PLAN_ITEMS.filter((it) => it.kind === 'concept' && it.client === 'changes')
       .length,
     total: DATED_PLAN_ITEMS.length,
@@ -65,7 +66,7 @@ function counts(): { team: number; client: number; changes: number; total: numbe
 }
 
 async function rowTitles(page: Page): Promise<string[]> {
-  return page_(page, 'plan').locator('[data-plan-row] span.truncate').allInnerTexts();
+  return page_(page, 'plan').locator('[data-plan-row] [data-plan-row-title]').allInnerTexts();
 }
 
 test.describe('phone', () => {
@@ -91,35 +92,46 @@ test.describe('phone', () => {
     await expect(plan).toBeVisible();
     await expect(plan.locator('[data-plan-row]').first()).toBeVisible();
     // First paint is already in date order (the list paints once, sorted).
-    expect(await rowTitles(page)).toEqual(expectedTitles('concept'));
+    expect(await rowTitles(page)).toEqual(expectedTitles());
     await expect(plan.locator('[data-plan-screen-progress]')).toHaveText(
       `Agency ${c.team} of ${c.total} · Client ${c.client} of ${c.total} · ${c.changes} change asked`,
     );
     const dates = plan.locator('[data-plan-row-date]');
     const undated = DATED_PLAN_ITEMS.filter((it) => it.kind === 'concept' && it.date === null);
+    const undatedAll = DATED_PLAN_ITEMS.filter((it) => it.date === null).length;
     const conceptCount = DATED_PLAN_ITEMS.filter((it) => it.kind === 'concept').length;
+    const total = DATED_PLAN_ITEMS.length;
     await expect(dates.first()).toHaveText('12 Oct');
-    for (let k = conceptCount - undated.length; k < conceptCount; k += 1) {
+    for (let k = total - undatedAll; k < total; k += 1) {
       await expect(dates.nth(k)).toHaveText('No date');
       await expect(dates.nth(k)).toHaveAttribute('data-plan-row-date', 'none');
-      await expect(dates.nth(k)).toHaveClass(/text-fg-3/);
     }
+    // One group per day of the range, "No date" last.
+    const days = plan.locator('[data-plan-day]');
+    await expect(days).toHaveCount(8);
+    expect(
+      await days.evaluateAll((els) => els.map((el) => el.getAttribute('data-plan-day'))),
+    ).toEqual([
+      '2026-10-12',
+      '2026-10-13',
+      '2026-10-14',
+      '2026-10-15',
+      '2026-10-16',
+      '2026-10-17',
+      '2026-10-18',
+      'none',
+    ]);
+    await expect(days.last().locator('[data-plan-day-col]')).toHaveText(/No date/i);
     await page.waitForTimeout(300);
-    await shot(page, 'dates-02-concepts-sorted');
+    await shot(page, 'dates-02-list-sorted');
     await plan
       .locator('[data-plan-row]')
-      .nth(conceptCount - 1)
+      .nth(total - 1)
       .scrollIntoViewIfNeeded();
-    await shot(page, 'dates-03-concepts-no-date-last');
-
-    await plan.locator('[data-plan-tab="post"]').click();
-    expect(await rowTitles(page)).toEqual(expectedTitles('post'));
-    await expect(dates.last()).toHaveText('No date');
-    await page.waitForTimeout(300);
-    await shot(page, 'dates-04-posts-sorted');
+    await shot(page, 'dates-03-list-no-date-last');
 
     // "Concept i of n" follows the date order.
-    await plan.locator('[data-plan-tab="concept"]').click();
+    await plan.locator('[data-plan-row]').first().scrollIntoViewIfNeeded();
     await plan.locator('[data-plan-row]').first().click();
     const item = page_(page, 'item');
     await expect(item).toBeVisible();
@@ -194,7 +206,7 @@ test.describe('phone', () => {
     expect(linksOf()).toEqual([link]);
     await page.goBack();
     await expect(item).toBeHidden();
-    await expect.poll(() => rowTitles(page)).toEqual(expectedTitles('concept'));
+    await expect.poll(() => rowTitles(page)).toEqual(expectedTitles());
     await page.waitForTimeout(300);
     await shot(page, 'dates-08-cleared');
     expectClean(network);
@@ -223,8 +235,9 @@ test.describe('phone', () => {
     await expect(plan.locator('[data-plan-screen-progress]')).toHaveText(
       `${c.client}/${c.total} approved`,
     );
-    expect(await rowTitles(page)).toEqual(expectedTitles('concept'));
+    expect(await rowTitles(page)).toEqual(expectedTitles());
     await expect(plan.locator('[data-plan-pill="team"]')).toHaveCount(0);
+    await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
     await page.waitForTimeout(300);
     await shot(page, 'dates-10-plan-client');
     expectClean(network);

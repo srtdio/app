@@ -85,4 +85,45 @@ describe('Toast', () => {
       'sorted-toast-out',
     );
   });
+
+  it('renders an optional 44px action that runs and then dismisses the toast', () => {
+    const onPress = vi.fn();
+    const onDismiss = vi.fn();
+    const tree = Toast({ toast: { ...base, action: { label: 'Undo', onPress } }, onDismiss });
+    const action = findAll(
+      tree,
+      (el) => (el.props as Record<string, unknown>)['data-toast-action'] === '',
+    );
+    expect(action).toHaveLength(1);
+    const props = action[0]!.props as { onClick: () => void; className: string; children: string };
+    expect(props.children).toBe('Undo');
+    expect(props.className).toContain('min-h-[44px]');
+    expect(props.className).toContain('min-w-[44px]');
+    props.onClick();
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledWith('1');
+    // The dismiss control is still there, apart from the action; the action is last.
+    expect(findAll(tree, (el) => ariaLabel(el) === 'Dismiss notification')).toHaveLength(1);
+    const kids = (tree.props as { children: ReactNode[] }).children.filter(
+      (c): c is ReactElement => typeof c === 'object' && c !== null && 'props' in c,
+    );
+    expect((kids[kids.length - 1]!.props as Record<string, unknown>)['data-toast-action']).toBe('');
+  });
+
+  it('renders no action button when none is given (existing toasts unchanged)', () => {
+    const tree = Toast({ toast: base, onDismiss: () => {} });
+    expect(
+      findAll(tree, (el) => (el.props as Record<string, unknown>)['data-toast-action'] === ''),
+    ).toHaveLength(0);
+  });
+
+  it('a success toast is tinted with the success tokens; a plain one is not', () => {
+    const cls = (t: ReactElement): string => (t.props as { className: string }).className;
+    const ok = Toast({ toast: { ...base, tone: 'success' }, onDismiss: () => {} });
+    // Opaque panel under the translucent success tint.
+    expect(cls(ok)).toContain('border-good bg-panel');
+    expect(cls(ok)).toContain('var(--good-soft)');
+    expect((ok.props as Record<string, unknown>)['data-toast-tone']).toBe('success');
+    expect(cls(Toast({ toast: base, onDismiss: () => {} }))).toContain('border-border bg-panel');
+  });
 });

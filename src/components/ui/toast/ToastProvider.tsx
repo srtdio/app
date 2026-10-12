@@ -94,6 +94,8 @@ export function createToastStore(): ToastStore {
       ...(options.description !== undefined ? { description: options.description } : {}),
       ...(options.icon !== undefined ? { icon: options.icon } : {}),
       ...(options.onPress !== undefined ? { onPress: options.onPress } : {}),
+      ...(options.action !== undefined ? { action: options.action } : {}),
+      ...(options.tone !== undefined ? { tone: options.tone } : {}),
       leaving: false,
     };
 

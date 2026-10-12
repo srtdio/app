@@ -71,8 +71,12 @@ function bundle(audience: 'team' | 'client'): PlanBundle {
         created_at: '1',
       },
     ],
-    reviews: [{ item_id: 'c1', side: 'client', status: 'changes' }],
-    postStages: { post1: 'approved' },
+    reviews: [
+      { item_id: 'c1', side: 'client', status: 'changes' },
+      // Client progress on a post item is its slot review (not posts.stage).
+      { item_id: 'p1', side: 'client', status: 'approved' },
+    ],
+    postStages: { post1: 'review' },
     postInfo: { post1: { title: 'Carousel', target_date: '2026-10-13' } },
   };
 }
@@ -170,7 +174,7 @@ describe('Item screen rules', () => {
     expect(src.match(/data-plan-ask=""/g)).toHaveLength(1);
   });
 
-  it('a post item embeds the pipeline post view with an Open in pipeline overflow', () => {
+  it('a post item embeds the pipeline post view; its overflow opens the post view sheet', () => {
     const src = readFileSync(
       fileURLToPath(new URL('./PlanItemScreen.tsx', import.meta.url)),
       'utf8',
@@ -179,8 +183,14 @@ describe('Item screen rules', () => {
     expect(src).toMatch(/postId=\{item\.post_id\}\s+embedded/);
     expect(src).toContain('onNavigateAway={props.onClose}');
     expect(src).toContain('<IconMore');
-    expect(src).toContain('label="Open in pipeline"');
+    expect(src).toContain('actionsOpen={props.open && moreOpen}');
+    expect(src).toContain('onActionsOpenChange={setMoreOpen}');
+    expect(src).toContain('onOpenInPipeline={() => {');
     expect(src).toContain('navigate(postRoute(item.post_id))');
+    // The overflow is THE post view's sheet: no sheet of its own, no absolute button.
+    expect(src).not.toContain('OverflowSheet');
+    expect(src).not.toContain("from '@/components/ui/Sheet'");
+    expect(src).not.toContain('absolute right-3');
     for (const gone of [
       'data-plan-pipeline',
       'data-plan-open-post',

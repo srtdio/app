@@ -129,4 +129,18 @@ describe('createToastStore', () => {
     expect(Object.keys(store.getSnapshot()[0]!)).toEqual(['id', 'title', 'leaving']);
     store.dispose();
   });
+
+  it('carries an action through show(); a toast without one has none', () => {
+    const store = createToastStore();
+    const onPress = vi.fn();
+    store.show({ title: 'Plain' });
+    store.show({ title: 'Slot approved', action: { label: 'Undo', onPress } });
+    const [withAction, plain] = store.getSnapshot();
+    expect(withAction!.action?.label).toBe('Undo');
+    withAction!.action?.onPress();
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(plain!.action).toBeUndefined();
+    expect('action' in plain!).toBe(false);
+    store.dispose();
+  });
 });

@@ -74,27 +74,28 @@ export function reviewStatus(bundle: PlanBundle, itemId: string, side: ReviewSid
   return reviewIndex(bundle).get(`${itemId}:${side}`) ?? 'waiting';
 }
 
-/** Whether the client has approved this item: a concept's client review, or a post's stage. Pure. */
+/**
+ * Whether the client has approved this item: its client review row, for a
+ * concept and a post item alike (a post's slot approval never reads or moves
+ * posts.stage). Pure.
+ */
 export function clientApproved(bundle: PlanBundle, item: PlanItemRow): boolean {
-  if (item.kind === 'post') {
-    return item.post_id !== null && bundle.postStages[item.post_id] === 'approved';
-  }
   return reviewStatus(bundle, item.id, 'client') === 'approved';
 }
 
-/** Whether the client asked changes on this item (concepts only). Pure. */
+/** Whether the client asked changes on this item (its client review row). Pure. */
 export function clientChanges(bundle: PlanBundle, item: PlanItemRow): boolean {
-  return item.kind === 'concept' && reviewStatus(bundle, item.id, 'client') === 'changes';
+  return reviewStatus(bundle, item.id, 'client') === 'changes';
 }
 
 export interface PlanProgress {
-  /** Client approved: a concept's client review, or a post at stage approved. */
+  /** Client approved: the item's client review (concepts and post slots). */
   approved: number;
   /** Team approved: the item's team review (concepts and posts). */
   teamApproved: number;
   /** Every item; a post the viewer cannot read counts here, never as approved. */
   total: number;
-  /** Client changes asked (concepts). */
+  /** Client changes asked (the item's client review). */
   changes: number;
 }
 
@@ -304,9 +305,8 @@ function toneOf(status: ReviewStatus): PillTone {
   return 'neutral';
 }
 
-/** The client side's status for an item: a concept's review, or a post's stage mapped. Pure. */
+/** The client side's status for an item: its client review row (concept or post slot). Pure. */
 export function clientStatus(bundle: PlanBundle, item: PlanItemRow): ReviewStatus {
-  if (item.kind === 'post') return clientApproved(bundle, item) ? 'approved' : 'waiting';
   return reviewStatus(bundle, item.id, 'client');
 }
 
@@ -417,3 +417,117 @@ export const DRAFT_PROBLEM_COPY: Record<Exclude<DraftProblem, null>, string> = {
   dates: 'To must be on or after From.',
   too_long: 'A plan can cover at most 92 days.',
 };
+
+// ---------------------------------------------------------------------------
+// Slot approval (the Plan screen's per-row checkbox)
+// ---------------------------------------------------------------------------
+
+/** Toast and error copy for a slot tick. */
+export const SLOT_REMOVED_TOAST = 'Slot approval removed';
+export const SLOT_FAILED = "Couldn't update this slot. Try again.";
+export const SLOT_POST_NOT_READY = "This post isn't ready yet.";
+export const SLOT_UNDO = 'Undo';
+/** How long the "Slot approved" toast (and its Undo) stays. */
+export const SLOT_UNDO_MS = 5_000;
+/** The post item header's subtitle. */
+export const SLOT_APPROVED_LABEL = 'Slot approved';
+export const SLOT_PENDING_LABEL = 'Slot pending';
+
+/** "Slot approved · Tue 14 Oct", or "Slot approved" for an undated item. Pure. */
+export function slotApprovedToast(dayHeader: string | null): string {
+  return dayHeader === null ? SLOT_APPROVED_LABEL : `${SLOT_APPROVED_LABEL} · ${dayHeader}`;
+}
+
+/** A failed slot write's copy: the draft refusal, else the generic one. Pure. */
+export function slotErrorCopy(message: string): string {
+  return message.includes('post_not_ready') ? SLOT_POST_NOT_READY : SLOT_FAILED;
+}
+
+/**
+ * Which review side the viewer's slot checkbox writes: the agency ticks the
+ * team side on any plan, a client the client side on a client plan only. An
+ * unknown side, or a client on a team plan, gets no checkbox. Pure.
+ */
+export function slotSide(side: ViewerSide, audience: PlanAudience): ReviewSide | null {
+  if (side === 'agency') return 'team';
+  if (side === 'client' && audience === 'client') return 'client';
+  return null;
+}
+
+/** Whether a row shows the checkbox: a slot side, and not a draft locked to the viewer. Pure. */
+export function slotCheckboxShown(
+  bundle: Pick<PlanBundle, 'postStages' | 'plan'>,
+  item: PlanItemRow,
+  side: ViewerSide,
+): ReviewSide | null {
+  if (draftLocked(bundle, item, side)) return null;
+  return slotSide(side, bundle.plan.audience);
+}
+
+/** A ticked slot: the side's review is approved ('changes' shows unticked). Pure. */
+export function slotTicked(bundle: PlanBundle, itemId: string, side: ReviewSide): boolean {
+  return reviewStatus(bundle, itemId, side) === 'approved';
+}
+
+/**
+ * The bundle with local (optimistic) review statuses laid over its reviews for
+ * one side, so the rows, pills, counts and bar all read the same state. The
+ * same bundle when there is nothing to lay over. Pure.
+ */
+export function withReviewOverrides(
+  bundle: PlanBundle,
+  side: ReviewSide,
+  overrides: Readonly<Record<string, ReviewStatus>>,
+): PlanBundle {
+  const ids = Object.keys(overrides);
+  if (ids.length === 0) return bundle;
+  const reviews = bundle.reviews.filter((r) => !(r.side === side && ids.includes(r.item_id)));
+  for (const id of ids) {
+    const status = overrides[id];
+    if (status !== undefined) reviews.push({ item_id: id, side, status });
+  }
+  return { ...bundle, reviews };
+}
+
+/**
+ * The post item header's review side: a client reads the client side; the
+ * agency the client side on a client plan and the team side on a team plan.
+ * An unknown side reads nothing. Pure.
+ */
+export function itemSlotSide(side: ViewerSide, audience: PlanAudience): ReviewSide | null {
+  if (side === 'client') return 'client';
+  if (side === 'agency') return audience === 'client' ? 'client' : 'team';
+  return null;
+}
+
+/** The post item header's subtitle: "Slot approved" / "Slot pending", or null. Pure. */
+export function itemSlotSubtitle(
+  bundle: PlanBundle,
+  item: PlanItemRow,
+  side: ViewerSide,
+): string | null {
+  if (item.kind !== 'post') return null;
+  const reviewSide = itemSlotSide(side, bundle.plan.audience);
+  if (reviewSide === null) return null;
+  return slotTicked(bundle, item.id, reviewSide) ? SLOT_APPROVED_LABEL : SLOT_PENDING_LABEL;
+}
+
+/** What a settled slot write shows: a toast title and whether it offers Undo. Pure. */
+export function slotToastSpec(
+  kind: 'tick' | 'untick' | 'undo',
+  outcome: { ok: true } | { ok: false; message: string },
+  dayHeader: string | null,
+): { title: string; undo: boolean } | null {
+  if (!outcome.ok) return { title: slotErrorCopy(outcome.message), undo: false };
+  if (kind === 'tick') return { title: slotApprovedToast(dayHeader), undo: true };
+  if (kind === 'untick') return { title: SLOT_REMOVED_TOAST, undo: false };
+  return null;
+}
+
+/**
+ * What Undo writes after a tick: the exact status the tick replaced
+ * ('changes' stays 'changes'; waiting or no row is 'waiting'). Pure.
+ */
+export function slotUndoStatus(previous: ReviewStatus): ReviewStatus {
+  return previous === 'changes' ? 'changes' : 'waiting';
+}

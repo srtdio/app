@@ -146,6 +146,9 @@ function roleOf(tables: Tables, userId: string): string {
   );
 }
 
+/** The agency-side roles (is_agency_side_member). */
+const AGENCY_ROLES = ['owner', 'admin', 'agency'];
+
 function planItemsOf(tables: Tables, planId: unknown): Row[] {
   return (tables.plan_items ?? []).filter((i) => i.plan_id === planId && i.deleted_at === null);
 }
@@ -339,23 +342,92 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     });
     return null;
   },
+  // Mirrors the live proc: a live item on a live plan; a post item's post must
+  // exist and not be deleted (invalid_payload, both sides); team side for the
+  // agency roles; client side for a client on a client plan, a draft post
+  // refused (post_not_ready). Never touches posts.stage. approved/changes add
+  // plan_review inbox rows; waiting after approved/changes adds a withdrawal row.
   plan_item_review: (args, tables) => {
-    const rows = (tables.plan_item_reviews ??= []);
-    const existing = rows.find((r) => r.item_id === args.p_item_id && r.side === args.p_side);
-    if (existing !== undefined) {
-      existing.status = args.p_status;
-      existing.reviewed_by = ME;
-      existing.reviewed_at = new Date().toISOString();
-      return null;
+    const item = [...(tables.plan_items ?? []), ...(tables.hidden_plan_items ?? [])].find(
+      (i) => i.id === args.p_item_id && i.deleted_at === null,
+    );
+    const plan =
+      item !== undefined
+        ? (tables.plans ?? []).find((p) => p.id === item.plan_id && p.deleted_at === null)
+        : undefined;
+    if (item === undefined || plan === undefined) throw new HarnessRpcError('invalid_payload');
+    const side = String(args.p_side);
+    const status = String(args.p_status);
+    if (
+      !['team', 'client'].includes(side) ||
+      !['waiting', 'approved', 'changes'].includes(status)
+    ) {
+      throw new HarnessRpcError('invalid_payload');
     }
-    rows.push({
-      item_id: args.p_item_id,
-      workspace_id: WORKSPACE_ID,
-      side: args.p_side,
-      status: args.p_status,
-      reviewed_by: ME,
-      reviewed_at: new Date().toISOString(),
-    });
+    let stage: string | null = null;
+    if (item.kind === 'post') {
+      const post = (tables.posts ?? []).find((p) => p.id === item.post_id);
+      if (post === undefined || (post.deleted_at !== undefined && post.deleted_at !== null)) {
+        throw new HarnessRpcError('invalid_payload');
+      }
+      stage = String(post.stage);
+    }
+    const role = roleOf(tables, ME);
+    if (side === 'team') {
+      if (!AGENCY_ROLES.includes(role)) throw new HarnessRpcError('forbidden_role');
+    } else {
+      if (role !== 'client' || plan.audience !== 'client') {
+        throw new HarnessRpcError('forbidden_role');
+      }
+      if (stage === 'draft') throw new HarnessRpcError('post_not_ready');
+    }
+    const rows = (tables.plan_item_reviews ??= []);
+    const existing = rows.find((r) => r.item_id === args.p_item_id && r.side === side);
+    const previous = existing !== undefined ? String(existing.status) : null;
+    const now = new Date().toISOString();
+    if (existing !== undefined) {
+      existing.status = status;
+      existing.reviewed_by = ME;
+      existing.reviewed_at = now;
+    } else {
+      rows.push({
+        item_id: args.p_item_id,
+        workspace_id: WORKSPACE_ID,
+        side,
+        status,
+        reviewed_by: ME,
+        reviewed_at: now,
+      });
+    }
+    const payload: Record<string, unknown> | null =
+      status !== 'waiting'
+        ? { side, status }
+        : previous !== null && previous !== 'waiting'
+          ? { side, status: 'waiting', withdrawn: true, previous }
+          : null;
+    if (payload !== null) {
+      // _plan_item_notify: agency roles, plus clients on a client-side review; never the actor.
+      const recipients = (tables.workspace_members ?? []).filter(
+        (m) =>
+          m.active === true &&
+          m.user_id !== ME &&
+          (AGENCY_ROLES.includes(String(m.role)) || (side === 'client' && m.role === 'client')),
+      );
+      for (const m of recipients) {
+        (tables.inbox_entries ??= []).push({
+          ...planInboxRow({
+            id: crypto.randomUUID(),
+            eventType: 'plan_review',
+            itemId: String(item.id),
+            planId: String(plan.id),
+            actor: ME,
+            payload,
+            agoMs: 0,
+          }),
+          user_id: m.user_id,
+        });
+      }
+    }
     return null;
   },
   plan_item_comment_create: (args, tables) => {
@@ -820,6 +892,27 @@ export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork>
             status: 500,
             headers: { ...CORS, 'content-type': 'application/json' },
             body: JSON.stringify({ code: 'XX000', message: 'failed', details: null, hint: null }),
+          });
+          return;
+        }
+        // A post's live plans (the delete confirm): plan_items joined to their
+        // live plans' titles in one select, as PostgREST's !inner embed answers.
+        if (
+          table === 'plan_items' &&
+          (url.searchParams.get('select') ?? '').includes('plans!inner')
+        ) {
+          const postId = (url.searchParams.get('post_id') ?? '').replace(/^eq\./, '');
+          const rows = (world.tables.plan_items ?? []).flatMap((i) => {
+            if (i.post_id !== postId || i.deleted_at !== null) return [];
+            const plan = (world.tables.plans ?? []).find(
+              (p) => p.id === i.plan_id && p.deleted_at === null,
+            );
+            return plan === undefined ? [] : [{ plan_id: i.plan_id, plans: { title: plan.title } }];
+          });
+          await route.fulfill({
+            status: 200,
+            headers: { ...CORS, 'content-type': 'application/json' },
+            body: JSON.stringify(rows),
           });
           return;
         }
