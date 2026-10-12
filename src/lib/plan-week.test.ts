@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  civilDayOf,
+  civilDaysBetween,
+  civilMondayOf,
+  formatCivilDayHeader,
+  planShowsWeeks,
+  planWeekGroups,
+  planWeekLabel,
   civilNoonInZoneIso,
   civilToday,
   dayOfMonth,
@@ -235,5 +242,97 @@ describe('civilNoonInZoneIso', () => {
         expect(byDay[civil]!.map((item) => item.id)).toEqual([civil]);
       }
     }
+  });
+});
+
+describe('Plan screen week list (W1, W2)', () => {
+  interface It {
+    id: string;
+    day: string | null;
+  }
+  const list = (groups: ReturnType<typeof planWeekGroups<It>>) =>
+    groups.map((w) => ({
+      week: w.label,
+      days: w.days.map((d) => [d.label, d.inRange, d.items.map((i) => i.id)]),
+    }));
+
+  it('every day of the range, empty days kept, items in input order', () => {
+    const items: It[] = [
+      { id: 'a', day: '2026-10-14' },
+      { id: 'b', day: '2026-10-14' },
+      { id: 'c', day: '2026-10-12' },
+    ];
+    const groups = planWeekGroups(
+      items,
+      { startsOn: '2026-10-12', endsOn: '2026-10-15' },
+      (i) => i.day,
+      false,
+    );
+    expect(list(groups)).toEqual([
+      {
+        week: null,
+        days: [
+          ['Mon 12 Oct', true, ['c']],
+          ['Tue 13 Oct', true, []],
+          ['Wed 14 Oct', true, ['a', 'b']],
+          ['Thu 15 Oct', true, []],
+        ],
+      },
+    ]);
+  });
+
+  it('out-of-range days sit before and after in date order; No date is last', () => {
+    const items: It[] = [
+      { id: 'late', day: '2026-10-20' },
+      { id: 'none', day: null },
+      { id: 'early', day: '2026-10-01' },
+      { id: 'in', day: '2026-10-12' },
+    ];
+    const groups = planWeekGroups(
+      items,
+      { startsOn: '2026-10-12', endsOn: '2026-10-13' },
+      (i) => i.day,
+      false,
+    );
+    expect(list(groups)).toEqual([
+      {
+        week: null,
+        days: [
+          ['Thu 1 Oct', false, ['early']],
+          ['Mon 12 Oct', true, ['in']],
+          ['Tue 13 Oct', true, []],
+          ['Tue 20 Oct', false, ['late']],
+        ],
+      },
+      { week: null, days: [['No date', false, ['none']]] },
+    ]);
+  });
+
+  it('week headers only past 7 days, per Mon-start week', () => {
+    expect(planShowsWeeks('2026-10-12', '2026-10-18')).toBe(false);
+    expect(planShowsWeeks('2026-10-14', '2026-10-20')).toBe(false);
+    expect(planShowsWeeks('2026-10-12', '2026-10-19')).toBe(true);
+    const groups = planWeekGroups<It>(
+      [],
+      { startsOn: '2026-10-14', endsOn: '2026-10-22' },
+      (i) => i.day,
+      true,
+    );
+    expect(groups.map((w) => [w.label, w.days.length])).toEqual([
+      ['Week of 12 Oct', 5],
+      ['Week of 19 Oct', 4],
+    ]);
+    expect(planWeekLabel('2026-10-18')).toBe('Week of 12 Oct');
+    expect(civilMondayOf('2026-10-12')).toBe('2026-10-12');
+  });
+
+  it('day header and zone reading', () => {
+    expect(formatCivilDayHeader('2026-10-12')).toBe('Mon 12 Oct');
+    expect(formatCivilDayHeader('2026-10-14')).toBe('Wed 14 Oct');
+    expect(civilDayOf('2026-10-14', 'UTC')).toBe('2026-10-14');
+    expect(civilDayOf('2026-10-13T20:00:00Z', 'Asia/Kolkata')).toBe('2026-10-14');
+    expect(civilDayOf('', 'UTC')).toBeNull();
+    expect(civilDayOf('nope', 'UTC')).toBeNull();
+    expect(civilDaysBetween('2026-10-13', '2026-10-12')).toEqual([]);
   });
 });

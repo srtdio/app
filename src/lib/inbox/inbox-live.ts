@@ -39,6 +39,10 @@ interface EnrichedLead {
   mentionNames: ReadonlyMap<string, string> | null;
   /** stage_change only: the stage the post moved to (payload.to), when the reader carries it. */
   toStage?: string | null;
+  /** plan_review only: a withdrawal (payload.withdrawn), when the reader carries it. */
+  reviewWithdrawn?: boolean;
+  /** plan_review withdrawal only: the status withdrawn (payload.previous). */
+  reviewPrevious?: string | null;
 }
 
 /** A batch of new rows reduced to a count plus its enriched lead. */
@@ -104,9 +108,20 @@ export function stageChangeLabel(toStage: string | null | undefined): string {
 /**
  * A neutral, null-safe label for a single event, by type. post_deleted and
  * assets_deleted are Activity rows (never bell types): they toast here and
- * count in the Activity badge.
+ * count in the Activity badge. A plan_review withdrawal reads "<name> withdrew
+ * slot approval" ("withdrew their changes request" after changes).
  */
-export function eventLabel(eventType: string, toStage: string | null = null): string {
+export function eventLabel(
+  eventType: string,
+  toStage: string | null = null,
+  review: { withdrawn?: boolean; previous?: string | null; actorName?: string | null } = {},
+): string {
+  if (eventType === 'plan_review' && review.withdrawn === true) {
+    const who = review.actorName ?? 'Someone';
+    return review.previous === 'changes'
+      ? `${who} withdrew their changes request`
+      : `${who} withdrew slot approval`;
+  }
   switch (eventType) {
     case 'comment':
       return 'New comment';
@@ -214,7 +229,11 @@ export function toastFromEnriched(enriched: EnrichedNew): ToastSpec | null {
       : `${lead.actorName} commented`
     : namesFailed && leadTitle !== null
       ? `New comment on ${leadTitle}`
-      : eventLabel(lead.eventType, lead.toStage ?? null);
+      : eventLabel(lead.eventType, lead.toStage ?? null, {
+          ...(lead.reviewWithdrawn !== undefined ? { withdrawn: lead.reviewWithdrawn } : {}),
+          previous: lead.reviewPrevious ?? null,
+          actorName: lead.actorName,
+        });
   // A named comment, or a failed name read, already carries the title on line 1
   // (or has no line 2 at all); do not repeat it.
   const description = snippet ?? (named || namesFailed ? null : leadTitle);

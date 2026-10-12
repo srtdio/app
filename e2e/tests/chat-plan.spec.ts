@@ -196,9 +196,12 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   const plan = page_(page, 'plan');
   await expect(plan).toBeVisible();
   await expect(plan.getByText(`Shared with ${PEER_NAME}`)).toBeVisible();
-  await expect(plan.locator('[data-plan-tab="concept"]')).toHaveText('Concepts 1');
-  await expect(plan.locator('[data-plan-tab="post"]')).toHaveText('Posts 1');
-  const row = plan.locator('[data-plan-row]').first();
+  // One list by day (no Concepts/Posts tabs): each row tagged with its kind.
+  await expect(plan.locator('[data-plan-tab]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-row]')).toHaveCount(2);
+  const conceptRow = () => plan.locator('[data-plan-row]').filter({ hasText: 'Concept 1 of 1' });
+  const postRow = () => plan.locator('[data-plan-row]').filter({ hasText: 'Post 1 of 1' });
+  const row = conceptRow();
   await expect(row.getByText('Agency · Waiting')).toBeVisible();
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-06-plan-screen-agency`);
@@ -236,15 +239,13 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await page.goBack();
   await expect(item).toBeHidden();
   await expect(plan).toBeVisible();
-  await expect(
-    plan.locator('[data-plan-row]').first().getByText('Agency · Approved'),
-  ).toBeVisible();
-  await expect(plan.locator('[data-plan-row]').first().getByText('1 comment')).toBeVisible();
+  await expect(conceptRow().getByText('Agency · Approved')).toBeVisible();
+  await expect(conceptRow().getByText('1 comment')).toBeVisible();
 
   // A post item for the agency: the pipeline post view embedded, no plan
-  // review buttons, and the header overflow offers Open in pipeline.
-  await plan.locator('[data-plan-tab="post"]').click();
-  await plan.locator('[data-plan-row]').first().click();
+  // review buttons, and the header overflow opens the post view's own sheet.
+  await postRow().scrollIntoViewIfNeeded();
+  await postRow().click();
   await expect(item).toBeVisible();
   await expect(item.getByText('Post 1 of 1')).toBeVisible();
   await expect(item.getByText('Fixture caption')).toBeVisible();
@@ -269,7 +270,7 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await page.waitForTimeout(400);
   // No extra pop: the Plan layer is still open after the Item closed itself.
   await expect(plan).toBeVisible();
-  await expect(plan.locator('[data-plan-tab="post"]')).toHaveText('Posts 0');
+  await expect(postRow()).toHaveCount(0);
   // Back once returns to the thread.
   await page.goBack();
   await expect(plan).toBeHidden();
@@ -347,7 +348,7 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   await shot(page, `${prefix}-04-plan-screen-client`);
 
   // D5: a concept: Approve with its confirm.
-  await plan.locator('[data-plan-row]').first().click();
+  await plan.locator('[data-plan-row]').filter({ hasText: 'Concept 1 of 1' }).click();
   const item = page_(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByText('Can we keep it under 30 seconds?')).toBeVisible();
@@ -374,8 +375,9 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   // A post item: the pipeline post view embedded, no plan review buttons.
   await page.goBack();
   await expect(item).toBeHidden();
-  await plan.locator('[data-plan-tab="post"]').click();
-  await plan.locator('[data-plan-row]').first().click();
+  const postRow = plan.locator('[data-plan-row]').filter({ hasText: 'Post 1 of 1' });
+  await postRow.scrollIntoViewIfNeeded();
+  await postRow.click();
   await expect(item).toBeVisible();
   await expect(item.getByText('Fixture caption')).toBeVisible();
   await expect(item.locator('[data-plan-approve]')).toHaveCount(0);
@@ -392,11 +394,25 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   expectClean(network);
 }
 
-/** The post item's header overflow: one "Open in pipeline" row; Escape closes it. */
+/**
+ * The post item's header overflow opens the post view's own action sheet:
+ * Open in pipeline first, then the post's actions; Escape closes it.
+ */
 async function expectOverflowOpensPipeline(page: Page, item: Locator): Promise<void> {
   await item.locator('[data-plan-more]').click();
-  const more = page.getByRole('dialog', { name: 'Post', exact: true });
-  await expect(more.getByRole('button', { name: 'Open in pipeline' })).toBeVisible();
+  const more = page.getByRole('dialog', { name: 'Post actions', exact: true });
+  await expect(more.getByRole('button', { name: /Open in pipeline/ })).toBeVisible();
+  await expect(more.getByRole('button', { name: /Send to chat/ })).toBeVisible();
+  await expect(more.getByRole('button', { name: /Copy link/ })).toBeVisible();
+  const first = await more
+    .getByRole('button')
+    .filter({ hasText: /Open in pipeline/ })
+    .boundingBox();
+  const send = await more
+    .getByRole('button')
+    .filter({ hasText: /Send to chat/ })
+    .boundingBox();
+  expect(first !== null && send !== null && first.y < send.y).toBe(true);
   await page.keyboard.press('Escape');
   await expect(more).toBeHidden();
 }

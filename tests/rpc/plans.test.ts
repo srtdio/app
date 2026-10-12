@@ -6,7 +6,9 @@
 // Covered: a client cannot create a plan (forbidden_role); a draft goes into a
 // client plan and is audited (20261011011500_plan_drafts_in_client_plans
 // dropped plan_has_drafts); sharing a team plan that holds a draft succeeds, is
-// one-way and stays forbidden_role for a client; a client review on a post item says use_stage_transition; a client review on a team
+// one-way and stays forbidden_role for a client; a client slot review on a post item is ok
+// (20261012090000_plan_item_review_client_post_slots; posts.stage untouched,
+// the rest in plan-slots.test.ts); a client review on a team
 // plan is forbidden_role; a concept edit resets both reviews to waiting;
 // reorder rejects a wrong-length list; a chat-origin file is 'attachment not
 // available'; every success writes one audit_log row named after the proc.
@@ -247,7 +249,7 @@ describe.runIf(RPC_SUITE)('plan procs (authenticated role)', () => {
     );
   });
 
-  it('plan_item_review: a client review on a post item is use_stage_transition', async () => {
+  it('plan_item_review: a client slot review on a post item is ok and audited', async () => {
     const planId = await newPlan('client');
     ok(
       'plan_posts_add',
@@ -258,13 +260,13 @@ describe.runIf(RPC_SUITE)('plan procs (authenticated role)', () => {
     );
     const [item] = await itemsOf(planId);
     if (item === undefined) throw new Error('no item');
-    refusedWith(
+    await expectAudited(
+      'plan_item_review',
       await call(client, 'plan_item_review', {
         p_item_id: item.id,
         p_side: 'client',
         p_status: 'approved',
       }),
-      'use_stage_transition',
     );
   });
 

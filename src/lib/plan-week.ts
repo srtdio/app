@@ -262,3 +262,133 @@ export function groupByCivilDay<T extends { target_date: string | null }>(
 
   return { byDay, undated };
 }
+
+// ---------------------------------------------------------------------------
+// The Plan screen's week list: every day of a plan's range, in order, with the
+// items that fall on it. Same civil-day rules as above (workspace zone).
+// ---------------------------------------------------------------------------
+
+const CIVIL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The weekday (0=Sun..6=Sat) of a civil date; pure string-to-UTC work, no zone. */
+function civilWeekday(civil: string): number {
+  const [y, m, d] = civil.split('-').map(Number);
+  return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
+}
+
+/** "Mon 12 Oct" from "2026-10-12". Pure. */
+export function formatCivilDayHeader(civil: string): string {
+  return `${WEEKDAY_NAMES[civilWeekday(civil)] ?? ''} ${formatCivilShort(civil)}`;
+}
+
+/** The Monday on or before a civil date (Mon-start weeks). Pure. */
+export function civilMondayOf(civil: string): string {
+  return addCivilDays(civil, -((civilWeekday(civil) + 6) % 7));
+}
+
+/** "Week of 12 Oct" for the Mon-start week holding `civil`. Pure. */
+export function planWeekLabel(civil: string): string {
+  return `Week of ${formatCivilShort(civilMondayOf(civil))}`;
+}
+
+/**
+ * The civil day of a stored date in the workspace zone: a bare 'YYYY-MM-DD'
+ * (a concept's own date) is that day; an instant (a post's timestamptz) is
+ * read in the zone. Blank or unparseable is null. Pure.
+ */
+export function civilDayOf(raw: string | null | undefined, timeZone: string): string | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (CIVIL_DATE.test(raw)) return raw;
+  const instant = new Date(raw);
+  if (Number.isNaN(instant.getTime())) return null;
+  return civilDate(instant, safeZone(timeZone));
+}
+
+/** Every civil day from `start` to `end` inclusive (empty when end < start). Pure. */
+export function civilDaysBetween(start: string, end: string): string[] {
+  const days: string[] = [];
+  if (!CIVIL_DATE.test(start) || !CIVIL_DATE.test(end)) return days;
+  for (let day = start; day <= end && days.length < 400; day = addCivilDays(day, 1)) {
+    days.push(day);
+  }
+  return days;
+}
+
+/** Plans longer than this many days get a week header per Mon-start week. */
+export const PLAN_WEEK_HEADER_AFTER_DAYS = 7;
+
+/** Whether a plan's list shows week headers: more than 7 days. Pure. */
+export function planShowsWeeks(startsOn: string, endsOn: string): boolean {
+  return civilDaysBetween(startsOn, endsOn).length > PLAN_WEEK_HEADER_AFTER_DAYS;
+}
+
+export interface PlanDayGroup<T> {
+  /** The civil day, or null for the "No date" group. */
+  day: string | null;
+  /** "Mon 12 Oct", or "No date". */
+  label: string;
+  /** Whether the day is inside the plan's range. */
+  inRange: boolean;
+  /** The items on that day, in the caller's order. */
+  items: T[];
+}
+
+export interface PlanWeekGroup<T> {
+  /** "Week of 12 Oct"; null when the plan shows no week headers, and for "No date". */
+  label: string | null;
+  days: PlanDayGroup<T>[];
+}
+
+/**
+ * The Plan screen's list: one group per day of the range (empty days kept),
+ * items dated outside it in their own day groups before or after it (date
+ * order), undated items last under "No date". Input order survives inside a
+ * day. With `weeks`, dated days are split into Mon-start weeks; otherwise one
+ * unlabelled week holds every dated day. Pure.
+ */
+export function planWeekGroups<T>(
+  items: readonly T[],
+  range: { startsOn: string; endsOn: string },
+  dayOf: (item: T) => string | null,
+  weeks: boolean,
+): PlanWeekGroup<T>[] {
+  const byDay = new Map<string, T[]>();
+  const undated: T[] = [];
+  for (const item of items) {
+    const day = dayOf(item);
+    if (day === null) {
+      undated.push(item);
+      continue;
+    }
+    const list = byDay.get(day);
+    if (list === undefined) byDay.set(day, [item]);
+    else list.push(item);
+  }
+  const rangeDays = civilDaysBetween(range.startsOn, range.endsOn);
+  const inRange = new Set(rangeDays);
+  const allDays = [...new Set([...rangeDays, ...byDay.keys()])].sort();
+  const days: PlanDayGroup<T>[] = allDays.map((day) => ({
+    day,
+    label: formatCivilDayHeader(day),
+    inRange: inRange.has(day),
+    items: byDay.get(day) ?? [],
+  }));
+  const out: PlanWeekGroup<T>[] = [];
+  if (weeks) {
+    for (const group of days) {
+      const label = planWeekLabel(group.day ?? '');
+      const last = out[out.length - 1];
+      if (last !== undefined && last.label === label) last.days.push(group);
+      else out.push({ label, days: [group] });
+    }
+  } else if (days.length > 0) {
+    out.push({ label: null, days });
+  }
+  if (undated.length > 0) {
+    out.push({
+      label: null,
+      days: [{ day: null, label: 'No date', inRange: false, items: undated }],
+    });
+  }
+  return out;
+}

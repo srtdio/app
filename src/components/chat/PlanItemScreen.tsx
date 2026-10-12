@@ -1,6 +1,8 @@
 // One plan item, full page over the Plan screen (its own history step), headed
 // by the kind and place ("Concept 1 of 3"). A post item is the pipeline post
-// view embedded as is, with a header overflow that opens it in Pipeline. A
+// view embedded as is, its header subtitle the slot state ("Slot approved" /
+// "Slot pending") and its header overflow opening the post view's own action
+// sheet (Open in pipeline first, then the post's actions). A
 // concept shows its library files, title and description, a status box (Agency
 // for the agency side, Client), the viewer's actions, and the comments with a
 // composer. The agency marks agency approval (confirmed) or asks changes; a
@@ -13,12 +15,9 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement, RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { planConceptEdit, planItemCommentCreate, planItemReview } from '@srtdio/rpc';
-import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
-// Named apart from the concept sheet: this is only the post item's overflow menu.
-import { Sheet as OverflowSheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
-import { IconArrowUp, IconLock, IconMore, IconPipeline } from '@/components/ui/icons';
+import { IconArrowUp, IconLock, IconMore } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
@@ -37,6 +36,7 @@ import {
   clientStatus,
   itemDateLabel,
   itemKindLabel,
+  itemSlotSubtitle,
   reviewStatus,
   stageLabel,
   type PillTone,
@@ -218,6 +218,7 @@ export function PlanItemScreen(props: {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // The post item's overflow: the embedded post view's own action sheet.
   const [moreOpen, setMoreOpen] = useState(false);
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<CommentVisibility>('everyone');
@@ -464,10 +465,25 @@ export function PlanItemScreen(props: {
         open={props.open}
         testId="item"
         title={itemKindLabel(bundle.items, item)}
-        subtitle={bundle.plan.title}
+        subtitle={itemSlotSubtitle(bundle, item, side) ?? bundle.plan.title}
         backLabel={props.backLabel ?? 'Back to plan'}
         onBack={props.onClose}
         onEntered={() => setRested(true)}
+        {...(item.kind === 'post' && item.post_id !== null
+          ? {
+              action: (
+                <button
+                  type="button"
+                  aria-label="More actions"
+                  data-plan-more=""
+                  onClick={() => setMoreOpen(true)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <IconMore size={22} />
+                </button>
+              ),
+            }
+          : {})}
         footer={
           item.kind === 'post' ? undefined : (
             <form
@@ -531,17 +547,6 @@ export function PlanItemScreen(props: {
       >
         {item.kind === 'post' ? (
           <>
-            {/* PlanPage's header has no action slot: the overflow sits over its
-                right end, positioned against the page (not the scroll body). */}
-            <button
-              type="button"
-              aria-label="More actions"
-              data-plan-more=""
-              onClick={() => setMoreOpen(true)}
-              className="absolute right-3 top-[calc(env(safe-area-inset-top)+8px)] flex h-11 w-11 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <IconMore size={22} />
-            </button>
             {item.post_id !== null ? (
               <Suspense
                 fallback={<div className="m-4 h-[170px] animate-pulse rounded-lg bg-panel-2" />}
@@ -553,6 +558,11 @@ export function PlanItemScreen(props: {
                     ? { focusCommentId: props.highlightCommentId }
                     : {})}
                   onNavigateAway={props.onClose}
+                  actionsOpen={props.open && moreOpen}
+                  onActionsOpenChange={setMoreOpen}
+                  onOpenInPipeline={() => {
+                    if (item.post_id !== null) navigate(postRoute(item.post_id));
+                  }}
                 />
               </Suspense>
             ) : null}
@@ -715,21 +725,6 @@ export function PlanItemScreen(props: {
           onRetryFiles={filesRead.retry}
           {...(canAttach ? { uploadFile } : {})}
         />
-      ) : null}
-      {item.kind === 'post' && item.post_id !== null ? (
-        <OverflowSheet
-          open={props.open && moreOpen}
-          onClose={() => setMoreOpen(false)}
-          title="Post"
-        >
-          <ActionRow
-            icon={<IconPipeline size={20} />}
-            label="Open in pipeline"
-            onClick={() => {
-              if (item.post_id !== null) navigate(postRoute(item.post_id));
-            }}
-          />
-        </OverflowSheet>
       ) : null}
     </>
   );

@@ -17,6 +17,7 @@ import { abortable, READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
 import type { Precheck } from '@/lib/asset-upload';
 import type { AttachmentUploader } from '@/lib/chat/attachments';
 import { openPlans } from '@/lib/chat/status-bar';
+import { civilDayOf } from '@/lib/plan-week';
 
 /** Ids per IN read (the PostgREST URL stays short). */
 export const PLAN_READ_CHUNK = 100;
@@ -218,6 +219,25 @@ export function planItemDay(
         ? (postInfo[item.post_id]?.target_date ?? null)
         : null;
   return raw === null || raw === '' ? null : raw.slice(0, 10);
+}
+
+/**
+ * An item's civil day in the workspace zone (the Plan screen's day groups): a
+ * concept's own date as is, a post's target_date instant read in the zone;
+ * null when undated or the post is not readable. Pure.
+ */
+export function planItemDayInZone(
+  item: PlanItemRow,
+  postInfo: Readonly<Record<string, PlanPostInfo>>,
+  timeZone: string,
+): string | null {
+  const raw =
+    item.kind === 'concept' || item.draft_row === true
+      ? (item.target_date ?? null)
+      : item.post_id !== null
+        ? (postInfo[item.post_id]?.target_date ?? null)
+        : null;
+  return civilDayOf(raw, timeZone);
 }
 
 /**
@@ -1321,4 +1341,92 @@ export function createConceptUploads(deps: {
       publish([]);
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// A post's live plans (the delete confirm)
+// ---------------------------------------------------------------------------
+
+/** One live plan a post sits in. */
+export interface PostPlanRef {
+  planId: string;
+  title: string;
+}
+
+interface PostPlanRow {
+  plan_id: string;
+  plans: { title: string } | Array<{ title: string }> | null;
+}
+
+/**
+ * The live plans holding a post: ONE select of its live plan_items joined to
+ * their live plans (title), capped at 5s. A plan listed twice counts once.
+ * Never throws; a failure or the cap is a failed Result.
+ */
+export function readPostPlans(
+  client: Client,
+  postId: string,
+  timeoutMs: number = READ_TIMEOUT_MS,
+): Promise<Result<PostPlanRef[]>> {
+  return withReadTimeout(async (signal) => {
+    try {
+      const query = (client.from('plan_items') as unknown as PlanTable)
+        .select('plan_id, plans!inner(title)')
+        .eq('post_id', postId)
+        .is('deleted_at', null)
+        .is('plans.deleted_at', null);
+      const res = (await abortable(query, signal)) as SelectResult;
+      if (res.error !== null) return fail(`plan_items: ${res.error.message}`);
+      const seen = new Set<string>();
+      const out: PostPlanRef[] = [];
+      for (const row of (res.data ?? []) as PostPlanRow[]) {
+        const plan = Array.isArray(row.plans) ? row.plans[0] : row.plans;
+        if (plan === undefined || plan === null || seen.has(row.plan_id)) continue;
+        seen.add(row.plan_id);
+        out.push({ planId: row.plan_id, title: plan.title });
+      }
+      return { ok: true, data: out };
+    } catch (error) {
+      return fail(String(error));
+    }
+  }, timeoutMs);
+}
+
+/**
+ * The delete confirm's plan line: none for no plan, "It's in <title> and will
+ * leave that plan." for one, "It's in <title> and N other plans and will leave
+ * them." for more. Pure.
+ */
+export function postPlansLine(plans: readonly PostPlanRef[]): string | null {
+  const first = plans[0];
+  if (first === undefined) return null;
+  if (plans.length === 1) return `It's in ${first.title} and will leave that plan.`;
+  const others = plans.length - 1;
+  return `It's in ${first.title} and ${others} other ${others === 1 ? 'plan' : 'plans'} and will leave them.`;
+}
+
+// ---------------------------------------------------------------------------
+// A slot write (the Plan screen's checkbox)
+// ---------------------------------------------------------------------------
+
+/**
+ * One optimistic slot write: `apply` the new status at once, run the write,
+ * and on failure `apply` the previous status back. Returns the write's
+ * Result. Never throws (a thrown write is a failure, reverted).
+ */
+export async function runSlotWrite(input: {
+  status: ReviewStatus;
+  previous: ReviewStatus;
+  apply: (status: ReviewStatus) => void;
+  write: (status: ReviewStatus) => Promise<Result<unknown>>;
+}): Promise<Result<unknown>> {
+  input.apply(input.status);
+  let result: Result<unknown>;
+  try {
+    result = await input.write(input.status);
+  } catch (error) {
+    result = fail(String(error));
+  }
+  if (!result.ok) input.apply(input.previous);
+  return result;
 }

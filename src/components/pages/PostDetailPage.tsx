@@ -247,6 +247,9 @@ export function PostDetailPage({
   embedded = false,
   focusCommentId: focusCommentIdProp,
   onNavigateAway,
+  actionsOpen: actionsOpenProp,
+  onActionsOpenChange,
+  onOpenInPipeline,
 }: {
   postId?: string;
   /**
@@ -258,6 +261,15 @@ export function PostDetailPage({
   focusCommentId?: string;
   /** Replaces every hard navigation to /pipeline (back, not found, after delete). */
   onNavigateAway?: () => void;
+  /**
+   * Embedded only: the host owns the post action sheet's open state (its own
+   * header button opens this same sheet). Absent: the page owns it.
+   */
+  actionsOpen?: boolean;
+  /** Embedded only: the sheet asks to open or close. */
+  onActionsOpenChange?: (open: boolean) => void;
+  /** Embedded only: the sheet's first row, Open in pipeline. */
+  onOpenInPipeline?: () => void;
 } = {}) {
   const params = useParams();
   // The pretty-link resolver (/p/:ref) passes the resolved id as a prop; the
@@ -367,7 +379,12 @@ export function PostDetailPage({
   const [buckets, setBuckets] = useState<BucketOption[]>([]);
   // F8 post action sheet (Send to chat / Copy link / Download all images). Live
   // PCS only; the trigger is suppressed in read-only mode below.
-  const [actionsOpen, setActionsOpen] = useState(false);
+  const [ownActionsOpen, setOwnActionsOpen] = useState(false);
+  const actionsOpen = actionsOpenProp ?? ownActionsOpen;
+  const setActionsOpen = (next: boolean): void => {
+    if (actionsOpenProp === undefined) setOwnActionsOpen(next);
+    onActionsOpenChange?.(next);
+  };
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [savingMeta, setSavingMeta] = useState(false);
@@ -1667,6 +1684,7 @@ export function PostDetailPage({
           onToast={push}
           canDelete={canDelete}
           onDeletePost={handleDeletePost}
+          {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
         />
       ) : null}
 

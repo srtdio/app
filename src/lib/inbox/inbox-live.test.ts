@@ -306,6 +306,36 @@ describe('live toast labels for approve, reject, park and deletes', () => {
     expect(eventLabel('plan_review')).toBe('Plan item reviewed');
   });
 
+  it('a plan_review withdrawal names who withdrew what', () => {
+    expect(
+      eventLabel('plan_review', null, { withdrawn: true, previous: 'approved', actorName: 'Cy' }),
+    ).toBe('Cy withdrew slot approval');
+    expect(
+      eventLabel('plan_review', null, { withdrawn: true, previous: 'changes', actorName: 'Cy' }),
+    ).toBe('Cy withdrew their changes request');
+    expect(eventLabel('plan_review', null, { withdrawn: true, previous: 'approved' })).toBe(
+      'Someone withdrew slot approval',
+    );
+    expect(eventLabel('plan_review', null, { withdrawn: false, actorName: 'Cy' })).toBe(
+      'Plan item reviewed',
+    );
+    const spec = toastFromEnriched(
+      enriched({
+        lead: {
+          eventType: 'plan_review',
+          actorName: 'Cy',
+          actorAvatarUrl: null,
+          body: null,
+          title: null,
+          mentionNames: new Map(),
+          reviewWithdrawn: true,
+          reviewPrevious: 'approved',
+        },
+      }),
+    );
+    expect(spec?.title).toBe('Cy withdrew slot approval');
+  });
+
   it('post_deleted and assets_deleted have their own labels', () => {
     expect(eventLabel('post_deleted')).toBe('Post deleted');
     expect(eventLabel('assets_deleted')).toBe('Assets deleted');

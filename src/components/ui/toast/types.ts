@@ -1,11 +1,19 @@
 import type { ReactNode } from 'react';
 
+/** An optional trailing action on a toast (e.g. Undo): pressing it also dismisses the toast. */
+export interface ToastAction {
+  label: string;
+  onPress: () => void;
+}
+
 /** Caller-supplied options for a single toast. */
 export interface ToastOptions {
   title: string;
   description?: string;
   icon?: ReactNode;
   onPress?: () => void;
+  /** A trailing 44px action button (e.g. Undo). */
+  action?: ToastAction;
   /**
    * Auto-dismiss delay in milliseconds. Omitted falls back to the default
    * (5000ms). `0` or `null` makes the toast sticky (no auto-dismiss).
@@ -20,6 +28,7 @@ export interface Toast {
   description?: string;
   icon?: ReactNode;
   onPress?: () => void;
+  action?: ToastAction;
 }
 
 /** Public surface returned by useToast(). */

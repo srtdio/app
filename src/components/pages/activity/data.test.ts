@@ -1446,6 +1446,49 @@ describe('plan comments and approvals', () => {
     expect(cardTitle({ ...base, title: null, planTitle: null })).toBe('Plan item');
   });
 
+  it('a plan_review withdrawal reads "withdrew slot approval" / "withdrew their changes request"', () => {
+    const mapped = mapEntry(
+      row({
+        event_type: 'plan_review',
+        entity_type: 'plan_item',
+        entity_id: ITEM,
+        actor_user_id: 'u9',
+        payload: {
+          side: 'client',
+          status: 'waiting',
+          withdrawn: true,
+          previous: 'approved',
+          plan_id: PLAN,
+        },
+      }),
+    );
+    expect(mapped.reviewWithdrawn).toBe(true);
+    expect(mapped.reviewPrevious).toBe('approved');
+    const named = { ...mapped, actorName: 'Cy' };
+    expect(activityLine(named)).toBe('Cy withdrew slot approval');
+    expect(shortLine(named)).toBe('Cy withdrew slot approval');
+    expect(activityLine({ ...named, reviewPrevious: 'changes' })).toBe(
+      'Cy withdrew their changes request',
+    );
+    expect(activityLine({ ...named, reviewSide: 'team' })).toBe(
+      'Cy withdrew slot approval (team review)',
+    );
+    expect(activityLine({ ...named, actorName: null })).toBe('Someone withdrew slot approval');
+    // Same tap target as any plan_review row.
+    expect(entityHref(named)).toBe(`/plans/${PLAN}?item=${ITEM}`);
+    // A plain approval row is no withdrawal.
+    const plain = mapEntry(
+      row({
+        event_type: 'plan_review',
+        entity_type: 'plan_item',
+        entity_id: ITEM,
+        payload: { side: 'client', status: 'approved', plan_id: PLAN },
+      }),
+    );
+    expect(plain.reviewWithdrawn).toBe(false);
+    expect(activityLine({ ...plain, actorName: 'Cy' })).toBe('Cy approved a plan item');
+  });
+
   it('entityHref: comment with comment_id, review, missing plan_id, missing entity_id', () => {
     const comment = item({
       eventType: 'plan_comment',

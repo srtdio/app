@@ -47,8 +47,9 @@ const BUNDLE: PlanBundle = {
   reviews: [
     { item_id: 'c1', side: 'team', status: 'approved' },
     { item_id: 'c1', side: 'client', status: 'changes' },
+    { item_id: 'p1', side: 'client', status: 'approved' },
   ],
-  postStages: { post1: 'approved' },
+  postStages: { post1: 'review' },
   postInfo: { post1: { title: 'Carousel', target_date: '2026-10-13' } },
 };
 
@@ -72,7 +73,7 @@ describe('rows and the item status box (D3)', () => {
     const post = BUNDLE.items[1] as PlanItemRow;
     expect(statusRows(BUNDLE, post, 'client')[0]).toEqual({
       label: 'Pipeline',
-      value: 'Approved',
+      value: 'In review',
       tone: 'neutral',
     });
   });

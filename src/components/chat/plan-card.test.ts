@@ -70,14 +70,14 @@ const MIXED = bundle(
     { item_id: 'c1', side: 'client', status: 'approved' },
     { item_id: 'c2', side: 'client', status: 'changes' },
     { item_id: 'c3', side: 'team', status: 'approved' },
-    // A client review on a post item never counts: the post stage decides.
+    // A post item's client slot review counts; its post stage never does.
     { item_id: 'p2', side: 'client', status: 'approved' },
   ],
   { post1: 'approved', post2: 'review' },
 );
 
 describe('plan progress', () => {
-  it('counts concept client reviews and post stages; team reviews never count', () => {
+  it('counts client reviews on concepts and post slots; stages and team reviews never count', () => {
     expect(planProgress(MIXED)).toEqual({ approved: 2, teamApproved: 1, total: 5, changes: 1 });
     expect(progressLabel(planProgress(MIXED), 'client')).toBe(
       '2 of 5 approved by client · 1 change asked',
@@ -144,8 +144,11 @@ describe('rows and labels', () => {
       'Client · Approved',
     ]);
     expect(itemPills(MIXED, c1, 'client').map((p) => p.label)).toEqual(['Approved']);
+    // A post's pill follows its client slot review, not its stage.
     const p1 = MIXED.items[3] as PlanItemRow;
-    expect(itemPills(MIXED, p1, 'client').map((p) => p.label)).toEqual(['Approved']);
+    expect(itemPills(MIXED, p1, 'client').map((p) => p.label)).toEqual(['Waiting']);
+    const p2 = MIXED.items[4] as PlanItemRow;
+    expect(itemPills(MIXED, p2, 'client').map((p) => p.label)).toEqual(['Approved']);
     const c2 = MIXED.items[1] as PlanItemRow;
     expect(itemPills(MIXED, c2, 'client')[0]).toMatchObject({
       label: 'Changes asked',
@@ -228,7 +231,7 @@ describe('team only plan gating (F1)', () => {
 });
 
 describe('both progress counts (D1)', () => {
-  it('team counts team reviews on concepts and posts; client counts concept reviews and post stage', () => {
+  it('team counts team reviews; client counts client reviews on concepts and post slots', () => {
     const b = bundle(
       [
         item({ id: 'c1' }),
@@ -242,7 +245,9 @@ describe('both progress counts (D1)', () => {
         { item_id: 'c2', side: 'team', status: 'changes' },
         { item_id: 'p1', side: 'team', status: 'approved' },
         { item_id: 'p2', side: 'team', status: 'approved' },
+        { item_id: 'p2', side: 'client', status: 'approved' },
       ],
+      // post1 at stage approved has no client slot review: not client approved.
       { post1: 'approved', post2: 'review' },
     );
     const p = planProgress(b);

@@ -168,8 +168,12 @@ export interface ActivityItem {
   planTitle?: string | null;
   /** plan_review only: which side reviewed (payload.side, 'team' | 'client'). */
   reviewSide?: string | null;
-  /** plan_review only: the review outcome (payload.status, 'approved' | 'changes'). */
+  /** plan_review only: the review outcome (payload.status, 'approved' | 'changes' | 'waiting'). */
   reviewStatus?: string | null;
+  /** plan_review only: a withdrawal (payload.withdrawn true, status 'waiting'). */
+  reviewWithdrawn?: boolean;
+  /** plan_review withdrawal only: the status withdrawn (payload.previous). */
+  reviewPrevious?: string | null;
 }
 
 /**
@@ -221,6 +225,24 @@ export function chatMentionPreview(
   return first !== '' ? first : null;
 }
 
+/** Whether a jsonb payload's `key` is literally true. Pure. */
+function payloadFlag(p: unknown, key: string): boolean {
+  return typeof p === 'object' && p !== null && (p as Record<string, unknown>)[key] === true;
+}
+
+/**
+ * A plan_review withdrawal's phrase: "withdrew their changes request" when the
+ * withdrawn status was changes, else "withdrew slot approval". Null when the
+ * row is not a withdrawal. Pure.
+ */
+export function planWithdrawalPhrase(
+  withdrawn: boolean | null | undefined,
+  previous: string | null | undefined,
+): string | null {
+  if (withdrawn !== true) return null;
+  return previous === 'changes' ? 'withdrew their changes request' : 'withdrew slot approval';
+}
+
 /** Map a raw inbox_entries row into an ActivityItem. Pure; actorName stays null. */
 export function mapEntry(row: InboxEntryRow): ActivityItem {
   const payload: unknown = row.payload as Json;
@@ -267,6 +289,8 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     planTitle: null,
     reviewSide: review ? payloadStr(payload, 'side') : null,
     reviewStatus: review ? payloadStr(payload, 'status') : null,
+    reviewWithdrawn: review && payloadFlag(payload, 'withdrawn'),
+    reviewPrevious: review ? payloadStr(payload, 'previous') : null,
   };
 }
 
@@ -319,6 +343,10 @@ export function planEventLine(item: ActivityItem): string | null {
   }
   if (item.eventType !== 'plan_review') return null;
   const team = item.reviewSide === 'team' ? ' (team review)' : '';
+  const withdrew = planWithdrawalPhrase(item.reviewWithdrawn, item.reviewPrevious);
+  if (withdrew !== null) {
+    return `${who ?? UNKNOWN_ACTOR} ${withdrew}${team}`;
+  }
   switch (item.reviewStatus) {
     case 'approved':
       return who !== null

@@ -10,12 +10,16 @@
 //   - Download all -> the same attachment-disposition presigned URL the PCS
 //                     lightbox already uses per image, looped over the gallery.
 // It is mounted in LIVE PCS only (never the read-only old-version view).
+// Embedded in a plan item, the same sheet leads with Open in pipeline. The
+// delete confirm names the post's live plans (one bounded read on opening it).
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactElement } from 'react';
+import type { Result } from '@srtdio/rpc';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
-import { IconDownload, IconLink, IconSend, IconTrash } from '@/components/ui/icons';
+import { IconDownload, IconLink, IconPipeline, IconSend, IconTrash } from '@/components/ui/icons';
 import { requestPresignedUrl, type PresignDeps } from '@/lib/asset-presign';
 import { postRoute } from '@/components/chat/post-card';
 import { entityUrlPath } from '@/lib/entityRef';
@@ -28,6 +32,8 @@ import {
 } from '@/lib/post-share';
 import { ConversationPicker } from '@/components/pages/pcs/ConversationPicker';
 import type { GalleryItem } from '@srtdio/posts';
+import { postPlansLine, readPostPlans, type PostPlanRef } from '@/lib/chat/plans';
+import { supabase } from '@/lib/supabase';
 
 interface PostActionSheetProps {
   open: boolean;
@@ -53,6 +59,39 @@ interface PostActionSheetProps {
   canDelete: boolean;
   /** Soft-delete the post; the page handles the proc call, toast, and navigation. */
   onDeletePost: () => Promise<void>;
+  /** Embedded in a plan item: the first row, Open in pipeline. Absent elsewhere. */
+  onOpenInPipeline?: () => void;
+  /** The delete confirm's plans read; the live read (5s cap) when absent. */
+  readPlans?: (postId: string) => Promise<Result<PostPlanRef[]>>;
+}
+
+/** The delete confirm's base copy. */
+export const DELETE_CONFIRM_BASE = 'Delete this post? This cannot be undone.';
+
+/**
+ * The delete confirm's copy: the base, then the plans line once the read
+ * settled with one or more plans. Still reading, failed, timed out or no plan:
+ * the base alone. Pure.
+ */
+export function deleteConfirmText(plans: Result<PostPlanRef[]> | null): string {
+  if (plans === null || !plans.ok) return DELETE_CONFIRM_BASE;
+  const line = postPlansLine(plans.data);
+  return line === null ? DELETE_CONFIRM_BASE : `${DELETE_CONFIRM_BASE} ${line}`;
+}
+
+/** The action rows in order (Open in pipeline first when offered, Delete last). Pure. */
+export function postActionLabels(opts: {
+  openInPipeline: boolean;
+  download: boolean;
+  canDelete: boolean;
+}): string[] {
+  return [
+    ...(opts.openInPipeline ? ['Open in pipeline'] : []),
+    'Send to chat',
+    'Copy link',
+    ...(opts.download ? ['Download all images'] : []),
+    ...(opts.canDelete ? ['Delete post'] : []),
+  ];
 }
 
 /** Save one resolved URL as a file via a throwaway download anchor. */
@@ -104,10 +143,31 @@ export function PostActionSheet({
   onToast,
   canDelete,
   onDeletePost,
-}: PostActionSheetProps) {
+  onOpenInPipeline,
+  readPlans,
+}: PostActionSheetProps): ReactElement {
   const [view, setView] = useState<'actions' | 'chat' | 'confirm-delete'>('actions');
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // The confirm's plans read: null while it runs (the base copy shows).
+  const [plans, setPlans] = useState<Result<PostPlanRef[]> | null>(null);
+  const confirming = open && view === 'confirm-delete';
+  const readPlansRef = useRef(readPlans);
+  readPlansRef.current = readPlans;
+  useEffect(() => {
+    if (!confirming) {
+      setPlans(null);
+      return;
+    }
+    let live = true;
+    const run = readPlansRef.current ?? ((id: string) => readPostPlans(supabase, id));
+    void run(postId).then((result) => {
+      if (live) setPlans(result);
+    });
+    return () => {
+      live = false;
+    };
+  }, [confirming, postId]);
 
   const images = useMemo(() => gallery.filter(isDownloadableImage), [gallery]);
   const showDownload = canDownloadAll(gallery);
@@ -190,7 +250,9 @@ export function PostActionSheet({
         />
       ) : view === 'confirm-delete' ? (
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-fg">Delete this post? This cannot be undone.</p>
+          <p data-post-delete-text="" className="text-sm text-fg">
+            {deleteConfirmText(plans)}
+          </p>
           <Button
             variant="danger"
             size="lg"
@@ -205,6 +267,17 @@ export function PostActionSheet({
         </div>
       ) : (
         <div className="flex flex-col gap-1">
+          {onOpenInPipeline !== undefined ? (
+            <ActionRow
+              icon={<IconPipeline size={18} />}
+              label="Open in pipeline"
+              sub="See this post in the pipeline"
+              onClick={() => {
+                close();
+                onOpenInPipeline();
+              }}
+            />
+          ) : null}
           <ActionRow
             icon={<IconSend size={18} />}
             label="Send to chat"
