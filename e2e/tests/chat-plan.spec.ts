@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
+import { expectMinTouchTarget } from '../helpers/touch-target';
 import {
   COLLEAGUE_A,
   DM_CHANNEL,
@@ -18,11 +19,12 @@ import {
   seedTeamAndHiddenPlans,
 } from '../fixtures/chat-data';
 
-// Plan in chat (D1 to D8): the tray's Plan tile ("Share a plan", then New
-// plan), the New plan screen and its share sequence, the plan card (agency,
-// client, Agency only, not available), the Plan and Item screens with agency
-// and client approval and Agency only
-// comments, Forward for a client, and back closing one layer at a time. Runs in
+// Plan in chat: the tray's Plan tile ("Plans", then New plan), the New plan
+// screen's Create plan (a Draft plan, no card sent, its Plan screen opens),
+// the Draft footer (Open for client, Send in the chat, Go to card), the plan
+// card (Draft, Open, Plan deleted), the Plan and Item screens with agency and
+// client approval and Agency only comments, Forward (a Draft into a chat with
+// a client is refused), and back closing one layer at a time. Runs in
 // both colour schemes (the dark and light projects), on the iPhone viewport and
 // on a laptop. Linux WebKit approximates iOS WebKit.
 
@@ -93,7 +95,7 @@ const page_ = (page: Page, id: string) => page.locator(`[data-plan-page="${id}"]
 /** The Plan tile opens "Share a plan"; its last row opens the New plan screen. */
 async function newPlanFromTile(page: Page): Promise<void> {
   await page.locator('[data-tray-tile="plan"]').click();
-  const picker = page.getByRole('dialog', { name: 'Share a plan' });
+  const picker = page.getByRole('dialog', { name: 'Plans' });
   await expect(picker).toBeVisible();
   await picker.locator('[data-plan-pick-new]').click();
 }
@@ -111,16 +113,13 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await shot(page, `${prefix}-01-tray-agency`);
   await newPlanFromTile(page);
 
-  // D2: the New plan screen.
+  // D2: the New plan screen: no audience choice, drafts allowed.
   const compose = page_(page, 'compose');
   await expect(compose).toBeVisible();
-  await expect(compose.getByText('Who can see it').first()).toBeVisible();
-  await expect(compose.locator('[data-plan-audience="client"]')).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  // A chat with a client: no "Add drafts".
-  await expect(compose.locator('[data-plan-add-drafts]')).toHaveCount(0);
+  await expect(compose.getByText('Who can see it')).toHaveCount(0);
+  await expect(compose.locator('[data-plan-audience]')).toHaveCount(0);
+  await expect(compose.locator('[data-plan-add-drafts]')).toBeVisible();
+  await expect(compose.locator('[data-plan-create]')).toHaveText('Create plan');
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-02-new-plan-empty`);
   await compose.locator('[data-plan-title]').fill(PLAN_TITLE);
@@ -155,79 +154,65 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-04-new-plan-filled`);
 
-  // Share in chat: the screen closes, the card lands, the toast says so.
-  await compose.locator('[data-plan-share]').click();
+  // Create plan: a Draft plan, no card sent; its Plan screen opens.
+  await compose.locator('[data-plan-create]').click();
   await expect(compose).toBeHidden();
-  // "Plan shared" sits just above the composer (never over a page header).
-  const notice = page.locator('[data-plan-shared-notice="shown"]');
-  await expect(notice).toHaveText('Plan shared');
-  const noticeBox = await notice.locator('span').boundingBox();
-  const composerBox = await page.locator('form:has(textarea)').first().boundingBox();
-  expect(noticeBox).not.toBeNull();
-  expect(composerBox).not.toBeNull();
-  if (noticeBox !== null && composerBox !== null) {
-    expect(noticeBox.y + noticeBox.height).toBeLessThanOrEqual(composerBox.y);
-    expect(noticeBox.y).toBeGreaterThan(80);
-  }
+  const plan = page_(page, 'plan');
+  await expect(plan).toBeVisible();
   const tables = network.world.tables;
   expect(tables.plans).toHaveLength(1);
   const planId = String(tables.plans?.[0]?.id);
+  expect(tables.plans?.[0]?.audience).toBe('team');
   expect((tables.plan_items ?? []).filter((i) => i.plan_id === planId)).toHaveLength(2);
   expect(
     (tables.asset_attachments ?? []).filter((a) => a.entity_type === 'plan_item'),
   ).toHaveLength(1);
-  const shared = (tables.chat_messages ?? []).filter(
-    (m) => m.channel_id === DM_CHANNEL && Array.isArray(m.shared_plan_ids),
+  expect(network.rpcCalls.filter((c) => c.name === 'chat_plan_share')).toEqual([]);
+  // The header: the range, then Draft; progress the team side.
+  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Draft$/);
+  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Team 0 of 2');
+  // The Draft footer: Open for client, and Send in this chat held back (it has a client).
+  const openClient = plan.locator('[data-plan-open-client]');
+  const send = plan.locator('[data-plan-send-here]');
+  await expect(openClient).toHaveText('Open for client');
+  await expect(send).toHaveText(`Send in ${PEER_NAME}`);
+  await expect(send).toBeDisabled();
+  await expect(plan.locator('[data-plan-send-hint]')).toHaveText(
+    'Open the plan for client to send it here.',
   );
-  expect(shared.map((m) => m.shared_plan_ids)).toEqual([[planId]]);
-  const card = page.locator(`[data-plan-card="${planId}"]`);
-  await card.scrollIntoViewIfNeeded();
-  await expect(card).toBeVisible();
-  await expect(card.getByText('1 concept')).toBeVisible();
-  await expect(card.getByText('1 post')).toBeVisible();
-  await expect(card.getByText('Agency 0 of 2 · Client 0 of 2')).toBeVisible();
-  // The agency's Forward shows on every card.
-  await expect(card.locator('[data-plan-forward]')).toBeVisible();
-  await page.waitForTimeout(400);
-  await shot(page, `${prefix}-05-card-agency`);
-
-  // D4: the Plan screen.
-  await card.locator('[data-plan-open]').click();
-  const plan = page_(page, 'plan');
-  await expect(plan).toBeVisible();
-  // The header: the range, then who sees it.
-  await expect(plan.getByText(/ · Shared with client$/)).toBeVisible();
+  await expect(plan.getByText("Agency only. The client can't see it yet.")).toHaveCount(0);
+  for (const target of [openClient, send]) expectMinTouchTarget(await target.boundingBox());
   // One list by day (no Concepts/Posts tabs): each row tagged with its kind.
   await expect(plan.locator('[data-plan-tab]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row]')).toHaveCount(2);
   const kind = (label: string) => page.locator(`[data-plan-row-kind="${label}"]`);
   const conceptRow = () => plan.locator('[data-plan-row]').filter({ has: kind('Concept 1 of 1') });
   const postRow = () => plan.locator('[data-plan-row]').filter({ has: kind('Post 1 of 1') });
-  // The agency's team state is the row's checkbox.
-  const conceptBox = () =>
-    plan
-      .locator('[data-plan-row-wrap]')
-      .filter({ has: kind('Concept 1 of 1') })
-      .locator('[data-plan-slot="team"]');
+  // On a Draft plan the agency's team state is the row's checkbox.
+  const conceptWrap = () =>
+    plan.locator('[data-plan-row-wrap]').filter({ has: kind('Concept 1 of 1') });
   const row = conceptRow();
-  await expect(conceptBox()).toHaveAttribute('aria-checked', 'false');
+  await expect(conceptWrap().locator('[data-plan-slot="team"]')).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
   await page.waitForTimeout(300);
-  await shot(page, `${prefix}-06-plan-screen-agency`);
+  await shot(page, `${prefix}-05-plan-screen-draft`);
 
-  // D5: the Item screen, agency approve with its confirm.
+  // D5: the Item screen, agency approve with its confirm (a Draft plan).
   await row.click();
   const item = page_(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByText('Concept 1 of 1')).toBeVisible();
   await expect(item.locator('[data-plan-media="files"]')).toBeVisible();
+  // Remove from plan: a red button at the bottom, not a menu row.
+  await expect(item.locator('[data-plan-remove]')).toHaveText(/Remove from plan/);
   await page.waitForTimeout(300);
-  await shot(page, `${prefix}-07-item-concept-agency`);
+  await shot(page, `${prefix}-06-item-concept-agency`);
   await item.locator('[data-plan-approve]').click();
   const confirm = page.getByRole('dialog', { name: 'Agency approve' });
   await expect(confirm).toBeVisible();
   await expect(confirm.getByText(/Only the agency sees this/)).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-08-confirm-team-approve`);
   await confirm.locator('[data-plan-confirm]').click();
   await expect(confirm).toBeHidden();
   await expect(item.locator('[data-plan-status] [data-plan-pill="team"]')).toHaveText('Approved');
@@ -241,17 +226,74 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(note.getByText('Agency only')).toBeVisible();
   await expect(note).toHaveClass(/bg-warn-soft/);
   await page.waitForTimeout(300);
-  await shot(page, `${prefix}-09-team-comment`);
+  await shot(page, `${prefix}-07-team-comment`);
 
-  // Back closes one layer at a time: item, then plan; the chat stays open.
+  // Back closes one layer: the item; the Draft plan shows the team tick.
   await page.goBack();
   await expect(item).toBeHidden();
   await expect(plan).toBeVisible();
-  await expect(conceptBox()).toHaveAttribute('aria-checked', 'true');
+  await expect(conceptWrap().locator('[data-plan-slot="team"]')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Team 1 of 2');
+
+  // Open for client: the confirm, then the client side for everyone.
+  await openClient.click();
+  const openConfirm = page.getByRole('dialog', { name: 'Open this plan for client?' });
+  await expect(openConfirm).toBeVisible();
+  await expect(openConfirm).toContainText(
+    'Client can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.',
+  );
+  await page.waitForTimeout(300);
+  await shot(page, `${prefix}-08-open-for-client-confirm`);
+  await openConfirm.locator('[data-plan-confirm]').click();
+  await expect(openConfirm).toBeHidden();
+  await expect(page.getByText('Open for client', { exact: true }).last()).toBeVisible();
+  expect(tables.plans?.[0]?.audience).toBe('client');
+  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with client$/);
+  await expect(plan.locator('[data-plan-open-client]')).toHaveCount(0);
+  // Team ticks are never shown on an Open plan: read-only client boxes.
+  await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
+  await expect(conceptWrap().locator('[data-plan-slot="client"]')).toBeDisabled();
+  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Client 0 of 2');
   // The agency's status line: the client's side, then the visible comment count.
   await expect(conceptRow().locator('[data-plan-row-status]')).toHaveText(
     'Client waiting · 1 comment',
   );
+
+  // Send in this chat: the card lands; the button becomes Go to card.
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect(plan.locator('[data-plan-go-card]')).toHaveText('Go to card');
+  expect(
+    (tables.chat_messages ?? [])
+      .filter((m) => m.channel_id === DM_CHANNEL && Array.isArray(m.shared_plan_ids))
+      .map((m) => m.shared_plan_ids),
+  ).toEqual([[planId]]);
+  await page.waitForTimeout(300);
+  await shot(page, `${prefix}-09-footer-go-to-card`);
+
+  // Go to card: the screen closes, the card scrolls into view and is highlighted.
+  await plan.locator('[data-plan-go-card]').click();
+  await expect(plan).toBeHidden();
+  const card = page.locator(`[data-plan-card="${planId}"]`);
+  await expect(card).toBeInViewport();
+  await expect(
+    page.locator('[data-msg-id]').filter({ has: card }).locator('.ring-accent'),
+  ).toHaveCount(1);
+  await expect(card.getByText('1 concept')).toBeVisible();
+  await expect(card.getByText('1 post')).toBeVisible();
+  await expect(card.locator('[data-plan-progress]')).toHaveText('Client 0 of 2');
+  await expect(card.locator('[data-plan-chip="warn"]')).toHaveCount(0);
+  await expect(card.locator('[data-plan-forward]')).toBeVisible();
+  await page.waitForTimeout(400);
+  await shot(page, `${prefix}-10-card-highlighted`);
+
+  // D4 again from the card.
+  await card.locator('[data-plan-open]').click();
+  await expect(plan).toBeVisible();
+  await expect(plan.locator('[data-plan-go-card]')).toBeVisible();
 
   // A post item for the agency: the pipeline post view embedded, no plan
   // review buttons, and the header overflow opens the post view's own sheet.
@@ -263,8 +305,10 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(item.getByRole('button', { name: 'Agency approve' })).toHaveCount(0);
   await expect(item.locator('[data-plan-approve]')).toHaveCount(0);
   await expect(item.locator('[data-plan-ask]')).toHaveCount(0);
+  // The post view's own sheet keeps Move but no Remove from plan row.
+  await expect(item.locator('[data-plan-remove]')).toBeVisible();
   await page.waitForTimeout(400);
-  await shot(page, `${prefix}-10-item-post-agency`);
+  await shot(page, `${prefix}-11-item-post-agency`);
   await expectOverflowOpensPipeline(page, item);
 
   // G2: the open item is removed elsewhere; the re-read closes the Item layer
@@ -353,9 +397,13 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   await card.locator('[data-plan-open]').click();
   const plan = page_(page, 'plan');
   await expect(plan).toBeVisible();
-  // A client sees the range alone, no status line and no Add.
-  await expect(plan.getByText(/ · Shared with client$/)).toHaveCount(0);
+  // The same subtitle for everyone; no status line and no Add for a client.
+  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with client$/);
+  await expect(plan.locator('[data-plan-title-menu]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row-status]')).toHaveCount(0);
+  // A client gets Go to card only (the card is in this chat).
+  await expect(plan.locator('[data-plan-go-card]')).toBeVisible();
+  await expect(plan.locator('[data-plan-send-here], [data-plan-open-client]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-add], [data-plan-add-header]')).toHaveCount(0);
   // The concept's Everyone comment shows as the row's third line.
   await expect(
@@ -446,49 +494,45 @@ async function teamAndHidden(page: Page, prefix: string): Promise<void> {
   await openChat(page, GROUP_NAME);
   const hidden = page.locator('[data-plan-card="unavailable"]');
   await hidden.scrollIntoViewIfNeeded();
-  await expect(hidden).toHaveText('Plan not available');
-  const team = page.locator('[data-plan-chip="warn"]');
-  await expect(team).toHaveText('Agency only');
-  await team.scrollIntoViewIfNeeded();
+  await expect(hidden).toHaveText('Plan deleted');
+  const draftChip = page.locator('[data-plan-chip="warn"]');
+  await expect(draftChip).toHaveText('Draft');
+  await draftChip.scrollIntoViewIfNeeded();
   await page.waitForTimeout(400);
-  await shot(page, `${prefix}-01-cards-team-and-hidden`);
+  await shot(page, `${prefix}-01-cards-draft-and-deleted`);
 
-  // An agency-only group: an Agency only plan offers "Add drafts".
+  // Forward the Draft card into a chat with a client: nothing is sent.
+  const draftCard = page.locator('[data-plan-card]').filter({ has: draftChip }).first();
+  await draftCard.locator('[data-plan-forward]').click();
+  const picker = page.getByRole('dialog', { name: 'Forward plan' });
+  await expect(picker).toBeVisible();
+  const messagesBefore = (network.world.tables.chat_messages ?? []).length;
+  await picker.getByRole('button', { name: new RegExp(PEER_NAME) }).click();
+  await expect(page.getByText('Open the plan for client first.')).toBeVisible();
+  expect(network.world.tables.chat_messages ?? []).toHaveLength(messagesBefore);
+  await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await shot(page, `${prefix}-02-forward-draft-refused`);
+  await page.keyboard.press('Escape');
+
+  // An agency-only group: Create plan, then Send in the group (no client here).
   await openTray(page);
   await newPlanFromTile(page);
   const compose = page_(page, 'compose');
   await expect(compose).toBeVisible();
-  await compose.locator('[data-plan-audience="team"]').click();
   await expect(compose.locator('[data-plan-add-drafts]')).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-02-new-plan-team-only`);
-  await page.goBack();
-  await expect(compose).toBeHidden();
-
-  // An Agency only plan into a chat with a client: refused inline, screen stays open.
-  await openChat(page, PEER_NAME);
-  await openTray(page);
-  await newPlanFromTile(page);
-  await expect(compose).toBeVisible();
   await compose.locator('[data-plan-title]').fill('Internal week');
-  await expect(compose.locator('[data-plan-share]')).toBeEnabled();
-  await compose.locator('[data-plan-audience="team"]').click();
-  // Agency only in a chat with a client: Share is off and says why; nothing is written.
-  await expect(compose.locator('[data-plan-team-blocked]')).toHaveText(
-    "Agency only plans can't be sent in chats with clients.",
-  );
-  await expect(compose.locator('[data-plan-share]')).toBeDisabled();
-  const plansBefore = (network.world.tables.plans ?? []).length;
-  const messagesBefore = (network.world.tables.chat_messages ?? []).length;
-  await compose.locator('[data-plan-share]').click({ force: true });
+  await compose.locator('[data-plan-create]').click();
+  const plan = page_(page, 'plan');
+  await expect(plan).toBeVisible();
+  const send = plan.locator('[data-plan-send-here]');
+  await expect(send).toHaveText(`Send in ${GROUP_NAME}`);
+  await expect(send).toBeEnabled();
+  await expect(plan.locator('[data-plan-send-hint]')).toHaveCount(0);
   await page.waitForTimeout(300);
-  // No plan_create (and no share): the fixture tables are unchanged.
-  expect(network.world.tables.plans ?? []).toHaveLength(plansBefore);
-  expect(network.world.tables.chat_messages ?? []).toHaveLength(messagesBefore);
-  await expect(compose.locator('[data-plan-share-error]')).toHaveCount(0);
-  await expect(compose).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-03-team-plan-blocked`);
+  await shot(page, `${prefix}-03-draft-send-in-group`);
+  await send.click();
+  await expect(plan.locator('[data-plan-go-card]')).toBeVisible();
   expectClean(network);
 }
 
@@ -505,7 +549,7 @@ test.describe('phone', () => {
     await clientFlow(page, 'plan-phone-client');
   });
 
-  test('team only and not available cards; team plan blocked in a client chat', async ({
+  test('Draft and deleted cards; a Draft forward into a client chat is refused; send in a group', async ({
     page,
   }) => {
     await teamAndHidden(page, 'plan-phone-team');

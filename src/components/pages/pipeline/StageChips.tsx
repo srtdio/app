@@ -5,7 +5,7 @@ import { StageDot } from '@/components/pages/pipeline/stage-meta';
 import type { Stage } from '@srtdio/posts';
 
 export interface StageChipItem {
-  /** The chip's filter key: a Stage, or a UI-only key such as 'plan' / 'all'. */
+  /** The chip's filter key: a Stage, or the UI-only 'all'. */
   key: string;
   label: string;
   /** Trailing count badge; omitted entirely for a chip that carries no count. */
@@ -27,7 +27,7 @@ const OVERFLOW_MASK = 'linear-gradient(to right, #000 0, #000 calc(100% - 26px),
 
 /**
  * The Pipeline stage switcher: one horizontally scrollable, non-wrapping row of
- * chip-pill buttons (the stages plus the UI-only Plan and All) mirroring the
+ * chip-pill buttons (the stages plus the UI-only All) mirroring the
  * Activity filter row. A chip shows its dot only when it carries a stage and its
  * count only when one is supplied, so a non-stage chip renders label-only.
  * Runs full-bleed to the right edge with an edge-cut fade applied only when the

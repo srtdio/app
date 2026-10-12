@@ -4,9 +4,12 @@
 // "Slot pending") and its header overflow opening the post view's own action
 // sheet (Open in pipeline first, then the post's actions). A
 // concept shows its library files, title and description, a status box (Agency
-// for the agency side, Client), the viewer's actions, and the comments with a
-// composer. The agency marks agency approval (confirmed) or asks changes; a
-// client approves or asks changes on a concept. Comments: the agency sees all
+// for the agency side on a Draft plan, Client), the viewer's actions, and the
+// comments with a composer. On a Draft plan the agency marks agency approval
+// (confirmed) or asks changes; a client approves or asks changes on an Open
+// plan's concept (team reviews are never shown or written on an Open plan).
+// The agency side gets a red "Remove from plan" at the bottom (the Remove
+// confirm, then plan_item_remove). Comments: the agency sees all
 // and picks Everyone or Agency only; a client sees Everyone ones (RLS). A
 // comment appends at once and keeps its text on failure. One read per table per
 // open, bounded at 5s; the body paints once it settles. Tokens only.
@@ -28,9 +31,11 @@ import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
   PlanConceptActionsSheet,
+  PlanKeepApprovalSheet,
   PlanMoveSheet,
   PlanRemoveSheet,
   PostSheetPlanRowsContext,
+  RemoveFromPlanButton,
 } from '@/components/chat/PlanMoveSheet';
 import { flattenOrder, hasTicks, moveToEnd } from '@/lib/chat/plan-drag';
 import {
@@ -50,9 +55,14 @@ import {
   TEAM_ONLY_LABEL,
   clientApproveConfirm,
   clientStatus,
+  dayHeaderOf,
   itemDateLabel,
   itemKindLabel,
   itemSlotSubtitle,
+  keepApprovalBody,
+  keepApprovalTitle,
+  moveAsksKeep,
+  movedKeptToast,
   movedToast,
   planWriteErrorCopy,
   reviewStatus,
@@ -87,7 +97,6 @@ import {
   type ReviewStatus,
 } from '@/lib/chat/plans';
 import { formatClockTime, workspaceTimeZone } from '@/lib/chat/time-format';
-import { formatCivilDayHeader } from '@/lib/plan-week';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
@@ -114,8 +123,9 @@ export type ItemActions =
 
 /**
  * The viewer's actions on an item: a post item has none (the embedded post
- * view carries its own); on a concept the agency reviews as the team and a
- * client reviews on a client plan. An unknown side gets none. Pure.
+ * view carries its own); on a concept the agency reviews as the team on a
+ * Draft plan (never on an Open plan: no team writes there) and a client
+ * reviews on an Open plan. An unknown side gets none. Pure.
  */
 export function itemActions(
   side: ViewerSide,
@@ -124,7 +134,9 @@ export function itemActions(
 ): ItemActions {
   if (item.kind === 'post') return { kind: 'none' };
   if (side === 'agency') {
-    return { kind: 'review', side: 'team', approveLabel: 'Agency approve' };
+    return audience === 'team'
+      ? { kind: 'review', side: 'team', approveLabel: 'Agency approve' }
+      : { kind: 'none' };
   }
   if (side === 'client' && audience === 'client') {
     return { kind: 'review', side: 'client', approveLabel: 'Approve' };
@@ -141,7 +153,7 @@ export function actionLabels(actions: ItemActions): string[] {
 /** The agency's status row label (the review side stays 'team'). */
 export const AGENCY_ROW = 'Agency';
 
-/** The status box rows: Pipeline (post), Agency, Client. Pure. */
+/** The status box rows: Pipeline (post), Agency (Draft plan only), Client. Pure. */
 export function statusRows(
   bundle: PlanBundle,
   item: PlanItemRow,
@@ -158,7 +170,7 @@ export function statusRows(
   }
   const tone = (s: ReviewStatus): PillTone =>
     s === 'approved' ? 'good' : s === 'changes' ? 'review' : 'neutral';
-  if (side === 'agency') {
+  if (side === 'agency' && bundle.plan.audience === 'team') {
     const team = overrides.team ?? reviewStatus(bundle, item.id, 'team');
     rows.push({ label: AGENCY_ROW, value: STATUS_LABELS[team], tone: tone(team) });
   }
@@ -225,6 +237,8 @@ export function PlanItemScreen(props: {
   onClose: () => void;
   /** After Remove from plan: back to the list. Defaults to onClose. */
   onRemoved?: () => void;
+  /** The client approver's name (the keep sheet's title on an Open plan). */
+  approverName?: string;
 }): ReactElement | null {
   const { bundle, item, side } = props;
   const { workspaces, workspaceId } = useWorkspace();
@@ -248,6 +262,8 @@ export function PlanItemScreen(props: {
   const [conceptMenuOpen, setConceptMenuOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
+  // A Move of an Open plan's client-approved slot to another day: its day.
+  const [keepFor, setKeepFor] = useState<{ day: string | null } | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<CommentVisibility>('everyone');
@@ -287,6 +303,7 @@ export function PlanItemScreen(props: {
     setConceptMenuOpen(false);
     setMoveOpen(false);
     setRemoveOpen(false);
+    setKeepFor(null);
   }, [props.open, item.id]);
 
   // A write that lands after the viewer moved on (another item, or closed)
@@ -344,7 +361,7 @@ export function PlanItemScreen(props: {
   // Edit concept: one sheet (the Add concept one) for every field; the Date
   // row's Edit opens it too. Save sends the full title, description and date;
   // files go as null unless they changed. An unchanged form sends nothing.
-  const date = itemDateLabel(bundle, item);
+  const date = itemDateLabel(bundle, item, timeZone);
   const editable = canEditConcept(side, item);
   const editResets = conceptEditResets(
     overrides.team ?? reviewStatus(bundle, item.id, 'team'),
@@ -463,20 +480,31 @@ export function PlanItemScreen(props: {
     dispatchPlanChanged(window, bundle.plan.id);
   };
 
-  // Agency plan actions. Move: to the end of the picked day (one
-  // plan_item_move with the full plan order); Remove: plan_item_remove, then
-  // back to the list. Clients never reach these (no rows render for them).
+  // Agency plan actions. Move: to the end of the picked day (one 5-arg
+  // plan_item_move with the full plan order; an Open plan's client-approved
+  // slot asks "Keep the approval?" first, cancelling cancels the move);
+  // Remove: plan_item_remove, then back to the list. Clients never reach
+  // these (no rows render for them).
   const planActions = side === 'agency';
   const groups = planListGroups(bundle, timeZone, side);
   const currentDay = groups
     .flatMap((w) => w.days)
     .find((d) => d.items.some((i) => i.id === item.id))?.day;
-  const moveItemTo = async (day: string | null): Promise<void> => {
+  const pickDay = (day: string | null): void => {
     if (!planActions || planBusy) return;
     if (day === currentDay) {
       setMoveOpen(false);
       return;
     }
+    if (moveAsksKeep(bundle, item, currentDay ?? null, day)) {
+      setMoveOpen(false);
+      setKeepFor({ day });
+      return;
+    }
+    void moveItemTo(day, false);
+  };
+  const moveItemTo = async (day: string | null, keep: boolean): Promise<void> => {
+    if (!planActions || planBusy) return;
     const order = flattenOrder(moveToEnd(planDayIds(groups), item.id, day));
     const hadTicks = hasTicks(bundle, item.id);
     setPlanBusy(true);
@@ -485,6 +513,7 @@ export function PlanItemScreen(props: {
       p_item_id: item.id,
       p_target_date: day,
       p_item_ids: order,
+      p_keep_reviews: keep,
       p_trace_id: traceId,
     });
     setPlanBusy(false);
@@ -498,7 +527,9 @@ export function PlanItemScreen(props: {
       return;
     }
     setMoveOpen(false);
-    toast.show({ title: movedToast(day !== null ? formatCivilDayHeader(day) : null, hadTicks) });
+    toast.show({
+      title: keep ? movedKeptToast(dayHeaderOf(day)) : movedToast(dayHeaderOf(day), hadTicks),
+    });
     dispatchPlanChanged(window, bundle.plan.id);
   };
   const removeFromPlan = async (): Promise<void> => {
@@ -523,10 +554,14 @@ export function PlanItemScreen(props: {
     (props.onRemoved ?? props.onClose)();
   };
   const planRows = useMemo(
-    () =>
-      planActions ? { onMove: () => setMoveOpen(true), onRemove: () => setRemoveOpen(true) } : null,
+    () => (planActions ? { onMove: () => setMoveOpen(true) } : null),
     [planActions],
   );
+  const removeButton = planActions ? (
+    <div data-plan-remove-row="" className="px-4 pb-6 pt-2">
+      <RemoveFromPlanButton busy={planBusy} onClick={() => setRemoveOpen(true)} />
+    </div>
+  ) : null;
 
   // The deep-linked comment: once the read lists it, scroll to it and
   // highlight it briefly. Not listed (deleted, hidden): nothing happens.
@@ -680,6 +715,7 @@ export function PlanItemScreen(props: {
                 </Suspense>
               </PostSheetPlanRowsContext.Provider>
             ) : null}
+            {removeButton}
           </>
         ) : (
           <div className="flex flex-col gap-3.5 p-4">
@@ -803,6 +839,11 @@ export function PlanItemScreen(props: {
                 )
               )}
             </section>
+            {planActions ? (
+              <div data-plan-remove-row="" className="pt-2">
+                <RemoveFromPlanButton busy={planBusy} onClick={() => setRemoveOpen(true)} />
+              </div>
+            ) : null}
           </div>
         )}
       </PlanPage>
@@ -835,10 +876,6 @@ export function PlanItemScreen(props: {
               setConceptMenuOpen(false);
               openEdit();
             }}
-            onRemove={() => {
-              setConceptMenuOpen(false);
-              setRemoveOpen(true);
-            }}
             onClose={() => setConceptMenuOpen(false)}
           />
           <PlanMoveSheet
@@ -846,8 +883,19 @@ export function PlanItemScreen(props: {
             days={planMoveDays(bundle.plan)}
             current={currentDay ?? null}
             busy={planBusy}
-            onPick={(day) => void moveItemTo(day)}
+            onPick={pickDay}
             onClose={() => setMoveOpen(false)}
+          />
+          <PlanKeepApprovalSheet
+            open={props.open && keepFor !== null}
+            title={keepApprovalTitle(props.approverName ?? 'Member')}
+            body={keepApprovalBody(dayHeaderOf(keepFor?.day ?? null))}
+            onKeep={(keep) => {
+              const ask = keepFor;
+              setKeepFor(null);
+              if (ask !== null) void moveItemTo(ask.day, keep);
+            }}
+            onCancel={() => setKeepFor(null)}
           />
           <PlanRemoveSheet
             open={props.open && removeOpen}

@@ -59,12 +59,13 @@ const BUNDLE: PlanBundle = {
   },
   items: [
     item('c1', { target_date: '2026-10-14' }),
-    // The post's own date is 2 Oct; its plan day is 15 Oct.
+    // A stale plan_items.target_date (2 Oct) never places a post slot; its
+    // post's target_date (15 Oct) does.
     item('p1', {
       kind: 'post',
       title: null,
       post_id: 'post1',
-      target_date: '2026-10-15',
+      target_date: '2026-10-02',
       position: 1,
     }),
     item('u1', { position: 2 }),
@@ -72,35 +73,24 @@ const BUNDLE: PlanBundle = {
   reviews: [{ item_id: 'c1', side: 'client', status: 'changes' }],
   postStages: { post1: 'review' },
   postInfo: {
-    post1: { title: 'Carousel', target_date: '2026-10-02T09:00:00Z', format: 'carousel' },
+    post1: { title: 'Carousel', target_date: '2026-10-15T12:00:00Z', format: 'carousel' },
   },
 };
 
 describe('header, progress and status (A1)', () => {
-  it('subtitle: the range, then who sees it for the agency; the range alone for a client', () => {
+  it('subtitle: "{range} · Draft" or "{range} · Shared with client" (item 3)', () => {
     expect(planRangeShort('2026-10-12', '2026-10-16')).toBe('12 to 16 Oct');
     expect(planRangeShort('2026-10-28', '2026-11-03')).toBe('28 Oct to 3 Nov');
-    expect(planHeaderSubtitle(BUNDLE.plan, 'agency')).toBe('12 to 16 Oct · Agency only');
-    expect(planHeaderSubtitle({ ...BUNDLE.plan, audience: 'client' }, 'agency')).toBe(
+    expect(planHeaderSubtitle(BUNDLE.plan)).toBe('12 to 16 Oct · Draft');
+    expect(planHeaderSubtitle({ ...BUNDLE.plan, audience: 'client' })).toBe(
       '12 to 16 Oct · Shared with client',
-    );
-    expect(planHeaderSubtitle({ ...BUNDLE.plan, audience: 'client' }, 'client')).toBe(
-      '12 to 16 Oct',
     );
   });
 
-  it('progress: agency counts with an accent bar; client "slots approved" with a good bar', () => {
-    expect(planProgressView(BUNDLE, 'agency')).toEqual({
-      lead: 'Agency 0 of 3',
-      client: 'Client 0 of 3',
-      percent: 0,
-      tone: 'accent',
-    });
-    expect(planProgressView(BUNDLE, 'client')).toMatchObject({
-      lead: '0 of 3 slots approved',
-      client: null,
-      tone: 'good',
-    });
+  it('progress: Draft "Team X of N" (accent bar), Open "Client X of N" (good bar) (item 5)', () => {
+    expect(planProgressView(BUNDLE)).toEqual({ lead: 'Team 0 of 3', percent: 0, tone: 'accent' });
+    const open = { ...BUNDLE, plan: { ...BUNDLE.plan, audience: 'client' as const } };
+    expect(planProgressView(open)).toEqual({ lead: 'Client 0 of 3', percent: 0, tone: 'good' });
     const src = read('PlanScreen.tsx');
     const block = src.slice(src.indexOf('export function PlanProgressRow'));
     expect(block.slice(0, 1500)).not.toContain('font-mono');
@@ -118,7 +108,7 @@ describe('header, progress and status (A1)', () => {
 });
 
 describe('grouping by plan day (A5)', () => {
-  it('a post sits on its plan day, never its own date; No date kept for the agency', () => {
+  it("a post sits on its post's target_date in the zone, never plan_items.target_date (item 8)", () => {
     const groups = planListGroups(BUNDLE, 'UTC', 'agency');
     const days = planDayIds(groups);
     expect(days.map((d) => d.day)).toEqual([
@@ -131,7 +121,7 @@ describe('grouping by plan day (A5)', () => {
     ]);
     expect(days.find((d) => d.day === '2026-10-15')?.ids).toEqual(['p1']);
     expect(days.find((d) => d.day === null)?.ids).toEqual(['u1']);
-    // No 2 Oct group: the post's own date is not read.
+    // No 2 Oct group: a post slot's plan_items.target_date is never read.
     expect(days.some((d) => d.day === '2026-10-02')).toBe(false);
     // A client gets No date only when something is undated.
     const clientDays = planDayIds(
@@ -194,14 +184,17 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     const src = read('PlanScreen.tsx');
     expect(src).toContain('{...(agency ? { onAdd: openAdd, onDragStart: drag.start } : {})}');
     expect(src).toContain("const agency = side === 'agency' && bundle !== null;");
-    expect(src).toContain('{agency ? (\n        <>\n          <PlanAddSheet');
+    expect(src).toMatch(/\{agency \? \(\s*<>\s*<PlanConfirmSheet[\s\S]*<PlanAddSheet/);
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain("const planActions = side === 'agency';");
     expect(item).toContain('{planActions ? (');
     expect(item).toContain("{...(item.kind === 'concept' && planActions");
     // A client gets no plan rows in the post view's sheet.
     expect(item).toContain('<PostSheetPlanRowsContext.Provider value={planRows}>');
-    expect(item).toMatch(/planActions\s*\?\s*\{ onMove: \(\) => setMoveOpen\(true\)/);
+    expect(item).toMatch(/planActions \? \{ onMove: \(\) => setMoveOpen\(true\) \}/);
+    // Remove from plan is the screen's red button, not a menu row (item 10).
+    expect(item).toContain('<RemoveFromPlanButton');
+    expect(item).not.toMatch(/onRemove: \(\) => setRemoveOpen/);
   });
 
   it('drag cleans up every listener, frame and timer; Escape and pointercancel cancel with no write', () => {

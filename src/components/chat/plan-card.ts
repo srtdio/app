@@ -2,30 +2,36 @@
 // progress maths, chips, status pills, kind labels, the default week and the
 // draft checks. No React, no reads, so every rule is unit-tested directly.
 
-import { planItemDay } from '@/lib/chat/plans';
+import { planItemDayInZone } from '@/lib/chat/plans';
 import type {
   PlanAudience,
   PlanBundle,
   PlanItemRow,
+  PlanReviewRow,
   ReviewSide,
   ReviewStatus,
 } from '@/lib/chat/plans';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
+import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
+import { civilToday, formatCivilDayHeader } from '@/lib/plan-week';
 
 /** Card and screen copy. */
 export const PLAN_EYEBROW = 'PLAN';
 export const PLAN_NOT_AVAILABLE = 'Plan not available';
+/** A card whose plan can no longer be read (deleted, or no longer visible). */
+export const PLAN_DELETED = 'Plan deleted';
 export const PLAN_SHARED_TOAST = 'Plan shared';
+/** An Agency only comment's tag (plan comments' visibility). */
 export const TEAM_ONLY_LABEL = 'Agency only';
-export const AUDIENCE_HINTS: Record<PlanAudience, string> = {
-  client: "Client sees concepts, posts and Everyone comments. Drafts can't be added.",
-  team: 'Only your agency sees this plan. Drafts allowed. Share with the client later.',
-};
+/** A Draft plan (audience team): the chip, the subtitle and the progress side. */
+export const PLAN_DRAFT_LABEL = 'Draft';
+/** An Open plan (audience client): the subtitle. */
+export const PLAN_OPEN_LABEL = 'Shared with client';
 export const TEAM_APPROVE_CONFIRM =
   'Mark as agency approved? Only the agency sees this. The client still approves separately.';
-/** The "In this chat" chip on a plan already shared here (Plan tile list). */
+/** The "In this chat" chip on a plan already shared here (the Plans sheet). */
 export const IN_THIS_CHAT_LABEL = 'In this chat';
-/** The Forward list's tag on a chat known to have a client (Agency only plan). */
+/** The Forward list's tag on a chat known to have a client (a Draft plan). */
 export const HAS_CLIENT_TAG = 'Has client';
 /** A draft post's pill, and a client's sub line on its row. */
 export const DRAFT_LABEL = 'Draft';
@@ -88,6 +94,15 @@ export function clientChanges(bundle: PlanBundle, item: PlanItemRow): boolean {
   return reviewStatus(bundle, item.id, 'client') === 'changes';
 }
 
+/**
+ * The one review side a plan shows, for everyone: a Draft plan (audience team)
+ * the team side, an Open plan (audience client) the client side. Team reviews
+ * are never shown on an Open plan. Pure.
+ */
+export function shownReviewSide(audience: PlanAudience): ReviewSide {
+  return audience === 'client' ? 'client' : 'team';
+}
+
 export interface PlanProgress {
   /** Client approved: the item's client review (concepts and post slots). */
   approved: number;
@@ -97,6 +112,8 @@ export interface PlanProgress {
   total: number;
   /** Client changes asked (the item's client review). */
   changes: number;
+  /** The side the plan shows (shownReviewSide); absent reads as the client side. */
+  side?: ReviewSide;
 }
 
 /** Team and client approval across the plan's items, one pass. Pure. */
@@ -109,31 +126,35 @@ export function planProgress(bundle: PlanBundle): PlanProgress {
     if (reviewStatus(bundle, item.id, 'team') === 'approved') teamApproved += 1;
     if (clientChanges(bundle, item)) changes += 1;
   }
-  return { approved, teamApproved, total: bundle.items.length, changes };
+  return {
+    approved,
+    teamApproved,
+    total: bundle.items.length,
+    changes,
+    side: shownReviewSide(bundle.plan.audience),
+  };
 }
 
-function changesPart(changes: number): string {
-  return changes === 0 ? '' : ` · ${changes} ${changes === 1 ? 'change' : 'changes'} asked`;
+/** The shown side's approved count. Pure. */
+function shownApproved(progress: PlanProgress): number {
+  return (progress.side ?? 'client') === 'team' ? progress.teamApproved : progress.approved;
 }
 
 /**
- * The progress line. Agency: "Agency A of N · Client B of N", then
- * "· K changes asked" when K > 0. Anyone else (client, unknown) sees the
- * client count only, never a team status. Pure.
+ * The progress line, the same for every viewer: a Draft plan "Team X of N",
+ * an Open plan "Client X of N" (never a team count on an Open plan). `side`
+ * is kept for the callers. Pure.
  */
-export function progressLabel(progress: PlanProgress, side: ViewerSide): string {
-  const n = progress.total;
-  const base =
-    side === 'agency'
-      ? `Agency ${progress.teamApproved} of ${n} · Client ${progress.approved} of ${n}`
-      : `${progress.approved} of ${n} approved by client`;
-  return `${base}${changesPart(progress.changes)}`;
+export function progressLabel(progress: PlanProgress, side?: ViewerSide): string {
+  void side;
+  const who = (progress.side ?? 'client') === 'team' ? 'Team' : 'Client';
+  return `${who} ${shownApproved(progress)} of ${progress.total}`;
 }
 
-/** The bar's fill (client approval), 0..100. Pure. */
+/** The bar's fill (the shown side's approval), 0..100. Pure. */
 export function progressPercent(progress: PlanProgress): number {
   if (progress.total === 0) return 0;
-  return Math.round((progress.approved / progress.total) * 100);
+  return Math.round((shownApproved(progress) / progress.total) * 100);
 }
 
 export interface PlanChip {
@@ -141,7 +162,7 @@ export interface PlanChip {
   tone: 'neutral' | 'warn' | 'accent';
 }
 
-/** Count chips, then "Agency only" for a team plan. Pure. */
+/** Count chips, then "Draft" for a Draft (team) plan. Pure. */
 export function planChips(bundle: PlanBundle): PlanChip[] {
   const concepts = bundle.items.filter((i) => i.kind === 'concept').length;
   const posts = bundle.items.filter((i) => i.kind === 'post').length;
@@ -149,11 +170,11 @@ export function planChips(bundle: PlanBundle): PlanChip[] {
     { label: plural(concepts, 'concept'), tone: 'neutral' },
     { label: plural(posts, 'post'), tone: 'neutral' },
   ];
-  if (bundle.plan.audience === 'team') chips.push({ label: TEAM_ONLY_LABEL, tone: 'warn' });
+  if (bundle.plan.audience === 'team') chips.push({ label: PLAN_DRAFT_LABEL, tone: 'warn' });
   return chips;
 }
 
-/** The Plan tile list's chips: the card's, then "In this chat" when shared here. Pure. */
+/** The Plans sheet's chips: the card's, then "In this chat" when shared here. Pure. */
 export function pickerChips(bundle: PlanBundle, inThisChat: boolean): PlanChip[] {
   const chips = planChips(bundle);
   if (inThisChat) chips.push({ label: IN_THIS_CHAT_LABEL, tone: 'accent' });
@@ -166,16 +187,16 @@ export function canForwardPlan(side: ViewerSide, audience: PlanAudience): boolea
   return side === 'client' && audience === 'client';
 }
 
+/** Forward on a Draft card into a chat with a client: nothing is sent. */
+export const OPEN_FOR_CLIENT_FIRST = 'Open the plan for client first.';
+
 /**
- * What sending a plan into a chat does: an Agency only plan into a chat known
- * to have a client asks "Share with client first?"; anything else is sent at
- * once (an unknown chat is sent, and the server's refusal opens the confirm). Pure.
+ * Whether a forward is refused before any write: a Draft plan into a chat
+ * known to have a client (an unknown chat is sent, and the server's refusal
+ * says the same). Pure.
  */
-export function planShareDecision(
-  audience: PlanAudience,
-  hasClient: boolean | null,
-): 'send' | 'confirm' {
-  return audience === 'team' && hasClient === true ? 'confirm' : 'send';
+export function forwardBlocked(audience: PlanAudience, hasClient: boolean | null): boolean {
+  return audience === 'team' && hasClient === true;
 }
 
 /**
@@ -208,39 +229,6 @@ export function draftLocked(
   return side !== 'agency' && isDraftPost(bundle, item);
 }
 
-/** Draft posts in the plan. Pure. */
-export function draftCount(bundle: Pick<PlanBundle, 'items' | 'postStages'>): number {
-  return bundle.items.filter((i) => isDraftPost(bundle, i)).length;
-}
-
-/** The "Share with client first?" sheet's copy. */
-export const SHARE_FIRST_TITLE = 'Share with client first?';
-export const SHARE_FIRST_CONFIRM = 'Share with client and send';
-export const SHARE_FIRST_UNDO = "This can't be undone. The plan stays shared with client.";
-
-/** The confirm's body after the plan title (the sheet sets the title in bold). Pure. */
-export function shareFirstRest(chatName: string, group: boolean): string {
-  const who = group ? 'has clients in it' : 'has a client in it';
-  return ` is Agency only. ${chatName} ${who}, so the plan has to be shared with the client to send it here.`;
-}
-
-/** The confirm's body. Pure. */
-export function shareFirstBody(planTitle: string, chatName: string, group: boolean): string {
-  return `${planTitle}${shareFirstRest(chatName, group)}`;
-}
-
-/** The confirm's first fact. Pure. */
-export function shareFirstAudience(workspaceName: string): string {
-  return `Every client in ${workspaceName} will be able to open it, from any chat it's in.`;
-}
-
-/** The confirm's drafts fact, or null with none. Pure. */
-export function shareFirstDrafts(drafts: number): string | null {
-  if (drafts <= 0) return null;
-  const lead = drafts === 1 ? '1 draft shows' : `${drafts} drafts show`;
-  return `${lead} to clients as name only. They can't open it until it goes to review.`;
-}
-
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** "12 Oct" from "2026-10-12" (a calendar date, no zone). Pure. */
@@ -262,8 +250,9 @@ export const NO_DATE_LABEL = 'No date';
 export function itemDateLabel(
   bundle: Pick<PlanBundle, 'postInfo'>,
   item: PlanItemRow,
+  timeZone = 'UTC',
 ): { label: string; dated: boolean } {
-  const day = planItemDay(item, bundle.postInfo);
+  const day = planItemDayInZone(item, bundle.postInfo, timeZone);
   return day === null
     ? { label: NO_DATE_LABEL, dated: false }
     : { label: shortDay(day), dated: true };
@@ -311,13 +300,17 @@ export function clientStatus(bundle: PlanBundle, item: PlanItemRow): ReviewStatu
 }
 
 /**
- * A row's pills: the agency sees Team and Client, a client sees one (no side
- * prefix). Unknown side shows the client pill only (never a team status). Pure.
+ * A row's pills: the agency sees Team and Client on a Draft plan and the
+ * client's alone on an Open plan (never a team status there); a client sees
+ * one (no side prefix). Unknown side shows the client pill only. Pure.
  */
 export function itemPills(bundle: PlanBundle, item: PlanItemRow, side: ViewerSide): StatusPill[] {
   const client = clientStatus(bundle, item);
   if (side !== 'agency') {
     return [{ label: STATUS_LABELS[client], tone: toneOf(client), side: 'client' }];
+  }
+  if (bundle.plan.audience === 'client') {
+    return [{ label: `Client · ${STATUS_LABELS[client]}`, tone: toneOf(client), side: 'client' }];
   }
   const team = reviewStatus(bundle, item.id, 'team');
   return [
@@ -336,27 +329,9 @@ export function itemKindLabel(items: readonly PlanItemRow[], item: PlanItemRow):
   return `${item.kind === 'concept' ? 'Concept' : 'Post'} ${at} of ${same.length}`;
 }
 
-/** The plan screen's sub line. Pure. */
-export function planSharedLine(side: ViewerSide, name: string): string {
-  return side === 'agency' ? `Shared with ${name}` : `Shared by ${name}`;
-}
-
 /** Whether the Plan tray tile is live: agency side only (unknown keeps it off). Pure. */
 export function planTileEnabled(side: ViewerSide): boolean {
   return side === 'agency';
-}
-
-/**
- * Whether a Team only plan is blocked here: the chat has a client, or its
- * members are still unknown (never shared on a guess). Pure.
- */
-export function teamPlanBlocked(audience: PlanAudience, hasClient: boolean | null): boolean {
-  return audience === 'team' && hasClient !== false;
-}
-
-/** Whether "Add drafts" shows: a team plan in a chat known to have no client. Pure. */
-export function draftsButtonShown(audience: PlanAudience, hasClient: boolean | null): boolean {
-  return audience === 'team' && hasClient === false;
 }
 
 /** "YYYY-MM-DD" for `now` in the zone. Pure (given the clock). */
@@ -444,24 +419,41 @@ export function slotErrorCopy(message: string): string {
 }
 
 /**
- * Which review side the viewer's slot checkbox writes: the agency ticks the
- * team side on any plan, a client the client side on a client plan only. An
- * unknown side, or a client on a team plan, gets no checkbox. Pure.
+ * Which review side the viewer's slot checkbox WRITES: on a Draft plan the
+ * agency ticks the team side; on an Open plan a client ticks the client side
+ * and the agency writes nothing (its boxes are read-only). An unknown side,
+ * or a client on a Draft plan, writes nothing. Pure.
  */
 export function slotSide(side: ViewerSide, audience: PlanAudience): ReviewSide | null {
-  if (side === 'agency') return 'team';
-  if (side === 'client' && audience === 'client') return 'client';
-  return null;
+  if (audience === 'team') return side === 'agency' ? 'team' : null;
+  return side === 'client' ? 'client' : null;
 }
 
-/** Whether a row shows the checkbox: a slot side, and not a draft locked to the viewer. Pure. */
+/** A row's checkbox: the side it shows and whether the viewer may tick it. */
+export interface SlotView {
+  side: ReviewSide;
+  writable: boolean;
+}
+
+/**
+ * The checkbox a viewer sees: Draft, the team side (agency only, writable);
+ * Open, the client side for everyone (a client ticks it, the agency sees it
+ * read-only). An unknown side sees none (first paint waits for the side). Pure.
+ */
+export function slotView(side: ViewerSide, audience: PlanAudience): SlotView | null {
+  if (side === 'unknown') return null;
+  if (audience === 'team') return side === 'agency' ? { side: 'team', writable: true } : null;
+  return { side: 'client', writable: side === 'client' };
+}
+
+/** Whether a row shows the checkbox (and which): a slot view, not a draft locked to the viewer. Pure. */
 export function slotCheckboxShown(
   bundle: Pick<PlanBundle, 'postStages' | 'plan'>,
   item: PlanItemRow,
   side: ViewerSide,
-): ReviewSide | null {
+): SlotView | null {
   if (draftLocked(bundle, item, side)) return null;
-  return slotSide(side, bundle.plan.audience);
+  return slotView(side, bundle.plan.audience);
 }
 
 /** A ticked slot: the side's review is approved ('changes' shows unticked). Pure. */
@@ -547,46 +539,33 @@ export function planRangeShort(startsOn: string, endsOn: string): string {
 }
 
 /**
- * The Plan screen's subtitle: the range, then for the agency who sees it
- * ("Agency only" / "Shared with client"); anyone else the range alone. Pure.
+ * The Plan screen's subtitle, the same for every viewer: the range, then
+ * "Draft" (audience team) or "Shared with client" (audience client). Pure.
  */
 export function planHeaderSubtitle(
   plan: Pick<PlanBundle['plan'], 'starts_on' | 'ends_on' | 'audience'>,
-  side: ViewerSide,
 ): string {
   const range = planRangeShort(plan.starts_on, plan.ends_on);
-  if (side !== 'agency') return range;
-  return `${range} · ${plan.audience === 'team' ? TEAM_ONLY_LABEL : 'Shared with client'}`;
+  return `${range} · ${plan.audience === 'team' ? PLAN_DRAFT_LABEL : PLAN_OPEN_LABEL}`;
 }
 
-/** The progress block: the lead line, the agency's client count, the bar's fill and tone. */
+/** The progress block: the label, the bar's fill and tone. */
 export interface ProgressView {
   lead: string;
-  client: string | null;
   percent: number;
   tone: 'accent' | 'good';
 }
 
 /**
- * Agency: "Agency A of N" (the bar, accent) and "Client B of N"; anyone else
- * "B of N slots approved" (the bar, good). Pure.
+ * The same for every viewer: Draft "Team X of N" (the bar, accent), Open
+ * "Client X of N" (the bar, good). Pure.
  */
-export function planProgressView(bundle: PlanBundle, side: ViewerSide): ProgressView {
+export function planProgressView(bundle: PlanBundle): ProgressView {
   const p = planProgress(bundle);
-  const pct = (n: number): number => (p.total === 0 ? 0 : Math.round((n / p.total) * 100));
-  if (side === 'agency') {
-    return {
-      lead: `Agency ${p.teamApproved} of ${p.total}`,
-      client: `Client ${p.approved} of ${p.total}`,
-      percent: pct(p.teamApproved),
-      tone: 'accent',
-    };
-  }
   return {
-    lead: `${p.approved} of ${p.total} slots approved`,
-    client: null,
-    percent: pct(p.approved),
-    tone: 'good',
+    lead: progressLabel(p),
+    percent: progressPercent(p),
+    tone: p.side === 'team' ? 'accent' : 'good',
   };
 }
 
@@ -639,4 +618,211 @@ export function movedToast(dayHeader: string | null, ticksReset: boolean): strin
 export function commentsLabel(count: number): string | null {
   if (!(count > 0)) return null;
   return count === 1 ? '1 comment' : `${count} comments`;
+}
+
+/**
+ * The toast after a move that kept the approval: "Moved to Thu 15 Oct." (or
+ * "Moved to No date."). Pure.
+ */
+export function movedKeptToast(dayHeader: string | null): string {
+  return movedToast(dayHeader, false);
+}
+
+// ---------------------------------------------------------------------------
+// Draft / Open: header menu, rename, delete, open for client, send, keep approval
+// ---------------------------------------------------------------------------
+
+export const RENAME_LABEL = 'Rename';
+export const RENAMED_TOAST = 'Renamed';
+export const RENAME_FAILED = "Couldn't rename. Try again.";
+export const DELETE_PLAN_LABEL = 'Delete plan';
+export const DELETE_PLAN_TITLE = 'Delete this plan?';
+export const PLAN_DELETED_TOAST = 'Plan deleted';
+export const DELETE_FORBIDDEN = "Only the plan's creator or a workspace admin can delete it.";
+export const DELETE_FAILED = "Couldn't delete. Try again.";
+export const OPEN_FOR_CLIENT_LABEL = 'Open for client';
+export const OPEN_FOR_CLIENT_TITLE = 'Open this plan for client?';
+export const OPEN_FOR_CLIENT_BODY =
+  'Client can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.';
+export const OPEN_FOR_CLIENT_TOAST = 'Open for client';
+export const OPEN_FOR_CLIENT_FAILED = "Couldn't open for client. Try again.";
+export const SEND_NEEDS_OPEN = 'Open the plan for client to send it here.';
+export const SEND_FAILED = "Couldn't send. Try again.";
+export const GO_TO_CARD_LABEL = 'Go to card';
+export const CREATE_PLAN_LABEL = 'Create plan';
+export const KEEP_APPROVAL_YES = 'Yes, keep it';
+export const KEEP_APPROVAL_NO = 'No, ask again';
+
+/** "Send in {chat name}". Pure. */
+export function sendInLabel(chatName: string): string {
+  return `Send in ${chatName}`;
+}
+
+/**
+ * The delete confirm's body: the cards line, " Client gets a notification."
+ * only on an Open plan, then " This cannot be undone." Pure.
+ */
+export function deletePlanBody(audience: PlanAudience): string {
+  const notify = audience === 'client' ? ' Client gets a notification.' : '';
+  return `Cards already in chat will show Plan deleted.${notify} This cannot be undone.`;
+}
+
+/** A delete's failure copy: forbidden_role names who may, else the generic line. Pure. */
+export function deletePlanErrorCopy(message: string): string {
+  return message.includes('forbidden_role') ? DELETE_FORBIDDEN : DELETE_FAILED;
+}
+
+/** Whether the viewer may delete the plan: its creator, or a workspace owner/admin. Pure. */
+export function canDeletePlan(
+  plan: Pick<PlanBundle['plan'], 'created_by'>,
+  userId: string | null,
+  role: string | null,
+): boolean {
+  if (userId !== null && plan.created_by !== null && plan.created_by === userId) return true;
+  return isOwnerOrAdmin(role);
+}
+
+/** A rename's title, trimmed; null when it is outside 1 to 200 characters. Pure. */
+export function renameTitle(raw: string): string | null {
+  const title = raw.trim();
+  return title.length >= 1 && title.length <= PLAN_TITLE_MAX ? title : null;
+}
+
+/**
+ * The plan screen's send button: none outside a chat; "Go to card" when the
+ * chat already holds a card for this plan; on the agency side "Send in
+ * {chat}", disabled with SEND_NEEDS_OPEN on a Draft plan in a chat with a
+ * client. A client only ever gets "Go to card".
+ */
+export type SendAction =
+  | { kind: 'none' }
+  | { kind: 'go' }
+  | { kind: 'send'; label: string; disabled: boolean; hint: string | null };
+
+/** The plan screen's send action (see SendAction). Pure. */
+export function planSendAction(input: {
+  side: ViewerSide;
+  audience: PlanAudience;
+  chat: { name: string; hasClient: boolean | null; cardInChat: boolean } | null;
+}): SendAction {
+  const chat = input.chat;
+  if (chat === null) return { kind: 'none' };
+  if (chat.cardInChat) return { kind: 'go' };
+  if (input.side !== 'agency') return { kind: 'none' };
+  const blocked = input.audience === 'team' && chat.hasClient === true;
+  return {
+    kind: 'send',
+    label: sendInLabel(chat.name),
+    disabled: blocked,
+    hint: blocked ? SEND_NEEDS_OPEN : null,
+  };
+}
+
+const CLIENT_REVIEW_ROWS = new WeakMap<PlanBundle, Map<string, PlanReviewRow>>();
+
+/**
+ * An item's client review row, when one is on record: indexed once per bundle
+ * (no row scans the review list). Pure.
+ */
+export function clientReviewOf(bundle: PlanBundle, itemId: string): PlanReviewRow | undefined {
+  let index = CLIENT_REVIEW_ROWS.get(bundle);
+  if (index === undefined) {
+    index = new Map();
+    for (const r of bundle.reviews) if (r.side === 'client') index.set(r.item_id, r);
+    CLIENT_REVIEW_ROWS.set(bundle, index);
+  }
+  return index.get(itemId);
+}
+
+/**
+ * Who approved a slot and when, for an Open plan's client-approved row; null
+ * otherwise (a Draft plan, not approved, or not recorded yet). Pure.
+ */
+export function approvedBy(
+  bundle: PlanBundle,
+  item: PlanItemRow,
+): { userId: string | null; at: string } | null {
+  if (bundle.plan.audience !== 'client') return null;
+  const review = clientReviewOf(bundle, item.id);
+  if (review === undefined || review.status !== 'approved') return null;
+  if (review.reviewed_at === undefined || review.reviewed_at === null) return null;
+  return { userId: review.reviewed_by ?? null, at: review.reviewed_at };
+}
+
+/** The user ids behind every Approved by line of a bundle (one batched name read). Pure. */
+export function approverIds(bundle: PlanBundle): string[] {
+  if (bundle.plan.audience !== 'client') return [];
+  const ids = new Set<string>();
+  for (const r of bundle.reviews) {
+    if (r.side === 'client' && r.status === 'approved' && r.reviewed_by != null) {
+      ids.add(r.reviewed_by);
+    }
+  }
+  return [...ids];
+}
+
+/** "6:45 pm" for an instant in the zone. Pure. */
+function clockInZone(at: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(at);
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
+  return `${Number(get('hour'))}:${get('minute')} ${get('dayPeriod').toLowerCase()}`;
+}
+
+/**
+ * When a slot was approved, in the workspace zone: "today, 6:45 pm",
+ * "yesterday, 6:45 pm", else "12 Oct, 6:45 pm". Pure (given the clock).
+ */
+export function approvedWhen(iso: string, now: Date, timeZone: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  const day = todayInZone(at, timeZone);
+  const today = civilToday(now, timeZone);
+  const yesterday = addDays(today, -1);
+  const lead = day === today ? 'today' : day === yesterday ? 'yesterday' : shortDay(day);
+  return `${lead}, ${clockInZone(at, timeZone)}`;
+}
+
+/** "Approved by {name} · {when}". Pure. */
+export function approvedByLine(name: string, when: string): string {
+  return `Approved by ${name} · ${when}`;
+}
+
+/** The Also in pill: "Also in {title}", or "Also in N plans" for more than one. Pure. */
+export function alsoInLabel(titles: readonly string[]): string | null {
+  const first = titles[0];
+  if (first === undefined) return null;
+  return titles.length === 1 ? `Also in ${first}` : `Also in ${titles.length} plans`;
+}
+
+/**
+ * Whether a move must ask "Keep the approval?": an Open plan, a day change,
+ * and the item's client review approved. Every other move resets. Pure.
+ */
+export function moveAsksKeep(
+  bundle: PlanBundle,
+  item: PlanItemRow,
+  fromDay: string | null,
+  toDay: string | null,
+): boolean {
+  return bundle.plan.audience === 'client' && fromDay !== toDay && clientApproved(bundle, item);
+}
+
+/** The keep sheet's title: "Slot approved by {name}". Pure. */
+export function keepApprovalTitle(name: string): string {
+  return `Slot approved by ${name}`;
+}
+
+/** The keep sheet's body: "Moving it to {day}. Keep the approval?" Pure. */
+export function keepApprovalBody(dayHeader: string | null): string {
+  return `Moving it to ${dayHeader ?? NO_DATE_LABEL}. Keep the approval?`;
+}
+
+/** A day's header for toasts and sheets ("Thu 15 Oct"), null for No date. Pure. */
+export function dayHeaderOf(day: string | null): string | null {
+  return day !== null ? formatCivilDayHeader(day) : null;
 }

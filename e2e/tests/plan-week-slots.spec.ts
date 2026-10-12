@@ -90,7 +90,7 @@ async function openPlan(page: Page, planId: string) {
   return plan;
 }
 
-test('client: week list, tick with Undo, counts, slot header, overflow, Activity withdrawal', async ({
+test('client: week list, tick with Undo, counts, slot header, overflow, withdrawal row', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -116,7 +116,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   await expect(plan.locator('[data-plan-week-header]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row-kind]')).toHaveCount(2);
   const progress = plan.locator('[data-plan-screen-progress]');
-  await expect(progress).toHaveText('0 of 2 slots approved');
+  await expect(progress).toHaveText('Client 0 of 2');
 
   // The client box writes the client side; no team state anywhere.
   const box = plan.locator(`[data-plan-row-wrap="${PLAN_POST_ITEM}"] [data-plan-slot]`);
@@ -133,7 +133,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   // Tick: optimistic, the count moves, the toast offers Undo.
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'true');
-  await expect(progress).toHaveText('1 of 2 slots approved');
+  await expect(progress).toHaveText('Client 1 of 2');
   const undo = page.locator('[data-toast-action]');
   await expect(undo).toHaveText('Undo');
   // The fixture's post item has no plan day, so the toast names none.
@@ -159,7 +159,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   // Undo: back to waiting, the count back, a withdrawal registered.
   await undo.click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
-  await expect(progress).toHaveText('0 of 2 slots approved');
+  await expect(progress).toHaveText('Client 0 of 2');
   await expect
     .poll(() => (network.world.tables.plan_item_reviews ?? [])[0]?.status)
     .toBe('waiting');
@@ -199,18 +199,21 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByText('Slot approval removed')).toBeVisible();
-  await expect(progress).toHaveText('0 of 2 slots approved');
+  await expect(progress).toHaveText('Client 0 of 2');
   expectClean(network);
 
-  // Activity shows the withdrawal row.
-  await page.goto('/activity');
-  await expect(page.getByText(/withdrew slot approval/).first()).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-05-activity-withdrawal');
+  // The withdrawal row goes to the other members (never the actor): a plan
+  // alert, so a bell row for them (never Activity).
+  const latest = (network.world.tables.inbox_entries ?? []).filter(
+    (r) => r.event_type === 'plan_review' && r.user_id !== ME,
+  );
+  expect(
+    latest.some((r) => (r.payload as Record<string, unknown> | null)?.withdrawn === true),
+  ).toBe(true);
   expectClean(network);
 });
 
-test('agency: team checkbox and client pill, header subtitle, long title, delete confirm names the plan', async ({
+test('agency on an Open plan: read-only client checkbox, header subtitle, long title, delete confirm names the plan', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -221,24 +224,24 @@ test('agency: team checkbox and client pill, header subtitle, long title, delete
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, PLAN_ID);
 
+  // One view of ticks: the client side for everyone, read-only for the agency.
   const box = plan.locator(`[data-plan-row-wrap="${PLAN_POST_ITEM}"] [data-plan-slot]`);
-  await expect(box).toHaveAttribute('data-plan-slot', 'team');
+  await expect(box).toHaveAttribute('data-plan-slot', 'client');
+  await expect(box).toBeDisabled();
   await expectRowLayout(page, PLAN_POST_ITEM);
-  await expect(plan.locator('[data-plan-slot="client"]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
   const row = plan.locator(`[data-plan-row="${PLAN_POST_ITEM}"]`);
   await expect(row.locator('[data-plan-row-status]')).toHaveText('Client waiting');
   await expect(row.getByText('Client · Waiting')).toHaveCount(0);
-  await box.click();
-  await expect(box).toHaveAttribute('aria-checked', 'true');
-  await expect(plan.locator('[data-plan-screen-progress] > span')).toHaveText([
-    'Agency 1 of 2',
-    'Client 0 of 2',
-  ]);
-  expect(network.world.tables.plan_item_reviews).toEqual([
-    expect.objectContaining({ item_id: PLAN_POST_ITEM, side: 'team', status: 'approved' }),
-  ]);
+  await box.click({ force: true });
+  await expect(box).toHaveAttribute('aria-checked', 'false');
+  await expect(plan.locator('[data-plan-screen-progress] > span')).toHaveText(['Client 0 of 2']);
+  expect(network.world.tables.plan_item_reviews ?? []).toEqual([]);
+  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_review')).toEqual([]);
+  // The subtitle, the same for every viewer.
+  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with client$/);
   await page.waitForTimeout(300);
-  await shot(page, 'slots-06-agency-team-ticked');
+  await shot(page, 'slots-06-agency-read-only');
 
   // The post item: client side on a client plan reads pending.
   await row.click();

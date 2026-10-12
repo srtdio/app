@@ -2,7 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 import {
   ACTIVITY_PLAN_COMMENT_BODY,
-  ACTIVITY_PLAN_COMMENT_ID,
   installHarnessNetwork,
   seedActivityPlanComment,
   seedActivityPlanReview,
@@ -22,12 +21,13 @@ import {
   seedClientPlan,
 } from '../fixtures/chat-data';
 
-// Activity plan rows: a plan_comment or plan_review row opens the standalone
-// Plan page (/plans/:planId?item=) with that item open; a comment row scrolls
-// to and highlights its comment. One Back (header or browser) returns to
-// Activity; a cold deep link's Back lands on Activity; an unreadable plan shows
-// "Plan not available". Runs in both colour schemes (the dark and light
-// projects) on the iPhone viewport. Linux WebKit approximates iOS WebKit.
+// Plan rows live in the chat bell, never in Activity (item 12): a
+// plan_comment or plan_review row shows in the bell's Plans section with its
+// Activity wording; a tap marks it read and opens the standalone Plan page
+// (/plans/:planId?item=) with that item open, and Activity shows no plan card.
+// A cold deep link to an unreadable plan shows "Plan not available" and Back
+// lands on Activity. Runs in both colour schemes (the dark and light projects)
+// on the iPhone viewport. Linux WebKit approximates iOS WebKit.
 
 const FILE_VERSION = '0190e100-0000-7000-8000-0000000000c1';
 const POST_TITLE = 'Monday carousel';
@@ -56,7 +56,16 @@ function card(page: Page, title: string) {
   return page.locator('[data-activity-lead]').filter({ hasText: title }).first();
 }
 
-test('agency: a plan_comment row opens the item with the comment highlighted; Back = Activity', async ({
+/** Open the chat bell on the Chat home and wait for its rows. */
+async function openBell(page: Page): Promise<void> {
+  await page.goto('/chat');
+  const bell = page.locator('[data-bell-button]');
+  await bell.waitFor({ state: 'visible', timeout: 15_000 });
+  await bell.click();
+  await page.locator('[data-bell-skeleton]').waitFor({ state: 'detached' });
+}
+
+test('agency: a plan_comment row is a bell row (not Activity) and opens the item', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -67,58 +76,36 @@ test('agency: a plan_comment row opens the item with the comment highlighted; Ba
     actor: PEER,
   });
 
+  // Activity drops it through the bell split.
   await page.goto('/activity');
-  const lead = card(page, PLAN_CONCEPT_TITLE);
-  await lead.waitFor({ state: 'visible', timeout: 15_000 });
-  await expect(lead.getByText(`${PEER_NAME} commented`, { exact: true })).toBeVisible();
-  await expect(lead.getByText(ACTIVITY_PLAN_COMMENT_BODY)).toBeVisible();
-  await expect(lead.locator('[data-activity-plan-icon]')).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, 'activity-plan-01-agency-card');
+  await page.waitForTimeout(1500);
+  await expect(card(page, PLAN_CONCEPT_TITLE)).toHaveCount(0);
+  await expect(page.locator('[data-activity-plan-icon]')).toHaveCount(0);
+  await shot(page, 'activity-plan-01-activity-no-plan-row');
 
-  // The tap: the standalone page with the item open, the comment highlighted.
-  await lead.click();
-  await expect(page).toHaveURL(
-    new RegExp(
-      `/plans/${PLAN_ID}\\?item=${PLAN_CONCEPT_ITEM}&comment=${ACTIVITY_PLAN_COMMENT_ID}$`,
-    ),
-  );
+  await openBell(page);
+  const row = page.locator('[data-bell-row="plan"]');
+  await expect(row).toHaveCount(1);
+  await expect(page.locator('[data-bell-section="plans"]')).toBeVisible();
+  await expect(row).toContainText(`${PEER_NAME} commented on a plan item`);
+  expectMinTouchTarget(await row.locator('[data-bell-open]').boundingBox());
+  await page.waitForTimeout(300);
+  await shot(page, 'activity-plan-02-bell-row');
+
+  // The tap: marked read, then the standalone page with the item open.
+  await row.locator('[data-bell-open]').click();
+  await expect(page).toHaveURL(new RegExp(`/plans/${PLAN_ID}\\?item=${PLAN_CONCEPT_ITEM}$`));
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByRole('heading', { name: PLAN_CONCEPT_TITLE })).toBeVisible();
-  const highlighted = item.locator(`[data-plan-comment-id="${ACTIVITY_PLAN_COMMENT_ID}"]`);
-  await expect(highlighted).toHaveAttribute('data-plan-comment-highlight', '');
-  await expect(highlighted).toBeInViewport();
-  await expect(highlighted).toContainText(ACTIVITY_PLAN_COMMENT_BODY);
-  // The back control is 44x44.
-  const back = item.getByRole('button', { name: 'Back', exact: true });
-  const box = await back.boundingBox();
-  expectMinTouchTarget(box);
+  await expect(item.getByText(ACTIVITY_PLAN_COMMENT_BODY)).toBeVisible();
+  expectMinTouchTarget(await item.getByRole('button', { name: 'Back', exact: true }).boundingBox());
   await page.waitForTimeout(300);
-  await shot(page, 'activity-plan-02-agency-item-highlight');
-  // The highlight is brief.
-  await expect(highlighted).not.toHaveAttribute('data-plan-comment-highlight', { timeout: 5000 });
-
-  // The browser's Back once: Activity, no plan layer left behind.
-  await page.goBack();
-  await expect(page).toHaveURL(/\/activity$/);
-  await expect(planPage(page, 'item')).toHaveCount(0);
-  await expect(planPage(page, 'plan')).toHaveCount(0);
-  await expect(card(page, PLAN_CONCEPT_TITLE)).toBeVisible();
-
-  // The header's Back once: Activity too.
-  await card(page, PLAN_CONCEPT_TITLE).click();
-  await expect(planPage(page, 'item')).toBeVisible();
-  await planPage(page, 'item').getByRole('button', { name: 'Back', exact: true }).click();
-  await expect(page).toHaveURL(/\/activity$/);
-  await expect(planPage(page, 'item')).toHaveCount(0);
-  await expect(planPage(page, 'plan')).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'activity-plan-03-agency-back');
+  await shot(page, 'activity-plan-03-agency-item');
   expectClean(network);
 });
 
-test('client: a plan_review row opens the post item; Back = Activity', async ({ page }) => {
+test('client: a plan_review row is a bell row and opens the post item', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   viewAsClient(network);
   seedClientPlan(network.world, {
@@ -135,26 +122,22 @@ test('client: a plan_review row opens the post item; Back = Activity', async ({ 
   });
 
   await page.goto('/activity');
-  const lead = card(page, POST_TITLE);
-  await lead.waitFor({ state: 'visible', timeout: 15_000 });
-  await expect(lead.getByText('Maya Chen approved a plan item', { exact: true })).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, 'activity-plan-04-client-card');
+  await page.waitForTimeout(1500);
+  await expect(card(page, POST_TITLE)).toHaveCount(0);
 
-  await lead.click();
+  await openBell(page);
+  const row = page.locator('[data-bell-row="plan"]');
+  await expect(row).toContainText('Maya Chen approved a plan item');
+  await page.waitForTimeout(300);
+  await shot(page, 'activity-plan-04-client-bell-row');
+
+  await row.locator('[data-bell-open]').click();
   await expect(page).toHaveURL(new RegExp(`/plans/${PLAN_ID}\\?item=${PLAN_POST_ITEM}$`));
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByRole('heading', { name: POST_TITLE })).toBeVisible();
-  // No "Shared with/by" line outside a chat: the plan screen has no subtitle row.
-  await expect(planPage(page, 'plan').getByText(/Shared (with|by)/)).toHaveCount(0);
   await page.waitForTimeout(300);
   await shot(page, 'activity-plan-05-client-item');
-
-  await item.getByRole('button', { name: 'Back', exact: true }).click();
-  await expect(page).toHaveURL(/\/activity$/);
-  await expect(planPage(page, 'item')).toHaveCount(0);
-  await expect(card(page, POST_TITLE)).toBeVisible();
   expectClean(network);
 });
 

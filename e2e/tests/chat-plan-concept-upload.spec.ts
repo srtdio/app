@@ -117,7 +117,7 @@ test('create a concept with one uploaded file and one library file', async ({ pa
 
   await page.getByRole('button', { name: 'Add attachment' }).click();
   await page.locator('[data-tray-tile="plan"]').click();
-  await page.getByRole('dialog', { name: 'Share a plan' }).locator('[data-plan-pick-new]').click();
+  await page.getByRole('dialog', { name: 'Plans' }).locator('[data-plan-pick-new]').click();
   const compose = page_(page, 'compose');
   await expect(compose).toBeVisible();
   await compose.locator('[data-plan-title]').fill('Launch week');
@@ -164,7 +164,7 @@ test('create a concept with one uploaded file and one library file', async ({ pa
   expect(network.uploads).toEqual(['storyboard.png']);
   expect(origins).toEqual(['library']);
 
-  await compose.locator('[data-plan-share]').click();
+  await compose.locator('[data-plan-create]').click();
   await expect(compose).toBeHidden();
   const adds = network.rpcCalls.filter((c) => c.name === 'plan_concept_add');
   expect(adds).toHaveLength(1);

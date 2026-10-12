@@ -1107,7 +1107,11 @@ describe('fetchActivityEntries query composition', () => {
     const { client, calls } = recordingClient([]);
     await fetchActivityEntries(client, 'w1');
     expect(
-      hasCall(calls, 'not', ['event_type', 'in', '(reminder,scheduled_sent,scheduled_failed)']),
+      hasCall(calls, 'not', [
+        'event_type',
+        'in',
+        '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment)',
+      ]),
     ).toBe(true);
     expect(
       hasCall(calls, 'or', [

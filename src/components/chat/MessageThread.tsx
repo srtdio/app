@@ -436,6 +436,11 @@ interface MessageThreadProps {
   mentions?: BubbleMentions;
   /** Open with this message in view (an Activity mention); a miss toasts, the chat stays at the bottom. */
   initialMessageId?: string | null;
+  /**
+   * "Go to card" from the Plan screen: scroll to this plan card message and
+   * highlight it briefly; each new seq jumps again.
+   */
+  cardJump?: { messageId: string; seq: number } | null;
   /** The thread took initialMessageId (its jump runs, found or miss): the caller drops it. */
   onInitialJumpTaken?: () => void;
   /**
@@ -4802,6 +4807,14 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     );
     return () => clearTimeout(timer);
   }, [openHoldDone, pageLoading, openHeld, openAt]);
+  // Go to card: the same jump and highlight as a deep link, once per seq.
+  const cardJump = props.cardJump ?? null;
+  const cardJumpSeq = useRef<number | null>(null);
+  useEffect(() => {
+    if (cardJump === null || bodyLoading || cardJumpSeq.current === cardJump.seq) return;
+    cardJumpSeq.current = cardJump.seq;
+    setJumpRequest((prev) => ({ id: cardJump.messageId, seq: (prev?.seq ?? 0) + 1 }));
+  }, [cardJump, bodyLoading]);
   const onInitialJumpTaken = props.onInitialJumpTaken;
   useEffect(() => {
     const id = initialMessageId;

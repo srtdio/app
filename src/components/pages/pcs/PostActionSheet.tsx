@@ -41,11 +41,7 @@ import { ConversationPicker } from '@/components/pages/pcs/ConversationPicker';
 import type { GalleryItem } from '@srtdio/posts';
 import { postPlansLine, readPostPlans, type PostPlanRef } from '@/lib/chat/plans';
 import { supabase } from '@/lib/supabase';
-import {
-  MOVE_ROW_LABEL,
-  PostSheetPlanRowsContext,
-  REMOVE_ROW_LABEL,
-} from '@/components/chat/PlanMoveSheet';
+import { MOVE_ROW_LABEL, PostSheetPlanRowsContext } from '@/components/chat/PlanMoveSheet';
 
 interface PostActionSheetProps {
   open: boolean;
@@ -292,25 +288,14 @@ export function PostActionSheet({
             />
           ) : null}
           {planRows !== null ? (
-            <>
-              <ActionRow
-                icon={<IconCalendar size={18} />}
-                label={MOVE_ROW_LABEL}
-                onClick={() => {
-                  close();
-                  planRows.onMove();
-                }}
-              />
-              <ActionRow
-                danger
-                icon={<IconTrash size={18} />}
-                label={REMOVE_ROW_LABEL}
-                onClick={() => {
-                  close();
-                  planRows.onRemove();
-                }}
-              />
-            </>
+            <ActionRow
+              icon={<IconCalendar size={18} />}
+              label={MOVE_ROW_LABEL}
+              onClick={() => {
+                close();
+                planRows.onMove();
+              }}
+            />
           ) : null}
           <ActionRow
             icon={<IconSend size={18} />}

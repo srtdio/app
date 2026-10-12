@@ -35,13 +35,13 @@ const planRpcs = (network: HarnessNetwork) =>
 async function openCompose(page: Page): Promise<ReturnType<typeof page_>> {
   await page.getByRole('button', { name: 'Add attachment' }).click();
   await page.locator('[data-tray-tile="plan"]').click();
-  await page.getByRole('dialog', { name: 'Share a plan' }).locator('[data-plan-pick-new]').click();
+  await page.getByRole('dialog', { name: 'Plans' }).locator('[data-plan-pick-new]').click();
   const compose = page_(page, 'compose');
   await expect(compose).toBeVisible();
   return compose;
 }
 
-test('tap a draft concept to edit it; Save replaces it in place; share carries it', async ({
+test('tap a draft concept to edit it; Save replaces it in place; Create plan carries it', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -123,8 +123,15 @@ test('tap a draft concept to edit it; Save replaces it in place; share carries i
   await rows.nth(1).locator('[data-plan-draft-concept-remove]').click();
   await expect(rows).toHaveCount(1);
 
-  await compose.locator('[data-plan-share]').click();
+  await compose.locator('[data-plan-create]').click();
   await expect(compose).toBeHidden();
+  // Create plan: a Draft (team) plan, no card sent; its Plan screen opens.
+  expect(network.rpcCalls.find((c) => c.name === 'plan_create')?.args.p_audience).toBe('team');
+  expect(network.rpcCalls.filter((c) => c.name === 'chat_plan_share')).toEqual([]);
+  await expect(page.locator('[data-plan-page="plan"]')).toBeVisible();
+  await expect(page.locator('[data-plan-page="plan"] [data-plan-page-subtitle]')).toContainText(
+    'Draft',
+  );
   const adds = network.rpcCalls.filter((c) => c.name === 'plan_concept_add');
   expect(adds).toHaveLength(1);
   expect(adds[0]?.args.p_title).toBe('Opening reel v2');

@@ -115,8 +115,11 @@ describe('PlanCardBody', () => {
     expect(html).toContain('12 Oct - 18 Oct');
     expect(html).toContain('1 concept');
     expect(html).toContain('1 post');
-    expect(html).toContain('Agency 0 of 2 · Client 1 of 2 · 1 change asked');
+    // An Open plan: the client side for everyone, never the team count.
+    expect(html).toContain('Client 1 of 2');
+    expect(html).not.toContain('Agency 0 of 2');
     expect(html).toContain('width:50%');
+    expect(html).toContain('data-plan-card-bar="client"');
     expect(html).toContain('Open plan');
     expect(html).toContain('data-plan-forward');
     expect(html).not.toContain('Agency only');
@@ -129,10 +132,13 @@ describe('PlanCardBody', () => {
     expect(html).toContain('Forward');
   });
 
-  it('a team plan shows the warn "Agency only" chip (tokens only); Forward for the agency only', () => {
+  it('a Draft plan shows the warn "Draft" chip and "Team X of N" (tokens only); Forward for the agency only', () => {
     const html = render({ kind: 'plan', bundle: bundle('team') }, 'agency');
     const chip = /<span[^>]*data-plan-chip="warn"[^>]*>[^<]*<\/span>/.exec(html)?.[0] ?? '';
-    expect(chip).toContain('Agency only');
+    expect(chip).toContain('Draft');
+    expect(html).not.toContain('Agency only');
+    expect(html).toContain('Team 0 of 2');
+    expect(html).toContain('data-plan-card-bar="team"');
     expect(html).toContain('data-plan-forward');
     expect(chip).toContain('bg-warn-soft');
     expect(chip).toContain('border-warn');
@@ -140,9 +146,10 @@ describe('PlanCardBody', () => {
     expect(render({ kind: 'plan', bundle: bundle('team') }, 'client')).not.toContain('Forward');
   });
 
-  it('a plan the viewer cannot read renders the neutral not-visible card', () => {
+  it('a plan the viewer can no longer read (deleted) renders "Plan deleted"', () => {
     const html = render({ kind: 'unavailable' }, 'client');
-    expect(html).toContain('Plan not available');
+    expect(html).toContain('Plan deleted');
+    expect(html).not.toContain('Plan not available');
     expect(html).toContain('data-plan-card="unavailable"');
     expect(html).toContain('bg-panel-2');
     expect(html).not.toContain('Open plan');
@@ -150,19 +157,21 @@ describe('PlanCardBody', () => {
 });
 
 describe('Item screen rules', () => {
-  it('agency reviews a concept as team; a post item has no actions', () => {
-    expect(itemActions('agency', { kind: 'concept' }, 'client')).toEqual({
+  it('agency reviews a concept as team on a Draft plan only; a post item has no actions', () => {
+    expect(itemActions('agency', { kind: 'concept' }, 'team')).toEqual({
       kind: 'review',
       side: 'team',
       approveLabel: 'Agency approve',
     });
+    // No team writes on an Open plan.
+    expect(itemActions('agency', { kind: 'concept' }, 'client')).toEqual({ kind: 'none' });
     expect(itemActions('agency', { kind: 'post' }, 'client')).toEqual({ kind: 'none' });
     expect(itemActions('agency', { kind: 'post' }, 'team')).toEqual({ kind: 'none' });
   });
 
   it('labels: "Ask changes" then the approve on a concept; none on a post', () => {
     expect(actionLabels(itemActions('agency', { kind: 'post' }, 'client'))).toEqual([]);
-    expect(actionLabels(itemActions('agency', { kind: 'concept' }, 'client'))).toEqual([
+    expect(actionLabels(itemActions('agency', { kind: 'concept' }, 'team'))).toEqual([
       'Ask changes',
       'Agency approve',
     ]);
@@ -213,12 +222,15 @@ describe('Item screen rules', () => {
     expect(itemActions('unknown', { kind: 'concept' }, 'client')).toEqual({ kind: 'none' });
   });
 
-  it('status rows: Pipeline for a post, Agency for the agency only, Client always', () => {
+  it('status rows: Pipeline for a post, Agency for the agency on a Draft plan only, Client always', () => {
     const b = bundle('client');
     const post = b.items[1];
     const concept = b.items[0];
     if (post === undefined || concept === undefined) throw new Error('fixture');
-    expect(statusRows(b, post, 'agency').map((r) => r.label)).toEqual([
+    // Open plan: team reviews are never shown.
+    expect(statusRows(b, post, 'agency').map((r) => r.label)).toEqual(['Pipeline', 'Client']);
+    const d = bundle('team');
+    expect(statusRows(d, post, 'agency').map((r) => r.label)).toEqual([
       'Pipeline',
       'Agency',
       'Client',
@@ -228,7 +240,7 @@ describe('Item screen rules', () => {
       { label: 'Client', value: 'Changes asked', tone: 'review' },
     ]);
     // A saved review shows at once (before the re-read lands).
-    expect(statusRows(b, concept, 'agency', { team: 'approved' })[0]).toEqual({
+    expect(statusRows(d, concept, 'agency', { team: 'approved' })[0]).toEqual({
       label: 'Agency',
       value: 'Approved',
       tone: 'good',

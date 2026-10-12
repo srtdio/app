@@ -336,7 +336,12 @@ function chatMentionLine(item: ActivityItem): string {
  * "(team review)"; the client side reads plain. A missing actor degrades to a
  * name-free phrase. Null for any other event type.
  */
-export function planEventLine(item: ActivityItem): string | null {
+export function planEventLine(
+  item: Pick<
+    ActivityItem,
+    'eventType' | 'actorName' | 'reviewSide' | 'reviewStatus' | 'reviewWithdrawn' | 'reviewPrevious'
+  >,
+): string | null {
   const who = item.actorName;
   if (item.eventType === 'plan_comment') {
     return who !== null ? `${who} commented on a plan item` : 'New comment on a plan item';

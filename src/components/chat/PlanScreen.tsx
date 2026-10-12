@@ -1,19 +1,25 @@
 // The Plan screen (full page over the chat, one history step): the plan's
-// title, its range and who sees it, progress, and one list grouped by each
-// item's plan day (plan_items.target_date; a post's own date is never read)
+// title, "{range} · Draft" or "{range} · Shared with client", progress, and
+// one list grouped by each item's plan day (a post slot's day is its post's
+// posts.target_date in the workspace zone, a concept's plan_items.target_date)
 // for every day of the range ("Nothing planned" on an empty day, "No date"
 // last; a plan longer than a week adds a sticky "Week of" header per week).
 // Each row: day column, thumbnail, title, type line, the agency's client
-// status line, then the slot tick. Tapping a row opens the Item screen. A
-// tick is optimistic, with Undo on its toast; a failure reverts.
-// The agency side also gets: Add under each day and "+" in the header (new
-// concept or pick a post), long-press drag to reorder or move between days
-// (one plan_item_move with the full order, optimistic, reverted on failure),
-// and "Share with client" on a team plan. A client sees the list and ticks
-// only. One read per table per open (plans.ts), bounded at 5s; nothing paints
+// status line, "Also in" when the post sits in another plan, "Approved by"
+// on an Open plan's client-approved row, then the slot tick. One view of
+// ticks: a Draft plan shows the team side (agency only), an Open plan the
+// client side for everyone (a client ticks, the agency sees them read-only).
+// Tapping a row opens the Item screen. A tick is optimistic, with Undo on its
+// toast; a failure reverts. The agency side also gets: the title menu (Rename
+// inline, Delete plan for its creator or an owner/admin), Add under each day
+// and "+" in the header, long-press drag to reorder or move between days (one
+// 5-arg plan_item_move, optimistic, reverted on failure; an Open plan's
+// client-approved slot asks "Keep the approval?" first), and the footer: "Open
+// for client" on a Draft plan, and from a chat "Send in {chat}" or "Go to
+// card". One read per table per open (plans.ts), bounded at 5s; nothing paints
 // until that read settles. This file also holds the page frame, the bounded
 // read hook and the confirm sheet the other plan screens share.
-// Motion: drag on translateY and scale only; the page and sheets on
+// Motion: drag on translateY and scale only; the page, menu and sheets on
 // translateY. Tokens only.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,39 +27,81 @@ import type { PointerEvent as ReactPointerEvent, ReactElement, ReactNode, RefObj
 import { createPortal } from 'react-dom';
 import type { Result } from '@srtdio/rpc';
 import {
+  chatPlanShare,
   planConceptAdd,
+  planDelete,
   planItemMove,
   planItemReview,
   planPostsAdd,
   planShareWithClient,
+  planUpdate,
 } from '@srtdio/rpc';
 import type { PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import { useLongPress } from '@/components/ui';
-import { IconCheck, IconChevronLeft, IconPlan, IconPlus, IconX } from '@/components/ui/icons';
+import {
+  IconCheck,
+  IconChevronDown,
+  IconChevronLeft,
+  IconEdit,
+  IconPlan,
+  IconPlus,
+  IconTrash,
+  IconX,
+} from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
   ADD_FAILED,
   commentsLabel,
+  DELETE_PLAN_LABEL,
+  DELETE_PLAN_TITLE,
   DRAFT_NOT_READY,
+  GO_TO_CARD_LABEL,
   MOVE_FAILED,
   NO_DATE_LABEL,
+  OPEN_FOR_CLIENT_BODY,
+  OPEN_FOR_CLIENT_FAILED,
+  OPEN_FOR_CLIENT_LABEL,
+  OPEN_FOR_CLIENT_TITLE,
+  OPEN_FOR_CLIENT_TOAST,
+  PLAN_DELETED_TOAST,
   PLAN_NOT_AVAILABLE,
+  PLAN_TITLE_MAX,
+  RENAMED_TOAST,
+  RENAME_FAILED,
+  RENAME_LABEL,
+  SEND_FAILED,
+  SEND_NEEDS_OPEN,
   SLOT_UNDO,
   SLOT_UNDO_MS,
   addedToast,
+  alsoInLabel,
+  approvedBy,
+  approvedByLine,
+  approvedWhen,
+  approverIds,
+  canDeletePlan,
+  dayHeaderOf,
+  deletePlanBody,
+  deletePlanErrorCopy,
   draftLocked,
   itemDateLabel,
   itemKindLabel,
   itemStatusLine,
+  keepApprovalBody,
+  keepApprovalTitle,
+  moveAsksKeep,
+  movedKeptToast,
   movedToast,
   planHeaderSubtitle,
   planProgressView,
+  planSendAction,
   planWriteErrorCopy,
+  renameTitle,
   reviewStatus,
   slotCheckboxShown,
   slotSide,
@@ -63,11 +111,12 @@ import {
   stageLabel,
   withReviewOverrides,
   type PillTone,
+  type SendAction,
   type StatusPill,
 } from '@/components/chat/plan-card';
 import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
 import { PlanAddSheet } from '@/components/chat/PlanAddSheet';
-import type { MoveDay } from '@/components/chat/PlanMoveSheet';
+import { PlanKeepApprovalSheet, type MoveDay } from '@/components/chat/PlanMoveSheet';
 import { ConceptSheet, EMPTY_CONCEPT, type ConceptForm } from '@/components/chat/ConceptSheet';
 import { PostPicker } from '@/components/chat/PostPicker';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
@@ -82,7 +131,13 @@ import {
   type DayIds,
 } from '@/lib/chat/plan-drag';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
-import { LATE_READ_GRACE_MS, READ_TIMEOUT_MS, withLateRead } from '@/lib/chat-reads';
+import { LATE_READ_GRACE_MS, READ_TIMEOUT_MS, readProfiles, withLateRead } from '@/lib/chat-reads';
+import { newMessageId } from '@/lib/chat/message-id';
+import { sharePlanToChannel } from '@/lib/chat/share-plan';
+import type { ChatMessageRow } from '@/lib/chat/thread';
+import { createInFlightGuard } from '@/lib/chat/thread-actions';
+import { fetchMemberRole } from '@/lib/assets';
+import { useSession } from '@/lib/session-context';
 import {
   PLAN_CHANGED_EVENT,
   dispatchPlanChanged,
@@ -90,6 +145,7 @@ import {
   conceptAddArgs,
   planItemDayInZone,
   readPlanScreen,
+  refusedForClient,
   runSlotWrite,
   type PlanBundle,
   type PlanItemRow,
@@ -139,6 +195,10 @@ export function PlanPage(props: {
   footer?: ReactNode;
   /** A header action (44px) after the title column, e.g. an overflow button. */
   action?: ReactNode;
+  /** Replaces the title line (the agency's menu button, the inline rename). */
+  titleSlot?: ReactNode;
+  /** Drawn under the header, anchored to it (the header menu). */
+  overlay?: ReactNode;
   /** The scrolling body (a drag auto-scrolls it). */
   bodyRef?: RefObject<HTMLDivElement>;
   children: ReactNode;
@@ -189,7 +249,7 @@ export function PlanPage(props: {
         entered ? 'translate-y-0' : 'translate-y-full',
       )}
     >
-      <header className="flex min-h-[60px] shrink-0 items-center gap-2 border-b border-border bg-panel pl-1 pr-3">
+      <header className="relative z-20 flex min-h-[60px] shrink-0 items-center gap-2 border-b border-border bg-panel pl-1 pr-3">
         <button
           type="button"
           aria-label={props.backLabel}
@@ -199,7 +259,11 @@ export function PlanPage(props: {
           {props.backIcon ?? <IconChevronLeft size={22} />}
         </button>
         <div data-plan-page-titles="" className="flex min-w-0 flex-1 flex-col">
-          <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">{props.title}</h2>
+          {props.titleSlot ?? (
+            <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">
+              {props.title}
+            </h2>
+          )}
           {props.subtitle !== undefined ? (
             <span
               data-plan-page-subtitle=""
@@ -210,6 +274,7 @@ export function PlanPage(props: {
           ) : null}
         </div>
         {props.action}
+        {props.overlay}
       </header>
       <div
         ref={props.bodyRef}
@@ -380,21 +445,22 @@ export function PlanPill(props: { pill: StatusPill }): ReactElement {
 }
 
 /**
- * The progress line as one string (tests and labels): agency "Agency A of N ·
- * Client B of N"; anyone else "B of N slots approved". Pure.
+ * The progress line as one string (tests and labels), the same for every
+ * viewer: Draft "Team X of N", Open "Client X of N". `side` is kept for the
+ * callers. Pure.
  */
-export function screenProgressLabel(bundle: PlanBundle, side: ViewerSide): string {
-  const view = planProgressView(bundle, side);
-  return view.client === null ? view.lead : `${view.lead} · ${view.client}`;
+export function screenProgressLabel(bundle: PlanBundle, side?: ViewerSide): string {
+  void side;
+  return planProgressView(bundle).lead;
 }
 
 /**
- * The progress block under the header (sans, 13px/18px): the agency's count
- * left (weight 600) and the client's right (muted), or a client's one line;
- * a 4px bar below (accent for the agency count, good for the client's).
+ * The progress block under the header (sans, 13px/18px): one line, Draft
+ * "Team X of N" or Open "Client X of N", the same for every viewer; a 4px bar
+ * below (accent for the team side, good for the client's).
  */
-export function PlanProgressRow(props: { bundle: PlanBundle; side: ViewerSide }): ReactElement {
-  const view = planProgressView(props.bundle, props.side);
+export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }): ReactElement {
+  const view = planProgressView(props.bundle);
   return (
     <div data-plan-progress-block="" className="flex flex-col gap-2 px-4 pt-3">
       <div
@@ -402,7 +468,6 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side: ViewerSide })
         className="flex items-baseline justify-between gap-3 text-[13px] leading-[18px]"
       >
         <span className="font-semibold text-fg">{view.lead}</span>
-        {view.client !== null ? <span className="text-fg-3">{view.client}</span> : null}
       </div>
       <span className="block h-1 overflow-hidden rounded-[2px] bg-panel-3">
         <span
@@ -491,6 +556,31 @@ interface MoveOverlay {
   itemId: string;
   toDay: string | null;
   order: string[];
+  /** The move keeps the item's reviews (the keep sheet's "Yes, keep it"). */
+  keep: boolean;
+}
+
+/** The chat the Plan screen was opened from (absent at /plans/:id). */
+export interface PlanScreenChat {
+  channelId: string;
+  /** The chat's title ("Send in {chat name}"). */
+  name: string;
+  /** A client among the chat's members; null while unknown. */
+  hasClient: boolean | null;
+  /** The plans the chat's loaded thread holds a card for. */
+  cardPlanIds: readonly string[];
+  /** A plan card was recorded into this chat (the thread adds the row). */
+  onSent: (row: ChatMessageRow, traceId: string) => void;
+  /** "Go to card": close the screen, scroll to the card and highlight it. */
+  onGoToCard: (planId: string) => void;
+}
+
+/** A move waiting on "Keep the approval?". */
+interface KeepAsk {
+  itemId: string;
+  toDay: string | null;
+  toIndex: number;
+  approver: string;
 }
 
 export function PlanScreen(props: {
@@ -500,6 +590,8 @@ export function PlanScreen(props: {
   senderName?: string;
   /** The open chat's title. Absent outside a chat (kept for callers). */
   chatTitle?: string;
+  /** The chat the screen was opened from: its send / Go to card footer. Absent outside a chat. */
+  chat?: PlanScreenChat;
   /**
    * Outside a chat (the standalone page): the item open on entry. It takes no
    * history step of its own (the page's entry is its step), so closing it
@@ -515,15 +607,22 @@ export function PlanScreen(props: {
   const { workspaceId, workspaces } = useWorkspace();
   const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
   const { side } = useViewerSide(workspaceId);
+  const { session } = useSession();
+  const me = session?.user.id ?? null;
   const toast = useToast();
   const planId = props.planId;
-  const { read, reload } = useScreenRead<PlanScreenData>(props.open, planId, (signal) =>
-    readPlanScreen(supabase, planId, signal),
+  const { read, reload } = useScreenRead<PlanScreenData>(
+    props.open,
+    `${planId}:${timeZone}`,
+    (signal) =>
+      readPlanScreen(supabase, planId, signal, {
+        timeZone,
+        approvers: approverIds,
+        readNames: (ids, s) => readProfiles(supabase, ids, s),
+      }),
   );
   const [itemId, setItemId] = useState<string | null>(props.initialItemId ?? null);
   const entryItemId = props.initialItemId ?? null;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // Add: the sheet (its day; undefined = closed), the concept sheet, the picker.
   const [addFor, setAddFor] = useState<{ day: string | null } | null>(null);
   const [conceptFor, setConceptFor] = useState<{ day: string | null } | null>(null);
@@ -531,6 +630,20 @@ export function PlanScreen(props: {
   const [conceptBusy, setConceptBusy] = useState(false);
   const [pickFor, setPickFor] = useState<{ day: string | null } | null>(null);
   const [picked, setPicked] = useState<PostCardFields[]>([]);
+  // The header menu, the inline rename, the delete and open-for-client confirms.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [openConfirm, setOpenConfirm] = useState(false);
+  const [openBusy, setOpenBusy] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [keepAsk, setKeepAsk] = useState<KeepAsk | null>(null);
+  const [sendGuard] = useState(createInFlightGuard);
   const { canAttach, uploadFile } = useCommentAttachments();
   const bodyRef = useRef<HTMLDivElement>(null);
   useHistoryStep(
@@ -549,7 +662,14 @@ export function PlanScreen(props: {
     setConceptFor(null);
     setPickFor(null);
     setPicked([]);
-    setError(null);
+    setMenuOpen(false);
+    setRenaming(null);
+    setDeleteOpen(false);
+    setDeleteError(null);
+    setOpenConfirm(false);
+    setOpenError(null);
+    setSendError(null);
+    setKeepAsk(null);
   }, [props.open]);
 
   // A write anywhere re-reads this plan (keeping what is shown meanwhile).
@@ -569,6 +689,7 @@ export function PlanScreen(props: {
     readBundle.plan.workspace_id !== props.onlyWorkspaceId
       ? null
       : readBundle;
+  // The side the viewer's ticks WRITE (null: read-only, as the agency on an Open plan).
   const slot = shownBundle !== null ? slotSide(side, shownBundle.plan.audience) : null;
   // The viewer's slot ticks and a pending move, laid over the read until a
   // fresh read lands (a write still in flight survives that read). Rows,
@@ -591,13 +712,23 @@ export function PlanScreen(props: {
     const ticked =
       slot !== null ? withReviewOverrides(shownBundle, slot, slotOverrides) : shownBundle;
     return moveOverlay !== null
-      ? applyMove(ticked, moveOverlay.itemId, moveOverlay.toDay, moveOverlay.order)
+      ? applyMove(
+          ticked,
+          moveOverlay.itemId,
+          moveOverlay.toDay,
+          moveOverlay.order,
+          timeZone,
+          moveOverlay.keep,
+        )
       : ticked;
-  }, [shownBundle, slot, slotOverrides, moveOverlay]);
+  }, [shownBundle, slot, slotOverrides, moveOverlay, timeZone]);
   const groups = useMemo(
     () => (bundle !== null ? planListGroups(bundle, timeZone, side) : []),
     [bundle, timeZone, side],
   );
+  const names = read.status === 'ready' ? (read.data.names ?? {}) : {};
+  const nameOf = (userId: string | null): string =>
+    (userId !== null ? names[userId] : undefined) ?? MEMBER_NAME;
 
   // A re-read that drops the open item (removed) or the plan itself (deleted,
   // no longer readable) closes that layer through its own close path, so its
@@ -625,27 +756,150 @@ export function PlanScreen(props: {
   const cachedTitle = planCards?.cache.snapshot([planId]).bundles.get(planId)?.plan.title ?? null;
   const title = planHeaderTitle(read.status, bundle?.plan.title ?? null, cachedTitle);
   const subtitle =
-    bundle !== null && side !== 'unknown' ? planHeaderSubtitle(bundle.plan, side) : undefined;
+    bundle !== null && side !== 'unknown' ? planHeaderSubtitle(bundle.plan) : undefined;
   const agency = side === 'agency' && bundle !== null;
+  // Delete is for the plan's creator or a workspace owner/admin: one role read
+  // per open, agency side only.
+  const [role, setRole] = useState<string | null>(null);
+  useEffect(() => {
+    if (!props.open || side !== 'agency' || workspaceId === null || me === null) return;
+    let cancelled = false;
+    void fetchMemberRole(supabase, workspaceId, me).then((next) => {
+      if (!cancelled) setRole(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.open, side, workspaceId, me]);
+  const mayDelete = bundle !== null && canDeletePlan(bundle.plan, me, role);
 
-  const shareWithClient = async (): Promise<void> => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
+  // Rename: the title becomes a field; Done saves through plan_update with the
+  // plan's current dates.
+  const saveRename = async (): Promise<void> => {
+    if (bundle === null || renaming === null || renameBusy) return;
+    const next = renameTitle(renaming);
+    if (next === null) return;
+    if (next === bundle.plan.title) {
+      setRenaming(null);
+      return;
+    }
+    setRenameBusy(true);
     const traceId = generateTraceId();
-    const result = await planShareWithClient(supabase, { p_plan_id: planId, p_trace_id: traceId });
-    setBusy(false);
+    const result = await planUpdate(supabase, {
+      p_plan_id: planId,
+      p_title: next,
+      p_starts_on: bundle.plan.starts_on,
+      p_ends_on: bundle.plan.ends_on,
+      p_trace_id: traceId,
+    });
+    setRenameBusy(false);
     if (!result.ok) {
-      logger.warn('chat: plan share with client failed', {
+      logger.warn('chat: plan rename failed', {
         trace_id: traceId,
         plan_id: planId,
         error: result.error.message,
       });
-      setError("Couldn't share. Try again.");
+      toast.show({ title: RENAME_FAILED });
       return;
     }
-    toast.show({ title: 'Shared with the client' });
+    setRenaming(null);
+    toast.show({ title: RENAMED_TOAST });
     dispatchPlanChanged(window, planId);
+  };
+
+  const deletePlan = async (): Promise<void> => {
+    if (deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    const traceId = generateTraceId();
+    const result = await planDelete(supabase, { p_plan_id: planId, p_trace_id: traceId });
+    setDeleteBusy(false);
+    if (!result.ok) {
+      logger.warn('chat: plan delete failed', {
+        trace_id: traceId,
+        plan_id: planId,
+        error: result.error.message,
+      });
+      setDeleteError(deletePlanErrorCopy(result.error.message));
+      return;
+    }
+    setDeleteOpen(false);
+    toast.show({ title: PLAN_DELETED_TOAST });
+    dispatchPlanChanged(window, planId);
+    props.onClose();
+  };
+
+  const openForClient = async (): Promise<void> => {
+    if (openBusy) return;
+    setOpenBusy(true);
+    setOpenError(null);
+    const traceId = generateTraceId();
+    const result = await planShareWithClient(supabase, { p_plan_id: planId, p_trace_id: traceId });
+    setOpenBusy(false);
+    if (!result.ok) {
+      logger.warn('chat: plan open for client failed', {
+        trace_id: traceId,
+        plan_id: planId,
+        error: result.error.message,
+      });
+      setOpenError(OPEN_FOR_CLIENT_FAILED);
+      return;
+    }
+    setOpenConfirm(false);
+    toast.show({ title: OPEN_FOR_CLIENT_TOAST });
+    dispatchPlanChanged(window, planId);
+  };
+
+  const chat = props.chat ?? null;
+  const sendAction =
+    bundle !== null
+      ? planSendAction({
+          side,
+          audience: bundle.plan.audience,
+          chat:
+            chat !== null
+              ? {
+                  name: chat.name,
+                  hasClient: chat.hasClient,
+                  cardInChat: chat.cardPlanIds.includes(planId),
+                }
+              : null,
+        })
+      : ({ kind: 'none' } as const);
+  const sendHere = async (): Promise<void> => {
+    if (chat === null || sendBusy) return;
+    setSendError(null);
+    setSendBusy(true);
+    const result = await sharePlanToChannel(
+      {
+        guard: sendGuard,
+        record: (input) =>
+          chatPlanShare(supabase, {
+            p_id: input.id,
+            p_channel_id: input.channelId,
+            p_plan_id: input.planId,
+            p_trace_id: input.traceId,
+          }),
+        // The open thread adds the row and publishes it live.
+        publish: null,
+        newMessageId,
+        newTraceId: generateTraceId,
+        onPublishFailed: () => {},
+      },
+      { channelId: chat.channelId, planId },
+    );
+    setSendBusy(false);
+    if (!result.ok) {
+      if (result.reason === 'busy') return;
+      logger.warn('chat: plan send from the plan screen failed', {
+        channel_id: chat.channelId,
+        plan_id: planId,
+        error: result.message,
+      });
+      setSendError(refusedForClient(result.message) ? SEND_NEEDS_OPEN : SEND_FAILED);
+      return;
+    }
+    chat.onSent(result.row, result.traceId);
   };
 
   // One slot write: optimistic at once, reverted on failure; a tick's toast
@@ -714,6 +968,7 @@ export function PlanScreen(props: {
     });
   };
   const toggleSlot = (item: PlanItemRow): void => {
+    // Read-only boxes (the agency on an Open plan) never write.
     if (bundle === null || slot === null) return;
     const previous = reviewStatus(bundle, item.id, slot);
     const ticked = previous === 'approved';
@@ -729,9 +984,15 @@ export function PlanScreen(props: {
   };
 
   // A drop or a Move: optimistic at once (the full new order and the day),
-  // one plan_item_move, reverted on failure. A day change says so, and says
-  // the ticks were reset when it had any.
-  const moveTo = async (moved: string, toDay: string | null, toIndex: number): Promise<void> => {
+  // one 5-arg plan_item_move, reverted on failure. On an Open plan a day
+  // change of a client-approved slot asks "Keep the approval?" first
+  // (cancelling cancels the move); every other move resets (false).
+  const commitMove = async (
+    moved: string,
+    toDay: string | null,
+    toIndex: number,
+    keep: boolean,
+  ): Promise<void> => {
     if (bundle === null) return;
     const days = planDayIds(groups);
     const from = findItem(days, moved);
@@ -744,12 +1005,13 @@ export function PlanScreen(props: {
     const dayChanged = from.day !== toDay;
     const hadTicks = hasTicks(bundle, moved);
     moveWriting.current = true;
-    setMoveOverlay({ itemId: moved, toDay, order });
+    setMoveOverlay({ itemId: moved, toDay, order, keep });
     const traceId = generateTraceId();
     const result = await planItemMove(supabase, {
       p_item_id: moved,
       p_target_date: toDay,
       p_item_ids: order,
+      p_keep_reviews: keep,
       p_trace_id: traceId,
     });
     moveWriting.current = false;
@@ -765,20 +1027,34 @@ export function PlanScreen(props: {
     }
     if (dayChanged) {
       toast.show({
-        title: movedToast(toDay !== null ? formatCivilDayHeader(toDay) : null, hadTicks),
+        title: keep ? movedKeptToast(dayHeaderOf(toDay)) : movedToast(dayHeaderOf(toDay), hadTicks),
       });
     }
     dispatchPlanChanged(window, planId);
   };
+  const moveTo = (moved: string, toDay: string | null, toIndex: number): void => {
+    if (bundle === null) return;
+    const item = bundle.items.find((i) => i.id === moved);
+    const from = findItem(planDayIds(groups), moved);
+    if (item === undefined || from === null) return;
+    if (moveAsksKeep(bundle, item, from.day, toDay)) {
+      setKeepAsk({
+        itemId: moved,
+        toDay,
+        toIndex,
+        approver: nameOf(approvedBy(bundle, item)?.userId ?? null),
+      });
+      return;
+    }
+    void commitMove(moved, toDay, toIndex, false);
+  };
   const drag = usePlanDrag({
     enabled: agency,
     bodyRef,
-    onDrop: (moved, toDay, toIndex) => void moveTo(moved, toDay, toIndex),
+    onDrop: (moved, toDay, toIndex) => moveTo(moved, toDay, toIndex),
   });
 
   // Add: a concept on that day, or picked posts on that day.
-  const dayHeaderOf = (day: string | null): string | null =>
-    day !== null ? formatCivilDayHeader(day) : null;
   const openAdd = (day: string | null): void => setAddFor({ day });
   const startConcept = (): void => {
     if (addFor === null) return;
@@ -860,29 +1136,83 @@ export function PlanScreen(props: {
   // A draft the viewer can see by name only never opens (a drawer row included).
   const item =
     found !== null && bundle !== null && !draftLocked(bundle, found, side) ? found : null;
+  const showOpen = side === 'agency' && bundle !== null && bundle.plan.audience === 'team';
+  const footer =
+    bundle !== null && (showOpen || sendAction.kind !== 'none') ? (
+      <PlanFooter
+        showOpen={showOpen}
+        send={sendAction}
+        sending={sendBusy}
+        error={sendError}
+        onOpenForClient={() => {
+          setOpenError(null);
+          setOpenConfirm(true);
+        }}
+        onSend={() => void sendHere()}
+        onGoToCard={() => chat?.onGoToCard(planId)}
+      />
+    ) : undefined;
   return (
     <>
       <PlanPage
         open={props.open}
         testId="plan"
         title={title}
-        subtitle={subtitle}
+        // The inline rename takes the whole title column.
+        subtitle={renaming !== null ? undefined : subtitle}
         backLabel="Back"
         onBack={props.onClose}
         bodyRef={bodyRef}
+        footer={footer}
         {...(agency
           ? {
-              action: (
-                <button
-                  type="button"
-                  aria-label="Add to plan"
-                  data-plan-add-header=""
-                  onClick={() => openAdd(null)}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  <IconPlus size={22} />
-                </button>
+              titleSlot:
+                renaming !== null ? (
+                  <RenameField
+                    value={renaming}
+                    busy={renameBusy}
+                    onChange={setRenaming}
+                    onCancel={() => setRenaming(null)}
+                    onDone={() => void saveRename()}
+                  />
+                ) : (
+                  <PlanTitleButton
+                    title={title}
+                    open={menuOpen}
+                    onToggle={() => setMenuOpen((v) => !v)}
+                  />
+                ),
+              overlay: (
+                <PlanHeaderMenu
+                  open={props.open && menuOpen}
+                  canDelete={mayDelete}
+                  onRename={() => {
+                    setMenuOpen(false);
+                    setRenaming(bundle?.plan.title ?? '');
+                  }}
+                  onDelete={() => {
+                    setMenuOpen(false);
+                    setDeleteError(null);
+                    setDeleteOpen(true);
+                  }}
+                  onClose={() => setMenuOpen(false)}
+                />
               ),
+              ...(renaming === null
+                ? {
+                    action: (
+                      <button
+                        type="button"
+                        aria-label="Add to plan"
+                        data-plan-add-header=""
+                        onClick={() => openAdd(null)}
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        <IconPlus size={22} />
+                      </button>
+                    ),
+                  }
+                : {}),
             }
           : {})}
       >
@@ -903,13 +1233,12 @@ export function PlanScreen(props: {
             timeZone={timeZone}
             thumbs={read.status === 'ready' ? read.data.thumbs : {}}
             counts={read.status === 'ready' ? read.data.commentCounts : {}}
+            names={names}
+            alsoIn={read.status === 'ready' ? (read.data.alsoIn ?? {}) : {}}
             drag={drag.state}
             onOpenItem={setItemId}
             onToggleSlot={toggleSlot}
             {...(agency ? { onAdd: openAdd, onDragStart: drag.start } : {})}
-            shareError={error}
-            sharing={busy}
-            onShareWithClient={() => void shareWithClient()}
           />
         )}
       </PlanPage>
@@ -931,6 +1260,7 @@ export function PlanScreen(props: {
           bundle={bundle}
           item={item}
           side={side}
+          approverName={nameOf(approvedBy(bundle, item)?.userId ?? null)}
           {...(itemId === entryItemId
             ? {
                 backLabel: 'Back',
@@ -943,8 +1273,44 @@ export function PlanScreen(props: {
           onRemoved={() => setItemId(null)}
         />
       ) : null}
+      <PlanKeepApprovalSheet
+        open={props.open && keepAsk !== null}
+        title={keepApprovalTitle(keepAsk?.approver ?? MEMBER_NAME)}
+        body={keepApprovalBody(dayHeaderOf(keepAsk?.toDay ?? null))}
+        onKeep={(keep) => {
+          const ask = keepAsk;
+          setKeepAsk(null);
+          if (ask !== null) void commitMove(ask.itemId, ask.toDay, ask.toIndex, keep);
+        }}
+        onCancel={() => setKeepAsk(null)}
+      />
       {agency ? (
         <>
+          <PlanConfirmSheet
+            open={props.open && deleteOpen}
+            title={DELETE_PLAN_TITLE}
+            message={deletePlanBody(bundle?.plan.audience ?? 'team')}
+            confirmLabel={DELETE_PLAN_LABEL}
+            destructive
+            busy={deleteBusy}
+            error={deleteError}
+            onConfirm={() => void deletePlan()}
+            onCancel={() => {
+              if (!deleteBusy) setDeleteOpen(false);
+            }}
+          />
+          <PlanConfirmSheet
+            open={props.open && openConfirm}
+            title={OPEN_FOR_CLIENT_TITLE}
+            message={OPEN_FOR_CLIENT_BODY}
+            confirmLabel={OPEN_FOR_CLIENT_LABEL}
+            busy={openBusy}
+            error={openError}
+            onConfirm={() => void openForClient()}
+            onCancel={() => {
+              if (!openBusy) setOpenConfirm(false);
+            }}
+          />
           <PlanAddSheet
             open={props.open && addFor !== null}
             dayHeader={addFor !== null ? dayHeaderOf(addFor.day) : null}
@@ -984,6 +1350,237 @@ export function PlanScreen(props: {
         </>
       ) : null}
     </>
+  );
+}
+
+/** The name an approver reads as when their name did not load. */
+export const MEMBER_NAME = 'Member';
+
+/**
+ * The agency's header title: a button with a small chevron that opens the
+ * header menu (Rename, Delete plan). 44px tall; truncates.
+ */
+function PlanTitleButton(props: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      data-plan-title-menu=""
+      aria-haspopup="menu"
+      aria-expanded={props.open}
+      onClick={props.onToggle}
+      onContextMenu={(event) => event.preventDefault()}
+      className={cn(
+        '-ml-1 flex min-h-[44px] min-w-0 max-w-full items-center gap-1 self-start rounded-md px-1 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        NO_TOUCH_SELECT,
+      )}
+    >
+      <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">{props.title}</h2>
+      <span aria-hidden="true" className="shrink-0 text-fg-3">
+        <IconChevronDown size={16} />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The header menu, anchored under the header: Rename and, for the plan's
+ * creator or a workspace owner/admin, "Delete plan" (danger, bin icon). Slides
+ * on translateY only; an outside tap or Escape closes it.
+ */
+export function PlanHeaderMenu(props: {
+  open: boolean;
+  canDelete: boolean;
+  onRename: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}): ReactElement | null {
+  const ref = useRef<HTMLDivElement>(null);
+  const onClose = props.onClose;
+  // Slides in on translateY (no X, no rotate); reduced motion skips it.
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    if (!props.open) {
+      setEntered(false);
+      return;
+    }
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, [props.open]);
+  useEffect(() => {
+    if (!props.open) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose();
+    };
+    const onPointer = (event: Event): void => {
+      const target = event.target as Node;
+      if (ref.current?.contains(target) === true) return;
+      if (target instanceof Element && target.closest('[data-plan-title-menu]') !== null) return;
+      onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [props.open, onClose]);
+  if (!props.open) return null;
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      aria-label="Plan actions"
+      data-plan-header-menu=""
+      className={cn(
+        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-lg border border-border-strong bg-panel py-1 shadow-lg transition-transform duration-fast ease-enter motion-reduce:transition-none',
+        entered ? 'translate-y-0' : '-translate-y-1',
+        NO_TOUCH_SELECT,
+      )}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        data-plan-menu-rename=""
+        onClick={props.onRename}
+        className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-[15px] text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <IconEdit size={18} />
+        {RENAME_LABEL}
+      </button>
+      {props.canDelete ? (
+        <button
+          type="button"
+          role="menuitem"
+          data-plan-menu-delete=""
+          onClick={props.onDelete}
+          className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-[15px] text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <IconTrash size={18} />
+          {DELETE_PLAN_LABEL}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The inline rename: the title as a text field (1 to 200 characters, trimmed),
+ * Cancel (X) and Done, each 44px. Enter is Done, Escape is Cancel.
+ */
+export function RenameField(props: {
+  value: string;
+  busy: boolean;
+  onChange: (value: string) => void;
+  onCancel: () => void;
+  onDone: () => void;
+}): ReactElement {
+  const valid = renameTitle(props.value) !== null;
+  return (
+    <div data-plan-rename="" className="flex min-w-0 items-center gap-1">
+      <input
+        aria-label="Plan title"
+        data-plan-rename-input=""
+        autoFocus
+        value={props.value}
+        maxLength={PLAN_TITLE_MAX}
+        disabled={props.busy}
+        autoComplete="off"
+        onChange={(e) => props.onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && valid) props.onDone();
+          if (e.key === 'Escape') props.onCancel();
+        }}
+        className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-base font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+      />
+      <button
+        type="button"
+        aria-label="Cancel rename"
+        data-plan-rename-cancel=""
+        disabled={props.busy}
+        onClick={props.onCancel}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+      >
+        <IconX size={20} />
+      </button>
+      <button
+        type="button"
+        data-plan-rename-done=""
+        disabled={props.busy || !valid}
+        onClick={props.onDone}
+        className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+      >
+        Done
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The Plan screen's footer: "Open for client" (primary) on an agency Draft
+ * plan, then the chat action: "Send in {chat}" (disabled with its hint on a
+ * Draft plan in a chat with a client) or "Go to card". 44px+ targets.
+ */
+export function PlanFooter(props: {
+  showOpen: boolean;
+  send: SendAction;
+  sending: boolean;
+  error: string | null;
+  onOpenForClient: () => void;
+  onSend: () => void;
+  onGoToCard: () => void;
+}): ReactElement {
+  const { send } = props;
+  const hint = send.kind === 'send' ? send.hint : null;
+  return (
+    <div data-plan-footer="" className="flex flex-col gap-1.5">
+      {props.error !== null ? (
+        <p role="alert" data-plan-send-error="" className="text-[13px] text-bad">
+          {props.error}
+        </p>
+      ) : null}
+      {hint !== null ? (
+        <p data-plan-send-hint="" className="text-[13px] leading-[18px] text-fg-3">
+          {hint}
+        </p>
+      ) : null}
+      <div className="flex gap-2">
+        {props.showOpen ? (
+          <Button
+            size="lg"
+            variant="primary"
+            data-plan-open-client=""
+            className="min-h-[48px] flex-1"
+            onClick={props.onOpenForClient}
+          >
+            {OPEN_FOR_CLIENT_LABEL}
+          </Button>
+        ) : null}
+        {send.kind === 'send' ? (
+          <Button
+            size="lg"
+            data-plan-send-here=""
+            className="min-h-[48px] min-w-0 flex-1"
+            disabled={send.disabled || props.sending}
+            onClick={props.onSend}
+          >
+            <span className="truncate">{send.label}</span>
+          </Button>
+        ) : send.kind === 'go' ? (
+          <Button
+            size="lg"
+            data-plan-go-card=""
+            className="min-h-[48px] flex-1"
+            onClick={props.onGoToCard}
+          >
+            {GO_TO_CARD_LABEL}
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -1273,6 +1870,10 @@ export function PlanBody(props: {
   thumbs: Record<string, string>;
   /** Visible comment counts by item id (the screen's one count read). */
   counts?: Readonly<Record<string, number>>;
+  /** Approvers' names by user id (the Approved by lines). */
+  names?: Readonly<Record<string, string>>;
+  /** Other plans' titles by post id (the Also in pill). */
+  alsoIn?: Readonly<Record<string, string[]>>;
   /** The drag in progress, or null. */
   drag: DragState | null;
   onOpenItem: (id: string) => void;
@@ -1281,9 +1882,6 @@ export function PlanBody(props: {
   onAdd?: (day: string | null) => void;
   /** Agency only: a row's long-press lifts it. */
   onDragStart?: (itemId: string, row: HTMLElement, clientY: number) => void;
-  shareError: string | null;
-  sharing: boolean;
-  onShareWithClient: () => void;
 }): ReactElement {
   const { bundle, side, drag } = props;
   const weeks = planShowsWeeks(bundle.plan.starts_on, bundle.plan.ends_on);
@@ -1291,30 +1889,7 @@ export function PlanBody(props: {
   const dragFrom = drag !== null ? (findItem(planDayIds(props.groups), drag.itemId) ?? null) : null;
   return (
     <>
-      <PlanProgressRow bundle={bundle} side={side} />
-      {side === 'agency' && bundle.plan.audience === 'team' ? (
-        <div className="flex flex-col gap-1.5 px-4 pt-3">
-          <div className="flex items-center gap-2 rounded-lg border border-warn bg-warn-soft px-3 py-2">
-            <span className="flex-1 text-[13px] text-warn">
-              Agency only. The client can&apos;t see it yet.
-            </span>
-            <Button
-              size="sm"
-              data-plan-share-client=""
-              className="min-h-[44px]"
-              disabled={props.sharing}
-              onClick={props.onShareWithClient}
-            >
-              Share with client
-            </Button>
-          </div>
-          {props.shareError !== null ? (
-            <p role="alert" className="text-[13px] text-bad">
-              {props.shareError}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      <PlanProgressRow bundle={bundle} />
       <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col pb-4 pt-3">
         {props.groups.map((week, w) => (
           <section
@@ -1377,6 +1952,18 @@ export function PlanBody(props: {
                             }
                             dimmed={lifted}
                             comments={props.counts?.[item.id] ?? 0}
+                            timeZone={props.timeZone}
+                            approvedByName={(() => {
+                              const by = approvedBy(bundle, item);
+                              if (by === null) return null;
+                              return (
+                                (by.userId !== null ? props.names?.[by.userId] : undefined) ??
+                                MEMBER_NAME
+                              );
+                            })()}
+                            alsoIn={
+                              item.post_id !== null ? (props.alsoIn?.[item.post_id] ?? []) : []
+                            }
                             onOpen={() => props.onOpenItem(item.id)}
                             onToggleSlot={() => props.onToggleSlot(item)}
                             {...(props.onDragStart !== undefined &&
@@ -1517,20 +2104,29 @@ export function SlotCheckbox(props: {
   side: ReviewSide;
   checked: boolean;
   title: string;
+  /** Read-only (the agency on an Open plan): shown, disabled, never writes. */
+  readOnly?: boolean;
   onToggle: () => void;
 }): ReactElement {
+  const readOnly = props.readOnly === true;
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={props.checked}
       aria-label={
-        props.checked ? `Remove slot approval: ${props.title}` : `Approve slot: ${props.title}`
+        readOnly
+          ? `${props.checked ? 'Client approved' : 'Client pending'}: ${props.title}`
+          : props.checked
+            ? `Remove slot approval: ${props.title}`
+            : `Approve slot: ${props.title}`
       }
       data-plan-slot={props.side}
       data-plan-slot-state={props.checked ? 'approved' : 'pending'}
-      onClick={props.onToggle}
-      className="flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      {...(readOnly ? { 'data-plan-slot-readonly': '' } : {})}
+      disabled={readOnly}
+      onClick={readOnly ? undefined : props.onToggle}
+      className="flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
     >
       <span
         className={cn(
@@ -1626,12 +2222,19 @@ function PlanRow(props: {
   dimmed: boolean;
   /** Visible comments on the item; shown when above zero. */
   comments: number;
+  /** The workspace zone (the Approved by time, the date line). */
+  timeZone?: string;
+  /** An Open plan's client-approved row: the approver's name; null otherwise. */
+  approvedByName?: string | null;
+  /** Other live plans this post sits in (the Also in pill). */
+  alsoIn?: readonly string[];
   onOpen: () => void;
   onToggleSlot: () => void;
   /** Agency only: a long-press lifts the row (no menu any more). */
   onDragStart?: (itemId: string, row: HTMLElement, clientY: number) => void;
 }): ReactElement {
   const onDragStart = props.onDragStart;
+  const zone = props.timeZone ?? 'UTC';
   const wrapRef = useRef<HTMLDivElement>(null);
   const pointerY = useRef(0);
   const hold = useLongPress(() => {
@@ -1642,7 +2245,9 @@ function PlanRow(props: {
   const kindLabel = itemKindLabel(props.bundle.items, props.item);
   const title = rowTitle(props.bundle, props.item);
   const comments = commentsLabel(props.comments);
-  const date = itemDateLabel(props.bundle, props.item);
+  const date = itemDateLabel(props.bundle, props.item, zone);
+  const alsoIn = alsoInLabel(props.alsoIn ?? []);
+  const by = props.approvedByName != null ? approvedBy(props.bundle, props.item) : null;
   const dateLine = (
     <span
       data-plan-row-date={date.dated ? 'dated' : 'none'}
@@ -1748,14 +2353,34 @@ function PlanRow(props: {
               {comments}
             </span>
           ) : null}
+          {alsoIn !== null ? (
+            <span
+              data-plan-row-also-in=""
+              className="inline-flex max-w-full self-start truncate rounded px-1.5 text-[11px] font-semibold leading-[18px] bg-warn-soft text-warn"
+            >
+              {alsoIn}
+            </span>
+          ) : null}
+          {by !== null && props.approvedByName != null ? (
+            <span
+              data-plan-row-approved-by=""
+              className="flex min-w-0 items-center gap-1 text-xs leading-4 text-good"
+            >
+              <IconCheck size={12} />
+              <span className="truncate">
+                {approvedByLine(props.approvedByName, approvedWhen(by.at, new Date(), zone))}
+              </span>
+            </span>
+          ) : null}
           {dateLine}
         </span>
       </button>
       {slot !== null ? (
         <SlotCheckbox
-          side={slot}
-          checked={slotTicked(props.bundle, props.item.id, slot)}
+          side={slot.side}
+          checked={slotTicked(props.bundle, props.item.id, slot.side)}
           title={title}
+          readOnly={!slot.writable}
           onToggle={props.onToggleSlot}
         />
       ) : (

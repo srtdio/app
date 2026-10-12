@@ -4,8 +4,9 @@
 // chat at the message and leaves the reminder), Mentions (a tap marks it read
 // and opens the chat at the message), Scheduled (sent: a tap marks it read and
 // opens the chat, "Clear sent" clears them all; failed: "Not sent" with the
-// reason, Retry and Edit). Sections hide when empty; all empty reads "You're
-// all caught up".
+// reason, Retry and Edit), Plans (the plan alerts: a tap marks it read and
+// opens the plan, a deleted plan's row only toasts "This plan was deleted").
+// Sections hide when empty; all empty reads "You're all caught up".
 // Upcoming: pending Reminders (Change time, Cancel) and Scheduled messages (a
 // tap opens that chat's scheduled sheet), soonest first; empty reads "Nothing
 // coming up".
@@ -19,7 +20,13 @@ import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
-import { IconAlarmClock, IconAt, IconCalendarClock, IconSend } from '@/components/ui/icons';
+import {
+  IconAlarmClock,
+  IconAt,
+  IconCalendarClock,
+  IconPlan,
+  IconSend,
+} from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
 import { ReminderSheet } from '@/components/chat/ReminderSheet';
@@ -29,14 +36,19 @@ import {
   BELL_SNOOZE_OPTIONS,
   bellSections,
   failureInPlainWords,
+  itemTitleOfEntry,
   mentionTitle,
   messagePreview,
+  planBellLine,
+  planTitleOfEntry,
   rowTime,
   scheduledPreview,
   sentTitle,
   type BellEntry,
 } from '@/lib/chat/bell';
 import { formatSendLabel } from '@/lib/chat/scheduled';
+import { useViewerSide } from '@/lib/chat/viewer-role';
+import { useWorkspace } from '@/lib/workspace-context';
 
 export const NOTIFICATIONS_TITLE = 'Notifications';
 export const BELL_EMPTY_NOW = "You're all caught up";
@@ -52,7 +64,7 @@ export function visibleNowSections(
   entries: readonly BellEntry[],
   hidden: ReadonlySet<string>,
   nowMs: number,
-): { key: 'reminders' | 'mentions' | 'scheduled'; title: string; rows: BellEntry[] }[] {
+): { key: 'reminders' | 'mentions' | 'scheduled' | 'plans'; title: string; rows: BellEntry[] }[] {
   const s = bellSections(
     entries.filter((e) => !hidden.has(e.id)),
     nowMs,
@@ -61,6 +73,7 @@ export function visibleNowSections(
     { key: 'reminders' as const, title: 'Reminders', rows: s.reminders },
     { key: 'mentions' as const, title: 'Mentions', rows: s.mentions },
     { key: 'scheduled' as const, title: 'Scheduled', rows: s.scheduled },
+    { key: 'plans' as const, title: 'Plans', rows: s.plans },
   ];
   return all.filter((section) => section.rows.length > 0);
 }
@@ -214,6 +227,46 @@ function MentionRowView(props: { bell: BellContextValue; entry: BellEntry }): Re
   );
 }
 
+/**
+ * A plan alert: the plan icon, the line (who did what to which plan), the
+ * plan's title and "Plan". A tap marks it read and opens the plan; a deleted
+ * plan's row opens nothing (it toasts).
+ */
+function PlanRowView(props: { bell: BellContextValue; entry: BellEntry }): ReactElement {
+  const { bell, entry } = props;
+  const { workspaceId } = useWorkspace();
+  const { side } = useViewerSide(workspaceId);
+  const plan = planTitleOfEntry(entry, bell.data.planTitles);
+  const who = entry.actorId !== null ? (bell.nameOf(entry.actorId) ?? null) : null;
+  const line = planBellLine(
+    entry,
+    { who, plan, item: itemTitleOfEntry(entry, bell.data.itemTitles) },
+    side,
+  );
+  return (
+    <li
+      data-bell-row="plan"
+      data-bell-plan={entry.eventType}
+      data-bell-entry={entry.id}
+      className={ROW}
+    >
+      <RowBody
+        testId={entry.id}
+        icon={
+          <RowIcon>
+            <IconPlan size={18} />
+          </RowIcon>
+        }
+        title={line}
+        time={rowTime(entry.createdAt, new Date())}
+        preview={plan ?? 'Plan'}
+        chat="Plan"
+        onClick={() => bell.openEntry(entry)}
+      />
+    </li>
+  );
+}
+
 function ScheduledRowView(props: { bell: BellContextValue; entry: BellEntry }): ReactElement {
   const { bell, entry } = props;
   const chat = bell.chatNameOf(entry.channelId);
@@ -358,6 +411,8 @@ export function NowTab(props: { bell: BellContextValue }): ReactElement {
                 <ReminderRowView key={entry.id} bell={bell} entry={entry} />
               ) : section.key === 'mentions' ? (
                 <MentionRowView key={entry.id} bell={bell} entry={entry} />
+              ) : section.key === 'plans' ? (
+                <PlanRowView key={entry.id} bell={bell} entry={entry} />
               ) : (
                 <ScheduledRowView key={entry.id} bell={bell} entry={entry} />
               ),

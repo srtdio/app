@@ -14,19 +14,19 @@ import {
   UPCOMING_CLIENT_PLAN_ID,
   UPCOMING_CLIENT_PLAN_TITLE,
   UPCOMING_TEAM_PLAN_ID,
-  UPCOMING_TEAM_PLAN_TITLE,
   seedClientPlanWithDraft,
   seedTeamAndHiddenPlans,
   seedUpcomingPlans,
 } from '../fixtures/chat-data';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
-// Share an existing plan: the agency's Plan tile lists upcoming plans ("Share
-// a plan"), a client plan is sent at once, an Agency only plan in a chat with
-// a client asks "Share with client first?" (plan_share_with_client, then
-// chat_plan_share, one trace id), Cancel sends nothing, the agency's Forward
-// goes through the same confirm, a client sees a draft post by name only, and
-// the empty list. Runs in both colour schemes (the dark and light projects).
+// The Plans sheet: the agency's Plan tile lists upcoming plans ("Plans"); a
+// row opens that plan's Plan screen and never sends. From the screen a plan
+// is sent with "Send in {chat}"; a Draft plan in a chat with a client is held
+// back until "Open for client" (plan_share_with_client). The agency's Forward
+// of a Draft card into a chat with a client sends nothing ("Open the plan for
+// client first."), a client sees a draft post by name only, and the empty
+// list. Runs in both colour schemes (the dark and light projects).
 
 async function openChat(page: Page, name: string): Promise<void> {
   await page.goto('/chat');
@@ -53,7 +53,7 @@ async function openPicker(page: Page): Promise<ReturnType<Page['getByRole']>> {
   await expect(page.locator('[data-tray]')).toBeVisible();
   await page.waitForTimeout(250);
   await page.locator('[data-tray-tile="plan"]').click();
-  const picker = page.getByRole('dialog', { name: 'Share a plan' });
+  const picker = page.getByRole('dialog', { name: 'Plans' });
   await expect(picker).toBeVisible();
   return picker;
 }
@@ -71,7 +71,7 @@ function viewAsClient(network: HarnessNetwork): void {
   }
 }
 
-test('agency: Plan tile lists upcoming plans; client plan sends; Agency only asks first', async ({
+test('agency: Plans lists upcoming plans; a row opens the plan, never sends; send from the screen', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -89,7 +89,7 @@ test('agency: Plan tile lists upcoming plans; client plan sends; Agency only ask
   ).toEqual([UPCOMING_TEAM_PLAN_ID, UPCOMING_CLIENT_PLAN_ID]);
   await expect(picker.getByText(ENDED_PLAN_TITLE)).toHaveCount(0);
   const teamRow = picker.locator(`[data-plan-pick="${UPCOMING_TEAM_PLAN_ID}"]`);
-  await expect(teamRow.locator('[data-plan-chip="warn"]')).toHaveText('Agency only');
+  await expect(teamRow.locator('[data-plan-chip="warn"]')).toHaveText('Draft');
   await expect(teamRow.getByText('1 concept')).toBeVisible();
   await expect(teamRow.getByText('1 post')).toBeVisible();
   await expect(picker.locator('[data-plan-chip="accent"]')).toHaveCount(0);
@@ -98,18 +98,23 @@ test('agency: Plan tile lists upcoming plans; client plan sends; Agency only ask
   expectMinTouchTarget(await teamRow.boundingBox());
   expectMinTouchTarget(await picker.locator('[data-plan-pick-new]').boundingBox());
   await page.waitForTimeout(300);
-  await shot(page, 'share-01-picker');
+  await shot(page, 'share-01-plans-sheet');
 
-  // A client plan: sent at once (one chat_plan_share), the card lands.
+  // A row opens that plan's screen; nothing is sent.
   await picker.locator(`[data-plan-pick="${UPCOMING_CLIENT_PLAN_ID}"]`).click();
   await expect(picker).toBeHidden();
-  const clientCard = page.locator(`[data-plan-card="${UPCOMING_CLIENT_PLAN_ID}"]`);
-  await clientCard.scrollIntoViewIfNeeded();
-  await expect(clientCard).toBeVisible();
-  // The agency's Forward shows on every card.
-  await expect(clientCard.locator('[data-plan-forward]')).toBeVisible();
+  const plan = page.locator('[data-plan-page="plan"]');
+  await expect(plan).toBeVisible();
+  await expect(plan.getByRole('heading', { name: UPCOMING_CLIENT_PLAN_TITLE })).toBeVisible();
+  expect(sharedPlans(network, DM_CHANNEL)).toEqual([]);
+  expect(network.rpcCalls.filter((c) => c.name === 'chat_plan_share')).toHaveLength(0);
+  // Send in this chat from the screen (an Open plan).
+  await plan.locator('[data-plan-send-here]').click();
+  await expect(plan.locator('[data-plan-go-card]')).toBeVisible();
   expect(sharedPlans(network, DM_CHANNEL)).toEqual([[UPCOMING_CLIENT_PLAN_ID]]);
   expect(network.rpcCalls.filter((c) => c.name === 'plan_share_with_client')).toHaveLength(0);
+  await page.goBack();
+  await expect(plan).toBeHidden();
 
   // Again: the shared plan now reads "In this chat".
   const again = await openPicker(page);
@@ -117,50 +122,32 @@ test('agency: Plan tile lists upcoming plans; client plan sends; Agency only ask
     again.locator(`[data-plan-pick="${UPCOMING_CLIENT_PLAN_ID}"] [data-plan-chip="accent"]`),
   ).toHaveText('In this chat');
 
-  // The Agency only plan in a chat with a client: the confirm, then Cancel.
+  // The Draft plan in a chat with a client: the screen holds the send back.
   await again.locator(`[data-plan-pick="${UPCOMING_TEAM_PLAN_ID}"]`).click();
-  const confirm = page.getByRole('dialog', { name: 'Share with client first?' });
-  await expect(confirm).toBeVisible();
-  await expect(
-    confirm.getByText(
-      `is Agency only. ${PEER_NAME} has a client in it, so the plan has to be shared with the client to send it here.`,
-    ),
-  ).toBeVisible();
-  await expect(confirm.getByText(UPCOMING_TEAM_PLAN_TITLE)).toBeVisible();
-  await expect(
-    confirm.getByText(
-      "Every client in Harness Studio will be able to open it, from any chat it's in.",
-    ),
-  ).toBeVisible();
-  await expect(confirm.locator('[data-plan-share-first-drafts]')).toHaveText(
-    "1 draft shows to clients as name only. They can't open it until it goes to review.",
+  await expect(plan).toBeVisible();
+  const send = plan.locator('[data-plan-send-here]');
+  await expect(send).toBeDisabled();
+  await expect(plan.locator('[data-plan-send-hint]')).toHaveText(
+    'Open the plan for client to send it here.',
   );
-  await expect(
-    confirm.getByText("This can't be undone. The plan stays shared with client."),
-  ).toBeVisible();
-  expectMinTouchTarget(await confirm.locator('[data-plan-share-first]').boundingBox());
-  expectMinTouchTarget(await confirm.locator('[data-plan-share-first-cancel]').boundingBox());
+  await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
   await page.waitForTimeout(300);
-  await shot(page, 'share-02-confirm');
-  const callsBefore = network.rpcCalls.length;
-  await confirm.locator('[data-plan-share-first-cancel]').click();
-  await expect(confirm).toBeHidden();
-  await page.waitForTimeout(300);
-  expect(network.rpcCalls.slice(callsBefore).map((c) => c.name)).toEqual([]);
-  expect(sharedPlans(network, DM_CHANNEL)).toEqual([[UPCOMING_CLIENT_PLAN_ID]]);
+  await shot(page, 'share-02-draft-held-back');
 
-  // Share with client and send: both calls in order, one trace id.
-  const third = await openPicker(page);
-  await third.locator(`[data-plan-pick="${UPCOMING_TEAM_PLAN_ID}"]`).click();
+  // Open for client, then send: two separate writes.
+  await plan.locator('[data-plan-open-client]').click();
+  const confirm = page.getByRole('dialog', { name: 'Open this plan for client?' });
   await expect(confirm).toBeVisible();
   const from = network.rpcCalls.length;
-  await confirm.locator('[data-plan-share-first]').click();
+  await confirm.locator('[data-plan-confirm]').click();
   await expect(confirm).toBeHidden();
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect(plan.locator('[data-plan-go-card]')).toBeVisible();
   const calls = network.rpcCalls
     .slice(from)
     .filter((c) => c.name === 'plan_share_with_client' || c.name === 'chat_plan_share');
   expect(calls.map((c) => c.name)).toEqual(['plan_share_with_client', 'chat_plan_share']);
-  expect(calls[0]?.args.p_trace_id).toBe(calls[1]?.args.p_trace_id);
   expect(calls[0]?.args.p_plan_id).toBe(UPCOMING_TEAM_PLAN_ID);
   expect(
     (network.world.tables.plans ?? []).find((p) => p.id === UPCOMING_TEAM_PLAN_ID)?.audience,
@@ -169,10 +156,11 @@ test('agency: Plan tile lists upcoming plans; client plan sends; Agency only ask
     [UPCOMING_CLIENT_PLAN_ID],
     [UPCOMING_TEAM_PLAN_ID],
   ]);
+  await plan.locator('[data-plan-go-card]').click();
+  await expect(plan).toBeHidden();
   const teamCard = page.locator(`[data-plan-card="${UPCOMING_TEAM_PLAN_ID}"]`);
-  await teamCard.scrollIntoViewIfNeeded();
-  await expect(teamCard).toBeVisible();
-  // Shared with client: no "Agency only" chip any more.
+  await expect(teamCard).toBeInViewport();
+  // Open for client: no "Draft" chip any more.
   await expect(teamCard.locator('[data-plan-chip="warn"]')).toHaveCount(0);
   // The ticker's plan: the soonest ending, now shared here (Plan A/N).
   const tickerPlan = page.locator('[data-loops-strip="open"] [data-status-item="plan"]');
@@ -183,16 +171,14 @@ test('agency: Plan tile lists upcoming plans; client plan sends; Agency only ask
   expectClean(network);
 });
 
-test('agency: Forward an Agency only plan from a chat with no client into a client chat', async ({
-  page,
-}) => {
+test('agency: Forward a Draft plan into a client chat sends nothing', async ({ page }) => {
   test.setTimeout(90_000);
   const network = await installHarnessNetwork(page);
   seedTeamAndHiddenPlans(network.world, { channelId: GROUP_CHANNEL, sender: ME });
   await openChat(page, GROUP_NAME);
   const card = page.locator(`[data-plan-card="${TEAM_PLAN_ID}"]`);
   await card.scrollIntoViewIfNeeded();
-  await expect(card.locator('[data-plan-chip="warn"]')).toHaveText('Agency only');
+  await expect(card.locator('[data-plan-chip="warn"]')).toHaveText('Draft');
   await card.locator('[data-plan-forward]').click();
   const forward = page.getByRole('dialog', { name: 'Forward plan' });
   await expect(forward).toBeVisible();
@@ -205,19 +191,16 @@ test('agency: Forward an Agency only plan from a chat with no client into a clie
   await shot(page, 'share-04-forward');
   const from = network.rpcCalls.length;
   await target.click();
-  const confirm = page.getByRole('dialog', { name: 'Share with client first?' });
-  await expect(confirm).toBeVisible();
-  await expect(confirm.locator('[data-plan-share-first-drafts]')).toHaveCount(0);
-  // Nothing is sent before the confirm.
-  expect(network.rpcCalls.slice(from).map((c) => c.name)).toEqual([]);
-  await confirm.locator('[data-plan-share-first]').click();
-  await expect(page.getByText(`Forwarded to ${PEER_NAME}`)).toBeVisible();
-  const calls = network.rpcCalls
-    .slice(from)
-    .filter((c) => c.name === 'plan_share_with_client' || c.name === 'chat_plan_share');
-  expect(calls.map((c) => c.name)).toEqual(['plan_share_with_client', 'chat_plan_share']);
-  expect(calls[0]?.args.p_trace_id).toBe(calls[1]?.args.p_trace_id);
-  expect(sharedPlans(network, DM_CHANNEL)).toEqual([[TEAM_PLAN_ID]]);
+  await expect(page.getByText('Open the plan for client first.')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
+  // No plan or share write (a read cursor may land meanwhile).
+  expect(
+    network.rpcCalls
+      .slice(from)
+      .map((c) => c.name)
+      .filter((n) => n.startsWith('plan_') || n === 'chat_plan_share'),
+  ).toEqual([]);
+  expect(sharedPlans(network, DM_CHANNEL)).toEqual([]);
   expectClean(network);
 });
 
@@ -233,7 +216,7 @@ test('client: a draft post in a client plan shows by name only and does nothing'
   await card.scrollIntoViewIfNeeded();
   // The draft counts: 1 concept, 1 post, 0 of 2.
   await expect(card.getByText('1 post')).toBeVisible();
-  await expect(card.locator('[data-plan-progress]')).toHaveText('0 of 2 approved by client');
+  await expect(card.locator('[data-plan-progress]')).toHaveText('Client 0 of 2');
   await card.locator('[data-plan-open]').click();
   const plan = page.locator('[data-plan-page="plan"]');
   await expect(plan).toBeVisible();

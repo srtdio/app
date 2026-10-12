@@ -8,28 +8,30 @@
 // client is forbidden_role; another workspace's agency is refused; a wrong
 // item list is invalid_payload; a day change resets the team and client
 // reviews to waiting; a same-day reorder keeps them. plan_posts_add with
-// p_target_date sets that day; without it a post takes its own date when it is
-// inside the plan and no date when outside; p_target_date outside the plan is
-// 'date_outside_plan'. Concept and post items both carry target_date.
+// p_target_date writes that day onto every added post; without it a post keeps
+// its own date when it is inside the plan; p_target_date outside the plan is
+// 'date_outside_plan'.
 //
-// One date per post (20261012161000_plan_one_date_per_post.sql): a post slot's
-// day is posts.target_date at 12:00 workspace zone, mirrored onto
-// plan_items.target_date (transitional until part 2b) by posts_plan_day_sync.
-// Covered: the 5-arg move on a post slot writes the post date and the mirror
-// follows; p_keep_reviews true keeps both sides' reviews, false resets them; a
+// One date per post (20261012161000_plan_one_date_per_post.sql) and part 2b
+// (20261012190000_plan_part_2b.sql): a post slot's day is posts.target_date at
+// 12:00 workspace zone; post slots carry no plan_items.target_date (the mirror
+// is gone and plan_items_target_date_concept_only is back). Covered: the 5-arg
+// move on a post slot writes the post date only; p_keep_reviews true keeps
+// both sides' reviews, false resets them; a
 // post date outside the plan week soft-deletes the slot; a cleared post date
 // keeps the slot undated; concept add/edit outside the week and posts add with
 // no day of a post dated outside the week are 'date_outside_plan'.
 // Plan delete (20261012162000_plan_delete_open_rules.sql): an agency member who
 // is not the creator or an owner/admin is forbidden_role; the creator succeeds.
 // Post dates and soft-deleted slots are read with psql (RLS hides deleted rows).
-// Plan updated alerts (20261012163000_plan_updated_alerts.sql): _plan_notify is
-// silent on live, so one psql session swaps in an inserting body inside a
-// transaction, drives the triggers with direct SQL, reads inbox_entries and
-// rolls back: slot_added, concept_changed, renamed, slot_removed, and a post
-// leaving by date announced once (plan_date_changed only; the
-// app.plan_day_sync flag is back to 'off'). The trigger functions have no
-// EXECUTE for authenticated.
+// Plan updated alerts (20261012163000_plan_updated_alerts.sql) with the 2b
+// _plan_notify: one psql session drives the triggers with direct SQL inside a
+// transaction on an Open plan, reads the inbox rows it wrote and rolls back:
+// slot_added, concept_changed, renamed, slot_removed, and a post leaving by
+// date announced once (plan_date_changed only; the app.plan_day_sync flag is
+// back to 'off'); every payload carries plan_title. On a Draft plan only
+// plan_deleted is sent. The trigger functions have no EXECUTE for
+// authenticated.
 // No teardown: this suite runs no deletes; every fixture has its own workspace.
 
 import { execFileSync } from 'node:child_process';
@@ -378,22 +380,24 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     ]);
   });
 
-  it('plan_posts_add with p_target_date sets that day on every added post', async () => {
+  it('plan_posts_add with p_target_date writes that day onto every added post (2b: not the slot)', async () => {
     const planId = await newPlan();
     const inside = await seedPost('2026-11-20T12:00:00Z');
     const none = await seedPost(null);
     expect(await addPosts(planId, [inside, none], '2026-11-07')).toBe(2);
-    expect((await items(planId)).map((i) => i.target_date)).toEqual(['2026-11-07', '2026-11-07']);
+    expect((await items(planId)).map((i) => i.target_date)).toEqual([null, null]);
+    expect(postDate(inside)).toBe('2026-11-07T12:00:00Z');
+    expect(postDate(none)).toBe('2026-11-07T12:00:00Z');
   });
 
-  it("without p_target_date: the post's own date inside the plan; an undated post stays undated", async () => {
+  it('without p_target_date: the post keeps its own date; the slot carries none', async () => {
     const planId = await newPlan();
     const inside = await seedPost('2026-11-20T12:00:00Z');
     const undated = await seedPost(null);
     expect(await addPosts(planId, [inside, undated])).toBe(2);
-    const byPost = new Map((await items(planId)).map((i) => [i.post_id, i.target_date]));
-    expect(byPost.get(inside)).toBe('2026-11-20');
-    expect(byPost.get(undated)).toBeNull();
+    expect((await items(planId)).every((i) => i.target_date === null)).toBe(true);
+    expect(postDate(inside)).toBe('2026-11-20T12:00:00Z');
+    expect(postDate(undated)).toBeNull();
   });
 
   it("without p_target_date: a post dated outside the plan week is 'date_outside_plan'", async () => {
@@ -420,21 +424,27 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     expect(await items(planId)).toEqual([]);
   });
 
-  it('concept and post items both carry target_date (the concept-only constraint is gone)', async () => {
+  it('only concepts carry target_date (plan_items_target_date_concept_only, 2b)', async () => {
     const planId = await newPlan();
     const concept = await newConcept(planId, '2026-11-03');
-    await addPosts(planId, [await seedPost(null)], '2026-11-04');
+    const postId = await seedPost(null);
+    await addPosts(planId, [postId], '2026-11-04');
     const rows = await items(planId);
     expect(rows.find((i) => i.id === concept)?.target_date).toBe('2026-11-03');
-    expect(rows.find((i) => i.kind === 'post')?.target_date).toBe('2026-11-04');
-    // A post item moves like a concept.
+    expect(rows.find((i) => i.kind === 'post')?.target_date).toBeNull();
+    // A post item moves by its post's date, never plan_items.target_date.
     const post = rows.find((i) => i.kind === 'post');
     if (post === undefined) throw new Error('no post item');
     expect((await move(agency, post.id, '2026-11-09', [concept, post.id])).error).toBeNull();
-    expect((await items(planId)).find((i) => i.id === post.id)?.target_date).toBe('2026-11-09');
+    expect((await items(planId)).find((i) => i.id === post.id)?.target_date).toBeNull();
+    expect(postDate(postId)).toBe('2026-11-09T12:00:00Z');
+    // The CHECK refuses a day on a post slot.
+    expect(() =>
+      psql(`update public.plan_items set target_date = '2026-11-05' where id = '${post.id}'`),
+    ).toThrow(/plan_items_target_date_concept_only/);
   });
 
-  it('5-arg move on a post slot writes posts.target_date at 12:00 workspace zone; the mirror follows', async () => {
+  it('5-arg move on a post slot writes posts.target_date at 12:00 workspace zone; no mirror (2b)', async () => {
     psql(
       `update public.workspaces set timezone = 'Asia/Kolkata', row_version = row_version + 1 where id = '${ws.id}'`,
     );
@@ -447,7 +457,7 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
       expect((await move5(agency, item, '2026-11-10', [item], true)).error).toBeNull();
       // 12:00 in Asia/Kolkata (+05:30) is 06:30 UTC.
       expect(postDate(post)).toBe('2026-11-10T06:30:00Z');
-      expect(slot(item)).toEqual({ target_date: '2026-11-10', deleted: false });
+      expect(slot(item)).toEqual({ target_date: null, deleted: false });
     } finally {
       psql(
         `update public.workspaces set timezone = 'UTC', row_version = row_version + 1 where id = '${ws.id}'`,
@@ -493,11 +503,12 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     const post = await seedPost('2026-11-02T12:00:00Z');
     await addPosts(planId, [post]);
     const item = await postSlot(planId, post);
-    expect(slot(item).target_date).toBe('2026-11-02');
+    expect(slot(item)).toEqual({ target_date: null, deleted: false });
     psql(
       `update public.posts set target_date = null, row_version = row_version + 1 where id = '${post}'`,
     );
     expect(slot(item)).toEqual({ target_date: null, deleted: false });
+    expect(postDate(post)).toBeNull();
   });
 
   it("concept add and edit outside the plan week are 'date_outside_plan'", async () => {
@@ -544,23 +555,11 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     const post = await seedPost('2026-11-03T12:00:00Z');
     await addPosts(planId, [post]);
     const postItem = await postSlot(planId, post);
-    // Full _plan_notify body from 20261012160000_plan_notify_plumbing.sql.
-    const insertingNotify = `create or replace function public._plan_notify(p_plan_id uuid, p_event_type text, p_payload jsonb)
- returns void language plpgsql security definer set search_path to '' as $fn$
-declare v_ws uuid; v_aud text;
-begin
-  select workspace_id, audience into v_ws, v_aud from public.plans where id = p_plan_id;
-  if v_ws is null then raise exception 'invalid_payload'; end if;
-  insert into public.inbox_entries (user_id, workspace_id, event_type, entity_type, entity_id, scope, scope_key, tier, payload, actor_user_id)
-  select wm.user_id, v_ws, p_event_type, 'plan', p_plan_id::text, 'posts', p_plan_id::text, 'active',
-         coalesce(p_payload, '{}'::jsonb) || jsonb_build_object('plan_id', p_plan_id), auth.uid()
-    from public.workspace_members wm
-   where wm.workspace_id = v_ws and wm.active = true and wm.user_id is distinct from auth.uid()
-     and (wm.role = any (array['owner','admin','agency']) or (v_aud = 'client' and wm.role = 'client'));
-end $fn$`;
+    const before = psql(
+      `select count(*) from public.inbox_entries where entity_type = 'plan' and entity_id = '${planId}'`,
+    );
     const lines = psqlSession([
       'begin',
-      insertingNotify,
       `insert into public.plan_items (workspace_id, plan_id, kind, position, title)
          select workspace_id, id, 'concept', 99, 'Tx concept' from public.plans where id = '${planId}'`,
       `update public.plan_items set title = 'Renamed concept' where id = '${concept}'`,
@@ -574,10 +573,14 @@ end $fn$`;
                    when e.payload ? 'item_id' then 'new'
                    else '' end
          from public.inbox_entries e
-        where e.entity_type = 'plan' and e.entity_id = '${planId}'
+        where e.entity_type = 'plan' and e.entity_id = '${planId}' and e.created_at >= now()
         order by 1`,
+      `select 'titled:' || bool_and(e.payload->>'plan_title' is not null)::text
+         from public.inbox_entries e
+        where e.entity_type = 'plan' and e.entity_id = '${planId}' and e.created_at >= now()`,
       'rollback',
     ]);
+    expect(lines).toContain('titled:true');
     expect(lines).toContain('flag:off');
     expect(lines.filter((l) => l.startsWith('event:'))).toEqual(
       [
@@ -588,12 +591,12 @@ end $fn$`;
         'event:plan_updated:slot_removed:new',
       ].sort(),
     );
-    // Rolled back: live notify stays as migrated, nothing left behind.
+    // Rolled back: nothing from the transaction is left behind.
     expect(
       psql(
         `select count(*) from public.inbox_entries where entity_type = 'plan' and entity_id = '${planId}'`,
       ),
-    ).toBe('0');
+    ).toBe(before);
     expect(
       psql(
         `select string_agg(tgname, ',' order by tgname) from pg_trigger where tgname in ('plan_items_change_notify', 'plans_rename_notify')`,
@@ -606,5 +609,24 @@ end $fn$`;
          where n.nspname = 'public' and p.proname in ('_plan_items_change_notify', '_plans_rename_notify', '_posts_plan_day_sync', '_plan_notify')`,
       ),
     ).toBe('false');
+  });
+
+  it('2b: a Draft plan sends no alerts except plan_deleted; payloads carry plan_title', async () => {
+    const planId = await newPlan('team');
+    const concept = await newConcept(planId, '2026-11-02');
+    await addPosts(planId, [await seedPost('2026-11-03T12:00:00Z')]);
+    psql(`update public.plan_items set title = 'Draft concept renamed' where id = '${concept}'`);
+    const count = (): string =>
+      psql(
+        `select count(*) from public.inbox_entries where entity_type = 'plan' and entity_id = '${planId}'`,
+      );
+    expect(count()).toBe('0');
+    expect((await call(agency, 'plan_delete', { p_plan_id: planId })).error).toBeNull();
+    expect(
+      psql(
+        `select string_agg(distinct event_type || ':' || (payload->>'plan_title' is not null)::text, ',')
+           from public.inbox_entries where entity_type = 'plan' and entity_id = '${planId}'`,
+      ),
+    ).toBe('plan_deleted:true');
   });
 });

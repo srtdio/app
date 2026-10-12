@@ -232,6 +232,7 @@ describe('planItemMove', () => {
     p_item_id: '11111111-1111-1111-1111-111111111111',
     p_target_date: '2026-10-14',
     p_item_ids: ['11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333'],
+    p_keep_reviews: false,
     p_trace_id: '22222222-2222-2222-2222-222222222222',
   };
 
@@ -240,6 +241,19 @@ describe('planItemMove', () => {
     const result = await planItemMove(client, args);
     expect(result.ok).toBe(true);
     expect(rpc).toHaveBeenCalledWith('plan_item_move', args);
+  });
+
+  it('always sends the 5-arg overload: p_keep_reviews goes through as given', async () => {
+    const { client, rpc } = makeClient({ data: null, error: null });
+    await planItemMove(client, { ...args, p_keep_reviews: true });
+    expect(rpc).toHaveBeenCalledWith('plan_item_move', { ...args, p_keep_reviews: true });
+    expect(Object.keys((rpc.mock.calls[0] as unknown[])[1] as object).sort()).toEqual([
+      'p_item_id',
+      'p_item_ids',
+      'p_keep_reviews',
+      'p_target_date',
+      'p_trace_id',
+    ]);
   });
 
   it('passes a null date (No date) through unchanged', async () => {

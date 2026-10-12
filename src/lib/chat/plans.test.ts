@@ -17,7 +17,6 @@ import {
   planChunks,
   planItemDay,
   planItemDayInZone,
-  draftRowDay,
   mergeDraftRows,
   postPlansLine,
   readPlanBundles,
@@ -695,16 +694,16 @@ describe('plan items in date order', () => {
   const info = {
     pa: { title: 'A', target_date: '2026-10-13T09:00:00+00:00' },
     pb: { title: 'B', target_date: null },
-    pc: { title: 'C', target_date: '2026-10-11' },
+    pc: { title: 'C', target_date: '2026-10-11T12:00:00+00:00' },
   };
 
-  it("every item takes its plan day (plan_items.target_date); a post's own date never places it", () => {
+  it("a concept takes plan_items.target_date; a post slot its post's target_date (item 8)", () => {
     expect(planItemDay(row({ id: 'c', target_date: '2026-10-12' }), info)).toBe('2026-10-12');
-    // pa's own date is 13 Oct; its plan day is 15 Oct.
+    // pa's post date is 13 Oct: a stale plan_items.target_date (15 Oct) never places it.
     expect(
       planItemDay(row({ id: 'p', kind: 'post', post_id: 'pa', target_date: '2026-10-15' }), info),
-    ).toBe('2026-10-15');
-    expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'pa' }), info)).toBeNull();
+    ).toBe('2026-10-13');
+    expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'pb' }), info)).toBeNull();
     expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'gone' }), info)).toBeNull();
     expect(planItemDay(row({ id: 'c' }), info)).toBeNull();
   });
@@ -712,10 +711,10 @@ describe('plan items in date order', () => {
   it('mixed dated concepts and posts ascending, undated last', () => {
     const items = [
       row({ id: 'undatedConcept', position: 0 }),
-      row({ id: 'post13', kind: 'post', post_id: 'pc', position: 1, target_date: '2026-10-13' }),
+      row({ id: 'post13', kind: 'post', post_id: 'pa', position: 1 }),
       row({ id: 'concept12', target_date: '2026-10-12', position: 2 }),
-      row({ id: 'undatedPost', kind: 'post', post_id: 'pa', position: 3 }),
-      row({ id: 'post11', kind: 'post', post_id: 'pb', position: 4, target_date: '2026-10-11' }),
+      row({ id: 'undatedPost', kind: 'post', post_id: 'pb', position: 3 }),
+      row({ id: 'post11', kind: 'post', post_id: 'pc', position: 4 }),
       row({ id: 'concept20', target_date: '2026-10-20', position: 5 }),
     ];
     expect(sortPlanItemsByDate(items, info).map((i) => i.id)).toEqual([
@@ -773,21 +772,23 @@ describe('plan items in date order', () => {
     const items = [
       row({ id: 'late', target_date: '2026-10-18', position: 0 }),
       row({ id: 'none', position: 1 }),
-      row({ id: 'post', kind: 'post', post_id: 'p1', position: 2, target_date: '2026-10-12' }),
-      // A post whose own date differs is placed by its plan day.
-      row({ id: 'post2', kind: 'post', post_id: 'p2', position: 3, target_date: '2026-10-17' }),
+      // A stale plan_items.target_date never places a post slot.
+      row({ id: 'post', kind: 'post', post_id: 'p1', position: 2, target_date: '2026-10-19' }),
+      row({ id: 'post2', kind: 'post', post_id: 'p2', position: 3 }),
     ];
     const out = assembleBundles(
       plans,
       items,
       [],
       [
-        // The post read carries no date at all: placement is the plan day only.
-        { id: 'p1', stage: 'review', title: 'P' },
-        { id: 'p2', stage: 'review', title: 'Q' },
+        // 12:00 Asia/Kolkata on 12 and 17 Oct: read in the workspace zone.
+        { id: 'p1', stage: 'review', title: 'P', target_date: '2026-10-12T06:30:00+00:00' },
+        { id: 'p2', stage: 'review', title: 'Q', target_date: '2026-10-17T06:30:00+00:00' },
       ],
+      'Asia/Kolkata',
     );
     expect(out.get('plan')?.items.map((i) => i.id)).toEqual(['post', 'post2', 'late', 'none']);
+    expect(out.get('plan')?.postInfo.p1?.target_date).toBe('2026-10-12T06:30:00+00:00');
   });
 
   it('the item read selects plan_items.target_date', async () => {
@@ -1000,16 +1001,17 @@ describe('slot write (W4)', () => {
     const post = { ...concept, id: 'p1', kind: 'post' as const, post_id: 'x', target_date: null };
     const info = { x: { title: 'X', target_date: '2026-10-13T20:00:00+00:00' } };
     expect(planItemDayInZone(concept, info, 'Asia/Kolkata')).toBe('2026-10-14');
-    // A post's own date never places it: no plan day is No date.
-    expect(planItemDayInZone(post, info, 'Asia/Kolkata')).toBeNull();
+    // A post slot: its post's instant read in the zone (20:00 UTC is 14 Oct in Kolkata).
+    expect(planItemDayInZone(post, info, 'Asia/Kolkata')).toBe('2026-10-14');
+    expect(planItemDayInZone(post, info, 'UTC')).toBe('2026-10-13');
+    // plan_items.target_date on a post slot is never read.
     expect(planItemDayInZone({ ...post, target_date: '2026-10-16' }, info, 'UTC')).toBe(
-      '2026-10-16',
+      '2026-10-13',
     );
   });
 
-  it("a client's draft row sits on its plan day, never the post's own date, in any zone", () => {
-    // plan_draft_rows returns the plan day at UTC midnight; the post's own
-    // date (2 Oct) never reaches the client.
+  it("a client's draft row: the post's target_date read in the zone, never sliced (item 8)", () => {
+    // plan_draft_rows returns p.target_date (12:00 in the workspace zone).
     const [row] = mergeDraftRows(
       [],
       [
@@ -1019,15 +1021,15 @@ describe('slot write (W4)', () => {
           item_position: 0,
           post_number: 7,
           title: 'Teaser',
-          target_date: '2026-10-15T00:00:00+00:00',
+          // 12:00 on 15 Oct in Pacific/Auckland (UTC+13) is 23:00 UTC on 14 Oct.
+          target_date: '2026-10-14T23:00:00+00:00',
         },
       ],
     );
-    expect(row?.target_date).toBe('2026-10-15');
-    for (const zone of ['UTC', 'Asia/Kolkata', 'America/Los_Angeles', 'Pacific/Auckland']) {
-      expect(planItemDayInZone(row!, {}, zone)).toBe('2026-10-15');
-    }
-    expect(draftRowDay(null)).toBeNull();
+    expect(row?.target_date).toBe('2026-10-14T23:00:00+00:00');
+    expect(planItemDayInZone(row!, {}, 'Pacific/Auckland')).toBe('2026-10-15');
+    // Slicing the string would have said 14 Oct.
+    expect(planItemDayInZone(row!, {}, 'UTC')).toBe('2026-10-14');
   });
 });
 

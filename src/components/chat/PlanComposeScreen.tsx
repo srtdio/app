@@ -1,19 +1,19 @@
-// The New plan screen (full page, one history step), opened from the tray's
-// Plan tile. Title, From and To (this Monday to Sunday in the workspace zone
-// by default, at most 92 days), who can see it (Agency and client, or Agency only),
-// concepts (title, description, up to 20 library files) and posts from
-// Pipeline (drafts too, for a team plan in a chat with no client). Nothing is
-// written until "Share in chat": then plan_create, each concept in order, the
-// posts in one call, and chat_plan_share, in sequence with one trace id. A
-// failed step keeps what was created and offers Retry, which resumes from that
-// step (the form locks once the plan exists, so a retry never adds a concept
-// twice). On success the screen closes, the card lands in the thread and a
-// toast says "Plan shared". Tokens only; translateY motion only.
+// The New plan screen (full page, one history step), opened from the Plans
+// sheet. Title, From and To (this Monday to Sunday in the workspace zone by
+// default, at most 92 days), concepts (title, description, up to 20 library
+// files) and posts from Pipeline (drafts allowed). Every new plan is a Draft
+// (audience team); there is no audience choice. Nothing is written until
+// "Create plan": then plan_create, each concept in order and the posts in one
+// call, in sequence with one trace id. No card is ever sent to chat. A failed
+// step keeps what was created and offers Retry, which resumes from that step
+// (the form locks once the plan exists, so a retry never adds a concept
+// twice). On success the screen closes and the new plan's Plan screen opens.
+// Tokens only; translateY motion only.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { PostCardFields } from '@srtdio/posts';
-import { chatPlanShare, planConceptAdd, planCreate, planPostsAdd } from '@srtdio/rpc';
+import { planConceptAdd, planCreate, planPostsAdd } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { IconX } from '@/components/ui/icons';
 import {
@@ -27,59 +27,51 @@ import { PostPicker } from '@/components/chat/PostPicker';
 import { togglePost } from '@/components/chat/post-picker';
 import { PlanPage } from '@/components/chat/PlanScreen';
 import {
-  AUDIENCE_HINTS,
+  CREATE_PLAN_LABEL,
   DRAFT_PROBLEM_COPY,
   NO_DATE_LABEL,
   PLAN_TITLE_MAX,
-  TEAM_ONLY_LABEL,
   defaultPlanRange,
   draftProblem,
-  draftsButtonShown,
   shortDay,
   stageLabel,
-  teamPlanBlocked,
 } from '@/components/chat/plan-card';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { newMessageId } from '@/lib/chat/message-id';
 import {
-  PLAN_SHARE_FAILED,
-  TEAM_PLAN_CLIENT_CHAT,
+  PLAN_CREATE_FAILED,
   conceptAddArgs,
   createShareEpoch,
   initialShareProgress,
   runPlanShare,
   type DraftConcept,
-  type PlanAudience,
   type PlanDraft,
   type ShareEpoch,
   type ShareProgress,
 } from '@/lib/chat/plans';
-import type { ChatMessageRow } from '@/lib/chat/thread';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 
+/** Every new plan is a Draft: plan_create's audience. */
+export const NEW_PLAN_AUDIENCE = 'team';
+
 export function PlanComposeScreen(props: {
   open: boolean;
   workspaceId: string;
-  channelId: string;
   timeZone: string;
-  /** A client among the chat's members; null while unknown. */
-  channelHasClient: boolean | null;
   onClose: () => void;
-  /** The share landed: the recorded message row and the trace it carried. */
   /**
-   * The share landed: the recorded message row and the trace it carried.
+   * The plan exists with its concepts and posts: open its Plan screen.
    * `stale` is true when the screen was closed (or reopened) meanwhile: the
-   * row still goes into the thread, but the current form is left alone.
+   * current form is left alone and nothing opens.
    */
-  onShared: (row: ChatMessageRow, traceId: string, stale: boolean) => void;
+  onCreated: (planId: string, stale: boolean) => void;
 }): ReactElement | null {
   const [title, setTitle] = useState('');
   const [range, setRange] = useState(() => defaultPlanRange(new Date(), props.timeZone));
-  const [audience, setAudience] = useState<PlanAudience>('client');
   const [concepts, setConcepts] = useState<DraftConceptItem[]>([]);
   const [posts, setPosts] = useState<PostCardFields[]>([]);
   const [picker, setPicker] = useState<'posts' | 'drafts' | null>(null);
@@ -120,7 +112,6 @@ export function PlanComposeScreen(props: {
     if (!open) return;
     setTitle('');
     setRange(defaultPlanRange(new Date(), timeZone));
-    setAudience('client');
     setConcepts([]);
     setPosts([]);
     setPicker(null);
@@ -137,16 +128,6 @@ export function PlanComposeScreen(props: {
   // Once the plan exists the form is fixed: a retry resumes, never re-adds.
   const locked = progress.planId !== null || busy;
   const problem = draftProblem({ title, startsOn: range.startsOn, endsOn: range.endsOn });
-  const showDrafts = draftsButtonShown(audience, props.channelHasClient);
-  // An Agency only plan is never shared into a chat that has (or may have) a
-  // client: Share stays off and nothing is written. The server check stays as
-  // the fallback.
-  const teamBlocked = teamPlanBlocked(audience, props.channelHasClient);
-  // A client plan holds no drafts: switching drops any picked ones.
-  const shownPosts = useMemo(
-    () => (audience === 'client' ? posts.filter((p) => p.stage !== 'draft') : posts),
-    [audience, posts],
-  );
 
   // Drafts list in the plan's order: dated by day, undated last (stable).
   const shownConcepts = useMemo(
@@ -163,9 +144,9 @@ export function PlanComposeScreen(props: {
     [concepts],
   );
 
-  const share = async (): Promise<void> => {
+  const create = async (): Promise<void> => {
     setTriedShare(true);
-    if (busy || problem !== null || teamBlocked) return;
+    if (busy || problem !== null) return;
     const token = epoch.current();
     setBusy(true);
     setError(null);
@@ -173,11 +154,10 @@ export function PlanComposeScreen(props: {
     traceRef.current = traceId;
     const draft: PlanDraft = {
       workspaceId: props.workspaceId,
-      channelId: props.channelId,
       title: title.trim(),
       startsOn: range.startsOn,
       endsOn: range.endsOn,
-      audience,
+      audience: NEW_PLAN_AUDIENCE,
       concepts: concepts.map(
         (c): DraftConcept => ({
           key: c.key,
@@ -187,9 +167,8 @@ export function PlanComposeScreen(props: {
           targetDate: c.date !== '' ? c.date : null,
         }),
       ),
-      postIds: shownPosts.map((p) => p.id),
+      postIds: posts.map((p) => p.id),
     };
-    let row: ChatMessageRow | null = null;
     const result = await runPlanShare(
       {
         create: (d, trace) =>
@@ -205,39 +184,30 @@ export function PlanComposeScreen(props: {
           planConceptAdd(supabase, conceptAddArgs(planId, c, trace)),
         postsAdd: (planId, ids, trace) =>
           planPostsAdd(supabase, { p_plan_id: planId, p_post_ids: ids, p_trace_id: trace }),
-        share: async (planId, channelId, messageId, trace) => {
-          const shared = await chatPlanShare(supabase, {
-            p_id: messageId,
-            p_channel_id: channelId,
-            p_plan_id: planId,
-            p_trace_id: trace,
-          });
-          if (shared.ok) row = shared.data;
-          return shared;
-        },
       },
       draft,
       progress,
       traceId,
     );
+    const planId = result.progress.planId;
     if (!mounted.current || !epoch.isCurrent(token)) {
-      // The form this share started from is gone: only the landed row counts.
-      if (result.ok && row !== null) props.onShared(row, traceId, true);
+      // The form this create started from is gone: nothing opens.
+      if (result.ok && planId !== null) props.onCreated(planId, true);
       return;
     }
     setBusy(false);
     setProgress(result.progress);
     if (!result.ok) {
-      logger.warn('chat: plan share failed', {
+      logger.warn('chat: plan create failed', {
         trace_id: traceId,
         step: result.step,
         plan_id: result.progress.planId,
         error: result.message,
       });
-      setError(result.copy);
+      setError(PLAN_CREATE_FAILED);
       return;
     }
-    if (row !== null) props.onShared(row, traceId, false);
+    if (planId !== null) props.onCreated(planId, false);
   };
 
   // Add appends a new concept; Edit replaces the draft in place (same key,
@@ -274,12 +244,12 @@ export function PlanComposeScreen(props: {
       <Button
         size="lg"
         variant="primary"
-        data-plan-share=""
+        data-plan-create=""
         className="min-h-[50px] w-full"
-        disabled={busy || problem !== null || teamBlocked}
-        onClick={() => void share()}
+        disabled={busy || problem !== null}
+        onClick={() => void create()}
       >
-        {busy ? 'Sharing…' : error === PLAN_SHARE_FAILED ? 'Retry' : 'Share in chat'}
+        {busy ? 'Creating…' : error !== null ? 'Retry' : CREATE_PLAN_LABEL}
       </Button>
     </div>
   );
@@ -339,47 +309,6 @@ export function PlanComposeScreen(props: {
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-2">
-            <span className="text-[13px] text-fg-3">Who can see it</span>
-            <div
-              role="group"
-              aria-label="Who can see it"
-              className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-panel p-1"
-            >
-              {(
-                [
-                  ['client', 'Agency and client'],
-                  ['team', TEAM_ONLY_LABEL],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={audience === value}
-                  data-plan-audience={value}
-                  disabled={locked}
-                  onClick={() => setAudience(value)}
-                  className={cn(
-                    'min-h-[44px] rounded-md text-[15px] font-medium disabled:opacity-60',
-                    audience === value ? 'bg-accent text-accent-fg' : 'text-fg-2 hover:bg-panel-2',
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p className="text-[13px] leading-[18px] text-fg-3">{AUDIENCE_HINTS[audience]}</p>
-            {teamBlocked ? (
-              <p
-                role="status"
-                data-plan-team-blocked=""
-                className="rounded-md border border-warn bg-warn-soft px-3 py-2 text-[13px] leading-[18px] text-warn"
-              >
-                {TEAM_PLAN_CLIENT_CHAT}
-              </p>
-            ) : null}
-          </div>
-
           <section className="flex flex-col gap-2" aria-label="Concepts">
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="text-[15px] font-semibold text-fg">Concepts</h3>
@@ -414,7 +343,7 @@ export function PlanComposeScreen(props: {
               <h3 className="text-[15px] font-semibold text-fg">Posts</h3>
               <span className="text-[13px] text-fg-3">From Pipeline</span>
             </div>
-            {shownPosts.map((p) => (
+            {posts.map((p) => (
               <div
                 key={p.id}
                 data-plan-draft-post=""
@@ -438,17 +367,15 @@ export function PlanComposeScreen(props: {
             >
               + Add from Pipeline
             </button>
-            {showDrafts ? (
-              <button
-                type="button"
-                data-plan-add-drafts=""
-                disabled={locked}
-                onClick={() => setPicker('drafts')}
-                className="min-h-[44px] rounded-lg border border-dashed border-border-strong text-[15px] font-medium text-accent disabled:opacity-60"
-              >
-                + Add drafts
-              </button>
-            ) : null}
+            <button
+              type="button"
+              data-plan-add-drafts=""
+              disabled={locked}
+              onClick={() => setPicker('drafts')}
+              className="min-h-[44px] rounded-lg border border-dashed border-border-strong text-[15px] font-medium text-accent disabled:opacity-60"
+            >
+              + Add drafts
+            </button>
           </section>
         </div>
       </PlanPage>
@@ -461,7 +388,8 @@ export function PlanComposeScreen(props: {
         onToggle={(post) => setPosts((prev) => togglePost(prev, post))}
         selectedBriefs={[]}
         onToggleBrief={() => {}}
-        channelHasClient={audience === 'team' ? props.channelHasClient : true}
+        // A Draft plan allows drafts (the picker's own drafts gate reads this).
+        channelHasClient={false}
       />
 
       <ConceptSheet
