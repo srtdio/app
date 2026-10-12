@@ -264,12 +264,16 @@ Applied 9 Oct 2026 (step 3a plans), restated in migration 20261009110000_plans_c
 | title | text | concept only, 1 to 200 |
 | description | text | concept only, nullable, up to 5000 |
 | post_id | uuid | post only, FK posts.id, CASCADE |
-| target_date | date | the plan's own day for every item (concept or post), nullable (null = No date); a post's own posts.target_date is untouched |
+| target_date | date | nullable (null = No date). Concepts: the concept's plan day. Post items: a TRANSITIONAL mirror of the post's day (posts.target_date in the workspace zone) kept by posts_plan_day_sync until part 2b; the post slot day is posts.target_date |
 | created_by | uuid | nullable, FK users.id, SET NULL |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
 
 - plan_items_shape: a concept has a title and no post_id; a post item has post_id and no title or description.
 - plan_items_target_date_concept_only: dropped 12 Oct (20261012120000_plan_item_days); post items carry target_date too (backfilled from posts.target_date in the workspace zone).
+- One date per post (12 Oct, 20261012161000_plan_one_date_per_post): a post slot's day is posts.target_date, stored at 12:00 in the workspace zone. The backfill copied each live post slot's plan day onto its post.
+- posts_plan_day_sync: AFTER UPDATE OF target_date ON posts FOR EACH ROW WHEN (old.target_date IS DISTINCT FROM new.target_date), runs _posts_plan_day_sync() (internal, no EXECUTE for anyone). For each live post slot of the post in a live plan whose workspace-zone day changed: a new day inside the plan's dates is mirrored into plan_items.target_date (transitional, removed in 2b); a new day outside the plan's dates soft-deletes the slot (the post leaves the plan); a cleared date keeps the slot, undated. Each change notifies plan_date_changed via _plan_notify, payload {item_id, post_id, from, to, left_plan}. Around its own soft delete it sets the transaction setting app.plan_day_sync to 'on' then 'off' (20261012163000_plan_updated_alerts), so a post leaving the plan by date is announced once (plan_date_changed only, no slot_removed).
+- plan_items_change_notify: AFTER INSERT OR UPDATE OF deleted_at, title, description ON plan_items FOR EACH ROW, runs _plan_items_change_notify() (internal, no EXECUTE for anyone). Sends plan_updated via _plan_notify: kind slot_added {item_id} on insert; kind slot_removed {item_id, post_id, title} on soft delete unless app.plan_day_sync = 'on'; kind concept_changed {item_id} when a live concept's title or description changes.
+- plans_rename_notify: AFTER UPDATE OF title ON plans FOR EACH ROW WHEN the title changed and the plan is not deleted, runs _plans_rename_notify() (internal, no EXECUTE for anyone). Sends plan_updated kind renamed {from, to}.
 - plan_items_post_once: a post appears at most once per plan among live post items (partial unique on plan_id, post_id).
 - plan_items_select_member: not deleted, its plan readable, and for a post item its post readable (so a draft post item stays hidden from a client, via posts_select_member).
 - Concept files: asset_attachments rows with entity_type plan_item; asset_attachments_select_member checks the plan item is readable.
@@ -304,12 +308,13 @@ All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_tra
 - is_agency_side_member(p_workspace_id): true when the caller is an active owner, admin or agency member.
 - plan_create(p_workspace_id, p_title, p_starts_on, p_ends_on, p_audience, p_trace_id) returns uuid: create a plan; a client plan is shared at once.
 - plan_update(p_plan_id, p_title, p_starts_on, p_ends_on, p_trace_id): rename or move dates.
-- plan_share_with_client(p_plan_id, p_trace_id): one-way team to client; drafts inside do not block it (20261011011500_plan_drafts_in_client_plans).
-- plan_delete(p_plan_id, p_trace_id): soft-delete the plan.
-- plan_concept_add(p_plan_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null) returns uuid: append a concept with up to 20 library files and an optional date.
-- plan_concept_edit(p_item_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null): edit a concept (null files keeps them); always writes target_date (null clears it); any edit, a date-only one included, resets its team and client reviews to waiting.
-- plan_posts_add(p_plan_id, p_post_ids, p_trace_id, p_target_date default null) returns integer: append 1 to 50 posts, skipping ones already in the plan; drafts are allowed in any plan, client plans included. p_target_date given = that plan day for every added post (must be inside the plan's dates, else 'date_outside_plan'); null = the post's own target_date (workspace zone) when inside the plan, else no date.
-- plan_item_move(p_item_id, p_target_date, p_item_ids, p_trace_id): agency side only (forbidden_role otherwise); sets the item's plan day (inside the plan's dates or null, else 'date_outside_plan') and the full, exact plan order like plan_items_reorder (invalid_payload otherwise); a day change resets its team and client reviews to waiting; same-day reorder keeps them; no notification; audit 'plan_item_move'.
+- plan_share_with_client(p_plan_id, p_trace_id): one-way team to client; drafts inside do not block it (20261011011500_plan_drafts_in_client_plans). Notifies plan_opened via _plan_notify; an already client plan is a no-op.
+- plan_delete(p_plan_id, p_trace_id): soft-delete the plan. Only the plan's creator or an active workspace owner/admin (any other agency-side member raises forbidden_role; 20261012162000_plan_delete_open_rules). Notifies plan_deleted via _plan_notify.
+- plan_concept_add(p_plan_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null) returns uuid: append a concept with up to 20 library files and an optional date; a date outside the plan's dates raises 'date_outside_plan'.
+- plan_concept_edit(p_item_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null): edit a concept (null files keeps them); always writes target_date (null clears it); any edit, a date-only one included, resets its team and client reviews to waiting; a date outside the plan's dates raises 'date_outside_plan'; a day change notifies plan_date_changed via _plan_notify.
+- plan_posts_add(p_plan_id, p_post_ids, p_trace_id, p_target_date default null) returns integer: append 1 to 50 posts, skipping ones already in the plan; drafts are allowed in any plan, client plans included. p_target_date given = that plan day for every added post (must be inside the plan's dates, else 'date_outside_plan'); p_target_date given also writes that day onto each added post's posts.target_date (12:00 workspace zone). Null = the slot takes the post's own day (workspace zone), or no date for an undated post; any post dated outside the plan's dates raises 'date_outside_plan' and nothing is added.
+- plan_item_move(p_item_id, p_target_date, p_item_ids, p_keep_reviews, p_trace_id): agency side only (forbidden_role otherwise); sets the item's day (inside the plan's dates or null, else 'date_outside_plan') and the full, exact plan order like plan_items_reorder (invalid_payload otherwise; null p_keep_reviews or a slot whose post is deleted is invalid_payload too). A post slot's day is written to posts.target_date (12:00 workspace zone, null clears it) and posts_plan_day_sync mirrors it and notifies; a concept's day is written to plan_items.target_date and notifies plan_date_changed via _plan_notify. On a day change p_keep_reviews true keeps the team and client reviews, false resets them to waiting; a same-day reorder keeps them. Audit 'plan_item_move' payload {from, to, day_changed, reviews_kept}.
+- plan_item_move(p_item_id, p_target_date, p_item_ids, p_trace_id): the original 4-arg overload, kept for existing callers; a wrapper calling the 5-arg with p_keep_reviews false (a day change resets reviews).
 - plan_item_remove(p_item_id, p_trace_id): soft-delete an item.
 - plan_items_reorder(p_plan_id, p_item_ids, p_trace_id): set positions from the full, exact list of live item ids.
 - plan_item_review(p_item_id, p_side, p_status, p_trace_id): upsert a review (never writes posts.stage); team side for owner/admin/agency, client side for an active client on a client plan's concepts and post items (slot approval; a draft post raises post_not_ready, a team plan forbidden_role; a missing or soft-deleted post raises invalid_payload on either side). A status other than waiting writes plan_review inbox rows via _plan_item_notify (team side to owner/admin/agency only), payload {side, status, plan_id}; waiting after approved/changes writes a new withdrawal row {side, status 'waiting', withdrawn true, previous, plan_id} and keeps the earlier one; waiting from waiting/none writes none.
@@ -317,6 +322,7 @@ All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_tra
 - plan_draft_rows(p_plan_ids) returns table(plan_id, item_id, item_position, post_number, title, target_date): batched read-only helper, STABLE, no p_trace_id, no audit; EXECUTE to authenticated only (not anon). Lists the live post items whose post is stage 'draft' (not deleted) across the given plans. target_date is the item's plan day (plan_items.target_date at UTC midnight), never the post's own date. Empty or null list returns nothing; more than 100 ids is invalid_payload. Per plan: not deleted, the caller is an active member of its workspace, and the plan is 'client' or the caller is agency-side; unknown or invisible ids return nothing. So a client sees draft rows in a client plan without posts SELECT on the draft.
 - plan_draft_items(p_plan_id): retired 11 Oct, no EXECUTE for anyone, drop pending. Its target_date is also the item's plan day (plan_items.target_date at UTC midnight).
 - Live only: schema retired holds an unexposed old plan_posts_add pending drop.
+- Internal, no EXECUTE for anyone: _plan_notify(p_plan_id, p_event_type, p_payload) (20261012160000_plan_notify_plumbing): one inbox row per other active member of the plan's workspace, owner/admin/agency always and clients too on a client plan; entity_type plan, entity_id = scope_key = plan id, scope posts, tier active, payload gains plan_id, actor_user_id auth.uid(). Used for plan_opened, plan_deleted, plan_date_changed and plan_updated. Live body is currently SILENT (returns immediately, 20261012161000): alerts are silent until part 2b; 2b sends them only for plans open to the client, except plan_deleted.
 - Internal, no EXECUTE for authenticated: _plan_check_versions (same-workspace, library, not deleted; 'attachment not available' for chat-origin or deleted files), _plan_attach_versions, and _plan_item_notify(p_item_id, p_event_type, p_team_only, p_payload) (one inbox row per other active member: owner/admin/agency always, clients too when not team-only on a client plan; payload gains plan_id).
 
 ## 5. Assets
@@ -537,7 +543,7 @@ Inbox is the only permanent in-app event surface. Email is out-of-app catch-up, 
 | actor_user_id | uuid | nullable, FK public.users.id ON DELETE SET NULL: the user who performed the event, distinct from user_id which is the recipient |
 | workspace_id | uuid | FK workspaces.id |
 | event_type | text | see enums (publish/approval/plan values removed) |
-| entity_type | text | nullable: post / brief / plan_cell / plan_period / chat_channel / workspace / plan_item (see section 12) |
+| entity_type | text | nullable: post / brief / chat_channel / workspace / plan_item / plan |
 | entity_id | text | nullable, 1 to 200 |
 | scope | text | everything / posts / briefs / people / groups / clients |
 | scope_key | text | nullable |
@@ -556,6 +562,7 @@ Where inbox entries are shown:
 - Activity: everything else, including mentions on posts and briefs.
 - inbox_mark_all_read (Activity Mark all read) skips bell types.
 - plan_comment and plan_review (entity_type plan_item, entity_id = item id, tier active; 20261009205500_plan_item_comments.sql): plan events use scope 'posts', scope_key = plan id.
+- plan_opened, plan_deleted, plan_date_changed and plan_updated (entity_type plan, entity_id = plan id, scope 'posts', scope_key = plan id, tier active; 20261012160000_plan_notify_plumbing.sql, 20261012163000_plan_updated_alerts.sql) via _plan_notify; payload gains plan_id. plan_updated payload kind: slot_added, slot_removed, concept_changed, renamed. Alerts are silent until part 2b; 2b sends them only for plans open to the client, except plan_deleted.
 
 Decision 3 Oct 2026 (Shubham): Activity is posts only; chat notifications live in the chat bell.
 
@@ -612,7 +619,8 @@ PK id. Fields: operator_user_id FK, flow_type (billing_override / sentry_inspect
 - workspace.subscription_state: trial, active, read_only, grace, soft_pause, full_pause, soft_delete
 - brief.status: open, closed
 - approval (table removed): n/a, approval is now a post.stage value
-- inbox_entries.event_type: comment, mention, stage_change, comment_resolved, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system, checkpoints_added, post_ready, scheduled_sent (tier active), scheduled_failed (tier urgent), reminder (tier urgent), post_deleted (tier active), assets_deleted (tier active), plan_comment (tier active), plan_review (tier active) (canonical list: INBOX_EVENT_TYPES in @srtdio/schemas; 23 values)
+- inbox_entries.event_type: comment, mention, stage_change, comment_resolved, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system, checkpoints_added, post_ready, checkpoint_reopened, checkpoint_asked, scheduled_sent (tier active), scheduled_failed (tier urgent), reminder (tier urgent), post_deleted (tier active), assets_deleted (tier active), plan_comment (tier active), plan_review (tier active), plan_opened (tier active), plan_deleted (tier active), plan_date_changed (tier active), plan_updated (tier active) (canonical list: INBOX_EVENT_TYPES in @srtdio/schemas; 27 values)
+- inbox_entries.entity_type: post, brief, chat_channel, workspace, plan_item, plan (nullable)
 - inbox_entries.scope: everything, posts, briefs, people, groups, clients
 - inbox_entries.tier: urgent, active, ambient
 - chat_channels.channel_type: dm, group, notes
@@ -633,7 +641,7 @@ Each carries (id, created_at) composite PK. New monthly partitions must be creat
 
 These are dead references from the pre-MVP schema. Harmless (they only widen a CHECK or name a now-missing concept), but listed so they can be cleaned in a later migration if desired:
 
-- comments.entity_type and inbox_entries.entity_type still allow plan_cell / plan_period. Plan is removed, so these values will never be written.
+- comments.entity_type still allows plan_cell / plan_period. These values are never written.
 - chat_channels_shape and chat_channel_member still carry a plan_period branch. channel_type (dm, group, notes) and the channel_id regex (^(dm|group|notes)__) no longer allow plan or plan_period, so the branch can never match.
 - intent_ledger.target_type still lists share_token. share_tokens table is dropped.
 - webhook_events.source lists stripe / resend / linkedin but not agora. To store the Agora chat webhook entry you wanted, this enum likely needs an agora value added.

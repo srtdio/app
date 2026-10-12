@@ -8399,6 +8399,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      _plan_notify: {
+        Args: { p_event_type: string; p_payload: Json; p_plan_id: string }
+        Returns: undefined
+      }
       _post_snapshot: { Args: { p_post_id: string }; Returns: Json }
       annotation_create: {
         Args: {
@@ -9147,15 +9151,26 @@ export type Database = {
         }
         Returns: string
       }
-      plan_item_move: {
-        Args: {
-          p_item_id: string
-          p_item_ids: string[]
-          p_target_date: string
-          p_trace_id: string
-        }
-        Returns: undefined
-      }
+      plan_item_move:
+        | {
+            Args: {
+              p_item_id: string
+              p_item_ids: string[]
+              p_keep_reviews: boolean
+              p_target_date: string
+              p_trace_id: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_item_id: string
+              p_item_ids: string[]
+              p_target_date: string
+              p_trace_id: string
+            }
+            Returns: undefined
+          }
       plan_item_remove: {
         Args: { p_item_id: string; p_trace_id: string }
         Returns: undefined
