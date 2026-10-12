@@ -9147,6 +9147,15 @@ export type Database = {
         }
         Returns: string
       }
+      plan_item_move: {
+        Args: {
+          p_item_id: string
+          p_item_ids: string[]
+          p_target_date: string
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
       plan_item_remove: {
         Args: { p_item_id: string; p_trace_id: string }
         Returns: undefined
@@ -9165,7 +9174,12 @@ export type Database = {
         Returns: undefined
       }
       plan_posts_add: {
-        Args: { p_plan_id: string; p_post_ids: string[]; p_trace_id: string }
+        Args: {
+          p_plan_id: string
+          p_post_ids: string[]
+          p_target_date?: string
+          p_trace_id: string
+        }
         Returns: number
       }
       plan_share_with_client: {

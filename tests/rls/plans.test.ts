@@ -445,7 +445,7 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
   }
 
   // 20261010120000_plan_items_concept_date.sql: concepts carry an optional
-  // target_date; post items never do (plan_items_target_date_concept_only).
+  // target_date; since 20261012120000_plan_item_days post items do too.
   it('plan_concept_add with a date stores it; without one stores null', async () => {
     const dated = must(
       'plan_concept_add',
@@ -494,21 +494,24 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
     expect(await status()).toBe('waiting');
   });
 
-  it('a post item with a target_date is refused by plan_items_target_date_concept_only', async () => {
-    const insertErr = postgresError(
-      `insert into public.plan_items (workspace_id, plan_id, kind, post_id, target_date) values ('${ws.id}', '${clientPlanId}', 'post', '${draftPostId}', '2026-11-05')`,
-    );
-    expect(insertErr).toMatch(/plan_items_target_date_concept_only/);
+  it('a post item carries a target_date (plan_items_target_date_concept_only dropped 12 Oct)', async () => {
+    // 20261012120000_plan_item_days: every item holds its plan day. No row is
+    // inserted here (an extra post item would change the draft-row cases).
     const updateErr = postgresError(
       `update public.plan_items set target_date = '2026-11-05' where id = '${clientPostItemId}'`,
     );
-    expect(updateErr).toMatch(/plan_items_target_date_concept_only/);
+    expect(updateErr).toBe('');
     const res = await as(agency)
       .from('plan_items')
       .select('target_date')
       .eq('id', clientPostItemId);
     expect(res.error).toBeNull();
-    expect(res.data?.[0]?.target_date).toBeNull();
+    expect(res.data?.[0]?.target_date).toBe('2026-11-05');
+    expect(
+      postgresError(
+        `update public.plan_items set target_date = null where id = '${clientPostItemId}'`,
+      ),
+    ).toBe('');
   });
 
   it('a client member calling plan_concept_add with a date is refused (forbidden_role)', async () => {

@@ -4,6 +4,8 @@ import {
   assetDeleteMany,
   memberRemove,
   planDraftRows,
+  planItemMove,
+  planPostsAdd,
   postSoftDelete,
   userProfileUpdate,
   type Client,
@@ -222,5 +224,63 @@ describe('planDraftRows', () => {
     const { client } = makeClient({ data: null, error: { message: 'network down' } });
     const result = await planDraftRows(client, args);
     expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
+  });
+});
+
+describe('planItemMove', () => {
+  const args = {
+    p_item_id: '11111111-1111-1111-1111-111111111111',
+    p_target_date: '2026-10-14',
+    p_item_ids: ['11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333'],
+    p_trace_id: '22222222-2222-2222-2222-222222222222',
+  };
+
+  it('returns ok and forwards the proc name + args on success', async () => {
+    const { client, rpc } = makeClient({ data: null, error: null });
+    const result = await planItemMove(client, args);
+    expect(result.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('plan_item_move', args);
+  });
+
+  it('passes a null date (No date) through unchanged', async () => {
+    const { client, rpc } = makeClient({ data: null, error: null });
+    await planItemMove(client, { ...args, p_target_date: null });
+    expect(rpc).toHaveBeenCalledWith('plan_item_move', { ...args, p_target_date: null });
+  });
+
+  it('maps forbidden_role and invalid_payload; keeps date_outside_plan as the message', async () => {
+    for (const code of ['forbidden_role', 'invalid_payload'] as const) {
+      const { client } = makeClient({ data: null, error: { message: code } });
+      expect(await planItemMove(client, args)).toEqual({
+        ok: false,
+        error: { code, message: code },
+      });
+    }
+    const { client } = makeClient({ data: null, error: { message: 'date_outside_plan' } });
+    expect(await planItemMove(client, args)).toEqual({
+      ok: false,
+      error: { code: 'unknown', message: 'date_outside_plan' },
+    });
+  });
+});
+
+describe('planPostsAdd', () => {
+  const base = {
+    p_plan_id: '11111111-1111-1111-1111-111111111111',
+    p_post_ids: ['33333333-3333-3333-3333-333333333333'],
+    p_trace_id: '22222222-2222-2222-2222-222222222222',
+  };
+
+  it('without p_target_date: the 3-arg shape still compiles and is forwarded as is', async () => {
+    const { client, rpc } = makeClient({ data: 1, error: null });
+    const result = await planPostsAdd(client, base);
+    expect(result).toEqual({ ok: true, data: 1 });
+    expect(rpc).toHaveBeenCalledWith('plan_posts_add', base);
+  });
+
+  it('with p_target_date: forwarded with the day', async () => {
+    const { client, rpc } = makeClient({ data: 1, error: null });
+    await planPostsAdd(client, { ...base, p_target_date: '2026-10-14' });
+    expect(rpc).toHaveBeenCalledWith('plan_posts_add', { ...base, p_target_date: '2026-10-14' });
   });
 });
