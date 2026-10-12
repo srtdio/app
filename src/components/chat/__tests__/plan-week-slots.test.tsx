@@ -32,6 +32,7 @@ import {
   slotCheckboxShown,
   slotSide,
   slotTicked,
+  slotView,
   slotToastSpec,
   slotUndoStatus,
   withReviewOverrides,
@@ -89,19 +90,38 @@ function bundle(audience: 'team' | 'client'): PlanBundle {
 const at = (b: PlanBundle, id: string): PlanItemRow => b.items.find((i) => i.id === id)!;
 
 describe('checkbox per role (W4)', () => {
-  it('client on a client plan writes the client side; agency the team side; else none', () => {
+  it('writes: a client the client side on an Open plan; the agency the team side on a Draft only', () => {
     expect(slotSide('client', 'client')).toBe('client');
     expect(slotSide('client', 'team')).toBeNull();
-    expect(slotSide('agency', 'client')).toBe('team');
+    // No team writes on an Open plan: the agency's boxes are read-only.
+    expect(slotSide('agency', 'client')).toBeNull();
     expect(slotSide('agency', 'team')).toBe('team');
     expect(slotSide('unknown', 'client')).toBeNull();
   });
 
-  it('a draft locked to a client has no checkbox; the agency keeps one on it', () => {
+  it('one view of ticks (item 5): Draft team side for the agency; Open client side for everyone', () => {
+    expect(slotView('agency', 'team')).toEqual({ side: 'team', writable: true });
+    expect(slotView('client', 'team')).toBeNull();
+    expect(slotView('agency', 'client')).toEqual({ side: 'client', writable: false });
+    expect(slotView('client', 'client')).toEqual({ side: 'client', writable: true });
+    // Unknown side: no box until the side is known (no flash of the wrong side).
+    expect(slotView('unknown', 'client')).toBeNull();
+    expect(slotView('unknown', 'team')).toBeNull();
+  });
+
+  it('a draft locked to a client has no checkbox; the agency keeps a read-only one on it', () => {
     const b = bundle('client');
     expect(slotCheckboxShown(b, at(b, 'd1'), 'client')).toBeNull();
-    expect(slotCheckboxShown(b, at(b, 'd1'), 'agency')).toBe('team');
-    expect(slotCheckboxShown(b, at(b, 'p1'), 'client')).toBe('client');
+    expect(slotCheckboxShown(b, at(b, 'd1'), 'agency')).toEqual({
+      side: 'client',
+      writable: false,
+    });
+    expect(slotCheckboxShown(b, at(b, 'p1'), 'client')).toEqual({
+      side: 'client',
+      writable: true,
+    });
+    const d = bundle('team');
+    expect(slotCheckboxShown(d, at(d, 'p1'), 'agency')).toEqual({ side: 'team', writable: true });
   });
 
   it('ticked reads the side the viewer writes: a client never sees team state', () => {
@@ -153,7 +173,8 @@ describe('optimistic counts and toasts (W4, W6)', () => {
     const ticked = withReviewOverrides(b, 'client', { p2: 'approved', c1: 'approved' });
     expect(planProgress(ticked)).toMatchObject({ approved: 3, changes: 0 });
     expect(progressPercent(planProgress(ticked))).toBe(75);
-    expect(screenProgressLabel(ticked, 'client')).toBe('3 of 4 slots approved');
+    expect(screenProgressLabel(ticked, 'client')).toBe('Client 3 of 4');
+    expect(screenProgressLabel(ticked, 'agency')).toBe('Client 3 of 4');
     // Reverting is laying the previous status back.
     const reverted = withReviewOverrides(ticked, 'client', { p2: 'waiting', c1: 'changes' });
     expect(planProgress(reverted)).toMatchObject({ approved: 1, changes: 1 });
@@ -319,9 +340,6 @@ describe('week list layout (L1-L4)', () => {
           onOpenItem={() => undefined}
           onToggleSlot={() => undefined}
           {...(side === 'agency' ? { onAdd: () => undefined, onDragStart: () => undefined } : {})}
-          shareError={null}
-          sharing={false}
-          onShareWithClient={() => undefined}
         />
       </MemoryRouter>,
     );
@@ -340,9 +358,6 @@ describe('week list layout (L1-L4)', () => {
           drag={null}
           onOpenItem={() => undefined}
           onToggleSlot={() => undefined}
-          shareError={null}
-          sharing={false}
-          onShareWithClient={() => undefined}
         />
       </MemoryRouter>,
     );
@@ -400,10 +415,14 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toContain('data-plan-row-draft="locked"');
   });
 
-  it('agency: team checkboxes, the client status line, Add rows, No date kept', () => {
+  it('agency on an Open plan: read-only client checkboxes, the client status line, Add rows, No date kept', () => {
     const html = paint('agency', 'client');
-    expect(html).toContain('data-plan-slot="team"');
-    expect(html).not.toContain('data-plan-slot="client"');
+    // Team reviews are never shown on an Open plan: the client side, read-only.
+    expect(html).not.toContain('data-plan-slot="team"');
+    expect(html).toContain('data-plan-slot="client"');
+    expect(html).toContain('data-plan-slot-readonly=""');
+    expect(html).toMatch(/data-plan-slot="client"[^>]*disabled=""/);
+    expect(html).toContain('Client 1 of 4');
     expect(html).toMatch(/data-plan-row-status=""[^>]*>.*Client approved</);
     expect(html).not.toContain('Client · Approved');
     expect(html).not.toContain('data-plan-pill="draft"');
@@ -411,5 +430,21 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toContain('data-plan-add="2026-10-12"');
     expect(html).toContain('data-plan-add="none"');
     expect(html).toContain('data-plan-day="none"');
+  });
+
+  it('agency on a Draft plan: writable team checkboxes and "Team X of N"', () => {
+    const html = paint('agency', 'team');
+    expect(html).toContain('data-plan-slot="team"');
+    expect(html).not.toContain('data-plan-slot="client"');
+    expect(html).not.toContain('data-plan-slot-readonly');
+    expect(html).toContain('Team 1 of 4');
+    expect(html).toContain('data-plan-progress-bar="accent"');
+  });
+
+  it('a client on an Open plan ticks the client side (writable)', () => {
+    const html = paint('client', 'client');
+    expect(html).toContain('data-plan-slot="client"');
+    expect(html).not.toContain('data-plan-slot-readonly');
+    expect(html).toContain('Client 1 of 4');
   });
 });

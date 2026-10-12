@@ -1,13 +1,14 @@
 // The plan shared into a message, as a card (modelled on BriefCard): eyebrow
-// PLAN, title, the date range in mono, count chips ("Agency only" on a team
-// plan), the client's approval progress, and a footer with Open plan (and
-// Forward: the agency on every plan, a client on a client plan). Forwarding an
-// Agency only plan into a chat with a client asks "Share with client first?"
+// PLAN, title, the date range in mono, count chips ("Draft" on a Draft plan),
+// the shown side's progress (Draft "Team X of N", Open "Client X of N", the
+// same for every viewer), and a footer with Open plan (and Forward: the agency
+// on every plan, a client on an Open plan). Forwarding a Draft plan into a
+// chat with a client sends nothing and says "Open the plan for client first."
 // (when the chat is known to have one, or when the server refuses it for that
 // reason). Ids resolve through the thread's
 // plan card cache (PlanCardsProvider), so every plan across the loaded thread
-// comes back in one batch, never one read per bubble. A plan the viewer cannot
-// read (RLS) renders the neutral "not visible" box with "Plan not available";
+// comes back in one batch, never one read per bubble. A plan the viewer can no
+// longer read (deleted, RLS) renders the neutral box with "Plan deleted";
 // a read that failed keeps the skeleton and is re-read, then shows "Couldn't
 // load" with a tap to retry. The card waits for the viewer's side and its whole
 // bundle (plan, items, reviews, post stages, draft rows) before its first
@@ -22,14 +23,14 @@ import { IconChat, IconPlan } from '@/components/ui/icons';
 import { CouldntLoadCard, SHARED_CARD } from '@/components/chat/PostCard';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { usePaintLogCommit } from '@/components/chat/PaintLog';
-import { ShareFirstFlow, type ShareFirstRequest } from '@/components/chat/PlanShareConfirm';
 import {
   HAS_CLIENT_TAG,
+  OPEN_FOR_CLIENT_FIRST,
+  PLAN_DELETED,
   PLAN_EYEBROW,
-  PLAN_NOT_AVAILABLE,
   canForwardPlan,
+  forwardBlocked,
   forwardedToast,
-  planShareDecision,
   planChips,
   planProgress,
   planRangeLabel,
@@ -185,13 +186,14 @@ export function PlanCardBody(props: {
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-panel-3 text-fg-3">
           <IconPlan size={18} />
         </span>
-        <span className="truncate text-sm font-medium">{PLAN_NOT_AVAILABLE}</span>
+        <span className="truncate text-sm font-medium">{PLAN_DELETED}</span>
       </div>
     );
   }
   const { bundle } = props.view;
   const progress = planProgress(bundle);
   const forward = canForwardPlan(props.side, bundle.plan.audience);
+  const draft = progress.side === 'team';
   return (
     <div data-plan-card={bundle.plan.id} className={PLAN_CARD}>
       <div className="flex min-h-0 flex-1 flex-col gap-2 px-3.5 pb-2.5 pt-3">
@@ -226,19 +228,20 @@ export function PlanCardBody(props: {
         </span>
         <span
           role="progressbar"
-          aria-label="Approved by client"
+          aria-label={draft ? 'Approved by team' : 'Approved by client'}
           aria-valuemin={0}
           aria-valuemax={progress.total}
-          aria-valuenow={progress.approved}
+          aria-valuenow={draft ? progress.teamApproved : progress.approved}
           className="block h-1.5 overflow-hidden rounded-full bg-panel-3"
         >
           <span
-            className="block h-1.5 bg-good"
+            data-plan-card-bar={draft ? 'team' : 'client'}
+            className={cn('block h-1.5', draft ? 'bg-accent' : 'bg-good')}
             style={{ width: `${progressPercent(progress)}%` }}
           />
         </span>
         <span data-plan-progress="" className="truncate text-xs leading-4 text-fg-3">
-          {progressLabel(progress, props.side)}
+          {progressLabel(progress)}
         </span>
       </div>
       <div className="flex shrink-0 border-t border-border">
@@ -269,9 +272,9 @@ export function PlanCardBody(props: {
  * Forward: pick one of my chats and share the plan into it with a fresh
  * message id (chat_plan_share), then publish it live when connected. The list
  * is the Chat page's own read; the body keeps one fixed height in every state.
- * An Agency only plan gets a "Has client" tag on chats known to have a client
- * (a DM with a client), and picking one, or one the server refuses for that
- * reason, asks "Share with client first?". No read per chat.
+ * A Draft plan gets a "Has client" tag on chats known to have a client (a DM
+ * with a client); picking one, or one the server refuses for that reason,
+ * sends nothing and toasts "Open the plan for client first." No read per chat.
  */
 function PlanForwardSheet(props: {
   open: boolean;
@@ -280,14 +283,13 @@ function PlanForwardSheet(props: {
   onClose: () => void;
 }): ReactElement {
   const { client } = useChat();
-  const { workspaceId, workspaceName } = useWorkspace();
+  const { workspaceId } = useWorkspace();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const toast = useToast();
   const [load, setLoad] = useState<LoadState>({ status: 'loading' });
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [guard] = useState(createInFlightGuard);
-  const [confirm, setConfirm] = useState<ShareFirstRequest | null>(null);
   const planCards = usePlanCards();
   const open = props.open;
   const planId = props.bundle.plan.id;
@@ -349,23 +351,13 @@ function PlanForwardSheet(props: {
     toast.show({ title: forwardedToast(channel.title) });
   }
 
-  function askFirst(channel: ChannelSummary): void {
-    setConfirm({
-      bundle: props.bundle,
-      channelId: channel.channelId,
-      chatName: channel.title,
-      group: channel.channelType === 'group',
-      publish: publishOf(channel),
-    });
-    props.onClose();
+  function openFirst(): void {
+    toast.show({ title: OPEN_FOR_CLIENT_FIRST });
   }
 
   async function forward(channel: ChannelSummary): Promise<void> {
-    if (
-      props.side === 'agency' &&
-      planShareDecision(props.bundle.plan.audience, summaryHasClient(channel)) === 'confirm'
-    ) {
-      askFirst(channel);
+    if (forwardBlocked(props.bundle.plan.audience, summaryHasClient(channel))) {
+      openFirst();
       return;
     }
     const result = await sharePlanToChannel(
@@ -399,8 +391,8 @@ function PlanForwardSheet(props: {
       props.onClose();
       return;
     }
-    if (props.side === 'agency' && refusedForClient(result.message)) {
-      askFirst(channel);
+    if (refusedForClient(result.message)) {
+      openFirst();
       return;
     }
     logger.error('chat: plan forward failed', {
@@ -412,29 +404,18 @@ function PlanForwardSheet(props: {
   }
 
   return (
-    <>
-      <Sheet open={props.open} onClose={props.onClose} title="Forward plan">
-        {load.status === 'ready' && load.channels.length > 0
-          ? forwardList(load.channels, sendingId, agencyOnly, (channel) => void forward(channel))
-          : conversationPickerBody(load, sendingId, (channel) => void forward(channel))}
-      </Sheet>
-      <ShareFirstFlow
-        request={confirm}
-        workspaceName={workspaceName ?? ''}
-        onCancel={() => setConfirm(null)}
-        onSent={(row, traceId, request) => {
-          setConfirm(null);
-          landed({ channelId: request.channelId, title: request.chatName }, row, traceId);
-        }}
-      />
-    </>
+    <Sheet open={props.open} onClose={props.onClose} title="Forward plan">
+      {load.status === 'ready' && load.channels.length > 0
+        ? forwardList(load.channels, sendingId, agencyOnly, (channel) => void forward(channel))
+        : conversationPickerBody(load, sendingId, (channel) => void forward(channel))}
+    </Sheet>
   );
 }
 
 /**
  * The Forward list: the conversation picker's rows (same box, same fixed body
  * height), with "Has client" on chats known to have a client when the plan is
- * Agency only. Hook-free.
+ * a Draft. Hook-free.
  */
 function forwardList(
   channels: readonly ChannelSummary[],

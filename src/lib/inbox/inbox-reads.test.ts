@@ -366,7 +366,11 @@ describe('bell rows stay out of the Activity counts', () => {
     await fetchInboxUnreadCount(client, params);
     expect(calls).toContainEqual({
       method: 'not',
-      args: ['event_type', 'in', '(reminder,scheduled_sent,scheduled_failed)'],
+      args: [
+        'event_type',
+        'in',
+        '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment)',
+      ],
     });
     expect(calls).toContainEqual({
       method: 'or',

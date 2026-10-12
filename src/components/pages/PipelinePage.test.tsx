@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 vi.mock('@/lib/events', () => ({ dispatchSorted: vi.fn() }));
 
@@ -55,9 +57,6 @@ vi.mock('react', async (importOriginal) => {
 // body can be invoked far enough to run its first useState (the stage filter).
 vi.mock('react-router-dom', () => ({
   useNavigate: () => () => {},
-  // The page reads ?view / ?week on its first render; an empty set is the
-  // no-params default the Review-chip guard below asserts against.
-  useSearchParams: () => [new URLSearchParams(), () => {}],
 }));
 vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/workspace-context', () => ({
@@ -65,33 +64,20 @@ vi.mock('@/lib/workspace-context', () => ({
 }));
 
 import {
+  INITIAL_STAGE,
   MOVE_FALLBACK_MESSAGE,
-  SET_DATE_FALLBACK_MESSAGE,
-  initialStage,
   moveErrorMessage,
   pipelineHeader,
   PipelinePage,
   pipelineSurface,
-  planCount,
-  planList,
-  planParams,
   postCountLabel,
   runMovePost,
-  runSetTargetDate,
   sanitizePostSort,
   stageCounts,
-  weekOffsetFromParam,
 } from '@/components/pages/PipelinePage';
-import type {
-  MovePostDeps,
-  PipelineSurfaceProps,
-  SetTargetDateDeps,
-} from '@/components/pages/PipelinePage';
-import { civilNoonInZoneIso } from '@/lib/plan-week';
+import type { MovePostDeps } from '@/components/pages/PipelinePage';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
-import { PlanWeek } from '@/components/pages/pipeline/PlanWeek';
-import { groupByCivilDay, weekBounds } from '@/lib/plan-week';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   PipelineSortControl,
@@ -101,7 +87,7 @@ import {
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
-import type { Client, PipelinePost, PostUpdateInput, Result, Stage } from '@srtdio/posts';
+import type { Client, PipelinePost, Result, Stage } from '@srtdio/posts';
 import { groupByStage } from '@/lib/post-board';
 import {
   POST_SORT_DEFAULT,
@@ -305,7 +291,7 @@ describe('pipelineHeader', () => {
 });
 
 describe('opens on the Review chip by default', () => {
-  it('initializes the stage filter to review, with Plan leading the row and All closing it', () => {
+  it('initializes the stage filter to review, the stages in order and All closing the row (no Plan chip)', () => {
     hookState.reset();
     try {
       // Invoke the page body far enough to run its first useState (the stage
@@ -319,7 +305,7 @@ describe('opens on the Review chip by default', () => {
     // (a) On first render the stage passed down (StageChips.active) is 'review'.
     expect(hookState.inits[0]).toBe('review');
 
-    // (b) The chip order is Plan, the stages in transition-map order, then All;
+    // (b) The chip order is the stages in transition-map order, then All;
     // the review default only shifts which chip is selected, never the list.
     const chips = findAll(
       pipelineHeader({
@@ -339,75 +325,28 @@ describe('opens on the Review chip by default', () => {
       (el) => el.type === StageChips,
     );
     expect(chips).toHaveLength(1);
-    const props = chips[0]!.props as { active: string; items: { key: string }[] };
+    const props = chips[0]!.props as { active: string; items: StageChipItem[] };
     expect(props.active).toBe('review');
-    expect(props.items[0]!.key).toBe('plan');
     expect(props.items[props.items.length - 1]!.key).toBe('all');
-    expect(props.items.map((t) => t.key)).toEqual(['plan', ...STAGES, 'all']);
+    expect(props.items.map((t) => t.key)).toEqual([...STAGES, 'all']);
+    expect(props.items.some((t) => t.key === 'plan' || t.label === 'Plan')).toBe(false);
+  });
+
+  it('a stale ?view=plan link opens Review: the page never reads view or week', () => {
+    expect(INITIAL_STAGE).toBe('review');
+    const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
+    expect(src).not.toMatch(/useSearchParams|PlanWeek|SetDateSheet|['"]week['"]|['"]view['"]/);
   });
 });
 
-describe('the Plan chip', () => {
-  function chipItems(stage: string): StageChipItem[] {
-    const chips = findAll(
-      pipelineHeader({
-        search: '',
-        onSearchChange: () => {},
-        sort: 'updated',
-        onSortChange: () => {},
-        dateWindow: 'any',
-        onDateWindowChange: () => {},
-        customRange: null,
-        onCustomRangeChange: () => {},
-        weekStartDay: 1,
-        stage,
-        onStageChange: () => {},
-        counts: { all: 3, draft: 2, review: 1 },
-      }),
-      (el) => el.type === StageChips,
-    );
-    return (chips[0]!.props as { items: StageChipItem[] }).items;
-  }
-
-  it('carries no stage (so no dot) and no count, unlike every stage chip', () => {
-    const items = chipItems('review');
-    const plan = items.find((item) => item.key === 'plan')!;
-    expect(plan.label).toBe('Plan');
-    expect(plan.stage).toBeUndefined();
-    expect(plan.count).toBeUndefined();
-    // Each stage chip still carries both, so StageChips renders its dot + badge.
-    for (const stage of STAGES) {
-      const item = items.find((i) => i.key === stage)!;
-      expect(item.stage).toBe(stage);
-      expect(typeof item.count).toBe('number');
-    }
-    // All keeps its count but has never carried a dot.
-    const all = items.find((item) => item.key === 'all')!;
-    expect(all.count).toBe(3);
-    expect(all.stage).toBeUndefined();
-  });
-});
-
-describe('the Plan surface', () => {
-  const now = new Date('2026-09-09T12:00:00Z');
-
-  function surface(over: Partial<PipelineSurfaceProps> = {}): ReactElement {
-    const posts = over.sorted ?? [];
+describe('the surface', () => {
+  function surface(stage: string, isDesktop: boolean): ReactElement {
     return pipelineSurface({
       role: 'agency',
-      stage: 'plan',
-      isDesktop: true,
-      sorted: posts,
-      planPosts: over.planPosts ?? posts,
-      grouped: groupByStage(posts, STAGES),
-      timeZone: 'UTC',
-      weekStartDay: 1,
-      weekOffset: 0,
-      onWeekOffsetChange: () => {},
-      canSetDate: false,
-      onSetDate: () => {},
-      onAddOnDay: () => {},
-      sheetOpen: false,
+      stage,
+      isDesktop,
+      sorted: [],
+      grouped: groupByStage([], STAGES),
       // The tree is walked and no card is ever expanded, so the cache is untouched.
       cache: {} as unknown as PresignCache,
       presignEnabled: false,
@@ -415,266 +354,14 @@ describe('the Plan surface', () => {
       onViewAll: () => {},
       onMovePost: () => {},
       onLongPressPost: () => {},
-      ...over,
     });
   }
 
-  it('renders PlanWeek for the Plan chip and neither the board nor the feed', () => {
-    const tree = surface({ stage: 'plan' });
-    expect(findAll(tree, (el) => el.type === PlanWeek)).toHaveLength(1);
-    expect(findAll(tree, (el) => el.type === PipelineBoard)).toHaveLength(0);
-    expect(findAll(tree, (el) => el.type === PipelineFeed)).toHaveLength(0);
-  });
-
-  it('keeps the board (desktop) and the feed (phone) for every other chip', () => {
-    const desktop = surface({ stage: 'all', isDesktop: true });
-    expect(findAll(desktop, (el) => el.type === PipelineBoard)).toHaveLength(1);
-    expect(findAll(desktop, (el) => el.type === PlanWeek)).toHaveLength(0);
-
-    const phone = surface({ stage: 'review', isDesktop: false });
-    expect(findAll(phone, (el) => el.type === PipelineFeed)).toHaveLength(1);
-    expect(findAll(phone, (el) => el.type === PlanWeek)).toHaveLength(0);
-  });
-
-  it('hands PlanWeek the workspace zone, week start and offset, never the browser zone', () => {
-    const plan = findAll(
-      surface({ stage: 'plan', timeZone: 'Asia/Kolkata', weekStartDay: 0, weekOffset: -2 }),
-      (el) => el.type === PlanWeek,
-    )[0]!;
-    const props = plan.props as { timeZone: string; weekStartDay: number; offset: number };
-    expect(props.timeZone).toBe('Asia/Kolkata');
-    expect(props.weekStartDay).toBe(0);
-    expect(props.offset).toBe(-2);
-  });
-
-  it('Plan IGNORES the date window: a post the window would hide still reaches it', () => {
-    const posts: PipelinePost[] = [
-      { ...makePost('in', 'draft'), target_date: '2026-09-09T00:00:00Z' },
-      { ...makePost('out', 'draft'), target_date: '2026-11-20T00:00:00Z' },
-    ];
-    // The board list is window-filtered ('This week' drops the November post)...
-    const windowed = filterByWindow(posts, 'week', { now, timeZone: 'UTC', weekStartDay: 1 });
-    expect(windowed.map((p) => p.id)).toEqual(['in']);
-    // ...while the Plan list applies search + sort only, so nothing is hidden.
-    expect(
-      planList(posts, '', 'updated')
-        .map((p) => p.id)
-        .sort(),
-    ).toEqual(['in', 'out']);
-
-    const plan = findAll(
-      surface({ stage: 'plan', sorted: windowed, planPosts: planList(posts, '', 'updated') }),
-      (el) => el.type === PlanWeek,
-    )[0]!;
-    const given = (plan.props as { posts: PipelinePost[] }).posts;
-    expect(given.map((p) => p.id).sort()).toEqual(['in', 'out']);
-  });
-
-  it('the Plan list still honours the active search', () => {
-    const posts: PipelinePost[] = [
-      { ...makePost('a', 'draft'), title: 'Alpha launch' },
-      { ...makePost('b', 'review'), title: 'Beta teaser' },
-    ];
-    expect(planList(posts, 'beta', 'updated').map((p) => p.id)).toEqual(['b']);
-  });
-
-  it('the Plan counter is the week posts plus EVERY undated post', () => {
-    const posts: PipelinePost[] = [
-      { ...makePost('mon', 'draft'), target_date: '2026-09-07T00:00:00Z' },
-      { ...makePost('wed', 'draft'), target_date: '2026-09-09T00:00:00Z' },
-      { ...makePost('later', 'draft'), target_date: '2026-11-20T00:00:00Z' },
-      ...Array.from({ length: 9 }, (_unused, i) => makePost(`u${i}`, 'draft')),
-    ];
-    const bounds = weekBounds({ now, timeZone: 'UTC', weekStartDay: 1, offset: 0 });
-    const grouping = groupByCivilDay(posts, bounds.days, 'UTC');
-    // 2 dated in the week + 9 undated; the post dated outside the week is not counted,
-    // and the undated block's display cap never trims the total.
-    expect(planCount(grouping, bounds.days)).toBe(11);
-    expect(postCountLabel(planCount(grouping, bounds.days))).toBe('11 posts');
-  });
-});
-
-describe('the Plan URL params', () => {
-  const now = new Date('2026-09-09T12:00:00Z');
-  const zone = { now, timeZone: 'UTC', weekStartDay: 1 };
-
-  it('?view=plan opens Plan; anything else opens the Review default', () => {
-    expect(initialStage(new URLSearchParams('view=plan'))).toBe('plan');
-    expect(initialStage(new URLSearchParams('view=plan&week=2026-09-14'))).toBe('plan');
-    expect(initialStage(new URLSearchParams(''))).toBe('review');
-    expect(initialStage(new URLSearchParams('view=board'))).toBe('review');
-  });
-
-  it('?week derives the offset from the workspace week bounds', () => {
-    // This week starts on Monday the 7th with a Monday week start.
-    expect(weekOffsetFromParam('2026-09-07', zone)).toBe(0);
-    expect(weekOffsetFromParam('2026-09-14', zone)).toBe(1);
-    expect(weekOffsetFromParam('2026-08-31', zone)).toBe(-1);
-    expect(weekOffsetFromParam('2026-10-05', zone)).toBe(4);
-    // A Sunday-start workspace anchors a week earlier, so the same param shifts.
-    expect(weekOffsetFromParam('2026-09-13', { ...zone, weekStartDay: 0 })).toBe(1);
-  });
-
-  it('ignores an absent, malformed, impossible or half-week param (offset 0)', () => {
-    expect(weekOffsetFromParam(null, zone)).toBe(0);
-    expect(weekOffsetFromParam('', zone)).toBe(0);
-    expect(weekOffsetFromParam('nonsense', zone)).toBe(0);
-    expect(weekOffsetFromParam('2026-9-7', zone)).toBe(0);
-    expect(weekOffsetFromParam('2026-02-31', zone)).toBe(0);
-    // A day that is not a week start is not half a week away: it is ignored.
-    expect(weekOffsetFromParam('2026-09-10', zone)).toBe(0);
-  });
-
-  it('writes view=plan and week only where they belong, dropping them elsewhere', () => {
-    const plan = planParams(new URLSearchParams(''), { stage: 'plan', weekStart: '2026-09-14' });
-    expect(plan.get('view')).toBe('plan');
-    expect(plan.get('week')).toBe('2026-09-14');
-
-    // Offset 0 carries no week param at all.
-    const thisWeek = planParams(plan, { stage: 'plan', weekStart: null });
-    expect(thisWeek.get('view')).toBe('plan');
-    expect(thisWeek.get('week')).toBeNull();
-
-    // Any other chip clears both.
-    const board = planParams(plan, { stage: 'review', weekStart: '2026-09-14' });
-    expect(board.get('view')).toBeNull();
-    expect(board.get('week')).toBeNull();
-  });
-
-  it('leaves every unrelated param on the URL untouched and never mutates the input', () => {
-    const current = new URLSearchParams('asset=a1&view=plan&week=2026-09-14');
-    const next = planParams(current, { stage: 'all', weekStart: null });
-    expect(next.get('asset')).toBe('a1');
-    expect(current.get('view')).toBe('plan');
-    expect(current.get('week')).toBe('2026-09-14');
-  });
-
-  it('round-trips: a week written by the arrows reads back as the same offset', () => {
-    for (const offset of [-3, -1, 0, 2, 7]) {
-      const start = weekBounds({ ...zone, offset }).start;
-      const params = planParams(new URLSearchParams(''), {
-        stage: 'plan',
-        weekStart: offset === 0 ? null : start,
-      });
-      expect(weekOffsetFromParam(params.get('week'), zone)).toBe(offset);
+  it('is the board on desktop and the feed on a phone for every chip (no Plan week)', () => {
+    for (const stage of [...STAGES, 'all', 'plan']) {
+      expect(findAll(surface(stage, true), (el) => el.type === PipelineBoard)).toHaveLength(1);
+      expect(findAll(surface(stage, false), (el) => el.type === PipelineFeed)).toHaveLength(1);
     }
-  });
-});
-
-describe('the set-date surface wiring', () => {
-  it('a client sees no calendar button; the agency side does', () => {
-    const props = (canSetDate: boolean): { canSetDate: boolean } =>
-      findAll(
-        pipelineSurface({
-          role: 'agency',
-          stage: 'plan',
-          isDesktop: true,
-          sorted: [],
-          planPosts: [],
-          grouped: groupByStage([], STAGES),
-          timeZone: 'UTC',
-          weekStartDay: 1,
-          weekOffset: 0,
-          onWeekOffsetChange: () => {},
-          canSetDate,
-          onSetDate: () => {},
-          onAddOnDay: () => {},
-          sheetOpen: false,
-          cache: {} as unknown as PresignCache,
-          presignEnabled: false,
-          workspaceKey: null,
-          onViewAll: () => {},
-          onMovePost: () => {},
-          onLongPressPost: () => {},
-        }),
-        (el) => el.type === PlanWeek,
-      )[0]!.props as { canSetDate: boolean };
-    // isAgencySide(role) is what the page passes; a client role resolves false.
-    expect(props(false).canSetDate).toBe(false);
-    expect(props(true).canSetDate).toBe(true);
-  });
-});
-
-describe('runSetTargetDate', () => {
-  function setDateHarness(over: Partial<SetTargetDateDeps> = {}): {
-    deps: SetTargetDateDeps;
-    writes: { input: PostUpdateInput; traceId?: string }[];
-    toasts: string[];
-    closed: () => number;
-    reloads: () => number;
-  } {
-    const writes: { input: PostUpdateInput; traceId?: string }[] = [];
-    const toasts: string[] = [];
-    let closed = 0;
-    let reloads = 0;
-    const deps: SetTargetDateDeps = {
-      client: {} as Client,
-      postId: 'p1',
-      timeZone: 'Asia/Kolkata',
-      newTrace: () => 'trace-1',
-      postUpdate: (_client, input, traceId) => {
-        writes.push({ input, ...(traceId !== undefined ? { traceId } : {}) });
-        return Promise.resolve({ ok: true, data: 'p1' } satisfies Result<string>);
-      },
-      onClose: () => {
-        closed += 1;
-      },
-      reload: () => {
-        reloads += 1;
-        return Promise.resolve();
-      },
-      toast: (message) => toasts.push(message),
-      ...over,
-    };
-    return { deps, writes, toasts, closed: () => closed, reloads: () => reloads };
-  }
-
-  it('success: writes noon-in-zone for the picked day, closes, and reloads ONCE', async () => {
-    const h = setDateHarness();
-    await runSetTargetDate(h.deps, '2026-09-10');
-
-    expect(h.writes).toHaveLength(1);
-    expect(h.writes[0]!.input).toEqual({
-      postId: 'p1',
-      targetDate: civilNoonInZoneIso('2026-09-10', 'Asia/Kolkata'),
-    });
-    // The stored instant is 12:00 IST, not UTC midnight (which would misfile it).
-    expect(h.writes[0]!.input.targetDate).toBe('2026-09-10T06:30:00.000Z');
-    // The trace id is explicit on every write, never inferred.
-    expect(h.writes[0]!.traceId).toBe('trace-1');
-    expect(h.closed()).toBe(1);
-    expect(h.reloads()).toBe(1);
-    expect(h.toasts).toEqual([]);
-  });
-
-  it('a cleared date writes an explicit null', async () => {
-    const h = setDateHarness();
-    await runSetTargetDate(h.deps, null);
-    expect(h.writes[0]!.input).toEqual({ postId: 'p1', targetDate: null });
-    expect(h.closed()).toBe(1);
-  });
-
-  it('failure: toasts the retry line, keeps the sheet open, and never reloads', async () => {
-    const h = setDateHarness({
-      postUpdate: () =>
-        Promise.resolve({
-          ok: false,
-          error: { code: 'forbidden_role', message: 'forbidden_role' },
-        } satisfies Result<string>),
-    });
-    await runSetTargetDate(h.deps, '2026-09-10');
-    expect(h.toasts).toEqual([SET_DATE_FALLBACK_MESSAGE]);
-    expect(h.closed()).toBe(0);
-    expect(h.reloads()).toBe(0);
-  });
-
-  it('a thrown proc is swallowed into the same toast', async () => {
-    const h = setDateHarness({ postUpdate: () => Promise.reject(new Error('network down')) });
-    // Must not reject: the catch turns the throw into a toast.
-    await runSetTargetDate(h.deps, '2026-09-10');
-    expect(h.toasts).toEqual([SET_DATE_FALLBACK_MESSAGE]);
-    expect(h.closed()).toBe(0);
-    expect(h.reloads()).toBe(0);
   });
 });
 

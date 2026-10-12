@@ -494,24 +494,20 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
     expect(await status()).toBe('waiting');
   });
 
-  it('a post item carries a target_date (plan_items_target_date_concept_only dropped 12 Oct)', async () => {
-    // 20261012120000_plan_item_days: every item holds its plan day. No row is
-    // inserted here (an extra post item would change the draft-row cases).
+  it('a post item carries no target_date (plan_items_target_date_concept_only, part 2b)', async () => {
+    // 20261012190000_plan_part_2b: a post slot's day is posts.target_date; the
+    // CHECK is back. No row is inserted here (an extra post item would change
+    // the draft-row cases).
     const updateErr = postgresError(
       `update public.plan_items set target_date = '2026-11-05' where id = '${clientPostItemId}'`,
     );
-    expect(updateErr).toBe('');
+    expect(updateErr).toMatch(/plan_items_target_date_concept_only/);
     const res = await as(agency)
       .from('plan_items')
       .select('target_date')
       .eq('id', clientPostItemId);
     expect(res.error).toBeNull();
-    expect(res.data?.[0]?.target_date).toBe('2026-11-05');
-    expect(
-      postgresError(
-        `update public.plan_items set target_date = null where id = '${clientPostItemId}'`,
-      ),
-    ).toBe('');
+    expect(res.data?.[0]?.target_date).toBeNull();
   });
 
   it('a client member calling plan_concept_add with a date is refused (forbidden_role)', async () => {
@@ -563,7 +559,8 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
     expect(row?.item_id).toBe(itemId);
     expect(row?.post_number).toBe(post.data.number);
     expect(row?.title).toBe(post.data.title);
-    expect(new Date(row?.target_date ?? '').toISOString()).toBe('2026-11-18T00:00:00.000Z');
+    // Part 2b: the post's own target_date (read in the workspace zone by the app).
+    expect(new Date(row?.target_date ?? '').toISOString()).toBe('2026-11-18T09:30:00.000Z');
     // The review post in the same plan is not a draft, so it is not listed.
     expect(rows.map((r) => r.item_id)).not.toContain(clientPostItemId);
     // The post itself stays hidden from the client.

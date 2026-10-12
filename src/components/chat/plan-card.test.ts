@@ -6,8 +6,6 @@ import {
   clientApproveConfirm,
   defaultPlanRange,
   draftProblem,
-  draftsButtonShown,
-  teamPlanBlocked,
   NO_DATE_LABEL,
   itemDateLabel,
   itemKindLabel,
@@ -15,7 +13,6 @@ import {
   planChips,
   planProgress,
   planRangeLabel,
-  planSharedLine,
   progressLabel,
   progressPercent,
 } from '@/components/chat/plan-card';
@@ -78,16 +75,23 @@ const MIXED = bundle(
 
 describe('plan progress', () => {
   it('counts client reviews on concepts and post slots; stages and team reviews never count', () => {
-    expect(planProgress(MIXED)).toEqual({ approved: 2, teamApproved: 1, total: 5, changes: 1 });
-    expect(progressLabel(planProgress(MIXED), 'client')).toBe(
-      '2 of 5 approved by client · 1 change asked',
-    );
+    expect(planProgress(MIXED)).toEqual({
+      approved: 2,
+      teamApproved: 1,
+      total: 5,
+      changes: 1,
+      side: 'client',
+    });
+    // An Open plan: "Client X of N" for every viewer (no changes part, no team count).
+    for (const side of ['agency', 'client', 'unknown'] as const) {
+      expect(progressLabel(planProgress(MIXED), side)).toBe('Client 2 of 5');
+    }
     expect(progressPercent(planProgress(MIXED))).toBe(40);
   });
 
   it('no changes: the label stops after the approvals; an empty plan is 0%', () => {
     const empty = bundle([]);
-    expect(progressLabel(planProgress(empty), 'client')).toBe('0 of 0 approved by client');
+    expect(progressLabel(planProgress(empty), 'client')).toBe('Client 0 of 0');
     expect(progressPercent(planProgress(empty))).toBe(0);
     const two = bundle(
       [item({ id: 'a' }), item({ id: 'b' })],
@@ -96,20 +100,18 @@ describe('plan progress', () => {
         { item_id: 'b', side: 'client', status: 'changes' },
       ],
     );
-    expect(progressLabel(planProgress(two), 'client')).toBe(
-      '0 of 2 approved by client · 2 changes asked',
-    );
+    expect(progressLabel(planProgress(two), 'client')).toBe('Client 0 of 2');
   });
 });
 
 describe('plan chips and forward', () => {
-  it('counts concepts and posts; "Agency only" only on a team plan', () => {
+  it('counts concepts and posts; "Draft" only on a Draft (team) plan', () => {
     expect(planChips(MIXED).map((c) => c.label)).toEqual(['3 concepts', '2 posts']);
     const team = { ...MIXED, plan: { ...MIXED.plan, audience: 'team' as const } };
     expect(planChips(team)).toEqual([
       { label: '3 concepts', tone: 'neutral' },
       { label: '2 posts', tone: 'neutral' },
-      { label: 'Agency only', tone: 'warn' },
+      { label: 'Draft', tone: 'warn' },
     ]);
     expect(planChips(bundle([item({ id: 'x' })])).map((c) => c.label)).toEqual([
       '1 concept',
@@ -137,12 +139,15 @@ describe('plan chips and forward', () => {
 });
 
 describe('rows and labels', () => {
-  it('agency sees Agency and Client pills; a client sees one pill with no side prefix', () => {
+  it('agency sees Agency and Client pills on a Draft plan, Client alone on an Open plan', () => {
     const c1 = MIXED.items[0] as PlanItemRow;
-    expect(itemPills(MIXED, c1, 'agency').map((p) => p.label)).toEqual([
+    const draft = { ...MIXED, plan: { ...MIXED.plan, audience: 'team' as const } };
+    expect(itemPills(draft, c1, 'agency').map((p) => p.label)).toEqual([
       'Agency · Waiting',
       'Client · Approved',
     ]);
+    // Team reviews are never shown on an Open plan.
+    expect(itemPills(MIXED, c1, 'agency').map((p) => p.label)).toEqual(['Client · Approved']);
     expect(itemPills(MIXED, c1, 'client').map((p) => p.label)).toEqual(['Approved']);
     // A post's pill follows its client slot review, not its stage.
     const p1 = MIXED.items[3] as PlanItemRow;
@@ -161,12 +166,10 @@ describe('rows and labels', () => {
     expect(itemKindLabel(MIXED.items, MIXED.items[4] as PlanItemRow)).toBe('Post 2 of 2');
   });
 
-  it('the range reads "12 Oct - 18 Oct" (no em-dash) and the shared line per side', () => {
+  it('the range reads "12 Oct - 18 Oct" (no em-dash)', () => {
     const range = planRangeLabel('2026-10-12', '2026-10-18');
     expect(range).toBe('12 Oct - 18 Oct');
     expect(range).not.toContain(String.fromCharCode(0x2014));
-    expect(planSharedLine('agency', 'Manisha Thakur')).toBe('Shared with Manisha Thakur');
-    expect(planSharedLine('client', 'Chitra')).toBe('Shared by Chitra');
     expect(clientApproveConfirm('Reel')).toBe(
       'Approve "Reel"? The agency will go ahead and make this into a post.',
     );
@@ -201,32 +204,27 @@ describe('New plan defaults and checks', () => {
     expect(draftProblem({ ...base, endsOn: '2027-01-13' })).toBe('too_long');
     expect(draftProblem({ ...base, endsOn: '2027-01-12' })).toBeNull();
   });
-
-  it('"Add drafts" only for a team plan in a chat known to have no client', () => {
-    expect(draftsButtonShown('team', false)).toBe(true);
-    expect(draftsButtonShown('team', true)).toBe(false);
-    expect(draftsButtonShown('team', null)).toBe(false);
-    expect(draftsButtonShown('client', false)).toBe(false);
-  });
 });
 
-describe('team only plan gating (F1)', () => {
-  it('blocks a Team only plan unless the chat is known to have no client', () => {
-    expect(teamPlanBlocked('team', true)).toBe(true);
-    expect(teamPlanBlocked('team', null)).toBe(true);
-    expect(teamPlanBlocked('team', false)).toBe(false);
-    expect(teamPlanBlocked('client', true)).toBe(false);
-    expect(teamPlanBlocked('client', null)).toBe(false);
+describe('Create plan (item 1)', () => {
+  const src = readFileSync(
+    fileURLToPath(new URL('./PlanComposeScreen.tsx', import.meta.url)),
+    'utf8',
+  );
+  it('has no audience toggle or hints; every new plan is a Draft (team)', () => {
+    expect(src).not.toMatch(/data-plan-audience|AUDIENCE_HINTS|Who can see it/);
+    expect(src).toContain("export const NEW_PLAN_AUDIENCE = 'team';");
+    expect(src).toContain('audience: NEW_PLAN_AUDIENCE');
   });
-
-  it('the screen disables Share, shows the line and never runs the share when blocked', () => {
-    const src = readFileSync(
-      fileURLToPath(new URL('./PlanComposeScreen.tsx', import.meta.url)),
-      'utf8',
-    );
-    expect(src).toContain('if (busy || problem !== null || teamBlocked) return;');
-    expect(src).toContain('disabled={busy || problem !== null || teamBlocked}');
-    expect(src).toContain('{TEAM_PLAN_CLIENT_CHAT}');
+  it('drafts are always allowed in the picker; the footer reads Create plan', () => {
+    expect(src).toContain('data-plan-add-drafts');
+    expect(src).not.toMatch(/showDrafts|teamBlocked/);
+    expect(src).toContain('channelHasClient={false}');
+    expect(src).toContain('CREATE_PLAN_LABEL');
+  });
+  it('never sends a card to chat: no chat_plan_share, no share step', () => {
+    expect(src).not.toMatch(/chatPlanShare|share: /);
+    expect(src).toContain('props.onCreated(planId, false)');
   });
 });
 
@@ -251,15 +249,20 @@ describe('both progress counts (D1)', () => {
       { post1: 'approved', post2: 'review' },
     );
     const p = planProgress(b);
-    expect(p).toEqual({ approved: 2, teamApproved: 3, total: 4, changes: 0 });
-    expect(progressLabel(p, 'agency')).toBe('Agency 3 of 4 · Client 2 of 4');
+    expect(p).toEqual({ approved: 2, teamApproved: 3, total: 4, changes: 0, side: 'client' });
+    // Open: the client side for everyone, never the team count.
+    expect(progressLabel(p, 'agency')).toBe('Client 2 of 4');
     expect(progressPercent(p)).toBe(50);
+    // Draft: the team side.
+    const draft = planProgress({ ...b, plan: { ...b.plan, audience: 'team' } });
+    expect(progressLabel(draft, 'agency')).toBe('Team 3 of 4');
+    expect(progressPercent(draft)).toBe(75);
   });
 
   it('a missing review row reads as waiting on both sides', () => {
     const b = bundle([item({ id: 'a' }), item({ id: 'b' })]);
-    expect(planProgress(b)).toEqual({ approved: 0, teamApproved: 0, total: 2, changes: 0 });
-    expect(progressLabel(planProgress(b), 'agency')).toBe('Agency 0 of 2 · Client 0 of 2');
+    expect(planProgress(b)).toMatchObject({ approved: 0, teamApproved: 0, total: 2, changes: 0 });
+    expect(progressLabel(planProgress(b), 'agency')).toBe('Client 0 of 2');
   });
 
   it('an unreadable post counts in N and is never client approved', () => {
@@ -271,17 +274,17 @@ describe('both progress counts (D1)', () => {
     expect(planProgress(b)).toMatchObject({ approved: 1, total: 2 });
   });
 
-  it('the changes part follows the counts on the agency side when K > 0', () => {
-    expect(progressLabel(planProgress(MIXED), 'agency')).toBe(
-      'Agency 1 of 5 · Client 2 of 5 · 1 change asked',
-    );
+  it('the old two-count strings are gone', () => {
+    const src = readFileSync(fileURLToPath(new URL('./plan-card.ts', import.meta.url)), 'utf8');
+    expect(src).not.toContain('approved by client`');
+    expect(src).not.toMatch(/Agency \$\{/);
   });
 
-  it('a client (or an unknown side) never sees a team count', () => {
-    for (const side of ['client', 'unknown'] as const) {
+  it('nobody sees a team count on an Open plan', () => {
+    for (const side of ['agency', 'client', 'unknown'] as const) {
       const label = progressLabel(planProgress(MIXED), side);
-      expect(label).toBe('2 of 5 approved by client · 1 change asked');
-      expect(label).not.toContain('Agency');
+      expect(label).toBe('Client 2 of 5');
+      expect(label).not.toMatch(/Agency|Team/);
     }
   });
 
@@ -291,15 +294,17 @@ describe('both progress counts (D1)', () => {
   });
 });
 
-describe('date labels (D3)', () => {
+describe('date labels (D3, item 8)', () => {
   const posts = bundle([
     item({ id: 'cd', target_date: '2026-10-14' }),
     item({ id: 'cu' }),
-    item({ id: 'pd', kind: 'post', title: null, post_id: 'post1', target_date: '2026-10-15' }),
+    // A stale plan_items.target_date on a post slot never places it.
+    item({ id: 'pd', kind: 'post', title: null, post_id: 'post1', target_date: '2026-10-11' }),
     item({ id: 'pu', kind: 'post', title: null, post_id: 'post2' }),
   ]);
   posts.postInfo = {
-    post1: { title: 'A', target_date: '2026-10-13T08:00:00+00:00' },
+    // 12:00 Asia/Kolkata on 15 Oct.
+    post1: { title: 'A', target_date: '2026-10-15T06:30:00+00:00' },
     post2: { title: 'B', target_date: null },
   };
   const at = (id: string): PlanItemRow => posts.items.find((i) => i.id === id) as PlanItemRow;
@@ -311,8 +316,14 @@ describe('date labels (D3)', () => {
     expect(itemDateLabel(posts, at('cu'))).toEqual({ label: NO_DATE_LABEL, dated: false });
     expect(NO_DATE_LABEL).toBe('No date');
   });
-  it('a post shows its plan day (not its post\'s own date); without one "No date"', () => {
-    expect(itemDateLabel(posts, at('pd'))).toEqual({ label: '15 Oct', dated: true });
-    expect(itemDateLabel(posts, at('pu'))).toEqual({ label: NO_DATE_LABEL, dated: false });
+  it('a post slot shows its post\'s target_date in the zone; without one "No date"', () => {
+    expect(itemDateLabel(posts, at('pd'), 'Asia/Kolkata')).toEqual({
+      label: '15 Oct',
+      dated: true,
+    });
+    expect(itemDateLabel(posts, at('pu'), 'Asia/Kolkata')).toEqual({
+      label: NO_DATE_LABEL,
+      dated: false,
+    });
   });
 });

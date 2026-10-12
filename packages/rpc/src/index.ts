@@ -419,14 +419,21 @@ export function planItemsReorder(
 }
 
 /**
- * plan_item_move: the item's plan day (null = No date; inside the plan's dates
- * else 'date_outside_plan') plus the plan's full item order, as
- * plan_items_reorder takes it. The generated type cannot express the nullable
- * date, so p_target_date is widened here and passed through unchanged.
+ * plan_item_move, the 5-arg overload only (the 4-arg one stays on live as an
+ * unused wrapper): the item's plan day (null = No date; inside the plan's
+ * dates else 'date_outside_plan'), the plan's full item order as
+ * plan_items_reorder takes it, and p_keep_reviews (on a day change, true keeps
+ * the team and client reviews, false resets them). The generated type cannot
+ * express the nullable date, so p_target_date is widened here and passed
+ * through unchanged.
  */
-export type PlanItemMoveArgs = Omit<ProcArgs<'plan_item_move'>, 'p_target_date'> & {
+export interface PlanItemMoveArgs {
+  p_item_id: string;
   p_target_date: string | null;
-};
+  p_item_ids: string[];
+  p_keep_reviews: boolean;
+  p_trace_id: string;
+}
 export function planItemMove(
   client: Client,
   args: PlanItemMoveArgs,

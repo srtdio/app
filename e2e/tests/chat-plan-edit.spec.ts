@@ -81,7 +81,9 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   await expect(edit).toHaveText('Edit');
   const box = await edit.boundingBox();
   expectMinTouchTarget(box);
-  await expect(item.locator('[data-plan-pill="team"]')).toHaveText(/Approved/);
+  // An Open plan: the client's status only (team reviews are never shown there).
+  await expect(item.locator('[data-plan-pill="team"]')).toHaveCount(0);
+  await expect(item.locator('[data-plan-pill="client"]')).toHaveText(/Approved/);
   await page.waitForTimeout(300);
   await shot(page, 'edit-01-item-approved');
 
@@ -98,7 +100,7 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   await sheet.locator('[data-plan-concept-save]').click();
   await expect(sheet).toBeHidden();
   expect(edits.count()).toBe(0);
-  await expect(item.locator('[data-plan-pill="team"]')).toHaveText(/Approved/);
+  await expect(item.locator('[data-plan-pill="client"]')).toHaveText(/Approved/);
 
   // Title and date: one call, both reviews back to Waiting.
   await edit.click();
@@ -113,8 +115,12 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   expect(edits.count()).toBe(1);
   await expect(item.getByRole('heading', { name: 'Lamp lighting reel v2' })).toBeVisible();
   await expect(item.locator('[data-plan-item-date]')).toHaveText('11 Oct');
-  await expect(item.locator('[data-plan-pill="team"]')).toHaveText(/Waiting/);
   await expect(item.locator('[data-plan-pill="client"]')).toHaveText(/Waiting/);
+  expect(
+    (network.world.tables.plan_item_reviews ?? [])
+      .filter((r) => r.item_id === target.id)
+      .map((r) => r.status),
+  ).toEqual(['waiting', 'waiting']);
   await expect(item.getByText(/^Concept 1 of \d+$/)).toBeVisible();
   const row = (network.world.tables.plan_items ?? []).find((i) => i.id === target.id);
   expect(row?.title).toBe('Lamp lighting reel v2');

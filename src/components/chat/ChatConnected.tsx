@@ -467,6 +467,18 @@ export function openingChannelId(input: {
 }
 
 /** The jump the open chat takes: the pending one only while it is for this chat. Pure. */
+/** The latest loaded message carrying a card for this plan, or null (Go to card). Pure. */
+export function latestPlanCardId(
+  messages: ReadonlyArray<{ id: string; sharedPlanIds?: string[] | undefined }>,
+  planId: string,
+): string | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m !== undefined && (m.sharedPlanIds ?? []).includes(planId)) return m.id;
+  }
+  return null;
+}
+
 export function initialJumpFor(
   pending: { channelId: string; messageId: string } | null,
   channelId: string,
@@ -1552,6 +1564,15 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     setOpenPlanItem(request.itemId);
     setPlanShown(true);
   }, []);
+  // "Go to card" on the Plan screen: the thread scrolls to that plan's latest
+  // loaded card and highlights it (seq repeats a same-card tap).
+  const [cardJump, setCardJump] = useState<{
+    channelId: string;
+    messageId: string;
+    seq: number;
+  } | null>(null);
+  // A chat switch drops it, so returning to that chat never jumps again.
+  useEffect(() => setCardJump(null), [selectedChannelId]);
   // The last one sent or cancelled: nothing left to show.
   useEffect(() => {
     if (scheduledSettled && scheduledRows.length === 0) setScheduledListOpen(false);
@@ -1964,6 +1985,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       onOpenPlanItem={onOpenPlanItem}
                       onNavigate={navigate}
                       locationKey={locationKey}
+                      cardJump={cardJump?.channelId === selected.channelId ? cardJump : null}
                       initialMessageId={initialJumpFor(pendingJump, selected.channelId)}
                       onInitialJumpTaken={() => setPendingJump(null)}
                       searchRequest={
@@ -2022,40 +2044,24 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                     open={planPicker !== null}
                     workspaceId={workspaceId}
                     workspaceName={workspace?.name ?? ''}
-                    channelId={selected.channelId}
-                    chatName={(shown ?? selected).title}
-                    group={isGroup}
                     timeZone={timeZone}
-                    hasClient={hasClient}
                     inChatPlanIds={planPicker?.inChat ?? NO_PLAN_IDS}
                     onClose={() => setPlanPicker(null)}
                     onNewPlan={() => setPlanComposeOpen(true)}
-                    onSent={(row, traceId) => {
-                      void thread.addSentRow(row, traceId);
-                      setPlanShares((prev) => ({
-                        channelId: row.channel_id,
-                        count: prev.count + 1,
-                      }));
-                    }}
+                    onOpenPlan={(planId) => onOpenPlan({ planId, senderName: '' })}
                   />
                 ) : null}
                 {!notesOpen ? (
                   <PlanComposeScreen
                     open={planComposeOpen}
                     workspaceId={workspaceId}
-                    channelId={selected.channelId}
                     timeZone={timeZone}
-                    channelHasClient={hasClient}
                     onClose={() => setPlanComposeOpen(false)}
-                    onShared={(row, traceId, stale) => {
-                      void thread.addSentRow(row, traceId);
-                      // A share from a form since closed only lands its row.
+                    onCreated={(planId, stale) => {
+                      // A create from a form since closed opens nothing.
                       if (stale) return;
                       setPlanComposeOpen(false);
-                      setPlanShares((prev) => ({
-                        channelId: row.channel_id,
-                        count: prev.count + 1,
-                      }));
+                      onOpenPlan({ planId, senderName: '' });
                     }}
                   />
                 ) : null}
@@ -2067,6 +2073,30 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                     {...(openPlanItem !== null ? { initialItemId: openPlanItem } : {})}
                     senderName={openPlan.senderName}
                     chatTitle={(shown ?? selected).title}
+                    chat={{
+                      channelId: selected.channelId,
+                      name: (shown ?? selected).title,
+                      hasClient,
+                      cardPlanIds: cardIds.planIds,
+                      onSent: (row, traceId) => {
+                        void thread.addSentRow(row, traceId);
+                        setPlanShares((prev) => ({
+                          channelId: row.channel_id,
+                          count: prev.count + 1,
+                        }));
+                      },
+                      onGoToCard: (planId) => {
+                        setPlanShown(false);
+                        const messageId = latestPlanCardId(threadMessages, planId);
+                        if (messageId !== null) {
+                          setCardJump((prev) => ({
+                            channelId: selected.channelId,
+                            messageId,
+                            seq: (prev?.seq ?? 0) + 1,
+                          }));
+                        }
+                      },
+                    }}
                     onClose={() => setPlanShown(false)}
                   />
                 ) : null}

@@ -18,10 +18,11 @@ import {
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Plan list: aligned layout, add to any day, drag and move. The agency adds a
-// concept or a post to a day (the post's own date stays), long-press drags a
-// row to another day (ticks reset) or within a day (the order persists),
-// moves or removes an item from its screen's overflow; a client sees the list
-// and ticks only. Runs in both colour schemes (the dark and light projects)
+// concept or a post to a day (a post's day is its post's target_date),
+// long-press drags a row to another day (ticks reset) or within a day (the
+// order persists), moves an item from its screen's overflow and removes it
+// with the screen's red "Remove from plan"; a client sees the list and ticks
+// only. Runs in both colour schemes (the dark and light projects)
 // on the iPhone viewport.
 
 const FILE_VERSION = '0190e100-0000-7000-8000-0000000000c1';
@@ -161,8 +162,8 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   );
   expect(added?.target_date).toBe('2026-10-14');
 
-  // Add, Pick a post: under that day; the post's own date is unchanged; posts
-  // already in the plan are not offered.
+  // Add, Pick a post: under that day (written onto the post itself, the slot
+  // carries no day); posts already in the plan are not offered.
   await dayBlock(plan, '2026-10-15').locator('[data-plan-add="2026-10-15"]').click();
   const thu = page.getByRole('dialog', { name: 'Add to Thu 15 Oct' });
   await thu.getByRole('button', { name: /Pick a post/ }).click();
@@ -174,9 +175,10 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   await expect(page.getByText('Added to Thu 15 Oct')).toBeVisible();
   await expect.poll(() => titlesOn(plan, '2026-10-15')).toEqual(['Friday reel']);
   const item = (network.world.tables.plan_items ?? []).find((i) => i.post_id === POST_IDS[1]);
-  expect(item?.target_date).toBe('2026-10-15');
+  expect(item?.target_date).toBeNull();
   const post = (network.world.tables.posts ?? []).find((p) => p.id === POST_IDS[1]);
-  expect(post?.target_date).toBe(ownDate);
+  expect(post?.target_date).toBe('2026-10-15T12:00:00Z');
+  expect(post?.target_date).not.toBe(ownDate);
 
   // Header "+": the same sheet with no day.
   await plus.click();
@@ -214,8 +216,13 @@ test('agency: long-press drag moves a Thu item to Wed and resets its ticks', asy
   await expect
     .poll(() => titlesOn(plan, '2026-10-14'))
     .toEqual(['Sweets flatlay', 'Lantern workshop']);
+  // A post slot moves by its post's date (12:00 in the workspace zone).
   const stored = (network.world.tables.plan_items ?? []).find((i) => i.id === moved.id);
-  expect(stored?.target_date).toBe('2026-10-14');
+  const movedPost = (network.world.tables.posts ?? []).find((p) => p.id === stored?.post_id);
+  expect(movedPost?.target_date).toBe('2026-10-14T12:00:00Z');
+  expect(
+    network.rpcCalls.filter((c) => c.name === 'plan_item_move').map((c) => c.args.p_keep_reviews),
+  ).toEqual([false]);
   const reviews = (network.world.tables.plan_item_reviews ?? []).filter(
     (r) => r.item_id === moved.id,
   );
@@ -281,7 +288,7 @@ test('agency: a reorder within a day persists after reload; Escape cancels with 
   expectClean(network);
 });
 
-test('agency: Move to another day and Remove from plan from the item overflow', async ({
+test('agency: Move to another day from the item overflow; Remove from plan is the red button', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -316,24 +323,33 @@ test('agency: Move to another day and Remove from plan from the item overflow', 
     )
     .toBe('2026-10-13');
 
+  // The overflow has no Remove row; the screen's red button does it.
   await more.click();
-  await page
-    .locator('[data-plan-item-actions]')
-    .getByRole('button', { name: /Remove from plan/ })
-    .click();
+  await expect(
+    page.locator('[data-plan-item-actions]').getByRole('button', { name: /Remove from plan/ }),
+  ).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  const remove = item.locator('[data-plan-remove]');
+  await remove.scrollIntoViewIfNeeded();
+  await expect(remove).toHaveText(/Remove from plan/);
+  expectMinTouchTarget(await remove.boundingBox());
+  await page.waitForTimeout(300);
+  await shot(page, 'move-04-remove-button');
+  await remove.click();
   await page.locator('[data-plan-remove-confirm]').click();
   await expect(page.getByText('Removed from plan')).toBeVisible();
   await expect(item).toBeHidden();
   await expect(plan.locator(`[data-plan-row="${target.id}"]`)).toHaveCount(0);
   expect(await titlesOn(plan, '2026-10-13')).toEqual(['Family portraits']);
 
-  // A post item: Move and Remove sit in the post view's own sheet.
+  // A post item: Move sits in the post view's own sheet; Remove is the button.
   await plan.locator(`[data-plan-row="${dated('Thank you note').id}"]`).click();
   await item.locator('[data-plan-more]').click();
   const postSheet = page.getByRole('dialog', { name: 'Post actions', exact: true });
   await expect(postSheet.getByRole('button', { name: /Move to another day/ })).toBeVisible();
-  await expect(postSheet.getByRole('button', { name: /Remove from plan/ })).toBeVisible();
+  await expect(postSheet.getByRole('button', { name: /Remove from plan/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
+  await expect(item.locator('[data-plan-remove]')).toHaveText(/Remove from plan/);
   expectClean(network);
 });
 
@@ -367,10 +383,11 @@ test('client: same list, no Add or +, long-press does nothing, no Move or Remove
   await expect(item).toBeVisible();
   await expect(item.locator('[data-plan-item-more]')).toHaveCount(0);
   await expect(page.getByText('Move to another day')).toHaveCount(0);
+  await expect(item.locator('[data-plan-remove]')).toHaveCount(0);
   expectClean(network);
 });
 
-test('client: a draft row sits under the plan day it was moved to, not its own date', async ({
+test("client: a draft row sits under its post's target_date read in the workspace zone", async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -382,12 +399,15 @@ test('client: a draft row sits under the plan day it was moved to, not its own d
   const hidden = (t.hidden_plan_items ?? []).find((i) => i.id === DRAFT_ITEM_ID);
   const post = (t.posts ?? []).find((p) => p.id === hidden?.post_id);
   if (plan === undefined || hidden === undefined || post === undefined) throw new Error('fixture');
-  // The agency moved it to the plan's fifth day; the post's own date differs.
+  // The agency moved it to the plan's fifth day: plan_item_move wrote the
+  // post's date (12:00 in the zone). A stale plan_items.target_date (the old
+  // day) never places it.
   const start = new Date(`${String(plan.starts_on)}T00:00:00Z`).getTime();
   const planDay = new Date(start + 5 * 24 * 3_600_000).toISOString().slice(0, 10);
   const ownDay = String(post.target_date).slice(0, 10);
   expect(ownDay).not.toBe(planDay);
-  hidden.target_date = planDay;
+  hidden.target_date = ownDay;
+  post.target_date = `${planDay}T12:00:00Z`;
 
   await openChat(page, PEER_NAME);
   const list = await openPlan(page, DRAFT_PLAN_ID);

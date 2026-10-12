@@ -1,30 +1,33 @@
 // An item's plan actions (agency only), outside the embedded post view's
-// own sheet: the concept overflow (Move to another day, Edit concept, Remove
-// from plan), the day list Move opens (each plan day and No date, the
-// current one marked) and the Remove confirm. The item screen does the
-// writes; these sheets only ask.
+// own sheet: the concept overflow (Move to another day, Edit concept), the
+// day list Move opens (each plan day and No date, the current one marked),
+// the Remove confirm (the item screen's red "Remove from plan" button opens
+// it) and "Keep the approval?" for a move of an Open plan's client-approved
+// slot. The item screen does the writes; these sheets only ask.
 
 import { createContext } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
-import { IconCalendar, IconEdit, IconTrash } from '@/components/ui/icons';
+import { IconCalendar, IconCheck, IconEdit, IconTrash } from '@/components/ui/icons';
+import { KEEP_APPROVAL_NO, KEEP_APPROVAL_YES } from '@/components/chat/plan-card';
 import { cn } from '@/lib/cn';
 
 /**
- * A plan item's rows for the embedded post view's own sheet (agency only),
- * provided by the item screen around it: Move to another day and Remove from
- * plan. Absent everywhere else, so the pipeline's sheet is unchanged.
+ * A plan item's row for the embedded post view's own sheet (agency only),
+ * provided by the item screen around it: Move to another day. (Remove from
+ * plan is the item screen's own button.) Absent everywhere else, so the
+ * pipeline's sheet is unchanged.
  */
 export interface PostSheetPlanRows {
   onMove: () => void;
-  onRemove: () => void;
 }
 export const PostSheetPlanRowsContext = createContext<PostSheetPlanRows | null>(null);
 
-/** The row labels, shared with the post view's sheet. */
+/** The row label, shared with the post view's sheet. */
 export const MOVE_ROW_LABEL = 'Move to another day';
+/** The item screen's red button. */
 export const REMOVE_ROW_LABEL = 'Remove from plan';
 
 /** One day the Move sheet offers: its day ("YYYY-MM-DD", null = No date) and label. */
@@ -33,13 +36,12 @@ export interface MoveDay {
   label: string;
 }
 
-/** A concept's overflow: Move, Edit concept, Remove. */
+/** A concept's overflow: Move, Edit concept. */
 export function PlanConceptActionsSheet(props: {
   open: boolean;
   title: string;
   onMove: () => void;
   onEdit: () => void;
-  onRemove: () => void;
   onClose: () => void;
 }): ReactElement {
   return (
@@ -51,12 +53,6 @@ export function PlanConceptActionsSheet(props: {
           onClick={props.onMove}
         />
         <ActionRow icon={<IconEdit size={18} />} label="Edit concept" onClick={props.onEdit} />
-        <ActionRow
-          danger
-          icon={<IconTrash size={18} />}
-          label={REMOVE_ROW_LABEL}
-          onClick={props.onRemove}
-        />
       </div>
     </Sheet>
   );
@@ -128,5 +124,65 @@ export function PlanRemoveSheet(props: {
         </Button>
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * "Slot approved by {name}" / "Moving it to {day}. Keep the approval?": an
+ * Open plan's client-approved slot changing day. "Yes, keep it" moves keeping
+ * the reviews, "No, ask again" moves resetting them; closing the sheet cancels
+ * the move. The sheet moves on translateY only.
+ */
+export function PlanKeepApprovalSheet(props: {
+  open: boolean;
+  title: string;
+  body: string;
+  onKeep: (keep: boolean) => void;
+  onCancel: () => void;
+}): ReactElement {
+  return (
+    <Sheet open={props.open} onClose={props.onCancel} title={props.title}>
+      <div data-plan-keep-sheet="" className="flex flex-col gap-3">
+        <p className="text-[15px] leading-[21px] text-fg-2">{props.body}</p>
+        <Button
+          variant="primary"
+          size="lg"
+          data-plan-keep-yes=""
+          className="min-h-[44px]"
+          onClick={() => props.onKeep(true)}
+        >
+          <IconCheck size={18} />
+          {KEEP_APPROVAL_YES}
+        </Button>
+        <Button
+          size="lg"
+          data-plan-keep-no=""
+          className="min-h-[44px]"
+          onClick={() => props.onKeep(false)}
+        >
+          {KEEP_APPROVAL_NO}
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
+
+/**
+ * The item screen's red "Remove from plan" (agency side), at the bottom of
+ * the item; it opens the Remove confirm. 44px tall.
+ */
+export function RemoveFromPlanButton(props: { busy: boolean; onClick: () => void }): ReactElement {
+  return (
+    <Button
+      variant="danger"
+      size="lg"
+      data-plan-remove=""
+      className="min-h-[44px] w-full"
+      disabled={props.busy}
+      onClick={props.onClick}
+    >
+      <IconTrash size={18} />
+      {REMOVE_ROW_LABEL}
+    </Button>
   );
 }

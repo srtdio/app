@@ -1,28 +1,20 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-import type { Result } from '@srtdio/rpc';
 import {
-  AUDIENCE_HINTS,
   DRAFT_LABEL,
   DRAFT_NOT_READY,
   HAS_CLIENT_TAG,
   IN_THIS_CHAT_LABEL,
-  SHARE_FIRST_CONFIRM,
-  SHARE_FIRST_TITLE,
-  SHARE_FIRST_UNDO,
+  OPEN_FOR_CLIENT_FIRST,
   TEAM_APPROVE_CONFIRM,
   TEAM_ONLY_LABEL,
-  draftCount,
   draftLocked,
+  forwardBlocked,
   isDraftPost,
   itemPills,
   pickerChips,
   planProgress,
-  planShareDecision,
-  shareFirstAudience,
-  shareFirstBody,
-  shareFirstDrafts,
   summaryHasClient,
 } from '@/components/chat/plan-card';
 import { pickerRows } from '@/components/chat/PlanPickerSheet';
@@ -41,8 +33,6 @@ import {
   type PlanRow,
 } from '@/lib/chat/plans';
 import { SEGMENT_PILL, openPlans } from '@/lib/chat/status-bar';
-import { shareWithClientThenSend, type SharePlanResult } from '@/lib/chat/share-plan';
-import type { ChatMessageRow } from '@/lib/chat/thread';
 
 function plan(id: string, over: Partial<PlanRow> = {}): PlanRow {
   return {
@@ -93,21 +83,30 @@ const DRAFT: PlanDraftRow = {
   target_date: '2026-10-14',
 };
 
-describe('share decision', () => {
-  it('an Agency only plan into a chat known to have a client asks first; else sends', () => {
-    expect(planShareDecision('team', true)).toBe('confirm');
-    expect(planShareDecision('team', false)).toBe('send');
-    // Unknown members: sent, and the server's refusal opens the confirm.
-    expect(planShareDecision('team', null)).toBe('send');
-    expect(planShareDecision('client', true)).toBe('send');
-    expect(planShareDecision('client', null)).toBe('send');
+describe('forward rule (item 4)', () => {
+  it('a Draft plan into a chat known to have a client is refused before any write', () => {
+    expect(forwardBlocked('team', true)).toBe(true);
+    expect(forwardBlocked('team', false)).toBe(false);
+    // Unknown members: sent, and the server's refusal says the same.
+    expect(forwardBlocked('team', null)).toBe(false);
+    expect(forwardBlocked('client', true)).toBe(false);
+    expect(OPEN_FOR_CLIENT_FIRST).toBe('Open the plan for client first.');
   });
 
-  it('the refusal that opens the confirm is plan_not_shared_with_client', () => {
+  it('the refusal is plan_not_shared_with_client and reads "Open the plan for client first."', () => {
     expect(refusedForClient('P0001: plan_not_shared_with_client')).toBe(true);
     expect(refusedForClient('plan not available')).toBe(false);
     expect(shareFailureCopy('plan_not_shared_with_client')).toBe(TEAM_PLAN_CLIENT_CHAT);
-    expect(TEAM_PLAN_CLIENT_CHAT).toBe("Agency only plans can't be sent in chats with clients.");
+    expect(TEAM_PLAN_CLIENT_CHAT).toBe(OPEN_FOR_CLIENT_FIRST);
+  });
+
+  it('Forward never opens a share-first confirm: PlanShareConfirm is gone', () => {
+    expect(existsSync(fileURLToPath(new URL('./PlanShareConfirm.tsx', import.meta.url)))).toBe(
+      false,
+    );
+    const card = readFileSync(fileURLToPath(new URL('./PlanCard.tsx', import.meta.url)), 'utf8');
+    expect(card).not.toMatch(/ShareFirstFlow|PlanShareConfirm|planShareWithClient/);
+    expect(card).toContain('toast.show({ title: OPEN_FOR_CLIENT_FIRST })');
   });
 
   it('a chat has a client when known from loaded data: a DM with a client', () => {
@@ -117,99 +116,6 @@ describe('share decision', () => {
     expect(summaryHasClient({ channelType: 'dm' })).toBeNull();
     expect(summaryHasClient({ channelType: 'group', role: null })).toBeNull();
     expect(HAS_CLIENT_TAG).toBe('Has client');
-  });
-});
-
-describe('"Share with client first?" copy', () => {
-  it('names the plan, the chat and the workspace; drafts only when there are any', () => {
-    expect(SHARE_FIRST_TITLE).toBe('Share with client first?');
-    expect(SHARE_FIRST_CONFIRM).toBe('Share with client and send');
-    expect(shareFirstBody('Week 12', 'Priya', false)).toBe(
-      'Week 12 is Agency only. Priya has a client in it, so the plan has to be shared with the client to send it here.',
-    );
-    expect(shareFirstBody('Week 12', 'Launch crew', true)).toContain(
-      'Launch crew has clients in it',
-    );
-    expect(shareFirstAudience('Harness Studio')).toBe(
-      "Every client in Harness Studio will be able to open it, from any chat it's in.",
-    );
-    expect(shareFirstDrafts(0)).toBeNull();
-    expect(shareFirstDrafts(1)).toBe(
-      "1 draft shows to clients as name only. They can't open it until it goes to review.",
-    );
-    expect(shareFirstDrafts(3)).toMatch(/^3 drafts show to clients as name only\./);
-    expect(SHARE_FIRST_UNDO).toBe("This can't be undone. The plan stays shared with client.");
-  });
-});
-
-describe('share with client, then send', () => {
-  const row = { id: 'm1', channel_id: 'c1' } as unknown as ChatMessageRow;
-  const ok = <T>(data: T): Result<T> => ({ ok: true, data });
-  const bad = (message: string): Result<never> => ({
-    ok: false,
-    error: { code: 'unknown', message },
-  });
-
-  it('runs both steps in order with one trace id', async () => {
-    const calls: string[] = [];
-    const result = await shareWithClientThenSend(
-      {
-        shareWithClient: async (planId, traceId) => {
-          calls.push(`client:${planId}:${traceId}`);
-          return ok(null);
-        },
-        send: async (traceId) => {
-          calls.push(`send:${traceId}`);
-          return { ok: true, row, traceId };
-        },
-      },
-      { planId: 'p1', traceId: 't1' },
-      { clientShared: false },
-    );
-    expect(calls).toEqual(['client:p1:t1', 'send:t1']);
-    expect(result).toEqual({ ok: true, row, progress: { clientShared: true } });
-  });
-
-  it('a failed share stops before the send; a retry after a failed send skips the share', async () => {
-    const send = vi.fn(
-      async (): Promise<SharePlanResult> => ({
-        ok: false,
-        reason: 'record',
-        message: 'x',
-        copy: 'y',
-      }),
-    );
-    const first = await shareWithClientThenSend(
-      { shareWithClient: async () => bad('boom'), send },
-      { planId: 'p', traceId: 't' },
-      { clientShared: false },
-    );
-    expect(first).toMatchObject({ ok: false, reason: 'client', progress: { clientShared: false } });
-    expect(send).not.toHaveBeenCalled();
-    const share = vi.fn(async () => ok(null));
-    const second = await shareWithClientThenSend(
-      { shareWithClient: share, send },
-      { planId: 'p', traceId: 't' },
-      { clientShared: false },
-    );
-    expect(second).toMatchObject({ ok: false, reason: 'send', progress: { clientShared: true } });
-    const third = await shareWithClientThenSend(
-      { shareWithClient: share, send: async () => ({ ok: true, row, traceId: 't' }) },
-      { planId: 'p', traceId: 't' },
-      second.progress,
-    );
-    expect(third.ok).toBe(true);
-    expect(share).toHaveBeenCalledTimes(1);
-  });
-
-  it('the confirm reuses one message id per request, so a retry posts no second card', () => {
-    const src = readFileSync(
-      fileURLToPath(new URL('./PlanShareConfirm.tsx', import.meta.url)),
-      'utf8',
-    );
-    expect(src).toContain('newMessageId: () => current.messageId');
-    expect(src).toContain('newTraceId: () => traceId');
-    expect(src).toContain('dispatchPlanChanged(window, planId)');
   });
 });
 
@@ -241,7 +147,7 @@ describe('draft rows', () => {
     );
     expect(b.items.map((i) => i.id)).toEqual(['c1', 'd1', 'c2']);
     expect(planProgress(b).total).toBe(3);
-    expect(draftCount(b)).toBe(1);
+    expect(b.items.filter((i) => isDraftPost(b, i))).toHaveLength(1);
     expect(rowTitle(b, b.items[1] as PlanItemRow)).toBe('Soil health');
   });
 
@@ -315,7 +221,7 @@ describe('readPlanBundles with draft rows', () => {
   });
 });
 
-describe('Plan tile list', () => {
+describe('Plans sheet (item 2)', () => {
   it('drops plans ended before today in the workspace zone; ending soonest first', () => {
     const bundles = assembleBundles(
       [
@@ -335,7 +241,7 @@ describe('Plan tile list', () => {
     ]);
   });
 
-  it('chips: counts, "Agency only" (warn) on a team plan, "In this chat" (accent) when here', () => {
+  it('chips: counts, "Draft" (warn) on a Draft plan, "In this chat" (accent) when here', () => {
     const team = assembleBundles([plan('t', { audience: 'team' })], [], [], []).get(
       't',
     ) as PlanBundle;
@@ -345,7 +251,7 @@ describe('Plan tile list', () => {
       [
         { label: '0 concepts', tone: 'neutral' },
         { label: '0 posts', tone: 'neutral' },
-        { label: 'Agency only', tone: 'warn' },
+        { label: 'Draft', tone: 'warn' },
       ],
       [
         { label: '0 concepts', tone: 'neutral' },
@@ -354,6 +260,17 @@ describe('Plan tile list', () => {
       ],
     ]);
     expect(pickerChips(client, false).map((c) => c.label)).not.toContain(IN_THIS_CHAT_LABEL);
+  });
+
+  it('titled "Plans"; a row opens the plan, never sends', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./PlanPickerSheet.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toContain("export const PICKER_TITLE = 'Plans';");
+    expect(src).toContain('props.onOpenPlan(bundle.plan.id)');
+    expect(src).not.toMatch(/chatPlanShare|sharePlanToChannel|ShareFirstFlow|onSent/);
+    expect(src).toContain('pickerChips(bundle, inChat.has(bundle.plan.id))');
   });
 
   it('the upcoming read: workspace, not deleted, ends today or later, ends_on asc, 100', async () => {
@@ -384,7 +301,6 @@ describe('Plan tile list', () => {
 describe('Team is Agency in every plan string', () => {
   it('chips, hints, pills, rows and buttons', () => {
     expect(TEAM_ONLY_LABEL).toBe('Agency only');
-    expect(AUDIENCE_HINTS.team).not.toMatch(/team/i);
     expect(TEAM_APPROVE_CONFIRM).toBe(
       'Mark as agency approved? Only the agency sees this. The client still approves separately.',
     );
@@ -393,14 +309,15 @@ describe('Team is Agency in every plan string', () => {
     expect(CONCEPT_EDIT_RESET_HINT).toBe(
       'Saving sends this back to waiting for agency and client.',
     );
-    const b = bundleOf([item({ id: 'c1' })]);
-    expect(itemPills(b, b.items[0] as PlanItemRow, 'agency')[0]?.label).toBe('Agency · Waiting');
-    const compose = readFileSync(
-      fileURLToPath(new URL('./PlanComposeScreen.tsx', import.meta.url)),
-      'utf8',
+    const draft = assembleBundles(
+      [plan('a', { audience: 'team' })],
+      [item({ id: 'c1' })],
+      [],
+      [],
+    ).get('a') as PlanBundle;
+    expect(itemPills(draft, draft.items[0] as PlanItemRow, 'agency')[0]?.label).toBe(
+      'Agency · Waiting',
     );
-    expect(compose).toContain("['client', 'Agency and client']");
-    expect(compose).toContain("['team', TEAM_ONLY_LABEL]");
     const itemScreen = readFileSync(
       fileURLToPath(new URL('./PlanItemScreen.tsx', import.meta.url)),
       'utf8',
@@ -411,7 +328,9 @@ describe('Team is Agency in every plan string', () => {
       fileURLToPath(new URL('./PlanScreen.tsx', import.meta.url)),
       'utf8',
     );
-    expect(screen).toContain('Agency only. The client can&apos;t see it yet.');
+    // The old banner and its Share with client button are gone.
+    expect(screen).not.toContain('Agency only. The client can&apos;t see it yet.');
+    expect(screen).not.toContain('data-plan-share-client');
     expect(screen).not.toContain('plan_has_drafts');
   });
 });

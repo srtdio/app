@@ -21,7 +21,7 @@ import {
 // settled. The only allowed sequence is skeleton (the card's own height), then
 // one card that never changes, never drops back to a skeleton and never
 // remounts. Covers a client plan with a draft row (plan_draft_rows returns 1),
-// an Agency only plan, and a slow plan read. Runs on the config's WebKit
+// a Draft plan, and a slow plan read. Runs on the config's WebKit
 // projects (dark and light) and, where a local Chromium is installed, in
 // Chromium with the same iPhone viewport and the project's colour scheme.
 
@@ -145,16 +145,16 @@ const SCENARIOS: Scenario[] = [
       seedClientPlanWithDraft(network.world, { channelId: DM_CHANNEL, sender: PEER });
     },
     chips: ['1 concept', '1 post'],
-    progress: '0 of 2 approved by client',
+    progress: 'Client 0 of 2',
     forward: true,
   },
   {
-    name: 'Agency only plan',
+    name: 'Draft plan',
     messageId: TEAM_PLAN_MESSAGE_ID,
     planId: TEAM_PLAN_ID,
     seed: (network) => seedTeamAndHiddenPlans(network.world, { channelId: DM_CHANNEL, sender: ME }),
-    chips: ['1 concept', '0 posts', 'Agency only'],
-    progress: 'Agency 0 of 1 · Client 0 of 1',
+    chips: ['1 concept', '0 posts', 'Draft'],
+    progress: 'Team 0 of 1',
     forward: true,
   },
   {
@@ -167,7 +167,7 @@ const SCENARIOS: Scenario[] = [
     },
     slowMs: 2_500,
     chips: ['1 concept', '1 post'],
-    progress: '0 of 2 approved by client',
+    progress: 'Client 0 of 2',
     forward: true,
   },
 ];

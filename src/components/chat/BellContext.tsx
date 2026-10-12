@@ -42,6 +42,7 @@ import {
   loadBell,
   markBellEventsRead,
   markBellRead,
+  PLAN_DELETED_BELL_TOAST,
   mergeOlder,
   messagePreview,
   readChannelScheduled,
@@ -66,7 +67,7 @@ import {
   updateScheduledMessage,
   type ScheduledRow,
 } from '@/lib/chat/scheduled';
-import { BELL_OPEN_PARAM, chatMessageHref } from '@/lib/inbox/bell-types';
+import { BELL_OPEN_PARAM, chatMessageHref, planHref } from '@/lib/inbox/bell-types';
 import { HISTORY_STEP_KEYS, useHistoryStep } from '@/lib/chat/use-history-step';
 import { useToast } from '@/components/ui/toast';
 
@@ -156,6 +157,8 @@ export interface BellActionDeps {
   failed: (what: string, traceId: string, message: string, copy?: string | null) => void;
   notify: (title: string) => void;
   goToMessage: (channelId: string | null, messageId: string | null) => void;
+  /** A plan row: close the bell and open /plans/{plan_id} (?item=). Absent: plan rows only mark read. */
+  goToPlan?: (href: string) => void;
   openChannelSheet: (channelId: string) => void;
   /**
    * True only when the failed-rows read succeeded and this scheduled row is
@@ -190,6 +193,9 @@ export interface BellActions {
  * explicit), refetches, and on failure logs and toasts the action copy (a "not
  * found" refetches silently). Opening a mention or a sent row marks it read,
  * THEN opens the chat at the message; opening a reminder never clears it.
+ * Opening a plan row marks it read, then opens /plans/{plan_id} (with ?item=
+ * when it names an item still in the plan); a plan_deleted row opens nothing
+ * and toasts "This plan was deleted".
  */
 export function createBellActions(deps: BellActionDeps): BellActions {
   const markRead = async (entry: BellEntry, what: string): Promise<boolean> => {
@@ -205,6 +211,17 @@ export function createBellActions(deps: BellActionDeps): BellActions {
   };
   return {
     openEntry(entry) {
+      const plan = entry.plan;
+      if (plan !== undefined) {
+        if (entry.eventType === 'plan_deleted' || plan.planId === null) {
+          void markRead(entry, 'plan read');
+          deps.notify(PLAN_DELETED_BELL_TOAST);
+          return;
+        }
+        const href = planHref(plan.planId, plan.leftPlan ? null : plan.itemId);
+        void markRead(entry, 'plan read').then(() => deps.goToPlan?.(href));
+        return;
+      }
       if (entry.eventType === 'reminder') {
         deps.goToMessage(entry.channelId, entry.messageId);
         return;
@@ -484,6 +501,15 @@ export function BellProvider(props: {
     [navigate, bellStep],
   );
 
+  const goToPlan = useCallback(
+    (href: string): void => {
+      bellStep.detach();
+      setOpenState(false);
+      navigate(href);
+    },
+    [navigate, bellStep],
+  );
+
   const openChannelSheet = useCallback(
     (channelId: string): void => {
       void readChannelScheduled(supabase, { channelId }).then((res) => {
@@ -521,6 +547,7 @@ export function BellProvider(props: {
         failed,
         notify: (title) => toast.show({ title }),
         goToMessage,
+        goToPlan,
         openChannelSheet,
         isStaleFailed: (id) =>
           dataRef.current.failedReadOk && dataRef.current.failed.get(id)?.status !== 'failed',
@@ -545,7 +572,7 @@ export function BellProvider(props: {
             ),
           ),
       }),
-    [workspaceId, currentUserId, reload, failed, toast, goToMessage, openChannelSheet],
+    [workspaceId, currentUserId, reload, failed, toast, goToMessage, goToPlan, openChannelSheet],
   );
 
   const refreshSheet = useCallback((channelId: string): void => {

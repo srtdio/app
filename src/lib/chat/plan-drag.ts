@@ -3,7 +3,8 @@
 // index, and the full plan order plan_item_move takes. No React, no reads,
 // so every case is unit-tested directly.
 
-import { sortPlanItemsByDate, type PlanBundle } from '@/lib/chat/plans';
+import { planItemDayInZone, sortPlanItemsByDate, type PlanBundle } from '@/lib/chat/plans';
+import { civilNoonInZoneIso } from '@/lib/plan-week';
 
 /** One day group of the list, in display order: its day (null = No date) and item ids. */
 export interface DayIds {
@@ -78,31 +79,48 @@ export function dropIndex(rowMiddles: readonly number[], y: number): number {
 }
 
 /**
- * The bundle as a move leaves it, for the optimistic paint: the item's plan
- * day set, every position taken from `order`, the items re-sorted by date,
- * and the item's reviews dropped (read as waiting) when its day changed, as
- * the server resets them. Pure.
+ * The bundle as a move leaves it, for the optimistic paint: the item's day set
+ * (a concept's plan_items.target_date; a post slot's post date, noon in the
+ * workspace zone, as plan_item_move writes it), every position taken from
+ * `order`, the items re-sorted by date, and the item's reviews dropped (read
+ * as waiting) when its day changed, as the server resets them, unless the
+ * move keeps them (`keep`). Pure.
  */
 export function applyMove(
   bundle: PlanBundle,
   itemId: string,
   toDay: string | null,
   order: readonly string[],
+  timeZone = 'UTC',
+  keep = false,
 ): PlanBundle {
   const position = new Map(order.map((id, i) => [id, i]));
   const before = bundle.items.find((i) => i.id === itemId);
   const fromDay =
-    before === undefined ? null : ((before.target_date ?? null)?.slice(0, 10) ?? null);
+    before === undefined ? null : planItemDayInZone(before, bundle.postInfo, timeZone);
   const dayChanged = before !== undefined && fromDay !== toDay;
+  const postId = before?.kind === 'post' ? before.post_id : null;
+  const postInfo =
+    postId !== null && dayChanged
+      ? {
+          ...bundle.postInfo,
+          [postId]: {
+            ...(bundle.postInfo[postId] ?? { title: '' }),
+            target_date: toDay !== null ? civilNoonInZoneIso(toDay, timeZone) : null,
+          },
+        }
+      : bundle.postInfo;
   const items = bundle.items.map((i) => ({
     ...i,
     position: position.get(i.id) ?? i.position,
-    ...(i.id === itemId ? { target_date: toDay } : {}),
+    ...(i.id === itemId && i.kind === 'concept' ? { target_date: toDay } : {}),
   }));
   return {
     ...bundle,
-    items: sortPlanItemsByDate(items, bundle.postInfo),
-    reviews: dayChanged ? bundle.reviews.filter((r) => r.item_id !== itemId) : bundle.reviews,
+    postInfo,
+    items: sortPlanItemsByDate(items, postInfo, timeZone),
+    reviews:
+      dayChanged && !keep ? bundle.reviews.filter((r) => r.item_id !== itemId) : bundle.reviews,
   };
 }
 

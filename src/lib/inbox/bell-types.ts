@@ -2,7 +2,9 @@
 // is posts only; chat notifications live in the chat bell). docs/schema.md
 // "Where inbox entries are shown":
 //   - Chat bell only, never Activity: mention with entity_type chat_channel,
-//     reminder, scheduled_sent, scheduled_failed.
+//     reminder, scheduled_sent, scheduled_failed, and the plan alerts
+//     (plan_opened, plan_deleted, plan_date_changed, plan_updated, plan_review,
+//     plan_comment).
 //   - Activity: everything else, including mentions on posts and briefs.
 // Every reader that splits the inbox between the two surfaces uses this file:
 // the Activity feed, its unread badge and Mentions count, the live toast layer
@@ -16,12 +18,41 @@ export const BELL_CHAT_ENTITY = 'chat_channel';
 /** The mention event_type: a bell row only when its entity is a chat. */
 export const BELL_MENTION_EVENT: InboxEventTypeValue = 'mention';
 
+/** The plan alerts: bell rows (entity plan, or plan_item for reviews and comments). */
+export const BELL_PLAN_EVENT_TYPES = [
+  'plan_opened',
+  'plan_deleted',
+  'plan_date_changed',
+  'plan_updated',
+  'plan_review',
+  'plan_comment',
+] as const satisfies readonly InboxEventTypeValue[];
+
+export type BellPlanEventType = (typeof BELL_PLAN_EVENT_TYPES)[number];
+
 /** Event types that are always bell rows, whatever their entity. */
 export const BELL_ONLY_EVENT_TYPES = [
   'reminder',
   'scheduled_sent',
   'scheduled_failed',
+  ...BELL_PLAN_EVENT_TYPES,
 ] as const satisfies readonly InboxEventTypeValue[];
+
+const BELL_PLAN = new Set<string>(BELL_PLAN_EVENT_TYPES);
+
+/** Whether an event type is a plan alert (a bell row). Pure. */
+export function isBellPlanEvent(eventType: string): eventType is BellPlanEventType {
+  return BELL_PLAN.has(eventType);
+}
+
+/**
+ * The link a plan alert opens: /plans/{plan_id}, with ?item={item_id} when the
+ * row names an item. Pure.
+ */
+export function planHref(planId: string, itemId: string | null): string {
+  const base = `/plans/${encodeURIComponent(planId)}`;
+  return itemId !== null && itemId !== '' ? `${base}?item=${encodeURIComponent(itemId)}` : base;
+}
 
 export type BellOnlyEventType = (typeof BELL_ONLY_EVENT_TYPES)[number];
 

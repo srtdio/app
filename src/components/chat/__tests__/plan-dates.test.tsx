@@ -54,10 +54,12 @@ const BUNDLE: PlanBundle = {
 };
 
 describe('Plan screen progress (D1)', () => {
-  it('agency: agency and client counts; client: the client count only', () => {
-    expect(screenProgressLabel(BUNDLE, 'agency')).toBe('Agency 1 of 2 · Client 1 of 2');
-    expect(screenProgressLabel(BUNDLE, 'client')).toBe('1 of 2 slots approved');
-    expect(screenProgressLabel(BUNDLE, 'unknown')).not.toContain('Agency');
+  it('the same line for every viewer: Open "Client X of N", Draft "Team X of N"', () => {
+    for (const side of ['agency', 'client', 'unknown'] as const) {
+      expect(screenProgressLabel(BUNDLE, side)).toBe('Client 1 of 2');
+    }
+    const draft = { ...BUNDLE, plan: { ...BUNDLE.plan, audience: 'team' as const } };
+    expect(screenProgressLabel(draft, 'agency')).toBe('Team 1 of 2');
   });
 });
 

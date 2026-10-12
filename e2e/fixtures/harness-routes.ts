@@ -157,15 +157,6 @@ function inPlan(plan: Row | undefined, day: string): boolean {
   return plan !== undefined && day >= String(plan.starts_on) && day <= String(plan.ends_on);
 }
 
-/** A post's own day when it falls inside the plan, else null (plan_posts_add with no day). */
-function ownDayInPlan(tables: Tables, plan: Row | undefined, postId: unknown): string | null {
-  const post = (tables.posts ?? []).find((p) => p.id === postId);
-  if (post === undefined || post.target_date === null || post.target_date === undefined)
-    return null;
-  const day = String(post.target_date).slice(0, 10);
-  return inPlan(plan, day) ? day : null;
-}
-
 /** The plan procs over the fixture tables (owner/agency writes; RLS is not emulated). */
 const PLAN_RPC: Record<string, RpcHandler> = {
   plan_create: (args, tables) => {
@@ -208,7 +199,7 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     return null;
   },
   // The draft post items of up to 100 plans the caller may see by name, each
-  // on its plan day: a client gets them on client plans only. Items a client cannot read from
+  // with its post's target_date (part 2b): a client gets them on client plans only. Items a client cannot read from
   // plan_items sit in hidden_plan_items (the fixture's stand-in for RLS).
   plan_draft_rows: (args, tables) => {
     const ids = new Set(Array.isArray(args.p_plan_ids) ? args.p_plan_ids.map(String) : []);
@@ -227,19 +218,23 @@ const PLAN_RPC: Record<string, RpcHandler> = {
           item_position: i.position,
           post_number: post.number,
           title: post.title,
-          // The plan day at UTC midnight (20261012140000_plan_draft_rows_plan_day),
-          // never the post's own date.
-          target_date:
-            i.target_date === null || i.target_date === undefined
-              ? null
-              : `${String(i.target_date).slice(0, 10)}T00:00:00+00:00`,
+          // The post's own target_date (20261012190000_plan_part_2b).
+          target_date: post.target_date ?? null,
         },
       ];
     });
   },
+  // The creator or an owner/admin only (forbidden_role otherwise); RLS hides
+  // a deleted plan, so the fixture drops the row.
   plan_delete: (args, tables) => {
-    const plan = (tables.plans ?? []).find((p) => p.id === args.p_plan_id);
-    if (plan !== undefined) plan.deleted_at = new Date().toISOString();
+    const plans = tables.plans ?? [];
+    const at = plans.findIndex((p) => p.id === args.p_plan_id);
+    if (at < 0) return null;
+    const role = roleOf(tables, ME);
+    if (plans[at]?.created_by !== ME && role !== 'owner' && role !== 'admin') {
+      throw new HarnessRpcError('forbidden_role');
+    }
+    plans.splice(at, 1);
     return null;
   },
   plan_concept_add: (args, tables) => {
@@ -318,9 +313,10 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     }
     return null;
   },
-  // Mirrors the live proc: agency only; p_target_date given = that day (inside
-  // the plan, else date_outside_plan); null = the post's own day if inside
-  // the plan, else no date. The post's own date is never written.
+  // Mirrors the 2b proc: agency only; p_target_date given = that day (inside
+  // the plan, else date_outside_plan) written onto each added post (12:00 in
+  // the fixture's UTC workspace); null = the post keeps its own date. The slot
+  // never carries a day (plan_items_target_date_concept_only).
   plan_posts_add: (args, tables) => {
     if (roleOf(tables, ME) === 'client') throw new HarnessRpcError('forbidden_role');
     const ids = Array.isArray(args.p_post_ids) ? args.p_post_ids : [];
@@ -341,12 +337,16 @@ const PLAN_RPC: Record<string, RpcHandler> = {
         title: null,
         description: null,
         post_id: postId,
-        target_date: given ?? ownDayInPlan(tables, plan, postId),
+        target_date: null,
         created_by: ME,
         created_at: now,
         updated_at: now,
         deleted_at: null,
       });
+      if (given !== null) {
+        const post = (tables.posts ?? []).find((p) => p.id === postId);
+        if (post !== undefined) post.target_date = `${given}T12:00:00Z`;
+      }
       held.add(postId);
       added += 1;
     }
@@ -359,9 +359,11 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     if (at >= 0) items.splice(at, 1);
     return null;
   },
-  // Mirrors the live proc: agency only; a day inside the plan or null (else
-  // date_outside_plan); p_item_ids is the full plan order after the move. A
-  // day change resets both slot reviews to waiting; same day only reorders.
+  // Mirrors the live 5-arg proc: agency only; a day inside the plan or null
+  // (else date_outside_plan); p_item_ids is the full plan order after the
+  // move. A post slot's day is its post's target_date (12:00 in the fixture's
+  // UTC workspace), a concept's plan_items.target_date. A day change resets
+  // both slot reviews to waiting unless p_keep_reviews; same day only reorders.
   plan_item_move: (args, tables) => {
     if (roleOf(tables, ME) === 'client') throw new HarnessRpcError('forbidden_role');
     const item = (tables.plan_items ?? []).find(
@@ -371,10 +373,22 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     const plan = (tables.plans ?? []).find((p) => p.id === item.plan_id);
     const day = typeof args.p_target_date === 'string' ? args.p_target_date : null;
     if (day !== null && !inPlan(plan, day)) throw new HarnessRpcError('date_outside_plan');
-    if ((item.target_date ?? null) !== day) {
-      item.target_date = day;
-      for (const r of tables.plan_item_reviews ?? []) {
-        if (r.item_id === item.id) r.status = 'waiting';
+    if (typeof args.p_keep_reviews !== 'boolean') throw new HarnessRpcError('invalid_payload');
+    const post =
+      item.kind === 'post' ? (tables.posts ?? []).find((p) => p.id === item.post_id) : undefined;
+    const current =
+      item.kind === 'post'
+        ? post?.target_date == null
+          ? null
+          : String(post.target_date).slice(0, 10)
+        : (item.target_date ?? null);
+    if (current !== day) {
+      if (post !== undefined) post.target_date = day === null ? null : `${day}T12:00:00Z`;
+      else item.target_date = day;
+      if (args.p_keep_reviews !== true) {
+        for (const r of tables.plan_item_reviews ?? []) {
+          if (r.item_id === item.id) r.status = 'waiting';
+        }
       }
     }
     const order = Array.isArray(args.p_item_ids) ? args.p_item_ids : [];
@@ -945,19 +959,25 @@ export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork>
           });
           return;
         }
-        // A post's live plans (the delete confirm): plan_items joined to their
-        // live plans' titles in one select, as PostgREST's !inner embed answers.
+        // A post's live plans (the delete confirm: post_id=eq.) and the Plan
+        // screen's batched Also in read (post_id=in.(...)): plan_items joined to
+        // their live plans' titles in one select, as PostgREST's !inner embed answers.
         if (
           table === 'plan_items' &&
           (url.searchParams.get('select') ?? '').includes('plans!inner')
         ) {
-          const postId = (url.searchParams.get('post_id') ?? '').replace(/^eq\./, '');
+          const filter = url.searchParams.get('post_id') ?? '';
+          const postIds = filter.startsWith('in.(')
+            ? filter.slice(4, -1).split(',')
+            : [filter.replace(/^eq\./, '')];
           const rows = (world.tables.plan_items ?? []).flatMap((i) => {
-            if (i.post_id !== postId || i.deleted_at !== null) return [];
+            if (!postIds.includes(String(i.post_id)) || i.deleted_at !== null) return [];
             const plan = (world.tables.plans ?? []).find(
               (p) => p.id === i.plan_id && p.deleted_at === null,
             );
-            return plan === undefined ? [] : [{ plan_id: i.plan_id, plans: { title: plan.title } }];
+            return plan === undefined
+              ? []
+              : [{ post_id: i.post_id, plan_id: i.plan_id, plans: { title: plan.title } }];
           });
           await route.fulfill({
             status: 200,
