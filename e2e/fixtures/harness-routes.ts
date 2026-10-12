@@ -874,7 +874,10 @@ export interface HarnessNetwork {
   failTable: Set<string>;
 }
 
-export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork> {
+export async function installHarnessNetwork(
+  page: Page,
+  opts: { planSwipePeek?: boolean } = {},
+): Promise<HarnessNetwork> {
   const world = buildWorld();
   const unmatched: string[] = [];
   const blocked: string[] = [];
@@ -889,6 +892,13 @@ export async function installHarnessNetwork(page: Page): Promise<HarnessNetwork>
   await page.addInitScript((session) => {
     window.localStorage.setItem('sb-harness-auth-token', session);
   }, fakeSession());
+  // The plan list's one-time swipe peek moves a row about 600ms after it
+  // paints: specs see it only when they ask for it.
+  if (opts.planSwipePeek !== true) {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sorted:plan-swipe-peek-seen', '1');
+    });
+  }
 
   const png = solidPng(64, 48, [96, 128, 160]);
   const wav = silentWav();

@@ -599,6 +599,10 @@ export const MOVE_FAILED = "Couldn't move this item. Try again.";
 export const DATE_OUTSIDE_PLAN = 'That day is outside this plan.';
 export const REMOVED_TOAST = 'Removed from plan';
 export const REMOVE_FAILED = "Couldn't remove. Try again.";
+/** The swipe action behind a plan row (agency side). */
+export const SWIPE_REMOVE_LABEL = 'Remove';
+/** The reduced-motion stand-in for the one-time swipe peek. */
+export const SWIPE_TIP_TOAST = 'Tip: swipe left on a slot to remove it';
 
 /** A failed add or move's copy: the day refusal, else `fallback`. Pure. */
 export function planWriteErrorCopy(message: string, fallback: string): string {
