@@ -98,6 +98,7 @@ async function recordOpen(page: Page): Promise<void> {
     let lastScroller: Element | null = null;
     let lastScroll: number | null = null;
     let lastHeight: number | null = null;
+    let grown = 0;
     const read = (): Omit<Frame, 'at'> => {
       const first = document.querySelector('[data-msg-id]');
       const card = document.querySelector(`[data-plan-card="${CSS.escape(planId)}"]`);
@@ -157,14 +158,22 @@ async function recordOpen(page: Page): Promise<void> {
       }
       const st = Math.round(scroller.scrollTop);
       const height = scroller.scrollHeight;
-      if (scroller === lastScroller && lastScroll !== null && st !== lastScroll) {
-        // A pin that follows growth by the same amount keeps the reader still.
-        const grew = lastHeight !== null ? height - lastHeight : 0;
-        if (st - lastScroll !== grew) log.scrollJumps += 1;
+      if (scroller !== lastScroller) {
+        lastScroller = scroller;
+        lastScroll = st;
+        lastHeight = height;
+        grown = 0;
+        return;
       }
-      lastScroller = scroller;
-      lastScroll = st;
+      // Growth since the scroll last moved: a pin may land a frame after it.
+      grown += lastHeight !== null ? height - lastHeight : 0;
       lastHeight = height;
+      if (lastScroll !== null && st !== lastScroll) {
+        // A pin that follows the growth by the same amount keeps the reader still.
+        if (Math.abs(st - lastScroll - grown) > 1) log.scrollJumps += 1;
+        grown = 0;
+      }
+      lastScroll = st;
     };
     const start = (): void => {
       new MutationObserver(sampleDom).observe(document.body, {
