@@ -213,7 +213,26 @@ describe('enrichNewRows', () => {
       title: 'Q3 Launch',
       mentionNames: new Map(),
       toStage: null,
+      reviewWithdrawn: false,
+      reviewPrevious: null,
     });
+  });
+
+  it('carries a plan_review withdrawal so the live toast names it', async () => {
+    const client = fakeClient({});
+    const res = await enrichNewRows(client, [
+      row({
+        event_type: 'plan_review',
+        entity_type: 'plan_item',
+        entity_id: 'i1',
+        actor_user_id: 'u-cy',
+        payload: { side: 'client', status: 'waiting', withdrawn: true, previous: 'approved' },
+      }),
+    ]);
+    expect(res.lead?.reviewWithdrawn).toBe(true);
+    expect(res.lead?.reviewPrevious).toBe('approved');
+    // The live reader resolves no actor for plan rows: the name-free wording.
+    expect(toastFromEnriched(res)?.title).toBe('Slot approval withdrawn');
   });
 
   it('carries a stage_change lead toStage so the toast names the outcome', async () => {

@@ -91,12 +91,14 @@ function seedLinkedConcept(network: HarnessNetwork): string {
   return target.id;
 }
 
-async function openItem(page: Page, itemId: string): Promise<void> {
+async function openItem(page: Page, itemId: string, beforeItem?: () => void): Promise<void> {
   const card = page.locator(`[data-plan-card="${DATED_PLAN_ID}"]`);
   await card.scrollIntoViewIfNeeded();
   await card.locator('[data-plan-open]').click();
   const plan = page_(page, 'plan');
   await expect(plan.locator('[data-plan-row]').first()).toBeVisible();
+  // The plan list (its row thumbnails read asset_attachments too) has painted.
+  beforeItem?.();
   await plan.locator(`[data-plan-row="${itemId}"]`).click();
   await expect(page_(page, 'item')).toBeVisible();
 }
@@ -180,8 +182,10 @@ test('edit while the files read is slow: skeleton, then the list', async ({ page
   const network = await installHarnessNetwork(page);
   const itemId = seedLinkedConcept(network);
   await openChat(page, PEER_NAME);
-  const held = network.holdTable('asset_attachments');
-  await openItem(page, itemId);
+  const holds: Array<{ release: () => void }> = [];
+  await openItem(page, itemId, () => {
+    holds.push(network.holdTable('asset_attachments'));
+  });
   const item = page_(page, 'item');
   await item.locator('[data-plan-edit-concept]').click();
   const sheet = page.getByRole('dialog', { name: 'Edit concept' });
@@ -192,7 +196,7 @@ test('edit while the files read is slow: skeleton, then the list', async ({ page
   await page.waitForTimeout(400);
   await shot(page, 'upload-03-files-loading');
 
-  held.release();
+  for (const held of holds) held.release();
   await expect(sheet.locator('[data-plan-concept-files-loading]')).toHaveCount(0);
   await expect(sheet.locator('[data-plan-concept-file]')).toHaveCount(1);
   await expect(sheet.locator('[data-plan-concept-files]')).toBeVisible();

@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
+  DATED_PLAN_ID,
+  DATED_PLAN_ITEMS,
+  seedDatedPlan,
   DM_CHANNEL,
   DRAFT_ITEM_ID,
   DRAFT_PLAN_ID,
@@ -52,6 +55,26 @@ function viewAsClient(network: HarnessNetwork): void {
   }
 }
 
+/**
+ * L1-L3: the checkbox is the row's last element, its right edge within 16px
+ * of the row's right edge, and the day column sits left of the items.
+ */
+async function expectRowLayout(page: Page, itemId: string): Promise<void> {
+  const wrap = page.locator(`[data-plan-row-wrap="${itemId}"]`);
+  const last = await wrap.evaluate((el) => el.lastElementChild?.getAttribute('data-plan-slot'));
+  expect(last === 'client' || last === 'team').toBe(true);
+  const row = await wrap.boundingBox();
+  const box = await wrap.locator('[data-plan-slot]').boundingBox();
+  expect(row !== null && box !== null).toBe(true);
+  if (row === null || box === null) return;
+  expect(row.x + row.width - (box.x + box.width)).toBeLessThanOrEqual(16);
+  expect(row.x + row.width - (box.x + box.width)).toBeGreaterThanOrEqual(0);
+  const day = page.locator('[data-plan-day]').filter({ has: wrap });
+  const col = await day.locator('[data-plan-day-col]').boundingBox();
+  expect(col !== null && col.x + col.width <= row.x).toBe(true);
+  expect(col?.width).toBe(40);
+}
+
 const planPage = (page: Page, id: string) => page.locator(`[data-plan-page="${id}"]`);
 
 async function openPlan(page: Page, planId: string) {
@@ -79,7 +102,11 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
 
   // One list by day: every day of the range, empty ones "Nothing planned".
   await expect(plan.locator('[data-plan-tab]')).toHaveCount(0);
-  await expect(plan.locator('[data-plan-day-header]').first()).toHaveText('Mon 12 Oct');
+  // Day column on the left: weekday over the date number.
+  const firstDay = plan.locator('[data-plan-day]').first();
+  await expect(firstDay).toHaveAttribute('data-plan-day', '2026-10-12');
+  await expect(firstDay.locator('[data-plan-day-weekday]')).toHaveText(/^mon$/i);
+  await expect(firstDay.locator('[data-plan-day-number]')).toHaveText('12');
   await expect(plan.locator('[data-plan-day-empty]').first()).toHaveText('Nothing planned');
   expect(await plan.locator('[data-plan-day-empty]').count()).toBeGreaterThan(0);
   await expect(plan.locator('[data-plan-week-header]')).toHaveCount(0);
@@ -94,6 +121,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-pill="team"]')).toHaveCount(0);
   expectMinTouchTarget(await box.boundingBox());
+  await expectRowLayout(page, PLAN_POST_ITEM);
   await box.scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
   await shot(page, 'slots-01-client-week-list');
@@ -105,6 +133,10 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   const undo = page.locator('[data-toast-action]');
   await expect(undo).toHaveText('Undo');
   await expect(page.getByText(/^Slot approved · \w{3} \d{1,2} \w{3}$/)).toBeVisible();
+  // L5: the success-tinted toast with Undo at its right end.
+  const success = page.locator('[data-toast-tone="success"]');
+  await expect(success).toBeVisible();
+  await expect(success.locator('[data-toast-action]')).toHaveText('Undo');
   expectMinTouchTarget(await undo.boundingBox());
   expect(network.world.tables.plan_item_reviews).toEqual([
     expect.objectContaining({ item_id: PLAN_POST_ITEM, side: 'client', status: 'approved' }),
@@ -183,12 +215,12 @@ test('agency: team checkbox and client pill, header subtitle, long title, delete
 
   const box = plan.locator(`[data-plan-row-wrap="${PLAN_POST_ITEM}"] [data-plan-slot]`);
   await expect(box).toHaveAttribute('data-plan-slot', 'team');
+  await expectRowLayout(page, PLAN_POST_ITEM);
   await expect(plan.locator('[data-plan-slot="client"]')).toHaveCount(0);
   const row = plan.locator(`[data-plan-row="${PLAN_POST_ITEM}"]`);
   await expect(row.getByText('Client · Waiting')).toBeVisible();
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'true');
-  await expect(row.getByText('Agency · Approved')).toBeVisible();
   await expect(plan.locator('[data-plan-screen-progress]')).toHaveText(
     'Agency 1 of 2 · Client 0 of 2',
   );
@@ -228,7 +260,7 @@ test('agency: team checkbox and client pill, header subtitle, long title, delete
   expectClean(network);
 });
 
-test('client: a long plan shows week headers, 32px empty days, and a draft with no checkbox', async ({
+test('client: a long plan shows week headers, 36px empty days, and a draft with no checkbox', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -242,13 +274,49 @@ test('client: a long plan shows week headers, 32px empty days, and a draft with 
   );
   expect(await plan.locator('[data-plan-week-header]').count()).toBeGreaterThan(1);
   const empty = plan.locator('[data-plan-day-empty]').first();
-  expect((await empty.boundingBox())?.height).toBe(32);
+  expect((await empty.boundingBox())?.height).toBe(36);
   const draft = plan.locator(`[data-plan-row="${DRAFT_ITEM_ID}"]`);
   await draft.scrollIntoViewIfNeeded();
   await expect(draft).toHaveAttribute('aria-disabled', 'true');
   await expect(plan.locator(`[data-plan-row-wrap="${DRAFT_ITEM_ID}"]`)).toHaveCount(0);
   await expect(draft.locator('[data-plan-slot]')).toHaveCount(0);
+  // Today's weekday is in the accent.
+  const today = plan.locator('[data-plan-today] [data-plan-day-weekday]');
+  if ((await today.count()) > 0) await expect(today).toHaveClass(/text-accent/);
   await page.waitForTimeout(300);
   await shot(page, 'slots-09-client-long-plan-draft');
+  expectClean(network);
+});
+
+test('client: Undo after ticking a concept with changes asked restores changes', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page);
+  viewAsClient(network);
+  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: PEER });
+  const concept = DATED_PLAN_ITEMS.find((it) => it.kind === 'concept' && it.client === 'changes');
+  if (concept === undefined) throw new Error('fixture');
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, DATED_PLAN_ID);
+  const box = plan.locator(`[data-plan-row-wrap="${concept.id}"] [data-plan-slot]`);
+  await box.scrollIntoViewIfNeeded();
+  await expect(box).toHaveAttribute('aria-checked', 'false');
+  const status = () =>
+    (network.world.tables.plan_item_reviews ?? []).find(
+      (r) => r.item_id === concept.id && r.side === 'client',
+    )?.status;
+  expect(status()).toBe('changes');
+  await box.click();
+  await expect(box).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(status).toBe('approved');
+  await page.locator('[data-toast-action]').click();
+  await expect(box).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(status).toBe('changes');
+  await expect(
+    plan.locator(`[data-plan-row="${concept.id}"] [data-plan-pill="client"]`),
+  ).toHaveText('Changes asked');
+  await page.waitForTimeout(300);
+  await shot(page, 'slots-10-client-undo-restores-changes');
   expectClean(network);
 });

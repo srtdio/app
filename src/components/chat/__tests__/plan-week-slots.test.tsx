@@ -9,7 +9,15 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { renderToStaticMarkup } from 'react-dom/server';
-import { SlotCheckbox, screenProgressLabel } from '@/components/chat/PlanScreen';
+import {
+  DayColumn,
+  PlanBody,
+  SlotCheckbox,
+  rowMeta,
+  screenProgressLabel,
+} from '@/components/chat/PlanScreen';
+import { runSlotWrite } from '@/lib/chat/plans';
+import { MemoryRouter } from 'react-router-dom';
 import {
   SLOT_FAILED,
   SLOT_POST_NOT_READY,
@@ -23,6 +31,7 @@ import {
   slotSide,
   slotTicked,
   slotToastSpec,
+  slotUndoStatus,
   withReviewOverrides,
 } from '@/components/chat/plan-card';
 import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
@@ -113,13 +122,24 @@ describe('checkbox per role (W4)', () => {
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain('h-11 w-11');
     expect(html).toContain('h-[22px] w-[22px]');
+    expect(html).toContain('rounded-[6px]');
+    expect(html).toContain('mr-1');
     expect(html).toContain('data-plan-slot="client"');
+    // Client ticked: success fill, white tick.
+    expect(html).toContain('bg-good');
+    expect(html).toContain('text-accent-fg');
+    const team = renderToStaticMarkup(
+      <SlotCheckbox side="team" checked title="One" onToggle={() => undefined} />,
+    );
+    expect(team).toContain('bg-accent');
+    expect(team).not.toContain('bg-good');
     expect(html).not.toMatch(new RegExp(`${String.fromCharCode(35)}[0-9a-f]{3,6}`, 'i'));
     const off = renderToStaticMarkup(
       <SlotCheckbox side="team" checked={false} title="One" onToggle={() => undefined} />,
     );
     expect(off).toContain('aria-checked="false"');
     expect(off).toContain('data-plan-slot-state="pending"');
+    expect(off).toContain('border-[1.5px] border-border-strong');
   });
 });
 
@@ -172,13 +192,13 @@ describe('optimistic counts and toasts (W4, W6)', () => {
     expect(SLOT_FAILED).toBe("Couldn't update this slot. Try again.");
   });
 
-  it('the screen wires the write through runSlotWrite, dispatches on success, Undo writes waiting', () => {
+  it('the screen wires the write through runSlotWrite, dispatches on success, Undo restores', () => {
     const src = read('PlanScreen.tsx');
     expect(src).toContain('await runSlotWrite({');
     expect(src).toContain('p_trace_id: traceId');
     expect(src).toContain('dispatchPlanChanged(window, planId);');
     expect(src).toMatch(
-      /void writeSlot\(item, reviewSide, 'waiting', 'approved', 'undo', dayHeader\)/,
+      /void writeSlot\(\s*item,\s*reviewSide,\s*slotUndoStatus\(previous\),\s*'approved',\s*'undo',/,
     );
     // A slot write never touches posts.stage (no stage transition on this screen).
     expect(src).not.toContain('stageTransition');
@@ -210,5 +230,122 @@ describe('post item header (W7, W8)', () => {
     expect(item).toContain('action: (');
     expect(item).toContain('data-plan-more=""');
     expect(item).not.toContain('absolute right-3');
+  });
+});
+
+describe('Undo restores the exact previous status (A3)', () => {
+  it('from changes -> changes; from waiting or no row -> waiting', () => {
+    expect(slotUndoStatus('changes')).toBe('changes');
+    expect(slotUndoStatus('waiting')).toBe('waiting');
+  });
+
+  for (const previous of ['changes', 'waiting'] as const) {
+    it(`Undo after a tick from ${previous}: writes ${previous}, reverts to approved on failure`, async () => {
+      const writes: string[] = [];
+      const applied: string[] = [];
+      const ok = await runSlotWrite({
+        status: slotUndoStatus(previous),
+        previous: 'approved',
+        apply: (s) => applied.push(s),
+        write: (s) => {
+          writes.push(s);
+          return Promise.resolve({ ok: true, data: null });
+        },
+      });
+      expect(ok.ok).toBe(true);
+      expect(writes).toEqual([previous]);
+      expect(applied).toEqual([previous]);
+      applied.length = 0;
+      const failed = await runSlotWrite({
+        status: slotUndoStatus(previous),
+        previous: 'approved',
+        apply: (s) => applied.push(s),
+        write: () => Promise.resolve({ ok: false, error: { code: 'unknown', message: 'x' } }),
+      });
+      expect(failed.ok).toBe(false);
+      expect(applied).toEqual([previous, 'approved']);
+    });
+  }
+});
+
+describe('week list layout (L1-L4)', () => {
+  it('day column: weekday over the number; today in the accent; empty muted; No date', () => {
+    const today = renderToStaticMarkup(
+      <DayColumn day="2026-10-14" today="2026-10-14" empty={false} />,
+    );
+    expect(today).toContain('w-10');
+    expect(today).toContain('data-plan-today=""');
+    expect(today).toMatch(/text-\[11px\] font-semibold uppercase[^"]*text-accent[^"]*">Wed</);
+    expect(today).toMatch(/text-xl font-semibold leading-6 text-fg">14</);
+    const empty = renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" empty />);
+    expect(empty).toMatch(/text-fg-3">Thu</);
+    expect(empty).toMatch(/text-xl font-semibold leading-6 text-fg-3">15</);
+    const none = renderToStaticMarkup(<DayColumn day={null} today="2026-10-14" empty={false} />);
+    expect(none).toContain('No date');
+    expect(none).not.toContain('data-plan-day-number');
+  });
+
+  it('meta line: format and stage for a post, the description for a concept', () => {
+    const b = bundle('client');
+    b.postInfo.post1 = { title: 'One', target_date: null, format: 'carousel' };
+    expect(rowMeta(b, at(b, 'p1'))).toMatch(/ · In review$/);
+    expect(rowMeta(b, at(b, 'p2'))).toBe('Approved');
+    expect(rowMeta({ ...b }, { ...at(b, 'c1'), description: 'Morning light' })).toBe(
+      'Morning light',
+    );
+  });
+
+  function paint(side: 'client' | 'agency', audience: 'client' | 'team'): string {
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <PlanBody
+          bundle={bundle(audience)}
+          counts={{}}
+          side={side}
+          timeZone="UTC"
+          thumbs={{ post1: 'v1' }}
+          onOpenItem={() => undefined}
+          onToggleSlot={() => undefined}
+          onRemove={() => undefined}
+          shareError={null}
+          sharing={false}
+          onShareWithClient={() => undefined}
+        />
+      </MemoryRouter>,
+    );
+  }
+
+  it('each row: the open area first, the checkbox last; Nothing planned 36px; day blocks bordered', () => {
+    const html = paint('client', 'client');
+    const wrap = /<div data-plan-row-wrap="p1"[^>]*>([\s\S]*?)<\/button><\/div>/.exec(html);
+    expect(wrap).not.toBeNull();
+    const row = wrap![0];
+    expect(row.indexOf('data-plan-row="p1"')).toBeLessThan(row.indexOf('data-plan-slot='));
+    // The checkbox is the row's last element.
+    expect(row.trimEnd().endsWith('</span></button></div>')).toBe(true);
+    expect(html).toMatch(
+      /data-plan-day-empty="" class="flex h-9 items-center text-\[13px\] text-fg-3">Nothing planned/,
+    );
+    expect(html).toContain('flex gap-3 border-b border-border');
+    // Day column left of items.
+    const day = html.slice(html.indexOf('data-plan-day="2026-10-13"'));
+    expect(day.indexOf('data-plan-day-col')).toBeLessThan(day.indexOf('data-plan-row'));
+    // Tiles: the first image, the text tile, the dashed concept outline.
+    expect(html).toContain('data-plan-row-tile="image"');
+    expect(html).toContain('data-plan-row-tile="text"');
+    expect(html).toContain('data-plan-row-tile="concept"');
+    expect(html).toMatch(/data-plan-row-kind="Post 1 of 3"[^>]*>Post</);
+    // A client: no team state; the locked draft has no checkbox.
+    expect(html).not.toContain('data-plan-slot="team"');
+    expect(html).not.toContain('data-plan-row-wrap="d1"');
+    expect(html).toContain('data-plan-row-draft="locked"');
+  });
+
+  it('agency: team checkboxes, the client pill beside them', () => {
+    const html = paint('agency', 'client');
+    expect(html).toContain('data-plan-slot="team"');
+    expect(html).not.toContain('data-plan-slot="client"');
+    expect(html).toContain('Client · Approved');
+    expect(html).toContain('data-plan-row-wrap="d1"');
   });
 });

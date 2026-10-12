@@ -112,4 +112,14 @@ describe('Toast', () => {
       findAll(tree, (el) => (el.props as Record<string, unknown>)['data-toast-action'] === ''),
     ).toHaveLength(0);
   });
+
+  it('a success toast is tinted with the success tokens; a plain one is not', () => {
+    const cls = (t: ReactElement): string => (t.props as { className: string }).className;
+    const ok = Toast({ toast: { ...base, tone: 'success' }, onDismiss: () => {} });
+    // Opaque panel under the translucent success tint.
+    expect(cls(ok)).toContain('border-good bg-panel');
+    expect(cls(ok)).toContain('var(--good-soft)');
+    expect((ok.props as Record<string, unknown>)['data-toast-tone']).toBe('success');
+    expect(cls(Toast({ toast: base, onDismiss: () => {} }))).toContain('border-border bg-panel');
+  });
 });

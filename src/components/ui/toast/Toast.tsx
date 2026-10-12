@@ -1,4 +1,4 @@
-import { IconX } from '@/components/ui/icons';
+import { IconCheck, IconX } from '@/components/ui/icons';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
 
 interface ToastProps {
@@ -18,7 +18,8 @@ interface ToastProps {
  * fades in (--dur-slow); exit fades down (--dur-base); axis is translateY only.
  */
 export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
-  const { id, title, description, icon, onPress, action } = toast;
+  const { id, title, description, icon, onPress, action, tone } = toast;
+  const success = tone === 'success';
 
   // Motion via keyframes (defined once in the viewport) so the card stays
   // hookless. Durations/easings read from the motion tokens, never hardcoded.
@@ -30,6 +31,10 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
     <>
       {icon !== undefined ? (
         <span className="flex h-6 w-6 shrink-0 items-center justify-center text-fg-2">{icon}</span>
+      ) : success ? (
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-good">
+          <IconCheck size={16} />
+        </span>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-medium text-fg">{title}</span>
@@ -43,7 +48,12 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
   return (
     <div
       style={{ animation }}
-      className="pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border border-border bg-panel pr-1 shadow-lg"
+      {...(success ? { 'data-toast-tone': 'success' } : {})}
+      className={`pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border pr-1 shadow-lg ${
+        success
+          ? 'border-good bg-panel [background-image:linear-gradient(var(--good-soft),var(--good-soft))]'
+          : 'border-border bg-panel'
+      }`}
     >
       {onPress !== undefined ? (
         <button

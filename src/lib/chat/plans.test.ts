@@ -20,6 +20,7 @@ import {
   postPlansLine,
   readPlanBundles,
   readPostPlans,
+  readPostThumbs,
   runSlotWrite,
   readPlanScreen,
   runPlanShare,
@@ -991,5 +992,45 @@ describe('slot write (W4)', () => {
     expect(planItemDayInZone(post, info, 'Asia/Kolkata')).toBe('2026-10-14');
     expect(planItemDayInZone(post, info, 'UTC')).toBe('2026-10-13');
     expect(planItemDayInZone({ ...post, post_id: 'gone' }, info, 'UTC')).toBeNull();
+  });
+});
+
+describe('row thumbnails (L2)', () => {
+  it('one select per chunk; the first live image per post wins; non-images skipped', async () => {
+    const calls: Array<[string, unknown[]]> = [];
+    const q: Record<string, unknown> = {};
+    for (const m of ['select', 'in', 'eq', 'is', 'order', 'abortSignal']) {
+      q[m] = (...args: unknown[]) => {
+        calls.push([m, args]);
+        return q;
+      };
+    }
+    q.then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({
+        data: [
+          {
+            entity_id: 'a',
+            asset_version_id: 'v-video',
+            asset_versions: { mime_type: 'video/mp4' },
+          },
+          { entity_id: 'a', asset_version_id: 'v-a1', asset_versions: { mime_type: 'image/png' } },
+          { entity_id: 'a', asset_version_id: 'v-a2', asset_versions: { mime_type: 'image/png' } },
+          {
+            entity_id: 'b',
+            asset_version_id: 'v-b',
+            asset_versions: [{ mime_type: 'image/jpeg' }],
+          },
+        ],
+        error: null,
+      }).then(resolve);
+    const from = vi.fn(() => q);
+    const result = await readPostThumbs({ from } as unknown as Client, ['a', 'b', 'c']);
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith('asset_attachments');
+    expect(calls).toContainEqual(['eq', ['entity_type', 'post']]);
+    expect(calls).toContainEqual(['is', ['deleted_at', null]]);
+    expect(result).toEqual({ ok: true, data: { a: 'v-a1', b: 'v-b' } });
+    expect((await readPostThumbs({ from } as unknown as Client, [])).ok).toBe(true);
+    expect(from).toHaveBeenCalledTimes(1);
   });
 });

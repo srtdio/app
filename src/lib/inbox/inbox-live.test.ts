@@ -314,8 +314,11 @@ describe('live toast labels for approve, reject, park and deletes', () => {
       eventLabel('plan_review', null, { withdrawn: true, previous: 'changes', actorName: 'Cy' }),
     ).toBe('Cy withdrew their changes request');
     expect(eventLabel('plan_review', null, { withdrawn: true, previous: 'approved' })).toBe(
-      'Someone withdrew slot approval',
+      'Slot approval withdrawn',
     );
+    expect(
+      eventLabel('plan_review', null, { withdrawn: true, previous: 'changes', actorName: null }),
+    ).toBe('Changes request withdrawn');
     expect(eventLabel('plan_review', null, { withdrawn: false, actorName: 'Cy' })).toBe(
       'Plan item reviewed',
     );

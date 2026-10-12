@@ -109,7 +109,8 @@ export function stageChangeLabel(toStage: string | null | undefined): string {
  * A neutral, null-safe label for a single event, by type. post_deleted and
  * assets_deleted are Activity rows (never bell types): they toast here and
  * count in the Activity badge. A plan_review withdrawal reads "<name> withdrew
- * slot approval" ("withdrew their changes request" after changes).
+ * slot approval" ("withdrew their changes request" after changes); with no
+ * resolved name, "Slot approval withdrawn" / "Changes request withdrawn".
  */
 export function eventLabel(
   eventType: string,
@@ -117,10 +118,14 @@ export function eventLabel(
   review: { withdrawn?: boolean; previous?: string | null; actorName?: string | null } = {},
 ): string {
   if (eventType === 'plan_review' && review.withdrawn === true) {
-    const who = review.actorName ?? 'Someone';
-    return review.previous === 'changes'
-      ? `${who} withdrew their changes request`
-      : `${who} withdrew slot approval`;
+    const changes = review.previous === 'changes';
+    // The live reader resolves no actor for plan rows: name-free then.
+    if (review.actorName === undefined || review.actorName === null) {
+      return changes ? 'Changes request withdrawn' : 'Slot approval withdrawn';
+    }
+    return changes
+      ? `${review.actorName} withdrew their changes request`
+      : `${review.actorName} withdrew slot approval`;
   }
   switch (eventType) {
     case 'comment':

@@ -199,10 +199,17 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   // One list by day (no Concepts/Posts tabs): each row tagged with its kind.
   await expect(plan.locator('[data-plan-tab]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row]')).toHaveCount(2);
-  const conceptRow = () => plan.locator('[data-plan-row]').filter({ hasText: 'Concept 1 of 1' });
-  const postRow = () => plan.locator('[data-plan-row]').filter({ hasText: 'Post 1 of 1' });
+  const kind = (label: string) => page.locator(`[data-plan-row-kind="${label}"]`);
+  const conceptRow = () => plan.locator('[data-plan-row]').filter({ has: kind('Concept 1 of 1') });
+  const postRow = () => plan.locator('[data-plan-row]').filter({ has: kind('Post 1 of 1') });
+  // The agency's team state is the row's checkbox.
+  const conceptBox = () =>
+    plan
+      .locator('[data-plan-row-wrap]')
+      .filter({ has: kind('Concept 1 of 1') })
+      .locator('[data-plan-slot="team"]');
   const row = conceptRow();
-  await expect(row.getByText('Agency · Waiting')).toBeVisible();
+  await expect(conceptBox()).toHaveAttribute('aria-checked', 'false');
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-06-plan-screen-agency`);
 
@@ -239,7 +246,7 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await page.goBack();
   await expect(item).toBeHidden();
   await expect(plan).toBeVisible();
-  await expect(conceptRow().getByText('Agency · Approved')).toBeVisible();
+  await expect(conceptBox()).toHaveAttribute('aria-checked', 'true');
   await expect(conceptRow().getByText('1 comment')).toBeVisible();
 
   // A post item for the agency: the pipeline post view embedded, no plan
@@ -348,7 +355,10 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   await shot(page, `${prefix}-04-plan-screen-client`);
 
   // D5: a concept: Approve with its confirm.
-  await plan.locator('[data-plan-row]').filter({ hasText: 'Concept 1 of 1' }).click();
+  await plan
+    .locator('[data-plan-row]')
+    .filter({ has: page.locator('[data-plan-row-kind="Concept 1 of 1"]') })
+    .click();
   const item = page_(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByText('Can we keep it under 30 seconds?')).toBeVisible();
@@ -375,7 +385,9 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   // A post item: the pipeline post view embedded, no plan review buttons.
   await page.goBack();
   await expect(item).toBeHidden();
-  const postRow = plan.locator('[data-plan-row]').filter({ hasText: 'Post 1 of 1' });
+  const postRow = plan
+    .locator('[data-plan-row]')
+    .filter({ has: page.locator('[data-plan-row-kind="Post 1 of 1"]') });
   await postRow.scrollIntoViewIfNeeded();
   await postRow.click();
   await expect(item).toBeVisible();

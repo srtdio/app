@@ -66,7 +66,7 @@ function counts(): { team: number; client: number; changes: number; total: numbe
 }
 
 async function rowTitles(page: Page): Promise<string[]> {
-  return page_(page, 'plan').locator('[data-plan-row] span.truncate').allInnerTexts();
+  return page_(page, 'plan').locator('[data-plan-row] [data-plan-row-title]').allInnerTexts();
 }
 
 test.describe('phone', () => {
@@ -105,19 +105,23 @@ test.describe('phone', () => {
     for (let k = total - undatedAll; k < total; k += 1) {
       await expect(dates.nth(k)).toHaveText('No date');
       await expect(dates.nth(k)).toHaveAttribute('data-plan-row-date', 'none');
-      await expect(dates.nth(k)).toHaveClass(/text-fg-3/);
     }
     // One group per day of the range, "No date" last.
-    await expect(plan.locator('[data-plan-day-header]')).toHaveText([
-      'Mon 12 Oct',
-      'Tue 13 Oct',
-      'Wed 14 Oct',
-      'Thu 15 Oct',
-      'Fri 16 Oct',
-      'Sat 17 Oct',
-      'Sun 18 Oct',
-      'No date',
+    const days = plan.locator('[data-plan-day]');
+    await expect(days).toHaveCount(8);
+    expect(
+      await days.evaluateAll((els) => els.map((el) => el.getAttribute('data-plan-day'))),
+    ).toEqual([
+      '2026-10-12',
+      '2026-10-13',
+      '2026-10-14',
+      '2026-10-15',
+      '2026-10-16',
+      '2026-10-17',
+      '2026-10-18',
+      'none',
     ]);
+    await expect(days.last().locator('[data-plan-day-col]')).toHaveText(/No date/i);
     await page.waitForTimeout(300);
     await shot(page, 'dates-02-list-sorted');
     await plan

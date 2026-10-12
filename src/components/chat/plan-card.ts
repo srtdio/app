@@ -523,3 +523,11 @@ export function slotToastSpec(
   if (kind === 'untick') return { title: SLOT_REMOVED_TOAST, undo: false };
   return null;
 }
+
+/**
+ * What Undo writes after a tick: the exact status the tick replaced
+ * ('changes' stays 'changes'; waiting or no row is 'waiting'). Pure.
+ */
+export function slotUndoStatus(previous: ReviewStatus): ReviewStatus {
+  return previous === 'changes' ? 'changes' : 'waiting';
+}

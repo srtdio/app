@@ -276,6 +276,11 @@ function civilWeekday(civil: string): number {
   return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
 }
 
+/** "Wed" from "2026-10-14" (the day column's weekday). Pure. */
+export function civilWeekdayShort(civil: string): string {
+  return WEEKDAY_NAMES[civilWeekday(civil)] ?? '';
+}
+
 /** "Mon 12 Oct" from "2026-10-12". Pure. */
 export function formatCivilDayHeader(civil: string): string {
   return `${WEEKDAY_NAMES[civilWeekday(civil)] ?? ''} ${formatCivilShort(civil)}`;

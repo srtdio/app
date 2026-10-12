@@ -131,6 +131,8 @@ export interface PlanBundle {
 export interface PlanPostInfo {
   title: string;
   target_date: string | null;
+  /** The post's format (the Plan screen row's meta line); null when not read. */
+  format?: string | null;
 }
 
 const PLAN_COLUMNS = 'id, workspace_id, title, starts_on, ends_on, audience, created_by';
@@ -356,7 +358,14 @@ async function readItemsWithReviews(
       items.data.map((i) => i.id),
       signal,
     ),
-    selectIn<PlanPostRow>(client, 'posts', 'id, stage, title, target_date', 'id', postIds, signal),
+    selectIn<PlanPostRow>(
+      client,
+      'posts',
+      'id, stage, title, target_date, format',
+      'id',
+      postIds,
+      signal,
+    ),
   ]);
   if (!reviews.ok) return reviews;
   if (!stages.ok) return stages;
@@ -451,6 +460,7 @@ export interface PlanPostRow {
   stage: string;
   title?: string | null;
   target_date?: string | null;
+  format?: string | null;
 }
 
 /** Group the four reads into bundles by plan id. Pure. */
@@ -472,7 +482,11 @@ export function assembleBundles(
       const post = item.post_id !== null ? byId.get(item.post_id) : undefined;
       if (item.post_id !== null && post !== undefined) {
         postStages[item.post_id] = post.stage;
-        postInfo[item.post_id] = { title: post.title ?? '', target_date: post.target_date ?? null };
+        postInfo[item.post_id] = {
+          title: post.title ?? '',
+          target_date: post.target_date ?? null,
+          format: post.format ?? null,
+        };
       }
     }
     out.set(plan.id, {
@@ -1083,9 +1097,61 @@ export function conceptEditUnchanged(
 export interface PlanScreenData {
   bundle: PlanBundle | null;
   commentCounts: Record<string, number>;
+  /** Each post's first image (asset version id), for the row thumbnails. */
+  thumbs: Record<string, string>;
 }
 
-/** Read the Plan screen (plans, items, reviews, posts, then comment counts). Never throws. */
+interface ThumbRow {
+  entity_id: string;
+  asset_version_id: string;
+  asset_versions: { mime_type: string | null } | Array<{ mime_type: string | null }> | null;
+}
+
+/**
+ * Each post's first image (the live image attachment with the lowest
+ * position, then the earliest attached): one asset_attachments select per
+ * chunk of 100 post ids with the version mime embedded (no read per post).
+ * Posts with no image are absent. Never throws.
+ */
+export async function readPostThumbs(
+  client: Client,
+  postIds: readonly string[],
+  signal?: AbortSignal,
+): Promise<Result<Record<string, string>>> {
+  try {
+    const rows = await selectIn<ThumbRow>(
+      client,
+      'asset_attachments',
+      'entity_id, asset_version_id, asset_versions!inner(mime_type)',
+      'entity_id',
+      postIds,
+      signal,
+      (q) =>
+        q
+          .eq('entity_type', 'post')
+          .is('deleted_at', null)
+          .order('entity_id', { ascending: true })
+          .order('position', { ascending: true })
+          .order('attached_at', { ascending: true }),
+    );
+    if (!rows.ok) return rows;
+    const out: Record<string, string> = {};
+    for (const row of rows.data) {
+      if (out[row.entity_id] !== undefined) continue;
+      const version = Array.isArray(row.asset_versions)
+        ? row.asset_versions[0]
+        : row.asset_versions;
+      if (version?.mime_type?.startsWith('image/') === true) {
+        out[row.entity_id] = row.asset_version_id;
+      }
+    }
+    return { ok: true, data: out };
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/** Read the Plan screen (plans, items, reviews, posts, then comment counts and thumbnails). Never throws. */
 export async function readPlanScreen(
   client: Client,
   planId: string,
@@ -1094,14 +1160,22 @@ export async function readPlanScreen(
   const bundles = await readPlanBundles(client, [planId], signal);
   if (!bundles.ok) return bundles;
   const bundle = bundles.data.get(planId) ?? null;
-  if (bundle === null) return { ok: true, data: { bundle, commentCounts: {} } };
-  const counts = await readCommentCounts(
-    client,
-    bundle.items.map((i) => i.id),
-    signal,
-  );
+  if (bundle === null) return { ok: true, data: { bundle, commentCounts: {}, thumbs: {} } };
+  const postIds = bundle.items.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
+  const [counts, thumbs] = await Promise.all([
+    readCommentCounts(
+      client,
+      bundle.items.map((i) => i.id),
+      signal,
+    ),
+    readPostThumbs(client, postIds, signal),
+  ]);
   if (!counts.ok) return counts;
-  return { ok: true, data: { bundle, commentCounts: counts.data } };
+  // A failed thumbnail read keeps the screen: those rows show their text tile.
+  return {
+    ok: true,
+    data: { bundle, commentCounts: counts.data, thumbs: thumbs.ok ? thumbs.data : {} },
+  };
 }
 
 /** The Item screen: comments (oldest first), a concept's files, and author names. */

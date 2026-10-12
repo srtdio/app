@@ -349,7 +349,7 @@ Chat files stay in chat (20261005040000_chat_files_stay_in_chat.sql):
 - Agency actions (20261007100000_agency_actions_activity.sql, applied 7 Oct):
   - post_deleted inbox event: post_soft_delete writes one row per other active member (entity_type post, entity_id post id, scope posts, tier active), payload {number, title (<=120), actor_role}, actor_user_id = actor; for a draft post only roles with pipeline.view_all_stages, plus clients when the draft sits in a live client plan.
   - assets_deleted inbox event: asset_delete / asset_delete_many write ONE row per other active member per call (entity_type workspace, entity_id = scope_key = workspace id, scope everything, tier active), payload {count, filenames (up to 3), actor_role}. Bulk = one row; nothing deleted = no row. Any active member may delete assets.
-  - post_deleted for a draft goes only to roles with pipeline.view_all_stages.
+  - post_deleted for a draft goes only to roles with pipeline.view_all_stages, plus clients when the draft sits in a live client plan.
   - stage_change payload is {from, to, actor_role} (also in the audit row); approved / rejected need post.approve, parked / review need post.edit. Rows written before 7 Oct have no actor_role.
   - workspace_role_permissions: agency has post.delete (post_soft_delete is owner, admin, agency).
   - workspace_role_permissions: client has asset.delete (all workspaces and seed_workspace_role_defaults).

@@ -25,6 +25,8 @@ import { useToast } from '@/components/ui/toast';
 import { useLongPress } from '@/components/ui';
 import { IconCheck, IconChevronLeft, IconPlan, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { Thumbnail } from '@/components/media/Thumbnail';
+import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
   DRAFT_LABEL,
   DRAFT_NOT_READY,
@@ -46,6 +48,8 @@ import {
   slotSide,
   slotTicked,
   slotToastSpec,
+  slotUndoStatus,
+  stageLabel,
   withReviewOverrides,
   type StatusPill,
 } from '@/components/chat/plan-card';
@@ -69,12 +73,20 @@ import { workspaceTimeZone } from '@/lib/chat/time-format';
 import { HISTORY_STEP_KEYS, useHistoryStep } from '@/lib/chat/use-history-step';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
+import { formatLabel } from '@/lib/post-detail-presentation';
 import { logger } from '@/lib/logger';
 import { DUR_SLOW_MS } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
-import { formatCivilDayHeader, planShowsWeeks, planWeekGroups } from '@/lib/plan-week';
+import {
+  civilToday,
+  civilWeekdayShort,
+  dayOfMonth,
+  formatCivilDayHeader,
+  planShowsWeeks,
+  planWeekGroups,
+} from '@/lib/plan-week';
 
 // ---------------------------------------------------------------------------
 // Shared pieces
@@ -544,7 +556,8 @@ export function PlanScreen(props: {
   };
 
   // One slot write: optimistic at once, reverted on failure; a tick's toast
-  // offers Undo (a write back to waiting), an untick's says it was removed.
+  // offers Undo (a write back to the status the tick replaced), an untick's
+  // says it was removed.
   const writeSlot = async (
     item: PlanItemRow,
     reviewSide: ReviewSide,
@@ -586,13 +599,22 @@ export function PlanScreen(props: {
     if (spec === null) return;
     toast.show({
       title: spec.title,
+      ...(spec.undo ? { tone: 'success' as const } : {}),
       ...(spec.undo
         ? {
             durationMs: SLOT_UNDO_MS,
             action: {
               label: SLOT_UNDO,
+              // Undo restores the exact status the tick replaced.
               onPress: () =>
-                void writeSlot(item, reviewSide, 'waiting', 'approved', 'undo', dayHeader),
+                void writeSlot(
+                  item,
+                  reviewSide,
+                  slotUndoStatus(previous),
+                  'approved',
+                  'undo',
+                  dayHeader,
+                ),
             },
           }
         : {}),
@@ -642,6 +664,7 @@ export function PlanScreen(props: {
             counts={counts}
             side={side}
             timeZone={timeZone}
+            thumbs={read.status === 'ready' ? read.data.thumbs : {}}
             onOpenItem={setItemId}
             onToggleSlot={toggleSlot}
             onRemove={(row) => {
@@ -735,11 +758,12 @@ export function rowSubline(item: PlanItemRow): string {
   return item.kind === 'concept' ? (item.description ?? '') : '';
 }
 
-function PlanBody(props: {
+export function PlanBody(props: {
   bundle: PlanBundle;
   counts: Record<string, number>;
   side: ViewerSide;
   timeZone: string;
+  thumbs: Record<string, string>;
   onOpenItem: (id: string) => void;
   onToggleSlot: (item: PlanItemRow) => void;
   onRemove: (item: PlanItemRow) => void;
@@ -750,6 +774,7 @@ function PlanBody(props: {
   const { bundle, side } = props;
   const { starts_on: startsOn, ends_on: endsOn } = bundle.plan;
   const weeks = planShowsWeeks(startsOn, endsOn);
+  const today = civilToday(new Date(), props.timeZone);
   const groups = planWeekGroups(
     bundle.items,
     { startsOn, endsOn },
@@ -783,7 +808,7 @@ function PlanBody(props: {
           ) : null}
         </div>
       ) : null}
-      <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col pb-4 pt-1">
+      <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col pb-4 pt-2">
         {groups.map((week, w) => (
           <section
             key={week.label ?? `days-${w}`}
@@ -803,42 +828,33 @@ function PlanBody(props: {
                 key={day.day ?? 'none'}
                 data-plan-day={day.day ?? 'none'}
                 {...(day.day !== null && !day.inRange ? { 'data-plan-day-out': '' } : {})}
-                className="flex flex-col"
+                className="flex gap-3 border-b border-border py-2 pl-4 pr-3"
               >
-                <h4
-                  data-plan-day-header=""
-                  className="px-4 pb-1.5 pt-3 text-[13px] font-semibold text-fg-2"
-                >
-                  {day.label}
-                </h4>
-                {day.items.length === 0 ? (
-                  <p
-                    data-plan-day-empty=""
-                    className={cn(
-                      'mx-4 flex items-center text-[13px] text-fg-3',
-                      weeks
-                        ? 'h-8'
-                        : 'min-h-[56px] rounded-lg border border-dashed border-border px-3',
-                    )}
-                  >
-                    Nothing planned
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-2 px-4">
-                    {day.items.map((item) => (
+                <DayColumn day={day.day} today={today} empty={day.items.length === 0} />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {day.items.length === 0 ? (
+                    <p
+                      data-plan-day-empty=""
+                      className="flex h-9 items-center text-[13px] text-fg-3"
+                    >
+                      Nothing planned
+                    </p>
+                  ) : (
+                    day.items.map((item) => (
                       <PlanRow
                         key={item.id}
                         bundle={bundle}
                         item={item}
                         side={side}
+                        thumb={item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null}
                         comments={props.counts[item.id] ?? 0}
                         onOpen={() => props.onOpenItem(item.id)}
                         onToggleSlot={() => props.onToggleSlot(item)}
                         {...(side === 'agency' ? { onRemove: () => props.onRemove(item) } : {})}
                       />
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             ))}
           </section>
@@ -849,8 +865,55 @@ function PlanBody(props: {
 }
 
 /**
- * The slot checkbox: a 22px box in a 44x44 target. Ticked reads approved
- * ('changes' shows unticked). Tokens only; no motion.
+ * A day's left column (40px): the weekday (11px, uppercase, muted; today in
+ * the accent) over the date number (20px; muted on an empty day). The "No
+ * date" group shows "No date" in the weekday slot and no number.
+ */
+export function DayColumn(props: {
+  day: string | null;
+  today: string;
+  empty: boolean;
+}): ReactElement {
+  if (props.day === null) {
+    return (
+      <div data-plan-day-col="" className="flex w-10 shrink-0 flex-col items-center pt-1.5">
+        <span className="text-center text-[11px] font-semibold uppercase leading-[14px] text-fg-3">
+          No date
+        </span>
+      </div>
+    );
+  }
+  const isToday = props.day === props.today;
+  return (
+    <div
+      data-plan-day-col=""
+      {...(isToday ? { 'data-plan-today': '' } : {})}
+      className="flex w-10 shrink-0 flex-col items-center pt-1"
+    >
+      <span
+        data-plan-day-weekday=""
+        className={cn(
+          'text-[11px] font-semibold uppercase leading-[14px]',
+          isToday ? 'text-accent' : 'text-fg-3',
+        )}
+      >
+        {civilWeekdayShort(props.day)}
+      </span>
+      <span
+        data-plan-day-number=""
+        className={cn('text-xl font-semibold leading-6', props.empty ? 'text-fg-3' : 'text-fg')}
+      >
+        {dayOfMonth(props.day)}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The slot checkbox, at a row's right end: a 22px box (radius 6) in a 44x44
+ * target. Unticked: a 1.5px border-strong outline. Ticked: the client side
+ * fills with the success token, the team side with the accent; white tick.
+ * Tokens only; no motion.
  */
 export function SlotCheckbox(props: {
   side: ReviewSide;
@@ -869,12 +932,16 @@ export function SlotCheckbox(props: {
       data-plan-slot={props.side}
       data-plan-slot-state={props.checked ? 'approved' : 'pending'}
       onClick={props.onToggle}
-      className="flex h-11 w-11 shrink-0 items-center justify-center self-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center self-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span
         className={cn(
-          'flex h-[22px] w-[22px] items-center justify-center rounded-md border-2',
-          props.checked ? 'border-good bg-good-soft text-good' : 'border-border-strong bg-panel',
+          'flex h-[22px] w-[22px] items-center justify-center rounded-[6px] text-accent-fg',
+          props.checked
+            ? props.side === 'client'
+              ? 'border-[1.5px] border-good bg-good'
+              : 'border-[1.5px] border-accent bg-accent'
+            : 'border-[1.5px] border-border-strong bg-panel',
         )}
       >
         {props.checked ? <IconCheck size={14} /> : null}
@@ -898,10 +965,77 @@ export function DraftPill(props: { locked: boolean }): ReactElement {
   );
 }
 
+/** A row's meta line: a post's "Carousel · In review", a concept's description. Pure. */
+export function rowMeta(bundle: PlanBundle, item: PlanItemRow): string {
+  if (item.kind === 'concept') return rowSubline(item);
+  if (item.post_id === null) return stageLabel('draft');
+  const stage = stageLabel(bundle.postStages[item.post_id]);
+  const format = bundle.postInfo[item.post_id]?.format ?? null;
+  return format !== null && format !== '' ? `${formatLabel(format)} · ${stage}` : stage;
+}
+
+/** The row's 44x44 tile: a post's first image, "Aa" for a text post, a dashed concept outline. */
+function RowTile(props: { item: PlanItemRow; thumb: string | null; muted: boolean }): ReactElement {
+  if (props.item.kind === 'concept') {
+    return (
+      <span
+        data-plan-row-tile="concept"
+        className="h-11 w-11 shrink-0 rounded-lg border border-dashed border-border-strong bg-panel-2"
+      />
+    );
+  }
+  if (props.thumb !== null) {
+    return (
+      <span
+        data-plan-row-tile="image"
+        className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-2"
+      >
+        <Thumbnail
+          assetVersionId={props.thumb}
+          cache={sharedCardPresignCache()}
+          presignEnabled={PRESIGN_ENABLED}
+          fallback={{ kind: 'glyph' }}
+          alt=""
+        />
+      </span>
+    );
+  }
+  return (
+    <span
+      data-plan-row-tile="text"
+      className={cn(
+        'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[15px] font-semibold',
+        props.muted
+          ? 'border border-dashed border-border bg-panel-2 text-fg-3'
+          : 'bg-accent-soft text-accent',
+      )}
+    >
+      Aa
+    </span>
+  );
+}
+
+/** The Post / Concept tag pill (11px semibold, tinted). */
+function KindTag(props: { item: PlanItemRow; label: string }): ReactElement {
+  const post = props.item.kind === 'post';
+  return (
+    <span
+      data-plan-row-kind={props.label}
+      className={cn(
+        'inline-flex h-[18px] shrink-0 items-center rounded px-1.5 text-[11px] font-semibold',
+        post ? 'bg-accent-soft text-accent' : 'bg-panel-3 text-fg-2',
+      )}
+    >
+      {post ? 'Post' : 'Concept'}
+    </span>
+  );
+}
+
 function PlanRow(props: {
   bundle: PlanBundle;
   item: PlanItemRow;
   side: ViewerSide;
+  thumb: string | null;
   comments: number;
   onOpen: () => void;
   onToggleSlot: () => void;
@@ -909,13 +1043,12 @@ function PlanRow(props: {
 }): ReactElement {
   const onRemove = props.onRemove;
   const hold = useLongPress(() => onRemove?.());
-  const sub = rowSubline(props.item);
-  const date = itemDateLabel(props.bundle, props.item);
   const draft = isDraftPost(props.bundle, props.item);
-  const kindTag = itemKindLabel(props.bundle.items, props.item);
+  const kindLabel = itemKindLabel(props.bundle.items, props.item);
   const title = rowTitle(props.bundle, props.item);
+  const date = itemDateLabel(props.bundle, props.item);
   if (draftLocked(props.bundle, props.item, props.side)) {
-    // Name only: no checkbox, no open, no hover, no chevron.
+    // Name only: no checkbox (the right side stays empty), no open, no hover.
     return (
       <div
         role="button"
@@ -924,48 +1057,43 @@ function PlanRow(props: {
         data-plan-row-draft="locked"
         onContextMenu={(event) => event.preventDefault()}
         className={cn(
-          'flex w-full cursor-default flex-col gap-2 rounded-lg border border-border bg-panel p-3 text-left',
+          'flex min-h-[60px] w-full cursor-default items-center gap-3 py-2 pr-12',
           NO_TOUCH_SELECT,
         )}
       >
-        <span className="flex w-full gap-3">
-          <span className="h-12 w-12 shrink-0 rounded-md border border-dashed border-border bg-panel-2" />
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span data-plan-row-kind="" className="text-xs text-fg-3">
-              {kindTag}
-            </span>
-            <span className="truncate text-[15px] font-semibold text-fg-2">{title}</span>
-            <span className="text-[13px] text-fg-3">{DRAFT_NOT_READY}</span>
-            <span
-              data-plan-row-date={date.dated ? 'dated' : 'none'}
-              className={cn('text-[13px] text-fg-3', date.dated && 'font-mono')}
-            >
-              {date.label}
-            </span>
+        <RowTile item={props.item} thumb={null} muted />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span data-plan-row-title="" className="truncate text-[15px] font-semibold text-fg-2">
+            {title}
           </span>
-        </span>
-        <span className="flex w-full flex-wrap items-center gap-1.5">
-          <DraftPill locked />
+          <span className="flex min-w-0 items-center gap-1.5">
+            <KindTag item={props.item} label={kindLabel} />
+            <DraftPill locked />
+            <span className="truncate text-[13px] text-fg-3">{DRAFT_NOT_READY}</span>
+          </span>
+          <span
+            data-plan-row-date={date.dated ? 'dated' : 'none'}
+            className={cn('sr-only', date.dated && 'font-mono')}
+          >
+            {date.label}
+          </span>
         </span>
       </div>
     );
   }
   const slot = slotCheckboxShown(props.bundle, props.item, props.side);
+  const meta = rowMeta(props.bundle, props.item);
+  // Status beyond the checkbox: the agency sees the client pill; a client
+  // sees a changes request. Comments count when there are any.
+  const pills = itemPills(props.bundle, props.item, props.side).filter((pill) =>
+    props.side === 'agency' ? pill.side === 'client' : pill.tone === 'review',
+  );
+  const extra = draft || pills.length > 0 || props.comments > 0;
   return (
     <div
       data-plan-row-wrap={props.item.id}
-      className="flex w-full items-stretch rounded-lg border border-border bg-panel"
+      className={cn('flex w-full items-center', slot === null && 'pr-12')}
     >
-      {slot !== null ? (
-        <span className="flex shrink-0 items-center pl-1">
-          <SlotCheckbox
-            side={slot}
-            checked={slotTicked(props.bundle, props.item.id, slot)}
-            title={title}
-            onToggle={props.onToggleSlot}
-          />
-        </span>
-      ) : null}
       <button
         type="button"
         data-plan-row={props.item.id}
@@ -982,44 +1110,52 @@ function PlanRow(props: {
           props.onOpen();
         }}
         className={cn(
-          'flex min-w-0 flex-1 flex-col gap-2 rounded-lg p-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          slot !== null && 'pl-1',
+          'flex min-h-[60px] min-w-0 flex-1 items-center gap-3 rounded-lg py-2 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           NO_TOUCH_SELECT,
         )}
       >
-        <span className="flex w-full gap-3">
-          <span
-            className={cn(
-              'h-12 w-12 shrink-0 rounded-md',
-              props.item.kind === 'concept'
-                ? 'border border-dashed border-border-strong bg-panel-3'
-                : 'bg-accent-soft',
-            )}
-          />
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span data-plan-row-kind="" className="text-xs text-fg-3">
-              {kindTag}
-            </span>
-            <span className="truncate text-[15px] font-semibold text-fg">{title}</span>
-            {sub !== '' ? <span className="line-clamp-2 text-[13px] text-fg-3">{sub}</span> : null}
-            <span
-              data-plan-row-date={date.dated ? 'dated' : 'none'}
-              className={cn('text-[13px] text-fg-3', date.dated && 'font-mono')}
-            >
-              {date.label}
-            </span>
+        <RowTile item={props.item} thumb={props.thumb} muted={false} />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span data-plan-row-title="" className="truncate text-[15px] font-semibold text-fg">
+            {title}
           </span>
-        </span>
-        <span className="flex w-full flex-wrap items-center gap-1.5">
-          {draft ? <DraftPill locked={false} /> : null}
-          {itemPills(props.bundle, props.item, props.side).map((pill) => (
-            <PlanPill key={pill.side} pill={pill} />
-          ))}
-          <span className="ml-auto text-xs text-fg-3">
-            {props.comments === 1 ? '1 comment' : `${props.comments} comments`}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <KindTag item={props.item} label={kindLabel} />
+            {meta !== '' ? (
+              <span data-plan-row-meta="" className="truncate text-[13px] text-fg-3">
+                {meta}
+              </span>
+            ) : null}
+          </span>
+          {extra ? (
+            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {draft ? <DraftPill locked={false} /> : null}
+              {pills.map((pill) => (
+                <PlanPill key={pill.side} pill={pill} />
+              ))}
+              {props.comments > 0 ? (
+                <span className="text-xs text-fg-3">
+                  {props.comments === 1 ? '1 comment' : `${props.comments} comments`}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+          <span
+            data-plan-row-date={date.dated ? 'dated' : 'none'}
+            className={cn('sr-only', date.dated && 'font-mono')}
+          >
+            {date.label}
           </span>
         </span>
       </button>
+      {slot !== null ? (
+        <SlotCheckbox
+          side={slot}
+          checked={slotTicked(props.bundle, props.item.id, slot)}
+          title={title}
+          onToggle={props.onToggleSlot}
+        />
+      ) : null}
     </div>
   );
 }
