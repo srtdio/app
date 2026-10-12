@@ -615,7 +615,8 @@ test('a plan holding today opens with today at the top, no jump; earlier days ab
     if (body === null) throw new Error('body');
     return el.getBoundingClientRect().top - body.getBoundingClientRect().top;
   });
-  expect(Math.abs(gap)).toBeLessThan(1);
+  // Directly at the top (scrollTop is whole pixels; WebKit rounds layout to 1px).
+  expect(Math.abs(gap)).toBeLessThanOrEqual(1);
   await expect(dayBlock(plan, today).locator('[data-plan-today]')).toHaveCount(1);
   await shot(page, 'today-01-open-at-today');
   // Earlier days are still there, above.

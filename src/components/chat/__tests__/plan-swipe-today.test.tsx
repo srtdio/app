@@ -183,7 +183,7 @@ describe('open at today', () => {
     expect(src).toMatch(
       /useLayoutEffect\(\(\) => \{\s*if \(!props\.open\) \{\s*scrolledFor\.current = null;/,
     );
-    expect(src).toContain('body.scrollTop +=');
+    expect(src).toContain('body.scrollTop = Math.round(');
     expect(src).not.toMatch(/scrollTo\(\{[^}]*smooth/);
   });
 });

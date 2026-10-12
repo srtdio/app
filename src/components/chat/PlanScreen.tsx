@@ -594,7 +594,11 @@ function scrollDayToTop(body: HTMLElement, day: string): void {
   if (block === null) return;
   const header = block.closest('section')?.querySelector<HTMLElement>('[data-plan-week-header]');
   const sticky = header?.getBoundingClientRect().height ?? 0;
-  body.scrollTop += block.getBoundingClientRect().top - body.getBoundingClientRect().top - sticky;
+  // Whole pixels: WebKit truncates a fractional scrollTop, which would leave
+  // rows on sub-pixel edges.
+  body.scrollTop = Math.round(
+    body.scrollTop + block.getBoundingClientRect().top - body.getBoundingClientRect().top - sticky,
+  );
 }
 
 /** The first swipeable row fully in view and not under a sticky header, or null. */
