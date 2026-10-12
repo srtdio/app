@@ -590,6 +590,25 @@ export function openingState(input: {
   };
 }
 
+/**
+ * Rows whose reply quote or thread root is not resolved yet (a read still in
+ * flight when the thread left), plus `pending` ids among them. Pure.
+ */
+export function awaitingResolve(
+  rows: readonly ThreadMessage[],
+  pending: ReadonlySet<string> = new Set(),
+): string[] {
+  const ids = new Set(rows.map((m) => m.id));
+  return rows
+    .filter(
+      (m) =>
+        pending.has(m.id) ||
+        (m.reply !== null && m.reply.preview === '' && m.parentDeleted !== true) ||
+        (m.threadRootId != null && !ids.has(m.threadRootId) && m.rootPostIds === undefined),
+    )
+    .map((m) => m.id);
+}
+
 /** The forward rows a reopen still has to fold in: ids not on screen yet. Pure. */
 export function unseenRows(
   messages: readonly ThreadMessage[],
@@ -1071,8 +1090,8 @@ export function useChatThread(params: {
           hasMore: window.hasMore,
           through: contiguity.through(),
           reads: readsLeft,
-          // Quotes and roots still resolving are resolved on the next reopen.
-          unresolved: [...pendingResolve].filter((id) => window.rows.some((m) => m.id === id)),
+          // Quotes and roots still waiting are resolved on the next reopen.
+          unresolved: awaitingResolve(window.rows, pendingResolve),
         });
       }
       owner.release();

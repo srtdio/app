@@ -41,6 +41,7 @@ import {
 } from '@/lib/chat/thread';
 import {
   applyReopenChecks,
+  awaitingResolve,
   openingState,
   revalidateRemembered,
   sameReadPositions,
@@ -186,6 +187,19 @@ describe('remember on switch', () => {
     expect(store.holding('thread')).toHaveLength(OPEN_CACHE_LIMIT);
     expect(store.recall({ ...A, channelId: 'c0' }, 'thread')).toBeUndefined();
     expect(store.recall({ ...A, channelId: `c${OPEN_CACHE_LIMIT}` }, 'thread')).toBeDefined();
+  });
+});
+
+describe('quotes left unresolved', () => {
+  it('rows still waiting on a quote or root are kept pending for the next reopen', () => {
+    const plain = msg(row(1));
+    const quoted: ThreadMessage = {
+      ...msg(row(2)),
+      reply: { id: 'm-0099', authorUserId: PEER, preview: '' } as unknown as ThreadMessage['reply'],
+    };
+    const rooted: ThreadMessage = { ...msg(row(3)), threadRootId: 'm-0098' };
+    expect(awaitingResolve([plain, quoted, rooted])).toEqual(['m-0002', 'm-0003']);
+    expect(awaitingResolve([plain], new Set(['m-0001']))).toEqual(['m-0001']);
   });
 });
 
