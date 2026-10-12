@@ -102,8 +102,12 @@ describe('Toast', () => {
     props.onClick();
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(onDismiss).toHaveBeenCalledWith('1');
-    // The dismiss control is still there, apart from the action.
+    // The dismiss control is still there, apart from the action; the action is last.
     expect(findAll(tree, (el) => ariaLabel(el) === 'Dismiss notification')).toHaveLength(1);
+    const kids = (tree.props as { children: ReactNode[] }).children.filter(
+      (c): c is ReactElement => typeof c === 'object' && c !== null && 'props' in c,
+    );
+    expect((kids[kids.length - 1]!.props as Record<string, unknown>)['data-toast-action']).toBe('');
   });
 
   it('renders no action button when none is given (existing toasts unchanged)', () => {

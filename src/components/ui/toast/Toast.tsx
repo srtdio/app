@@ -13,7 +13,7 @@ interface ToastProps {
  * its element tree (the codebase convention for pure components). The whole
  * content area is the press target when `onPress` is set; the dismiss control
  * is always a separate 44x44 button so the two never nest. An optional action
- * (e.g. Undo) is its own 44px button before the dismiss; pressing it runs the
+ * (e.g. Undo) is its own 44px button at the card's right end, after the dismiss; pressing it runs the
  * action and dismisses the toast. Enter glides up and
  * fades in (--dur-slow); exit fades down (--dur-base); axis is translateY only.
  */
@@ -66,6 +66,14 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
       ) : (
         <div className="flex min-h-[44px] min-w-0 flex-1 items-center gap-3 px-3 py-2">{body}</div>
       )}
+      <button
+        type="button"
+        aria-label="Dismiss notification"
+        onClick={() => onDismiss(id)}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
+      >
+        <IconX />
+      </button>
       {action !== undefined ? (
         <button
           type="button"
@@ -79,14 +87,6 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
           {action.label}
         </button>
       ) : null}
-      <button
-        type="button"
-        aria-label="Dismiss notification"
-        onClick={() => onDismiss(id)}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
-      >
-        <IconX />
-      </button>
     </div>
   );
 }

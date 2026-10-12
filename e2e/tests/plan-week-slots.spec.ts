@@ -137,6 +137,9 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   const success = page.locator('[data-toast-tone="success"]');
   await expect(success).toBeVisible();
   await expect(success.locator('[data-toast-action]')).toHaveText('Undo');
+  expect(
+    await success.evaluate((el) => el.lastElementChild?.hasAttribute('data-toast-action')),
+  ).toBe(true);
   expectMinTouchTarget(await undo.boundingBox());
   expect(network.world.tables.plan_item_reviews).toEqual([
     expect.objectContaining({ item_id: PLAN_POST_ITEM, side: 'client', status: 'approved' }),
