@@ -1283,6 +1283,77 @@ export function markReadUpToMessage(messages: ThreadMessage[], messageId: string
   return anchor === undefined ? messages : markReadUpTo(messages, anchor.time);
 }
 
+// Live event apply: one path for the open thread and a remembered (closed)
+// chat, so the two can never read the same event differently.
+
+/** A verified live row folded into a chat's rows (merge by id, in order). Pure. */
+export function applyLiveRow(messages: ThreadMessage[], message: ThreadMessage): ThreadMessage[] {
+  return mergeFetched(messages, [message]);
+}
+
+/**
+ * A live delete signal: the ids the sender may delete (loaded, theirs, not a
+ * tombstone yet) become tombstones; anyone else's ids are ignored. Pure.
+ */
+export function applyLiveDelete(
+  messages: ThreadMessage[],
+  input: { messageIds: readonly string[]; fromUserId: string },
+): { messages: ThreadMessage[]; deleted: string[] } {
+  const claimed = new Set(input.messageIds);
+  const deleted = messages
+    .filter((m) => claimed.has(m.id) && m.senderUserId === input.fromUserId)
+    .map((m) => m.id);
+  return {
+    messages: deleted.length > 0 ? markMessagesDeleted(messages, deleted) : messages,
+    deleted,
+  };
+}
+
+/** A live edit signal is worth a re-read only for a loaded message of its sender. Pure. */
+export function liveEditWanted(
+  messages: readonly ThreadMessage[],
+  input: { messageId: string; fromUserId: string },
+): boolean {
+  const target = messages.find((m) => m.id === input.messageId);
+  return target !== undefined && target.senderUserId === input.fromUserId;
+}
+
+/**
+ * A live edit's re-read row applied: only a row of this chat by the signal's
+ * sender (applyEditFromRow then keeps an unchanged or older edit out). Pure.
+ */
+export function applyLiveEditRow(
+  messages: ThreadMessage[],
+  input: { row: ChatMessageRow; channelId: string; fromUserId: string },
+): ThreadMessage[] {
+  const { row } = input;
+  if (row.channel_id !== input.channelId || row.sender_user_id !== input.fromUserId) {
+    return messages;
+  }
+  return applyEditFromRow(messages, row);
+}
+
+/** A live reaction signal (mine when the signal is the viewer's own, another device). Pure. */
+export function applyLiveReaction(
+  messages: ThreadMessage[],
+  input: { messageId: string; emoji: string; op: 'add' | 'remove'; fromUserId: string },
+  currentUserId: string,
+): ThreadMessage[] {
+  if (!messages.some((m) => m.id === input.messageId)) return messages;
+  return applyReactionOp(messages, {
+    messageId: input.messageId,
+    emoji: input.emoji,
+    op: input.op,
+    mine: input.fromUserId === currentUserId,
+  });
+}
+
+/** A peer's live read signal: own messages up to it read (the same list when not loaded). Pure. */
+export function applyLiveRead(messages: ThreadMessage[], messageId: string): ThreadMessage[] {
+  if (!messages.some((m) => m.id === messageId)) return messages;
+  return markReadUpToMessage(messages, messageId);
+}
+
 /**
  * Subscribe to live traffic for one channel and return the teardown. Registers
  * the 'chat-thread' handler (separate from the Foundation handler) and removes

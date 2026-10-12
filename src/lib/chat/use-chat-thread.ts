@@ -13,6 +13,14 @@
 // (only a server refusal reads "Not sent"). Unrecorded sends live in
 // the per-channel outbox, so switching channels keeps a sending or failed
 // bubble and its Retry payload.
+//
+// A chat opened before in this session reopens from memory (open-cache): its
+// remembered page is the first frame (no skeleton), then one background
+// revalidation brings it level with the record: the rows after the newest
+// remembered one, one batched re-read of the remembered rows by id and one
+// batched reactions read. While the thread shows a chat it owns that chat's
+// rows and writes them back when it leaves; while closed, live events land
+// on the remembered rows through the same apply functions used here.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, Result } from '@srtdio/rpc';
@@ -22,6 +30,7 @@ import { generateTraceId } from '@/lib/trace';
 import { newMessageId } from '@/lib/chat/message-id';
 import { createCmdMessage, createTextMessage } from '@/lib/chat/message-factory';
 import {
+  CATCH_UP_LIMIT,
   loadLatestMessages,
   readLatestMessages,
   loadMessageById,
@@ -46,6 +55,14 @@ import {
   type CatchUpReason,
 } from '@/lib/chat/catch-up';
 import { liveVerifierFor, type LiveVerifier } from '@/lib/chat/live-verify';
+import {
+  chatKey,
+  openCache,
+  rememberedWindow,
+  withOwnCursor,
+  type OpenCache,
+  type RememberedThread,
+} from '@/lib/chat/open-cache';
 import {
   messagePreviewContent,
   previewText,
@@ -75,13 +92,17 @@ import { createInFlightGuard, recordThenSignal } from '@/lib/chat/thread-actions
 import {
   applyEdit,
   applyEditFromRow,
+  applyLiveDelete,
+  applyLiveEditRow,
+  applyLiveRead,
+  applyLiveReaction,
   applyReactionOp,
+  liveEditWanted,
   hydrateReplies,
   hydrateRoots,
   missingRootIds,
   markMessagesDeleted,
   markReadUpTo,
-  markReadUpToMessage,
   mergeFetched,
   mergeReactions,
   replaceReactions,
@@ -89,6 +110,7 @@ import {
   reactionEventExt,
   readEventExt,
   removeMessages,
+  rowCursor,
   rowToThreadMessage,
   sendText,
   setMessageAttachments,
@@ -100,6 +122,7 @@ import {
   type ChannelTarget,
   type ChatMessageRow,
   type MessageCursor,
+  type MessageReaction,
   type ThreadConnection,
   type ThreadMessage,
 } from '@/lib/chat/thread';
@@ -201,6 +224,8 @@ export async function findWithinBudget(params: {
 }
 
 export interface UseChatThread {
+  /** The chat `messages` belongs to (it follows a switch in the same render). */
+  channelId: string | null;
   messages: ThreadMessage[];
   loading: boolean;
   /** The latest page failed or timed out (5s): the thread shows Retry, never "No messages yet". */
@@ -429,6 +454,184 @@ export async function runLatestLoad(
   }
 }
 
+/** What a reopen's background revalidation read. */
+export type ReopenRead =
+  /** More new rows than one forward read holds: the remembered page is dropped (no gap shown). */
+  | { kind: 'gap' }
+  | {
+      kind: 'read';
+      /** Rows after the newest remembered one (oldest first); null: that read failed. */
+      newer: ChatMessageRow[] | null;
+      /** Where the record is contiguous through after `newer`. */
+      through: MessageCursor | undefined;
+      /** The remembered rows re-read by id; null: failed. */
+      rechecked: ChatMessageRow[] | null;
+      /** The remembered rows' reactions as recorded; null: failed. */
+      reactions: Map<string, MessageReaction[]> | null;
+      /** Which rows the reactions read covered. */
+      checkedIds: string[];
+    };
+
+/** The reads a reopen's revalidation makes (the app's history reads; tests pass fakes). */
+export interface ReopenLoaders {
+  loadNewer: (cursor: MessageCursor, signal: AbortSignal) => Promise<Result<ChatMessageRow[]>>;
+  loadLatest: (signal: AbortSignal) => Promise<Result<HistoryPage>>;
+  loadByIds: (ids: readonly string[], signal: AbortSignal) => Promise<Result<ChatMessageRow[]>>;
+  loadReactions: (
+    ids: readonly string[],
+    signal: AbortSignal,
+  ) => Promise<Result<Map<string, MessageReaction[]>>>;
+}
+
+/**
+ * A reopen's safety net for events missed while closed (asleep, away, sent
+ * outside live delivery, notes): one forward read after `through` (the latest
+ * page when nothing was contiguous), one IN re-read of the remembered rows
+ * (edited_at, deleted_at, body) and one IN reactions read, all at once, each
+ * bounded at 5s by its reader. A forward read that comes back full means more
+ * may follow: 'gap'.
+ */
+export async function revalidateRemembered(
+  loaders: ReopenLoaders,
+  remembered: Pick<RememberedThread, 'rows' | 'through'>,
+  signal: AbortSignal,
+): Promise<ReopenRead> {
+  const ids = remembered.rows.slice(-CATCH_UP_LIMIT).map((m) => m.id);
+  const through = remembered.through;
+  const [forward, rechecked, reactions] = await Promise.all([
+    through !== undefined
+      ? loaders
+          .loadNewer(through, signal)
+          .then((r) =>
+            r.ok ? { ok: true as const, rows: r.data, full: r.data.length >= CATCH_UP_LIMIT } : r,
+          )
+      : loaders
+          .loadLatest(signal)
+          .then((r) => (r.ok ? { ok: true as const, rows: r.data.rows, full: r.data.hasMore } : r)),
+    ids.length > 0 ? loaders.loadByIds(ids, signal) : Promise.resolve(null),
+    ids.length > 0 ? loaders.loadReactions(ids, signal) : Promise.resolve(null),
+  ]);
+  if (forward.ok && forward.full) return { kind: 'gap' };
+  const newest = forward.ok ? forward.rows[forward.rows.length - 1] : undefined;
+  return {
+    kind: 'read',
+    newer: forward.ok ? forward.rows : null,
+    through: newest !== undefined ? rowCursor(newest) : through,
+    rechecked: rechecked === null ? [] : rechecked.ok ? rechecked.data : null,
+    reactions: reactions === null ? new Map() : reactions.ok ? reactions.data : null,
+    checkedIds: ids,
+  };
+}
+
+/**
+ * Fold a reopen's re-reads into the rows: reactions as recorded (rows a local
+ * toggle touched since are left alone), tombstones and edits from the re-read
+ * rows. The same list when nothing changed. Pure.
+ */
+export function applyReopenChecks(
+  messages: ThreadMessage[],
+  read: Extract<ReopenRead, { kind: 'read' }>,
+  channelId: string,
+  untouched: (ids: readonly string[]) => string[] = (ids) => [...ids],
+): { messages: ThreadMessage[]; deleted: string[] } {
+  let next = messages;
+  if (read.reactions !== null) {
+    next = replaceReactions(next, untouched(read.checkedIds), read.reactions);
+  }
+  if (read.rechecked === null || read.rechecked.length === 0)
+    return { messages: next, deleted: [] };
+  return applyRevalidatedRows(next, read.rechecked, channelId);
+}
+
+/**
+ * What a thread shows the moment it switches to a chat: a remembered page is
+ * the first frame (rows with the outbox laid on top, ready cursors, no
+ * loading); otherwise the outbox alone while the latest page loads. Pure.
+ */
+export function openingState(input: {
+  channelId: string | null;
+  page: RememberedThread | undefined;
+  outbox: readonly OutboxEntry[];
+  currentUserId: string;
+}): {
+  messages: ThreadMessage[];
+  loading: boolean;
+  hasMore: boolean;
+  reads: {
+    channelId: string | null;
+    status: ThreadReadState['status'];
+    read: ReadPositionsRead;
+    open: OpenCursor;
+  };
+} {
+  const { channelId, page, currentUserId } = input;
+  if (channelId === null) {
+    return {
+      messages: [],
+      loading: false,
+      hasMore: false,
+      reads: { channelId, status: 'loading', read: NO_READS, open: { kind: 'unknown' } },
+    };
+  }
+  const messages = withOutboxBubbles(page?.rows ?? [], [...input.outbox], currentUserId);
+  return {
+    messages,
+    loading: page === undefined,
+    hasMore: page?.hasMore ?? false,
+    reads:
+      page?.reads !== null && page?.reads !== undefined
+        ? {
+            channelId,
+            status: 'ready',
+            read: page.reads,
+            open: openCursorFrom(page.reads, currentUserId),
+          }
+        : { channelId, status: 'loading', read: NO_READS, open: { kind: 'unknown' } },
+  };
+}
+
+/**
+ * Rows whose reply quote or thread root is not resolved yet (a read still in
+ * flight when the thread left), plus `pending` ids among them. Pure.
+ */
+export function awaitingResolve(
+  rows: readonly ThreadMessage[],
+  pending: ReadonlySet<string> = new Set(),
+): string[] {
+  const ids = new Set(rows.map((m) => m.id));
+  return rows
+    .filter(
+      (m) =>
+        pending.has(m.id) ||
+        (m.reply !== null && m.reply.preview === '' && m.parentDeleted !== true) ||
+        (m.threadRootId != null && !ids.has(m.threadRootId) && m.rootPostIds === undefined),
+    )
+    .map((m) => m.id);
+}
+
+/** The forward rows a reopen still has to fold in: ids not on screen yet. Pure. */
+export function unseenRows(
+  messages: readonly ThreadMessage[],
+  rows: readonly ChatMessageRow[],
+): ChatMessageRow[] {
+  const shown = new Set(messages.map((m) => m.id));
+  return rows.filter((row) => !shown.has(row.id));
+}
+
+/** Whether two cursor reads say the same thing (a background re-read changes nothing then). Pure. */
+export function sameReadPositions(a: ReadPositionsRead, b: ReadPositionsRead): boolean {
+  if (a.rows.length !== b.rows.length) return false;
+  // A cursor whose message time is known is placed by it (lastReadAt is the fallback).
+  const key = (r: ReadPositionsRead['rows'][number], times: ReadPositionsRead['times']): string =>
+    `${r.userId}\n${r.lastReadMessageId}\n${times.has(r.lastReadMessageId) ? '' : r.lastReadAt}`;
+  const left = new Set(a.rows.map((r) => key(r, a.times)));
+  if (!b.rows.every((r) => left.has(key(r, b.times)))) return false;
+  for (const r of a.rows) {
+    if (a.times.get(r.lastReadMessageId) !== b.times.get(r.lastReadMessageId)) return false;
+  }
+  return true;
+}
+
 /** The Foundation client is the real connection; widen it to the messaging surface. */
 function asThreadConnection(client: ChatConnection): ThreadConnection {
   return client as ThreadConnection;
@@ -474,12 +677,21 @@ export function useChatThread(params: {
    * device's notes land on focus, tab visible and open).
    */
   catchUpOnFocus?: boolean;
+  /** The open workspace: with the user and the chat it keys the remembered page. */
+  workspaceId?: string | null;
+  /** Injected in tests; the app uses the tab's one store. */
+  memory?: OpenCache;
 }): UseChatThread {
   const { client, status, channelId, target, currentUserId, peerUserId, onOwnMessage, onCaughtUp } =
     params;
   const db: Client = params.db ?? supabase;
   const verifier = params.verifier ?? liveVerifierFor(db);
   const outbox = params.outbox;
+  const memory = params.memory ?? openCache;
+  const memoryKey = useMemo(
+    () => chatKey(currentUserId, params.workspaceId ?? null, channelId),
+    [currentUserId, params.workspaceId, channelId],
+  );
   const outboxRef = useRef(outbox);
   outboxRef.current = outbox;
 
@@ -490,6 +702,8 @@ export function useChatThread(params: {
   const retryLoad = useCallback(() => setLoadAttempt((n) => n + 1), []);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const hasMoreRef = useRef(false);
+  hasMoreRef.current = hasMore;
 
   // Live values the stable callbacks read.
   const messagesRef = useRef<ThreadMessage[]>([]);
@@ -545,6 +759,57 @@ export function useChatThread(params: {
     pendingWrite: false,
   });
   const markNewestRef = useRef<() => void>(() => {});
+  // The cursors as last read for the open chat, for the page this thread leaves behind.
+  const readsRef = useRef(reads);
+  readsRef.current = reads;
+
+  // A switch (or the mount): the chat's first frame is set while rendering,
+  // so no frame ever shows the previous chat or a skeleton before a
+  // remembered page. The load effect below then revalidates or loads.
+  const [shownChannel, setShownChannel] = useState<string | null>(null);
+  const seededRef = useRef<RememberedThread | undefined>(undefined);
+  // The chat being left, as it stood: its cleanups (the page left behind,
+  // the previews released) run after this render already holds the new chat.
+  const leavingRef = useRef<{
+    channelId: string | null;
+    messages: ThreadMessage[];
+    hasMore: boolean;
+    reads: typeof reads;
+  } | null>(null);
+  if (shownChannel !== channelId) {
+    leavingRef.current = {
+      channelId: shownChannel,
+      messages: messagesRef.current,
+      hasMore: hasMoreRef.current,
+      reads: readsRef.current,
+    };
+    setShownChannel(channelId);
+    const page = memoryKey !== null ? memory.recall(memoryKey, 'thread') : undefined;
+    const opening = openingState({
+      channelId,
+      page,
+      outbox: channelId !== null ? outbox.entries(channelId) : [],
+      currentUserId,
+    });
+    seededRef.current = page;
+    setMessages(opening.messages);
+    setLoading(opening.loading);
+    setHasMore(opening.hasMore);
+    setLoadFailed(false);
+    setReads(opening.reads);
+  }
+  /** The rows, hasMore and cursors of a chat this thread is leaving (its cleanups read them). */
+  const leaving = useCallback((forChannel: string | null) => {
+    const left = leavingRef.current;
+    return left !== null && left.channelId === forChannel
+      ? left
+      : {
+          channelId: forChannel,
+          messages: messagesRef.current,
+          hasMore: hasMoreRef.current,
+          reads: readsRef.current,
+        };
+  }, []);
 
   /** Merge the reactions for a batch of ids into the list (one IN query). */
   const attachReactions = useCallback(
@@ -656,17 +921,23 @@ export function useChatThread(params: {
   useEffect(() => {
     lastCursorRef.current = null;
     const epoch = contiguity.reset();
-    setHasMore(false);
     setLoadFailed(false);
     if (channelId === null) {
+      setHasMore(false);
       setMessages([]);
       setLoading(false);
       return;
     }
-    setMessages(withOutboxBubbles([], outboxRef.current.entries(channelId), currentUserId));
     let cancelled = false;
     const abort = new AbortController();
-    setLoading(true);
+    // This thread owns the chat's remembered page while it shows the chat.
+    let owner = memoryKey !== null ? memory.attach(memoryKey) : null;
+    const remembered = memoryKey !== null ? memory.recall(memoryKey, 'thread') : undefined;
+    // Rows on screen came from this effect (a page or the memory): only then
+    // is the page left behind on leaving.
+    let shown = false;
+    // Remembered rows whose quotes and roots are not resolved yet.
+    const pendingResolve = new Set<string>();
     const applyPage = (page: HistoryPage): void => {
       const fetched = page.rows.map((row) => rowToThreadMessage(row, currentUserId));
       foldRows(fetched, channelId);
@@ -674,32 +945,156 @@ export function useChatThread(params: {
       setHasMore(page.hasMore);
       setLoadFailed(false);
       setLoading(false);
+      shown = true;
       if (peerUserId !== null) void attachPeerCursor(channelId, peerUserId);
     };
-    void (async (): Promise<void> => {
-      const outcome = await runLatestLoad(() =>
-        withLateRead((signal) => readLatestMessages(db, channelId, signal), {
-          onLate: (page) => {
-            if (!cancelled) applyPage(page);
-          },
-          cancel: abort.signal,
-        }),
-      );
-      if (cancelled) return;
-      if (outcome.kind === 'failed') {
-        logger.error('chat: history load failed', {
-          channel_id: channelId,
-          error: outcome.message,
-        });
-        setLoadFailed(true);
+    const openFresh = (): void => {
+      setHasMore(false);
+      setMessages(withOutboxBubbles([], outboxRef.current.entries(channelId), currentUserId));
+      setLoading(true);
+      void (async (): Promise<void> => {
+        const outcome = await runLatestLoad(() =>
+          withLateRead((signal) => readLatestMessages(db, channelId, signal), {
+            onLate: (page) => {
+              if (!cancelled) applyPage(page);
+            },
+            cancel: abort.signal,
+          }),
+        );
+        if (cancelled) return;
+        if (outcome.kind === 'failed') {
+          logger.error('chat: history load failed', {
+            channel_id: channelId,
+            error: outcome.message,
+          });
+          setLoadFailed(true);
+          setLoading(false);
+          return;
+        }
+        applyPage(outcome.page);
+      })();
+    };
+    const reopen = (page: RememberedThread): void => {
+      // The first frame: the remembered rows with the outbox laid on top, as a
+      // load does (already on screen when the render's switch seeded this page).
+      if (seededRef.current !== page) {
+        const seeded = withOutboxBubbles(
+          page.rows,
+          outboxRef.current.entries(channelId),
+          currentUserId,
+        );
+        messagesRef.current = seeded;
+        hasMoreRef.current = page.hasMore;
+        setMessages(seeded);
+        setHasMore(page.hasMore);
         setLoading(false);
-        return;
       }
-      applyPage(outcome.page);
-    })();
+      seededRef.current = undefined;
+      contiguity.catchUpApplied(epoch, page.through);
+      shown = true;
+      for (const id of page.unresolved) pendingResolve.add(id);
+      if (pendingResolve.size > 0) {
+        void resolveReplies(
+          page.rows.filter((m) => pendingResolve.has(m.id)),
+          channelId,
+        ).then(() => {
+          if (!cancelled) pendingResolve.clear();
+        });
+      }
+      if (peerUserId !== null) void attachPeerCursor(channelId, peerUserId);
+      const reactionsFrom = reactionTouchesRef.current.seq;
+      void revalidateRemembered(
+        {
+          loadNewer: (cursor, signal) => loadNewerMessages(db, channelId, cursor, signal),
+          // Bounded at 5s like every catch-up read.
+          loadLatest: () => loadLatestMessages(db, channelId),
+          loadByIds: (ids, signal) => loadMessagesByIds(db, ids, signal),
+          // The catch-up's batched reactions re-read (chunks of 100, 5s each).
+          loadReactions: (ids) =>
+            rereadReactions(
+              (chunk, signal) => loadReactions(db, chunk, currentUserId, signal),
+              ids,
+            ),
+        },
+        page,
+        abort.signal,
+      ).then((read) => {
+        if (cancelled || contiguity.epoch() !== epoch) return;
+        if (read.kind === 'gap') {
+          // Too much happened while away: today's fresh open, never a gap.
+          // The fresh page this open loads is what it leaves behind (a new owner:
+          // the forget voided the old one's write-back).
+          if (memoryKey !== null) {
+            memory.forget(memoryKey, 'thread');
+            owner?.release();
+            owner = memory.attach(memoryKey);
+          }
+          shown = false;
+          openFresh();
+          return;
+        }
+        if (read.newer === null || read.rechecked === null || read.reactions === null) {
+          logger.warn('chat: reopen revalidation read failed', { channel_id: channelId });
+        }
+        const untouched = (ids: readonly string[]): string[] =>
+          untouchedSince(ids, reactionTouchesRef.current.byId, reactionsFrom);
+        const checked = applyReopenChecks(messagesRef.current, read, channelId, untouched);
+        if (checked.messages !== messagesRef.current) {
+          setMessages((prev) => applyReopenChecks(prev, read, channelId, untouched).messages);
+        }
+        if (checked.deleted.length > 0) reportDeleted(channelId, checked.deleted);
+        if (read.rechecked !== null) {
+          for (const row of editedRows(messagesRef.current, read.rechecked, channelId)) {
+            onMessageEditedRef.current?.(row);
+          }
+        }
+        if (read.newer !== null) {
+          const fresh = unseenRows(messagesRef.current, read.newer);
+          if (fresh.length > 0) {
+            foldRows(
+              fresh.map((row) => rowToThreadMessage(row, currentUserId)),
+              channelId,
+              true,
+            );
+          }
+          contiguity.catchUpApplied(epoch, read.through);
+        }
+      });
+    };
+    if (remembered !== undefined) reopen(remembered);
+    else openFresh();
     return () => {
       cancelled = true;
       abort.abort();
+      if (owner === null) return;
+      if (shown) {
+        // What this thread leaves behind: its server rows (the newest window)
+        // and the cursors, the viewer's own as this thread last wrote it.
+        const left = leaving(channelId);
+        const window = rememberedWindow(left.messages, left.hasMore);
+        const r = left.reads;
+        let readsLeft = r.channelId === channelId && r.status === 'ready' ? r.read : null;
+        const written = lastCursorRef.current;
+        const cursorRow =
+          written !== null ? left.messages.find((m) => m.id === written) : undefined;
+        if (readsLeft !== null && cursorRow !== undefined) {
+          readsLeft = withOwnCursor(
+            readsLeft,
+            currentUserId,
+            { id: cursorRow.id, time: cursorRow.time },
+            new Date().toISOString(),
+          );
+        }
+        owner.keep({
+          rows: window.rows,
+          hasMore: window.hasMore,
+          through: contiguity.through(),
+          reads: readsLeft,
+          // Quotes and roots still waiting are resolved on the next reopen.
+          unresolved: awaitingResolve(window.rows, pendingResolve),
+        });
+      }
+      owner.release();
     };
   }, [
     db,
@@ -708,16 +1103,41 @@ export function useChatThread(params: {
     peerUserId,
     foldRows,
     attachPeerCursor,
+    resolveReplies,
+    reportDeleted,
     loadAttempt,
     contiguity,
+    memory,
+    memoryKey,
+    leaving,
   ]);
 
   // The channel's cursors, read once on open (in parallel with the latest
   // page) and again after a peer's live read signal or a catch-up. Only the
   // first read sets the open cursor; a Retry re-reads positions only.
+  // A reopen: the remembered cursors are the open cursor at once (the
+  // viewer's own as this thread last wrote it), and the re-read only refreshes
+  // the positions (Seen, Read by), never moving the unread divider.
   useEffect(() => {
-    openReadRef.current = { settled: channelId === null, pendingWrite: false };
-    setReads({ channelId, status: 'loading', read: NO_READS, open: { kind: 'unknown' } });
+    const remembered =
+      memoryKey !== null ? (memory.recall(memoryKey, 'thread')?.reads ?? null) : null;
+    openReadRef.current = {
+      settled: channelId === null || remembered !== null,
+      pendingWrite: false,
+    };
+    // Already set by the render's switch when it seeded these cursors.
+    setReads((prev) =>
+      remembered !== null && prev.channelId === channelId && prev.read === remembered
+        ? prev
+        : remembered !== null
+          ? {
+              channelId,
+              status: 'ready',
+              read: remembered,
+              open: openCursorFrom(remembered, currentUserId),
+            }
+          : { channelId, status: 'loading', read: NO_READS, open: { kind: 'unknown' } },
+    );
     if (channelId === null) return;
     let cancelled = false;
     void loadReadPositions(db, channelId).then((result) => {
@@ -726,7 +1146,13 @@ export function useChatThread(params: {
       gate.settled = true;
       if (!result.ok) {
         logger.warn('chat: read cursors load failed', { error: result.error.message });
-        setReads((prev) => ({ ...prev, status: 'failed' }));
+        if (remembered === null) setReads((prev) => ({ ...prev, status: 'failed' }));
+      } else if (remembered !== null) {
+        setReads((prev) =>
+          prev.channelId !== channelId || sameReadPositions(prev.read, result.data)
+            ? prev
+            : { ...prev, read: result.data },
+        );
       } else {
         setReads({
           channelId,
@@ -743,7 +1169,7 @@ export function useChatThread(params: {
     return () => {
       cancelled = true;
     };
-  }, [db, channelId, currentUserId]);
+  }, [db, channelId, currentUserId, memory, memoryKey]);
 
   /** Re-read every cursor (positions only; the open cursor stays as captured). */
   const rereadPositions = useCallback((): void => {
@@ -804,32 +1230,26 @@ export function useChatThread(params: {
       },
       // The store reports ids-less messages (it sees every message); stay quiet here.
       onIgnored: () => {},
-      onReaction: ({ messageId, emoji, op, fromUserId }) =>
-        setMessages((prev) =>
-          applyReactionOp(prev, { messageId, emoji, op, mine: fromUserId === currentUserId }),
-        ),
+      onReaction: (event) => setMessages((prev) => applyLiveReaction(prev, event, currentUserId)),
       onRead: ({ messageId, fromUserId }) => {
         if (fromUserId === currentUserId) return;
-        setMessages((prev) => markReadUpToMessage(prev, messageId));
+        setMessages((prev) => applyLiveRead(prev, messageId));
         rereadDebounced.schedule(null);
       },
       // A sender can only delete or edit their own messages: ids of anyone
       // else's are ignored (the record is truth on the next load either way).
-      onDelete: ({ messageIds, fromUserId }) => {
+      onDelete: (event) => {
         if (channelRef.current !== channelId) return;
-        const own = messagesRef.current
-          .filter((m) => messageIds.includes(m.id) && m.senderUserId === fromUserId)
-          .map((m) => m.id);
-        if (own.length === 0) return;
-        setMessages((prev) => markMessagesDeleted(prev, own));
-        reportDeleted(channelId, own);
+        const { deleted } = applyLiveDelete(messagesRef.current, event);
+        if (deleted.length === 0) return;
+        setMessages((prev) => applyLiveDelete(prev, event).messages);
+        reportDeleted(channelId, deleted);
       },
       // The edit renders from the re-read row (like live messages), never the
       // Agora payload; a missing (deleted, unreadable) or unchanged row is ignored.
       onEdit: ({ messageId, fromUserId }) => {
         if (channelRef.current !== channelId) return;
-        const target = messagesRef.current.find((m) => m.id === messageId);
-        if (target === undefined || target.senderUserId !== fromUserId) return;
+        if (!liveEditWanted(messagesRef.current, { messageId, fromUserId })) return;
         void loadMessageById(db, messageId).then((lookup) => {
           if (!lookup.ok) {
             logger.warn('chat: live edit verification failed, ignored', {
@@ -842,7 +1262,7 @@ export function useChatThread(params: {
           const stored = lookup.data.row;
           if (channelRef.current !== channelId || stored.channel_id !== channelId) return;
           if (stored.sender_user_id !== fromUserId) return;
-          setMessages((prev) => applyEditFromRow(prev, stored));
+          setMessages((prev) => applyLiveEditRow(prev, { row: stored, channelId, fromUserId }));
           onMessageEditedRef.current?.(stored);
         });
       },
@@ -1101,10 +1521,10 @@ export function useChatThread(params: {
   // object URLs. Unrecorded ones stay in the outbox and keep theirs.
   useEffect(
     () => () => {
-      const recorded = messagesRef.current.filter((m) => m.state === 'sent');
+      const recorded = leaving(channelId).messages.filter((m) => m.state === 'sent');
       revokeLocalPreviews(recorded.flatMap((m) => m.attachments));
     },
-    [channelId],
+    [channelId, leaving],
   );
 
   const send = useCallback<UseChatThread['send']>(
@@ -1517,6 +1937,7 @@ export function useChatThread(params: {
   );
 
   return {
+    channelId: shownChannel,
     messages,
     loading,
     loadFailed,

@@ -40,7 +40,7 @@ import { runClearChannels, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { workspaceTimeZone } from '@/lib/chat/time-format';
 import { useChatThread } from '@/lib/chat/use-chat-thread';
 import { useChatMarks } from '@/lib/chat/use-chat-marks';
-import { chatKey, kickoffChatOpen } from '@/lib/chat/open-cache';
+import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
 import { prefetchLatestMessages } from '@/lib/chat/history';
 import { loadChannelMarks } from '@/lib/chat/marks';
 import { fetchOpenPosts } from '@/lib/chat/use-open-posts';
@@ -639,6 +639,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // for answers that land after the render that asked.
   const workspaceIdRef = useRef(workspaceId);
   workspaceIdRef.current = workspaceId;
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
   const channelParamRef = useRef(searchParams.get('channel'));
   channelParamRef.current = searchParams.get('channel');
   const mountedRef = useRef(true);
@@ -954,6 +956,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   }, [refreshChannels]);
 
   const onGroupLeft = useCallback(() => {
+    // A chat left is forgotten now, so the page this thread leaves is never kept.
+    forgetRememberedThread(
+      chatKey(currentUserIdRef.current, workspaceIdRef.current, selectedRef.current?.channelId),
+    );
     setGroupInfoOpen(false);
     closeChannel();
     void refreshChannels(null);
@@ -1060,6 +1066,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     const step = openChannelAfterRoster(selectedRef.current, chatRoster, reloaded);
     if (step.kind === 'update') setSelected(step.channel);
     else if (step.kind === 'close') {
+      // Removed or gone: forgotten before the thread leaves, so it keeps nothing.
+      forgetRememberedThread(
+        chatKey(currentUserIdRef.current, workspaceIdRef.current, selectedRef.current?.channelId),
+      );
       setGroupInfoOpen(false);
       closeChannel();
     }
@@ -1140,6 +1150,39 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const starStore = useMemo(() => createStarStore({ workspaceId }), [workspaceId]);
   const stars = useChannelStars({ store: starStore, channelId: selectedChannelId });
   const refetchStars = stars.refetch;
+  // A chat whose messages page is remembered reopens without waiting on reads
+  // whose last answer is already on screen: its stars (this store read them)
+  // and its scheduled rows (remembered); both re-read in place.
+  const rememberedOpen = useMemo(() => {
+    const key = chatKey(currentUserId, workspaceId, selectedChannelId);
+    return key !== null && openCache.recall(key, 'thread') !== undefined;
+  }, [currentUserId, workspaceId, selectedChannelId]);
+  const [starsRead, setStarsRead] = useState<{ store: typeof starStore; ids: ReadonlySet<string> }>(
+    () => ({ store: starStore, ids: new Set() }),
+  );
+  useEffect(() => {
+    if (!stars.settled || selectedChannelId === null) return;
+    setStarsRead((prev) => {
+      const ids = prev.store === starStore ? prev.ids : new Set<string>();
+      return ids.has(selectedChannelId)
+        ? prev
+        : { store: starStore, ids: new Set([...ids, selectedChannelId]) };
+    });
+  }, [stars.settled, selectedChannelId, starStore]);
+  // A remembered chat's marks as last settled, for its first frame (the
+  // marks hook sets the same ones in its effect, then revalidates).
+  const marksLoaded = marks.loaded;
+  const rememberedMarks = useMemo(() => {
+    if (!rememberedOpen || marksLoaded) return undefined;
+    const key = chatKey(currentUserId, workspaceId, selectedChannelId);
+    return key !== null ? openCache.recall(key, 'marks') : undefined;
+  }, [rememberedOpen, marksLoaded, currentUserId, workspaceId, selectedChannelId]);
+  const starsSettled =
+    stars.settled ||
+    (rememberedOpen &&
+      selectedChannelId !== null &&
+      starsRead.store === starStore &&
+      starsRead.ids.has(selectedChannelId));
   // Every catch-up refreshes the unread counts and re-reads the channel's marks and stars.
   const onCaughtUp = useCallback(() => {
     refreshUnreadCounts();
@@ -1156,6 +1199,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     catchUpOnFocus: notesOpen,
     target,
     currentUserId,
+    // Keys the chat's remembered page (this user, this workspace, this chat).
+    workspaceId,
     peerUserId: selected?.peerUserId ?? null,
     channelType: selected?.channelType ?? null,
     onOwnMessage,
@@ -1172,7 +1217,11 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // in the same re-render.
   const [threadChannelId, setThreadChannelId] = useState(selectedChannelId);
   useEffect(() => setThreadChannelId(selectedChannelId), [selectedChannelId]);
-  const threadCurrent = threadChannelId === selectedChannelId;
+  // The hook switches its rows while rendering (a remembered page is the first
+  // frame), so its own channel says the rows are this chat's at once.
+  const threadCurrent =
+    threadChannelId === selectedChannelId ||
+    (selectedChannelId !== null && thread.channelId === selectedChannelId);
 
   const typing = useChatTyping({
     client: liveClient,
@@ -1306,7 +1355,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     for (const row of rows) painted.current.add(row.id);
     return rows;
   }, [thread.messages, profiles, nameReads, workspaceId]);
-  const namesReady = namesSettled === selectedChannelId;
+  // Settled names latch in an effect; a first page whose names are all known
+  // is ready in the same render (a reopen paints in its first frame).
+  const namesReady = namesSettled === selectedChannelId || firstPageSettled;
 
   // The viewer's scheduled messages in the open chat (RLS: own rows only).
   // Read in parallel with the thread's first page; the thread keeps its
@@ -1323,9 +1374,18 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const refetchScheduled = useCallback((channelId: string): void => {
     scheduledSeq.current += 1;
     const seq = scheduledSeq.current;
+    const key = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
     void withReadTimeout((signal) => readScheduledMessages(supabase, { channelId, signal })).then(
       (result) => {
         if (!mountedRef.current || seq !== scheduledSeq.current) return;
+        // Remembered only for the user and workspace still open (a late answer
+        // never re-scopes the memory).
+        const current = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
+        if (key !== null && current !== null && result.ok && current.userId === key.userId) {
+          if (current.workspaceId === key.workspaceId) {
+            openCache.remember(key, 'scheduled', result.data);
+          }
+        }
         if (!result.ok) {
           logger.warn('chat: scheduled read failed', {
             channel_id: channelId,
@@ -1352,10 +1412,22 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [selectedChannelId, refetchScheduled, notesOpen]);
+  // A remembered chat's scheduled rows as last read, for its first frame
+  // (until this open's own state for it is set).
+  const rememberedScheduled = useMemo(() => {
+    if (!rememberedOpen) return undefined;
+    const key = chatKey(currentUserId, workspaceId, selectedChannelId);
+    return key !== null ? openCache.recall(key, 'scheduled') : undefined;
+  }, [rememberedOpen, currentUserId, workspaceId, selectedChannelId]);
+  const scheduledOwn = scheduled.settled && scheduled.channelId === selectedChannelId;
   // Notes never schedule: nothing to read, nothing to wait for.
-  const scheduledSettled =
-    notesOpen || (scheduled.settled && scheduled.channelId === selectedChannelId);
-  const scheduledRows = scheduledSettled && !notesOpen ? scheduled.rows : NO_SCHEDULED;
+  const scheduledSettled = notesOpen || scheduledOwn || rememberedScheduled !== undefined;
+  const scheduledRows =
+    scheduledSettled && !notesOpen
+      ? scheduledOwn
+        ? scheduled.rows
+        : (rememberedScheduled ?? NO_SCHEDULED)
+      : NO_SCHEDULED;
   // Notes: the saved copies' "Saved from" lines of the first page paint with
   // it. One batched source read per loaded page (and one batched name read
   // for their senders), never one per row.
@@ -1426,7 +1498,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     (!notesFailed &&
       (thread.loading ||
         !namesReady ||
-        !stars.settled ||
+        !starsSettled ||
         !scheduledSettled ||
         (notesOpen && notes.status !== 'ready') ||
         (notesReady && !savedReady)));
@@ -1857,10 +1929,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       {...(notesOpen
                         ? { marksLoaded: true }
                         : {
-                            marks: marks.marks,
-                            marksLoaded: marks.loaded,
+                            marks: rememberedMarks?.marks ?? marks.marks,
+                            marksLoaded: marks.loaded || rememberedMarks !== undefined,
                             marksFailed: marks.failed,
-                            markedMessages: marks.markedMessages,
+                            markedMessages: rememberedMarks?.markedMessages ?? marks.markedMessages,
                             onSetMark: marks.setMark,
                             onResolveMark: marks.resolve,
                             onReopenMark: marks.reopen,

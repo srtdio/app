@@ -76,6 +76,16 @@ import { createTextMessage } from '@/lib/chat/message-factory';
 import { sendMessageRecord } from '@/lib/chat/record';
 import { createOutboxSender, runSend, type OutboxSender } from '@/lib/chat/send-flow';
 import { isNotesChannelId } from '@/lib/chat/notes';
+import { userIdFromAgoraUsername } from '@/lib/chat/agora-identity';
+import {
+  chatKey,
+  forgetRememberedThread,
+  forgetThreadsOutside,
+  rememberRecordedSend,
+  routeRememberedCmd,
+  routeRememberedText,
+  type RememberedLiveDeps,
+} from '@/lib/chat/open-cache';
 import {
   clearOutboxFiles,
   deleteOutboxFiles,
@@ -113,6 +123,7 @@ import {
 } from '@/lib/chat/roster-signal';
 import {
   loadConversationPreviews,
+  loadMessageById,
   loadMessagesByIds,
   loadUnreadCounts,
   readConversationPreviews,
@@ -300,6 +311,25 @@ export function pruneDraftsFromRoster(
 interface HeldIncoming {
   row: ChatMessageRow;
   incoming: store.IncomingMessage;
+}
+
+/**
+ * Live events reach a remembered chat that no thread shows (open-cache's
+ * router): the shared verifier names a live text's row, an edit re-reads its row.
+ */
+export function rememberedLiveDeps(userId: string, workspaceId: string): RememberedLiveDeps {
+  return {
+    userId,
+    workspaceId,
+    verify: (messageId) =>
+      liveVerifierFor(supabase)
+        .verify(messageId)
+        .then((lookup) => (lookup.found ? lookup.row : null)),
+    loadRow: (messageId) =>
+      loadMessageById(supabase, messageId).then((result) =>
+        result.ok && result.data.found ? result.data.row : null,
+      ),
+  };
 }
 
 /**
@@ -881,10 +911,15 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   const updateEditedRef = useRef(updateEditedMessage);
   updateEditedRef.current = updateEditedMessage;
 
-  const clearConversation = useCallback((channelId: string, clearedAtMs: number) => {
-    senderRef.current?.dropChannel(channelId);
-    setState((prev) => store.applyClear(prev, channelId, clearedAtMs));
-  }, []);
+  const clearConversation = useCallback(
+    (channelId: string, clearedAtMs: number) => {
+      senderRef.current?.dropChannel(channelId);
+      // A cleared chat's remembered page goes with it: a reopen reads from the clear point.
+      forgetRememberedThread(chatKey(currentUserId, workspaceId, channelId));
+      setState((prev) => store.applyClear(prev, channelId, clearedAtMs));
+    },
+    [currentUserId, workspaceId],
+  );
 
   const requestOpen = useCallback((channelId: string) => {
     setState((prev) => store.requestOpen(prev, channelId));
@@ -1227,6 +1262,11 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
           // The row exists: the list card shows 'You: ...', whatever page is open.
           if (event.type === 'recorded') {
             const { channelId, message } = event;
+            // A chat no thread shows keeps the recorded row on its remembered page.
+            rememberRecordedSend(
+              chatKey(scopeKey.userId, scopeKey.workspaceId, channelId),
+              message,
+            );
             setState((prev) =>
               store.updateOwnMessage(prev, {
                 channelId,
@@ -1390,6 +1430,14 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       logger.warn('chat store: live message without sorted ids ignored', { agora_id: raw.id });
       return;
     }
+    // A remembered chat no thread shows takes the row too (own sends from another device included).
+    if (workspaceId) {
+      void routeRememberedText(rememberedLiveDeps(currentUserId, workspaceId), {
+        channelId: mapped.channelId,
+        messageId: mapped.message.id,
+        ext: raw.ext,
+      });
+    }
     if (mapped.message.mine) return;
     if (rememberSeen(seenRef.current, mapped.message.id)) return;
     const forUser = currentUserId;
@@ -1473,6 +1521,16 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     if (store.selectLoadStatus(stateRef.current, scope) !== 'ready') return;
     reloaderRef.current?.request();
   };
+  // Reaction, read, delete and edit signals for a remembered chat no thread shows.
+  const onRememberedCmdRef = useRef<(message: AgoraChat.CmdMsgBody) => void>(() => {});
+  onRememberedCmdRef.current = (message) => {
+    if (!workspaceId || currentUserId === null) return;
+    const from = message.from !== undefined ? userIdFromAgoraUsername(message.from) : null;
+    void routeRememberedCmd(rememberedLiveDeps(currentUserId, workspaceId), {
+      ext: message.ext,
+      fromUserId: from !== null && from.ok ? from.userId : undefined,
+    });
+  };
   // A delete signal for any chat, open or not, strips its drafts, queued quotes
   // and list line once its rows read back deleted (the open thread also turns
   // the rows into tombstones itself).
@@ -1480,6 +1538,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     () =>
       subscribeGlobalCmds((message) => {
         onRosterCmdRef.current(message);
+        onRememberedCmdRef.current(message);
         void routeGlobalCmd(message.ext, {
           loadByIds: (ids) => loadMessagesByIds(supabase, ids),
           onDeleted: (ids) => onMessagesDeletedRef.current(ids),
@@ -1493,6 +1552,34 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
 
   const loadStatus = store.selectLoadStatus(state, scope);
   const roster = loadStatus === 'ready' ? state.roster : EMPTY_ROSTER;
+
+  // A remembered chat the roster no longer lists (left, removed, deleted,
+  // unknown) is forgotten; so is one whose clear point moved (cleared here or
+  // on another device). A roster read that may have hit its cap forgets nothing.
+  useEffect(() => {
+    if (loadStatus !== 'ready' || !workspaceId || currentUserId === null) return;
+    if (roster.length >= ROSTER_ROW_CAP - 1) return;
+    forgetThreadsOutside(
+      currentUserId,
+      workspaceId,
+      new Set(roster.map((summary) => summary.channelId)),
+      isNotesChannelId,
+    );
+  }, [loadStatus, roster, workspaceId, currentUserId]);
+  const clearsSeenRef = useRef<{ scope: string; clears: Record<string, number> } | null>(null);
+  const clears = state.clears;
+  useEffect(() => {
+    if (loadStatus !== 'ready' || !workspaceId || currentUserId === null) return;
+    const scopeId = `${currentUserId}\n${workspaceId}`;
+    const seen = clearsSeenRef.current;
+    clearsSeenRef.current = { scope: scopeId, clears };
+    if (seen === null || seen.scope !== scopeId) return;
+    for (const [channelId, at] of Object.entries(clears)) {
+      if (seen.clears[channelId] !== at) {
+        forgetRememberedThread(chatKey(currentUserId, workspaceId, channelId));
+      }
+    }
+  }, [loadStatus, clears, workspaceId, currentUserId]);
   const value = useMemo<ChatStoreContextValue>(
     () => ({
       state,
