@@ -158,6 +158,23 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
     expect((await readEntry(snoozed)).readAt).toBeNull();
   });
 
+  it('inbox_mark_all_read marks a comment read and leaves a plan alert unread', async () => {
+    const comment = await insertEntry(member.id);
+    const plan = await insertEntry(member.id, {
+      event_type: 'plan_updated',
+      entity_type: 'plan',
+      entity_id: crypto.randomUUID(),
+    });
+
+    const result = await inboxMarkAllRead(clientFor(member.id), {
+      p_workspace_id: ws.id,
+      p_trace_id: generateTraceId(),
+    });
+    expect(result.ok).toBe(true);
+    expect((await readEntry(comment)).readAt).not.toBeNull();
+    expect((await readEntry(plan)).readAt).toBeNull();
+  });
+
   it('inbox_snooze sets snoozed_until and clear un-snoozes', async () => {
     const id = await insertEntry(member.id);
     const snooze = await inboxSnooze(clientFor(member.id), {

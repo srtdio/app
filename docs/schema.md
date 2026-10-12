@@ -560,7 +560,7 @@ Where inbox entries are shown:
 
 - Chat bell only, never Activity: mention with entity_type chat_channel, scheduled_sent, scheduled_failed, reminder.
 - Activity: everything else, including mentions on posts and briefs.
-- inbox_mark_all_read (Activity Mark all read) skips bell types.
+- inbox_mark_all_read (Activity Mark all read) skips bell types: reminder, scheduled_sent, scheduled_failed, chat mentions (mention with entity_type chat_channel) and, since part 2b (20261012190000_plan_part_2b.sql), the plan alerts plan_opened, plan_deleted, plan_date_changed, plan_updated, plan_review, plan_comment (same list as BELL_ONLY_EVENT_TYPES in src/lib/inbox/bell-types.ts).
 - plan_comment and plan_review (entity_type plan_item, entity_id = item id, tier active; 20261009205500_plan_item_comments.sql): plan events use scope 'posts', scope_key = plan id.
 - plan_opened, plan_deleted, plan_date_changed and plan_updated (entity_type plan, entity_id = plan id, scope 'posts', scope_key = plan id, tier active; 20261012160000_plan_notify_plumbing.sql, 20261012163000_plan_updated_alerts.sql) via _plan_notify; payload gains plan_id and plan_title. plan_updated payload kind: slot_added, slot_removed, concept_changed, renamed. Since part 2b they are sent only for plans open to the client, except plan_deleted. Shown in the chat bell only (never Activity), with plan_review and plan_comment.
 

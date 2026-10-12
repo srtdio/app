@@ -10,13 +10,17 @@
 -- The three proc bodies are copies of 20261012161000 (plan_posts_add),
 -- 20261012163000 (_posts_plan_day_sync) and 20261012140000 (plan_draft_rows)
 -- with only the stated change. Grants unchanged (CREATE OR REPLACE keeps them).
+-- inbox_mark_all_read (Activity "Mark all read") now also skips the plan bell
+-- types (same list as BELL_PLAN_EVENT_TYPES in src/lib/inbox/bell-types.ts;
+-- bell-types.test.ts asserts its NOT IN list covers BELL_ONLY_EVENT_TYPES).
 --
 -- Rollback: ALTER TABLE public.plan_items DROP CONSTRAINT
 -- plan_items_target_date_concept_only; restore _plan_notify (silent) from
 -- 20261012161000_plan_one_date_per_post.sql, plan_posts_add from
 -- 20261012161000_plan_one_date_per_post.sql, _posts_plan_day_sync from
 -- 20261012163000_plan_updated_alerts.sql and plan_draft_rows from
--- 20261012140000_plan_draft_rows_plan_day.sql; re-backfill post slot days with
+-- 20261012140000_plan_draft_rows_plan_day.sql, inbox_mark_all_read from
+-- 20261003160000_inbox_mark_all_read_skip_bell.sql; re-backfill post slot days with
 -- UPDATE plan_items i SET target_date = (p.target_date AT TIME ZONE w.timezone)::date
 -- FROM posts p, workspaces w WHERE i.kind = 'post' AND p.id = i.post_id AND w.id = i.workspace_id.
 
@@ -138,4 +142,27 @@ end $function$
 UPDATE public.plan_items SET target_date = NULL, updated_at = now() WHERE kind = 'post' AND target_date IS NOT NULL;
 
 ALTER TABLE public.plan_items ADD CONSTRAINT plan_items_target_date_concept_only CHECK (kind = 'concept' OR target_date IS NULL);
+--END 2b
+
+--BEGIN 2b inbox_mark_all_read
+CREATE OR REPLACE FUNCTION public.inbox_mark_all_read(p_workspace_id uuid, p_trace_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE v_n int;
+BEGIN
+  IF NOT public.is_active_workspace_member(p_workspace_id) THEN RAISE EXCEPTION 'workspace_member_only'; END IF;
+  UPDATE public.inbox_entries SET read_at = now()
+   WHERE workspace_id = p_workspace_id AND user_id = auth.uid()
+     AND read_at IS NULL AND snoozed_until IS NULL AND deleted_at IS NULL
+     AND event_type NOT IN ('reminder','scheduled_sent','scheduled_failed',
+                            'plan_opened','plan_deleted','plan_date_changed','plan_updated','plan_review','plan_comment')
+     AND NOT (event_type = 'mention' AND entity_type = 'chat_channel');
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  IF v_n > 0 THEN
+    PERFORM public.audit_log_write('inbox_mark_all_read','success',p_trace_id,p_workspace_id,'inbox_entry',NULL::text,jsonb_build_object('count',v_n));
+  END IF;
+END; $function$;
 --END 2b
