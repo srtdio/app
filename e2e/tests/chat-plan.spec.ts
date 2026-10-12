@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   COLLEAGUE_A,
@@ -241,16 +241,19 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   ).toBeVisible();
   await expect(plan.locator('[data-plan-row]').first().getByText('1 comment')).toBeVisible();
 
-  // A post item for the agency: Open in pipeline and Agency approve.
+  // A post item for the agency: the pipeline post view embedded, no plan
+  // review buttons, and the header overflow offers Open in pipeline.
   await plan.locator('[data-plan-tab="post"]').click();
   await plan.locator('[data-plan-row]').first().click();
   await expect(item).toBeVisible();
   await expect(item.getByText('Post 1 of 1')).toBeVisible();
-  await expect(item.locator('[data-plan-pipeline]')).toBeVisible();
-  await expect(item.locator('[data-plan-approve]')).toHaveText('Agency approve');
+  await expect(item.getByText('Fixture caption')).toBeVisible();
+  await expect(item.getByRole('button', { name: 'Agency approve' })).toHaveCount(0);
+  await expect(item.locator('[data-plan-approve]')).toHaveCount(0);
   await expect(item.locator('[data-plan-ask]')).toHaveCount(0);
   await page.waitForTimeout(400);
   await shot(page, `${prefix}-10-item-post-agency`);
+  await expectOverflowOpensPipeline(page, item);
 
   // G2: the open item is removed elsewhere; the re-read closes the Item layer
   // through its own close (its history step released), the Plan stays.
@@ -368,17 +371,18 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
     expect.objectContaining({ side: 'client', status: 'approved' }),
   ]);
 
-  // A post item: "Open post" only.
+  // A post item: the pipeline post view embedded, no plan review buttons.
   await page.goBack();
   await expect(item).toBeHidden();
   await plan.locator('[data-plan-tab="post"]').click();
   await plan.locator('[data-plan-row]').first().click();
   await expect(item).toBeVisible();
-  await expect(item.locator('[data-plan-open-post]')).toBeVisible();
+  await expect(item.getByText('Fixture caption')).toBeVisible();
   await expect(item.locator('[data-plan-approve]')).toHaveCount(0);
   await expect(item.locator('[data-plan-ask]')).toHaveCount(0);
   await page.waitForTimeout(400);
   await shot(page, `${prefix}-07-item-post-client`);
+  await expectOverflowOpensPipeline(page, item);
 
   await page.goBack();
   await expect(item).toBeHidden();
@@ -386,6 +390,15 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   await page.goBack();
   await expect(plan).toBeHidden();
   expectClean(network);
+}
+
+/** The post item's header overflow: one "Open in pipeline" row; Escape closes it. */
+async function expectOverflowOpensPipeline(page: Page, item: Locator): Promise<void> {
+  await item.locator('[data-plan-more]').click();
+  const more = page.getByRole('dialog', { name: 'Post', exact: true });
+  await expect(more.getByRole('button', { name: 'Open in pipeline' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(more).toBeHidden();
 }
 
 async function teamAndHidden(page: Page, prefix: string): Promise<void> {
