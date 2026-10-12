@@ -15,7 +15,7 @@ export default defineConfig({
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: `http://localhost:${port}`,
-    screenshot: 'on',
+    screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
   projects: [
@@ -25,6 +25,13 @@ export default defineConfig({
     },
     {
       name: 'iphone-webkit-light',
+      // Light parity is covered by the paint specs; the rest run dark only.
+      testMatch: [
+        'smoke.spec.ts',
+        'chat-thread.spec.ts',
+        'chat-plan-card-paint.spec.ts',
+        'chat-status-ticker.spec.ts',
+      ],
       use: { ...devices['iPhone 13'], colorScheme: 'light' },
     },
   ],

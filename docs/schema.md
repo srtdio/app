@@ -530,6 +530,26 @@ RLS: chat_message_stars_select_own (SELECT to authenticated) USING user_id = aut
 
 Recorded in 20261004050000_chat_message_stars.sql.
 
+### Chat tasks
+
+Per-chat numbered task list with a change log, bell fan-out and a due timer. Any chat member (chat_channel_member) reads and writes; agency and client members are equal. Task events are drawn in the thread from chat_task_events and are never written to chat_messages.
+
+- chat_task_counters: PK channel_id text FK chat_channels ON DELETE CASCADE, next_number integer default 1 (CHECK > 0). Hands out the per-chat task number. RLS enabled with NO policies and no grants: written only by chat_task_create.
+- chat_tasks: PK id uuid default uuidv7(). Fields: channel_id text FK chat_channels ON DELETE CASCADE, workspace_id FK workspaces ON DELETE CASCADE, number integer (CHECK > 0; unique (channel_id, number)), title text (CHECK 1 to 200 chars), note text nullable (CHECK null or at most 200 chars), side text (CHECK agency / client), status text default 'todo' (CHECK todo / waiting / shared / approved / rejected), priority smallint default 2 (CHECK 0 / 1 / 2), due_at timestamptz nullable, due_set_by nullable FK auth.users.id ON DELETE SET NULL, due_set_at nullable, due_passed_at nullable, created_by nullable FK auth.users.id ON DELETE SET NULL, created_at / updated_at default now(). Indexes: chat_tasks_channel_idx (channel_id, status, priority, number), chat_tasks_due_idx (due_at) WHERE due_passed_at IS NULL AND status IN ('todo','waiting').
+- chat_task_events: PK id uuid default uuidv7(). Fields: task_id FK chat_tasks ON DELETE CASCADE, channel_id text FK chat_channels ON DELETE CASCADE, workspace_id FK workspaces ON DELETE CASCADE, actor_user_id nullable FK auth.users.id ON DELETE SET NULL (null for due_passed), kind text (CHECK created / status / priority / due / side / title / note / due_passed), old_value / new_value text nullable, created_at default now(). Indexes: chat_task_events_channel_idx (channel_id, created_at desc), chat_task_events_task_idx (task_id, created_at desc).
+
+RLS: chat_tasks_select_channel_member and chat_task_events_select_channel_member (SELECT to authenticated) USING chat_channel_member(channel_id, auth.uid()). No write policies. Table grants: authenticated SELECT on chat_tasks and chat_task_events only. All writes go through the SECURITY DEFINER procs below (all search_path='').
+
+- chat_task_create(p_channel_id text, p_title text, p_note text, p_side text, p_priority smallint, p_due_at timestamptz, p_trace_id uuid) RETURNS uuid (the task id; EXECUTE to authenticated only). Requires auth.uid() ('not authenticated') and membership ('not a member of this chat'). Takes the next number from chat_task_counters, trims title, stores an empty note as null, priority defaults to 2; when p_due_at is set, due_set_by = caller and due_set_at = now(). Writes a 'created' event.
+- chat_task_set(p_task_id uuid, p_field text, p_value text, p_trace_id uuid) RETURNS void (EXECUTE to authenticated only). One field per call: status / priority / side / title / note / due ('unknown field' otherwise; 'task not found'; 'not a member of this chat'). Title is trimmed; an empty note clears it; '' clears due. A value equal to the current one is a no-op (no event, no bell). A due change sets due_set_by = caller, due_set_at = now() and resets due_passed_at to null. Writes one event of kind p_field with old and new values.
+- chat_task_event_write(p_task chat_tasks, p_kind text, p_old text, p_new text, p_actor uuid, p_tier text) RETURNS void (no grants; internal): inserts the chat_task_events row and fans out one inbox_entries row per chat member except the actor.
+- chat_channel_member_ids(p_channel_id text) RETURNS SETOF uuid, SQL STABLE (no grants; internal): active members of the chat by the same rules as chat_channel_member (dm pair, group_members, notes owner).
+- chat_tasks_fire_due(p_limit integer default 500) RETURNS integer (no grants; cron only). Locks up to p_limit (clamped 1..2000) tasks with due_at <= now(), due_passed_at null and status todo / waiting (FOR UPDATE SKIP LOCKED), sets due_passed_at, and writes a 'due_passed' event (actor null, old = due_at). Returns the number fired. Run by pg_cron job chat-tasks-fire-due every minute (`select public.chat_tasks_fire_due(500)`).
+
+Bell: inbox_entries.event_type adds task_changed (tier active, every event except due_passed) and task_due (tier urgent, due_passed). Entity chat_channel, entity_id and scope_key channel_id, scope groups for a group channel else people, actor_user_id the actor (null for task_due). Payload {task_id, number, title, kind, old, new}.
+
+Recorded in 20261013043000_chat_tasks.sql.
+
 ## 8. Inbox and delivery
 
 Inbox is the only permanent in-app event surface. Email is out-of-app catch-up, bundled 9am to 9pm workspace TZ.
@@ -619,7 +639,7 @@ PK id. Fields: operator_user_id FK, flow_type (billing_override / sentry_inspect
 - workspace.subscription_state: trial, active, read_only, grace, soft_pause, full_pause, soft_delete
 - brief.status: open, closed
 - approval (table removed): n/a, approval is now a post.stage value
-- inbox_entries.event_type: comment, mention, stage_change, comment_resolved, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system, checkpoints_added, post_ready, checkpoint_reopened, checkpoint_asked, scheduled_sent (tier active), scheduled_failed (tier urgent), reminder (tier urgent), post_deleted (tier active), assets_deleted (tier active), plan_comment (tier active), plan_review (tier active), plan_opened (tier active), plan_deleted (tier active), plan_date_changed (tier active), plan_updated (tier active) (canonical list: INBOX_EVENT_TYPES in @srtdio/schemas; 27 values)
+- inbox_entries.event_type: comment, mention, stage_change, comment_resolved, brief_created, brief_closed, asset_uploaded, asset_version_added, invite, trial_warning, billing_failure, system, checkpoints_added, post_ready, checkpoint_reopened, checkpoint_asked, scheduled_sent (tier active), scheduled_failed (tier urgent), reminder (tier urgent), post_deleted (tier active), assets_deleted (tier active), plan_comment (tier active), plan_review (tier active), plan_opened (tier active), plan_deleted (tier active), plan_date_changed (tier active), plan_updated (tier active), task_changed (tier active), task_due (tier urgent) (DB check: 29 values, 20261013043000_chat_tasks.sql; canonical list INBOX_EVENT_TYPES in @srtdio/schemas still has 27 and gains the two task types with the chat tasks app PR)
 - inbox_entries.entity_type: post, brief, chat_channel, workspace, plan_item, plan (nullable)
 - inbox_entries.scope: everything, posts, briefs, people, groups, clients
 - inbox_entries.tier: urgent, active, ambient

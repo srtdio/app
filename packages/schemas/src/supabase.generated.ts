@@ -4709,6 +4709,159 @@ export type Database = {
           },
         ]
       }
+      chat_task_counters: {
+        Row: {
+          channel_id: string
+          next_number: number
+        }
+        Insert: {
+          channel_id: string
+          next_number?: number
+        }
+        Update: {
+          channel_id?: string
+          next_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_task_counters_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: true
+            referencedRelation: "chat_channels"
+            referencedColumns: ["channel_id"]
+          },
+        ]
+      }
+      chat_task_events: {
+        Row: {
+          actor_user_id: string | null
+          channel_id: string
+          created_at: string
+          id: string
+          kind: string
+          new_value: string | null
+          old_value: string | null
+          task_id: string
+          workspace_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          channel_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          new_value?: string | null
+          old_value?: string | null
+          task_id: string
+          workspace_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          channel_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          new_value?: string | null
+          old_value?: string | null
+          task_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_task_events_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["channel_id"]
+          },
+          {
+            foreignKeyName: "chat_task_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "chat_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_task_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_tasks: {
+        Row: {
+          channel_id: string
+          created_at: string
+          created_by: string | null
+          due_at: string | null
+          due_passed_at: string | null
+          due_set_at: string | null
+          due_set_by: string | null
+          id: string
+          note: string | null
+          number: number
+          priority: number
+          side: string
+          status: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          due_passed_at?: string | null
+          due_set_at?: string | null
+          due_set_by?: string | null
+          id?: string
+          note?: string | null
+          number: number
+          priority?: number
+          side: string
+          status?: string
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          due_passed_at?: string | null
+          due_set_at?: string | null
+          due_set_by?: string | null
+          id?: string
+          note?: string | null
+          number?: number
+          priority?: number
+          side?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_tasks_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["channel_id"]
+          },
+          {
+            foreignKeyName: "chat_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cockpit_access_log: {
         Row: {
           accessed_at: string
@@ -8471,6 +8624,10 @@ export type Database = {
         Args: { p_channel_id: string; p_user_id: string }
         Returns: boolean
       }
+      chat_channel_member_ids: {
+        Args: { p_channel_id: string }
+        Returns: string[]
+      }
       chat_cleared_at: {
         Args: { p_channel_id: string; p_user_id: string }
         Returns: string
@@ -8886,6 +9043,39 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      chat_task_create: {
+        Args: {
+          p_channel_id: string
+          p_due_at: string
+          p_note: string
+          p_priority: number
+          p_side: string
+          p_title: string
+          p_trace_id: string
+        }
+        Returns: string
+      }
+      chat_task_event_write: {
+        Args: {
+          p_actor: string
+          p_kind: string
+          p_new: string
+          p_old: string
+          p_task: Database["public"]["Tables"]["chat_tasks"]["Row"]
+          p_tier: string
+        }
+        Returns: undefined
+      }
+      chat_task_set: {
+        Args: {
+          p_field: string
+          p_task_id: string
+          p_trace_id: string
+          p_value: string
+        }
+        Returns: undefined
+      }
+      chat_tasks_fire_due: { Args: { p_limit?: number }; Returns: number }
       chat_thread_reply_counts: {
         Args: { p_channel_id: string; p_root_ids: string[]; p_trace_id: string }
         Returns: {
