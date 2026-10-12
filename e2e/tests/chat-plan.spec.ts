@@ -101,8 +101,6 @@ async function newPlanFromTile(page: Page): Promise<void> {
 async function agencyFlow(page: Page, prefix: string): Promise<void> {
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
-  // The embedded post view reads the post's ready notices (none here).
-  network.world.tables.post_ready_notifications ??= [];
   seedLibrary(network);
   await openChat(page, PEER_NAME);
 
@@ -283,8 +281,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
 async function clientFlow(page: Page, prefix: string): Promise<void> {
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
-  // The embedded post view reads the post's ready notices (none here).
-  network.world.tables.post_ready_notifications ??= [];
   viewAsClient(network);
   seedLibrary(network);
   seedClientPlan(network.world, {

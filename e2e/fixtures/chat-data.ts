@@ -547,6 +547,7 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
     comments: [],
     assets: [],
     asset_attachments: [],
+    post_ready_notifications: [],
     // Plans in chat (RLS is not emulated: specs seed only what the viewer reads).
     plans: [],
     plan_items: [],
