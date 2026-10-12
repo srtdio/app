@@ -13,13 +13,20 @@
 // Embedded in a plan item, the same sheet leads with Open in pipeline. The
 // delete confirm names the post's live plans (one bounded read on opening it).
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
-import { IconDownload, IconLink, IconPipeline, IconSend, IconTrash } from '@/components/ui/icons';
+import {
+  IconCalendar,
+  IconDownload,
+  IconLink,
+  IconPipeline,
+  IconSend,
+  IconTrash,
+} from '@/components/ui/icons';
 import { requestPresignedUrl, type PresignDeps } from '@/lib/asset-presign';
 import { postRoute } from '@/components/chat/post-card';
 import { entityUrlPath } from '@/lib/entityRef';
@@ -34,6 +41,11 @@ import { ConversationPicker } from '@/components/pages/pcs/ConversationPicker';
 import type { GalleryItem } from '@srtdio/posts';
 import { postPlansLine, readPostPlans, type PostPlanRef } from '@/lib/chat/plans';
 import { supabase } from '@/lib/supabase';
+import {
+  MOVE_ROW_LABEL,
+  PostSheetPlanRowsContext,
+  REMOVE_ROW_LABEL,
+} from '@/components/chat/PlanMoveSheet';
 
 interface PostActionSheetProps {
   open: boolean;
@@ -146,6 +158,7 @@ export function PostActionSheet({
   onOpenInPipeline,
   readPlans,
 }: PostActionSheetProps): ReactElement {
+  const planRows = useContext(PostSheetPlanRowsContext);
   const [view, setView] = useState<'actions' | 'chat' | 'confirm-delete'>('actions');
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -277,6 +290,27 @@ export function PostActionSheet({
                 onOpenInPipeline();
               }}
             />
+          ) : null}
+          {planRows !== null ? (
+            <>
+              <ActionRow
+                icon={<IconCalendar size={18} />}
+                label={MOVE_ROW_LABEL}
+                onClick={() => {
+                  close();
+                  planRows.onMove();
+                }}
+              />
+              <ActionRow
+                danger
+                icon={<IconTrash size={18} />}
+                label={REMOVE_ROW_LABEL}
+                onClick={() => {
+                  close();
+                  planRows.onRemove();
+                }}
+              />
+            </>
           ) : null}
           <ActionRow
             icon={<IconSend size={18} />}

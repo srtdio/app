@@ -356,6 +356,8 @@ export function planWeekGroups<T>(
   range: { startsOn: string; endsOn: string },
   dayOf: (item: T) => string | null,
   weeks: boolean,
+  /** Keep the "No date" group even when nothing is undated (a drop and Add target). */
+  alwaysNoDate = false,
 ): PlanWeekGroup<T>[] {
   const byDay = new Map<string, T[]>();
   const undated: T[] = [];
@@ -389,7 +391,7 @@ export function planWeekGroups<T>(
   } else if (days.length > 0) {
     out.push({ label: null, days });
   }
-  if (undated.length > 0) {
+  if (undated.length > 0 || alwaysNoDate) {
     out.push({
       label: null,
       days: [{ day: null, label: 'No date', inRange: false, items: undated }],

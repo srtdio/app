@@ -93,9 +93,11 @@ test.describe('phone', () => {
     await expect(plan.locator('[data-plan-row]').first()).toBeVisible();
     // First paint is already in date order (the list paints once, sorted).
     expect(await rowTitles(page)).toEqual(expectedTitles());
-    await expect(plan.locator('[data-plan-screen-progress]')).toHaveText(
-      `Agency ${c.team} of ${c.total} · Client ${c.client} of ${c.total} · ${c.changes} change asked`,
-    );
+    // Agency count left, client count right.
+    await expect(plan.locator('[data-plan-screen-progress] > span')).toHaveText([
+      `Agency ${c.team} of ${c.total}`,
+      `Client ${c.client} of ${c.total}`,
+    ]);
     const dates = plan.locator('[data-plan-row-date]');
     const undated = DATED_PLAN_ITEMS.filter((it) => it.kind === 'concept' && it.date === null);
     const undatedAll = DATED_PLAN_ITEMS.filter((it) => it.date === null).length;
@@ -233,7 +235,7 @@ test.describe('phone', () => {
     await card.locator('[data-plan-open]').click();
     const plan = page_(page, 'plan');
     await expect(plan.locator('[data-plan-screen-progress]')).toHaveText(
-      `${c.client}/${c.total} approved`,
+      `${c.client} of ${c.total} slots approved`,
     );
     expect(await rowTitles(page)).toEqual(expectedTitles());
     await expect(plan.locator('[data-plan-pill="team"]')).toHaveCount(0);

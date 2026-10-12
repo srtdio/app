@@ -755,7 +755,7 @@ export interface DatedPlanItem {
   id: string;
   kind: 'concept' | 'post';
   title: string;
-  /** "YYYY-MM-DD" (a concept's own date, or its post's day), or null. */
+  /** "YYYY-MM-DD" (the item's plan day; for a post also its own day), or null. */
   date: string | null;
   team: 'approved' | null;
   client: 'approved' | 'changes' | null;
@@ -851,7 +851,7 @@ export function seedDatedPlan(
       title: it.kind === 'concept' ? it.title : null,
       description: it.kind === 'concept' ? 'Fixture concept.' : null,
       post_id: postId,
-      target_date: it.kind === 'concept' ? it.date : null,
+      target_date: it.date,
       created_by: opts.sender,
       created_at: '2026-10-09T09:00:00Z',
       updated_at: '2026-10-09T09:00:00Z',

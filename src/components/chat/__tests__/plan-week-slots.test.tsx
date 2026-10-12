@@ -13,6 +13,7 @@ import {
   DayColumn,
   PlanBody,
   SlotCheckbox,
+  planListGroups,
   rowMeta,
   screenProgressLabel,
 } from '@/components/chat/PlanScreen';
@@ -65,7 +66,7 @@ function bundle(audience: 'team' | 'client'): PlanBundle {
       created_by: null,
     },
     items: [
-      item({ id: 'p1', post_id: 'post1' }),
+      item({ id: 'p1', post_id: 'post1', target_date: '2026-10-13' }),
       item({ id: 'p2', post_id: 'post2' }),
       item({ id: 'd1', post_id: 'draft1' }),
       item({ id: 'c1', kind: 'concept', title: 'Reel' }),
@@ -123,7 +124,8 @@ describe('checkbox per role (W4)', () => {
     expect(html).toContain('h-11 w-11');
     expect(html).toContain('h-[22px] w-[22px]');
     expect(html).toContain('rounded-[6px]');
-    expect(html).toContain('mr-1');
+    // Top-aligned with the thumbnail; the day block's 5px right padding puts the box 16px in.
+    expect(html).toContain('self-start');
     expect(html).toContain('data-plan-slot="client"');
     // Client ticked: success fill, white tick.
     expect(html).toContain('bg-good');
@@ -150,7 +152,7 @@ describe('optimistic counts and toasts (W4, W6)', () => {
     const ticked = withReviewOverrides(b, 'client', { p2: 'approved', c1: 'approved' });
     expect(planProgress(ticked)).toMatchObject({ approved: 3, changes: 0 });
     expect(progressPercent(planProgress(ticked))).toBe(75);
-    expect(screenProgressLabel(ticked, 'client')).toBe('3/4 approved');
+    expect(screenProgressLabel(ticked, 'client')).toBe('3 of 4 slots approved');
     // Reverting is laying the previous status back.
     const reverted = withReviewOverrides(ticked, 'client', { p2: 'waiting', c1: 'changes' });
     expect(planProgress(reverted)).toMatchObject({ approved: 1, changes: 1 });
@@ -269,17 +271,25 @@ describe('Undo restores the exact previous status (A3)', () => {
 });
 
 describe('week list layout (L1-L4)', () => {
-  it('day column: weekday over the number; today in the accent; empty muted; No date', () => {
+  it('day column: 48x44, weekday over the digits centred; today both accent; empty faint; No date', () => {
     const today = renderToStaticMarkup(
       <DayColumn day="2026-10-14" today="2026-10-14" empty={false} />,
     );
-    expect(today).toContain('w-10');
+    expect(today).toContain('flex h-11 w-12 shrink-0 flex-col items-center justify-center gap-0.5');
     expect(today).toContain('data-plan-today=""');
-    expect(today).toMatch(/text-\[11px\] font-semibold uppercase[^"]*text-accent[^"]*">Wed</);
-    expect(today).toMatch(/text-xl font-semibold leading-6 text-fg">14</);
+    expect(today).toMatch(
+      /text-\[11px\] font-semibold uppercase leading-\[14px\] tracking-\[\.06em\] text-accent">Wed</,
+    );
+    expect(today).toMatch(
+      /text-\[22px\] font-semibold leading-7 tracking-\[-\.01em\] tabular-nums text-accent">14</,
+    );
     const empty = renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" empty />);
     expect(empty).toMatch(/text-fg-3">Thu</);
-    expect(empty).toMatch(/text-xl font-semibold leading-6 text-fg-3">15</);
+    expect(empty).toMatch(/tabular-nums text-border-strong">15</);
+    const busy = renderToStaticMarkup(
+      <DayColumn day="2026-10-15" today="2026-10-14" empty={false} />,
+    );
+    expect(busy).toMatch(/tabular-nums text-fg">15</);
     const none = renderToStaticMarkup(<DayColumn day={null} today="2026-10-14" empty={false} />);
     expect(none).toContain('No date');
     expect(none).not.toContain('data-plan-day-number');
@@ -300,13 +310,14 @@ describe('week list layout (L1-L4)', () => {
       <MemoryRouter>
         <PlanBody
           bundle={bundle(audience)}
-          counts={{}}
+          groups={planListGroups(bundle(audience), 'UTC', side)}
           side={side}
           timeZone="UTC"
           thumbs={{ post1: 'v1' }}
+          drag={null}
           onOpenItem={() => undefined}
           onToggleSlot={() => undefined}
-          onRemove={() => undefined}
+          {...(side === 'agency' ? { onAdd: () => undefined, onDragStart: () => undefined } : {})}
           shareError={null}
           sharing={false}
           onShareWithClient={() => undefined}
@@ -324,9 +335,16 @@ describe('week list layout (L1-L4)', () => {
     // The checkbox is the row's last element.
     expect(row.trimEnd().endsWith('</span></button></div>')).toBe(true);
     expect(html).toMatch(
-      /data-plan-day-empty="" class="flex h-9 items-center text-\[13px\] text-fg-3">Nothing planned/,
+      /data-plan-day-empty="" class="flex min-h-\[44px\] items-center text-\[13px\] text-fg-3">Nothing planned/,
     );
-    expect(html).toContain('flex gap-3 border-b border-border');
+    // Day block: 16px top/bottom/left, 5px right, a 1px line between days.
+    expect(html).toContain('flex gap-3 border-t border-border py-4 pl-4 pr-[5px]');
+    // Items 16px apart; title, type line and status 2px apart.
+    expect(html).toContain('flex min-w-0 flex-1 flex-col gap-4');
+    expect(html).toContain('flex min-w-0 flex-1 flex-col gap-0.5');
+    // A client sees no Add, no status line, no drag.
+    expect(html).not.toContain('data-plan-add=');
+    expect(html).not.toContain('data-plan-row-status');
     // Day column left of items.
     const day = html.slice(html.indexOf('data-plan-day="2026-10-13"'));
     expect(day.indexOf('data-plan-day-col')).toBeLessThan(day.indexOf('data-plan-row'));
@@ -341,11 +359,16 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toContain('data-plan-row-draft="locked"');
   });
 
-  it('agency: team checkboxes, the client pill beside them', () => {
+  it('agency: team checkboxes, the client status line, Add rows, No date kept', () => {
     const html = paint('agency', 'client');
     expect(html).toContain('data-plan-slot="team"');
     expect(html).not.toContain('data-plan-slot="client"');
-    expect(html).toContain('Client · Approved');
+    expect(html).toMatch(/data-plan-row-status=""[^>]*>.*Client approved</);
+    expect(html).not.toContain('Client · Approved');
+    expect(html).not.toContain('data-plan-pill="draft"');
     expect(html).toContain('data-plan-row-wrap="d1"');
+    expect(html).toContain('data-plan-add="2026-10-12"');
+    expect(html).toContain('data-plan-add="none"');
+    expect(html).toContain('data-plan-day="none"');
   });
 });

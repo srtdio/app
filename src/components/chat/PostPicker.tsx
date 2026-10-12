@@ -116,6 +116,8 @@ interface PostPickerProps {
    * the agency side.
    */
   channelHasClient?: boolean | null | undefined;
+  /** Post ids not to list at all (a plan's posts, when adding to that plan). */
+  excludePostIds?: ReadonlySet<string> | undefined;
 }
 
 /** The sheet title per mode. */
@@ -458,6 +460,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     workspaceKey,
     timeZone,
     sharedPostIds: props.sharedPostIds,
+    excludePostIds: props.excludePostIds,
   };
 
   let postBody: ReactElement;
@@ -574,6 +577,8 @@ export interface PostRowContext {
   workspaceKey: string | null;
   timeZone: string;
   sharedPostIds?: ReadonlySet<string> | undefined;
+  /** Post ids whose rows are not rendered (already in the plan being added to). */
+  excludePostIds?: ReadonlySet<string> | undefined;
 }
 
 const LIST_CLASS = '-mx-[18px] flex max-h-[50vh] flex-col overflow-y-auto border-t border-border';
@@ -700,8 +705,9 @@ export function SearchResultsView(
 }
 
 /** One post row: placeholder thumb, KEY · title, format · date, stage or "in this chat". */
-export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): ReactElement {
+export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): ReactElement | null {
   const { post } = props;
+  if (props.excludePostIds?.has(post.id) === true) return null;
   const active = isPostSelected(props.selected, post.id);
   const inChat = props.sharedPostIds?.has(post.id) === true;
   const meta = [

@@ -245,7 +245,9 @@ test('client: a draft post in a client plan shows by name only and does nothing'
   await expect(row).toHaveAttribute('aria-disabled', 'true');
   await expect(row.getByText('Not ready to view yet')).toBeVisible();
   await expect(row.getByText('Product teaser')).toBeVisible();
-  await expect(row.locator('[data-plan-pill="draft"]')).toHaveText('Draft');
+  // The type line says it is not ready; no separate Draft chip.
+  await expect(row).toHaveAttribute('data-plan-row-draft', 'locked');
+  await expect(row.locator('[data-plan-pill="draft"]')).toHaveCount(0);
   // aria-disabled: a forced tap still lands on it and opens nothing.
   await row.click({ force: true });
   await page.waitForTimeout(400);

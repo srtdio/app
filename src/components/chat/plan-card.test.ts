@@ -295,7 +295,7 @@ describe('date labels (D3)', () => {
   const posts = bundle([
     item({ id: 'cd', target_date: '2026-10-14' }),
     item({ id: 'cu' }),
-    item({ id: 'pd', kind: 'post', title: null, post_id: 'post1' }),
+    item({ id: 'pd', kind: 'post', title: null, post_id: 'post1', target_date: '2026-10-15' }),
     item({ id: 'pu', kind: 'post', title: null, post_id: 'post2' }),
   ]);
   posts.postInfo = {
@@ -311,8 +311,8 @@ describe('date labels (D3)', () => {
     expect(itemDateLabel(posts, at('cu'))).toEqual({ label: NO_DATE_LABEL, dated: false });
     expect(NO_DATE_LABEL).toBe('No date');
   });
-  it('a post with a date shows its post day; without one "No date"', () => {
-    expect(itemDateLabel(posts, at('pd'))).toEqual({ label: '13 Oct', dated: true });
+  it('a post shows its plan day (not its post\'s own date); without one "No date"', () => {
+    expect(itemDateLabel(posts, at('pd'))).toEqual({ label: '15 Oct', dated: true });
     expect(itemDateLabel(posts, at('pu'))).toEqual({ label: NO_DATE_LABEL, dated: false });
   });
 });
