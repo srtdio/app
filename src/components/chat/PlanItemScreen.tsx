@@ -223,6 +223,8 @@ export function PlanItemScreen(props: {
   /** A comment to scroll to and briefly highlight once listed; none when absent. */
   highlightCommentId?: string;
   onClose: () => void;
+  /** After Remove from plan: back to the list. Defaults to onClose. */
+  onRemoved?: () => void;
 }): ReactElement | null {
   const { bundle, item, side } = props;
   const { workspaces, workspaceId } = useWorkspace();
@@ -517,7 +519,8 @@ export function PlanItemScreen(props: {
     setRemoveOpen(false);
     toast.show({ title: REMOVED_TOAST });
     dispatchPlanChanged(window, bundle.plan.id);
-    props.onClose();
+    // Back to the list (the entry item included), not out of the plan.
+    (props.onRemoved ?? props.onClose)();
   };
   const planRows = useMemo(
     () =>

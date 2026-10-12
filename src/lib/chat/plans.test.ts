@@ -780,8 +780,9 @@ describe('plan items in date order', () => {
       items,
       [],
       [
-        { id: 'p1', stage: 'review', title: 'P', target_date: '2026-10-12' },
-        { id: 'p2', stage: 'review', title: 'Q', target_date: '2026-10-02' },
+        // The post read carries no date at all: placement is the plan day only.
+        { id: 'p1', stage: 'review', title: 'P' },
+        { id: 'p2', stage: 'review', title: 'Q' },
       ],
     );
     expect(out.get('plan')?.items.map((i) => i.id)).toEqual(['post', 'post2', 'late', 'none']);

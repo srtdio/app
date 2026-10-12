@@ -447,7 +447,6 @@ export interface PlanPostRow {
   id: string;
   stage: string;
   title?: string | null;
-  target_date?: string | null;
   format?: string | null;
 }
 

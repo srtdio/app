@@ -731,7 +731,11 @@ export function PlanScreen(props: {
   // one plan_item_move, reverted on failure. A day change says so, and says
   // the ticks were reset when it had any.
   const moveTo = async (moved: string, toDay: string | null, toIndex: number): Promise<void> => {
-    if (bundle === null || moveWriting.current) return;
+    if (bundle === null) return;
+    if (moveWriting.current) {
+      toast.show({ title: MOVE_FAILED });
+      return;
+    }
     const days = planDayIds(groups);
     const from = findItem(days, moved);
     if (from === null || isNoop(days, moved, { day: toDay, index: toIndex })) return;
@@ -934,6 +938,7 @@ export function PlanScreen(props: {
               }
             : {})}
           onClose={() => (itemId === entryItemId ? props.onClose() : setItemId(null))}
+          onRemoved={() => setItemId(null)}
         />
       ) : null}
       {agency ? (
@@ -1112,8 +1117,11 @@ function usePlanDrag(opts: {
       const current = stateRef.current;
       if (current !== null && current.snapTop === null) {
         const box = body.getBoundingClientRect();
+        const before = body.scrollTop;
         if (current.y < box.top + EDGE_PX) body.scrollTop -= EDGE_STEP_PX;
         else if (current.y > box.bottom - EDGE_PX) body.scrollTop += EDGE_STEP_PX;
+        // The rows moved under a resting pointer: re-aim the drop.
+        if (body.scrollTop !== before) update(current.y);
       }
       frame = requestAnimationFrame(tick);
     };
