@@ -11,8 +11,21 @@
 // p_target_date sets that day; without it a post takes its own date when it is
 // inside the plan and no date when outside; p_target_date outside the plan is
 // 'date_outside_plan'. Concept and post items both carry target_date.
+//
+// One date per post (20261012161000_plan_one_date_per_post.sql): a post slot's
+// day is posts.target_date at 12:00 workspace zone, mirrored onto
+// plan_items.target_date (transitional until part 2b) by posts_plan_day_sync.
+// Covered: the 5-arg move on a post slot writes the post date and the mirror
+// follows; p_keep_reviews true keeps both sides' reviews, false resets them; a
+// post date outside the plan week soft-deletes the slot; a cleared post date
+// keeps the slot undated; concept add/edit outside the week and posts add with
+// no day of a post dated outside the week are 'date_outside_plan'.
+// Plan delete (20261012162000_plan_delete_open_rules.sql): an agency member who
+// is not the creator or an owner/admin is forbidden_role; the creator succeeds.
+// Post dates and soft-deleted slots are read with psql (RLS hides deleted rows).
 // No teardown: this suite runs no deletes; every fixture has its own workspace.
 
+import { execFileSync } from 'node:child_process';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { v7 as uuidv7 } from 'uuid';
 import {
@@ -40,6 +53,8 @@ type Rpc = Database['public']['Functions'];
 type ProcName =
   | 'plan_create'
   | 'plan_concept_add'
+  | 'plan_concept_edit'
+  | 'plan_delete'
   | 'plan_posts_add'
   | 'plan_item_move'
   | 'plan_item_review';
@@ -60,6 +75,8 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
   let agency: SeededUser;
   let client: SeededUser;
   let otherAgency: SeededUser;
+  let agency2: SeededUser;
+  let dbUrl: string;
   let ws: SeededWorkspace;
   let bucketId: string;
 
@@ -95,6 +112,59 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
       p_target_date: day as string,
       p_item_ids: order,
     });
+  }
+
+  /** 5-arg plan_item_move (p_keep_reviews); a nullable day as above. */
+  async function move5(
+    user: SeededUser,
+    itemId: string,
+    day: string | null,
+    order: string[],
+    keepReviews: boolean,
+  ): Promise<Outcome<null>> {
+    const traceId = uuidv7();
+    const args = {
+      p_item_id: itemId,
+      p_target_date: day as string,
+      p_item_ids: order,
+      p_keep_reviews: keepReviews,
+      p_trace_id: traceId,
+    };
+    const res = await clientFor(user.id).rpc('plan_item_move', args);
+    return {
+      data: null,
+      error: res.error === null ? null : { message: res.error.message },
+      traceId,
+    };
+  }
+
+  /** Runs SQL as postgres on the local stack; returns the trimmed -At output. */
+  function psql(sql: string): string {
+    return execFileSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql], {
+      encoding: 'utf8',
+    }).trim();
+  }
+
+  /** posts.target_date as an ISO instant, or null. */
+  function postDate(postId: string): string | null {
+    const out = psql(
+      `select coalesce(to_char(target_date at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') from public.posts where id = '${postId}'`,
+    );
+    return out === '' ? null : out;
+  }
+
+  /** plan_items day and deleted flag, read past RLS (which hides deleted rows). */
+  function slot(itemId: string): { target_date: string | null; deleted: boolean } {
+    const [day = '', deleted = ''] = psql(
+      `select coalesce(target_date::text, ''), (deleted_at is not null)::text from public.plan_items where id = '${itemId}'`,
+    ).split('|');
+    return { target_date: day === '' ? null : day, deleted: deleted === 'true' };
+  }
+
+  async function postSlot(planId: string, postId: string): Promise<string> {
+    const row = (await items(planId)).find((i) => i.post_id === postId);
+    if (row === undefined) throw new Error('no post slot');
+    return row.id;
   }
 
   async function seedPost(targetDate: string | null): Promise<string> {
@@ -201,9 +271,12 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     agency = await seedUser(env, admin);
     client = await seedUser(env, admin);
     otherAgency = await seedUser(env, admin);
+    agency2 = await seedUser(env, admin);
+    dbUrl = env.dbUrl;
     ws = await seedWorkspace(admin, owner, `Plan days ${owner.email}`);
     await seedMember(g, ws, agency, 'agency');
     await seedMember(g, ws, client, 'client');
+    await seedMember(g, ws, agency2, 'agency');
     const otherWs = await seedWorkspace(admin, owner, `Plan days other ${owner.email}`);
     await seedMember(g, otherWs, otherAgency, 'agency');
     const bucket = await insertRow(g, 'workspace_buckets', {
@@ -296,16 +369,26 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     expect((await items(planId)).map((i) => i.target_date)).toEqual(['2026-11-07', '2026-11-07']);
   });
 
-  it("without p_target_date: the post's own date inside the plan, else no date", async () => {
+  it("without p_target_date: the post's own date inside the plan; an undated post stays undated", async () => {
     const planId = await newPlan();
     const inside = await seedPost('2026-11-20T12:00:00Z');
-    const outside = await seedPost('2026-12-20T12:00:00Z');
     const undated = await seedPost(null);
-    expect(await addPosts(planId, [inside, outside, undated])).toBe(3);
+    expect(await addPosts(planId, [inside, undated])).toBe(2);
     const byPost = new Map((await items(planId)).map((i) => [i.post_id, i.target_date]));
     expect(byPost.get(inside)).toBe('2026-11-20');
-    expect(byPost.get(outside)).toBeNull();
     expect(byPost.get(undated)).toBeNull();
+  });
+
+  it("without p_target_date: a post dated outside the plan week is 'date_outside_plan'", async () => {
+    const planId = await newPlan();
+    const outside = await seedPost('2026-12-20T12:00:00Z');
+    const undated = await seedPost(null);
+    const res = await call(agency, 'plan_posts_add', {
+      p_plan_id: planId,
+      p_post_ids: [undated, outside],
+    });
+    expect(res.error?.message).toBe('date_outside_plan');
+    expect(await items(planId)).toEqual([]);
   });
 
   it("plan_posts_add: p_target_date outside the plan is 'date_outside_plan'", async () => {
@@ -332,5 +415,109 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     if (post === undefined) throw new Error('no post item');
     expect((await move(agency, post.id, '2026-11-09', [concept, post.id])).error).toBeNull();
     expect((await items(planId)).find((i) => i.id === post.id)?.target_date).toBe('2026-11-09');
+  });
+
+  it('5-arg move on a post slot writes posts.target_date at 12:00 workspace zone; the mirror follows', async () => {
+    psql(
+      `update public.workspaces set timezone = 'Asia/Kolkata', row_version = row_version + 1 where id = '${ws.id}'`,
+    );
+    try {
+      const planId = await newPlan();
+      const post = await seedPost(null);
+      await addPosts(planId, [post]);
+      const item = await postSlot(planId, post);
+      expect(slot(item).target_date).toBeNull();
+      expect((await move5(agency, item, '2026-11-10', [item], true)).error).toBeNull();
+      // 12:00 in Asia/Kolkata (+05:30) is 06:30 UTC.
+      expect(postDate(post)).toBe('2026-11-10T06:30:00Z');
+      expect(slot(item)).toEqual({ target_date: '2026-11-10', deleted: false });
+    } finally {
+      psql(
+        `update public.workspaces set timezone = 'UTC', row_version = row_version + 1 where id = '${ws.id}'`,
+      );
+    }
+  });
+
+  it('5-arg move: p_keep_reviews true keeps both sides, false resets them to waiting', async () => {
+    const planId = await newPlan('client');
+    const post = await seedPost('2026-11-02T12:00:00Z');
+    await addPosts(planId, [post]);
+    const item = await postSlot(planId, post);
+    await reviewBoth(item);
+    const approved = [
+      { side: 'client', status: 'approved' },
+      { side: 'team', status: 'approved' },
+    ];
+    expect((await move5(agency, item, '2026-11-05', [item], true)).error).toBeNull();
+    expect(postDate(post)).toBe('2026-11-05T12:00:00Z');
+    expect(await reviews(item)).toEqual(approved);
+    expect((await move5(agency, item, '2026-11-06', [item], false)).error).toBeNull();
+    expect(await reviews(item)).toEqual([
+      { side: 'client', status: 'waiting' },
+      { side: 'team', status: 'waiting' },
+    ]);
+  });
+
+  it('a posts.target_date change outside the plan week soft-deletes the slot', async () => {
+    const planId = await newPlan();
+    const post = await seedPost('2026-11-02T12:00:00Z');
+    await addPosts(planId, [post]);
+    const item = await postSlot(planId, post);
+    psql(
+      `update public.posts set target_date = '2026-12-15T12:00:00Z', row_version = row_version + 1 where id = '${post}'`,
+    );
+    expect(slot(item).deleted).toBe(true);
+    expect(await items(planId)).toEqual([]);
+    expect(postDate(post)).toBe('2026-12-15T12:00:00Z');
+  });
+
+  it('a cleared post date keeps the slot, undated', async () => {
+    const planId = await newPlan();
+    const post = await seedPost('2026-11-02T12:00:00Z');
+    await addPosts(planId, [post]);
+    const item = await postSlot(planId, post);
+    expect(slot(item).target_date).toBe('2026-11-02');
+    psql(
+      `update public.posts set target_date = null, row_version = row_version + 1 where id = '${post}'`,
+    );
+    expect(slot(item)).toEqual({ target_date: null, deleted: false });
+  });
+
+  it("concept add and edit outside the plan week are 'date_outside_plan'", async () => {
+    const planId = await newPlan();
+    const added = await call(agency, 'plan_concept_add', {
+      p_plan_id: planId,
+      p_title: 'Out of week',
+      p_description: '',
+      p_attachment_version_ids: [],
+      p_target_date: '2026-12-02',
+    });
+    expect(added.error?.message).toBe('date_outside_plan');
+    expect(await items(planId)).toEqual([]);
+    const concept = await newConcept(planId, '2026-11-02');
+    const edited = await call(agency, 'plan_concept_edit', {
+      p_item_id: concept,
+      p_title: 'Moved out',
+      p_description: '',
+      p_attachment_version_ids: [],
+      p_target_date: '2026-10-31',
+    });
+    expect(edited.error?.message).toBe('date_outside_plan');
+    expect(slot(concept).target_date).toBe('2026-11-02');
+  });
+
+  it('plan_delete: an agency member who is not the creator or owner/admin is forbidden_role; the creator succeeds', async () => {
+    const planId = await newPlan();
+    expect((await call(agency2, 'plan_delete', { p_plan_id: planId })).error?.message).toBe(
+      'forbidden_role',
+    );
+    expect(psql(`select (deleted_at is null)::text from public.plans where id = '${planId}'`)).toBe(
+      'true',
+    );
+    const deleted = await call(agency, 'plan_delete', { p_plan_id: planId });
+    expect(deleted.error).toBeNull();
+    expect(
+      psql(`select (deleted_at is not null)::text from public.plans where id = '${planId}'`),
+    ).toBe('true');
   });
 });
