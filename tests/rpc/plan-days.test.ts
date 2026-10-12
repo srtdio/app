@@ -23,6 +23,13 @@
 // Plan delete (20261012162000_plan_delete_open_rules.sql): an agency member who
 // is not the creator or an owner/admin is forbidden_role; the creator succeeds.
 // Post dates and soft-deleted slots are read with psql (RLS hides deleted rows).
+// Plan updated alerts (20261012163000_plan_updated_alerts.sql): _plan_notify is
+// silent on live, so one psql session swaps in an inserting body inside a
+// transaction, drives the triggers with direct SQL, reads inbox_entries and
+// rolls back: slot_added, concept_changed, renamed, slot_removed, and a post
+// leaving by date announced once (plan_date_changed only; the
+// app.plan_day_sync flag is back to 'off'). The trigger functions have no
+// EXECUTE for authenticated.
 // No teardown: this suite runs no deletes; every fixture has its own workspace.
 
 import { execFileSync } from 'node:child_process';
@@ -143,6 +150,16 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     return execFileSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql], {
       encoding: 'utf8',
     }).trim();
+  }
+
+  /** Runs statements in ONE psql session (quiet, -At); returns non-empty output lines. */
+  function psqlSession(statements: string[]): string[] {
+    const out = execFileSync(
+      'psql',
+      [dbUrl, '-q', '-v', 'ON_ERROR_STOP=1', '-At', ...statements.flatMap((sql) => ['-c', sql])],
+      { encoding: 'utf8' },
+    );
+    return out.split('\n').filter((line) => line !== '');
   }
 
   /** posts.target_date as an ISO instant, or null. */
@@ -519,5 +536,75 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     expect(
       psql(`select (deleted_at is not null)::text from public.plans where id = '${planId}'`),
     ).toBe('true');
+  });
+
+  it('plan_updated alerts: triggers fire with the right kinds; a post leaving by date is announced once', async () => {
+    const planId = await newPlan();
+    const concept = await newConcept(planId, '2026-11-02');
+    const post = await seedPost('2026-11-03T12:00:00Z');
+    await addPosts(planId, [post]);
+    const postItem = await postSlot(planId, post);
+    // Full _plan_notify body from 20261012160000_plan_notify_plumbing.sql.
+    const insertingNotify = `create or replace function public._plan_notify(p_plan_id uuid, p_event_type text, p_payload jsonb)
+ returns void language plpgsql security definer set search_path to '' as $fn$
+declare v_ws uuid; v_aud text;
+begin
+  select workspace_id, audience into v_ws, v_aud from public.plans where id = p_plan_id;
+  if v_ws is null then raise exception 'invalid_payload'; end if;
+  insert into public.inbox_entries (user_id, workspace_id, event_type, entity_type, entity_id, scope, scope_key, tier, payload, actor_user_id)
+  select wm.user_id, v_ws, p_event_type, 'plan', p_plan_id::text, 'posts', p_plan_id::text, 'active',
+         coalesce(p_payload, '{}'::jsonb) || jsonb_build_object('plan_id', p_plan_id), auth.uid()
+    from public.workspace_members wm
+   where wm.workspace_id = v_ws and wm.active = true and wm.user_id is distinct from auth.uid()
+     and (wm.role = any (array['owner','admin','agency']) or (v_aud = 'client' and wm.role = 'client'));
+end $fn$`;
+    const lines = psqlSession([
+      'begin',
+      insertingNotify,
+      `insert into public.plan_items (workspace_id, plan_id, kind, position, title)
+         select workspace_id, id, 'concept', 99, 'Tx concept' from public.plans where id = '${planId}'`,
+      `update public.plan_items set title = 'Renamed concept' where id = '${concept}'`,
+      `update public.plans set title = 'Renamed plan', updated_at = now() where id = '${planId}'`,
+      `update public.posts set target_date = '2026-12-15T12:00:00Z', row_version = row_version + 1 where id = '${post}'`,
+      `update public.plan_items set deleted_at = now() where plan_id = '${planId}' and title = 'Tx concept'`,
+      `select 'flag:' || coalesce(current_setting('app.plan_day_sync', true), '')`,
+      `select distinct 'event:' || e.event_type || ':' || coalesce(e.payload->>'kind', '') || ':' ||
+              case when e.payload->>'item_id' = '${postItem}' then 'post'
+                   when e.payload->>'item_id' = '${concept}' then 'concept'
+                   when e.payload ? 'item_id' then 'new'
+                   else '' end
+         from public.inbox_entries e
+        where e.entity_type = 'plan' and e.entity_id = '${planId}'
+        order by 1`,
+      'rollback',
+    ]);
+    expect(lines).toContain('flag:off');
+    expect(lines.filter((l) => l.startsWith('event:'))).toEqual(
+      [
+        'event:plan_date_changed::post',
+        'event:plan_updated:concept_changed:concept',
+        'event:plan_updated:renamed:',
+        'event:plan_updated:slot_added:new',
+        'event:plan_updated:slot_removed:new',
+      ].sort(),
+    );
+    // Rolled back: live notify stays as migrated, nothing left behind.
+    expect(
+      psql(
+        `select count(*) from public.inbox_entries where entity_type = 'plan' and entity_id = '${planId}'`,
+      ),
+    ).toBe('0');
+    expect(
+      psql(
+        `select string_agg(tgname, ',' order by tgname) from pg_trigger where tgname in ('plan_items_change_notify', 'plans_rename_notify')`,
+      ),
+    ).toBe('plan_items_change_notify,plans_rename_notify');
+    expect(
+      psql(
+        `select bool_or(has_function_privilege('authenticated', p.oid, 'EXECUTE'))::text from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public' and p.proname in ('_plan_items_change_notify', '_plans_rename_notify', '_posts_plan_day_sync', '_plan_notify')`,
+      ),
+    ).toBe('false');
   });
 });
