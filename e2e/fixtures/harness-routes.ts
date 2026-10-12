@@ -207,8 +207,8 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     plan.shared_with_client_by = ME;
     return null;
   },
-  // The draft post items of up to 100 plans the caller may see by name: a
-  // client gets them on client plans only. Items a client cannot read from
+  // The draft post items of up to 100 plans the caller may see by name, each
+  // on its plan day: a client gets them on client plans only. Items a client cannot read from
   // plan_items sit in hidden_plan_items (the fixture's stand-in for RLS).
   plan_draft_rows: (args, tables) => {
     const ids = new Set(Array.isArray(args.p_plan_ids) ? args.p_plan_ids.map(String) : []);
@@ -227,7 +227,12 @@ const PLAN_RPC: Record<string, RpcHandler> = {
           item_position: i.position,
           post_number: post.number,
           title: post.title,
-          target_date: post.target_date === null ? null : String(post.target_date).slice(0, 10),
+          // The plan day at UTC midnight (20261012140000_plan_draft_rows_plan_day),
+          // never the post's own date.
+          target_date:
+            i.target_date === null || i.target_date === undefined
+              ? null
+              : `${String(i.target_date).slice(0, 10)}T00:00:00+00:00`,
         },
       ];
     });

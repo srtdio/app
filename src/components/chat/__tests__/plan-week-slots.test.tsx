@@ -23,6 +23,7 @@ import {
   SLOT_FAILED,
   SLOT_POST_NOT_READY,
   SLOT_REMOVED_TOAST,
+  commentsLabel,
   itemPills,
   itemSlotSubtitle,
   planProgress,
@@ -325,6 +326,46 @@ describe('week list layout (L1-L4)', () => {
       </MemoryRouter>,
     );
   }
+
+  function paintCounts(side: 'client' | 'agency', counts: Record<string, number>): string {
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <PlanBody
+          bundle={bundle('client')}
+          groups={planListGroups(bundle('client'), 'UTC', side)}
+          side={side}
+          timeZone="UTC"
+          thumbs={{}}
+          counts={counts}
+          drag={null}
+          onOpenItem={() => undefined}
+          onToggleSlot={() => undefined}
+          shareError={null}
+          sharing={false}
+          onShareWithClient={() => undefined}
+        />
+      </MemoryRouter>,
+    );
+  }
+
+  it('B3 comments: agency at the end of the status line, muted; client as the third line', () => {
+    const rowOf = (html: string): string =>
+      /<div data-plan-row-wrap="p1"[^>]*>[\s\S]*?<\/button>/.exec(html)?.[0] ?? '';
+    const agency = rowOf(paintCounts('agency', { p1: 3 }));
+    expect(agency).toMatch(
+      /data-plan-row-status=""[^>]*class="flex min-w-0 items-center text-xs leading-4">[\s\S]*?<span data-plan-row-comments="" class="truncate text-fg-3"> · 3 comments<\/span><\/span>/,
+    );
+    const client = rowOf(paintCounts('client', { p1: 1 }));
+    expect(client).not.toContain('data-plan-row-status');
+    expect(client).toContain(
+      '<span data-plan-row-comments="" class="truncate text-xs leading-4 text-fg-3">1 comment</span>',
+    );
+    // None when zero, on either side.
+    expect(rowOf(paintCounts('agency', { p1: 0 }))).not.toContain('data-plan-row-comments');
+    expect(rowOf(paintCounts('client', {}))).not.toContain('data-plan-row-comments');
+    expect(commentsLabel(0)).toBeNull();
+    expect(commentsLabel(2)).toBe('2 comments');
+  });
 
   it('each row: the open area first, the checkbox last; Nothing planned 36px; day blocks bordered', () => {
     const html = paint('client', 'client');

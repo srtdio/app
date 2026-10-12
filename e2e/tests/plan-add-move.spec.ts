@@ -4,12 +4,15 @@ import {
   DATED_PLAN_ID,
   DATED_PLAN_ITEMS,
   DM_CHANNEL,
+  DRAFT_ITEM_ID,
+  DRAFT_PLAN_ID,
   ME,
   PEER,
   PEER_NAME,
   PLAN_ID,
   POST_IDS,
   seedClientPlan,
+  seedClientPlanWithDraft,
   seedDatedPlan,
 } from '../fixtures/chat-data';
 import { expectMinTouchTarget } from '../helpers/touch-target';
@@ -364,5 +367,35 @@ test('client: same list, no Add or +, long-press does nothing, no Move or Remove
   await expect(item).toBeVisible();
   await expect(item.locator('[data-plan-item-more]')).toHaveCount(0);
   await expect(page.getByText('Move to another day')).toHaveCount(0);
+  expectClean(network);
+});
+
+test('client: a draft row sits under the plan day it was moved to, not its own date', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page);
+  viewAsClient(network);
+  seedClientPlanWithDraft(network.world, { channelId: DM_CHANNEL, sender: PEER });
+  const t = network.world.tables;
+  const plan = (t.plans ?? []).find((p) => p.id === DRAFT_PLAN_ID);
+  const hidden = (t.hidden_plan_items ?? []).find((i) => i.id === DRAFT_ITEM_ID);
+  const post = (t.posts ?? []).find((p) => p.id === hidden?.post_id);
+  if (plan === undefined || hidden === undefined || post === undefined) throw new Error('fixture');
+  // The agency moved it to the plan's fifth day; the post's own date differs.
+  const start = new Date(`${String(plan.starts_on)}T00:00:00Z`).getTime();
+  const planDay = new Date(start + 5 * 24 * 3_600_000).toISOString().slice(0, 10);
+  const ownDay = String(post.target_date).slice(0, 10);
+  expect(ownDay).not.toBe(planDay);
+  hidden.target_date = planDay;
+
+  await openChat(page, PEER_NAME);
+  const list = await openPlan(page, DRAFT_PLAN_ID);
+  const draft = dayBlock(list, planDay).locator(`[data-plan-row="${DRAFT_ITEM_ID}"]`);
+  await draft.scrollIntoViewIfNeeded();
+  await expect(draft).toHaveAttribute('data-plan-row-draft', 'locked');
+  await expect(dayBlock(list, ownDay).locator(`[data-plan-row="${DRAFT_ITEM_ID}"]`)).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await shot(page, 'client-02-draft-on-plan-day');
   expectClean(network);
 });

@@ -17,6 +17,8 @@ import {
   planChunks,
   planItemDay,
   planItemDayInZone,
+  draftRowDay,
+  mergeDraftRows,
   postPlansLine,
   readPlanBundles,
   readPostPlans,
@@ -1003,9 +1005,29 @@ describe('slot write (W4)', () => {
     expect(planItemDayInZone({ ...post, target_date: '2026-10-16' }, info, 'UTC')).toBe(
       '2026-10-16',
     );
-    // A draft row's instant (plan_draft_rows) is read in the zone.
-    const draft = { ...post, draft_row: true as const, target_date: '2026-10-13T20:00:00+00:00' };
-    expect(planItemDayInZone(draft, info, 'Asia/Kolkata')).toBe('2026-10-14');
+  });
+
+  it("a client's draft row sits on its plan day, never the post's own date, in any zone", () => {
+    // plan_draft_rows returns the plan day at UTC midnight; the post's own
+    // date (2 Oct) never reaches the client.
+    const [row] = mergeDraftRows(
+      [],
+      [
+        {
+          plan_id: 'p',
+          item_id: 'd1',
+          item_position: 0,
+          post_number: 7,
+          title: 'Teaser',
+          target_date: '2026-10-15T00:00:00+00:00',
+        },
+      ],
+    );
+    expect(row?.target_date).toBe('2026-10-15');
+    for (const zone of ['UTC', 'Asia/Kolkata', 'America/Los_Angeles', 'Pacific/Auckland']) {
+      expect(planItemDayInZone(row!, {}, zone)).toBe('2026-10-15');
+    }
+    expect(draftRowDay(null)).toBeNull();
   });
 });
 

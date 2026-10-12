@@ -206,12 +206,17 @@ interface PlanTable {
   select: (columns: string) => PlanQuery;
 }
 
+/** A draft row's plan day: the date part of plan_draft_rows' UTC-midnight instant. Pure. */
+export function draftRowDay(raw: string | null): string | null {
+  return raw === null || raw === '' ? null : raw.slice(0, 10);
+}
+
 /**
  * An item's plan day ("YYYY-MM-DD"): plan_items.target_date for every item,
  * concept or post (20261012120000_plan_item_days); null is No date. A post's
- * own posts.target_date never places it. A draft row (a client cannot read
- * the item) carries the day plan_draft_rows returns. `postInfo` is kept for
- * the callers' shape; the day never comes from it. Pure.
+ * own posts.target_date never places it, a draft row included (a client
+ * cannot read the item; plan_draft_rows returns its plan day). `postInfo` is
+ * kept for the callers' shape; the day never comes from it. Pure.
  */
 export function planItemDay(
   item: PlanItemRow,
@@ -224,9 +229,8 @@ export function planItemDay(
 
 /**
  * An item's plan day for the Plan screen's day groups: plan_items.target_date
- * (a calendar date) for every item; a draft row's day from plan_draft_rows,
- * read in the workspace zone when it is an instant. Never posts.target_date
- * of a readable post. Null is No date. Pure.
+ * (a calendar date) for every item, a draft row's plan day included. Never
+ * posts.target_date. Null is No date. Pure.
  */
 export function planItemDayInZone(
   item: PlanItemRow,
@@ -401,7 +405,10 @@ export function mergeDraftRows(
       description: null,
       post_id: null,
       created_at: '',
-      target_date: row.target_date,
+      // plan_draft_rows returns the plan day at UTC midnight
+      // (20261012140000_plan_draft_rows_plan_day): its date part is the day,
+      // never read in a zone (that would shift it west of UTC).
+      target_date: draftRowDay(row.target_date),
       draft_row: true,
       post_number: row.post_number,
     });

@@ -38,6 +38,7 @@ import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
   ADD_FAILED,
+  commentsLabel,
   DRAFT_NOT_READY,
   MOVE_FAILED,
   NO_DATE_LABEL,
@@ -901,6 +902,7 @@ export function PlanScreen(props: {
             side={side}
             timeZone={timeZone}
             thumbs={read.status === 'ready' ? read.data.thumbs : {}}
+            counts={read.status === 'ready' ? read.data.commentCounts : {}}
             drag={drag.state}
             onOpenItem={setItemId}
             onToggleSlot={toggleSlot}
@@ -1269,6 +1271,8 @@ export function PlanBody(props: {
   side: ViewerSide;
   timeZone: string;
   thumbs: Record<string, string>;
+  /** Visible comment counts by item id (the screen's one count read). */
+  counts?: Readonly<Record<string, number>>;
   /** The drag in progress, or null. */
   drag: DragState | null;
   onOpenItem: (id: string) => void;
@@ -1372,6 +1376,7 @@ export function PlanBody(props: {
                               item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null
                             }
                             dimmed={lifted}
+                            comments={props.counts?.[item.id] ?? 0}
                             onOpen={() => props.onOpenItem(item.id)}
                             onToggleSlot={() => props.onToggleSlot(item)}
                             {...(props.onDragStart !== undefined &&
@@ -1619,6 +1624,8 @@ function PlanRow(props: {
   side: ViewerSide;
   thumb: string | null;
   dimmed: boolean;
+  /** Visible comments on the item; shown when above zero. */
+  comments: number;
   onOpen: () => void;
   onToggleSlot: () => void;
   /** Agency only: a long-press lifts the row (no menu any more). */
@@ -1634,6 +1641,7 @@ function PlanRow(props: {
   });
   const kindLabel = itemKindLabel(props.bundle.items, props.item);
   const title = rowTitle(props.bundle, props.item);
+  const comments = commentsLabel(props.comments);
   const date = itemDateLabel(props.bundle, props.item);
   const dateLine = (
     <span
@@ -1724,15 +1732,20 @@ function PlanRow(props: {
             ) : null}
           </span>
           {status !== null ? (
-            <span
-              data-plan-row-status=""
-              className={cn(
-                'flex items-center gap-1.5 text-xs leading-4',
-                STATUS_TONES[status.tone],
-              )}
-            >
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
-              {status.label}
+            <span data-plan-row-status="" className="flex min-w-0 items-center text-xs leading-4">
+              <span className={cn('flex shrink-0 items-center gap-1.5', STATUS_TONES[status.tone])}>
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+                {status.label}
+              </span>
+              {comments !== null ? (
+                <span data-plan-row-comments="" className="truncate text-fg-3">
+                  {` · ${comments}`}
+                </span>
+              ) : null}
+            </span>
+          ) : comments !== null ? (
+            <span data-plan-row-comments="" className="truncate text-xs leading-4 text-fg-3">
+              {comments}
             </span>
           ) : null}
           {dateLine}

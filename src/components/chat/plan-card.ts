@@ -634,3 +634,9 @@ export function movedToast(dayHeader: string | null, ticksReset: boolean): strin
   const where = `Moved to ${dayHeader ?? 'No date'}.`;
   return ticksReset ? `${where} Its ticks were reset.` : where;
 }
+
+/** A row's visible comment count: "1 comment" / "N comments"; null when none. Pure. */
+export function commentsLabel(count: number): string | null {
+  if (!(count > 0)) return null;
+  return count === 1 ? '1 comment' : `${count} comments`;
+}
