@@ -42,7 +42,8 @@ interface Frame {
 interface Log {
   taps: number[];
   frames: Frame[];
-  scrollJumps: number;
+  /** When the thread scrolled without the reader (a jump). */
+  scrollJumps: number[];
   shift: number;
   /** When a frame was about to paint with a skeleton on screen (rAF samples only). */
   paintedSkeleton: number[];
@@ -56,7 +57,7 @@ declare global {
 
 async function record(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const log: Log = { taps: [], frames: [], scrollJumps: 0, shift: 0, paintedSkeleton: [] };
+    const log: Log = { taps: [], frames: [], scrollJumps: [], shift: 0, paintedSkeleton: [] };
     window.__remember = log;
     document.addEventListener('pointerdown', () => log.taps.push(performance.now()), true);
     try {
@@ -126,7 +127,8 @@ async function record(page: Page): Promise<void> {
       lastHeight = height;
       if (lastScroll !== null && st !== lastScroll) {
         // A pin that follows the growth by the same amount keeps the reader still.
-        if (!userScroll && Math.abs(st - lastScroll - grown) > 1) log.scrollJumps += 1;
+        if (!userScroll && Math.abs(st - lastScroll - grown) > 1)
+          log.scrollJumps.push(Math.round(performance.now()));
         grown = 0;
       }
       userScroll = false;
@@ -160,6 +162,11 @@ async function logOf(page: Page): Promise<Log> {
 
 function framesSince(log: Log, tap: number): Frame[] {
   return log.frames.filter((f) => f.at >= tap).map((f) => ({ ...f, at: Math.round(f.at - tap) }));
+}
+
+/** The jumps from the last tap on, timed from it (earlier opens are not this reopen's). */
+function jumpsSince(log: Log, tap: number): number[] {
+  return log.scrollJumps.filter((at) => at >= tap).map((at) => Math.round(at - tap));
 }
 
 function show(frames: readonly Frame[]): string {
@@ -305,7 +312,7 @@ async function runFirstFrame(page: Page): Promise<void> {
     reopenMs: frames[first]?.at ?? null,
     frames: show(frames),
     shift: log.shift - shiftBefore,
-    jumps: log.scrollJumps,
+    jumps: jumpsSince(log, tap),
   });
   expect(first, show(frames)).toBeGreaterThanOrEqual(0);
   // Never a skeleton on the reopen: not in the DOM, not in a painted frame.
@@ -323,7 +330,7 @@ async function runFirstFrame(page: Page): Promise<void> {
     expect(f.last).toBe(firstFrame?.last);
   }
   expect(log.shift - shiftBefore, 'no layout shift').toBe(0);
-  expect(log.scrollJumps).toBe(0);
+  expect(jumpsSince(log, tap)).toEqual([]);
   // The background revalidation reads (forward, by ids, cursors) never the latest page first.
   expect(reads() - before).toBeGreaterThanOrEqual(1);
   await page.screenshot({ path: test.info().outputPath('reopen-first-frame.png') });
@@ -357,10 +364,10 @@ async function runLiveWhileClosed(page: Page): Promise<void> {
   await page.waitForTimeout(3_500);
   const log = await logOf(page);
   const frames = framesSince(log, tap);
-  report('live while closed', { frames: show(frames), jumps: log.scrollJumps });
+  report('live while closed', { frames: show(frames), jumps: jumpsSince(log, tap) });
   expect(frames.some((f) => f.skeleton)).toBe(false);
   expect(log.paintedSkeleton.filter((at) => at >= tap)).toEqual([]);
-  expect(log.scrollJumps).toBe(0);
+  expect(jumpsSince(log, tap)).toEqual([]);
   // The revalidation found nothing new: the same rows, still in place.
   expect(frames[frames.length - 1]?.last).toBe(changed.sent);
   await page.screenshot({ path: test.info().outputPath('live-while-closed.png') });
@@ -391,7 +398,7 @@ async function runCatchUp(page: Page): Promise<void> {
   await page.waitForTimeout(1_000);
   const log = await logOf(page);
   const frames = framesSince(log, tap);
-  report('catch-up', { frames: show(frames), jumps: log.scrollJumps });
+  report('catch-up', { frames: show(frames), jumps: jumpsSince(log, tap) });
   expect(
     frames.some((f) => f.skeleton),
     show(frames),
@@ -401,7 +408,7 @@ async function runCatchUp(page: Page): Promise<void> {
   const first = frames.find((f) => f.count > 0);
   expect(first?.last).not.toBe(changed.sent);
   expect(frames[frames.length - 1]?.last).toBe(changed.sent);
-  expect(log.scrollJumps).toBe(0);
+  expect(jumpsSince(log, tap)).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('catch-up.png') });
   expectClean(network);
 }
