@@ -1,4 +1,7 @@
 -- Chat task list (applied live 13 Oct 2026 via MCP; this file is the record). Per-chat numbered items, change log, bell fan-out, due timer.
+-- The one difference from the applied SQL: the cron.schedule call is wrapped in
+-- IF to_regclass('cron.job') IS NOT NULL (same guard as 20261003140000_chat_message_reminders.sql).
+-- CI containers have no pg_cron; live has it, so the job is scheduled as applied.
 create table public.chat_task_counters (
   channel_id text primary key references public.chat_channels(channel_id) on delete cascade,
   next_number integer not null default 1 check (next_number > 0)
@@ -145,4 +148,9 @@ begin
   return v_count;
 end $$;
 revoke execute on function public.chat_tasks_fire_due(integer) from public;
-select cron.schedule('chat-tasks-fire-due', '* * * * *', 'select public.chat_tasks_fire_due(500)');
+do $$
+begin
+  if to_regclass('cron.job') is not null then
+    perform cron.schedule('chat-tasks-fire-due', '* * * * *', 'select public.chat_tasks_fire_due(500)');
+  end if;
+end $$;
