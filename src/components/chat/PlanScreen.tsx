@@ -732,13 +732,13 @@ export function PlanScreen(props: {
   // the ticks were reset when it had any.
   const moveTo = async (moved: string, toDay: string | null, toIndex: number): Promise<void> => {
     if (bundle === null) return;
+    const days = planDayIds(groups);
+    const from = findItem(days, moved);
+    if (from === null || isNoop(days, moved, { day: toDay, index: toIndex })) return;
     if (moveWriting.current) {
       toast.show({ title: MOVE_FAILED });
       return;
     }
-    const days = planDayIds(groups);
-    const from = findItem(days, moved);
-    if (from === null || isNoop(days, moved, { day: toDay, index: toIndex })) return;
     const order = flattenOrder(moveItem(days, moved, toDay, toIndex));
     const dayChanged = from.day !== toDay;
     const hadTicks = hasTicks(bundle, moved);
