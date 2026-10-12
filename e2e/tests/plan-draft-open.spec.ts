@@ -343,3 +343,301 @@ test('the chat bell: plan alerts as bell rows; a deleted plan only toasts; a tap
   expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toHaveLength(2);
   expectClean(network);
 });
+
+// ---------------------------------------------------------------------------
+// Plan list: swipe left to remove (agency), the one-time peek, open at today
+// ---------------------------------------------------------------------------
+
+const PEEK_KEY = 'sorted:plan-swipe-peek-seen';
+
+/** Drag a row's content left (or right) with the pointer, no long-press. */
+async function swipeRow(page: Page, row: Locator, dx: number, dy = 0): Promise<void> {
+  await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  const box = await row.boundingBox();
+  if (box === null) throw new Error('row box');
+  const x = dx < 0 ? box.x + box.width - 60 : box.x + 120;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx, y + dy, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+}
+
+const removes = (network: HarnessNetwork) =>
+  network.rpcCalls.filter((c) => c.name === 'plan_item_remove');
+
+test('agency: swipe left to Remove, Undo restores with no request, expiry sends once; drag still reorders', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const network = await installHarnessNetwork(page);
+  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, DATED_PLAN_ID);
+  const lantern = dated('Lantern workshop');
+  const portraits = dated('Family portraits');
+  const row = plan.locator(`[data-plan-row-swipe="${lantern.id}"]`);
+  const action = plan.locator(`[data-plan-row-remove="${lantern.id}"]`);
+
+  // A vertical drag never opens the row.
+  await swipeRow(page, row, -12, 60);
+  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
+  // A short swipe springs back.
+  await swipeRow(page, row, -30);
+  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
+
+  // Past half the action: it stays open, 88px wide, full row height, red.
+  await swipeRow(page, row, -70);
+  await expect(row).toHaveAttribute('data-plan-row-open', '');
+  await expect(action).toBeVisible();
+  const actionBox = await action.boundingBox();
+  const rowBox = await row.boundingBox();
+  if (actionBox === null || rowBox === null) throw new Error('boxes');
+  expect(Math.round(actionBox.width)).toBe(88);
+  expect(Math.abs(actionBox.height - rowBox.height)).toBeLessThan(1);
+  expectMinTouchTarget(actionBox);
+  await expect(action).toHaveClass(/bg-bad/);
+  await expect(action).toHaveText('Remove');
+  await shot(page, 'swipe-01-open-action');
+
+  // Opening another row closes the first: one open row at a time.
+  const other = plan.locator(`[data-plan-row-swipe="${portraits.id}"]`);
+  await swipeRow(page, other, -70);
+  await expect(other).toHaveAttribute('data-plan-row-open', '');
+  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(1);
+  // A swipe right closes it; a tap elsewhere closes; a tap on the open row opens nothing.
+  await swipeRow(page, other, 70);
+  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
+  await swipeRow(page, row, -70);
+  await plan.locator('[data-plan-progress-block]').click({ force: true });
+  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
+  await swipeRow(page, row, -70);
+  await row.locator(`[data-plan-row="${lantern.id}"]`).click();
+  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
+  await expect(page.locator('[data-plan-page="item"]')).toHaveCount(0);
+
+  // Remove: the row collapses and is hidden at once; nothing is sent yet.
+  await swipeRow(page, row, -70);
+  await action.click();
+  await expect(plan.locator(`[data-plan-row-wrap="${lantern.id}"]`)).toHaveCount(0);
+  const toast = page.getByText('Removed from plan', { exact: true });
+  await expect(toast).toBeVisible();
+  expect(removes(network)).toEqual([]);
+  // Undo: the row is back in place, no request ever.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${lantern.id}"]`)).toHaveCount(
+    1,
+  );
+  await page.waitForTimeout(5_500);
+  expect(removes(network)).toEqual([]);
+
+  // Remove again and let the toast expire: exactly one plan_item_remove.
+  await swipeRow(page, row, -70);
+  await action.click();
+  await expect(plan.locator(`[data-plan-row-wrap="${lantern.id}"]`)).toHaveCount(0);
+  await expect.poll(() => removes(network).length, { timeout: 8_000 }).toBe(1);
+  expect(removes(network)[0]?.args).toMatchObject({ p_item_id: lantern.id });
+  expect(typeof removes(network)[0]?.args.p_trace_id).toBe('string');
+  await page.waitForTimeout(1_000);
+  // Never reappears after the re-read; never sent twice.
+  await expect(plan.locator(`[data-plan-row-wrap="${lantern.id}"]`)).toHaveCount(0);
+  expect(removes(network)).toHaveLength(1);
+
+  // The long-press drag still reorders, with the full order minus the removed row.
+  const moves = () => network.rpcCalls.filter((c) => c.name === 'plan_item_move');
+  await dragToDay(page, plan, plan.locator(`[data-plan-row="${portraits.id}"]`), '2026-10-16');
+  await expect(
+    dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${portraits.id}"]`),
+  ).toHaveCount(1);
+  expect(moves()).toHaveLength(1);
+  const order = moves()[0]?.args.p_item_ids as string[];
+  expect(order).toHaveLength(DATED_PLAN_ITEMS.length - 1);
+  expect(order).not.toContain(lantern.id);
+  expectClean(network);
+});
+
+test('agency: a removal waiting on Undo is sent at once when the screen closes', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page);
+  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, DATED_PLAN_ID);
+  const lantern = dated('Lantern workshop');
+  await swipeRow(page, plan.locator(`[data-plan-row-swipe="${lantern.id}"]`), -70);
+  await plan.locator(`[data-plan-row-remove="${lantern.id}"]`).click();
+  expect(removes(network)).toEqual([]);
+  await plan.getByRole('button', { name: 'Back' }).first().click();
+  await expect.poll(() => removes(network).length).toBe(1);
+  await page.waitForTimeout(6_000);
+  expect(removes(network)).toHaveLength(1);
+  expectClean(network);
+});
+
+test('client: no swipe, no Remove on plan rows', async ({ page }) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page, { planSwipePeek: true });
+  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: PEER });
+  for (const m of network.world.tables.workspace_members ?? []) {
+    if (m.user_id === ME) m.role = 'client';
+  }
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, DATED_PLAN_ID);
+  await expect(plan.locator('[data-plan-row]').first()).toBeVisible();
+  await expect(plan.locator('[data-plan-row-swipe]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-row-remove]')).toHaveCount(0);
+  // No peek for clients either: the device stays unmarked.
+  await page.waitForTimeout(2_000);
+  expect(await page.evaluate((k) => window.localStorage.getItem(k), PEEK_KEY)).toBeNull();
+  expectClean(network);
+});
+
+test('agency: the one-time peek slides the first visible row, once per device', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page, { planSwipePeek: true });
+  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, DATED_PLAN_ID);
+  const peeking = plan.locator('[data-plan-row-swipe][style*="translateX(-72px)"]');
+  await expect(peeking).toHaveCount(1, { timeout: 3_000 });
+  await page.waitForTimeout(250);
+  await shot(page, 'swipe-02-peek');
+  // Back at rest, and the device is marked.
+  await expect(peeking).toHaveCount(0, { timeout: 3_000 });
+  await expect(
+    plan.locator('[data-plan-row-swipe][style*="translateX(0px)"]').first(),
+  ).toBeVisible();
+  expect(await page.evaluate((k) => window.localStorage.getItem(k), PEEK_KEY)).toBe('1');
+  // Close and reopen: never again.
+  await plan.getByRole('button', { name: 'Back' }).first().click();
+  await expect(plan).toBeHidden();
+  await openPlan(page, DATED_PLAN_ID);
+  await page.waitForTimeout(2_000);
+  await expect(plan.locator('[data-plan-row-swipe]:not([style*="translateX(0px)"])')).toHaveCount(
+    0,
+  );
+  expectClean(network);
+});
+
+test('agency, reduced motion: the tip toast instead of the peek, once', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const network = await installHarnessNetwork(page, { planSwipePeek: true });
+  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, DATED_PLAN_ID);
+  await expect(page.getByText('Tip: swipe left on a slot to remove it')).toBeVisible({
+    timeout: 3_000,
+  });
+  await expect(plan.locator('[data-plan-row-swipe]:not([style*="translateX(0px)"])')).toHaveCount(
+    0,
+  );
+  expect(await page.evaluate((k) => window.localStorage.getItem(k), PEEK_KEY)).toBe('1');
+  expectClean(network);
+});
+
+/** "YYYY-MM-DD" moved by `days` (UTC, the fixture workspace's zone). */
+function shiftDay(day: string, days: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Move the dated plan (12 to 18 Oct), its items and its posts so that
+ * `anchor` (a day of the fixture) falls on the real today: the session stays
+ * valid (no fake clock) and the plan's "today" is known.
+ */
+function anchorDatedPlan(network: HarnessNetwork, anchor: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const days = Math.round(
+    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${anchor}T00:00:00Z`)) / 86_400_000,
+  );
+  const t = network.world.tables;
+  for (const p of t.plans ?? []) {
+    if (p.id !== DATED_PLAN_ID) continue;
+    p.starts_on = shiftDay(String(p.starts_on), days);
+    p.ends_on = shiftDay(String(p.ends_on), days);
+  }
+  for (const i of t.plan_items ?? []) {
+    if (i.plan_id === DATED_PLAN_ID && typeof i.target_date === 'string') {
+      i.target_date = shiftDay(i.target_date, days);
+    }
+  }
+  const posts = new Set((t.plan_items ?? []).map((i) => i.post_id));
+  for (const post of t.posts ?? []) {
+    if (posts.has(post.id) && typeof post.target_date === 'string') {
+      post.target_date = `${shiftDay(post.target_date.slice(0, 10), days)}T09:00:00Z`;
+    }
+  }
+  return today;
+}
+
+test('a plan holding today opens with today at the top, no jump; earlier days above', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page);
+  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
+  // Today is the plan's fourth day (15 Oct in the fixture).
+  const today = anchorDatedPlan(network, '2026-10-15');
+  await openChat(page, PEER_NAME);
+  // Every frame from the list's first paint: the scroll position never moves.
+  await page.evaluate(() => {
+    const samples: number[] = [];
+    (window as unknown as { __planScroll: number[] }).__planScroll = samples;
+    const tick = (): void => {
+      const list = document.querySelector('[data-plan-page="plan"] [data-plan-list]');
+      const body = list?.closest<HTMLElement>('.overflow-y-auto');
+      if (body != null) samples.push(body.scrollTop);
+      if (samples.length < 40) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  const plan = await openPlan(page, DATED_PLAN_ID);
+  await expect(plan.locator('[data-plan-today]')).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { __planScroll: number[] }).__planScroll.length),
+    )
+    .toBeGreaterThanOrEqual(40);
+  const samples = await page.evaluate(
+    () => (window as unknown as { __planScroll: number[] }).__planScroll,
+  );
+  expect(samples[0]).toBeGreaterThan(0);
+  expect(new Set(samples).size).toBe(1);
+  const gap = await dayBlock(plan, today).evaluate((el) => {
+    const body = el.closest<HTMLElement>('.overflow-y-auto');
+    if (body === null) throw new Error('body');
+    return el.getBoundingClientRect().top - body.getBoundingClientRect().top;
+  });
+  expect(Math.abs(gap)).toBeLessThan(1);
+  await expect(dayBlock(plan, today).locator('[data-plan-today]')).toHaveCount(1);
+  await shot(page, 'today-01-open-at-today');
+  // Earlier days are still there, above.
+  const first = dayBlock(plan, shiftDay(today, -3));
+  await expect(first).not.toBeInViewport();
+  await first.scrollIntoViewIfNeeded();
+  await expect(first).toBeVisible();
+  expectClean(network);
+});
+
+test('today outside the plan: opens at the top', async ({ page }) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page);
+  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
+  // The plan ended a week ago.
+  anchorDatedPlan(network, '2026-10-25');
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, DATED_PLAN_ID);
+  await page.waitForTimeout(500);
+  const top = await plan
+    .locator('[data-plan-list]')
+    .evaluate((el) => el.closest<HTMLElement>('.overflow-y-auto')?.scrollTop ?? -1);
+  expect(top).toBe(0);
+  expectClean(network);
+});

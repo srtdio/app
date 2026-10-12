@@ -182,7 +182,7 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
 
   it('agency only: Add rows, "+", drag; Move and Remove rows', () => {
     const src = read('PlanScreen.tsx');
-    expect(src).toContain('{...(agency ? { onAdd: openAdd, onDragStart: drag.start } : {})}');
+    expect(src).toMatch(/\{\.\.\.\(agency\s*\?\s*\{\s*onAdd: openAdd,\s*onDragStart: startDrag,\s*swipe:/);
     expect(src).toContain("const agency = side === 'agency' && bundle !== null;");
     expect(src).toMatch(/\{agency \? \(\s*<>\s*<PlanConfirmSheet[\s\S]*<PlanAddSheet/);
     const item = read('PlanItemScreen.tsx');

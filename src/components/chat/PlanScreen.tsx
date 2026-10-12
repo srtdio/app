@@ -19,10 +19,22 @@
 // card". One read per table per open (plans.ts), bounded at 5s; nothing paints
 // until that read settles. This file also holds the page frame, the bounded
 // read hook and the confirm sheet the other plan screens share.
+// Swipe to remove (agency, use-row-swipe.ts): a row swiped left shows a red
+// Remove; the write waits for the Undo toast. A one-time peek teaches it. A
+// plan whose range holds today opens with today's group at the top.
 // Motion: drag on translateY and scale only; the page, menu and sheets on
-// translateY. Tokens only.
+// translateY; plan rows alone also move on translateX (the swipe and its
+// peek), and a removed row collapses on height. Tokens only.
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import type { Result } from '@srtdio/rpc';
@@ -31,6 +43,7 @@ import {
   planConceptAdd,
   planDelete,
   planItemMove,
+  planItemRemove,
   planItemReview,
   planPostsAdd,
   planShareWithClient,
@@ -71,6 +84,8 @@ import {
   PLAN_DELETED_TOAST,
   PLAN_NOT_AVAILABLE,
   PLAN_TITLE_MAX,
+  REMOVED_TOAST,
+  REMOVE_FAILED,
   RENAMED_TOAST,
   RENAME_FAILED,
   RENAME_LABEL,
@@ -78,6 +93,8 @@ import {
   SEND_NEEDS_OPEN,
   SLOT_UNDO,
   SLOT_UNDO_MS,
+  SWIPE_REMOVE_LABEL,
+  SWIPE_TIP_TOAST,
   addedToast,
   alsoInLabel,
   approvedBy,
@@ -136,6 +153,16 @@ import { newMessageId } from '@/lib/chat/message-id';
 import { sharePlanToChannel } from '@/lib/chat/share-plan';
 import type { ChatMessageRow } from '@/lib/chat/thread';
 import { createInFlightGuard } from '@/lib/chat/thread-actions';
+import {
+  ROW_ACTION_PX,
+  createDelayedRemover,
+  flushOnLeave,
+  openRowOnSettle,
+  openRowOnStart,
+  rowSwipeEnabled,
+  runPlanPeek,
+  useRowSwipe,
+} from '@/lib/chat/use-row-swipe';
 import { fetchMemberRole } from '@/lib/assets';
 import { useSession } from '@/lib/session-context';
 import {
@@ -159,7 +186,7 @@ import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { logger } from '@/lib/logger';
-import { DUR_SLOW_MS } from '@/lib/motion';
+import { DUR_BASE_MS, DUR_SLOW_MS } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -530,6 +557,68 @@ export function planListGroups(
   );
 }
 
+/** The bundle without the rows a removal hides (their reviews too). Pure. */
+export function withoutItems(bundle: PlanBundle, hidden: ReadonlySet<string>): PlanBundle {
+  if (hidden.size === 0) return bundle;
+  return {
+    ...bundle,
+    items: bundle.items.filter((i) => !hidden.has(i.id)),
+    reviews: bundle.reviews.filter((r) => !hidden.has(r.item_id)),
+  };
+}
+
+/**
+ * The day the list opens at: today when the plan's range holds it and no item
+ * was deep-linked (the link keeps priority); null opens at the top. Pure.
+ */
+export function todayScrollDay(
+  plan: Pick<PlanBundle['plan'], 'starts_on' | 'ends_on'>,
+  today: string,
+  entryItemId: string | null,
+): string | null {
+  if (entryItemId !== null) return null;
+  return today >= plan.starts_on && today <= plan.ends_on ? today : null;
+}
+
+/** The open position is set once per open of a plan: a re-read never re-scrolls. Pure. */
+export function needsOpenScroll(scrolledFor: string | null, planId: string): boolean {
+  return scrolledFor !== planId;
+}
+
+/**
+ * Scroll the list so `day`'s group sits at the top, directly under its sticky
+ * week header (when the list has weeks). Instant: no smooth scroll.
+ */
+function scrollDayToTop(body: HTMLElement, day: string): void {
+  const block = body.querySelector<HTMLElement>(`[data-plan-day="${day}"]`);
+  if (block === null) return;
+  const header = block.closest('section')?.querySelector<HTMLElement>('[data-plan-week-header]');
+  const sticky = header?.getBoundingClientRect().height ?? 0;
+  body.scrollTop += block.getBoundingClientRect().top - body.getBoundingClientRect().top - sticky;
+}
+
+/** The first swipeable row fully in view and not under a sticky header, or null. */
+function firstVisibleSwipeRow(body: HTMLElement | null): string | null {
+  if (body === null) return null;
+  const box = body.getBoundingClientRect();
+  for (const el of body.querySelectorAll<HTMLElement>('[data-plan-row-swipe]')) {
+    const r = el.getBoundingClientRect();
+    if (r.top < box.top || r.bottom > box.bottom) continue;
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 2);
+    if (hit !== null && el.contains(hit)) return el.getAttribute('data-plan-row-swipe');
+  }
+  return null;
+}
+
+/** A set with or without one id (the same set when nothing changes). Pure. */
+function withId(set: ReadonlySet<string>, id: string, on: boolean): ReadonlySet<string> {
+  if (set.has(id) === on) return set;
+  const next = new Set(set);
+  if (on) next.add(id);
+  else next.delete(id);
+  return next;
+}
+
 /** The list as day groups of item ids, in display order (the drag and Move math). Pure. */
 export function planDayIds(groups: readonly PlanWeekGroup<PlanItemRow>[]): DayIds[] {
   return groups.flatMap((w) => w.days.map((d) => ({ day: d.day, ids: d.items.map((i) => i.id) })));
@@ -646,6 +735,13 @@ export function PlanScreen(props: {
   const [sendGuard] = useState(createInFlightGuard);
   const { canAttach, uploadFile } = useCommentAttachments();
   const bodyRef = useRef<HTMLDivElement>(null);
+  // Swipe to remove (agency): the one open row; rows hidden while their
+  // removal waits on Undo, is in flight, or until a re-read drops them; the
+  // rows collapsing now; the one-time peek's row and offset.
+  const [openSwipe, setOpenSwipe] = useState<string | null>(null);
+  const [gone, setGone] = useState<ReadonlySet<string>>(() => new Set());
+  const [collapsing, setCollapsing] = useState<ReadonlySet<string>>(() => new Set());
+  const [peek, setPeek] = useState<{ id: string; offset: number } | null>(null);
   useHistoryStep(
     itemId !== null && itemId !== entryItemId && props.open,
     HISTORY_STEP_KEYS.planItem,
@@ -670,6 +766,8 @@ export function PlanScreen(props: {
     setOpenError(null);
     setSendError(null);
     setKeepAsk(null);
+    setOpenSwipe(null);
+    setPeek(null);
   }, [props.open]);
 
   // A write anywhere re-reads this plan (keeping what is shown meanwhile).
@@ -707,10 +805,18 @@ export function PlanScreen(props: {
     });
     if (!moveWriting.current) setMoveOverlay(null);
   }, [shownBundle]);
+  // A removed row stays hidden until a read no longer lists it (no flicker).
+  useEffect(() => {
+    if (shownBundle === null) return;
+    setGone((prev) => {
+      const kept = [...prev].filter((id) => shownBundle.items.some((i) => i.id === id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [shownBundle]);
   const bundle = useMemo(() => {
     if (shownBundle === null) return null;
-    const ticked =
-      slot !== null ? withReviewOverrides(shownBundle, slot, slotOverrides) : shownBundle;
+    const listed = withoutItems(shownBundle, gone);
+    const ticked = slot !== null ? withReviewOverrides(listed, slot, slotOverrides) : listed;
     return moveOverlay !== null
       ? applyMove(
           ticked,
@@ -721,7 +827,7 @@ export function PlanScreen(props: {
           moveOverlay.keep,
         )
       : ticked;
-  }, [shownBundle, slot, slotOverrides, moveOverlay, timeZone]);
+  }, [shownBundle, gone, slot, slotOverrides, moveOverlay, timeZone]);
   const groups = useMemo(
     () => (bundle !== null ? planListGroups(bundle, timeZone, side) : []),
     [bundle, timeZone, side],
@@ -1006,6 +1112,8 @@ export function PlanScreen(props: {
     const hadTicks = hasTicks(bundle, moved);
     moveWriting.current = true;
     setMoveOverlay({ itemId: moved, toDay, order, keep });
+    // plan_item_move takes the full order: any removal lands first.
+    await remover.settled();
     const traceId = generateTraceId();
     const result = await planItemMove(supabase, {
       p_item_id: moved,
@@ -1053,6 +1161,193 @@ export function PlanScreen(props: {
     bodyRef,
     onDrop: (moved, toDay, toIndex) => moveTo(moved, toDay, toIndex),
   });
+
+  // Swipe to remove: the row collapses and hides at once; plan_item_remove
+  // goes out when the Undo toast ends, or at once on close, background, a
+  // drag, opening an item or another removal. Undo restores the row in place
+  // with no request; a failure restores it with the remove error.
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+  const undoToast = useRef<string | null>(null);
+  const collapseTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const removePlan = useRef(new Map<string, string>());
+  const unhide = useCallback((id: string): void => {
+    const timer = collapseTimers.current.get(id);
+    if (timer !== undefined) clearTimeout(timer);
+    collapseTimers.current.delete(id);
+    setCollapsing((prev) => withId(prev, id, false));
+    setGone((prev) => withId(prev, id, false));
+  }, []);
+  const [remover] = useState(() =>
+    createDelayedRemover({
+      delayMs: SLOT_UNDO_MS,
+      send: async (id) => {
+        const traceId = generateTraceId();
+        const result = await planItemRemove(supabase, { p_item_id: id, p_trace_id: traceId });
+        if (!result.ok) {
+          logger.warn('chat: plan item remove failed', {
+            trace_id: traceId,
+            item_id: id,
+            error: result.error.message,
+          });
+        }
+        return result.ok;
+      },
+      onSend: () => {
+        if (undoToast.current !== null) toastRef.current.dismiss(undoToast.current);
+        undoToast.current = null;
+      },
+      onSent: (id) => {
+        const from = removePlan.current.get(id);
+        removePlan.current.delete(id);
+        if (from !== undefined) dispatchPlanChanged(window, from);
+      },
+      onFailed: (id) => {
+        removePlan.current.delete(id);
+        unhide(id);
+        toastRef.current.show({ title: REMOVE_FAILED });
+      },
+    }),
+  );
+  const removeRow = (id: string): void => {
+    if (!agency || gone.has(id) || collapsing.has(id)) return;
+    setOpenSwipe(null);
+    remover.schedule(id);
+    removePlan.current.set(id, planId);
+    if (prefersReducedMotion()) {
+      setGone((prev) => withId(prev, id, true));
+    } else {
+      setCollapsing((prev) => withId(prev, id, true));
+      collapseTimers.current.set(
+        id,
+        setTimeout(() => {
+          collapseTimers.current.delete(id);
+          setGone((prev) => withId(prev, id, true));
+          setCollapsing((prev) => withId(prev, id, false));
+        }, DUR_BASE_MS),
+      );
+    }
+    undoToast.current = toast.show({
+      title: REMOVED_TOAST,
+      durationMs: SLOT_UNDO_MS,
+      action: {
+        label: SLOT_UNDO,
+        onPress: () => {
+          if (remover.pending() === id && remover.undo()) {
+            removePlan.current.delete(id);
+            unhide(id);
+          }
+        },
+      },
+    });
+  };
+  // Close, background, unmount: a waiting removal goes out now.
+  useEffect(() => {
+    if (!props.open) remover.flush();
+  }, [props.open, remover]);
+  useEffect(() => {
+    const timers = collapseTimers.current;
+    const stop = flushOnLeave(remover, { doc: document, win: window });
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      stop();
+    };
+  }, [remover]);
+  // A lift or an item screen works on the full plan order: the waiting
+  // removal goes out first, and an open row closes.
+  const startDrag = (id: string, row: HTMLElement, clientY: number): void => {
+    setOpenSwipe(null);
+    remover.flush();
+    drag.start(id, row, clientY);
+  };
+  const openItem = (id: string): void => {
+    remover.flush();
+    setItemId(id);
+  };
+  // One open row: a tap anywhere outside it or a scroll of the list closes it.
+  useEffect(() => {
+    if (openSwipe === null) return;
+    const body = bodyRef.current;
+    const onDown = (event: Event): void => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(`[data-plan-row-wrap="${openSwipe}"]`)) {
+        return;
+      }
+      setOpenSwipe(null);
+    };
+    const onScroll = (): void => setOpenSwipe(null);
+    document.addEventListener('pointerdown', onDown, true);
+    body?.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      body?.removeEventListener('scroll', onScroll);
+    };
+  }, [openSwipe]);
+
+  // The one-time peek (agency, a plan with rows): never while a drag, a swipe,
+  // a press, a sheet or a menu is active; a press during it ends it.
+  const peekBlocked = useRef(false);
+  peekBlocked.current =
+    drag.state !== null ||
+    openSwipe !== null ||
+    menuOpen ||
+    renaming !== null ||
+    addFor !== null ||
+    conceptFor !== null ||
+    pickFor !== null ||
+    deleteOpen ||
+    openConfirm ||
+    keepAsk !== null ||
+    itemId !== null;
+  const hasRows = agency && bundle !== null && bundle.items.length > 0;
+  useEffect(() => {
+    if (!props.open || !hasRows) return;
+    let pressing = false;
+    let showing = false;
+    const cancel = runPlanPeek({
+      blocked: () => peekBlocked.current || pressing,
+      firstRow: () => firstVisibleSwipeRow(bodyRef.current),
+      reducedMotion: prefersReducedMotion,
+      onOffset: (id, offset) => {
+        showing = offset !== null;
+        setPeek(offset === null ? null : { id, offset });
+      },
+      onTip: () => toastRef.current.show({ title: SWIPE_TIP_TOAST }),
+    });
+    const onDown = (): void => {
+      pressing = true;
+      if (showing) cancel();
+    };
+    const onUp = (): void => {
+      pressing = false;
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onUp, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('pointerup', onUp, true);
+      document.removeEventListener('pointercancel', onUp, true);
+      cancel();
+    };
+  }, [props.open, hasRows]);
+
+  // Open at today: when the plan's range holds today (workspace zone) and no
+  // item was deep-linked, the list's first paint already has today's group at
+  // the top (set before paint, never animated). Once per open: a re-read or a
+  // later render never re-scrolls.
+  const scrolledFor = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (!props.open) {
+      scrolledFor.current = null;
+      return;
+    }
+    const body = bodyRef.current;
+    if (bundle === null || body === null || !needsOpenScroll(scrolledFor.current, planId)) return;
+    scrolledFor.current = planId;
+    const day = todayScrollDay(bundle.plan, civilToday(new Date(), timeZone), entryItemId);
+    if (day !== null) scrollDayToTop(body, day);
+  }, [props.open, bundle, planId, timeZone, entryItemId]);
 
   // Add: a concept on that day, or picked posts on that day.
   const openAdd = (day: string | null): void => setAddFor({ day });
@@ -1236,9 +1531,24 @@ export function PlanScreen(props: {
             names={names}
             alsoIn={read.status === 'ready' ? (read.data.alsoIn ?? {}) : {}}
             drag={drag.state}
-            onOpenItem={setItemId}
+            onOpenItem={openItem}
             onToggleSlot={toggleSlot}
-            {...(agency ? { onAdd: openAdd, onDragStart: drag.start } : {})}
+            {...(agency
+              ? {
+                  onAdd: openAdd,
+                  onDragStart: startDrag,
+                  swipe: {
+                    openId: openSwipe,
+                    collapsing,
+                    peek,
+                    dragging: drag.state !== null,
+                    onStart: (id: string) => setOpenSwipe((prev) => openRowOnStart(prev, id)),
+                    onSettle: (id: string, open: boolean) =>
+                      setOpenSwipe((prev) => openRowOnSettle(prev, id, open)),
+                    onRemove: removeRow,
+                  },
+                }
+              : {})}
           />
         )}
       </PlanPage>
@@ -1862,6 +2172,23 @@ export function rowSubline(item: PlanItemRow): string {
   return item.kind === 'concept' ? (item.description ?? '') : '';
 }
 
+/** The agency's swipe to remove, handed down to each row. */
+export interface PlanRowSwipe {
+  /** The one open row, or null. */
+  openId: string | null;
+  /** Rows collapsing out after Remove. */
+  collapsing: ReadonlySet<string>;
+  /** The one-time peek's row and offset (px), or null. */
+  peek: { id: string; offset: number } | null;
+  /** A drag is running: no swipe starts. */
+  dragging: boolean;
+  /** A swipe locked in on this row (any other open row closes). */
+  onStart: (id: string) => void;
+  /** The row came to rest open or closed. */
+  onSettle: (id: string, open: boolean) => void;
+  onRemove: (id: string) => void;
+}
+
 export function PlanBody(props: {
   bundle: PlanBundle;
   groups: readonly PlanWeekGroup<PlanItemRow>[];
@@ -1882,6 +2209,8 @@ export function PlanBody(props: {
   onAdd?: (day: string | null) => void;
   /** Agency only: a row's long-press lifts it. */
   onDragStart?: (itemId: string, row: HTMLElement, clientY: number) => void;
+  /** Agency only: swipe left to remove. */
+  swipe?: PlanRowSwipe;
 }): ReactElement {
   const { bundle, side, drag } = props;
   const weeks = planShowsWeeks(bundle.plan.starts_on, bundle.plan.ends_on);
@@ -1970,6 +2299,7 @@ export function PlanBody(props: {
                             (day.day === null || day.inRange)
                               ? { onDragStart: props.onDragStart }
                               : {})}
+                            {...(props.swipe !== undefined ? { swipe: props.swipe } : {})}
                           />
                         </Fragment>
                       );
@@ -2232,16 +2562,62 @@ function PlanRow(props: {
   onToggleSlot: () => void;
   /** Agency only: a long-press lifts the row (no menu any more). */
   onDragStart?: (itemId: string, row: HTMLElement, clientY: number) => void;
+  /** Agency only: swipe left to remove. */
+  swipe?: PlanRowSwipe;
 }): ReactElement {
   const onDragStart = props.onDragStart;
   const zone = props.timeZone ?? 'UTC';
+  const id = props.item.id;
   const wrapRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const pointerY = useRef(0);
   const hold = useLongPress(() => {
+    // A lift ends any swipe of this press.
+    rowSwipe.cancel();
     if (onDragStart !== undefined && wrapRef.current !== null) {
-      onDragStart(props.item.id, wrapRef.current, pointerY.current);
+      onDragStart(id, wrapRef.current, pointerY.current);
     }
   });
+  // Swipe left (agency): the row content moves on translateX only, 1:1 with
+  // the finger while dragging, then eases to rest open (-88px) or closed.
+  const swipe =
+    props.swipe !== undefined &&
+    rowSwipeEnabled(props.side, draftLocked(props.bundle, props.item, props.side))
+      ? props.swipe
+      : undefined;
+  const open = swipe?.openId === id;
+  const [dragX, setDragX] = useState<number | null>(null);
+  const rowSwipe = useRowSwipe({
+    isOpen: () => open,
+    enabled: () => swipe !== undefined && !swipe.dragging,
+    onStart: (pointerId) => {
+      hold.cancel();
+      window.getSelection()?.removeAllRanges();
+      swipe?.onStart(id);
+      if (pointerId === undefined) return;
+      try {
+        contentRef.current?.setPointerCapture(pointerId);
+      } catch {
+        // The pointer is already gone; the release settles the row.
+      }
+    },
+    onDrag: setDragX,
+    onSettle: (next) => {
+      setDragX(null);
+      swipe?.onSettle(id, next);
+    },
+  });
+  const peekOffset = swipe?.peek?.id === id ? swipe.peek.offset : null;
+  const offset = dragX ?? (open ? -ROW_ACTION_PX : (peekOffset ?? 0));
+  const collapsing = swipe?.collapsing.has(id) === true;
+  // The row clips while it is off rest and until it has eased back home.
+  const [shownOffset, setShownOffset] = useState(offset);
+  const [settling, setSettling] = useState(false);
+  if (shownOffset !== offset) {
+    setShownOffset(offset);
+    setSettling(offset === 0 && dragX === null && !prefersReducedMotion());
+  }
+  const clip = offset !== 0 || settling || collapsing;
   const kindLabel = itemKindLabel(props.bundle.items, props.item);
   const title = rowTitle(props.bundle, props.item);
   const comments = commentsLabel(props.comments);
@@ -2287,13 +2663,8 @@ function PlanRow(props: {
   const slot = slotCheckboxShown(props.bundle, props.item, props.side);
   const meta = rowMeta(props.bundle, props.item);
   const status = itemStatusLine(props.bundle, props.item, props.side);
-  return (
-    <div
-      ref={wrapRef}
-      data-plan-row-wrap={props.item.id}
-      {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
-      className={cn('flex w-full items-start gap-1', props.dimmed && 'opacity-25')}
-    >
+  const row = (
+    <>
       <button
         type="button"
         data-plan-row={props.item.id}
@@ -2386,6 +2757,79 @@ function PlanRow(props: {
       ) : (
         <span aria-hidden="true" className="h-11 w-11 shrink-0" />
       )}
+    </>
+  );
+  if (swipe === undefined) {
+    return (
+      <div
+        ref={wrapRef}
+        data-plan-row-wrap={id}
+        {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
+        className={cn('flex w-full items-start gap-1', props.dimmed && 'opacity-25')}
+      >
+        {row}
+      </div>
+    );
+  }
+  // Collapse after Remove: the row's height eases to 0 (and the list gap with
+  // it), Y only; the red action sits behind the content, full row height.
+  return (
+    <div
+      ref={wrapRef}
+      data-plan-row-wrap={id}
+      {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
+      {...(collapsing ? { 'data-plan-row-collapsing': '', 'aria-hidden': true } : {})}
+      className={cn(
+        'grid w-full transition-[grid-template-rows,margin] duration-base ease-exit motion-reduce:transition-none',
+        collapsing ? '-mb-4 grid-rows-[0fr] last:mb-0' : 'grid-rows-[1fr]',
+      )}
+    >
+      <div className={cn('relative min-h-0', clip && 'overflow-hidden')}>
+        <button
+          type="button"
+          data-plan-row-remove={id}
+          aria-label={`${SWIPE_REMOVE_LABEL}: ${title}`}
+          aria-hidden={!open}
+          tabIndex={open ? 0 : -1}
+          onClick={() => swipe.onRemove(id)}
+          className={cn(
+            'absolute inset-y-0 right-0 flex min-h-[44px] w-[88px] flex-col items-center justify-center gap-0.5 rounded-lg bg-bad text-[13px] font-semibold text-accent-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            !open && 'pointer-events-none',
+            NO_TOUCH_SELECT,
+          )}
+        >
+          <IconTrash size={18} />
+          {SWIPE_REMOVE_LABEL}
+        </button>
+        <div
+          ref={contentRef}
+          data-plan-row-swipe={id}
+          {...(open ? { 'data-plan-row-open': '' } : {})}
+          {...rowSwipe.handlers}
+          onClickCapture={(event) => {
+            // The click that trails a swipe does nothing; a tap on an open
+            // row closes it (and opens nothing).
+            const swiped = rowSwipe.consumeClickSuppression();
+            if (!swiped && !open) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (!swiped) swipe.onSettle(id, false);
+          }}
+          onTransitionEnd={(event) => {
+            if (event.target === event.currentTarget) setSettling(false);
+          }}
+          className={cn(
+            'relative flex w-full touch-pan-y items-start gap-1 bg-bg',
+            dragX === null &&
+              'transition-transform duration-slow ease-exit motion-reduce:transition-none',
+            props.dimmed && 'opacity-25',
+            NO_TOUCH_SELECT,
+          )}
+          style={{ transform: `translateX(${offset}px)` }}
+        >
+          {row}
+        </div>
+      </div>
     </div>
   );
 }
