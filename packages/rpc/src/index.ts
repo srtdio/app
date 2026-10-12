@@ -385,6 +385,7 @@ export function planConceptEdit(
   return callProc(client, 'plan_concept_edit', args as ProcArgs<'plan_concept_edit'>);
 }
 
+/** plan_posts_add; p_target_date (optional) puts every added post on that plan day. */
 export type PlanPostsAddArgs = ProcArgs<'plan_posts_add'>;
 export function planPostsAdd(
   client: Client,
@@ -415,6 +416,22 @@ export function planItemsReorder(
   args: PlanItemsReorderArgs,
 ): Promise<Result<ProcReturns<'plan_items_reorder'>>> {
   return callProc(client, 'plan_items_reorder', args);
+}
+
+/**
+ * plan_item_move: the item's plan day (null = No date; inside the plan's dates
+ * else 'date_outside_plan') plus the plan's full item order, as
+ * plan_items_reorder takes it. The generated type cannot express the nullable
+ * date, so p_target_date is widened here and passed through unchanged.
+ */
+export type PlanItemMoveArgs = Omit<ProcArgs<'plan_item_move'>, 'p_target_date'> & {
+  p_target_date: string | null;
+};
+export function planItemMove(
+  client: Client,
+  args: PlanItemMoveArgs,
+): Promise<Result<ProcReturns<'plan_item_move'>>> {
+  return callProc(client, 'plan_item_move', args as ProcArgs<'plan_item_move'>);
 }
 
 export type PlanItemReviewArgs = ProcArgs<'plan_item_review'>;

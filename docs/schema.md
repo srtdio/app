@@ -264,12 +264,12 @@ Applied 9 Oct 2026 (step 3a plans), restated in migration 20261009110000_plans_c
 | title | text | concept only, 1 to 200 |
 | description | text | concept only, nullable, up to 5000 |
 | post_id | uuid | post only, FK posts.id, CASCADE |
-| target_date | date | concept only, nullable (null = no date); post items take their date from posts.target_date |
+| target_date | date | the plan's own day for every item (concept or post), nullable (null = No date); a post's own posts.target_date is untouched |
 | created_by | uuid | nullable, FK users.id, SET NULL |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
 
 - plan_items_shape: a concept has a title and no post_id; a post item has post_id and no title or description.
-- plan_items_target_date_concept_only: kind = concept or target_date is null.
+- plan_items_target_date_concept_only: dropped 12 Oct (20261012120000_plan_item_days); post items carry target_date too (backfilled from posts.target_date in the workspace zone).
 - plan_items_post_once: a post appears at most once per plan among live post items (partial unique on plan_id, post_id).
 - plan_items_select_member: not deleted, its plan readable, and for a post item its post readable (so a draft post item stays hidden from a client, via posts_select_member).
 - Concept files: asset_attachments rows with entity_type plan_item; asset_attachments_select_member checks the plan item is readable.
@@ -308,13 +308,15 @@ All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_tra
 - plan_delete(p_plan_id, p_trace_id): soft-delete the plan.
 - plan_concept_add(p_plan_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null) returns uuid: append a concept with up to 20 library files and an optional date.
 - plan_concept_edit(p_item_id, p_title, p_description, p_attachment_version_ids, p_trace_id, p_target_date default null): edit a concept (null files keeps them); always writes target_date (null clears it); any edit, a date-only one included, resets its team and client reviews to waiting.
-- plan_posts_add(p_plan_id, p_post_ids, p_trace_id) returns integer: append 1 to 50 posts, skipping ones already in the plan; drafts are allowed in any plan, client plans included.
+- plan_posts_add(p_plan_id, p_post_ids, p_trace_id, p_target_date default null) returns integer: append 1 to 50 posts, skipping ones already in the plan; drafts are allowed in any plan, client plans included. p_target_date given = that plan day for every added post (must be inside the plan's dates, else 'date_outside_plan'); null = the post's own target_date (workspace zone) when inside the plan, else no date.
+- plan_item_move(p_item_id, p_target_date, p_item_ids, p_trace_id): agency side only (forbidden_role otherwise); sets the item's plan day (inside the plan's dates or null, else 'date_outside_plan') and the full, exact plan order like plan_items_reorder (invalid_payload otherwise); a day change resets its team and client reviews to waiting; same-day reorder keeps them; no notification; audit 'plan_item_move'.
 - plan_item_remove(p_item_id, p_trace_id): soft-delete an item.
 - plan_items_reorder(p_plan_id, p_item_ids, p_trace_id): set positions from the full, exact list of live item ids.
 - plan_item_review(p_item_id, p_side, p_status, p_trace_id): upsert a review (never writes posts.stage); team side for owner/admin/agency, client side for an active client on a client plan's concepts and post items (slot approval; a draft post raises post_not_ready, a team plan forbidden_role; a missing or soft-deleted post raises invalid_payload on either side). A status other than waiting writes plan_review inbox rows via _plan_item_notify (team side to owner/admin/agency only), payload {side, status, plan_id}; waiting after approved/changes writes a new withdrawal row {side, status 'waiting', withdrawn true, previous, plan_id} and keeps the earlier one; waiting from waiting/none writes none.
 - plan_item_comment_create(p_item_id, p_body, p_visibility, p_trace_id) returns uuid: any active member; a client only on a client plan and only 'everyone' (forbidden_role otherwise); invalid_payload for a missing item, a bad visibility or an empty or over-5000 body; writes plan_comment inbox rows via _plan_item_notify ('team' to owner/admin/agency only).
 - plan_draft_rows(p_plan_ids) returns table(plan_id, item_id, item_position, post_number, title, target_date): batched read-only helper, STABLE, no p_trace_id, no audit; EXECUTE to authenticated only (not anon). Lists the live post items whose post is stage 'draft' (not deleted) across the given plans. Empty or null list returns nothing; more than 100 ids is invalid_payload. Per plan: not deleted, the caller is an active member of its workspace, and the plan is 'client' or the caller is agency-side; unknown or invisible ids return nothing. So a client sees draft rows in a client plan without posts SELECT on the draft.
 - plan_draft_items(p_plan_id): retired 11 Oct, no EXECUTE for anyone, drop pending.
+- Live only: schema retired holds an unexposed old plan_posts_add pending drop.
 - Internal, no EXECUTE for authenticated: _plan_check_versions (same-workspace, library, not deleted; 'attachment not available' for chat-origin or deleted files), _plan_attach_versions, and _plan_item_notify(p_item_id, p_event_type, p_team_only, p_payload) (one inbox row per other active member: owner/admin/agency always, clients too when not team-only on a client plan; payload gains plan_id).
 
 ## 5. Assets
