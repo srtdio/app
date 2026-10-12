@@ -620,6 +620,13 @@ export function PostDetailPage({
   // Both history surfaces suppress every write affordance below; they are
   // mutually exclusive, enforced by the handlers that enter each mode.
   const readOnly = viewingVersion !== null || comparing;
+  // A host-owned open (the plan item's header button) while the sheet cannot
+  // mount (loading, not found, an old version) closes again at once, so the
+  // sheet never pops open later on its own.
+  const sheetMountable = !loading && !notFound && detail !== null && !readOnly;
+  useEffect(() => {
+    if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);
+  }, [actionsOpenProp, sheetMountable, onActionsOpenChange]);
 
   // Resolve a version's createdBy to a display name via the same members read PCS
   // already uses; a null author or one who is no longer a current member reads
