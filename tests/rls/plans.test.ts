@@ -563,7 +563,7 @@ describe.runIf(RLS_SUITE)('plans RLS', () => {
     expect(row?.item_id).toBe(itemId);
     expect(row?.post_number).toBe(post.data.number);
     expect(row?.title).toBe(post.data.title);
-    expect(new Date(row?.target_date ?? '').toISOString()).toBe(new Date(targetDate).toISOString());
+    expect(new Date(row?.target_date ?? '').toISOString()).toBe('2026-11-18T00:00:00.000Z');
     // The review post in the same plan is not a draft, so it is not listed.
     expect(rows.map((r) => r.item_id)).not.toContain(clientPostItemId);
     // The post itself stays hidden from the client.
