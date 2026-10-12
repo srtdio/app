@@ -531,3 +531,112 @@ export function slotToastSpec(
 export function slotUndoStatus(previous: ReviewStatus): ReviewStatus {
   return previous === 'changes' ? 'changes' : 'waiting';
 }
+
+// ---------------------------------------------------------------------------
+// The aligned Plan list: header, progress, status line, add and move copy
+// ---------------------------------------------------------------------------
+
+/** "12 to 16 Oct" in one month, "28 Oct to 3 Nov" across two. Pure. */
+export function planRangeShort(startsOn: string, endsOn: string): string {
+  const [, sm] = startsOn.split('-');
+  const [, em] = endsOn.split('-');
+  if (sm === em && startsOn.slice(0, 4) === endsOn.slice(0, 4)) {
+    return `${Number(startsOn.slice(8, 10))} to ${shortDay(endsOn)}`;
+  }
+  return `${shortDay(startsOn)} to ${shortDay(endsOn)}`;
+}
+
+/**
+ * The Plan screen's subtitle: the range, then for the agency who sees it
+ * ("Agency only" / "Shared with client"); anyone else the range alone. Pure.
+ */
+export function planHeaderSubtitle(
+  plan: Pick<PlanBundle['plan'], 'starts_on' | 'ends_on' | 'audience'>,
+  side: ViewerSide,
+): string {
+  const range = planRangeShort(plan.starts_on, plan.ends_on);
+  if (side !== 'agency') return range;
+  return `${range} · ${plan.audience === 'team' ? TEAM_ONLY_LABEL : 'Shared with client'}`;
+}
+
+/** The progress block: the lead line, the agency's client count, the bar's fill and tone. */
+export interface ProgressView {
+  lead: string;
+  client: string | null;
+  percent: number;
+  tone: 'accent' | 'good';
+}
+
+/**
+ * Agency: "Agency A of N" (the bar, accent) and "Client B of N"; anyone else
+ * "B of N slots approved" (the bar, good). Pure.
+ */
+export function planProgressView(bundle: PlanBundle, side: ViewerSide): ProgressView {
+  const p = planProgress(bundle);
+  const pct = (n: number): number => (p.total === 0 ? 0 : Math.round((n / p.total) * 100));
+  if (side === 'agency') {
+    return {
+      lead: `Agency ${p.teamApproved} of ${p.total}`,
+      client: `Client ${p.approved} of ${p.total}`,
+      percent: pct(p.teamApproved),
+      tone: 'accent',
+    };
+  }
+  return {
+    lead: `${p.approved} of ${p.total} slots approved`,
+    client: null,
+    percent: pct(p.approved),
+    tone: 'good',
+  };
+}
+
+/** The agency's status line under a row ("Client waiting"); null for anyone else. Pure. */
+export function itemStatusLine(
+  bundle: PlanBundle,
+  item: PlanItemRow,
+  side: ViewerSide,
+): { label: string; tone: PillTone } | null {
+  if (side !== 'agency') return null;
+  const status = clientStatus(bundle, item);
+  const word =
+    status === 'approved' ? 'approved' : status === 'changes' ? 'changes asked' : 'waiting';
+  return { label: `Client ${word}`, tone: toneOf(status) };
+}
+
+/** The Add sheet's title: "Add to Wed 14 Oct", or "Add to plan" with no day. Pure. */
+export function addSheetTitle(dayHeader: string | null): string {
+  return dayHeader === null ? 'Add to plan' : `Add to ${dayHeader}`;
+}
+
+/** The toast after an add: "Added to Wed 14 Oct" / "Concept added to Wed 14 Oct". Pure. */
+export function addedToast(kind: 'concept' | 'post', dayHeader: string | null): string {
+  const where = dayHeader === null ? 'the plan' : dayHeader;
+  return kind === 'concept' ? `Concept added to ${where}` : `Added to ${where}`;
+}
+
+/** Add and move failure copy. */
+export const ADD_FAILED = "Couldn't add. Try again.";
+export const MOVE_FAILED = "Couldn't move this item. Try again.";
+export const DATE_OUTSIDE_PLAN = 'That day is outside this plan.';
+export const REMOVED_TOAST = 'Removed from plan';
+export const REMOVE_FAILED = "Couldn't remove. Try again.";
+
+/** A failed add or move's copy: the day refusal, else `fallback`. Pure. */
+export function planWriteErrorCopy(message: string, fallback: string): string {
+  return message.includes('date_outside_plan') ? DATE_OUTSIDE_PLAN : fallback;
+}
+
+/**
+ * The toast after a move to another day: "Moved to Thu 15 Oct." and, when the
+ * item had a tick that was not waiting, "Its ticks were reset." Pure.
+ */
+export function movedToast(dayHeader: string | null, ticksReset: boolean): string {
+  const where = `Moved to ${dayHeader ?? 'No date'}.`;
+  return ticksReset ? `${where} Its ticks were reset.` : where;
+}
+
+/** A row's visible comment count: "1 comment" / "N comments"; null when none. Pure. */
+export function commentsLabel(count: number): string | null {
+  if (!(count > 0)) return null;
+  return count === 1 ? '1 comment' : `${count} comments`;
+}

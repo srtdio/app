@@ -1,48 +1,59 @@
 // The Plan screen (full page over the chat, one history step): the plan's
-// title and who it is shared with or by, the client's progress, and one list
-// grouped by day for every day of the range (workspace zone; "Nothing planned"
-// on an empty day, out-of-range days before or after, "No date" last; a plan
-// longer than a week adds a sticky "Week of" header per Mon-start week). Each
-// row: the slot checkbox (client side for a client, team side for the agency)
-// and the open area (kind tag, title, description or date, status pills,
-// visible comment count). Tapping the open area opens the Item screen (its own
-// step). A tick is optimistic, with Undo on its toast; a failure reverts.
-// The agency side also gets "Share with client" on a team plan and Remove on a
-// row's long-press (confirmed). One read per table per open (plans.ts), bounded
-// at 5s; a late answer still lands. Nothing paints until that read settles, so
-// the list never renders and then shrinks. This file also holds the page frame,
-// the bounded read hook and the confirm sheet the other plan screens share.
-// Motion: the page and sheets move on translateY only. Tokens only.
+// title, its range and who sees it, progress, and one list grouped by each
+// item's plan day (plan_items.target_date; a post's own date is never read)
+// for every day of the range ("Nothing planned" on an empty day, "No date"
+// last; a plan longer than a week adds a sticky "Week of" header per week).
+// Each row: day column, thumbnail, title, type line, the agency's client
+// status line, then the slot tick. Tapping a row opens the Item screen. A
+// tick is optimistic, with Undo on its toast; a failure reverts.
+// The agency side also gets: Add under each day and "+" in the header (new
+// concept or pick a post), long-press drag to reorder or move between days
+// (one plan_item_move with the full order, optimistic, reverted on failure),
+// and "Share with client" on a team plan. A client sees the list and ticks
+// only. One read per table per open (plans.ts), bounded at 5s; nothing paints
+// until that read settles. This file also holds the page frame, the bounded
+// read hook and the confirm sheet the other plan screens share.
+// Motion: drag on translateY and scale only; the page and sheets on
+// translateY. Tokens only.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import type { Result } from '@srtdio/rpc';
-import { planItemRemove, planItemReview, planShareWithClient } from '@srtdio/rpc';
+import {
+  planConceptAdd,
+  planItemMove,
+  planItemReview,
+  planPostsAdd,
+  planShareWithClient,
+} from '@srtdio/rpc';
+import type { PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import { useLongPress } from '@/components/ui';
-import { IconCheck, IconChevronLeft, IconPlan, IconX } from '@/components/ui/icons';
+import { IconCheck, IconChevronLeft, IconPlan, IconPlus, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
-  DRAFT_LABEL,
+  ADD_FAILED,
+  commentsLabel,
   DRAFT_NOT_READY,
+  MOVE_FAILED,
+  NO_DATE_LABEL,
   PLAN_NOT_AVAILABLE,
   SLOT_UNDO,
   SLOT_UNDO_MS,
+  addedToast,
   draftLocked,
-  isDraftPost,
   itemDateLabel,
   itemKindLabel,
-  itemPills,
-  planProgress,
-  planRangeLabel,
-  planSharedLine,
-  progressLabel,
-  progressPercent,
+  itemStatusLine,
+  movedToast,
+  planHeaderSubtitle,
+  planProgressView,
+  planWriteErrorCopy,
   reviewStatus,
   slotCheckboxShown,
   slotSide,
@@ -51,15 +62,32 @@ import {
   slotUndoStatus,
   stageLabel,
   withReviewOverrides,
+  type PillTone,
   type StatusPill,
 } from '@/components/chat/plan-card';
 import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
+import { PlanAddSheet } from '@/components/chat/PlanAddSheet';
+import type { MoveDay } from '@/components/chat/PlanMoveSheet';
+import { ConceptSheet, EMPTY_CONCEPT, type ConceptForm } from '@/components/chat/ConceptSheet';
+import { PostPicker } from '@/components/chat/PostPicker';
+import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
+import {
+  applyMove,
+  dropIndex,
+  findItem,
+  flattenOrder,
+  hasTicks,
+  isNoop,
+  moveItem,
+  type DayIds,
+} from '@/lib/chat/plan-drag';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { LATE_READ_GRACE_MS, READ_TIMEOUT_MS, withLateRead } from '@/lib/chat-reads';
 import {
   PLAN_CHANGED_EVENT,
   dispatchPlanChanged,
   planChangedId,
+  conceptAddArgs,
   planItemDayInZone,
   readPlanScreen,
   runSlotWrite,
@@ -80,12 +108,14 @@ import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
 import {
+  civilDaysBetween,
   civilToday,
   civilWeekdayShort,
   dayOfMonth,
   formatCivilDayHeader,
   planShowsWeeks,
   planWeekGroups,
+  type PlanWeekGroup,
 } from '@/lib/plan-week';
 
 // ---------------------------------------------------------------------------
@@ -109,6 +139,8 @@ export function PlanPage(props: {
   footer?: ReactNode;
   /** A header action (44px) after the title column, e.g. an overflow button. */
   action?: ReactNode;
+  /** The scrolling body (a drag auto-scrolls it). */
+  bodyRef?: RefObject<HTMLDivElement>;
   children: ReactNode;
   testId: string;
 }): ReactElement | null {
@@ -167,16 +199,22 @@ export function PlanPage(props: {
           {props.backIcon ?? <IconChevronLeft size={22} />}
         </button>
         <div data-plan-page-titles="" className="flex min-w-0 flex-1 flex-col">
-          <h2 className="truncate text-base font-semibold text-fg">{props.title}</h2>
+          <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">{props.title}</h2>
           {props.subtitle !== undefined ? (
-            <span data-plan-page-subtitle="" className="truncate text-[13px] text-fg-3">
+            <span
+              data-plan-page-subtitle=""
+              className="truncate text-[13px] leading-[18px] text-fg-3"
+            >
               {props.subtitle}
             </span>
           ) : null}
         </div>
         {props.action}
       </header>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+      <div
+        ref={props.bodyRef}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+      >
         {props.children}
       </div>
       {props.footer !== undefined ? (
@@ -342,24 +380,36 @@ export function PlanPill(props: { pill: StatusPill }): ReactElement {
 }
 
 /**
- * The progress line beside the bar: the agency sees team and client counts
- * (planProgress, shared with the card); anyone else the client count only. Pure.
+ * The progress line as one string (tests and labels): agency "Agency A of N ·
+ * Client B of N"; anyone else "B of N slots approved". Pure.
  */
 export function screenProgressLabel(bundle: PlanBundle, side: ViewerSide): string {
-  const p = planProgress(bundle);
-  return side === 'agency' ? progressLabel(p, side) : `${p.approved}/${p.total} approved`;
+  const view = planProgressView(bundle, side);
+  return view.client === null ? view.lead : `${view.lead} · ${view.client}`;
 }
 
-/** The progress bar (client approval) and its count. */
+/**
+ * The progress block under the header (sans, 13px/18px): the agency's count
+ * left (weight 600) and the client's right (muted), or a client's one line;
+ * a 4px bar below (accent for the agency count, good for the client's).
+ */
 export function PlanProgressRow(props: { bundle: PlanBundle; side: ViewerSide }): ReactElement {
-  const pct = progressPercent(planProgress(props.bundle));
+  const view = planProgressView(props.bundle, props.side);
   return (
-    <div className="flex items-center gap-2.5 px-4 pb-1 pt-3">
-      <span className="block h-1.5 flex-1 overflow-hidden rounded-full bg-panel-3">
-        <span className="block h-1.5 bg-good" style={{ width: `${pct}%` }} />
-      </span>
-      <span data-plan-screen-progress="" className="font-mono text-[13px] text-fg-3">
-        {screenProgressLabel(props.bundle, props.side)}
+    <div data-plan-progress-block="" className="flex flex-col gap-2 px-4 pt-3">
+      <div
+        data-plan-screen-progress=""
+        className="flex items-baseline justify-between gap-3 text-[13px] leading-[18px]"
+      >
+        <span className="font-semibold text-fg">{view.lead}</span>
+        {view.client !== null ? <span className="text-fg-3">{view.client}</span> : null}
+      </div>
+      <span className="block h-1 overflow-hidden rounded-[2px] bg-panel-3">
+        <span
+          data-plan-progress-bar={view.tone}
+          className={cn('block h-1', view.tone === 'accent' ? 'bg-accent' : 'bg-good')}
+          style={{ width: `${view.percent}%` }}
+        />
       </span>
     </div>
   );
@@ -399,12 +449,56 @@ export function ScreenFailed(props: { onRetry: () => void }): ReactElement {
 // The Plan screen
 // ---------------------------------------------------------------------------
 
+/** The list's day groups: every plan day, out-of-range days, No date (always for the agency). */
+export function planListGroups(
+  bundle: PlanBundle,
+  timeZone: string,
+  side: ViewerSide,
+): PlanWeekGroup<PlanItemRow>[] {
+  const { starts_on: startsOn, ends_on: endsOn } = bundle.plan;
+  return planWeekGroups(
+    bundle.items,
+    { startsOn, endsOn },
+    (item) => planItemDayInZone(item, bundle.postInfo, timeZone),
+    planShowsWeeks(startsOn, endsOn),
+    side === 'agency',
+  );
+}
+
+/** The list as day groups of item ids, in display order (the drag and Move math). Pure. */
+export function planDayIds(groups: readonly PlanWeekGroup<PlanItemRow>[]): DayIds[] {
+  return groups.flatMap((w) => w.days.map((d) => ({ day: d.day, ids: d.items.map((i) => i.id) })));
+}
+
+/** The days an item can go to: the plan's own days and No date. Pure. */
+export function planMoveDays(plan: Pick<PlanBundle['plan'], 'starts_on' | 'ends_on'>): MoveDay[] {
+  return [
+    ...civilDaysBetween(plan.starts_on, plan.ends_on).map((day) => ({
+      day,
+      label: formatCivilDayHeader(day),
+    })),
+    { day: null, label: NO_DATE_LABEL },
+  ];
+}
+
+/** "Wed 14" for a drop slot; "No date" for No date. Pure. */
+export function dropDayLabel(day: string | null): string {
+  return day === null ? NO_DATE_LABEL : `${civilWeekdayShort(day)} ${dayOfMonth(day)}`;
+}
+
+/** A pending optimistic move: laid over the read until a fresh read lands. */
+interface MoveOverlay {
+  itemId: string;
+  toDay: string | null;
+  order: string[];
+}
+
 export function PlanScreen(props: {
   open: boolean;
   planId: string;
-  /** The message sender (client's "Shared by"). Absent outside a chat. */
+  /** The message sender. Absent outside a chat (kept for callers; the subtitle is the range). */
   senderName?: string;
-  /** The open chat's title (agency's "Shared with"). Absent outside a chat. */
+  /** The open chat's title. Absent outside a chat (kept for callers). */
   chatTitle?: string;
   /**
    * Outside a chat (the standalone page): the item open on entry. It takes no
@@ -428,21 +522,33 @@ export function PlanScreen(props: {
   );
   const [itemId, setItemId] = useState<string | null>(props.initialItemId ?? null);
   const entryItemId = props.initialItemId ?? null;
-  const [removing, setRemoving] = useState<PlanItemRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Add: the sheet (its day; undefined = closed), the concept sheet, the picker.
+  const [addFor, setAddFor] = useState<{ day: string | null } | null>(null);
+  const [conceptFor, setConceptFor] = useState<{ day: string | null } | null>(null);
+  const [conceptForm, setConceptForm] = useState<ConceptForm>(EMPTY_CONCEPT);
+  const [conceptBusy, setConceptBusy] = useState(false);
+  const [pickFor, setPickFor] = useState<{ day: string | null } | null>(null);
+  const [picked, setPicked] = useState<PostCardFields[]>([]);
+  const { canAttach, uploadFile } = useCommentAttachments();
+  const bodyRef = useRef<HTMLDivElement>(null);
   useHistoryStep(
     itemId !== null && itemId !== entryItemId && props.open,
     HISTORY_STEP_KEYS.planItem,
     () => setItemId(null),
   );
 
-  // A closed screen forgets its item, tab and confirms.
+  // A closed screen forgets its item, sheets and local state.
   useEffect(() => {
     if (props.open) return;
     setItemId(null);
-    setRemoving(null);
     setSlotOverrides({});
+    setMoveOverlay(null);
+    setAddFor(null);
+    setConceptFor(null);
+    setPickFor(null);
+    setPicked([]);
     setError(null);
   }, [props.open]);
 
@@ -464,11 +570,13 @@ export function PlanScreen(props: {
       ? null
       : readBundle;
   const slot = shownBundle !== null ? slotSide(side, shownBundle.plan.audience) : null;
-  // The viewer's slot ticks, laid over the read until a fresh read lands (a
-  // tick still being written survives that read). Rows, pills, counts and the
-  // bar all read the same bundle, so they move together on tick and revert.
+  // The viewer's slot ticks and a pending move, laid over the read until a
+  // fresh read lands (a write still in flight survives that read). Rows,
+  // pills, counts and the bar all read the same bundle, so they move together.
   const [slotOverrides, setSlotOverrides] = useState<Record<string, ReviewStatus>>({});
   const slotWriting = useRef(new Set<string>());
+  const [moveOverlay, setMoveOverlay] = useState<MoveOverlay | null>(null);
+  const moveWriting = useRef(false);
   useEffect(() => {
     setSlotOverrides((prev) => {
       const kept = Object.fromEntries(
@@ -476,13 +584,19 @@ export function PlanScreen(props: {
       );
       return Object.keys(kept).length === Object.keys(prev).length ? prev : kept;
     });
+    if (!moveWriting.current) setMoveOverlay(null);
   }, [shownBundle]);
-  const bundle = useMemo(
-    () =>
-      shownBundle !== null && slot !== null
-        ? withReviewOverrides(shownBundle, slot, slotOverrides)
-        : shownBundle,
-    [shownBundle, slot, slotOverrides],
+  const bundle = useMemo(() => {
+    if (shownBundle === null) return null;
+    const ticked =
+      slot !== null ? withReviewOverrides(shownBundle, slot, slotOverrides) : shownBundle;
+    return moveOverlay !== null
+      ? applyMove(ticked, moveOverlay.itemId, moveOverlay.toDay, moveOverlay.order)
+      : ticked;
+  }, [shownBundle, slot, slotOverrides, moveOverlay]);
+  const groups = useMemo(
+    () => (bundle !== null ? planListGroups(bundle, timeZone, side) : []),
+    [bundle, timeZone, side],
   );
 
   // A re-read that drops the open item (removed) or the plan itself (deleted,
@@ -506,14 +620,13 @@ export function PlanScreen(props: {
     // props.onClose is the parent's stable close; the read and item decide.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open, read, bundle, itemId]);
-  const counts = read.status === 'ready' ? read.data.commentCounts : {};
   // First paint: the thread's card cache already holds the title.
   const planCards = usePlanCards();
   const cachedTitle = planCards?.cache.snapshot([planId]).bundles.get(planId)?.plan.title ?? null;
   const title = planHeaderTitle(read.status, bundle?.plan.title ?? null, cachedTitle);
-  const sharedName = side === 'agency' ? props.chatTitle : props.senderName;
   const subtitle =
-    side !== 'unknown' && sharedName !== undefined ? planSharedLine(side, sharedName) : undefined;
+    bundle !== null && side !== 'unknown' ? planHeaderSubtitle(bundle.plan, side) : undefined;
+  const agency = side === 'agency' && bundle !== null;
 
   const shareWithClient = async (): Promise<void> => {
     if (busy) return;
@@ -532,26 +645,6 @@ export function PlanScreen(props: {
       return;
     }
     toast.show({ title: 'Shared with the client' });
-    dispatchPlanChanged(window, planId);
-  };
-
-  const removeItem = async (): Promise<void> => {
-    if (removing === null || busy) return;
-    setBusy(true);
-    const traceId = generateTraceId();
-    const result = await planItemRemove(supabase, { p_item_id: removing.id, p_trace_id: traceId });
-    setBusy(false);
-    if (!result.ok) {
-      logger.warn('chat: plan item remove failed', {
-        trace_id: traceId,
-        item_id: removing.id,
-        error: result.error.message,
-      });
-      setError("Couldn't remove. Try again.");
-      return;
-    }
-    setRemoving(null);
-    setError(null);
     dispatchPlanChanged(window, planId);
   };
 
@@ -635,6 +728,134 @@ export function PlanScreen(props: {
     );
   };
 
+  // A drop or a Move: optimistic at once (the full new order and the day),
+  // one plan_item_move, reverted on failure. A day change says so, and says
+  // the ticks were reset when it had any.
+  const moveTo = async (moved: string, toDay: string | null, toIndex: number): Promise<void> => {
+    if (bundle === null) return;
+    const days = planDayIds(groups);
+    const from = findItem(days, moved);
+    if (from === null || isNoop(days, moved, { day: toDay, index: toIndex })) return;
+    if (moveWriting.current) {
+      toast.show({ title: MOVE_FAILED });
+      return;
+    }
+    const order = flattenOrder(moveItem(days, moved, toDay, toIndex));
+    const dayChanged = from.day !== toDay;
+    const hadTicks = hasTicks(bundle, moved);
+    moveWriting.current = true;
+    setMoveOverlay({ itemId: moved, toDay, order });
+    const traceId = generateTraceId();
+    const result = await planItemMove(supabase, {
+      p_item_id: moved,
+      p_target_date: toDay,
+      p_item_ids: order,
+      p_trace_id: traceId,
+    });
+    moveWriting.current = false;
+    if (!result.ok) {
+      logger.warn('chat: plan item move failed', {
+        trace_id: traceId,
+        item_id: moved,
+        error: result.error.message,
+      });
+      setMoveOverlay(null);
+      toast.show({ title: planWriteErrorCopy(result.error.message, MOVE_FAILED) });
+      return;
+    }
+    if (dayChanged) {
+      toast.show({
+        title: movedToast(toDay !== null ? formatCivilDayHeader(toDay) : null, hadTicks),
+      });
+    }
+    dispatchPlanChanged(window, planId);
+  };
+  const drag = usePlanDrag({
+    enabled: agency,
+    bodyRef,
+    onDrop: (moved, toDay, toIndex) => void moveTo(moved, toDay, toIndex),
+  });
+
+  // Add: a concept on that day, or picked posts on that day.
+  const dayHeaderOf = (day: string | null): string | null =>
+    day !== null ? formatCivilDayHeader(day) : null;
+  const openAdd = (day: string | null): void => setAddFor({ day });
+  const startConcept = (): void => {
+    if (addFor === null) return;
+    setConceptForm({ ...EMPTY_CONCEPT, date: addFor.day ?? '' });
+    setConceptFor(addFor);
+    setAddFor(null);
+  };
+  const startPick = (): void => {
+    if (addFor === null) return;
+    setPicked([]);
+    setPickFor(addFor);
+    setAddFor(null);
+  };
+  const saveConcept = async (): Promise<void> => {
+    if (conceptBusy || conceptFor === null) return;
+    const date = conceptForm.date === '' ? null : conceptForm.date;
+    setConceptBusy(true);
+    const traceId = generateTraceId();
+    const result = await planConceptAdd(
+      supabase,
+      conceptAddArgs(
+        planId,
+        {
+          key: '',
+          title: conceptForm.title.trim(),
+          description: conceptForm.description.trim(),
+          versionIds: conceptForm.files.map((f) => f.versionId),
+          targetDate: date,
+        },
+        traceId,
+      ),
+    );
+    setConceptBusy(false);
+    if (!result.ok) {
+      logger.warn('chat: plan concept add failed', {
+        trace_id: traceId,
+        plan_id: planId,
+        error: result.error.message,
+      });
+      toast.show({ title: planWriteErrorCopy(result.error.message, ADD_FAILED) });
+      return;
+    }
+    setConceptFor(null);
+    toast.show({ title: addedToast('concept', dayHeaderOf(date)) });
+    dispatchPlanChanged(window, planId);
+  };
+  const closePicker = async (): Promise<void> => {
+    if (pickFor === null) return;
+    const day = pickFor.day;
+    const ids = picked.map((p) => p.id);
+    setPickFor(null);
+    setPicked([]);
+    if (ids.length === 0) return;
+    const traceId = generateTraceId();
+    const result = await planPostsAdd(supabase, {
+      p_plan_id: planId,
+      p_post_ids: ids,
+      p_trace_id: traceId,
+      ...(day !== null ? { p_target_date: day } : {}),
+    });
+    if (!result.ok) {
+      logger.warn('chat: plan posts add failed', {
+        trace_id: traceId,
+        plan_id: planId,
+        error: result.error.message,
+      });
+      toast.show({ title: planWriteErrorCopy(result.error.message, ADD_FAILED) });
+      return;
+    }
+    toast.show({ title: addedToast('post', dayHeaderOf(day)) });
+    dispatchPlanChanged(window, planId);
+  };
+  const inPlan = useMemo(
+    () => new Set((bundle?.items ?? []).flatMap((i) => (i.post_id !== null ? [i.post_id] : []))),
+    [bundle],
+  );
+
   const found = bundle?.items.find((i) => i.id === itemId) ?? null;
   // A draft the viewer can see by name only never opens (a drawer row included).
   const item =
@@ -648,6 +869,22 @@ export function PlanScreen(props: {
         subtitle={subtitle}
         backLabel="Back"
         onBack={props.onClose}
+        bodyRef={bodyRef}
+        {...(agency
+          ? {
+              action: (
+                <button
+                  type="button"
+                  aria-label="Add to plan"
+                  data-plan-add-header=""
+                  onClick={() => openAdd(null)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <IconPlus size={22} />
+                </button>
+              ),
+            }
+          : {})}
       >
         {read.status === 'loading' ? (
           <ScreenSkeleton />
@@ -661,22 +898,33 @@ export function PlanScreen(props: {
         ) : (
           <PlanBody
             bundle={bundle}
-            counts={counts}
+            groups={groups}
             side={side}
             timeZone={timeZone}
             thumbs={read.status === 'ready' ? read.data.thumbs : {}}
+            counts={read.status === 'ready' ? read.data.commentCounts : {}}
+            drag={drag.state}
             onOpenItem={setItemId}
             onToggleSlot={toggleSlot}
-            onRemove={(row) => {
-              setError(null);
-              setRemoving(row);
-            }}
-            shareError={removing === null ? error : null}
-            sharing={busy && removing === null}
+            {...(agency ? { onAdd: openAdd, onDragStart: drag.start } : {})}
+            shareError={error}
+            sharing={busy}
             onShareWithClient={() => void shareWithClient()}
           />
         )}
       </PlanPage>
+      {drag.state !== null && bundle !== null ? (
+        <DragCard
+          bundle={bundle}
+          state={drag.state}
+          thumb={(() => {
+            const dragged = bundle.items.find((i) => i.id === drag.state?.itemId);
+            return dragged?.post_id != null && read.status === 'ready'
+              ? (read.data.thumbs[dragged.post_id] ?? null)
+              : null;
+          })()}
+        />
+      ) : null}
       {bundle !== null && item !== null ? (
         <PlanItemScreen
           open={props.open && itemId !== null}
@@ -692,23 +940,282 @@ export function PlanScreen(props: {
               }
             : {})}
           onClose={() => (itemId === entryItemId ? props.onClose() : setItemId(null))}
+          onRemoved={() => setItemId(null)}
         />
       ) : null}
-      <PlanConfirmSheet
-        open={removing !== null}
-        title="Remove from plan?"
-        message={`"${removing !== null ? rowTitle(bundle, removing) : ''}" leaves the plan. Its comments stay with it.`}
-        confirmLabel="Remove"
-        destructive
-        busy={busy}
-        error={removing !== null ? error : null}
-        onConfirm={() => void removeItem()}
-        onCancel={() => {
-          setRemoving(null);
-          setError(null);
-        }}
-      />
+      {agency ? (
+        <>
+          <PlanAddSheet
+            open={props.open && addFor !== null}
+            dayHeader={addFor !== null ? dayHeaderOf(addFor.day) : null}
+            onNewConcept={startConcept}
+            onPickPost={startPick}
+            onClose={() => setAddFor(null)}
+          />
+          <ConceptSheet
+            open={props.open && conceptFor !== null}
+            mode="add"
+            form={conceptForm}
+            onChange={setConceptForm}
+            onSubmit={() => void saveConcept()}
+            onClose={() => {
+              if (!conceptBusy) setConceptFor(null);
+            }}
+            busy={conceptBusy}
+            {...(canAttach ? { uploadFile } : {})}
+          />
+          <PostPicker
+            open={props.open && pickFor !== null}
+            onClose={() => void closePicker()}
+            mode="posts"
+            selected={picked}
+            onToggle={(post) =>
+              setPicked((prev) =>
+                prev.some((p) => p.id === post.id)
+                  ? prev.filter((p) => p.id !== post.id)
+                  : [...prev, post],
+              )
+            }
+            selectedBriefs={[]}
+            onToggleBrief={() => {}}
+            channelHasClient={false}
+            excludePostIds={inPlan}
+          />
+        </>
+      ) : null}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Drag (agency): long-press lifts a row, the pointer moves it, a drop moves it
+// ---------------------------------------------------------------------------
+
+/** Lift and drop timings (ms); reduced motion skips the scale and the snap. */
+export const DRAG_LIFT_MS = 120;
+export const DRAG_SNAP_MS = 180;
+/** Auto-scroll: the edge band (px) and the step per frame (px). */
+const EDGE_PX = 56;
+const EDGE_STEP_PX = 10;
+
+/** A drag in progress: the item, where it started, the pointer and the hovered drop. */
+export interface DragState {
+  itemId: string;
+  /** The row's rect when lifted (viewport px). */
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  /** Pointer y at lift and now (viewport px). */
+  startY: number;
+  y: number;
+  /** The hovered droppable day (undefined = none) and the index in it. */
+  overDay: string | null | undefined;
+  overIndex: number;
+  /** Set once dropped: the clone eases to this top before the move lands. */
+  snapTop: number | null;
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/**
+ * The drag controller: `start` from a row's long-press lifts it; window
+ * pointer listeners move it (translateY only), hover a day block, auto-scroll
+ * near the body's edges; pointerup drops (one onDrop), Escape or pointercancel
+ * cancels with no write. Every listener, frame and timer is removed on end
+ * and on unmount.
+ */
+function usePlanDrag(opts: {
+  enabled: boolean;
+  bodyRef: RefObject<HTMLDivElement>;
+  onDrop: (itemId: string, toDay: string | null, toIndex: number) => void;
+}): {
+  state: DragState | null;
+  start: (itemId: string, row: HTMLElement, clientY: number) => void;
+} {
+  const [state, setState] = useState<DragState | null>(null);
+  const stateRef = useRef<DragState | null>(null);
+  const onDropRef = useRef(opts.onDrop);
+  onDropRef.current = opts.onDrop;
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  const set = (next: DragState | null): void => {
+    stateRef.current = next;
+    setState(next);
+  };
+  const end = useCallback((): void => {
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    stateRef.current = null;
+    setState(null);
+  }, []);
+  useEffect(() => end, [end]);
+  useEffect(() => {
+    if (!opts.enabled) end();
+  }, [opts.enabled, end]);
+
+  const start = (itemId: string, row: HTMLElement, clientY: number): void => {
+    if (!opts.enabled || stateRef.current !== null) return;
+    const body = opts.bodyRef.current;
+    if (body === null) return;
+    const rect = row.getBoundingClientRect();
+    let frame = 0;
+    let snapTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const target = (y: number): { day: string | null | undefined; index: number } => {
+      const x = rect.left + 8;
+      const hit = document.elementFromPoint(x, y);
+      const block = hit?.closest<HTMLElement>('[data-plan-drop]') ?? null;
+      if (block === null) return { day: undefined, index: 0 };
+      const raw = block.getAttribute('data-plan-day');
+      const day = raw === null || raw === 'none' ? null : raw;
+      const middles = [...block.querySelectorAll<HTMLElement>('[data-plan-row-wrap]')]
+        .filter((el) => el.getAttribute('data-plan-row-wrap') !== itemId)
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          return r.top + r.height / 2;
+        });
+      return { day, index: dropIndex(middles, y) };
+    };
+    const update = (y: number): void => {
+      const current = stateRef.current;
+      if (current === null || current.snapTop !== null) return;
+      const hit = target(y);
+      set({ ...current, y, overDay: hit.day, overIndex: hit.index });
+    };
+    const onMove = (event: PointerEvent): void => update(event.clientY);
+    const onTouchMove = (event: TouchEvent): void => event.preventDefault();
+    const cancel = (): void => end();
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') cancel();
+    };
+    const onUp = (): void => {
+      const current = stateRef.current;
+      if (current === null || current.snapTop !== null) return;
+      if (current.overDay === undefined) {
+        cancel();
+        return;
+      }
+      const toDay = current.overDay;
+      const toIndex = current.overIndex;
+      const commit = (): void => {
+        end();
+        onDropRef.current(itemId, toDay, toIndex);
+      };
+      const slot = document.querySelector<HTMLElement>('[data-plan-drop-slot]');
+      if (prefersReducedMotion() || slot === null) {
+        commit();
+        return;
+      }
+      set({ ...current, snapTop: slot.getBoundingClientRect().top });
+      snapTimer = setTimeout(commit, DRAG_SNAP_MS);
+    };
+    // Auto-scroll near the body's top or bottom edge while the pointer rests.
+    const tick = (): void => {
+      const current = stateRef.current;
+      if (current !== null && current.snapTop === null) {
+        const box = body.getBoundingClientRect();
+        const before = body.scrollTop;
+        if (current.y < box.top + EDGE_PX) body.scrollTop -= EDGE_STEP_PX;
+        else if (current.y > box.bottom - EDGE_PX) body.scrollTop += EDGE_STEP_PX;
+        // The rows moved under a resting pointer: re-aim the drop.
+        if (body.scrollTop !== before) update(current.y);
+      }
+      frame = requestAnimationFrame(tick);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    frame = requestAnimationFrame(tick);
+    cleanupRef.current = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('touchmove', onTouchMove);
+      cancelAnimationFrame(frame);
+      if (snapTimer !== null) clearTimeout(snapTimer);
+    };
+    const first = target(clientY);
+    set({
+      itemId,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      startY: clientY,
+      y: clientY,
+      overDay: first.day,
+      overIndex: first.index,
+      snapTop: null,
+    });
+  };
+
+  return { state, start };
+}
+
+/**
+ * The lifted card: fixed over the list at the row's place, moved with
+ * translateY only, raised (shadow token, a slight scale that eases in over
+ * 120ms); on drop it eases to the slot over 180ms. Reduced motion: no scale,
+ * no ease.
+ */
+function DragCard(props: {
+  bundle: PlanBundle;
+  state: DragState;
+  thumb: string | null;
+}): ReactElement | null {
+  const { state } = props;
+  const [lifted, setLifted] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setLifted(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const item = props.bundle.items.find((i) => i.id === state.itemId);
+  if (item === undefined) return null;
+  const dy = state.snapTop !== null ? state.snapTop - state.top : state.y - state.startY;
+  return createPortal(
+    <div
+      aria-hidden="true"
+      data-plan-drag-card=""
+      className={cn(
+        'pointer-events-none fixed z-[60]',
+        state.snapTop !== null && 'transition-transform ease-exit motion-reduce:transition-none',
+      )}
+      style={{
+        left: state.left,
+        top: state.top,
+        width: state.width,
+        transform: `translateY(${dy}px)`,
+        ...(state.snapTop !== null ? { transitionDuration: `${DRAG_SNAP_MS}ms` } : {}),
+      }}
+    >
+      <div
+        className={cn(
+          'flex items-start gap-3 rounded-lg border border-border bg-panel p-2 shadow-lg transition-transform ease-enter motion-reduce:scale-100 motion-reduce:transition-none',
+          lifted ? 'scale-[1.02]' : 'scale-100',
+        )}
+        style={{ transitionDuration: `${DRAG_LIFT_MS}ms` }}
+      >
+        <RowTile item={item} thumb={props.thumb} muted={false} />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate text-[15px] font-semibold leading-5 text-fg">
+            {rowTitle(props.bundle, item)}
+          </span>
+          <span className="truncate text-[13px] leading-[18px] text-fg-3">
+            {rowMeta(props.bundle, item)}
+          </span>
+        </span>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -760,31 +1267,31 @@ export function rowSubline(item: PlanItemRow): string {
 
 export function PlanBody(props: {
   bundle: PlanBundle;
-  counts: Record<string, number>;
+  groups: readonly PlanWeekGroup<PlanItemRow>[];
   side: ViewerSide;
   timeZone: string;
   thumbs: Record<string, string>;
+  /** Visible comment counts by item id (the screen's one count read). */
+  counts?: Readonly<Record<string, number>>;
+  /** The drag in progress, or null. */
+  drag: DragState | null;
   onOpenItem: (id: string) => void;
   onToggleSlot: (item: PlanItemRow) => void;
-  onRemove: (item: PlanItemRow) => void;
+  /** Agency only: a day's Add row (null = No date). */
+  onAdd?: (day: string | null) => void;
+  /** Agency only: a row's long-press lifts it. */
+  onDragStart?: (itemId: string, row: HTMLElement, clientY: number) => void;
   shareError: string | null;
   sharing: boolean;
   onShareWithClient: () => void;
 }): ReactElement {
-  const { bundle, side } = props;
-  const { starts_on: startsOn, ends_on: endsOn } = bundle.plan;
-  const weeks = planShowsWeeks(startsOn, endsOn);
+  const { bundle, side, drag } = props;
+  const weeks = planShowsWeeks(bundle.plan.starts_on, bundle.plan.ends_on);
   const today = civilToday(new Date(), props.timeZone);
-  const groups = planWeekGroups(
-    bundle.items,
-    { startsOn, endsOn },
-    (item) => planItemDayInZone(item, bundle.postInfo, props.timeZone),
-    weeks,
-  );
+  const dragFrom = drag !== null ? (findItem(planDayIds(props.groups), drag.itemId) ?? null) : null;
   return (
     <>
       <PlanProgressRow bundle={bundle} side={side} />
-      <p className="px-4 font-mono text-[13px] text-fg-3">{planRangeLabel(startsOn, endsOn)}</p>
       {side === 'agency' && bundle.plan.audience === 'team' ? (
         <div className="flex flex-col gap-1.5 px-4 pt-3">
           <div className="flex items-center gap-2 rounded-lg border border-warn bg-warn-soft px-3 py-2">
@@ -808,8 +1315,8 @@ export function PlanBody(props: {
           ) : null}
         </div>
       ) : null}
-      <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col pb-4 pt-2">
-        {groups.map((week, w) => (
+      <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col pb-4 pt-3">
+        {props.groups.map((week, w) => (
           <section
             key={week.label ?? `days-${w}`}
             {...(week.label !== null ? { 'data-plan-week': week.label } : {})}
@@ -823,40 +1330,78 @@ export function PlanBody(props: {
                 {week.label}
               </h3>
             ) : null}
-            {week.days.map((day) => (
-              <div
-                key={day.day ?? 'none'}
-                data-plan-day={day.day ?? 'none'}
-                {...(day.day !== null && !day.inRange ? { 'data-plan-day-out': '' } : {})}
-                className="flex gap-3 border-b border-border py-2 pl-4 pr-3"
-              >
-                <DayColumn day={day.day} today={today} empty={day.items.length === 0} />
-                <div className="flex min-w-0 flex-1 flex-col">
-                  {day.items.length === 0 ? (
-                    <p
-                      data-plan-day-empty=""
-                      className="flex h-9 items-center text-[13px] text-fg-3"
-                    >
-                      Nothing planned
-                    </p>
-                  ) : (
-                    day.items.map((item) => (
-                      <PlanRow
-                        key={item.id}
-                        bundle={bundle}
-                        item={item}
-                        side={side}
-                        thumb={item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null}
-                        comments={props.counts[item.id] ?? 0}
-                        onOpen={() => props.onOpenItem(item.id)}
-                        onToggleSlot={() => props.onToggleSlot(item)}
-                        {...(side === 'agency' ? { onRemove: () => props.onRemove(item) } : {})}
-                      />
-                    ))
+            {week.days.map((day) => {
+              const droppable = drag !== null && (day.day === null || day.inRange);
+              const hovered = droppable && drag.overDay === day.day;
+              const items = day.items;
+              // The drop slot shows where the item would land, unless that is where it is.
+              const slotAt =
+                hovered &&
+                !(
+                  dragFrom !== null &&
+                  dragFrom.day === day.day &&
+                  dragFrom.index === drag.overIndex
+                )
+                  ? drag.overIndex
+                  : null;
+              const others = items.filter((i) => drag === null || i.id !== drag.itemId);
+              const empty = items.length === 0;
+              let k = 0;
+              return (
+                <div
+                  key={day.day ?? 'none'}
+                  data-plan-day={day.day ?? 'none'}
+                  {...(day.day !== null && !day.inRange ? { 'data-plan-day-out': '' } : {})}
+                  {...(droppable ? { 'data-plan-drop': '' } : {})}
+                  {...(hovered ? { 'data-plan-drop-over': '' } : {})}
+                  className={cn(
+                    'flex gap-3 border-t border-border py-4 pl-4 pr-[5px]',
+                    hovered && 'shadow-[inset_3px_0_0_var(--accent)]',
                   )}
+                >
+                  <DayColumn day={day.day} today={today} empty={empty} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-4">
+                    {items.map((item) => {
+                      const lifted = drag !== null && item.id === drag.itemId;
+                      const slotHere = !lifted && slotAt === k;
+                      if (!lifted) k += 1;
+                      return (
+                        <Fragment key={item.id}>
+                          {slotHere ? <DropSlot day={day.day} /> : null}
+                          <PlanRow
+                            bundle={bundle}
+                            item={item}
+                            side={side}
+                            thumb={
+                              item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null
+                            }
+                            dimmed={lifted}
+                            comments={props.counts?.[item.id] ?? 0}
+                            onOpen={() => props.onOpenItem(item.id)}
+                            onToggleSlot={() => props.onToggleSlot(item)}
+                            {...(props.onDragStart !== undefined &&
+                            (day.day === null || day.inRange)
+                              ? { onDragStart: props.onDragStart }
+                              : {})}
+                          />
+                        </Fragment>
+                      );
+                    })}
+                    {slotAt !== null && slotAt >= others.length ? <DropSlot day={day.day} /> : null}
+                    {props.onAdd !== undefined && (day.day === null || day.inRange) ? (
+                      <AddRow day={day.day} empty={empty} onAdd={props.onAdd} />
+                    ) : empty && slotAt === null ? (
+                      <p
+                        data-plan-day-empty=""
+                        className="flex min-h-[44px] items-center text-[13px] text-fg-3"
+                      >
+                        Nothing planned
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </section>
         ))}
       </div>
@@ -864,20 +1409,73 @@ export function PlanBody(props: {
   );
 }
 
+/** The dashed 44px drop slot in the hovered day. */
+function DropSlot(props: { day: string | null }): ReactElement {
+  return (
+    <div
+      data-plan-drop-slot=""
+      className="flex h-11 items-center rounded-lg border-[1.5px] border-dashed border-accent px-3 text-[13px] text-accent"
+    >
+      {`Drop to move to ${dropDayLabel(props.day)}`}
+    </div>
+  );
+}
+
 /**
- * A day's left column (40px): the weekday (11px, uppercase, muted; today in
- * the accent) over the date number (20px; muted on an empty day). The "No
- * date" group shows "No date" in the weekday slot and no number.
+ * A day's Add row (agency): plus icon and "Add" (13px, 600, accent) in a 44px
+ * target, its left edge on the thumbnail column. Under a day's rows it tucks
+ * up so the gap stays 16px; on an empty day it sits right of "Nothing planned".
+ */
+function AddRow(props: {
+  day: string | null;
+  empty: boolean;
+  onAdd: (day: string | null) => void;
+}): ReactElement {
+  const label = `Add to ${props.day !== null ? formatCivilDayHeader(props.day) : NO_DATE_LABEL}`;
+  return (
+    <div
+      data-plan-add-row=""
+      className={cn('flex min-h-[44px] items-center gap-2', !props.empty && '-mb-3 -mt-2')}
+    >
+      {props.empty ? (
+        <p data-plan-day-empty="" className="flex-1 text-[13px] text-fg-3">
+          Nothing planned
+        </p>
+      ) : null}
+      <button
+        type="button"
+        aria-label={label}
+        data-plan-add={props.day ?? 'none'}
+        onClick={() => props.onAdd(props.day)}
+        className="flex h-11 items-center gap-1.5 pr-3 text-[13px] font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <IconPlus size={16} />
+        Add
+      </button>
+    </div>
+  );
+}
+
+/**
+ * A day's left column: 48px wide, 44px tall (the thumbnail's height), the
+ * weekday (11px/14px, 600, uppercase, .06em, muted) over the digits
+ * (22px/28px, 600, -.01em, tabular), centred as one block with a 2px gap.
+ * Today: both in the accent. An empty day's digits are faint. "No date": the
+ * words in the weekday style, no digits.
  */
 export function DayColumn(props: {
   day: string | null;
   today: string;
   empty: boolean;
 }): ReactElement {
+  const weekdayClass = 'text-[11px] font-semibold uppercase leading-[14px] tracking-[.06em]';
   if (props.day === null) {
     return (
-      <div data-plan-day-col="" className="flex w-10 shrink-0 flex-col items-center pt-1.5">
-        <span className="text-center text-[11px] font-semibold uppercase leading-[14px] text-fg-3">
+      <div
+        data-plan-day-col=""
+        className="flex h-11 w-12 shrink-0 flex-col items-center justify-center gap-0.5 text-center"
+      >
+        <span data-plan-day-weekday="" className={cn(weekdayClass, 'text-fg-3')}>
           No date
         </span>
       </div>
@@ -888,20 +1486,20 @@ export function DayColumn(props: {
     <div
       data-plan-day-col=""
       {...(isToday ? { 'data-plan-today': '' } : {})}
-      className="flex w-10 shrink-0 flex-col items-center pt-1"
+      className="flex h-11 w-12 shrink-0 flex-col items-center justify-center gap-0.5 text-center"
     >
       <span
         data-plan-day-weekday=""
-        className={cn(
-          'text-[11px] font-semibold uppercase leading-[14px]',
-          isToday ? 'text-accent' : 'text-fg-3',
-        )}
+        className={cn(weekdayClass, isToday ? 'text-accent' : 'text-fg-3')}
       >
         {civilWeekdayShort(props.day)}
       </span>
       <span
         data-plan-day-number=""
-        className={cn('text-xl font-semibold leading-6', props.empty ? 'text-fg-3' : 'text-fg')}
+        className={cn(
+          'text-[22px] font-semibold leading-7 tracking-[-.01em] tabular-nums',
+          isToday ? 'text-accent' : props.empty ? 'text-border-strong' : 'text-fg',
+        )}
       >
         {dayOfMonth(props.day)}
       </span>
@@ -911,9 +1509,9 @@ export function DayColumn(props: {
 
 /**
  * The slot checkbox, at a row's right end: a 22px box (radius 6) in a 44x44
- * target. Unticked: a 1.5px border-strong outline. Ticked: the client side
- * fills with the success token, the team side with the accent; white tick.
- * Tokens only; no motion.
+ * target, top-aligned with the thumbnail so the box centres on it. Unticked:
+ * a 1.5px border-strong outline. Ticked: the client side fills with the
+ * success token, the team side with the accent; white tick. Tokens only.
  */
 export function SlotCheckbox(props: {
   side: ReviewSide;
@@ -932,7 +1530,7 @@ export function SlotCheckbox(props: {
       data-plan-slot={props.side}
       data-plan-slot-state={props.checked ? 'approved' : 'pending'}
       onClick={props.onToggle}
-      className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center self-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span
         className={cn(
@@ -947,21 +1545,6 @@ export function SlotCheckbox(props: {
         {props.checked ? <IconCheck size={14} /> : null}
       </span>
     </button>
-  );
-}
-
-/** A draft post's pill: grey for the agency, outlined for anyone else. */
-export function DraftPill(props: { locked: boolean }): ReactElement {
-  return (
-    <span
-      data-plan-pill="draft"
-      className={cn(
-        'inline-flex min-h-[24px] items-center rounded-md px-2 text-[13px]',
-        props.locked ? 'border border-border text-fg-3' : 'bg-panel-2 text-fg-2',
-      )}
-    >
-      {DRAFT_LABEL}
-    </span>
   );
 }
 
@@ -980,7 +1563,7 @@ function RowTile(props: { item: PlanItemRow; thumb: string | null; muted: boolea
     return (
       <span
         data-plan-row-tile="concept"
-        className="h-11 w-11 shrink-0 rounded-lg border border-dashed border-border-strong bg-panel-2"
+        className="h-11 w-11 shrink-0 rounded-lg border-[1.5px] border-dashed border-border-strong"
       />
     );
   }
@@ -988,7 +1571,7 @@ function RowTile(props: { item: PlanItemRow; thumb: string | null; muted: boolea
     return (
       <span
         data-plan-row-tile="image"
-        className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-2"
+        className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-panel-2"
       >
         <Thumbnail
           assetVersionId={props.thumb}
@@ -1005,24 +1588,22 @@ function RowTile(props: { item: PlanItemRow; thumb: string | null; muted: boolea
       data-plan-row-tile="text"
       className={cn(
         'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[15px] font-semibold',
-        props.muted
-          ? 'border border-dashed border-border bg-panel-2 text-fg-3'
-          : 'bg-accent-soft text-accent',
+        props.muted ? 'bg-panel-2 text-fg-3' : 'bg-accent-soft text-accent',
       )}
     >
-      Aa
+      {props.muted ? '' : 'Aa'}
     </span>
   );
 }
 
-/** The Post / Concept tag pill (11px semibold, tinted). */
+/** The Post / Concept tag pill (11px/18px, 650, radius 4, padding 0 6, tinted). */
 function KindTag(props: { item: PlanItemRow; label: string }): ReactElement {
   const post = props.item.kind === 'post';
   return (
     <span
       data-plan-row-kind={props.label}
       className={cn(
-        'inline-flex h-[18px] shrink-0 items-center rounded px-1.5 text-[11px] font-semibold',
+        'inline-flex shrink-0 items-center rounded px-1.5 text-[11px] font-[650] leading-[18px]',
         post ? 'bg-accent-soft text-accent' : 'bg-panel-3 text-fg-2',
       )}
     >
@@ -1031,22 +1612,45 @@ function KindTag(props: { item: PlanItemRow; label: string }): ReactElement {
   );
 }
 
+const STATUS_TONES: Record<PillTone, string> = {
+  good: 'text-good',
+  review: 'text-stage-review',
+  neutral: 'text-fg-3',
+};
+
 function PlanRow(props: {
   bundle: PlanBundle;
   item: PlanItemRow;
   side: ViewerSide;
   thumb: string | null;
+  dimmed: boolean;
+  /** Visible comments on the item; shown when above zero. */
   comments: number;
   onOpen: () => void;
   onToggleSlot: () => void;
-  onRemove?: () => void;
+  /** Agency only: a long-press lifts the row (no menu any more). */
+  onDragStart?: (itemId: string, row: HTMLElement, clientY: number) => void;
 }): ReactElement {
-  const onRemove = props.onRemove;
-  const hold = useLongPress(() => onRemove?.());
-  const draft = isDraftPost(props.bundle, props.item);
+  const onDragStart = props.onDragStart;
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const pointerY = useRef(0);
+  const hold = useLongPress(() => {
+    if (onDragStart !== undefined && wrapRef.current !== null) {
+      onDragStart(props.item.id, wrapRef.current, pointerY.current);
+    }
+  });
   const kindLabel = itemKindLabel(props.bundle.items, props.item);
   const title = rowTitle(props.bundle, props.item);
+  const comments = commentsLabel(props.comments);
   const date = itemDateLabel(props.bundle, props.item);
+  const dateLine = (
+    <span
+      data-plan-row-date={date.dated ? 'dated' : 'none'}
+      className={cn('sr-only', date.dated && 'font-mono')}
+    >
+      {date.label}
+    </span>
+  );
   if (draftLocked(props.bundle, props.item, props.side)) {
     // Name only: no checkbox (the right side stays empty), no open, no hover.
     return (
@@ -1056,96 +1660,95 @@ function PlanRow(props: {
         data-plan-row={props.item.id}
         data-plan-row-draft="locked"
         onContextMenu={(event) => event.preventDefault()}
-        className={cn(
-          'flex min-h-[60px] w-full cursor-default items-center gap-3 py-2 pr-12',
-          NO_TOUCH_SELECT,
-        )}
+        className={cn('flex w-full cursor-default items-start gap-3 pr-12', NO_TOUCH_SELECT)}
       >
         <RowTile item={props.item} thumb={null} muted />
-        <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span data-plan-row-title="" className="truncate text-[15px] font-semibold text-fg-2">
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span
+            data-plan-row-title=""
+            className="truncate text-[15px] font-semibold leading-5 text-fg-2"
+          >
             {title}
           </span>
-          <span className="flex min-w-0 items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-fg-3">
             <KindTag item={props.item} label={kindLabel} />
-            <DraftPill locked />
-            <span className="truncate text-[13px] text-fg-3">{DRAFT_NOT_READY}</span>
+            <span className="truncate">{DRAFT_NOT_READY}</span>
           </span>
-          <span
-            data-plan-row-date={date.dated ? 'dated' : 'none'}
-            className={cn('sr-only', date.dated && 'font-mono')}
-          >
-            {date.label}
-          </span>
+          {dateLine}
         </span>
       </div>
     );
   }
   const slot = slotCheckboxShown(props.bundle, props.item, props.side);
   const meta = rowMeta(props.bundle, props.item);
-  // Status beyond the checkbox: the agency sees the client pill; a client
-  // sees a changes request. Comments count when there are any.
-  const pills = itemPills(props.bundle, props.item, props.side).filter((pill) =>
-    props.side === 'agency' ? pill.side === 'client' : pill.tone === 'review',
-  );
-  const extra = draft || pills.length > 0 || props.comments > 0;
+  const status = itemStatusLine(props.bundle, props.item, props.side);
   return (
     <div
+      ref={wrapRef}
       data-plan-row-wrap={props.item.id}
-      className={cn('flex w-full items-center', slot === null && 'pr-12')}
+      {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
+      className={cn('flex w-full items-start gap-1', props.dimmed && 'opacity-25')}
     >
       <button
         type="button"
         data-plan-row={props.item.id}
-        {...(draft ? { 'data-plan-row-draft': 'open' } : {})}
-        {...(onRemove !== undefined ? hold.handlers : {})}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          if (onRemove === undefined) return;
-          hold.cancel();
-          onRemove();
-        }}
+        {...(onDragStart !== undefined
+          ? {
+              ...hold.handlers,
+              onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
+                pointerY.current = event.clientY;
+                hold.handlers.onPointerDown(event);
+              },
+              onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => {
+                pointerY.current = event.clientY;
+                hold.handlers.onPointerMove(event);
+              },
+            }
+          : {})}
+        onContextMenu={(event) => event.preventDefault()}
         onClick={() => {
           if (hold.consumeClickSuppression()) return;
           props.onOpen();
         }}
         className={cn(
-          'flex min-h-[60px] min-w-0 flex-1 items-center gap-3 rounded-lg py-2 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'flex min-w-0 flex-1 items-start gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           NO_TOUCH_SELECT,
         )}
       >
         <RowTile item={props.item} thumb={props.thumb} muted={false} />
-        <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span data-plan-row-title="" className="truncate text-[15px] font-semibold text-fg">
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span
+            data-plan-row-title=""
+            className="truncate text-[15px] font-semibold leading-5 text-fg"
+          >
             {title}
           </span>
-          <span className="flex min-w-0 items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-fg-3">
             <KindTag item={props.item} label={kindLabel} />
             {meta !== '' ? (
-              <span data-plan-row-meta="" className="truncate text-[13px] text-fg-3">
+              <span data-plan-row-meta="" className="truncate">
                 {meta}
               </span>
             ) : null}
           </span>
-          {extra ? (
-            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-              {draft ? <DraftPill locked={false} /> : null}
-              {pills.map((pill) => (
-                <PlanPill key={pill.side} pill={pill} />
-              ))}
-              {props.comments > 0 ? (
-                <span className="text-xs text-fg-3">
-                  {props.comments === 1 ? '1 comment' : `${props.comments} comments`}
+          {status !== null ? (
+            <span data-plan-row-status="" className="flex min-w-0 items-center text-xs leading-4">
+              <span className={cn('flex shrink-0 items-center gap-1.5', STATUS_TONES[status.tone])}>
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+                {status.label}
+              </span>
+              {comments !== null ? (
+                <span data-plan-row-comments="" className="truncate text-fg-3">
+                  {` · ${comments}`}
                 </span>
               ) : null}
             </span>
+          ) : comments !== null ? (
+            <span data-plan-row-comments="" className="truncate text-xs leading-4 text-fg-3">
+              {comments}
+            </span>
           ) : null}
-          <span
-            data-plan-row-date={date.dated ? 'dated' : 'none'}
-            className={cn('sr-only', date.dated && 'font-mono')}
-          >
-            {date.label}
-          </span>
+          {dateLine}
         </span>
       </button>
       {slot !== null ? (
@@ -1155,7 +1758,9 @@ function PlanRow(props: {
           title={title}
           onToggle={props.onToggleSlot}
         />
-      ) : null}
+      ) : (
+        <span aria-hidden="true" className="h-11 w-11 shrink-0" />
+      )}
     </div>
   );
 }

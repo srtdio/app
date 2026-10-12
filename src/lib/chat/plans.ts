@@ -77,8 +77,8 @@ export interface PlanItemRow {
   post_id: string | null;
   created_at: string;
   /**
-   * A concept's own date ("YYYY-MM-DD"); null on a post read from plan_items
-   * (its post holds the date), the post's date on a draft row.
+   * The item's plan day ("YYYY-MM-DD"), concept or post; null is No date. A
+   * draft row carries the day plan_draft_rows returns.
    */
   target_date?: string | null;
   /**
@@ -130,7 +130,8 @@ export interface PlanBundle {
 
 export interface PlanPostInfo {
   title: string;
-  target_date: string | null;
+  /** Not read for the plan: a post's own date never places it (kept for old fixtures). */
+  target_date?: string | null;
   /** The post's format (the Plan screen row's meta line); null when not read. */
   format?: string | null;
 }
@@ -205,41 +206,39 @@ interface PlanTable {
   select: (columns: string) => PlanQuery;
 }
 
-/**
- * An item's day ("YYYY-MM-DD"): a concept's own target_date, a post's
- * target_date (a draft row's own); null when undated or the post is not
- * readable. Pure.
- */
-export function planItemDay(
-  item: PlanItemRow,
-  postInfo: Readonly<Record<string, PlanPostInfo>>,
-): string | null {
-  const raw =
-    item.kind === 'concept' || item.draft_row === true
-      ? (item.target_date ?? null)
-      : item.post_id !== null
-        ? (postInfo[item.post_id]?.target_date ?? null)
-        : null;
+/** A draft row's plan day: the date part of plan_draft_rows' UTC-midnight instant. Pure. */
+export function draftRowDay(raw: string | null): string | null {
   return raw === null || raw === '' ? null : raw.slice(0, 10);
 }
 
 /**
- * An item's civil day in the workspace zone (the Plan screen's day groups): a
- * concept's own date as is, a post's target_date instant read in the zone;
- * null when undated or the post is not readable. Pure.
+ * An item's plan day ("YYYY-MM-DD"): plan_items.target_date for every item,
+ * concept or post (20261012120000_plan_item_days); null is No date. A post's
+ * own posts.target_date never places it, a draft row included (a client
+ * cannot read the item; plan_draft_rows returns its plan day). `postInfo` is
+ * kept for the callers' shape; the day never comes from it. Pure.
+ */
+export function planItemDay(
+  item: PlanItemRow,
+  postInfo?: Readonly<Record<string, PlanPostInfo>>,
+): string | null {
+  void postInfo;
+  const raw = item.target_date ?? null;
+  return raw === null || raw === '' ? null : raw.slice(0, 10);
+}
+
+/**
+ * An item's plan day for the Plan screen's day groups: plan_items.target_date
+ * (a calendar date) for every item, a draft row's plan day included. Never
+ * posts.target_date. Null is No date. Pure.
  */
 export function planItemDayInZone(
   item: PlanItemRow,
   postInfo: Readonly<Record<string, PlanPostInfo>>,
   timeZone: string,
 ): string | null {
-  const raw =
-    item.kind === 'concept' || item.draft_row === true
-      ? (item.target_date ?? null)
-      : item.post_id !== null
-        ? (postInfo[item.post_id]?.target_date ?? null)
-        : null;
-  return civilDayOf(raw, timeZone);
+  void postInfo;
+  return civilDayOf(item.target_date ?? null, timeZone);
 }
 
 /**
@@ -358,14 +357,7 @@ async function readItemsWithReviews(
       items.data.map((i) => i.id),
       signal,
     ),
-    selectIn<PlanPostRow>(
-      client,
-      'posts',
-      'id, stage, title, target_date, format',
-      'id',
-      postIds,
-      signal,
-    ),
+    selectIn<PlanPostRow>(client, 'posts', 'id, stage, title, format', 'id', postIds, signal),
   ]);
   if (!reviews.ok) return reviews;
   if (!stages.ok) return stages;
@@ -413,7 +405,10 @@ export function mergeDraftRows(
       description: null,
       post_id: null,
       created_at: '',
-      target_date: row.target_date,
+      // plan_draft_rows returns the plan day at UTC midnight
+      // (20261012140000_plan_draft_rows_plan_day): its date part is the day,
+      // never read in a zone (that would shift it west of UTC).
+      target_date: draftRowDay(row.target_date),
       draft_row: true,
       post_number: row.post_number,
     });
@@ -454,12 +449,11 @@ export async function readUpcomingPlans(
   }
 }
 
-/** The post columns a plan reads (stage feeds progress; title and date the rows). */
+/** The post columns a plan reads (stage feeds progress; title and format the rows). */
 export interface PlanPostRow {
   id: string;
   stage: string;
   title?: string | null;
-  target_date?: string | null;
   format?: string | null;
 }
 
@@ -484,7 +478,6 @@ export function assembleBundles(
         postStages[item.post_id] = post.stage;
         postInfo[item.post_id] = {
           title: post.title ?? '',
-          target_date: post.target_date ?? null,
           format: post.format ?? null,
         };
       }

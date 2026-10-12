@@ -17,6 +17,8 @@ import {
   planChunks,
   planItemDay,
   planItemDayInZone,
+  draftRowDay,
+  mergeDraftRows,
   postPlansLine,
   readPlanBundles,
   readPostPlans,
@@ -696,10 +698,13 @@ describe('plan items in date order', () => {
     pc: { title: 'C', target_date: '2026-10-11' },
   };
 
-  it('a concept takes its own date, a post its post date; unreadable or empty is undated', () => {
+  it("every item takes its plan day (plan_items.target_date); a post's own date never places it", () => {
     expect(planItemDay(row({ id: 'c', target_date: '2026-10-12' }), info)).toBe('2026-10-12');
-    expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'pa' }), info)).toBe('2026-10-13');
-    expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'pb' }), info)).toBeNull();
+    // pa's own date is 13 Oct; its plan day is 15 Oct.
+    expect(
+      planItemDay(row({ id: 'p', kind: 'post', post_id: 'pa', target_date: '2026-10-15' }), info),
+    ).toBe('2026-10-15');
+    expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'pa' }), info)).toBeNull();
     expect(planItemDay(row({ id: 'p', kind: 'post', post_id: 'gone' }), info)).toBeNull();
     expect(planItemDay(row({ id: 'c' }), info)).toBeNull();
   });
@@ -707,10 +712,10 @@ describe('plan items in date order', () => {
   it('mixed dated concepts and posts ascending, undated last', () => {
     const items = [
       row({ id: 'undatedConcept', position: 0 }),
-      row({ id: 'post13', kind: 'post', post_id: 'pa', position: 1 }),
+      row({ id: 'post13', kind: 'post', post_id: 'pc', position: 1, target_date: '2026-10-13' }),
       row({ id: 'concept12', target_date: '2026-10-12', position: 2 }),
-      row({ id: 'undatedPost', kind: 'post', post_id: 'pb', position: 3 }),
-      row({ id: 'post11', kind: 'post', post_id: 'pc', position: 4 }),
+      row({ id: 'undatedPost', kind: 'post', post_id: 'pa', position: 3 }),
+      row({ id: 'post11', kind: 'post', post_id: 'pb', position: 4, target_date: '2026-10-11' }),
       row({ id: 'concept20', target_date: '2026-10-20', position: 5 }),
     ];
     expect(sortPlanItemsByDate(items, info).map((i) => i.id)).toEqual([
@@ -768,15 +773,21 @@ describe('plan items in date order', () => {
     const items = [
       row({ id: 'late', target_date: '2026-10-18', position: 0 }),
       row({ id: 'none', position: 1 }),
-      row({ id: 'post', kind: 'post', post_id: 'p1', position: 2 }),
+      row({ id: 'post', kind: 'post', post_id: 'p1', position: 2, target_date: '2026-10-12' }),
+      // A post whose own date differs is placed by its plan day.
+      row({ id: 'post2', kind: 'post', post_id: 'p2', position: 3, target_date: '2026-10-17' }),
     ];
     const out = assembleBundles(
       plans,
       items,
       [],
-      [{ id: 'p1', stage: 'review', title: 'P', target_date: '2026-10-12' }],
+      [
+        // The post read carries no date at all: placement is the plan day only.
+        { id: 'p1', stage: 'review', title: 'P' },
+        { id: 'p2', stage: 'review', title: 'Q' },
+      ],
     );
-    expect(out.get('plan')?.items.map((i) => i.id)).toEqual(['post', 'late', 'none']);
+    expect(out.get('plan')?.items.map((i) => i.id)).toEqual(['post', 'post2', 'late', 'none']);
   });
 
   it('the item read selects plan_items.target_date', async () => {
@@ -989,9 +1000,34 @@ describe('slot write (W4)', () => {
     const post = { ...concept, id: 'p1', kind: 'post' as const, post_id: 'x', target_date: null };
     const info = { x: { title: 'X', target_date: '2026-10-13T20:00:00+00:00' } };
     expect(planItemDayInZone(concept, info, 'Asia/Kolkata')).toBe('2026-10-14');
-    expect(planItemDayInZone(post, info, 'Asia/Kolkata')).toBe('2026-10-14');
-    expect(planItemDayInZone(post, info, 'UTC')).toBe('2026-10-13');
-    expect(planItemDayInZone({ ...post, post_id: 'gone' }, info, 'UTC')).toBeNull();
+    // A post's own date never places it: no plan day is No date.
+    expect(planItemDayInZone(post, info, 'Asia/Kolkata')).toBeNull();
+    expect(planItemDayInZone({ ...post, target_date: '2026-10-16' }, info, 'UTC')).toBe(
+      '2026-10-16',
+    );
+  });
+
+  it("a client's draft row sits on its plan day, never the post's own date, in any zone", () => {
+    // plan_draft_rows returns the plan day at UTC midnight; the post's own
+    // date (2 Oct) never reaches the client.
+    const [row] = mergeDraftRows(
+      [],
+      [
+        {
+          plan_id: 'p',
+          item_id: 'd1',
+          item_position: 0,
+          post_number: 7,
+          title: 'Teaser',
+          target_date: '2026-10-15T00:00:00+00:00',
+        },
+      ],
+    );
+    expect(row?.target_date).toBe('2026-10-15');
+    for (const zone of ['UTC', 'Asia/Kolkata', 'America/Los_Angeles', 'Pacific/Auckland']) {
+      expect(planItemDayInZone(row!, {}, zone)).toBe('2026-10-15');
+    }
+    expect(draftRowDay(null)).toBeNull();
   });
 });
 

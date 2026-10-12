@@ -195,7 +195,8 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await card.locator('[data-plan-open]').click();
   const plan = page_(page, 'plan');
   await expect(plan).toBeVisible();
-  await expect(plan.getByText(`Shared with ${PEER_NAME}`)).toBeVisible();
+  // The header: the range, then who sees it.
+  await expect(plan.getByText(/ · Shared with client$/)).toBeVisible();
   // One list by day (no Concepts/Posts tabs): each row tagged with its kind.
   await expect(plan.locator('[data-plan-tab]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row]')).toHaveCount(2);
@@ -247,7 +248,10 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(item).toBeHidden();
   await expect(plan).toBeVisible();
   await expect(conceptBox()).toHaveAttribute('aria-checked', 'true');
-  await expect(conceptRow().getByText('1 comment')).toBeVisible();
+  // The agency's status line: the client's side, then the visible comment count.
+  await expect(conceptRow().locator('[data-plan-row-status]')).toHaveText(
+    'Client waiting · 1 comment',
+  );
 
   // A post item for the agency: the pipeline post view embedded, no plan
   // review buttons, and the header overflow opens the post view's own sheet.
@@ -349,7 +353,17 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   await card.locator('[data-plan-open]').click();
   const plan = page_(page, 'plan');
   await expect(plan).toBeVisible();
-  await expect(plan.getByText(`Shared by ${PEER_NAME}`)).toBeVisible();
+  // A client sees the range alone, no status line and no Add.
+  await expect(plan.getByText(/ · Shared with client$/)).toHaveCount(0);
+  await expect(plan.locator('[data-plan-row-status]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-add], [data-plan-add-header]')).toHaveCount(0);
+  // The concept's Everyone comment shows as the row's third line.
+  await expect(
+    plan
+      .locator('[data-plan-row]')
+      .filter({ has: page.locator('[data-plan-row-kind="Concept 1 of 1"]') })
+      .locator('[data-plan-row-comments]'),
+  ).toHaveText('1 comment');
   await expect(plan.locator('[data-plan-pill="team"]')).toHaveCount(0);
   await page.waitForTimeout(300);
   await shot(page, `${prefix}-04-plan-screen-client`);

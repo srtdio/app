@@ -14,12 +14,25 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement, RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { planConceptEdit, planItemCommentCreate, planItemReview } from '@srtdio/rpc';
+import {
+  planConceptEdit,
+  planItemCommentCreate,
+  planItemMove,
+  planItemRemove,
+  planItemReview,
+} from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/toast';
 import { IconArrowUp, IconLock, IconMore } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
+import {
+  PlanConceptActionsSheet,
+  PlanMoveSheet,
+  PlanRemoveSheet,
+  PostSheetPlanRowsContext,
+} from '@/components/chat/PlanMoveSheet';
+import { flattenOrder, hasTicks, moveToEnd } from '@/lib/chat/plan-drag';
 import {
   ConceptSheet,
   EMPTY_CONCEPT,
@@ -29,6 +42,9 @@ import {
 import { postRoute } from '@/components/chat/post-card';
 import {
   COMMENT_FAILED,
+  MOVE_FAILED,
+  REMOVED_TOAST,
+  REMOVE_FAILED,
   STATUS_LABELS,
   TEAM_APPROVE_CONFIRM,
   TEAM_ONLY_LABEL,
@@ -37,6 +53,8 @@ import {
   itemDateLabel,
   itemKindLabel,
   itemSlotSubtitle,
+  movedToast,
+  planWriteErrorCopy,
   reviewStatus,
   stageLabel,
   type PillTone,
@@ -46,6 +64,9 @@ import {
   PlanPage,
   PlanPill,
   ScreenFailed,
+  planDayIds,
+  planListGroups,
+  planMoveDays,
   rowTitle,
   useScreenRead,
 } from '@/components/chat/PlanScreen';
@@ -66,6 +87,7 @@ import {
   type ReviewStatus,
 } from '@/lib/chat/plans';
 import { formatClockTime, workspaceTimeZone } from '@/lib/chat/time-format';
+import { formatCivilDayHeader } from '@/lib/plan-week';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
@@ -201,6 +223,8 @@ export function PlanItemScreen(props: {
   /** A comment to scroll to and briefly highlight once listed; none when absent. */
   highlightCommentId?: string;
   onClose: () => void;
+  /** After Remove from plan: back to the list. Defaults to onClose. */
+  onRemoved?: () => void;
 }): ReactElement | null {
   const { bundle, item, side } = props;
   const { workspaces, workspaceId } = useWorkspace();
@@ -220,6 +244,11 @@ export function PlanItemScreen(props: {
   const [actionError, setActionError] = useState<string | null>(null);
   // The post item's overflow: the embedded post view's own action sheet.
   const [moreOpen, setMoreOpen] = useState(false);
+  // Agency plan actions: a concept's overflow, the day list, the remove confirm.
+  const [conceptMenuOpen, setConceptMenuOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [planBusy, setPlanBusy] = useState(false);
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<CommentVisibility>('everyone');
   const [pending, setPending] = useState<ShownComment[]>([]);
@@ -255,6 +284,9 @@ export function PlanItemScreen(props: {
     setPending([]);
     setSendError(null);
     setEditOpen(false);
+    setConceptMenuOpen(false);
+    setMoveOpen(false);
+    setRemoveOpen(false);
   }, [props.open, item.id]);
 
   // A write that lands after the viewer moved on (another item, or closed)
@@ -431,6 +463,71 @@ export function PlanItemScreen(props: {
     dispatchPlanChanged(window, bundle.plan.id);
   };
 
+  // Agency plan actions. Move: to the end of the picked day (one
+  // plan_item_move with the full plan order); Remove: plan_item_remove, then
+  // back to the list. Clients never reach these (no rows render for them).
+  const planActions = side === 'agency';
+  const groups = planListGroups(bundle, timeZone, side);
+  const currentDay = groups
+    .flatMap((w) => w.days)
+    .find((d) => d.items.some((i) => i.id === item.id))?.day;
+  const moveItemTo = async (day: string | null): Promise<void> => {
+    if (!planActions || planBusy) return;
+    if (day === currentDay) {
+      setMoveOpen(false);
+      return;
+    }
+    const order = flattenOrder(moveToEnd(planDayIds(groups), item.id, day));
+    const hadTicks = hasTicks(bundle, item.id);
+    setPlanBusy(true);
+    const traceId = generateTraceId();
+    const result = await planItemMove(supabase, {
+      p_item_id: item.id,
+      p_target_date: day,
+      p_item_ids: order,
+      p_trace_id: traceId,
+    });
+    setPlanBusy(false);
+    if (!result.ok) {
+      logger.warn('chat: plan item move failed', {
+        trace_id: traceId,
+        item_id: item.id,
+        error: result.error.message,
+      });
+      toast.show({ title: planWriteErrorCopy(result.error.message, MOVE_FAILED) });
+      return;
+    }
+    setMoveOpen(false);
+    toast.show({ title: movedToast(day !== null ? formatCivilDayHeader(day) : null, hadTicks) });
+    dispatchPlanChanged(window, bundle.plan.id);
+  };
+  const removeFromPlan = async (): Promise<void> => {
+    if (!planActions || planBusy) return;
+    setPlanBusy(true);
+    const traceId = generateTraceId();
+    const result = await planItemRemove(supabase, { p_item_id: item.id, p_trace_id: traceId });
+    setPlanBusy(false);
+    if (!result.ok) {
+      logger.warn('chat: plan item remove failed', {
+        trace_id: traceId,
+        item_id: item.id,
+        error: result.error.message,
+      });
+      toast.show({ title: REMOVE_FAILED });
+      return;
+    }
+    setRemoveOpen(false);
+    toast.show({ title: REMOVED_TOAST });
+    dispatchPlanChanged(window, bundle.plan.id);
+    // Back to the list (the entry item included), not out of the plan.
+    (props.onRemoved ?? props.onClose)();
+  };
+  const planRows = useMemo(
+    () =>
+      planActions ? { onMove: () => setMoveOpen(true), onRemove: () => setRemoveOpen(true) } : null,
+    [planActions],
+  );
+
   // The deep-linked comment: once the read lists it, scroll to it and
   // highlight it briefly. Not listed (deleted, hidden): nothing happens.
   const highlightId = props.highlightCommentId ?? null;
@@ -469,6 +566,21 @@ export function PlanItemScreen(props: {
         backLabel={props.backLabel ?? 'Back to plan'}
         onBack={props.onClose}
         onEntered={() => setRested(true)}
+        {...(item.kind === 'concept' && planActions
+          ? {
+              action: (
+                <button
+                  type="button"
+                  aria-label="Item actions"
+                  data-plan-item-more=""
+                  onClick={() => setConceptMenuOpen(true)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <IconMore size={22} />
+                </button>
+              ),
+            }
+          : {})}
         {...(item.kind === 'post' && item.post_id !== null
           ? {
               action: (
@@ -548,23 +660,25 @@ export function PlanItemScreen(props: {
         {item.kind === 'post' ? (
           <>
             {item.post_id !== null ? (
-              <Suspense
-                fallback={<div className="m-4 h-[170px] animate-pulse rounded-lg bg-panel-2" />}
-              >
-                <PostDetailPage
-                  postId={item.post_id}
-                  embedded
-                  {...(props.highlightCommentId !== undefined
-                    ? { focusCommentId: props.highlightCommentId }
-                    : {})}
-                  onNavigateAway={props.onClose}
-                  actionsOpen={props.open && moreOpen}
-                  onActionsOpenChange={setMoreOpen}
-                  onOpenInPipeline={() => {
-                    if (item.post_id !== null) navigate(postRoute(item.post_id));
-                  }}
-                />
-              </Suspense>
+              <PostSheetPlanRowsContext.Provider value={planRows}>
+                <Suspense
+                  fallback={<div className="m-4 h-[170px] animate-pulse rounded-lg bg-panel-2" />}
+                >
+                  <PostDetailPage
+                    postId={item.post_id}
+                    embedded
+                    {...(props.highlightCommentId !== undefined
+                      ? { focusCommentId: props.highlightCommentId }
+                      : {})}
+                    onNavigateAway={props.onClose}
+                    actionsOpen={props.open && moreOpen}
+                    onActionsOpenChange={setMoreOpen}
+                    onOpenInPipeline={() => {
+                      if (item.post_id !== null) navigate(postRoute(item.post_id));
+                    }}
+                  />
+                </Suspense>
+              </PostSheetPlanRowsContext.Provider>
             ) : null}
           </>
         ) : (
@@ -708,6 +822,42 @@ export function PlanItemScreen(props: {
         onConfirm={() => void review('approved')}
         onCancel={() => setConfirmOpen(false)}
       />
+      {planActions ? (
+        <>
+          <PlanConceptActionsSheet
+            open={props.open && conceptMenuOpen && item.kind === 'concept'}
+            title={title}
+            onMove={() => {
+              setConceptMenuOpen(false);
+              setMoveOpen(true);
+            }}
+            onEdit={() => {
+              setConceptMenuOpen(false);
+              openEdit();
+            }}
+            onRemove={() => {
+              setConceptMenuOpen(false);
+              setRemoveOpen(true);
+            }}
+            onClose={() => setConceptMenuOpen(false)}
+          />
+          <PlanMoveSheet
+            open={props.open && moveOpen}
+            days={planMoveDays(bundle.plan)}
+            current={currentDay ?? null}
+            busy={planBusy}
+            onPick={(day) => void moveItemTo(day)}
+            onClose={() => setMoveOpen(false)}
+          />
+          <PlanRemoveSheet
+            open={props.open && removeOpen}
+            title={title}
+            busy={planBusy}
+            onConfirm={() => void removeFromPlan()}
+            onClose={() => setRemoveOpen(false)}
+          />
+        </>
+      ) : null}
       {editable ? (
         <ConceptSheet
           open={props.open && editOpen}

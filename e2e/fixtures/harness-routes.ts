@@ -153,6 +153,19 @@ function planItemsOf(tables: Tables, planId: unknown): Row[] {
   return (tables.plan_items ?? []).filter((i) => i.plan_id === planId && i.deleted_at === null);
 }
 
+function inPlan(plan: Row | undefined, day: string): boolean {
+  return plan !== undefined && day >= String(plan.starts_on) && day <= String(plan.ends_on);
+}
+
+/** A post's own day when it falls inside the plan, else null (plan_posts_add with no day). */
+function ownDayInPlan(tables: Tables, plan: Row | undefined, postId: unknown): string | null {
+  const post = (tables.posts ?? []).find((p) => p.id === postId);
+  if (post === undefined || post.target_date === null || post.target_date === undefined)
+    return null;
+  const day = String(post.target_date).slice(0, 10);
+  return inPlan(plan, day) ? day : null;
+}
+
 /** The plan procs over the fixture tables (owner/agency writes; RLS is not emulated). */
 const PLAN_RPC: Record<string, RpcHandler> = {
   plan_create: (args, tables) => {
@@ -194,8 +207,8 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     plan.shared_with_client_by = ME;
     return null;
   },
-  // The draft post items of up to 100 plans the caller may see by name: a
-  // client gets them on client plans only. Items a client cannot read from
+  // The draft post items of up to 100 plans the caller may see by name, each
+  // on its plan day: a client gets them on client plans only. Items a client cannot read from
   // plan_items sit in hidden_plan_items (the fixture's stand-in for RLS).
   plan_draft_rows: (args, tables) => {
     const ids = new Set(Array.isArray(args.p_plan_ids) ? args.p_plan_ids.map(String) : []);
@@ -214,7 +227,12 @@ const PLAN_RPC: Record<string, RpcHandler> = {
           item_position: i.position,
           post_number: post.number,
           title: post.title,
-          target_date: post.target_date === null ? null : String(post.target_date).slice(0, 10),
+          // The plan day at UTC midnight (20261012140000_plan_draft_rows_plan_day),
+          // never the post's own date.
+          target_date:
+            i.target_date === null || i.target_date === undefined
+              ? null
+              : `${String(i.target_date).slice(0, 10)}T00:00:00+00:00`,
         },
       ];
     });
@@ -300,9 +318,16 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     }
     return null;
   },
+  // Mirrors the live proc: agency only; p_target_date given = that day (inside
+  // the plan, else date_outside_plan); null = the post's own day if inside
+  // the plan, else no date. The post's own date is never written.
   plan_posts_add: (args, tables) => {
+    if (roleOf(tables, ME) === 'client') throw new HarnessRpcError('forbidden_role');
     const ids = Array.isArray(args.p_post_ids) ? args.p_post_ids : [];
     const held = new Set(planItemsOf(tables, args.p_plan_id).map((i) => i.post_id));
+    const plan = (tables.plans ?? []).find((p) => p.id === args.p_plan_id);
+    const given = typeof args.p_target_date === 'string' ? args.p_target_date : null;
+    if (given !== null && !inPlan(plan, given)) throw new HarnessRpcError('date_outside_plan');
     let added = 0;
     for (const postId of ids) {
       if (held.has(postId)) continue;
@@ -316,7 +341,7 @@ const PLAN_RPC: Record<string, RpcHandler> = {
         title: null,
         description: null,
         post_id: postId,
-        target_date: null,
+        target_date: given ?? ownDayInPlan(tables, plan, postId),
         created_by: ME,
         created_at: now,
         updated_at: now,
@@ -332,6 +357,31 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     const items = tables.plan_items ?? [];
     const at = items.findIndex((i) => i.id === args.p_item_id);
     if (at >= 0) items.splice(at, 1);
+    return null;
+  },
+  // Mirrors the live proc: agency only; a day inside the plan or null (else
+  // date_outside_plan); p_item_ids is the full plan order after the move. A
+  // day change resets both slot reviews to waiting; same day only reorders.
+  plan_item_move: (args, tables) => {
+    if (roleOf(tables, ME) === 'client') throw new HarnessRpcError('forbidden_role');
+    const item = (tables.plan_items ?? []).find(
+      (i) => i.id === args.p_item_id && i.deleted_at === null,
+    );
+    if (item === undefined) throw new HarnessRpcError('plan_item_not_found');
+    const plan = (tables.plans ?? []).find((p) => p.id === item.plan_id);
+    const day = typeof args.p_target_date === 'string' ? args.p_target_date : null;
+    if (day !== null && !inPlan(plan, day)) throw new HarnessRpcError('date_outside_plan');
+    if ((item.target_date ?? null) !== day) {
+      item.target_date = day;
+      for (const r of tables.plan_item_reviews ?? []) {
+        if (r.item_id === item.id) r.status = 'waiting';
+      }
+    }
+    const order = Array.isArray(args.p_item_ids) ? args.p_item_ids : [];
+    order.forEach((id, position) => {
+      const row = planItemsOf(tables, item.plan_id).find((i) => i.id === id);
+      if (row !== undefined) row.position = position;
+    });
     return null;
   },
   plan_items_reorder: (args, tables) => {

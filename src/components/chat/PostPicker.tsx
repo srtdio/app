@@ -29,7 +29,7 @@
 // controlled by the composer (the text after the hash). Waiting, approved and,
 // only where drafts are allowed, Drafts; search leaves drafts out otherwise.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -116,6 +116,8 @@ interface PostPickerProps {
    * the agency side.
    */
   channelHasClient?: boolean | null | undefined;
+  /** Post ids not to list at all (a plan's posts, when adding to that plan). */
+  excludePostIds?: ReadonlySet<string> | undefined;
 }
 
 /** The sheet title per mode. */
@@ -458,25 +460,47 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     workspaceKey,
     timeZone,
     sharedPostIds: props.sharedPostIds,
+    excludePostIds: props.excludePostIds,
   };
+
+  // Posts already in a plan are left out before rendering, so a section
+  // never shows a heading over nothing and the match count stays honest.
+  const exclude = props.excludePostIds;
+  const shownSections = useMemo(
+    () =>
+      sections === null || exclude === undefined || exclude.size === 0
+        ? sections
+        : {
+            ...sections,
+            sections: sections.sections
+              .map((s) => ({ ...s, rows: s.rows.filter((r) => !exclude.has(r.id)) }))
+              .filter((s) => s.rows.length > 0),
+          },
+    [sections, exclude],
+  );
+  const searchRows =
+    search === null || exclude === undefined
+      ? (search?.rows ?? [])
+      : search.rows.filter((r) => !exclude.has(r.id));
+  const searchCount = search === null ? 0 : search.count - (search.rows.length - searchRows.length);
 
   let postBody: ReactElement;
   if (postError !== null) {
     postBody = <PickerError message={postError} />;
   } else if (trimmed === '') {
     postBody =
-      sections === null ? (
+      shownSections === null ? (
         <PickerSkeleton />
       ) : (
-        <PostSectionsView data={sections} mode={mode} {...rowProps} />
+        <PostSectionsView data={shownSections} mode={mode} {...rowProps} />
       );
   } else if (search === null || search.text !== trimmed) {
     postBody = <PickerSkeleton />;
   } else {
     postBody = (
       <SearchResultsView
-        rows={search.rows}
-        count={search.count}
+        rows={searchRows}
+        count={searchCount}
         loadingMore={search.loadingMore}
         onLoadMore={loadMore}
         {...rowProps}
@@ -574,6 +598,8 @@ export interface PostRowContext {
   workspaceKey: string | null;
   timeZone: string;
   sharedPostIds?: ReadonlySet<string> | undefined;
+  /** Post ids whose rows are not rendered (already in the plan being added to). */
+  excludePostIds?: ReadonlySet<string> | undefined;
 }
 
 const LIST_CLASS = '-mx-[18px] flex max-h-[50vh] flex-col overflow-y-auto border-t border-border';
@@ -700,8 +726,9 @@ export function SearchResultsView(
 }
 
 /** One post row: placeholder thumb, KEY · title, format · date, stage or "in this chat". */
-export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): ReactElement {
+export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): ReactElement | null {
   const { post } = props;
+  if (props.excludePostIds?.has(post.id) === true) return null;
   const active = isPostSelected(props.selected, post.id);
   const inChat = props.sharedPostIds?.has(post.id) === true;
   const meta = [

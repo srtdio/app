@@ -56,23 +56,27 @@ function viewAsClient(network: HarnessNetwork): void {
 }
 
 /**
- * L1-L3: the checkbox is the row's last element, its right edge within 16px
- * of the row's right edge, and the day column sits left of the items.
+ * A1: the tick is the row's last element and its 22px box's right edge sits
+ * 16px from the viewport edge; the 48px day column sits left of the items,
+ * its top level with the day's first thumbnail.
  */
 async function expectRowLayout(page: Page, itemId: string): Promise<void> {
   const wrap = page.locator(`[data-plan-row-wrap="${itemId}"]`);
   const last = await wrap.evaluate((el) => el.lastElementChild?.getAttribute('data-plan-slot'));
   expect(last === 'client' || last === 'team').toBe(true);
   const row = await wrap.boundingBox();
-  const box = await wrap.locator('[data-plan-slot]').boundingBox();
-  expect(row !== null && box !== null).toBe(true);
-  if (row === null || box === null) return;
-  expect(row.x + row.width - (box.x + box.width)).toBeLessThanOrEqual(16);
-  expect(row.x + row.width - (box.x + box.width)).toBeGreaterThanOrEqual(0);
+  const box = await wrap.locator('[data-plan-slot] > span').boundingBox();
+  const viewport = page.viewportSize();
+  expect(row !== null && box !== null && viewport !== null).toBe(true);
+  if (row === null || box === null || viewport === null) return;
+  expect(Math.round(box.width)).toBe(22);
+  expect(Math.round(viewport.width - (box.x + box.width))).toBe(16);
   const day = page.locator('[data-plan-day]').filter({ has: wrap });
   const col = await day.locator('[data-plan-day-col]').boundingBox();
   expect(col !== null && col.x + col.width <= row.x).toBe(true);
-  expect(col?.width).toBe(40);
+  expect(col?.width).toBe(48);
+  const tile = await day.locator('[data-plan-row-tile]').first().boundingBox();
+  if (col !== null && tile !== null) expect(Math.round(col.y)).toBe(Math.round(tile.y));
 }
 
 const planPage = (page: Page, id: string) => page.locator(`[data-plan-page="${id}"]`);
@@ -112,7 +116,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   await expect(plan.locator('[data-plan-week-header]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row-kind]')).toHaveCount(2);
   const progress = plan.locator('[data-plan-screen-progress]');
-  await expect(progress).toHaveText('0/2 approved');
+  await expect(progress).toHaveText('0 of 2 slots approved');
 
   // The client box writes the client side; no team state anywhere.
   const box = plan.locator(`[data-plan-row-wrap="${PLAN_POST_ITEM}"] [data-plan-slot]`);
@@ -129,10 +133,11 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   // Tick: optimistic, the count moves, the toast offers Undo.
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'true');
-  await expect(progress).toHaveText('1/2 approved');
+  await expect(progress).toHaveText('1 of 2 slots approved');
   const undo = page.locator('[data-toast-action]');
   await expect(undo).toHaveText('Undo');
-  await expect(page.getByText(/^Slot approved · \w{3} \d{1,2} \w{3}$/)).toBeVisible();
+  // The fixture's post item has no plan day, so the toast names none.
+  await expect(page.getByText(/^Slot approved( · \w{3} \d{1,2} \w{3})?$/)).toBeVisible();
   // L5: the success-tinted toast with Undo at its right end.
   const success = page.locator('[data-toast-tone="success"]');
   await expect(success).toBeVisible();
@@ -154,7 +159,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   // Undo: back to waiting, the count back, a withdrawal registered.
   await undo.click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
-  await expect(progress).toHaveText('0/2 approved');
+  await expect(progress).toHaveText('0 of 2 slots approved');
   await expect
     .poll(() => (network.world.tables.plan_item_reviews ?? [])[0]?.status)
     .toBe('waiting');
@@ -194,7 +199,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, Activity
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByText('Slot approval removed')).toBeVisible();
-  await expect(progress).toHaveText('0/2 approved');
+  await expect(progress).toHaveText('0 of 2 slots approved');
   expectClean(network);
 
   // Activity shows the withdrawal row.
@@ -221,12 +226,14 @@ test('agency: team checkbox and client pill, header subtitle, long title, delete
   await expectRowLayout(page, PLAN_POST_ITEM);
   await expect(plan.locator('[data-plan-slot="client"]')).toHaveCount(0);
   const row = plan.locator(`[data-plan-row="${PLAN_POST_ITEM}"]`);
-  await expect(row.getByText('Client · Waiting')).toBeVisible();
+  await expect(row.locator('[data-plan-row-status]')).toHaveText('Client waiting');
+  await expect(row.getByText('Client · Waiting')).toHaveCount(0);
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'true');
-  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText(
-    'Agency 1 of 2 · Client 0 of 2',
-  );
+  await expect(plan.locator('[data-plan-screen-progress] > span')).toHaveText([
+    'Agency 1 of 2',
+    'Client 0 of 2',
+  ]);
   expect(network.world.tables.plan_item_reviews).toEqual([
     expect.objectContaining({ item_id: PLAN_POST_ITEM, side: 'team', status: 'approved' }),
   ]);
@@ -263,7 +270,7 @@ test('agency: team checkbox and client pill, header subtitle, long title, delete
   expectClean(network);
 });
 
-test('client: a long plan shows week headers, 36px empty days, and a draft with no checkbox', async ({
+test('client: a long plan shows week headers, 44px empty days, and a draft with no checkbox', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -277,7 +284,7 @@ test('client: a long plan shows week headers, 36px empty days, and a draft with 
   );
   expect(await plan.locator('[data-plan-week-header]').count()).toBeGreaterThan(1);
   const empty = plan.locator('[data-plan-day-empty]').first();
-  expect((await empty.boundingBox())?.height).toBe(36);
+  expect((await empty.boundingBox())?.height).toBe(44);
   const draft = plan.locator(`[data-plan-row="${DRAFT_ITEM_ID}"]`);
   await draft.scrollIntoViewIfNeeded();
   await expect(draft).toHaveAttribute('aria-disabled', 'true');
@@ -316,9 +323,10 @@ test('client: Undo after ticking a concept with changes asked restores changes',
   await page.locator('[data-toast-action]').click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
   await expect.poll(status).toBe('changes');
-  await expect(
-    plan.locator(`[data-plan-row="${concept.id}"] [data-plan-pill="client"]`),
-  ).toHaveText('Changes asked');
+  // A client's row carries the tick only: no status line.
+  await expect(plan.locator(`[data-plan-row="${concept.id}"] [data-plan-row-status]`)).toHaveCount(
+    0,
+  );
   await page.waitForTimeout(300);
   await shot(page, 'slots-10-client-undo-restores-changes');
   expectClean(network);
