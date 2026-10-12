@@ -133,7 +133,7 @@ describe('swipe to remove: rendering', () => {
     const peek = paint('agency', 'team', swipe({ peek: { id: 'c2', offset: -72 } }));
     expect(peek).toContain('translateX(-72px)');
     const collapsing = paint('agency', 'team', swipe({ collapsing: new Set(['c1']) }));
-    expect(collapsing).toMatch(/data-plan-row-wrap="c1" data-plan-row-collapsing=""/);
+    expect(collapsing).toMatch(/data-plan-row-item="c1" data-plan-row-collapsing=""/);
     expect(collapsing).toContain('grid-rows-[0fr]');
     expect(collapsing).not.toMatch(/rotate|translateY|opacity-0/);
   });

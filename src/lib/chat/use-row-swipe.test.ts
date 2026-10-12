@@ -290,7 +290,7 @@ describe('the one-time peek', () => {
     storage: StorageRead,
     over: { blocked?: () => boolean; reduced?: boolean } = {},
   ): { offsets: Array<number | null>; tips: number; cancel: () => void } => {
-    const out = { offsets: [] as Array<number | null>, tips: 0, cancel: () => undefined };
+    const out = { offsets: [] as Array<number | null>, tips: 0, cancel: (): void => undefined };
     out.cancel = runPlanPeek({
       blocked: over.blocked ?? (() => false),
       firstRow: () => 'row-1',

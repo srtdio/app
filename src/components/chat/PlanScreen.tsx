@@ -1270,7 +1270,7 @@ export function PlanScreen(props: {
     const body = bodyRef.current;
     const onDown = (event: Event): void => {
       const target = event.target;
-      if (target instanceof Element && target.closest(`[data-plan-row-wrap="${openSwipe}"]`)) {
+      if (target instanceof Element && target.closest(`[data-plan-row-item="${openSwipe}"]`)) {
         return;
       }
       setOpenSwipe(null);
@@ -2569,7 +2569,6 @@ function PlanRow(props: {
   const zone = props.timeZone ?? 'UTC';
   const id = props.item.id;
   const wrapRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   const pointerY = useRef(0);
   const hold = useLongPress(() => {
     // A lift ends any swipe of this press.
@@ -2596,7 +2595,7 @@ function PlanRow(props: {
       swipe?.onStart(id);
       if (pointerId === undefined) return;
       try {
-        contentRef.current?.setPointerCapture(pointerId);
+        wrapRef.current?.setPointerCapture(pointerId);
       } catch {
         // The pointer is already gone; the release settles the row.
       }
@@ -2775,9 +2774,7 @@ function PlanRow(props: {
   // it), Y only; the red action sits behind the content, full row height.
   return (
     <div
-      ref={wrapRef}
-      data-plan-row-wrap={id}
-      {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
+      data-plan-row-item={id}
       {...(collapsing ? { 'data-plan-row-collapsing': '', 'aria-hidden': true } : {})}
       className={cn(
         'grid w-full transition-[grid-template-rows,margin] duration-base ease-exit motion-reduce:transition-none',
@@ -2802,9 +2799,11 @@ function PlanRow(props: {
           {SWIPE_REMOVE_LABEL}
         </button>
         <div
-          ref={contentRef}
+          ref={wrapRef}
+          data-plan-row-wrap={id}
           data-plan-row-swipe={id}
           {...(open ? { 'data-plan-row-open': '' } : {})}
+          {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
           {...rowSwipe.handlers}
           onClickCapture={(event) => {
             // The click that trails a swipe does nothing; a tap on an open
