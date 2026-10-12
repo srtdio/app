@@ -404,15 +404,11 @@ async function expectOverflowOpensPipeline(page: Page, item: Locator): Promise<v
   await expect(more.getByRole('button', { name: /Open in pipeline/ })).toBeVisible();
   await expect(more.getByRole('button', { name: /Send to chat/ })).toBeVisible();
   await expect(more.getByRole('button', { name: /Copy link/ })).toBeVisible();
-  const first = await more
-    .getByRole('button')
-    .filter({ hasText: /Open in pipeline/ })
-    .boundingBox();
-  const send = await more
-    .getByRole('button')
-    .filter({ hasText: /Send to chat/ })
-    .boundingBox();
-  expect(first !== null && send !== null && first.y < send.y).toBe(true);
+  // Open in pipeline is the first row (DOM order, not geometry mid-slide).
+  const labels = await more.getByRole('button').allInnerTexts();
+  const at = (re: RegExp): number => labels.findIndex((t) => re.test(t));
+  expect(at(/Open in pipeline/)).toBeGreaterThanOrEqual(0);
+  expect(at(/Open in pipeline/)).toBeLessThan(at(/Send to chat/));
   await page.keyboard.press('Escape');
   await expect(more).toBeHidden();
 }
