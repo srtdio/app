@@ -259,7 +259,7 @@ describe('PostDetailPage embedded', () => {
     expect(src).toContain('{...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}');
     // A host open while the sheet cannot mount closes at once (never pops open later).
     expect(src).toContain(
-      'const sheetMountable = !loading && !notFound && detail !== null && !readOnly;',
+      '!loading && !notFound && loadError === null && detail !== null && !readOnly;',
     );
     expect(src).toContain(
       'if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);',

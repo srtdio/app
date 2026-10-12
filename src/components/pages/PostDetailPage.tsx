@@ -623,7 +623,8 @@ export function PostDetailPage({
   // A host-owned open (the plan item's header button) while the sheet cannot
   // mount (loading, not found, an old version) closes again at once, so the
   // sheet never pops open later on its own.
-  const sheetMountable = !loading && !notFound && detail !== null && !readOnly;
+  const sheetMountable =
+    !loading && !notFound && loadError === null && detail !== null && !readOnly;
   useEffect(() => {
     if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);
   }, [actionsOpenProp, sheetMountable, onActionsOpenChange]);
