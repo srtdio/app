@@ -384,8 +384,9 @@ function PdfPage(props: {
         const viewport = page.getViewport({ scale: widthPx / natural.width });
         canvas.width = Math.round(viewport.width);
         canvas.height = Math.round(viewport.height);
+        // iOS returns no context when canvas memory runs out: show the retry.
         const ctx = canvas.getContext('2d');
-        if (ctx === null) return;
+        if (ctx === null) throw new Error('no 2d context');
         task = page.render({
           canvasContext: ctx,
           canvas,
@@ -427,7 +428,11 @@ function PdfPage(props: {
           type="button"
           data-pdf-page-error=""
           onClick={() => setAttempt((n) => n + 1)}
-          className="absolute inset-0 flex min-h-[44px] items-center justify-center bg-overlay text-sm text-overlay-fg"
+          className={cn(
+            'absolute inset-0 flex min-h-[44px] items-center justify-center bg-overlay text-sm text-overlay-fg',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-overlay-fg',
+            NO_SELECT,
+          )}
         >
           {VIEWER_ERROR}
         </button>
