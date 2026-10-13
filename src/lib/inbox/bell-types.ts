@@ -2,9 +2,9 @@
 // is posts only; chat notifications live in the chat bell). docs/schema.md
 // "Where inbox entries are shown":
 //   - Chat bell only, never Activity: mention with entity_type chat_channel,
-//     reminder, scheduled_sent, scheduled_failed, and the plan alerts
+//     reminder, scheduled_sent, scheduled_failed, the plan alerts
 //     (plan_opened, plan_deleted, plan_date_changed, plan_updated, plan_review,
-//     plan_comment).
+//     plan_comment) and the task alerts (task_changed, task_due).
 //   - Activity: everything else, including mentions on posts and briefs.
 // Every reader that splits the inbox between the two surfaces uses this file:
 // the Activity feed, its unread badge and Mentions count, the live toast layer
@@ -30,12 +30,28 @@ export const BELL_PLAN_EVENT_TYPES = [
 
 export type BellPlanEventType = (typeof BELL_PLAN_EVENT_TYPES)[number];
 
+/** The chat task list's alerts: a change by someone else, and a missed due time. */
+export const BELL_TASK_EVENT_TYPES = [
+  'task_changed',
+  'task_due',
+] as const satisfies readonly InboxEventTypeValue[];
+
+export type BellTaskEventType = (typeof BELL_TASK_EVENT_TYPES)[number];
+
+const BELL_TASK = new Set<string>(BELL_TASK_EVENT_TYPES);
+
+/** Whether an event type is a task alert (a bell row). Pure. */
+export function isBellTaskEvent(eventType: string): eventType is BellTaskEventType {
+  return BELL_TASK.has(eventType);
+}
+
 /** Event types that are always bell rows, whatever their entity. */
 export const BELL_ONLY_EVENT_TYPES = [
   'reminder',
   'scheduled_sent',
   'scheduled_failed',
   ...BELL_PLAN_EVENT_TYPES,
+  ...BELL_TASK_EVENT_TYPES,
 ] as const satisfies readonly InboxEventTypeValue[];
 
 const BELL_PLAN = new Set<string>(BELL_PLAN_EVENT_TYPES);
@@ -103,13 +119,36 @@ export function onlyBellEntries<Q extends Pick<BellFilterable<Q>, 'or'>>(query: 
 /**
  * The chat deep link that opens a chat at one message: the same link the
  * Activity chat-mention rows have always opened (ChatConnected consumes
- * `channel` and `message`). Without a message id it opens the chat. Pure.
+ * `channel` and `message`). Without a message id it opens the chat; a task link token
+ * (taskLinkToken) opens its task sheet on that item instead. Pure.
  */
 export function chatMessageHref(channelId: string, messageId: string | null): string {
+  if (messageId !== null && messageId.startsWith(TASK_LINK_PREFIX)) {
+    return chatTaskHref(channelId, messageId.slice(TASK_LINK_PREFIX.length));
+  }
   const channel = `/chat?channel=${encodeURIComponent(channelId)}`;
   return messageId !== null && messageId !== ''
     ? `${channel}&message=${encodeURIComponent(messageId)}`
     : channel;
+}
+
+/**
+ * The chat deep link that opens a chat with its task sheet up and one item
+ * expanded (ChatConnected consumes `channel` and `task`). Pure.
+ */
+export function chatTaskHref(channelId: string, taskId: string): string {
+  return `/chat?channel=${encodeURIComponent(channelId)}&task=${encodeURIComponent(taskId)}`;
+}
+
+/**
+ * A bell task row opens through the bell's message link: its "message id" is
+ * this prefix plus the task id, which chatMessageHref turns into `&task=`.
+ */
+export const TASK_LINK_PREFIX = 'task:';
+
+/** The link token a task row hands the bell's open path. Pure. */
+export function taskLinkToken(taskId: string): string {
+  return `${TASK_LINK_PREFIX}${taskId}`;
 }
 
 /** The link that opens the chat home with the bell open (the missed-reminders toast). */

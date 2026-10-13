@@ -1,6 +1,6 @@
 // The chat bell's data layer. "Now" is one inbox_entries query narrowed to the
-// bell's rows (bell-types.ts: chat mentions, reminders, scheduled and the plan
-// alerts) for the current workspace, unread, newest first, paged by 50. "Upcoming" is one chat_message_reminders query (pending) and one
+// bell's rows (bell-types.ts: chat mentions, reminders, scheduled, the plan and
+// task alerts) for the current workspace, unread, newest first, paged by 50. "Upcoming" is one chat_message_reminders query (pending) and one
 // chat_scheduled_messages query (status scheduled; RLS: own rows only). The
 // message previews, the failed scheduled rows and the people's names are then
 // batched with IN reads (one per table, never per row), as are the plan rows'
@@ -22,7 +22,9 @@ import { soonestFirst, type ScheduledRow } from '@/lib/chat/scheduled';
 import {
   BELL_CHAT_ENTITY,
   BELL_PLAN_EVENT_TYPES,
+  BELL_TASK_EVENT_TYPES,
   isBellPlanEvent,
+  isBellTaskEvent,
   onlyBellEntries,
   type BellEventType,
   type BellOnlyEventType,
@@ -77,6 +79,19 @@ export interface BellEntry {
   actorId: string | null;
   /** Plan rows only (absent elsewhere): what the alert names. */
   plan?: BellPlanFields;
+  /** Task rows only (absent elsewhere): the change, from the payload. */
+  task?: BellTaskFields;
+}
+
+/** A task row's payload (task_changed, task_due), mapped. */
+export interface BellTaskFields {
+  taskId: string | null;
+  number: number | null;
+  title: string | null;
+  /** The change kind (created, status, ..., due_passed). */
+  kind: string | null;
+  old: string | null;
+  new: string | null;
 }
 
 /** A plan row's payload, mapped (plan_opened .. plan_comment). */
@@ -116,6 +131,7 @@ const BELL_TYPES = new Set<string>([
   'scheduled_sent',
   'scheduled_failed',
   ...BELL_PLAN_EVENT_TYPES,
+  ...BELL_TASK_EVENT_TYPES,
 ]);
 
 function flag(payload: unknown, key: string): boolean {
@@ -148,6 +164,23 @@ export function planFieldsOf(
   };
 }
 
+/** A task row's fields from its payload. Pure. */
+export function taskFieldsOf(row: Pick<InboxEntryRow, 'payload'>): BellTaskFields {
+  const payload: unknown = row.payload as Json;
+  const number =
+    typeof payload === 'object' && payload !== null
+      ? (payload as Record<string, unknown>).number
+      : undefined;
+  return {
+    taskId: str(payload, 'task_id'),
+    number: typeof number === 'number' && Number.isFinite(number) ? number : null,
+    title: str(payload, 'title'),
+    kind: str(payload, 'kind'),
+    old: str(payload, 'old'),
+    new: str(payload, 'new'),
+  };
+}
+
 /** Map a raw inbox row into a BellEntry; null for a row the bell does not show. Pure. */
 export function mapBellEntry(row: InboxEntryRow): BellEntry | null {
   if (!BELL_TYPES.has(row.event_type)) return null;
@@ -155,6 +188,7 @@ export function mapBellEntry(row: InboxEntryRow): BellEntry | null {
   const payload: unknown = row.payload as Json;
   return {
     ...(isBellPlanEvent(row.event_type) ? { plan: planFieldsOf(row) } : {}),
+    ...(isBellTaskEvent(row.event_type) ? { task: taskFieldsOf(row) } : {}),
     id: row.id,
     workspaceId: row.workspace_id,
     createdAt: row.created_at,
@@ -238,11 +272,13 @@ export interface BellSections {
   scheduled: BellEntry[];
   /** The plan alerts (plan_opened .. plan_comment). */
   plans: BellEntry[];
+  /** The task alerts (task_changed, task_due). */
+  tasks: BellEntry[];
 }
 
 /**
  * The Now tab: unread, not snoozed rows split into Reminders, Mentions,
- * Scheduled (sent and failed) and Plans, each newest first. Pure.
+ * Scheduled (sent and failed), Plans and Tasks, each newest first. Pure.
  */
 export function bellSections(entries: readonly BellEntry[], nowMs: number): BellSections {
   const live = entries.filter((e) => e.readAt === null && !isSnoozedAt(e, nowMs));
@@ -253,13 +289,16 @@ export function bellSections(entries: readonly BellEntry[], nowMs: number): Bell
       (e) => e.eventType === 'scheduled_sent' || e.eventType === 'scheduled_failed',
     ),
     plans: live.filter((e) => isBellPlanEvent(e.eventType)),
+    tasks: live.filter((e) => isBellTaskEvent(e.eventType)),
   };
 }
 
 /** The bell's dot: unread items in Now. Pure. */
 export function bellUnreadCount(entries: readonly BellEntry[], nowMs: number): number {
   const s = bellSections(entries, nowMs);
-  return s.reminders.length + s.mentions.length + s.scheduled.length + s.plans.length;
+  return (
+    s.reminders.length + s.mentions.length + s.scheduled.length + s.plans.length + s.tasks.length
+  );
 }
 
 /** The toast when a plan_deleted row is tapped (it opens nothing). */
@@ -664,7 +703,9 @@ export async function loadBell(
   const entries = entriesRes.data.entries;
 
   const messageIds = unique([
-    ...entries.map((e) => (e.eventType === 'scheduled_failed' ? null : e.messageId)),
+    ...entries.map((e) =>
+      e.eventType === 'scheduled_failed' || isBellTaskEvent(e.eventType) ? null : e.messageId,
+    ),
     ...remindersRes.data.map((r) => r.message_id),
   ]);
   const failedIds = unique(

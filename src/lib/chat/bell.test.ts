@@ -89,6 +89,56 @@ describe('Now sections', () => {
   });
 });
 
+describe('task rows', () => {
+  const changed = entry({
+    id: 'tc',
+    event_type: 'task_changed',
+    actor_user_id: 'u2',
+    payload: {
+      task_id: 't1',
+      number: 12,
+      title: 'Reel cut',
+      kind: 'status',
+      old: 'todo',
+      new: 'shared',
+    },
+  });
+  const due = entry({
+    id: 'td',
+    event_type: 'task_due',
+    tier: 'urgent',
+    payload: {
+      task_id: 't2',
+      number: 4,
+      title: 'Hook copy',
+      kind: 'due_passed',
+      old: '2026-10-03T09:00:00+00:00',
+      new: null,
+    },
+  });
+
+  it('maps the payload into task fields, with no message id', () => {
+    expect(changed.task).toEqual({
+      taskId: 't1',
+      number: 12,
+      title: 'Reel cut',
+      kind: 'status',
+      old: 'todo',
+      new: 'shared',
+    });
+    expect(changed.messageId).toBeNull();
+    expect(due.task?.kind).toBe('due_passed');
+    expect(due.plan).toBeUndefined();
+  });
+
+  it('the Tasks section holds both and the dot counts them', () => {
+    const s = bellSections([changed, due], NOW);
+    expect(s.tasks.map((e) => e.id)).toEqual(['tc', 'td']);
+    expect(s.mentions).toEqual([]);
+    expect(bellUnreadCount([changed, due], NOW)).toBe(2);
+  });
+});
+
 describe('copy', () => {
   it('failure reasons read as plain words, never the raw proc text', () => {
     expect(failureInPlainWords('not a member of this chat')).toBe("You're no longer in this chat");

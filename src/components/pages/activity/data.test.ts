@@ -1110,7 +1110,7 @@ describe('fetchActivityEntries query composition', () => {
       hasCall(calls, 'not', [
         'event_type',
         'in',
-        '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment)',
+        '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment,task_changed,task_due)',
       ]),
     ).toBe(true);
     expect(

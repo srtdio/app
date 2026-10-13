@@ -15,6 +15,7 @@ import {
   type ChatWorld,
 } from './chat-data';
 import { notesChannelRow } from './notes-data';
+import { TASK_RPC } from './tasks-data';
 
 const SUPABASE_HOST = 'harness.supabase.test';
 const CHAT_TOKEN_HOST = 'chat-token.harness.test';
@@ -552,6 +553,7 @@ const PLAN_RPC: Record<string, RpcHandler> = {
 
 const RPC: Record<string, RpcHandler> = {
   ...PLAN_RPC,
+  ...TASK_RPC,
   chat_unread_counts: (_args, tables) => {
     const cursors = tables.chat_read_cursors ?? [];
     const channels = tables.chat_channels ?? [];

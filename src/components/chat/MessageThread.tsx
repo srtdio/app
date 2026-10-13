@@ -83,6 +83,7 @@ import {
   breaksRun,
   deletedMessageLabel,
   replyPreview,
+  targetFromSummary,
   type ThreadMessage,
 } from '@/lib/chat/thread';
 import { classifyAttachment, splitAlbum, type ReplyQuote } from '@/lib/chat/attachments';
@@ -92,7 +93,7 @@ import {
   transcribeVoiceNote,
   useVoiceRecord,
 } from '@/lib/chat/transcript-store';
-import { formatClockTime } from '@/lib/chat/time-format';
+import { civilDay, formatClockTime } from '@/lib/chat/time-format';
 import { getDraft, setDraft, strippedReply, type DraftReply } from '@/lib/chat/drafts';
 import {
   BUBBLE_BODY_TYPE,
@@ -198,8 +199,22 @@ import {
   useStarStore,
 } from '@/lib/chat/stars';
 import { quoteMedia, ReplyQuoteBox } from '@/components/chat/ReplyQuote';
-import { withDaySeparators } from '@/components/chat/day-separators';
+import { dayPillLabel, withDaySeparators, type ThreadItem } from '@/components/chat/day-separators';
 import { ForwardPicker, type ForwardSendResult } from '@/components/chat/ForwardPicker';
+import { TaskButton, readTasksSeen, writeTasksSeen } from '@/components/chat/tasks/TaskButton';
+import { TaskEventLine, type TaskLineContext } from '@/components/chat/tasks/TaskEventLine';
+import { TaskSheet } from '@/components/chat/tasks/TaskSheet';
+import { shareTextToChats } from '@/components/chat/tasks/share';
+import { useChatOptional, useChatTasks } from '@/components/chat/tasks/useChatTasks';
+import {
+  collapseTaskRun,
+  eventsInWindow,
+  hasUnseenChanges,
+  shareSnapshot,
+  tasksSeenKey,
+  type TaskEvent,
+  type TaskLine,
+} from '@/lib/chat/tasks';
 import {
   NotesAvatar,
   SavedFromLabel,
@@ -436,6 +451,10 @@ interface MessageThreadProps {
   mentions?: BubbleMentions;
   /** Open with this message in view (an Activity mention); a miss toasts, the chat stays at the bottom. */
   initialMessageId?: string | null;
+  /** Open with the task sheet up and this item expanded (a bell task row); null: none. */
+  initialTaskId?: string | null;
+  /** The thread took initialTaskId (the sheet opened): the caller drops it. */
+  onInitialTaskTaken?: () => void;
   /**
    * "Go to card" from the Plan screen: scroll to this plan card message and
    * highlight it briefly; each new seq jumps again.
@@ -586,8 +605,10 @@ export function openHoldSettled(parts: {
   side: boolean;
   ticker: boolean;
   cards: boolean;
+  /** The chat's task list and its change lines (absent: nothing to wait on). */
+  tasks?: boolean;
 }): boolean {
-  return parts.marks && parts.side && parts.ticker && parts.cards;
+  return parts.marks && parts.side && parts.ticker && parts.cards && parts.tasks !== false;
 }
 
 /**
@@ -2395,7 +2416,76 @@ export function ForwardedLabel(props: { mine?: boolean } = {}): ReactElement {
 /** One rendered row of the thread list, grouped once before the first paint. */
 export type ThreadRow =
   | { kind: 'day'; key: string; label: string }
-  | { kind: 'message'; message: ThreadMessage; head: boolean; tail: boolean; meta: BubbleMeta };
+  | { kind: 'message'; message: ThreadMessage; head: boolean; tail: boolean; meta: BubbleMeta }
+  | TaskThreadRow;
+
+/** A task change line; `label` is its plain name, as day pills carry theirs. */
+type TaskThreadRow = { kind: 'task'; key: string; label: string; line: TaskLine };
+
+/** The label a task line row carries. */
+export const TASK_LINE_LABEL = 'Task change';
+
+type ThreadListItem = ThreadItem | TaskThreadRow;
+
+/**
+ * Messages and task changes in one time order with the day pills: each run of
+ * consecutive changes (no message between them) is split by day and collapsed
+ * (collapseTaskRun); a change at the same instant as a message sits after it.
+ * Pure.
+ */
+export function withTaskLines(
+  messages: readonly ThreadMessage[],
+  events: readonly TaskEvent[],
+  nowMs: number,
+  timeZone: string,
+): ThreadListItem[] {
+  const items: ThreadListItem[] = [];
+  let current: string | null = null;
+  const dayOf = (ms: number): void => {
+    if (!(Number.isFinite(ms) && ms > 0)) return;
+    const day = civilDay(ms, timeZone);
+    if (day === current) return;
+    current = day;
+    items.push({ kind: 'day', key: `day-${day}`, label: dayPillLabel(day, nowMs, timeZone) });
+  };
+  const flush = (run: TaskEvent[]): void => {
+    let k = 0;
+    while (k < run.length) {
+      const first = run[k];
+      if (first === undefined) break;
+      const day = civilDay(Date.parse(first.createdAt), timeZone);
+      let end = k;
+      while (end + 1 < run.length) {
+        const next = run[end + 1];
+        if (next === undefined || civilDay(Date.parse(next.createdAt), timeZone) !== day) break;
+        end += 1;
+      }
+      dayOf(Date.parse(first.createdAt));
+      for (const line of collapseTaskRun(run.slice(k, end + 1))) {
+        const lead = line.kind === 'one' ? line.event : line.events[0];
+        items.push({ kind: 'task', key: `task-${lead?.id ?? k}`, label: TASK_LINE_LABEL, line });
+      }
+      k = end + 1;
+    }
+  };
+  let e = 0;
+  messages.forEach((message, index) => {
+    const run: TaskEvent[] = [];
+    if (Number.isFinite(message.time) && message.time > 0) {
+      while (e < events.length) {
+        const event = events[e];
+        if (event === undefined || !(Date.parse(event.createdAt) < message.time)) break;
+        run.push(event);
+        e += 1;
+      }
+    }
+    flush(run);
+    dayOf(message.time);
+    items.push({ kind: 'message', message, index });
+  });
+  flush(events.slice(e));
+  return items;
+}
 
 /**
  * The thread's render list: day pills, then runs. A run is consecutive messages
@@ -2409,25 +2499,33 @@ export function threadRows(
   messages: readonly ThreadMessage[],
   nowMs: number,
   timeZone: string,
-  /** `days: false` (the thread view): one run of replies, no day pills. */
-  opts: { showTicks?: boolean; days?: boolean } = {},
+  /**
+   * `days: false` (the thread view): one run of replies, no day pills (and no
+   * task lines). `taskEvents`: the chat's task changes for the loaded window,
+   * oldest first; a task line ends a message run.
+   */
+  opts: { showTicks?: boolean; days?: boolean; taskEvents?: readonly TaskEvent[] } = {},
 ): ThreadRow[] {
-  const items =
+  const events = opts.days === false ? [] : (opts.taskEvents ?? []);
+  const items: ThreadListItem[] =
     opts.days === false
       ? messages.map((message, index) => ({ kind: 'message' as const, message, index }))
-      : withDaySeparators(messages, nowMs, timeZone);
+      : events.length > 0
+        ? withTaskLines(messages, events, nowMs, timeZone)
+        : withDaySeparators(messages, nowMs, timeZone);
   const showTicks = opts.showTicks === true;
   const rows: ThreadRow[] = [];
   items.forEach((item, k) => {
-    if (item.kind === 'day') {
+    if (item.kind !== 'message') {
       rows.push(item);
       return;
     }
     const { message, index } = item;
     const prev = messages[index - 1];
     const next = messages[index + 1];
-    const afterDay = items[k - 1]?.kind === 'day';
-    const beforeDay = items[k + 1]?.kind === 'day';
+    // A day pill or a task line between neighbours ends the run.
+    const afterDay = items[k - 1] !== undefined && items[k - 1]?.kind !== 'message';
+    const beforeDay = items[k + 1] !== undefined && items[k + 1]?.kind !== 'message';
     const head = afterDay || breaksRun(prev, message);
     const tail = next === undefined || beforeDay || breaksRun(message, next);
     rows.push({
@@ -2467,6 +2565,8 @@ export function threadListItems(
   layout: ChatLayout = 'touch',
   /** A touch-first pointer: Load older suppresses the native callout menu. */
   coarse = false,
+  /** Task change lines; absent: none are drawn. */
+  renderTask?: (row: Extract<ThreadRow, { kind: 'task' }>) => ReactElement,
 ): ReactElement[] {
   const items: ReactElement[] = [
     <li key="thread-spacer" aria-hidden="true" data-thread-spacer="" className="mt-auto" />,
@@ -2499,6 +2599,8 @@ export function threadListItems(
   rows.forEach((row, i) => {
     if (row.kind === 'day') {
       items.push(<DayPill key={row.key} label={row.label} layout={layout} />);
+    } else if (row.kind === 'task') {
+      if (renderTask !== undefined) items.push(renderTask(row));
     } else items.push(renderMessage(row, i > 0 && rows[i - 1]?.kind !== 'message'));
   });
   return items;
@@ -2979,7 +3081,7 @@ export function listRailPlans(
 ): Map<string, RailPlan> {
   const items: RailItem<ThreadMessage>[] = [];
   for (const row of rows) {
-    if (row.kind === 'day') {
+    if (row.kind !== 'message') {
       items.push({ kind: 'break' });
       continue;
     }
@@ -3071,6 +3173,8 @@ function ThreadBody(
     onSaveToNotes?: (message: ThreadMessage) => void;
     /** Menu "Star" / "Unstar" picked (the new value); absent hides the row. */
     onStar?: (message: ThreadMessage, starred: boolean) => void;
+    /** The chat's task changes for the loaded window (thread lines); absent: none. */
+    taskLines?: { events: readonly TaskEvent[]; ctx: TaskLineContext } | undefined;
   },
 ): ReactElement {
   const { onNewestVisible, jumpRequest } = props;
@@ -3640,7 +3744,9 @@ function ThreadBody(
   const listRows = threadRows(props.messages, nowMs, props.timeZone, {
     showTicks: props.showTicks,
     days: props.threads?.viewRootId === undefined,
+    ...(props.taskLines !== undefined ? { taskEvents: props.taskLines.events } : {}),
   });
+  const taskCtx = props.taskLines?.ctx;
   const plans =
     threads !== undefined
       ? listRailPlans(listRows, unread?.kind === 'loaded' ? unread.firstId : null, threads.memberOf)
@@ -3849,6 +3955,9 @@ function ThreadBody(
               : undefined,
             props.layout,
             coarsePointer,
+            taskCtx !== undefined
+              ? (row) => <TaskEventLine key={row.key} line={row.line} ctx={taskCtx} />
+              : undefined,
           )}
         </ul>
         {unread !== undefined && unread !== null && pill !== 'unknown' ? (
@@ -4434,6 +4543,71 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
   const { workspaceKey, workspaceId } = useWorkspace();
   const toast = useToast();
   const marks = props.marks ?? NO_MARKS;
+  // The chat's task list (never in Personal notes; only where the chat page
+  // wires the per-chat reads, as the marks show): read with the first page, so
+  // its change lines paint with the messages, never after them.
+  const taskChannel =
+    props.notes === true || props.marks === undefined ? null : (channelId ?? null);
+  const taskSummary = useMemo(
+    () => (props.forwardChannels ?? []).find((c) => c.channelId === taskChannel) ?? null,
+    [props.forwardChannels, taskChannel],
+  );
+  const taskTargetKey =
+    taskSummary === null
+      ? ''
+      : `${taskSummary.channelType}:${taskSummary.agoraGroupId ?? ''}:${taskSummary.peerUserId ?? ''}`;
+  const taskTarget = useMemo(() => {
+    if (taskSummary === null) return null;
+    try {
+      return targetFromSummary(taskSummary);
+    } catch {
+      return null;
+    }
+    // The same target while it routes the same way.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskTargetKey]);
+  const chatTasks = useChatTasks({
+    channelId: taskChannel,
+    currentUserId: props.currentUserId ?? '',
+    target: taskTarget,
+    profiles: props.profiles,
+  });
+  const liveChat = useChatOptional();
+  const [taskSheet, setTaskSheet] = useState<{ open: boolean; focus: string | null }>({
+    open: false,
+    focus: null,
+  });
+  const [taskShareOpen, setTaskShareOpen] = useState(false);
+  const seenKey = taskChannel !== null ? tasksSeenKey(taskChannel) : null;
+  const [seenMs, setSeenMs] = useState<{ key: string | null; ms: number | null }>(() => ({
+    key: seenKey,
+    ms: seenKey !== null ? readTasksSeen(seenKey) : null,
+  }));
+  const seenNow =
+    seenMs.key === seenKey ? seenMs.ms : seenKey !== null ? readTasksSeen(seenKey) : null;
+  const taskUnseen = hasUnseenChanges(chatTasks.events, props.currentUserId ?? '', seenNow);
+  const refetchTasks = chatTasks.refetch;
+  const openTasks = useCallback(
+    (focus: string | null): void => {
+      if (seenKey !== null) {
+        const now = Date.now();
+        writeTasksSeen(seenKey, now);
+        setSeenMs({ key: seenKey, ms: now });
+      }
+      setTaskSheet({ open: true, focus });
+      refetchTasks();
+    },
+    [seenKey, refetchTasks],
+  );
+  // Leaving the chat closes its sheet.
+  useEffect(() => {
+    setTaskSheet({ open: false, focus: null });
+    setTaskShareOpen(false);
+  }, [taskChannel]);
+  // One layer, one back step: back from the sheet is the thread.
+  useHistoryStep(taskSheet.open, 'chatTasks', () =>
+    setTaskSheet((prev) => ({ ...prev, open: false })),
+  );
   // Open loops: posts in review (two reads per thread open) and the viewer's side.
   const viewerSide = useViewerSide(workspaceId);
   const openPosts = useOpenPosts(workspaceId, channelKey, undefined, {
@@ -4485,6 +4659,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
       statusPlanCards === null ||
       pagePlanIds.length === 0 ||
       !statusPlanCards.cache.snapshot(pagePlanIds).loading,
+    tasks: taskChannel === null || chatTasks.loaded,
   });
   const openHeld = !openHoldDone && !openPartsSettled;
   const onOpenPlanCompose = props.onOpenPlanCompose;
@@ -4849,6 +5024,41 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
   );
   const gatedIndex = useMemo(() => parentIndexOf(onScreen), [onScreen]);
   const shownMessages = onScreen;
+  // A bell task row: once the first page is on screen, the sheet opens on
+  // that item (once per link; the caller then drops it).
+  const initialTaskId = props.initialTaskId ?? null;
+  const onInitialTaskTaken = props.onInitialTaskTaken;
+  useEffect(() => {
+    if (initialTaskId === null || bodyLoading || taskChannel === null) return;
+    openTasks(initialTaskId);
+    onInitialTaskTaken?.();
+  }, [initialTaskId, bodyLoading, taskChannel, openTasks, onInitialTaskTaken]);
+  // Task lines cover the loaded window; older pages bring their older changes.
+  const oldestLoaded = props.messages[0];
+  const ensureTaskEvents = chatTasks.ensureEventsSince;
+  useEffect(() => {
+    if (oldestLoaded !== undefined) ensureTaskEvents(oldestLoaded.createdAt);
+  }, [oldestLoaded, ensureTaskEvents]);
+  const windowEvents = useMemo(
+    () =>
+      eventsInWindow(
+        chatTasks.events,
+        oldestLoaded !== undefined ? oldestLoaded.time : null,
+        props.hasMore === true,
+      ),
+    [chatTasks.events, oldestLoaded, props.hasMore],
+  );
+  const tasksById = useMemo(
+    () => new Map(chatTasks.tasks.map((t) => [t.id, t] as const)),
+    [chatTasks.tasks],
+  );
+  const taskLineCtx: TaskLineContext = {
+    tasksById,
+    nameOf: chatTasks.nameOf,
+    nowMs: Date.now(),
+    timeZone: props.timeZone,
+    onOpenTask: (taskId) => openTasks(taskId),
+  };
   // Reading layer. Everything comes from the channel's cursors (one batched
   // read) and renders only once they are in, so nothing paints then moves.
   const readState = props.readState;
@@ -5561,6 +5771,9 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           }}
           onJumpFirstUnread={jumpFirstUnread}
           onOpenReadInfo={() => setReadInfoOpen(true)}
+          {...(taskChannel !== null
+            ? { taskLines: { events: windowEvents, ctx: taskLineCtx } }
+            : {})}
         />
       </SearchHighlightContext.Provider>
       <WhoReactedSheet
@@ -5605,6 +5818,9 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           {...(notes && replyDraft === null ? { placeholder: NOTES_PLACEHOLDER } : {})}
           {...(notes ? { noSchedule: true } : {})}
           onCancelAbout={() => setAboutDraft(null)}
+          {...(taskChannel !== null
+            ? { taskButton: <TaskButton unseen={taskUnseen} onOpen={() => openTasks(null)} /> }
+            : {})}
           sharedPostIds={sharedInChat}
           onBringPost={bringPost}
           {...(onOpenPlanCompose !== undefined && !notes
@@ -5718,6 +5934,40 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
             setForwardFor(null);
             exitSelection();
           }}
+        />
+      ) : null}
+      {taskChannel !== null ? (
+        <TaskSheet
+          open={taskSheet.open}
+          onClose={() => setTaskSheet((prev) => ({ ...prev, open: false }))}
+          tasks={chatTasks}
+          timeZone={props.timeZone}
+          focusTaskId={taskSheet.focus}
+          {...(forwardChannels !== undefined ? { onShare: () => setTaskShareOpen(true) } : {})}
+        />
+      ) : null}
+      {taskChannel !== null && forwardChannels !== undefined ? (
+        <ForwardPicker
+          open={taskShareOpen}
+          onClose={() => setTaskShareOpen(false)}
+          channels={forwardChannels}
+          onSend={(targets) =>
+            shareTextToChats({
+              text: shareSnapshot({
+                chatName: props.title,
+                tasks: chatTasks.tasks,
+                nowMs: Date.now(),
+                timeZone: props.timeZone,
+              }),
+              targets,
+              openChannelId: taskChannel,
+              // The plain composer send (outbox): never the about quote.
+              sendHere: (text) => props.onSend(text, [], [], null, []),
+              db: supabase,
+              connection: liveChat?.client ?? null,
+            })
+          }
+          onSent={() => setTaskShareOpen(false)}
         />
       ) : null}
       <PrioritySheet
