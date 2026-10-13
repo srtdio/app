@@ -128,9 +128,7 @@ async function leaveDraft(page: Page, draft: string): Promise<void> {
 }
 
 test.describe('iPhone', () => {
-  test('long-press Reply focuses the composer, draft kept, caret at end', async ({
-    page,
-  }, testInfo) => {
+  test('long-press Reply focuses the composer, draft kept, caret at end', async ({ page }) => {
     await openDm(page);
     // Decision 32: opening a chat on touch never focuses the composer.
     await expect(composer(page)).not.toBeFocused();
@@ -143,11 +141,10 @@ test.describe('iPhone', () => {
     await expect(page.getByRole('menu')).toHaveCount(0);
     await expect(page.locator('[data-selection-bar]')).toHaveCount(0);
     if (pinnedBefore) expect(await fromBottom(page)).toBeLessThanOrEqual(48);
-    await page.screenshot({ path: testInfo.outputPath('reply-longpress.png') });
     await typeLands(page, 'draft ');
   });
 
-  test('swipe right focuses the composer and typing lands there', async ({ page }, testInfo) => {
+  test('swipe right focuses the composer and typing lands there', async ({ page }) => {
     await openDm(page);
     await expect(composer(page)).not.toBeFocused();
     await settle(page);
@@ -155,7 +152,6 @@ test.describe('iPhone', () => {
     await expect(composer(page)).toHaveAttribute('placeholder', /^Reply/);
     await expectFocusedAtEnd(page);
     await expect(page.getByRole('menu')).toHaveCount(0);
-    await page.screenshot({ path: testInfo.outputPath('reply-swipe.png') });
     await typeLands(page, '');
   });
 });
@@ -195,7 +191,7 @@ test.describe('laptop', () => {
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
   });
 
-  test('hover chevron Reply focuses the composer', async ({ page }, testInfo) => {
+  test('hover chevron Reply focuses the composer', async ({ page }) => {
     await openDm(page);
     await leaveDraft(page, 'draft ');
     await settle(page);
@@ -203,7 +199,6 @@ test.describe('laptop', () => {
     await bubble(page).locator('[data-more]').click();
     await menuReply(page);
     await expectFocusedAtEnd(page);
-    await page.screenshot({ path: testInfo.outputPath('reply-chevron.png') });
     await typeLands(page, 'draft ');
   });
 
@@ -258,7 +253,7 @@ test.describe('laptop', () => {
 
   test('card hold with the mouse moved off the card still focuses the composer', async ({
     page,
-  }, testInfo) => {
+  }) => {
     await openMaya(page);
     await leaveDraft(page, 'about ');
     const card = page.locator('[role="button"][aria-label^="Open post"]').last();
@@ -276,7 +271,6 @@ test.describe('laptop', () => {
     await expect(page.locator('[role="dialog"]')).toHaveCount(0);
     await expectFocusedAtEnd(page);
     await expect(composer(page)).toHaveValue('about ');
-    await page.screenshot({ path: testInfo.outputPath('talk-about-mouse-hold.png') });
     // The next plain click on that card still opens its sheet.
     await card.click();
     await expect(page.getByRole('button', { name: /^Talk about/ })).toBeVisible();
@@ -293,7 +287,7 @@ test.describe('iPhone, cards and threads', () => {
     await target.dispatchEvent('pointerup', touch);
   }
 
-  test('card hold Talk about focuses the composer on release', async ({ page }, testInfo) => {
+  test('card hold Talk about focuses the composer on release', async ({ page }) => {
     await openMaya(page);
     await expect(composer(page)).not.toBeFocused();
     const card = page.locator('[role="button"][aria-label^="Open post"]').last();
@@ -301,10 +295,9 @@ test.describe('iPhone, cards and threads', () => {
     await hold(page, card);
     await expect(page.getByRole('menu')).toHaveCount(0);
     await expectFocusedAtEnd(page);
-    await page.screenshot({ path: testInfo.outputPath('talk-about-hold.png') });
   });
 
-  test('sheet Talk about focuses the composer', async ({ page }, testInfo) => {
+  test('sheet Talk about focuses the composer', async ({ page }) => {
     await openMaya(page);
     const card = page.locator('[role="button"][aria-label^="Open post"]').last();
     await settle(page, card);
@@ -314,10 +307,9 @@ test.describe('iPhone, cards and threads', () => {
     await talk.click();
     await expect(talk).toHaveCount(0);
     await expectFocusedAtEnd(page);
-    await page.screenshot({ path: testInfo.outputPath('talk-about-sheet.png') });
   });
 
-  test('Reply inside the thread view focuses the view composer', async ({ page }, testInfo) => {
+  test('Reply inside the thread view focuses the view composer', async ({ page }) => {
     await openMaya(page);
     await page.locator('[data-thread-open="replies"]', { hasText: '4 replies' }).click();
     const view = page.locator('[data-thread-view]');
@@ -332,7 +324,6 @@ test.describe('iPhone, cards and threads', () => {
       .locator('form textarea')
       .evaluate((el) => document.activeElement === el);
     expect(focused, 'thread view composer is document.activeElement').toBe(true);
-    await page.screenshot({ path: testInfo.outputPath('reply-thread-view.png') });
     await page.keyboard.type('hi');
     await expect(view.locator('form textarea')).toHaveValue('hi');
   });

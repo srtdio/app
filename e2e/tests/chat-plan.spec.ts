@@ -73,10 +73,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -100,7 +96,7 @@ async function newPlanFromTile(page: Page): Promise<void> {
   await picker.locator('[data-plan-pick-new]').click();
 }
 
-async function agencyFlow(page: Page, prefix: string): Promise<void> {
+async function agencyFlow(page: Page): Promise<void> {
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
   seedLibrary(network);
@@ -110,7 +106,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await openTray(page);
   const tile = page.locator('[data-tray-tile="plan"]');
   await expect(tile).toBeEnabled();
-  await shot(page, `${prefix}-01-tray-agency`);
   await newPlanFromTile(page);
 
   // D2: the New plan screen: no audience choice, drafts allowed.
@@ -120,8 +115,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(compose.locator('[data-plan-audience]')).toHaveCount(0);
   await expect(compose.locator('[data-plan-add-drafts]')).toBeVisible();
   await expect(compose.locator('[data-plan-create]')).toHaveText('Create plan');
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-02-new-plan-empty`);
   await compose.locator('[data-plan-title]').fill(PLAN_TITLE);
 
   // One concept with one library file.
@@ -137,8 +130,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await assets.getByRole('button', { name: 'Add (1)' }).click();
   await expect(assets).toBeHidden();
   await expect(concept.locator('[data-plan-concept-file]')).toHaveCount(1);
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-03-add-concept`);
   await concept.locator('[data-plan-concept-save]').click();
   await expect(concept).toBeHidden();
   await expect(compose.locator('[data-plan-draft-concept]')).toHaveCount(1);
@@ -151,8 +142,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await posts.getByRole('button', { name: 'Done (1)' }).click();
   await expect(posts).toBeHidden();
   await expect(compose.locator('[data-plan-draft-post]')).toHaveCount(1);
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-04-new-plan-filled`);
 
   // Create plan: a Draft plan, no card sent; its Plan screen opens.
   await compose.locator('[data-plan-create]').click();
@@ -196,8 +185,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
     'aria-checked',
     'false',
   );
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-05-plan-screen-draft`);
 
   // D5: the Item screen, agency approve with its confirm (a Draft plan).
   await row.click();
@@ -207,8 +194,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(item.locator('[data-plan-media="files"]')).toBeVisible();
   // Remove from plan: a red button at the bottom, not a menu row.
   await expect(item.locator('[data-plan-remove]')).toHaveText(/Remove from plan/);
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-06-item-concept-agency`);
   await item.locator('[data-plan-approve]').click();
   const confirm = page.getByRole('dialog', { name: 'Agency approve' });
   await expect(confirm).toBeVisible();
@@ -225,8 +210,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(note).toBeVisible();
   await expect(note.getByText('Agency only')).toBeVisible();
   await expect(note).toHaveClass(/bg-warn-soft/);
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-07-team-comment`);
 
   // Back closes one layer: the item; the Draft plan shows the team tick.
   await page.goBack();
@@ -245,8 +228,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(openConfirm).toContainText(
     'Client can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.',
   );
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-08-open-for-client-confirm`);
   await openConfirm.locator('[data-plan-confirm]').click();
   await expect(openConfirm).toBeHidden();
   await expect(page.getByText('Open for client', { exact: true }).last()).toBeVisible();
@@ -271,8 +252,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
       .filter((m) => m.channel_id === DM_CHANNEL && Array.isArray(m.shared_plan_ids))
       .map((m) => m.shared_plan_ids),
   ).toEqual([[planId]]);
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-09-footer-go-to-card`);
 
   // Go to card: the screen closes, the card scrolls into view and is highlighted.
   await plan.locator('[data-plan-go-card]').click();
@@ -287,8 +266,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(card.locator('[data-plan-progress]')).toHaveText('Client 0 of 2');
   await expect(card.locator('[data-plan-chip="warn"]')).toHaveCount(0);
   await expect(card.locator('[data-plan-forward]')).toBeVisible();
-  await page.waitForTimeout(400);
-  await shot(page, `${prefix}-10-card-highlighted`);
 
   // D4 again from the card.
   await card.locator('[data-plan-open]').click();
@@ -307,8 +284,6 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   await expect(item.locator('[data-plan-ask]')).toHaveCount(0);
   // The post view's own sheet keeps Move but no Remove from plan row.
   await expect(item.locator('[data-plan-remove]')).toBeVisible();
-  await page.waitForTimeout(400);
-  await shot(page, `${prefix}-11-item-post-agency`);
   await expectOverflowOpensPipeline(page, item);
 
   // G2: the open item is removed elsewhere; the re-read closes the Item layer
@@ -334,7 +309,7 @@ async function agencyFlow(page: Page, prefix: string): Promise<void> {
   expectClean(network);
 }
 
-async function clientFlow(page: Page, prefix: string): Promise<void> {
+async function clientFlow(page: Page): Promise<void> {
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
   viewAsClient(network);
@@ -352,7 +327,6 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   await expect(tile).toBeDisabled();
   await expect(tile).toHaveAttribute('aria-disabled', 'true');
   expect(Number(await tile.evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
-  await shot(page, `${prefix}-01-tray-client`);
   await tile.click({ force: true });
   await expect(page_(page, 'compose')).toHaveCount(0);
   await page.keyboard.press('Escape');
@@ -363,15 +337,11 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   await expect(card).toBeVisible();
   await expect(card.getByText(PLAN_TITLE)).toBeVisible();
   await expect(card.locator('[data-plan-forward]')).toBeVisible();
-  await page.waitForTimeout(400);
-  await shot(page, `${prefix}-02-card-client`);
 
   // Forward to a DM: a fresh message in that chat, and the toast.
   await card.locator('[data-plan-forward]').click();
   const picker = page.getByRole('dialog', { name: 'Forward plan' });
   await expect(picker).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-03-forward-picker`);
   await picker.getByRole('button', { name: new RegExp(MAYA_NAME) }).click();
   await expect(page.getByText(`Forwarded to ${MAYA_NAME}`)).toBeVisible();
   const forwarded = (network.world.tables.chat_messages ?? []).filter(
@@ -413,8 +383,6 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
       .locator('[data-plan-row-comments]'),
   ).toHaveText('1 comment');
   await expect(plan.locator('[data-plan-pill="team"]')).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-04-plan-screen-client`);
 
   // D5: a concept: Approve with its confirm.
   await plan
@@ -425,8 +393,6 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   await expect(item).toBeVisible();
   await expect(item.getByText('Can we keep it under 30 seconds?')).toBeVisible();
   await expect(item.locator('[data-plan-visibility]')).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-05-item-concept-client`);
   await item.locator('[data-plan-approve]').click();
   const confirm = page.getByRole('dialog', { name: 'Approve' });
   await expect(confirm).toBeVisible();
@@ -435,8 +401,6 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
       exact: false,
     }),
   ).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-06-confirm-client-approve`);
   await confirm.locator('[data-plan-confirm]').click();
   await expect(confirm).toBeHidden();
   await expect(item.locator('[data-plan-status] [data-plan-pill="client"]')).toHaveText('Approved');
@@ -456,8 +420,6 @@ async function clientFlow(page: Page, prefix: string): Promise<void> {
   await expect(item.getByText('Fixture caption')).toBeVisible();
   await expect(item.locator('[data-plan-approve]')).toHaveCount(0);
   await expect(item.locator('[data-plan-ask]')).toHaveCount(0);
-  await page.waitForTimeout(400);
-  await shot(page, `${prefix}-07-item-post-client`);
   await expectOverflowOpensPipeline(page, item);
 
   await page.goBack();
@@ -487,7 +449,7 @@ async function expectOverflowOpensPipeline(page: Page, item: Locator): Promise<v
   await expect(more).toBeHidden();
 }
 
-async function teamAndHidden(page: Page, prefix: string): Promise<void> {
+async function teamAndHidden(page: Page): Promise<void> {
   test.setTimeout(90_000);
   const network = await installHarnessNetwork(page);
   seedTeamAndHiddenPlans(network.world, { channelId: GROUP_CHANNEL, sender: COLLEAGUE_A });
@@ -498,8 +460,6 @@ async function teamAndHidden(page: Page, prefix: string): Promise<void> {
   const draftChip = page.locator('[data-plan-chip="warn"]');
   await expect(draftChip).toHaveText('Draft');
   await draftChip.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(400);
-  await shot(page, `${prefix}-01-cards-draft-and-deleted`);
 
   // Forward the Draft card into a chat with a client: nothing is sent.
   const draftCard = page.locator('[data-plan-card]').filter({ has: draftChip }).first();
@@ -511,8 +471,6 @@ async function teamAndHidden(page: Page, prefix: string): Promise<void> {
   await expect(page.getByText('Open the plan for client first.')).toBeVisible();
   expect(network.world.tables.chat_messages ?? []).toHaveLength(messagesBefore);
   await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-02-forward-draft-refused`);
   await page.keyboard.press('Escape');
 
   // An agency-only group: Create plan, then Send in the group (no client here).
@@ -529,8 +487,6 @@ async function teamAndHidden(page: Page, prefix: string): Promise<void> {
   await expect(send).toHaveText(`Send in ${GROUP_NAME}`);
   await expect(send).toBeEnabled();
   await expect(plan.locator('[data-plan-send-hint]')).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-03-draft-send-in-group`);
   await send.click();
   await expect(plan.locator('[data-plan-go-card]')).toBeVisible();
   expectClean(network);
@@ -540,19 +496,19 @@ test.describe('phone', () => {
   test('agency: new plan, share, plan and item screens, team approve and comment', async ({
     page,
   }) => {
-    await agencyFlow(page, 'plan-phone-agency');
+    await agencyFlow(page);
   });
 
   test('client: tile off, card Forward, approve a concept, post item opens the post', async ({
     page,
   }) => {
-    await clientFlow(page, 'plan-phone-client');
+    await clientFlow(page);
   });
 
   test('Draft and deleted cards; a Draft forward into a client chat is refused; send in a group', async ({
     page,
   }) => {
-    await teamAndHidden(page, 'plan-phone-team');
+    await teamAndHidden(page);
   });
 });
 
@@ -562,12 +518,12 @@ test.describe('laptop', () => {
   test('agency: new plan, share, plan and item screens, team approve and comment', async ({
     page,
   }) => {
-    await agencyFlow(page, 'plan-laptop-agency');
+    await agencyFlow(page);
   });
 
   test('client: tile off, card Forward, approve a concept, post item opens the post', async ({
     page,
   }) => {
-    await clientFlow(page, 'plan-laptop-client');
+    await clientFlow(page);
   });
 });

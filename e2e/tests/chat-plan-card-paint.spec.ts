@@ -227,7 +227,6 @@ async function run(page: Page, scenario: Scenario): Promise<void> {
   await expect(card.locator('[data-plan-chip]')).toHaveText(scenario.chips);
   await expect(card.locator('[data-plan-progress]')).toHaveText(scenario.progress);
   await expect(card.locator('[data-plan-forward]')).toHaveCount(scenario.forward ? 1 : 0);
-  await page.screenshot({ path: test.info().outputPath('settled.png') });
   expectClean(network);
 }
 
@@ -539,7 +538,6 @@ async function runTickerFill(page: Page): Promise<void> {
   expect(log.scrollJumps, `the thread never jumps: ${JSON.stringify(sequence)}`).toBe(0);
   // The paint log is opt-in: nothing of it without ?paintlog=1.
   await expect(page.locator('[data-paint-log]')).toHaveCount(0);
-  await page.screenshot({ path: test.info().outputPath('ticker-filled.png') });
   expectClean(network);
 }
 
@@ -563,7 +561,6 @@ async function runPaintLog(page: Page): Promise<void> {
   const box = await copy.boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-  await page.screenshot({ path: test.info().outputPath('paint-log.png') });
   expectClean(network);
 }
 

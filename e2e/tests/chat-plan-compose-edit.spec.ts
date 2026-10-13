@@ -20,10 +20,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -85,8 +81,6 @@ test('tap a draft concept to edit it; Save replaces it in place; Create plan car
   expectMinTouchTarget(
     await rows.first().locator('[data-plan-draft-concept-remove]').boundingBox(),
   );
-  await page.waitForTimeout(300);
-  await shot(page, 'compose-edit-01-rows');
 
   // Cancel leaves it unchanged.
   await edit.click();
@@ -108,16 +102,12 @@ test('tap a draft concept to edit it; Save replaces it in place; Create plan car
   await expect(sheet.locator('[data-plan-concept-title]')).toHaveValue('Opening reel');
   await sheet.locator('[data-plan-concept-title]').fill('Opening reel v2');
   await sheet.locator('[data-plan-concept-date]').fill('2026-10-15');
-  await page.waitForTimeout(300);
-  await shot(page, 'compose-edit-02-sheet');
   await sheet.locator('[data-plan-concept-save]').click();
   await expect(sheet).toBeHidden();
   expect(await titles()).toEqual(['Opening reel v2', 'Story']);
   await expect(rows.first().locator('[data-plan-draft-concept-date]')).toHaveText('15 Oct');
   await expect(rows.first()).toContainText('1 file');
   expect(planRpcs(network), 'no RPC on a local edit').toEqual([]);
-  await page.waitForTimeout(300);
-  await shot(page, 'compose-edit-03-saved');
 
   // The X still removes.
   await rows.nth(1).locator('[data-plan-draft-concept-remove]').click();
@@ -155,8 +145,6 @@ for (const width of [320, 390]) {
       expect(box.x + box.width, `${field} right edge`).toBeLessThanOrEqual(width);
       expect(box.height, `${field} height`).toBeGreaterThanOrEqual(44);
     }
-    await page.waitForTimeout(300);
-    await shot(page, `compose-dates-${width}`);
     expectClean(network);
   });
 }

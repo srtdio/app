@@ -72,10 +72,6 @@ function composer(page: Page) {
   return page.locator('form:has(textarea)').first();
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -95,7 +91,7 @@ async function tileIds(page: Page): Promise<string[]> {
     .evaluateAll((els) => els.map((e) => e.getAttribute('data-tray-tile') ?? ''));
 }
 
-async function trayAndPickers(page: Page, prefix: string): Promise<void> {
+async function trayAndPickers(page: Page): Promise<void> {
   const network = await installHarnessNetwork(page);
 
   // A DM with a client: eight tiles in order, Draft faded and inert; Plan live (agency).
@@ -113,7 +109,6 @@ async function trayAndPickers(page: Page, prefix: string): Promise<void> {
     expectMinTouchTarget(box);
   }
   await expect(page.locator('[data-tray-tile="plan"]')).toBeEnabled();
-  await shot(page, `${prefix}-1-tray-client-dm`);
   await draft.click({ force: true });
   await expect(page.getByRole('dialog', { name: 'Share a draft' })).toHaveCount(0);
 
@@ -123,8 +118,6 @@ async function trayAndPickers(page: Page, prefix: string): Promise<void> {
   await expect(posts).toBeVisible();
   await expect(posts.getByRole('tablist')).toHaveCount(0);
   await expect(posts.getByText('Waiting on client')).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-2-post-picker`);
   await page.keyboard.press('Escape');
   await expect(posts).toBeHidden();
 
@@ -134,8 +127,6 @@ async function trayAndPickers(page: Page, prefix: string): Promise<void> {
   const briefs = page.getByRole('dialog', { name: 'Share a brief' });
   await expect(briefs).toBeVisible();
   await expect(briefs.locator('[data-picker-mode="briefs"]')).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-3-brief-picker`);
   await page.keyboard.press('Escape');
   await expect(briefs).toBeHidden();
 
@@ -145,18 +136,15 @@ async function trayAndPickers(page: Page, prefix: string): Promise<void> {
   const live = page.locator('[data-tray-tile="draft"]');
   await expect(live).toBeEnabled();
   await expect(live).not.toHaveAttribute('aria-disabled', 'true');
-  await shot(page, `${prefix}-4-tray-agency-group`);
   await live.click();
   const drafts = page.getByRole('dialog', { name: 'Share a draft' });
   await expect(drafts).toBeVisible();
   await expect(drafts.locator('[data-picker-mode="drafts"]')).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-5-draft-picker`);
   await page.keyboard.press('Escape');
   expectClean(network);
 }
 
-async function libraryImageAndPdf(page: Page, prefix: string): Promise<void> {
+async function libraryImageAndPdf(page: Page): Promise<void> {
   const network = await installHarnessNetwork(page);
   seedLibrary(network);
   await openChat(page, PEER_NAME);
@@ -172,13 +160,9 @@ async function libraryImageAndPdf(page: Page, prefix: string): Promise<void> {
     await tiles.evaluateAll((els) => els.map((e) => e.getAttribute('data-asset-tile'))),
   ).toEqual([LIB_IMAGE, LIB_PDF]);
   await expect(sheet.locator(`[data-asset-tile="${LIB_IMAGE}"] img`)).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, `${prefix}-6-asset-picker`);
   await tiles.nth(0).click();
   await tiles.nth(1).click();
   await expect(sheet.getByRole('button', { name: 'Add (2)' })).toBeEnabled();
-  await page.waitForTimeout(150);
-  await shot(page, `${prefix}-7-asset-picker-selected`);
   await sheet.getByRole('button', { name: 'Add (2)' }).click();
   await expect(sheet).toBeHidden();
 
@@ -186,7 +170,6 @@ async function libraryImageAndPdf(page: Page, prefix: string): Promise<void> {
   await expect(composer(page).getByText('hero-shot.png')).toBeVisible();
   await expect(composer(page).getByText('brand-deck.pdf')).toBeVisible();
   await expect(composer(page).locator('[data-schedule-upload-bar]')).toHaveCount(0);
-  await shot(page, `${prefix}-8-library-chips`);
 
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => page.locator('[data-msg-id]').count()).toBe(before + 1);
@@ -207,18 +190,16 @@ async function libraryImageAndPdf(page: Page, prefix: string): Promise<void> {
   await expect(bubble.locator('[data-album] img')).toBeVisible();
   await expect(bubble.locator('[data-file-icon-spot]')).toBeVisible();
   await expect(bubble.getByText('brand-deck.pdf')).toBeVisible();
-  await page.waitForTimeout(400);
-  await shot(page, `${prefix}-9-library-sent`);
   expectClean(network);
 }
 
 test.describe('phone', () => {
   test('tray tiles, Draft gating and each picker mode', async ({ page }) => {
-    await trayAndPickers(page, 'tray-phone');
+    await trayAndPickers(page);
   });
 
   test('send one library image and one library PDF, no upload', async ({ page }) => {
-    await libraryImageAndPdf(page, 'tray-phone');
+    await libraryImageAndPdf(page);
   });
 });
 
@@ -226,10 +207,10 @@ test.describe('laptop', () => {
   test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
 
   test('tray tiles, Draft gating and each picker mode', async ({ page }) => {
-    await trayAndPickers(page, 'tray-laptop');
+    await trayAndPickers(page);
   });
 
   test('send one library image and one library PDF, no upload', async ({ page }) => {
-    await libraryImageAndPdf(page, 'tray-laptop');
+    await libraryImageAndPdf(page);
   });
 });

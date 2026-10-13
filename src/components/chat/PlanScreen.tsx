@@ -305,7 +305,7 @@ export function PlanPage(props: {
       </header>
       <div
         ref={props.bodyRef}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain"
       >
         {props.children}
       </div>
@@ -2613,14 +2613,15 @@ function PlanRow(props: {
   const peekOffset = swipe?.peek?.id === id ? swipe.peek.offset : null;
   const offset = dragX ?? (open ? -ROW_ACTION_PX : (peekOffset ?? 0));
   const collapsing = swipe?.collapsing.has(id) === true;
-  // The row clips while it is off rest and until it has eased back home.
+  // The red action shows only while the row is off rest, until it has eased
+  // back home; the row always clips, so it never shows past the row's edge.
   const [shownOffset, setShownOffset] = useState(offset);
   const [settling, setSettling] = useState(false);
   if (shownOffset !== offset) {
     setShownOffset(offset);
     setSettling(offset === 0 && dragX === null && !prefersReducedMotion());
   }
-  const clip = offset !== 0 || settling || collapsing;
+  const actionShown = offset !== 0 || settling || collapsing;
   const kindLabel = itemKindLabel(props.bundle.items, props.item);
   const title = rowTitle(props.bundle, props.item);
   const comments = commentsLabel(props.comments);
@@ -2768,7 +2769,7 @@ function PlanRow(props: {
         ref={wrapRef}
         data-plan-row-wrap={id}
         {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
-        className={cn('flex w-full items-start gap-1', props.dimmed && 'opacity-25')}
+        className={cn('flex w-full min-w-0 items-start gap-1', props.dimmed && 'opacity-25')}
       >
         {row}
       </div>
@@ -2776,16 +2777,18 @@ function PlanRow(props: {
   }
   // Collapse after Remove: the row's height eases to 0 (and the list gap with
   // it), Y only; the red action sits behind the content, full row height.
+  // The single track is minmax(0, 1fr) and every wrapper is min-w-0, so a long
+  // title truncates inside the column instead of widening the row (and the page).
   return (
     <div
       data-plan-row-item={id}
       {...(collapsing ? { 'data-plan-row-collapsing': '', 'aria-hidden': true } : {})}
       className={cn(
-        'grid w-full transition-[grid-template-rows,margin] duration-base ease-exit motion-reduce:transition-none',
+        'grid w-full min-w-0 grid-cols-[minmax(0,1fr)] transition-[grid-template-rows,margin] duration-base ease-exit motion-reduce:transition-none',
         collapsing ? '-mb-4 grid-rows-[0fr] last:mb-0' : 'grid-rows-[1fr]',
       )}
     >
-      <div className={cn('relative min-h-0', clip && 'overflow-hidden')}>
+      <div className="relative min-h-0 min-w-0 overflow-hidden">
         <button
           type="button"
           data-plan-row-remove={id}
@@ -2796,6 +2799,7 @@ function PlanRow(props: {
           className={cn(
             'absolute inset-y-0 right-0 flex min-h-[44px] w-[88px] flex-col items-center justify-center gap-0.5 rounded-lg bg-bad text-[13px] font-semibold text-accent-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             !open && 'pointer-events-none',
+            !actionShown && 'invisible',
             NO_TOUCH_SELECT,
           )}
         >
@@ -2822,7 +2826,7 @@ function PlanRow(props: {
             if (event.target === event.currentTarget) setSettling(false);
           }}
           className={cn(
-            'relative flex w-full touch-pan-y items-start gap-1 bg-bg',
+            'relative flex w-full min-w-0 touch-pan-y items-start gap-1 bg-bg',
             dragX === null &&
               'transition-transform duration-slow ease-exit motion-reduce:transition-none',
             props.dimmed && 'opacity-25',

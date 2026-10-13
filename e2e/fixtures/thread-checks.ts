@@ -2,7 +2,7 @@
 // composer row painted over the thread area), so these read layout boxes and
 // hit-testing, not just DOM counts.
 
-import type { Page, TestInfo } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 export interface StepReport {
   step: string;
@@ -16,8 +16,6 @@ export interface StepReport {
   composerTop: number;
   composerBottom: number;
   viewportHeight: number;
-  /** C4: the screenshot written for this step. */
-  screenshot: string;
   failures: string[];
 }
 
@@ -80,12 +78,9 @@ async function probe(page: Page): Promise<Probe> {
 
 export async function checkStep(
   page: Page,
-  testInfo: TestInfo,
   step: string,
   options: { allowSkeleton: boolean; requireComposer: boolean },
 ): Promise<StepReport> {
-  const screenshot = testInfo.outputPath(`${step}.png`);
-  await page.screenshot({ path: screenshot });
   const p = await probe(page);
   const failures: string[] = [];
   if (p.threadHeight <= 200) failures.push(`C1 thread height ${p.threadHeight}px <= 200`);
@@ -99,5 +94,5 @@ export async function checkStep(
       failures.push(`C3 composer box ${p.composerTop}..${p.composerBottom} is not at the bottom`);
     }
   }
-  return { step, ...p, screenshot, failures };
+  return { step, ...p, failures };
 }

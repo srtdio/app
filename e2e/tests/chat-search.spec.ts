@@ -24,7 +24,7 @@ async function tileNames(page: Page): Promise<string[]> {
     .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label') ?? ''));
 }
 
-async function runSearchFlow(page: Page, shot: (name: string) => Promise<void>): Promise<void> {
+async function runSearchFlow(page: Page): Promise<void> {
   await installHarnessNetwork(page);
   const calls = searchCalls(page);
   await page.goto('/chat');
@@ -47,7 +47,6 @@ async function runSearchFlow(page: Page, shot: (name: string) => Promise<void>):
   });
   expect(touch.callout).toBe('none');
   expect(touch.select).toBe('none');
-  await shot('1-results');
 
   // One RPC per page, named args, a uuid_v7 trace id.
   expect(calls.length).toBeGreaterThanOrEqual(1);
@@ -73,14 +72,12 @@ async function runSearchFlow(page: Page, shot: (name: string) => Promise<void>):
   await expect(counter).toHaveText(/^1 of \d+\+?$/);
   await expect(page.locator('[data-msg-id] mark[data-search-mark]').first()).toBeVisible();
   await expect(page.locator('[data-bubble].ring-2').first()).toBeVisible();
-  await shot('2-opened-at-hit');
 
   // Up is the older match, down the newer one.
   const total = Number(/of (\d+)/.exec((await counter.textContent()) ?? '')?.[1] ?? '0');
   expect(total).toBeGreaterThan(1);
   await bar.getByRole('button', { name: 'Older match' }).click();
   await expect(counter).toHaveText(/^2 of \d+\+?$/);
-  await shot('3-older');
   await bar.getByRole('button', { name: 'Newer match' }).click();
   await expect(counter).toHaveText(/^1 of \d+\+?$/);
   await bar.locator('input').press('Enter');
@@ -91,16 +88,13 @@ async function runSearchFlow(page: Page, shot: (name: string) => Promise<void>):
   await expect(bar).toHaveCount(0);
   await expect(page.locator('mark[data-search-mark]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Search this chat' })).toBeVisible();
-  await shot('4-closed');
 }
 
-test('chat search: phone', async ({ page }, testInfo) => {
-  await runSearchFlow(page, async (name) => {
-    await page.screenshot({ path: testInfo.outputPath(`search-phone-${name}.png`) });
-  });
+test('chat search: phone', async ({ page }) => {
+  await runSearchFlow(page);
 });
 
-test('chat search: in-chat bar from the header icon', async ({ page }, testInfo) => {
+test('chat search: in-chat bar from the header icon', async ({ page }) => {
   await installHarnessNetwork(page);
   await page.goto('/chat');
   await page.getByText(PEER_NAME, { exact: true }).first().click();
@@ -110,16 +104,13 @@ test('chat search: in-chat bar from the header icon', async ({ page }, testInfo)
   await bar.locator('input').fill('tigh');
   await expect(bar.locator('[data-search-counter]')).toHaveText(/^1 of \d+\+?$/);
   await expect(page.locator('mark[data-search-mark]').first()).toHaveText(/^tighten$/i);
-  await page.screenshot({ path: testInfo.outputPath('search-phone-header-bar.png') });
 });
 
 test.describe('laptop', () => {
   test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
 
-  test('chat search: laptop', async ({ page }, testInfo) => {
-    await runSearchFlow(page, async (name) => {
-      await page.screenshot({ path: testInfo.outputPath(`search-laptop-${name}.png`) });
-    });
+  test('chat search: laptop', async ({ page }) => {
+    await runSearchFlow(page);
     // The list stays beside the thread: a second hit in the same open chat
     // jumps again and reopens the bar on that match.
     const hits = page.locator('[data-search-hit]');

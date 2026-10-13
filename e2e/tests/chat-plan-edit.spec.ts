@@ -29,10 +29,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -84,8 +80,6 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   // An Open plan: the client's status only (team reviews are never shown there).
   await expect(item.locator('[data-plan-pill="team"]')).toHaveCount(0);
   await expect(item.locator('[data-plan-pill="client"]')).toHaveText(/Approved/);
-  await page.waitForTimeout(300);
-  await shot(page, 'edit-01-item-approved');
 
   // Unchanged Save closes the sheet and sends nothing (reviews stay approved).
   await edit.click();
@@ -107,8 +101,6 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   await expect(sheet).toBeVisible();
   await sheet.locator('[data-plan-concept-title]').fill('Lamp lighting reel v2');
   await sheet.locator('[data-plan-concept-date]').fill('2026-10-11');
-  await page.waitForTimeout(400);
-  await shot(page, 'edit-02-sheet-reset-line');
   await sheet.locator('[data-plan-concept-save]').click();
   await expect(sheet).toBeHidden();
   await expect(page.getByText('Concept updated')).toBeVisible();
@@ -125,8 +117,6 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   const row = (network.world.tables.plan_items ?? []).find((i) => i.id === target.id);
   expect(row?.title).toBe('Lamp lighting reel v2');
   expect(row?.target_date).toBe('2026-10-11');
-  await page.waitForTimeout(300);
-  await shot(page, 'edit-03-item-waiting');
 
   // The Date row's Edit opens the same sheet, prefilled; no reset line now.
   await item.locator('[data-plan-edit-date]').click();
@@ -134,8 +124,6 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   await expect(sheet.locator('[data-plan-concept-title]')).toHaveValue('Lamp lighting reel v2');
   await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue('2026-10-11');
   await expect(sheet.locator('[data-plan-concept-reset]')).toHaveCount(0);
-  await page.waitForTimeout(400);
-  await shot(page, 'edit-04-date-row-same-sheet');
   await sheet.getByRole('button', { name: 'Cancel' }).click();
   await expect(sheet).toBeHidden();
   expect(edits.count()).toBe(1);
@@ -144,8 +132,6 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   await page.goBack();
   await expect(item).toBeHidden();
   await expect.poll(async () => (await rowTitles(page))[0]).toBe('Lamp lighting reel v2');
-  await page.waitForTimeout(300);
-  await shot(page, 'edit-05-plan-moved');
   expectClean(network);
 });
 
@@ -168,7 +154,5 @@ test('client: no Edit on a concept', async ({ page }) => {
   await expect(item.locator('[data-plan-edit-concept]')).toHaveCount(0);
   await expect(item.locator('[data-plan-edit-date]')).toHaveCount(0);
   await expect(item.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'edit-06-client-no-edit');
   expectClean(network);
 });
