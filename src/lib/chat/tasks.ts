@@ -355,6 +355,15 @@ export function dueSelection(
 /** The hours the time strip offers: 10 am to 9 pm. */
 export const DUE_HOURS: readonly number[] = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 
+/**
+ * Whether an hour on a civil day is already over for picking a due time: on
+ * today (workspace clock) every hour up to and including the current one. Pure.
+ */
+export function isPastHour(civil: string, hour: number, nowMs: number, timeZone: string): boolean {
+  if (civil !== civilDay(nowMs, timeZone)) return civil < civilDay(nowMs, timeZone);
+  return hour <= zonedParts(nowMs, timeZone).hour;
+}
+
 /** The Date strip: the 14 days after tomorrow on the workspace clock. Pure. */
 export function dateStripDays(
   nowMs: number,
@@ -779,15 +788,36 @@ function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };
 }
 
-/** Every task of a channel (RLS: members only), one query. */
+/** The instant today starts on the workspace clock (00:00 there), as ISO. Pure. */
+export function startOfTodayIso(nowMs: number, timeZone: string): string {
+  return civilHourToUtcIso(civilDay(nowMs, timeZone), 0, timeZone);
+}
+
+/**
+ * The PostgREST `or` the list read uses: open items, plus anything changed
+ * since today began (the Done today group and the share snapshot). Pure.
+ */
+export function openOrTodayFilter(nowMs: number, timeZone: string): string {
+  return `status.in.(todo,waiting),updated_at.gte.${startOfTodayIso(nowMs, timeZone)}`;
+}
+
+/**
+ * A channel's open items and the items changed today (RLS: members only), one
+ * query; older closed items are never read.
+ */
 export async function readChannelTasks(
   client: Client,
   channelId: string,
+  clock: { nowMs: number; timeZone: string },
   signal?: AbortSignal,
 ): Promise<Result<ChatTask[]>> {
   try {
     const res = await abortable(
-      client.from('chat_tasks').select(TASK_COLUMNS).eq('channel_id', channelId),
+      client
+        .from('chat_tasks')
+        .select(TASK_COLUMNS)
+        .eq('channel_id', channelId)
+        .or(openOrTodayFilter(clock.nowMs, clock.timeZone)),
       signal,
     );
     if (res.error) return fail(`readChannelTasks: ${res.error.message}`);
@@ -795,6 +825,29 @@ export async function readChannelTasks(
     return { ok: true, data: rows.flatMap((r) => rowToTask(r) ?? []) };
   } catch (error) {
     return fail(`readChannelTasks: ${String(error)}`);
+  }
+}
+
+/** Tasks by id, one IN read (the thread lines of items no longer in the list). */
+export async function readTasksByIds(
+  client: Client,
+  ids: readonly string[],
+  signal?: AbortSignal,
+): Promise<Result<ChatTask[]>> {
+  if (ids.length === 0) return { ok: true, data: [] };
+  try {
+    const res = await abortable(
+      client
+        .from('chat_tasks')
+        .select(TASK_COLUMNS)
+        .in('id', [...ids]),
+      signal,
+    );
+    if (res.error) return fail(`readTasksByIds: ${res.error.message}`);
+    const rows = (res.data ?? []) as TaskRow[];
+    return { ok: true, data: rows.flatMap((r) => rowToTask(r) ?? []) };
+  } catch (error) {
+    return fail(`readTasksByIds: ${String(error)}`);
   }
 }
 

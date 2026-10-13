@@ -16,6 +16,10 @@ import {
   lastChangeLine,
   nextNumberPreview,
   readChannelTasks,
+  readTasksByIds,
+  isPastHour,
+  openOrTodayFilter,
+  startOfTodayIso,
   readTaskEvents,
   setTaskField,
   shareSnapshot,
@@ -264,6 +268,26 @@ describe('thread lines', () => {
   });
 });
 
+describe('today on the workspace clock', () => {
+  it('starts today at local midnight', () => {
+    expect(startOfTodayIso(NOW, UTC)).toBe('2026-10-13T00:00:00.000Z');
+    expect(startOfTodayIso(NOW, 'Asia/Kolkata')).toBe('2026-10-12T18:30:00.000Z');
+    expect(openOrTodayFilter(NOW, UTC)).toBe(
+      'status.in.(todo,waiting),updated_at.gte.2026-10-13T00:00:00.000Z',
+    );
+  });
+  it('past hours: today up to and including the current hour, never another day', () => {
+    // 2 pm UTC: 10 am to 2 pm are over today; 3 pm is open; tomorrow is open.
+    expect(isPastHour('2026-10-13', 14, NOW, UTC)).toBe(true);
+    expect(isPastHour('2026-10-13', 10, NOW, UTC)).toBe(true);
+    expect(isPastHour('2026-10-13', 15, NOW, UTC)).toBe(false);
+    expect(isPastHour('2026-10-14', 10, NOW, UTC)).toBe(false);
+    // Kolkata: it is already 7:30 pm there, so 7 pm is over and 8 pm is not.
+    expect(isPastHour('2026-10-13', 19, NOW, 'Asia/Kolkata')).toBe(true);
+    expect(isPastHour('2026-10-13', 20, NOW, 'Asia/Kolkata')).toBe(false);
+  });
+});
+
 describe('date strip', () => {
   it('lists the 14 days after tomorrow', () => {
     const days = dateStripDays(NOW, UTC);
@@ -346,6 +370,8 @@ function fakeClient(answer: { data: unknown; error: { message: string } | null }
     eq: (...args: unknown[]) => (calls.push({ method: 'eq', args }), query),
     gt: (...args: unknown[]) => (calls.push({ method: 'gt', args }), query),
     lt: (...args: unknown[]) => (calls.push({ method: 'lt', args }), query),
+    or: (...args: unknown[]) => (calls.push({ method: 'or', args }), query),
+    in: (...args: unknown[]) => (calls.push({ method: 'in', args }), query),
     order: (...args: unknown[]) => (calls.push({ method: 'order', args }), query),
     limit: (...args: unknown[]) => (calls.push({ method: 'limit', args }), query),
     then: (resolve: (v: unknown) => void) => resolve(answer),
@@ -361,12 +387,23 @@ function fakeClient(answer: { data: unknown; error: { message: string } | null }
 }
 
 describe('reads and writes', () => {
-  it('reads a channel with one query and explicit columns', async () => {
+  it("reads open items plus today's changes: one query, explicit columns, one or()", async () => {
     const { client, calls } = fakeClient({ data: [], error: null });
-    const res = await readChannelTasks(client, 'c1');
+    const res = await readChannelTasks(client, 'c1', { nowMs: NOW, timeZone: 'Asia/Kolkata' });
     expect(res).toEqual({ ok: true, data: [] });
-    expect(calls.map((c) => c.method)).toEqual(['from', 'select', 'eq']);
+    expect(calls.map((c) => c.method)).toEqual(['from', 'select', 'eq', 'or']);
     expect(String(calls[1]?.args[0])).toContain('due_set_by');
+    expect(calls[3]?.args).toEqual([
+      'status.in.(todo,waiting),updated_at.gte.2026-10-12T18:30:00.000Z',
+    ]);
+  });
+  it('reads tasks by id in one IN read, none for no ids', async () => {
+    const { client, calls } = fakeClient({ data: [], error: null });
+    expect(await readTasksByIds(client, [])).toEqual({ ok: true, data: [] });
+    expect(calls).toHaveLength(0);
+    await readTasksByIds(client, ['a', 'b']);
+    expect(calls.map((c) => c.method)).toEqual(['from', 'select', 'in']);
+    expect(calls[2]?.args).toEqual(['id', ['a', 'b']]);
   });
   it('reads a window of events newest first and returns them oldest first', async () => {
     const rows = [

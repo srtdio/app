@@ -3,6 +3,8 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { DM_CHANNEL, GROUP_NAME, PEER_NAME } from '../fixtures/chat-data';
 import {
+  OLDER_LINE_TITLE,
+  seedOlderTaskHistory,
   seedTasks,
   TASK_CHANNEL,
   TASK_DUE_ID,
@@ -238,5 +240,67 @@ test('composer: "1. a" then a newline gives "2. "; a newline on an empty item en
   await input.press('Enter');
   await expect(input).toHaveValue('1. a\n');
   expect(network.rpcCalls.filter((c) => c.name === 'chat_message_send')).toHaveLength(0);
+  expectClean(network);
+});
+
+test('an older page paints with its task lines in one commit; the reader does not move', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  seedTasks(network.world);
+  seedOlderTaskHistory(network.world);
+  const olderTask = network.world.tables.chat_tasks?.find((t) => t.title === OLDER_LINE_TITLE);
+  const olderLines = `[data-task-id="${String(olderTask?.id)}"]`;
+  await openChat(page, GROUP_NAME);
+  await expect(page.locator(olderLines)).toHaveCount(0);
+
+  // Any commit that shows an older row without all its lines is recorded.
+  await page.evaluate((selector) => {
+    const w = window as unknown as { splitCommit: boolean };
+    w.splitCommit = false;
+    new MutationObserver(() => {
+      // The older page: notes 1 to 20 (the first page ends at note 21).
+      const rows = [...document.querySelectorAll('[data-msg-id^="0190e300"]')].filter(
+        (el) => Number((el.getAttribute('data-msg-id') ?? '').slice(-12)) <= 20,
+      ).length;
+      const lines = document.querySelectorAll(selector).length;
+      if ((rows > 0 && lines < 3) || (lines > 0 && rows === 0)) w.splitCommit = true;
+    }).observe(document.body, { childList: true, subtree: true });
+  }, olderLines);
+
+  const gate = network.holdHistory();
+  // Scroll up as a finger would (mobile WebKit has no wheel); the anchor is
+  // measured before anything else renders.
+  const anchor = await page.evaluate(() => {
+    const list = document.querySelector('[data-thread-viewport] > ul');
+    if (list === null) return null;
+    list.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true }));
+    list.scrollTop = 0;
+    // A few rows below the seam (the seam row itself may regroup with the page).
+    const top = list.getBoundingClientRect().top;
+    const rows = [...list.querySelectorAll('[data-msg-id]')].filter(
+      (el) => el.getBoundingClientRect().top >= top,
+    );
+    const el = rows[3];
+    if (el === undefined) return null;
+    return { id: el.getAttribute('data-msg-id'), top: Math.round(el.getBoundingClientRect().top) };
+  });
+  if (anchor === null || anchor.id === null) throw new Error('no anchor row');
+  await page.evaluate(() => window.dispatchEvent(new TouchEvent('touchend', { bubbles: true })));
+  await expect(page.getByText('Loading earlier messages')).toBeVisible();
+  const topOf = (): Promise<number> =>
+    page
+      .locator(`[data-msg-id="${anchor.id}"]`)
+      .first()
+      .evaluate((el) => Math.round(el.getBoundingClientRect().top));
+  const before = anchor.top;
+  gate.release();
+
+  await expect(page.locator(olderLines)).toHaveCount(3);
+  await expect(page.getByText('Loading earlier messages')).toHaveCount(0);
+  expect(Math.abs((await topOf()) - before)).toBeLessThanOrEqual(1);
+  expect(
+    await page.evaluate(() => (window as unknown as { splitCommit: boolean }).splitCommit),
+  ).toBe(false);
   expectClean(network);
 });

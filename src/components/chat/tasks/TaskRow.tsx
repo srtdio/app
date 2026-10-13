@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { IconAlarmClock, IconCalendar } from '@/components/ui/icons';
+import { IconAlarmClock, IconCalendar, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
 import { cn } from '@/lib/cn';
@@ -23,6 +23,7 @@ import {
   DUE_HOURS,
   dueSelection,
   hourLabel,
+  isPastHour,
   isOpenStatus,
   STATUS_LABEL,
   TASK_NOTE_MAX,
@@ -56,18 +57,34 @@ export function PriorityTag(props: { priority: TaskPriority }): ReactElement {
   );
 }
 
-/** The inline failure line: "Not saved · Retry" (44px Retry). */
-export function NotSaved(props: { onRetry: () => void }): ReactElement {
+/** The inline failure line: "Not saved · Retry" (44px Retry), and a 44px x when it can be dropped. */
+export function NotSaved(props: { onRetry: () => void; onRemove?: () => void }): ReactElement {
   return (
     <div data-task-not-saved="" className="flex items-center gap-1 pl-[42px] pr-3 text-[13px]">
       <span className="text-bad">{NOT_SAVED} ·</span>
       <button
         type="button"
         onClick={props.onRetry}
-        className={cn('h-11 px-1 font-semibold text-bad', NO_TOUCH_SELECT)}
+        onContextMenu={(e) => e.preventDefault()}
+        className={cn('h-11 min-w-11 px-1 font-semibold text-bad', NO_TOUCH_SELECT)}
       >
         Retry
       </button>
+      {props.onRemove !== undefined ? (
+        <button
+          type="button"
+          aria-label="Remove"
+          data-task-remove=""
+          onClick={props.onRemove}
+          onContextMenu={(e) => e.preventDefault()}
+          className={cn(
+            'ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-2 hover:bg-panel-2',
+            NO_TOUCH_SELECT,
+          )}
+        >
+          <IconX size={16} />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -259,17 +276,26 @@ function DuePicker(props: {
         >
           {DUE_HOURS.map((hour) => {
             const on = set !== null && set.civil === day && set.hour === hour;
+            // Today's hours up to the current one are over: shown, not tappable.
+            const past = isPastHour(day, hour, nowMs, timeZone);
             return (
               <button
                 key={hour}
                 type="button"
                 aria-pressed={on}
+                aria-disabled={past || undefined}
                 data-task-hour={hour}
-                onClick={() => props.onSave(civilHourToUtcIso(day, hour, timeZone))}
+                onClick={() => {
+                  if (!past) props.onSave(civilHourToUtcIso(day, hour, timeZone));
+                }}
                 onContextMenu={(e) => e.preventDefault()}
                 className={cn(
                   'h-11 min-w-[56px] shrink-0 rounded-[8px] border px-2 font-mono text-[13px]',
-                  on ? 'border-accent bg-accent text-accent-fg' : 'border-border bg-panel text-fg',
+                  on
+                    ? 'border-accent bg-accent text-accent-fg'
+                    : past
+                      ? 'cursor-default border-border bg-panel text-fg-3'
+                      : 'border-border bg-panel text-fg',
                 )}
               >
                 {hourLabel(hour)}

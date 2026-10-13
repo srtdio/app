@@ -198,3 +198,55 @@ export function seedTasks(world: ChatWorld, now: number = Date.now()): void {
     });
   }
 }
+
+export const OLDER_LINE_TITLE = 'Moodboard refs';
+
+/**
+ * Older history for the group chat: 30 messages before the seeded ones (so a
+ * second page exists), a burst of 205 changes right after the newest message
+ * (the first events read comes back full) and 3 changes inside the older page
+ * (the oldest 20 rows; the first page of 50 ends at "Older note 21"),
+ * which only the older-page read brings.
+ */
+export function seedOlderTaskHistory(world: ChatWorld): void {
+  const tables = world.tables;
+  const first = world.groupMessages[0];
+  const last = world.groupMessages[world.groupMessages.length - 1];
+  const firstMs = Date.parse(String(first?.created_at));
+  const older: Row[] = Array.from({ length: 30 }, (_, k) => {
+    const n = 30 - k;
+    return {
+      ...first,
+      id: `0190e300-0000-7000-8000-${String(k + 1).padStart(12, '0')}`,
+      sender_user_id: k % 2 === 0 ? COLLEAGUE_A : ME,
+      body: `Older note ${k + 1}`,
+      attachment_asset_ids: null,
+      attachment_meta: null,
+      shared_post_ids: null,
+      created_at: iso(firstMs - n * 40 * 60_000),
+    };
+  });
+  (tables.chat_messages ??= []).push(...older);
+  const task = make8(tables);
+  const lastMs = Date.parse(String(last?.created_at)) + 120_000;
+  for (let k = 0; k < 205; k += 1) {
+    event(tables, task, 'note', null, `n${k}`, COLLEAGUE_A, iso(lastMs + k * 200));
+  }
+  const olderTask: Row = {
+    ...task,
+    id: '0190e100-0000-7000-8000-000000000009',
+    number: 7,
+    title: OLDER_LINE_TITLE,
+  };
+  tables.chat_tasks?.push(olderTask);
+  for (const k of [2, 8, 14]) {
+    const at = Date.parse(String(older[k]?.created_at)) + 60_000;
+    event(tables, olderTask, 'priority', '2', '1', ME, iso(at));
+  }
+}
+
+function make8(tables: Tables): Row {
+  const task = (tables.chat_tasks ?? []).find((t) => t.number === 8);
+  if (task === undefined) throw new Error('seedTasks first');
+  return task;
+}

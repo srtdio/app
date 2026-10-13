@@ -90,7 +90,7 @@ function AddRow(props: {
             type="submit"
             onMouseDown={(e) => e.preventDefault()}
             className={cn(
-              'h-8 shrink-0 rounded-[6px] bg-accent px-3 text-[13px] font-semibold text-accent-fg',
+              'h-11 min-w-11 shrink-0 rounded-[6px] bg-accent px-3 text-[13px] font-semibold text-accent-fg',
               NO_TOUCH_SELECT,
             )}
           >
@@ -222,7 +222,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
       .map((p) => (
         <li
           key={p.key}
-          data-task-pending=""
+          data-task-pending={p.state}
           className={cn(expanded !== null ? 'opacity-45' : 'opacity-100')}
         >
           <div className="flex min-h-[44px] items-start gap-[10px] px-4 py-[11px]">
@@ -240,7 +240,12 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
               <span className="font-mono text-[12.5px] text-fg-3">–</span>
             </span>
           </div>
-          {p.failed ? <NotSaved onRetry={() => tasks.retryCreate(p.key)} /> : null}
+          {p.state === 'failed' ? (
+            <NotSaved
+              onRetry={() => tasks.retryCreate(p.key)}
+              onRemove={() => tasks.removeCreate(p.key)}
+            />
+          ) : null}
         </li>
       ));
 

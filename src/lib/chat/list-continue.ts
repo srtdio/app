@@ -1,6 +1,6 @@
 // Numbered list continuation in the composer. Pure: the caller decides that a
 // newline is about to be inserted (touch: Enter; laptop: Shift+Enter; never
-// mid-IME or with the mention picker open) and hands over the value and the
+// mid-IME or with the mention or hash picker open) and hands over the value and the
 // selection; this says what the field becomes instead, or null to let the
 // default newline through.
 //
@@ -51,4 +51,9 @@ export function isListNewlineKeydown(input: {
 }): boolean {
   if (input.key !== 'Enter' || input.isComposing || input.pickerOpen) return false;
   return input.coarsePointer || input.shiftKey;
+}
+
+/** Whether a picker owns Enter: the mention picker has rows, or the hash picker is open. Pure. */
+export function listPickerOpen(mentionRowCount: number, hashQuery: string | null): boolean {
+  return mentionRowCount > 0 || hashQuery !== null;
 }

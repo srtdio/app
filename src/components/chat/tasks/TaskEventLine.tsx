@@ -116,10 +116,10 @@ function TaskBurst(props: {
   const { line, ctx } = props;
   if (open) {
     return (
-      <div data-task-burst="open" className="flex flex-col items-center py-1.5">
+      <div data-task-burst="open" className="flex flex-col items-center">
         {line.events.map((event) => (
-          // Each pill keeps its 44px target; the overlap matches single lines.
-          <div key={event.id} className="-my-1.5 flex max-w-full justify-center">
+          // Each pill keeps its own 44px target; neighbours never overlap.
+          <div key={event.id} className="flex max-w-full justify-center">
             <TaskEventPill event={event} ctx={ctx} />
           </div>
         ))}
@@ -146,7 +146,7 @@ function TaskBurst(props: {
 /** One thread row of task changes (a list item, like the day pill). */
 export function TaskEventLine(props: { line: TaskLine; ctx: TaskLineContext }): ReactElement {
   return (
-    <li data-task-row="" className="-my-1.5 flex justify-center">
+    <li data-task-row="" className="flex justify-center">
       {props.line.kind === 'one' ? (
         <TaskEventPill event={props.line.event} ctx={props.ctx} />
       ) : (

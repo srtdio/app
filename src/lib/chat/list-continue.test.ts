@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { continueList, isListNewlineKeydown } from '@/lib/chat/list-continue';
+import { continueList, isListNewlineKeydown, listPickerOpen } from '@/lib/chat/list-continue';
 
 describe('continueList', () => {
   it('continues a numbered line with the next number, caret after the marker', () => {
@@ -55,5 +55,25 @@ describe('isListNewlineKeydown', () => {
     expect(isListNewlineKeydown({ ...base, shiftKey: true, isComposing: true })).toBe(false);
     expect(isListNewlineKeydown({ ...base, coarsePointer: true, pickerOpen: true })).toBe(false);
     expect(isListNewlineKeydown({ ...base, key: 'a', coarsePointer: true })).toBe(false);
+  });
+});
+
+describe('listPickerOpen', () => {
+  it('the @ picker with rows or an open # picker owns Enter', () => {
+    expect(listPickerOpen(0, null)).toBe(false);
+    expect(listPickerOpen(2, null)).toBe(true);
+    expect(listPickerOpen(0, '')).toBe(true);
+    expect(listPickerOpen(0, 'HS-1')).toBe(true);
+  });
+  it('so a newline with the # picker open never continues the list', () => {
+    expect(
+      isListNewlineKeydown({
+        key: 'Enter',
+        shiftKey: false,
+        isComposing: false,
+        coarsePointer: true,
+        pickerOpen: listPickerOpen(0, 'reel'),
+      }),
+    ).toBe(false);
   });
 });

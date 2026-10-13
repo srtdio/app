@@ -88,7 +88,7 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { clearDraft, EMPTY_DRAFT, getDraft, setDraft, type DraftFile } from '@/lib/chat/drafts';
 import { deletedMessageLabel } from '@/lib/chat/thread';
-import { continueList, isListNewlineKeydown } from '@/lib/chat/list-continue';
+import { continueList, isListNewlineKeydown, listPickerOpen } from '@/lib/chat/list-continue';
 import {
   addPick,
   deserializeMentions,
@@ -1307,7 +1307,8 @@ export function Composer(props: ComposerProps): ReactElement {
       return;
     }
     // A newline on a numbered line continues the list ("2. "); on an empty
-    // item it ends the list. Nothing else about Enter changes.
+    // item it ends the list; never while the mention or hash picker is open.
+    // Nothing else about Enter changes.
     if (
       !held &&
       !scheduleBusy &&
@@ -1316,7 +1317,7 @@ export function Composer(props: ComposerProps): ReactElement {
         shiftKey: event.shiftKey,
         isComposing: event.nativeEvent.isComposing,
         coarsePointer: isCoarsePointer(),
-        pickerOpen: mentionRows.length > 0,
+        pickerOpen: listPickerOpen(mentionRows.length, hashQuery),
       })
     ) {
       const area = event.currentTarget;

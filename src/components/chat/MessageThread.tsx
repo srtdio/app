@@ -611,6 +611,23 @@ export function openHoldSettled(parts: {
   return parts.marks && parts.side && parts.ticker && parts.cards && parts.tasks !== false;
 }
 
+/** How long a page row waits for its task lines before it paints without them. */
+export const TASK_LINES_WAIT_MS = 2_000;
+
+/**
+ * Whether a page row's task lines are in (every change at or after its time
+ * is read), or its wait ran out. Pure.
+ */
+export function taskLinesReady(
+  rowTime: number,
+  since: number,
+  nowMs: number,
+  covers: (ms: number) => boolean,
+): boolean {
+  if (!(rowTime > 0) || covers(rowTime)) return true;
+  return nowMs - since >= TASK_LINES_WAIT_MS;
+}
+
 /**
  * Each voice-only message's auto-play successor: the message directly below it
  * when that is also a live voice-only note from the same sender. One pass.
@@ -4571,6 +4588,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     currentUserId: props.currentUserId ?? '',
     target: taskTarget,
     profiles: props.profiles,
+    timeZone: props.timeZone,
   });
   const liveChat = useChatOptional();
   const [taskSheet, setTaskSheet] = useState<{ open: boolean; focus: string | null }>({
@@ -4874,6 +4892,10 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     () => new Set(props.messages.flatMap((m) => m.sharedPostIds)),
     [props.messages],
   );
+  // A page row also waits for the task lines of its time (capped), so an
+  // older page's lines paint in the same commit as its rows, before the
+  // page-anchor step, and never insert after it.
+  const taskCovers = chatTasks.covers;
   // First paint final, page by page: the rows of a page being loaded (the first
   // page, an older one) go on screen together once each is hydrated, its chip
   // post is settled and (a reply in a card thread whose card is not loaded)
@@ -4900,7 +4922,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
               message !== undefined ? membershipOf(message, known, frozenRef.current) : null;
             return member != null ? member.postId : null;
           },
-        }),
+        }) && taskLinesReady(row.time, since, nowMs, taskCovers),
       nowMs,
     );
     gateRef.current = next.gate;
@@ -4918,6 +4940,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     countsVersion,
     loadedIds,
     known,
+    taskCovers,
   ]);
   const onScreen = admitted.rows;
   // Each row's thread, decided as it goes on screen and kept from then on.
@@ -5034,26 +5057,43 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     onInitialTaskTaken?.();
   }, [initialTaskId, bodyLoading, taskChannel, openTasks, onInitialTaskTaken]);
   // Task lines cover the loaded window; older pages bring their older changes.
+  // Every loaded row (held ones too): their events are read before they show.
   const oldestLoaded = props.messages[0];
   const ensureTaskEvents = chatTasks.ensureEventsSince;
   useEffect(() => {
     if (oldestLoaded !== undefined) ensureTaskEvents(oldestLoaded.createdAt);
   }, [oldestLoaded, ensureTaskEvents]);
+  // A held row whose lines are not in yet re-cuts the page at its cap.
+  useEffect(() => {
+    let earliest: number | null = null;
+    for (const message of props.messages) {
+      const since = admitted.gate.pending.get(message.id);
+      if (since === undefined || taskCovers(message.time)) continue;
+      earliest = earliest === null ? since : Math.min(earliest, since);
+    }
+    if (earliest === null) return;
+    const handle = setTimeout(
+      () => setHydrationTick((t) => t + 1),
+      Math.max(0, earliest + TASK_LINES_WAIT_MS - Date.now()),
+    );
+    return () => clearTimeout(handle);
+  }, [admitted, props.messages, taskCovers]);
+  // Lines show for the rows on screen only: a held older page's lines come
+  // with its rows, in the same commit.
+  const oldestShown = shownMessages[0];
+  const rowsHeld = oldestLoaded !== undefined && oldestLoaded.id !== oldestShown?.id;
+  const olderPageHeld = rowsHeld && oldestShown !== undefined;
   const windowEvents = useMemo(
     () =>
       eventsInWindow(
         chatTasks.events,
-        oldestLoaded !== undefined ? oldestLoaded.time : null,
-        props.hasMore === true,
+        oldestShown !== undefined ? oldestShown.time : null,
+        props.hasMore === true || rowsHeld,
       ),
-    [chatTasks.events, oldestLoaded, props.hasMore],
-  );
-  const tasksById = useMemo(
-    () => new Map(chatTasks.tasks.map((t) => [t.id, t] as const)),
-    [chatTasks.tasks],
+    [chatTasks.events, oldestShown, props.hasMore, rowsHeld],
   );
   const taskLineCtx: TaskLineContext = {
-    tasksById,
+    tasksById: chatTasks.lineTasks,
     nameOf: chatTasks.nameOf,
     nowMs: Date.now(),
     timeZone: props.timeZone,
@@ -5755,7 +5795,11 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           {...(props.loadFailed !== undefined ? { loadFailed: props.loadFailed } : {})}
           {...(props.onRetryLoad !== undefined ? { onRetryLoad: props.onRetryLoad } : {})}
           onReply={handleReply}
-          {...(props.loadingOlder !== undefined ? { loadingOlder: props.loadingOlder } : {})}
+          // An older page held for its task lines is still loading: the page
+          // anchor holds until its rows and lines paint together.
+          {...(props.loadingOlder !== undefined || olderPageHeld
+            ? { loadingOlder: props.loadingOlder === true || olderPageHeld }
+            : {})}
           {...(props.hasMore !== undefined ? { hasMore: props.hasMore } : {})}
           {...(props.onLoadOlder !== undefined ? { onLoadOlder: props.onLoadOlder } : {})}
           {...(props.onNewestVisible !== undefined
