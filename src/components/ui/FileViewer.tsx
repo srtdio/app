@@ -26,6 +26,7 @@ import { cn } from '@/lib/cn';
 import { humanizeSize } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
+import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
 import {
   loadPdfJs,
   openPdf,
@@ -112,10 +113,7 @@ export function shouldDismiss(dy: number, ms: number): boolean {
 // ---------------------------------------------------------------------------
 
 /** A link the viewer holds while it is open; release() frees a local blob URL. */
-export interface HeldLink {
-  url: string;
-  release: () => void;
-}
+export type { HeldLink };
 
 export interface FileViewerSource {
   /** The PDF's bytes, fetched fresh on every call. */
@@ -138,9 +136,7 @@ export function remoteFileSource(cache: PresignCache, versionId: string): FileVi
     async videoLink() {
       return { url: (await cache.freshUrl(versionId, 'inline')).url, release: NOOP };
     },
-    async downloadLink() {
-      return { url: (await cache.freshUrl(versionId, 'attachment')).url, release: NOOP };
-    },
+    downloadLink: attachmentLink(cache, versionId),
   };
 }
 
@@ -163,26 +159,8 @@ export function localFileSource(file: File): FileViewerSource {
  * Save a file through a same-window link with the download attribute: never a
  * new tab or window. A presigned attachment link makes the browser save it.
  */
-export async function downloadFile(source: FileViewerSource, name: string): Promise<boolean> {
-  let link: HeldLink | null = null;
-  try {
-    link = await source.downloadLink();
-    const anchor = document.createElement('a');
-    anchor.href = link.url;
-    anchor.download = name;
-    anchor.rel = 'noopener';
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    return true;
-  } catch {
-    return false;
-  } finally {
-    // A blob link must outlive the click a moment; a presigned one needs nothing.
-    const held = link;
-    if (held !== null) setTimeout(held.release, 30_000);
-  }
+export function downloadFile(source: FileViewerSource, name: string): Promise<boolean> {
+  return saveFromLink(() => source.downloadLink(), name);
 }
 
 // ---------------------------------------------------------------------------

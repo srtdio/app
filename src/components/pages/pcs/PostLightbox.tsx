@@ -21,6 +21,14 @@ import type { IconProps } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { wrapIndex, lightboxCounter, dragAxis, shouldDismiss } from '@/components/ui/ImageLightbox';
+import {
+  FileViewer,
+  remoteFileSource,
+  VIEWER_ERROR,
+  type FileViewerSource,
+} from '@/components/ui/FileViewer';
+import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
+import { fileKindLabel } from '@/lib/files/display-name';
 import type { GalleryItem } from '@srtdio/posts';
 
 // wrapIndex / lightboxCounter live in the shared ImageLightbox now; re-exported
@@ -47,9 +55,19 @@ function isVideo(item: GalleryItem): boolean {
   return item.kind === 'video' || (item.mimeType ?? '').startsWith('video/');
 }
 
-/** Whether the item can be shown in place at all (vs a download-only panel). */
+/** Whether the item can be shown in place at all (vs opening in the FileViewer). */
 function isInlineRenderable(item: GalleryItem): boolean {
   return isImage(item) || isVideo(item);
+}
+
+/**
+ * The FileViewer kind a slide opens in: pdf, office or any other file, from the
+ * version's mime (never the file name); null for images and video, which stay
+ * inline. Pure.
+ */
+export function slideViewerKind(item: GalleryItem): FileKind | null {
+  if (isInlineRenderable(item)) return null;
+  return classifyFileKind(item.mimeType ?? '');
 }
 
 /** The minimal rect shape the pin math reads off the rendered image. */
@@ -296,6 +314,10 @@ export interface LightboxViewProps {
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
   /** Swipe-down offset in px (translateY only); 0 or omitted at rest. */
   dragY?: number | undefined;
+  /** Open a pdf, office or other file slide in the FileViewer. */
+  onOpenFile?: ((item: GalleryItem) => void) | undefined;
+  /** The last FileViewer open of this slide failed: the card says so. */
+  openFailedFor?: ((item: GalleryItem) => boolean) | undefined;
 }
 
 /** One slide's stage: the fully-visible sharp image, no letterbox filler. */
@@ -311,6 +333,7 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
     : undefined;
   const showImage = presignEnabled && isImage(item) && src !== null && !failed;
   const showVideo = presignEnabled && isVideo(item) && src !== null && !failed;
+  const viewerKind = slideViewerKind(item);
 
   return (
     <div
@@ -350,11 +373,17 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
         <video src={src} controls className="max-h-full max-w-full" />
       ) : !presignEnabled ? (
         <GracefulPanel message="Image previews are unavailable in this environment." />
+      ) : viewerKind !== null ? (
+        <FileSlideCard
+          label={fileKindLabel(item.mimeType ?? '')}
+          failed={props.openFailedFor?.(item) === true}
+          onOpen={() => props.onOpenFile?.(item)}
+        />
       ) : isInlineRenderable(item) && !failed ? (
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
       ) : (
         <GracefulPanel
-          message={failed ? 'This image could not be loaded.' : 'Preview unavailable.'}
+          message="This image could not be loaded."
           onDownload={props.onDownload}
           busy={props.busy}
         />
@@ -596,6 +625,44 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   );
 }
 
+/**
+ * A pdf, office or other file slide: its kind and Open, which shows the file in
+ * the FileViewer (a fresh read every open). No filename on this surface. The
+ * tap never reaches the stage, so it does not toggle the chrome.
+ */
+function FileSlideCard({
+  label,
+  failed,
+  onOpen,
+}: {
+  label: string;
+  failed: boolean;
+  onOpen: () => void;
+}): ReactElement {
+  return (
+    <div data-file-slide="" className="flex flex-col items-center gap-3 px-6 text-center">
+      <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-overlay-surface text-sm font-medium text-overlay-fg">
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
+        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-overlay-surface px-4 text-sm font-medium text-overlay-fg hover:bg-overlay-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg"
+      >
+        Open
+      </button>
+      {failed ? (
+        <p role="status" className="text-sm text-overlay-fg-dim">
+          {VIEWER_ERROR}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function GracefulPanel({
   message,
   onDownload,
@@ -621,6 +688,32 @@ function GracefulPanel({
       ) : null}
     </div>
   );
+}
+
+/** A slide open in the FileViewer, with the source made for this open. */
+interface Viewing {
+  item: GalleryItem;
+  kind: FileKind;
+  source: FileViewerSource;
+}
+
+/**
+ * Mark a slide's open as failed (keyed by attachment). Returns the same object when it already is,
+ * so a repeated report never re-renders (the FileViewer reports again whenever
+ * its callback changes, and a new object every time would loop). Pure.
+ */
+export function markOpenFailed(
+  prev: Record<string, boolean>,
+  key: string,
+): Record<string, boolean> {
+  return prev[key] === true ? prev : { ...prev, [key]: true };
+}
+
+/** The FileViewer open for a pdf, office or other slide; null for images and video. */
+function viewingFor(item: GalleryItem, cache: PresignCache): Viewing | null {
+  const kind = slideViewerKind(item);
+  if (kind === null) return null;
+  return { item, kind, source: remoteFileSource(cache, item.assetVersionId) };
 }
 
 interface PostLightboxProps {
@@ -679,8 +772,43 @@ export function PostLightbox({
   // The delete confirm row replaces the bottom-bar controls until resolved.
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [dragY, setDragY] = useState(0);
+  // The pdf, office or other file open in the FileViewer. The one tapped in the
+  // gallery opens straight away; its source is made once per open, so a
+  // re-render never re-reads the file.
+  const [viewing, setViewing] = useState<Viewing | null>(() => {
+    const first = items[index];
+    return first !== undefined && presignEnabled ? viewingFor(first, cache) : null;
+  });
+  const [openFailed, setOpenFailed] = useState<Record<string, boolean>>({});
+  const viewingRef = useRef(false);
+  viewingRef.current = viewing !== null;
+  // Stable callbacks, so the viewer never re-attaches its listeners or re-reports.
+  const viewedId = viewing?.item.assetAttachmentId ?? null;
+  const closeViewer = useCallback(() => setViewing(null), []);
+  const onViewerError = useCallback(() => {
+    if (viewedId !== null) setOpenFailed((prev) => markOpenFailed(prev, viewedId));
+  }, [viewedId]);
 
   const trackRef = useRef<HTMLDivElement>(null);
+
+  // A slide removed while its file is open (another tab, or the gallery
+  // emptied) closes the viewer: it never shows, or reopens on, a stale item.
+  useEffect(() => {
+    if (viewing === null) return;
+    const id = viewing.item.assetAttachmentId;
+    if (!items.some((it) => it.assetAttachmentId === id)) setViewing(null);
+  }, [items, viewing]);
+
+  // The tile that opened the viewer is gone (this viewer replaced the ribbon),
+  // so on close focus lands on the slide's Open instead of the page body.
+  const wasViewing = useRef(viewing !== null);
+  useEffect(() => {
+    if (viewing === null && wasViewing.current) {
+      const slide = trackRef.current?.children.item(index);
+      slide?.querySelector<HTMLElement>('[data-file-slide] button')?.focus();
+    }
+    wasViewing.current = viewing !== null;
+  }, [viewing, index]);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const dismiss = useMemo(
@@ -756,6 +884,8 @@ export function PostLightbox({
   // it never locks body scroll.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      // The FileViewer owns the keys while it is open.
+      if (viewingRef.current) return;
       if (event.key === 'Escape') {
         onClose();
       } else if (event.key === 'ArrowLeft') {
@@ -801,8 +931,14 @@ export function PostLightbox({
     return { x: clamp(x, -maxX, maxX), y: clamp(y, -maxY, maxY) };
   }, []);
 
+  // Only an image slide zooms: a file or video slide has nothing to zoom, and
+  // a phantom zoom there would capture the pointer and swallow Open.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const applyZoomAt = useCallback(
     (nextScale: number, clientX: number, clientY: number, rect: RectLike): void => {
+      const slide = itemsRef.current[indexRef.current];
+      if (slide === undefined || !isImage(slide)) return;
       setZoom((z) => {
         const scale = clamp(nextScale, ZOOM_MIN, ZOOM_MAX);
         if (scale <= 1) return { scale: 1, x: 0, y: 0 };
@@ -934,6 +1070,15 @@ export function PostLightbox({
   if (item === undefined) return null;
   const current: GalleryItem = item;
 
+  const openFile = (it: GalleryItem): void => {
+    const next = presignEnabled ? viewingFor(it, cache) : null;
+    if (next === null) return;
+    setOpenFailed((prev) =>
+      prev[it.assetAttachmentId] === true ? { ...prev, [it.assetAttachmentId]: false } : prev,
+    );
+    setViewing(next);
+  };
+
   // Download saves the file in place via an attachment-disposition presigned URL;
   // a throwaway anchor with the download attribute keeps the page from navigating.
   const handleDownload = (): void => {
@@ -991,7 +1136,7 @@ export function PostLightbox({
         }
       : undefined;
 
-  return lightboxView({
+  const view = lightboxView({
     items,
     index,
     presignEnabled,
@@ -1029,5 +1174,25 @@ export function PostLightbox({
     },
     pinOverlay,
     dragY,
+    onOpenFile: openFile,
+    openFailedFor: (it) => openFailed[it.assetAttachmentId] === true,
   });
+
+  if (viewing === null) return view;
+  const viewed = viewing.item;
+  return (
+    <>
+      {view}
+      {/* The FileViewer carries its own ErrorBoundary (fallback: close +
+          Download), so a broken file never blanks the post or brief. */}
+      <FileViewer
+        key={viewed.assetAttachmentId}
+        name={viewed.filename}
+        kind={viewing.kind}
+        source={viewing.source}
+        onClose={closeViewer}
+        onLoadError={onViewerError}
+      />
+    </>
+  );
 }

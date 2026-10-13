@@ -16,7 +16,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { IconFile, IconFileText, IconPlay, IconVideo } from '@/components/ui/icons';
+import { IconPlay } from '@/components/ui/icons';
+import { KindIcon, useStoredThumbnail } from '@/components/ui/FileTile';
 import {
   FileViewer,
   localFileSource,
@@ -100,40 +101,6 @@ function useLocalThumbnail(file: File | null): string | null {
     };
   }, [file]);
   return url;
-}
-
-/** A recorded file's stored thumbnail, presigned through the shared cache. */
-function useStoredThumbnail(
-  versionId: string,
-  cache: PresignCache,
-  enabled: boolean,
-): { url: string | null; missing: boolean } {
-  const [state, setState] = useState<{ url: string | null; missing: boolean }>(() => ({
-    url: enabled && versionId !== '' ? (cache.peekThumbnail(versionId)?.url ?? null) : null,
-    missing: false,
-  }));
-  useEffect(() => {
-    if (!enabled || versionId === '') return;
-    let live = true;
-    cache
-      .thumbnail(versionId)
-      .then((presigned) => {
-        if (live) setState({ url: presigned?.url ?? null, missing: presigned === null });
-      })
-      .catch(() => {
-        if (live) setState({ url: null, missing: true });
-      });
-    return () => {
-      live = false;
-    };
-  }, [versionId, cache, enabled]);
-  return state;
-}
-
-function KindIcon(props: { kind: FileKind; size: number }): ReactElement {
-  if (props.kind === 'video') return <IconVideo size={props.size} />;
-  if (props.kind === 'pdf' || props.kind === 'office') return <IconFileText size={props.size} />;
-  return <IconFile size={props.size} />;
 }
 
 export interface FileBubbleProps {

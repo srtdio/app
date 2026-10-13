@@ -22,6 +22,8 @@ import { IconChevronLeft, IconChevronRight, IconDownload, IconX } from '@/compon
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import type { PresignCache } from '@/lib/asset-presign';
+import { VIEWER_ERROR } from '@/components/ui/FileViewer';
+import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
 
 /** Minimum horizontal travel (px) for a swipe to count as navigation. */
 const SWIPE_THRESHOLD = 48;
@@ -153,18 +155,25 @@ export function dismissOpacity(dy: number): number {
 }
 
 /**
- * The Download control's link: the current image's already-presigned GET URL
- * (or its local preview) with the file name, or null while the presign is
- * pending, failed, or presign is disabled (the control renders disabled). Pure.
+ * What the Download control saves: the image's local preview (own instant
+ * send), else a fresh attachment-disposition link from asset-read minted on
+ * the tap, with the file name. Null while presign is disabled or the image is
+ * not stored yet (the control renders disabled). Pure: nothing is fetched until getLink() is called.
  */
-export function downloadLink(args: {
-  url: string | null;
-  name: string;
+export function imageDownload(args: {
+  image: LightboxImage;
+  cache: PresignCache;
   presignEnabled: boolean;
-  local: boolean;
-}): { href: string; download: string } | null {
-  if (args.url === null || (!args.presignEnabled && !args.local)) return null;
-  return { href: args.url, download: args.name.trim() !== '' ? args.name : 'image' };
+}): { name: string; getLink: () => Promise<HeldLink> } | null {
+  const name = args.image.name.trim() !== '' ? args.image.name : 'image';
+  const local = args.image.src;
+  if (local !== undefined) {
+    // The caller owns the preview's blob URL: it is never revoked here.
+    return { name, getLink: () => Promise.resolve({ url: local, release: () => undefined }) };
+  }
+  // Not stored yet (no version id): nothing to save until it is.
+  if (!args.presignEnabled || args.image.assetId === '') return null;
+  return { name, getLink: attachmentLink(args.cache, args.image.assetId) };
 }
 
 /** The mutable style surface the scroll lock saves and restores. */
@@ -330,11 +339,10 @@ function LightboxMedia({
 }
 
 /**
- * The bottom bar's Download: a real link to the already-presigned GET URL with
- * the download attribute, styled as the 44px icon button. iOS Safari ignores
- * `download` cross-origin and opens the image in a new tab (saved with a
- * long-press there); that is accepted. Disabled while the presign is pending or
- * presign is disabled.
+ * The bottom bar's Download, the same mechanism as the FileViewer's: a fresh
+ * attachment link saved through a same-window anchor (never a new tab or
+ * window), styled as the 44px icon button. Disabled while a save is starting
+ * or presign is disabled; a link that could not be minted says so in place.
  */
 function DownloadControl({
   image,
@@ -345,36 +353,43 @@ function DownloadControl({
   cache: PresignCache;
   presignEnabled: boolean;
 }): ReactElement {
-  const { url } = useImageUrl(image, cache, presignEnabled);
-  const link = downloadLink({
-    url,
-    name: image.name,
-    presignEnabled,
-    local: image.src !== undefined,
-  });
-  if (link === null) {
-    return (
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const target = imageDownload({ image, cache, presignEnabled });
+  const onDownload = (): void => {
+    if (target === null || busy) return;
+    setBusy(true);
+    setFailed(false);
+    void saveFromLink(target.getLink, target.name).then((ok) => {
+      if (!live.current) return;
+      setBusy(false);
+      if (!ok) setFailed(true);
+    });
+  };
+  return (
+    <>
+      {failed ? (
+        <span role="status" className="shrink-0 text-xs text-overlay-fg-dim">
+          {VIEWER_ERROR}
+        </span>
+      ) : null}
       <button
         type="button"
         aria-label="Download"
-        disabled
-        className={cn(TOOLBAR_BUTTON, 'opacity-40')}
+        disabled={target === null || busy}
+        onClick={onDownload}
+        className={cn(TOOLBAR_BUTTON, 'disabled:opacity-40')}
       >
         <IconDownload size={20} />
       </button>
-    );
-  }
-  return (
-    <a
-      href={link.href}
-      download={link.download}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label="Download"
-      className={TOOLBAR_BUTTON}
-    >
-      <IconDownload size={20} />
-    </a>
+    </>
   );
 }
 

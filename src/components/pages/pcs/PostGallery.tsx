@@ -8,6 +8,8 @@ import type { CSSProperties, ReactElement, ReactNode, Ref } from 'react';
 import { IconAssets, IconImagePlus, IconPin } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui/useLongPress';
 import { PostLightbox, placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
+import { FileTile, storedThumbnailMeta } from '@/components/ui/FileTile';
+import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { cn } from '@/lib/cn';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
@@ -27,6 +29,21 @@ export interface TileGestures {
 /** True when this item has an inline image preview worth resolving for a tile. */
 function isImage(item: GalleryItem): boolean {
   return item.kind === 'image' || (item.mimeType ?? '').startsWith('image/');
+}
+
+/** True when this item is a video (by stored kind or mime). */
+function isVideo(item: GalleryItem): boolean {
+  return item.kind === 'video' || (item.mimeType ?? '').startsWith('video/');
+}
+
+/**
+ * The file tile kind for a non-image item, from its stored kind and the
+ * server-detected mime (never the file name); null for images. Pure.
+ */
+export function galleryFileKind(item: GalleryItem): FileKind | null {
+  if (isImage(item)) return null;
+  if (isVideo(item)) return 'video';
+  return classifyFileKind(item.mimeType ?? '');
 }
 
 /**
@@ -107,8 +124,23 @@ function GalleryThumb({
       />
     );
   }
-  // Fallback covers non-image kinds, a failed presign, and the unconfigured-env
-  // case (presignEnabled false), so a tile never renders blank.
+  // PDF, video, Office and other files: the file tile (stored thumbnail or
+  // icon card, name and meta). Tapping it opens the file as before.
+  const fileKind = galleryFileKind(item);
+  if (fileKind !== null) {
+    return (
+      <FileTile
+        kind={fileKind}
+        mime={item.mimeType ?? ''}
+        name={item.filename}
+        versionId={versionId}
+        cache={cache}
+        presignEnabled={presignEnabled}
+      />
+    );
+  }
+  // Fallback covers a failed image presign and the unconfigured-env case
+  // (presignEnabled false), so a tile never renders blank.
   return (
     <div className="flex h-full w-full items-center justify-center bg-panel-3 text-fg-3">
       <IconAssets size={22} />
@@ -210,9 +242,16 @@ export function resolveRibbonTileStyle(
 ): CSSProperties {
   let width: number | null = null;
   let height: number | null = null;
+  const thumb = isImage(item)
+    ? null
+    : storedThumbnailMeta(item.assetVersionId, item.mimeType ?? '');
   if (item.width !== null && item.height !== null && item.width > 0 && item.height > 0) {
     width = item.width;
     height = item.height;
+  } else if (thumb !== null) {
+    // A file with a stored thumbnail: its box comes from the thumbnail's size.
+    width = thumb.thumbW;
+    height = thumb.thumbH;
   } else {
     const seen = measured[item.assetAttachmentId];
     if (seen !== undefined) {

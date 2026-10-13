@@ -3,6 +3,8 @@ import { useLongPress } from '@/components/pages/assets/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { IconCheck } from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
+import { FileTile } from '@/components/ui/FileTile';
+import { classifyFileKind } from '@/lib/chat/attachments';
 import {
   displayLabel,
   fileExtension,
@@ -79,6 +81,40 @@ export function AssetCard({
         </span>
       ) : null}
 
+      {item.kind === 'file' ? (
+        // PDF, video, Office and other files: the stored thumbnail (PDF and
+        // video) or the icon card, the name on two lines and kind, pages, size.
+        <FileTile
+          layout="card"
+          kind={classifyFileKind(item.mimeType ?? '')}
+          mime={item.mimeType ?? ''}
+          name={name}
+          versionId={item.currentVersionId}
+          size={item.sizeBytes}
+          cache={cache}
+          presignEnabled={presignEnabled}
+        />
+      ) : (
+        <AssetMedia item={item} name={name} cache={cache} presignEnabled={presignEnabled} />
+      )}
+    </button>
+  );
+}
+
+/** An image or link card's thumbnail, name row and size or domain line (unchanged). */
+function AssetMedia({
+  item,
+  name,
+  cache,
+  presignEnabled,
+}: {
+  item: AssetListItem;
+  name: string;
+  cache: PresignCache;
+  presignEnabled: boolean;
+}) {
+  return (
+    <>
       <Thumbnail
         assetVersionId={item.kind === 'image' ? item.currentVersionId : null}
         cache={cache}
@@ -102,6 +138,6 @@ export function AssetCard({
       <div className="px-2.5 pb-2 text-[11px] tabular-nums text-fg-3">
         {item.kind === 'link' ? linkDomain(item.externalUrl) : humanizeSize(item.sizeBytes)}
       </div>
-    </button>
+    </>
   );
 }

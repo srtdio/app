@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
@@ -14,6 +14,23 @@ import {
   typeLabel,
 } from '@/components/pages/assets/media';
 import { downloadFile } from '@/components/pages/assets/openExternal';
+import {
+  FileViewer,
+  remoteFileSource,
+  VIEWER_ERROR,
+  type FileViewerSource,
+} from '@/components/ui/FileViewer';
+import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
+
+// The file card's action: a 44px target, colour change only on press (the
+// shared Button's height and press scale do not fit this rule).
+const CARD_BUTTON =
+  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md bg-accent px-4 ' +
+  'text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50 ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+
+/** Layout effect in the browser; a plain effect where there is no DOM (server render, tests). */
+const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
 const SWIPE_THRESHOLD = 48;
@@ -39,6 +56,59 @@ interface AssetLightboxProps {
   onToast: (message: string) => void;
 }
 
+/**
+ * The FileViewer kind an asset opens in: pdf, office or any other file, from
+ * the version's mime (never the file name); null for images and video, which
+ * stay inline, and for links, which open externally. Pure.
+ */
+export function assetViewerKind(
+  item: Pick<AssetListItem, 'kind' | 'mimeType' | 'filename'>,
+): FileKind | null {
+  if (item.kind === 'link' || isInlineRenderable(mediaKind(item))) return null;
+  return classifyFileKind(item.mimeType ?? '');
+}
+
+/**
+ * Whether the asset the lightbox opened on goes straight to the FileViewer: a
+ * stored pdf, office or other file, unless reached from the long-press Info.
+ * Pure.
+ */
+export function opensOnArrival(
+  item: AssetListItem,
+  initialInfoOpen: boolean,
+  presignEnabled: boolean,
+): boolean {
+  return (
+    !initialInfoOpen &&
+    presignEnabled &&
+    item.currentVersionId !== null &&
+    assetViewerKind(item) !== null
+  );
+}
+
+/** An asset open in the FileViewer, with the source made for this open. */
+interface Viewing {
+  asset: AssetListItem;
+  kind: FileKind;
+  source: FileViewerSource;
+}
+
+/** The FileViewer open for a stored pdf, office or other asset, else null. */
+function viewingFor(
+  asset: AssetListItem,
+  cache: PresignCache,
+  presignEnabled: boolean,
+): Viewing | null {
+  const kind = assetViewerKind(asset);
+  if (kind === null || !presignEnabled || asset.currentVersionId === null) return null;
+  return { asset, kind, source: remoteFileSource(cache, asset.currentVersionId) };
+}
+
+/** The viewer's title: the asset's name as it is now, so a rename shows while open. Pure. */
+export function viewerName(items: readonly AssetListItem[], asset: AssetListItem): string {
+  return displayLabel(items.find((candidate) => candidate.id === asset.id) ?? asset);
+}
+
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -56,7 +126,8 @@ function Spinner() {
 
 /**
  * Fullscreen, type-aware media viewer. Renders image/video inline from a
- * presigned URL and shows a download-only panel for every other type. Navigation
+ * presigned URL; pdf, office and every other file open in the shared
+ * FileViewer (the one tapped opens straight away, the rest from Open). Navigation
  * (arrows, swipe, ArrowLeft/Right) wraps around the navigable list; Esc and a tap
  * on the scrim close. Only the viewed asset (and its immediate neighbours) is
  * presigned, never the whole list.
@@ -86,6 +157,24 @@ export function AssetLightbox({
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  // The file open in the FileViewer. Reached from the long-press sheet's Info,
+  // the lightbox opens on the details instead.
+  // Opened right after this lightbox has locked the page (see below), never in
+  // the same commit, so the viewer's own lock always saves 'hidden'.
+  const [viewing, setViewing] = useState<Viewing | null>(null);
+  const [openFailed, setOpenFailed] = useState(false);
+  const viewingRef = useRef(false);
+  viewingRef.current = viewing !== null;
+  // Stable callbacks, so the viewer never re-attaches its listeners or re-reports.
+  const closeViewer = useCallback(() => setViewing(null), []);
+  const onViewerError = useCallback(() => setOpenFailed(true), []);
+  // On close, focus stays in this dialog (on Open), not on the grid behind it.
+  const openRef = useRef<HTMLButtonElement>(null);
+  const wasViewing = useRef(viewing !== null);
+  useEffect(() => {
+    if (viewing === null && wasViewing.current) openRef.current?.focus();
+    wasViewing.current = viewing !== null;
+  }, [viewing]);
 
   const kind = item !== undefined ? mediaKind(item) : 'file';
   const name = item !== undefined ? displayLabel(item) : '';
@@ -141,25 +230,53 @@ export function AssetLightbox({
   useEffect(() => {
     setConfirming(false);
     setEditingName(false);
+    setOpenFailed(false);
   }, [index]);
 
   useEffect(() => {
     if (!infoOpen) setEditingName(false);
   }, [infoOpen]);
 
-  // Esc closes; arrows navigate. Lock body scroll while open.
+  // Lock body scroll while open, in a layout effect so it is in place before
+  // the viewer mounts. When both close together (back, a route change) the
+  // viewer restores its saved 'hidden' after this cleanup, so the page's own
+  // value is put back once more right after.
+  useBrowserLayoutEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      if (viewingRef.current) {
+        setTimeout(() => {
+          document.body.style.overflow = previousOverflow;
+        }, 0);
+      }
+    };
+  }, []);
+
+  // The file tapped in the grid opens straight away (not when reached from
+  // the long-press sheet's Info, which opens on the details).
+  useBrowserLayoutEffect(() => {
+    const first = items[index];
+    if (first !== undefined && opensOnArrival(first, initialInfoOpen, presignEnabled)) {
+      setViewing(viewingFor(first, cache, presignEnabled));
+    }
+    // Once, on open: later navigation never opens the viewer by itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Esc closes; arrows navigate.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      // The FileViewer owns the keys while it is open.
+      if (viewingRef.current) return;
       if (event.key === 'Escape') onClose();
       else if (event.key === 'ArrowLeft') go(-1);
       else if (event.key === 'ArrowRight') go(1);
     };
     window.addEventListener('keydown', onKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
     };
   }, [go, onClose]);
 
@@ -186,6 +303,14 @@ export function AssetLightbox({
       .then(() => onToast('Download started'))
       .catch(() => onToast(SIGN_FAIL))
       .finally(() => setBusy(false));
+  };
+
+  const viewable = viewingFor(asset, cache, presignEnabled) !== null;
+  const handleOpen = (): void => {
+    const next = viewingFor(asset, cache, presignEnabled);
+    if (next === null) return;
+    setOpenFailed(false);
+    setViewing(next);
   };
 
   const handleCopy = (): void => {
@@ -297,7 +422,10 @@ export function AssetLightbox({
         ) : isInlineRenderable(kind) && !mediaFailed && presignEnabled ? (
           <Spinner />
         ) : (
-          <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-xl">
+          <div
+            data-file-card=""
+            className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-xl"
+          >
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-sm font-semibold tracking-wide text-fg-2">
               {typeLabel(kind)}
             </div>
@@ -307,11 +435,27 @@ export function AssetLightbox({
               {mediaFailed ? (
                 <p className="mt-1 text-xs text-fg-3">This asset could not be loaded.</p>
               ) : null}
+              {openFailed ? (
+                <p role="status" className="mt-1 text-xs text-fg-3">
+                  {VIEWER_ERROR}
+                </p>
+              ) : null}
             </div>
-            <Button variant="primary" className="h-11" onClick={handleDownload} disabled={busy}>
-              <IconDownload size={16} />
-              Download to view
-            </Button>
+            {viewable ? (
+              <button ref={openRef} type="button" onClick={handleOpen} className={CARD_BUTTON}>
+                Open
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={busy}
+                className={CARD_BUTTON}
+              >
+                <IconDownload size={16} />
+                {isInlineRenderable(kind) ? 'Download to view' : 'Download'}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -452,6 +596,20 @@ export function AssetLightbox({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {/* The FileViewer carries its own ErrorBoundary (fallback: close +
+          Download), so a broken file never blanks the Assets page. */}
+      {viewing !== null ? (
+        <FileViewer
+          key={viewing.asset.id}
+          name={viewerName(items, viewing.asset)}
+          kind={viewing.kind}
+          size={viewing.asset.sizeBytes ?? undefined}
+          source={viewing.source}
+          onClose={closeViewer}
+          onLoadError={onViewerError}
+        />
       ) : null}
     </div>
   );
