@@ -134,11 +134,12 @@ export function LatestButton(props: {
 }
 
 /**
- * "Seen <time>" under the last own message the DM peer has read. `rail`: a
- * card thread's rail runs on past it (its through line at the left).
+ * "Seen <time>" under the last own message the DM peer has read; the time is
+ * when they read it (read_at), and with none known the line reads "Seen"
+ * alone. `rail`: a card thread's rail runs on past it (its through line at the left).
  */
 export function SeenLine(props: {
-  lastReadAt: string;
+  readAt: string | null;
   timeZone: string;
   rail?: boolean;
 }): ReactElement {
@@ -153,7 +154,13 @@ export function SeenLine(props: {
     >
       {props.rail === true ? <RailThrough /> : null}
       <span className={cn(BUBBLE_META_TYPE, 'text-fg-3')}>
-        Seen <span className="font-mono">{formatClockTime(props.lastReadAt, props.timeZone)}</span>
+        Seen
+        {props.readAt !== null ? (
+          <>
+            {' '}
+            <span className="font-mono">{formatClockTime(props.readAt, props.timeZone)}</span>
+          </>
+        ) : null}
       </span>
     </li>
   );
@@ -279,9 +286,11 @@ export function MessageInfoSheet(props: {
                 src={byId.get(pos.userId)?.avatarUrl ?? null}
               />
               <span className="min-w-0 flex-1 truncate text-sm text-fg">{nameOf(pos.userId)}</span>
-              <span className="font-mono text-xs tabular-nums text-fg-3">
-                {formatClockTime(pos.lastReadAt, props.timeZone)}
-              </span>
+              {pos.readAt !== null ? (
+                <span className="font-mono text-xs tabular-nums text-fg-3">
+                  {formatClockTime(pos.readAt, props.timeZone)}
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>

@@ -622,8 +622,9 @@ export function unseenRows(
 export function sameReadPositions(a: ReadPositionsRead, b: ReadPositionsRead): boolean {
   if (a.rows.length !== b.rows.length) return false;
   // A cursor whose message time is known is placed by it (lastReadAt is the fallback).
+  // readAt is what Seen and Message info show, so a change to it alone counts.
   const key = (r: ReadPositionsRead['rows'][number], times: ReadPositionsRead['times']): string =>
-    `${r.userId}\n${r.lastReadMessageId}\n${times.has(r.lastReadMessageId) ? '' : r.lastReadAt}`;
+    `${r.userId}\n${r.lastReadMessageId}\n${times.has(r.lastReadMessageId) ? '' : r.lastReadAt}\n${r.readAt ?? ''}`;
   const left = new Set(a.rows.map((r) => key(r, a.times)));
   if (!b.rows.every((r) => left.has(key(r, b.times)))) return false;
   for (const r of a.rows) {

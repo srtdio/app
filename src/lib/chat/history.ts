@@ -433,14 +433,14 @@ export function loadChannelReadCursors(
     const res = await abortable(
       client
         .from('chat_read_cursors')
-        .select('user_id, last_read_message_id, last_read_at')
+        .select('user_id, last_read_message_id, last_read_at, read_at')
         .eq('channel_id', channelId),
       signal,
     );
     if (res.error) return fail(`loadChannelReadCursors: ${res.error.message}`);
     const rows = (res.data ?? []) as Pick<
       ChatReadCursorRow,
-      'user_id' | 'last_read_message_id' | 'last_read_at'
+      'user_id' | 'last_read_message_id' | 'last_read_at' | 'read_at'
     >[];
     return {
       ok: true,
@@ -448,6 +448,7 @@ export function loadChannelReadCursors(
         userId: row.user_id,
         lastReadMessageId: row.last_read_message_id,
         lastReadAt: row.last_read_at,
+        readAt: row.read_at,
       })),
     };
   });

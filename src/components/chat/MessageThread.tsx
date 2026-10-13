@@ -3176,7 +3176,7 @@ function ThreadBody(
      */
     reading?: {
       unread: FirstUnread | null | undefined;
-      seen: { messageId: string; lastReadAt: string } | null;
+      seen: { messageId: string; readAt: string | null } | null;
       readBy: { messageId: string; label: string } | null;
     };
     onJumpFirstUnread?: () => void;
@@ -3945,7 +3945,7 @@ function ThreadBody(
                   ) : null}
                   {props.reading?.seen?.messageId === row.message.id ? (
                     <SeenLine
-                      lastReadAt={props.reading.seen.lastReadAt}
+                      readAt={props.reading.seen.readAt}
                       timeZone={props.timeZone}
                       rail={plan.continues}
                     />

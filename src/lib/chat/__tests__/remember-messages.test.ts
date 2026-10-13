@@ -484,12 +484,31 @@ describe('catch-up on reopen', () => {
     expect(applyReopenChecks(remembered.rows, r, CHANNEL).messages).toBe(remembered.rows);
     expect(unseenRows(remembered.rows, r.newer ?? [])).toEqual([]);
     const cursors = {
-      rows: [{ userId: PEER, lastReadMessageId: 'm-0003', lastReadAt: 'a' }],
+      rows: [{ userId: PEER, lastReadMessageId: 'm-0003', lastReadAt: 'a', readAt: 'r1' }],
       times: new Map([['m-0003', 3]]),
     };
     expect(
       sameReadPositions(cursors, { ...cursors, rows: [{ ...cursors.rows[0]!, lastReadAt: 'b' }] }),
     ).toBe(true);
+  });
+
+  it('a read_at-only change is a change (Seen shows it), on the same cursor message', () => {
+    const cursors = {
+      rows: [
+        {
+          userId: PEER,
+          lastReadMessageId: 'm-0003',
+          lastReadAt: '2026-10-02T09:01:00Z',
+          readAt: '2026-10-02T09:05:00Z',
+        },
+      ],
+      times: new Map([['m-0003', 3]]),
+    };
+    const later = { ...cursors, rows: [{ ...cursors.rows[0]!, readAt: '2026-10-02T11:30:00Z' }] };
+    const none = { ...cursors, rows: [{ ...cursors.rows[0]!, readAt: null }] };
+    expect(sameReadPositions(cursors, later)).toBe(false);
+    expect(sameReadPositions(cursors, none)).toBe(false);
+    expect(sameReadPositions(cursors, { ...cursors, rows: [{ ...cursors.rows[0]! }] })).toBe(true);
   });
 
   it('edited, deleted and new rows while away are all correct after reopen', async () => {

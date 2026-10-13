@@ -40,8 +40,9 @@ function pos(
   id: string,
   time: number,
   lastReadAt = '2026-10-02T10:00:00Z',
+  readAt: string | null = null,
 ): ReadPosition {
-  return { userId, id, time, lastReadAt };
+  return { userId, id, time, lastReadAt, readAt };
 }
 
 describe('T1 read-state helper', () => {
@@ -77,23 +78,55 @@ describe('T1 read-state helper', () => {
 
   it('resolves cursor times from the lookup, else from last_read_at', () => {
     const rows = [
-      { userId: 'a', lastReadMessageId: 'm1', lastReadAt: '2026-10-02T10:00:00Z' },
-      { userId: 'b', lastReadMessageId: 'gone', lastReadAt: '2026-10-02T11:00:00Z' },
+      { userId: 'a', lastReadMessageId: 'm1', lastReadAt: '2026-10-02T10:00:00Z', readAt: null },
+      {
+        userId: 'b',
+        lastReadMessageId: 'gone',
+        lastReadAt: '2026-10-02T11:00:00Z',
+        readAt: '2026-10-02T12:00:00Z',
+      },
     ];
     const out = resolvePositions(rows, (id) => (id === 'm1' ? 42 : undefined));
     expect(out.get('a')?.time).toBe(42);
     expect(out.get('b')?.time).toBe(Date.parse('2026-10-02T11:00:00Z'));
+    expect(out.get('a')?.readAt).toBeNull();
+    expect(out.get('b')?.readAt).toBe('2026-10-02T12:00:00Z');
   });
 });
 
 describe('T2 Seen line', () => {
   it('goes under the LAST own message the peer has read', () => {
     const list = [msg('a', 1), msg('b', 2), msg('p', 3, { mine: false }), msg('c', 4)];
-    const peer = pos(PEER, 'b', 2, '2026-10-02T10:05:00Z');
+    const peer = pos(PEER, 'b', 2, '2026-10-02T10:05:00Z', '2026-10-02T10:07:00Z');
     expect(seenLineTarget(list, peer)).toEqual({
       messageId: 'b',
-      lastReadAt: '2026-10-02T10:05:00Z',
+      readAt: '2026-10-02T10:07:00Z',
     });
+  });
+
+  it('regression: the Seen time is read_at, never last_read_at (the message sent time)', () => {
+    const sentMs = Date.parse('2026-10-02T09:01:00Z');
+    const list = [msg('a', sentMs - 1000), msg('b', sentMs), msg('c', sentMs + 60_000)];
+    const rows = [
+      {
+        userId: PEER,
+        lastReadMessageId: 'b',
+        lastReadAt: '2026-10-02T09:01:00Z',
+        readAt: '2026-10-02T11:30:00Z',
+      },
+    ];
+    const positions = resolvePositions(rows, (id) => list.find((m) => m.id === id)?.time);
+    const peer = positions.get(PEER);
+    // Ordering is unchanged: placed by the cursor message's created_at.
+    expect(peer?.time).toBe(sentMs);
+    expect(covers(peer!, list[1]!)).toBe(true);
+    expect(covers(peer!, list[2]!)).toBe(false);
+    expect(seenLineTarget(list, peer)).toEqual({ messageId: 'b', readAt: '2026-10-02T11:30:00Z' });
+  });
+
+  it('a cursor with no read_at gives a Seen slot with no time', () => {
+    const list = [msg('a', 1), msg('b', 2)];
+    expect(seenLineTarget(list, pos(PEER, 'b', 2))).toEqual({ messageId: 'b', readAt: null });
   });
 
   it('moves down as the peer reads further', () => {
@@ -162,12 +195,19 @@ describe('T4 first unread from the cursor captured on open', () => {
 
   it('the open capture is unaffected by the cursor written after open', () => {
     const read = {
-      rows: [{ userId: ME, lastReadMessageId: 'a', lastReadAt: '2026-10-02T10:00:00Z' }],
+      rows: [
+        { userId: ME, lastReadMessageId: 'a', lastReadAt: '2026-10-02T10:00:00Z', readAt: null },
+      ],
       times: new Map([['a', 1]]),
     };
     const open = openCursorFrom(read, ME);
     // After open the thread writes its cursor to 'c'; the captured value stays.
-    read.rows[0] = { userId: ME, lastReadMessageId: 'c', lastReadAt: '2026-10-02T10:01:00Z' };
+    read.rows[0] = {
+      userId: ME,
+      lastReadMessageId: 'c',
+      lastReadAt: '2026-10-02T10:01:00Z',
+      readAt: null,
+    };
     read.times.set('c', 4);
     expect(open).toEqual({ kind: 'cursor', position: { time: 1, id: 'a' } });
     expect(firstUnread({ messages: list, open, hasMore: false, unreadAtOpen: 0 })).toMatchObject({

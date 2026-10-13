@@ -480,6 +480,7 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
         last_read_message_id: lastOwnDm?.id,
         last_read_at: lastOwnDm?.created_at,
         updated_at: lastOwnDm?.created_at,
+        read_at: lastOwnDm?.created_at,
       },
       {
         channel_id: DM_CHANNEL,
@@ -488,6 +489,7 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
         last_read_message_id: myDmCursor?.id,
         last_read_at: myDmCursor?.created_at,
         updated_at: myDmCursor?.created_at,
+        read_at: myDmCursor?.created_at,
       },
       ...[ME, COLLEAGUE_A].map((userId) => ({
         channel_id: GROUP_CHANNEL,
@@ -496,6 +498,7 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
         last_read_message_id: lastGroup?.id,
         last_read_at: lastGroup?.created_at,
         updated_at: lastGroup?.created_at,
+        read_at: lastGroup?.created_at,
       })),
       // The thread chats are read to the end: no unread divider splits a run.
       ...[ME, MAYA].map((userId) => ({
@@ -505,6 +508,7 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
         last_read_message_id: lastThreadDm?.id,
         last_read_at: lastThreadDm?.created_at,
         updated_at: lastThreadDm?.created_at,
+        read_at: lastThreadDm?.created_at,
       })),
       ...[ME, COLLEAGUE_A, COLLEAGUE_B].map((userId) => ({
         channel_id: THREAD_GROUP,
@@ -513,6 +517,7 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
         last_read_message_id: lastThreadGroup?.id,
         last_read_at: lastThreadGroup?.created_at,
         updated_at: lastThreadGroup?.created_at,
+        read_at: lastThreadGroup?.created_at,
       })),
     ],
     chat_channel_clears: [],

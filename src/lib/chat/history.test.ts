@@ -17,6 +17,7 @@ import {
   loadMessagesByIds,
   loadNewerMessages,
   loadOlderMessages,
+  loadChannelReadCursors,
   loadPeerReadCursor,
   loadReactions,
   loadThreadPage,
@@ -204,6 +205,48 @@ describe('loadPeerReadCursor', () => {
       'p',
     );
     expect(none.ok && none.data).toEqual({ found: false });
+  });
+});
+
+describe('loadChannelReadCursors', () => {
+  it('selects read_at with the cursor and maps it to readAt', async () => {
+    const { client, calls } = makeClient({
+      data: [
+        {
+          user_id: 'a',
+          last_read_message_id: 'm9',
+          last_read_at: '2026-10-02T09:01:00+00:00',
+          read_at: '2026-10-02T11:30:00+00:00',
+        },
+        {
+          user_id: 'b',
+          last_read_message_id: 'm8',
+          last_read_at: '2026-10-02T09:00:00+00:00',
+          read_at: null,
+        },
+      ],
+      error: null,
+    });
+    const result = await loadChannelReadCursors(client, CHANNEL);
+    expect(argsOf(calls, 'from')).toEqual([['chat_read_cursors']]);
+    expect(argsOf(calls, 'select')).toEqual([
+      ['user_id, last_read_message_id, last_read_at, read_at'],
+    ]);
+    expect(argsOf(calls, 'eq')).toEqual([['channel_id', CHANNEL]]);
+    expect(result.ok && result.data).toEqual([
+      {
+        userId: 'a',
+        lastReadMessageId: 'm9',
+        lastReadAt: '2026-10-02T09:01:00+00:00',
+        readAt: '2026-10-02T11:30:00+00:00',
+      },
+      {
+        userId: 'b',
+        lastReadMessageId: 'm8',
+        lastReadAt: '2026-10-02T09:00:00+00:00',
+        readAt: null,
+      },
+    ]);
   });
 });
 
