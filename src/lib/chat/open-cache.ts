@@ -423,7 +423,7 @@ export function withOwnCursor(
   atIso: string,
 ): ReadPositionsRead {
   const rows = reads.rows.filter((row) => row.userId !== viewerId);
-  rows.push({ userId: viewerId, lastReadMessageId: message.id, lastReadAt: atIso });
+  rows.push({ userId: viewerId, lastReadMessageId: message.id, lastReadAt: atIso, readAt: atIso });
   const times = new Map(reads.times);
   times.set(message.id, message.time);
   return { rows, times };

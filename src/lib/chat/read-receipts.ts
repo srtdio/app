@@ -14,11 +14,13 @@ export interface ThreadPoint {
   id: string;
 }
 
-/** One member's read position: the cursor message's point plus last_read_at. */
+/** One member's read position: the cursor message's point plus last_read_at and read_at. */
 export interface ReadPosition extends ThreadPoint {
   userId: string;
-  /** chat_read_cursors.last_read_at as stored. */
+  /** chat_read_cursors.last_read_at as stored (the cursor message's created_at; ordering only). */
   lastReadAt: string;
+  /** chat_read_cursors.read_at: when the cursor last advanced (display only); null when unknown. */
+  readAt: string | null;
 }
 
 /** A raw chat_read_cursors row, as the channel read returns it. */
@@ -26,6 +28,7 @@ export interface ReadCursorRow {
   userId: string;
   lastReadMessageId: string;
   lastReadAt: string;
+  readAt: string | null;
 }
 
 /** True when a cursor at `cursor` covers message `m` (the cursor is m or newer). Pure. */
@@ -54,6 +57,7 @@ export function resolvePositions(
       id: row.lastReadMessageId,
       time,
       lastReadAt: row.lastReadAt,
+      readAt: row.readAt,
     });
   }
   return out;
@@ -88,18 +92,19 @@ export function readersOf(
 
 /**
  * The DM "Seen" slot: the LAST own recorded message the peer's cursor covers,
- * with the peer's last_read_at. Never a sending, failed or deleted bubble;
- * null when the peer has read none of mine (or has no cursor). Pure.
+ * with the peer's read_at (when they read it; null when unknown). Never a
+ * sending, failed or deleted bubble; null when the peer has read none of mine
+ * (or has no cursor). Pure.
  */
 export function seenLineTarget(
   messages: readonly ThreadMessage[],
   peer: ReadPosition | undefined,
-): { messageId: string; lastReadAt: string } | null {
+): { messageId: string; readAt: string | null } | null {
   if (peer === undefined) return null;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const m = messages[i];
     if (m === undefined || !receiptable(m)) continue;
-    if (covers(peer, m)) return { messageId: m.id, lastReadAt: peer.lastReadAt };
+    if (covers(peer, m)) return { messageId: m.id, readAt: peer.readAt };
   }
   return null;
 }

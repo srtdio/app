@@ -312,8 +312,8 @@ describe('thread controls', () => {
   });
 
   it('Seen keeps the rail through it inside a run', () => {
-    expect(html(<SeenLine lastReadAt={AT} timeZone="UTC" rail />)).toContain('data-rail="through"');
-    expect(html(<SeenLine lastReadAt={AT} timeZone="UTC" />)).not.toContain('data-rail');
+    expect(html(<SeenLine readAt={AT} timeZone="UTC" rail />)).toContain('data-rail="through"');
+    expect(html(<SeenLine readAt={AT} timeZone="UTC" />)).not.toContain('data-rail');
   });
 
   it('rail pieces use tokens only', () => {

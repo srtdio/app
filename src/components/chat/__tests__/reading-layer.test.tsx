@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+// The Sheet portals to document.body; static markup renders its body in place.
+vi.mock('@/components/ui/Sheet', () => ({
+  Sheet: (props: { open: boolean; children: ReactNode }) => (props.open ? props.children : null),
+}));
 
+import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +25,7 @@ import { ComposerEmoji, showsEmojiButton } from '@/components/chat/ComposerEmoji
 import { planTileEnabled } from '@/components/chat/plan-card';
 import {
   LatestButton,
+  MessageInfoSheet,
   ReadByLine,
   SeenLine,
   sentLine,
@@ -27,6 +33,7 @@ import {
   UnreadPill,
 } from '@/components/chat/ReadingLayer';
 import { chatLayout } from '@/components/chat/chat-type';
+import { formatClockTime } from '@/lib/chat/time-format';
 
 const EM_DASH = String.fromCharCode(0x2014);
 
@@ -204,12 +211,50 @@ describe('reading layer elements', () => {
   });
 
   it('Seen line is 11/15 muted with a mono time', () => {
-    const html = renderToStaticMarkup(
-      <SeenLine lastReadAt="2026-10-02T10:05:00Z" timeZone="UTC" />,
-    );
+    const html = renderToStaticMarkup(<SeenLine readAt="2026-10-02T10:05:00Z" timeZone="UTC" />);
     expect(html).toContain('text-[11px] leading-[15px]');
     expect(html).toContain('Seen');
     expect(html).toContain('font-mono');
+  });
+
+  it('Seen shows read_at on the workspace clock; no read_at reads "Seen" with no time', () => {
+    const at = '2026-10-02T11:30:00Z';
+    const kolkata = renderToStaticMarkup(<SeenLine readAt={at} timeZone="Asia/Kolkata" />);
+    expect(kolkata).toContain(formatClockTime(at, 'Asia/Kolkata'));
+    expect(kolkata).not.toContain(formatClockTime(at, 'UTC'));
+    const none = renderToStaticMarkup(<SeenLine readAt={null} timeZone="UTC" />);
+    expect(none).toContain('Seen');
+    expect(none).not.toContain('font-mono');
+    expect(none.replace(/<[^>]*>/g, '').trim()).toBe('Seen');
+  });
+
+  it('Message info shows each reader at read_at, never last_read_at; no read_at, no time', () => {
+    const html = renderToStaticMarkup(
+      <MessageInfoSheet
+        open
+        onClose={() => undefined}
+        createdAt="2026-10-02T03:31:00Z"
+        timeZone="Asia/Kolkata"
+        nowMs={Date.parse('2026-10-02T12:00:00Z')}
+        read={[
+          {
+            userId: 'a',
+            id: 'm',
+            time: 1,
+            lastReadAt: '2026-10-02T03:31:00Z',
+            readAt: '2026-10-02T06:00:00Z',
+          },
+          { userId: 'b', id: 'm', time: 1, lastReadAt: '2026-10-02T03:31:00Z', readAt: null },
+        ]}
+        unread={[]}
+        members={[
+          { userId: 'a', displayName: 'Asha', avatarUrl: null, role: null },
+          { userId: 'b', displayName: 'Bo', avatarUrl: null, role: null },
+        ]}
+      />,
+    );
+    expect(html).toContain(formatClockTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
+    expect(html.match(/font-mono text-xs tabular-nums/g)?.length).toBe(1);
   });
 
   it('Read by line is a real button with a 44px hit area', () => {
