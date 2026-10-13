@@ -9310,6 +9310,18 @@ export type Database = {
         }
         Returns: string
       }
+      plan_create_with_items: {
+        Args: {
+          p_concepts: Json
+          p_ends_on: string
+          p_posts: Json
+          p_starts_on: string
+          p_title: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       plan_delete: {
         Args: { p_plan_id: string; p_trace_id: string }
         Returns: undefined
