@@ -96,6 +96,18 @@ async function newPlanFromTile(page: Page): Promise<void> {
   await picker.locator('[data-plan-pick-new]').click();
 }
 
+/** Every New plan row still asking for a day gets the plan's first day. */
+async function pickDaysForFlagged(page: Page, compose: Locator): Promise<void> {
+  const need = compose.locator('[data-plan-day-button="need"]');
+  while ((await need.count()) > 0) {
+    await need.first().click();
+    const sheet = page.locator('[data-plan-day-picker]');
+    await expect(sheet).toBeVisible();
+    await sheet.locator('[data-plan-day-tile]').first().click();
+    await expect(sheet).toBeHidden();
+  }
+}
+
 async function agencyFlow(page: Page): Promise<void> {
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
@@ -132,7 +144,7 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(concept.locator('[data-plan-concept-file]')).toHaveCount(1);
   await concept.locator('[data-plan-concept-save]').click();
   await expect(concept).toBeHidden();
-  await expect(compose.locator('[data-plan-draft-concept]')).toHaveCount(1);
+  await expect(compose.locator('[data-plan-compose-item="concept"]')).toHaveCount(1);
 
   // One post from Pipeline.
   await compose.locator('[data-plan-add-posts]').click();
@@ -141,7 +153,9 @@ async function agencyFlow(page: Page): Promise<void> {
   await posts.getByRole('button', { name: /Monday carousel/ }).click();
   await posts.getByRole('button', { name: 'Done (1)' }).click();
   await expect(posts).toBeHidden();
-  await expect(compose.locator('[data-plan-draft-post]')).toHaveCount(1);
+  await expect(compose.locator('[data-plan-compose-item="post"]')).toHaveCount(1);
+  // The fixture post is dated tomorrow: outside this week on a Sunday, so give it a day.
+  await pickDaysForFlagged(page, compose);
 
   // Create plan: a Draft plan, no card sent; its Plan screen opens.
   await compose.locator('[data-plan-create]').click();
@@ -480,6 +494,12 @@ async function teamAndHidden(page: Page): Promise<void> {
   await expect(compose).toBeVisible();
   await expect(compose.locator('[data-plan-add-drafts]')).toBeVisible();
   await compose.locator('[data-plan-title]').fill('Internal week');
+  // A plan needs at least one item: one concept, no date.
+  await compose.locator('[data-plan-add-concept]').click();
+  const idea = page.getByRole('dialog', { name: 'Add concept' });
+  await idea.locator('[data-plan-concept-title]').fill('Team photo');
+  await idea.locator('[data-plan-concept-save]').click();
+  await expect(idea).toBeHidden();
   await compose.locator('[data-plan-create]').click();
   const plan = page_(page, 'plan');
   await expect(plan).toBeVisible();
