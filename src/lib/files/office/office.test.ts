@@ -1,5 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
+import { DOC_HTML_BUDGET } from './docx';
 import { handleOfficeRequest } from './handle';
 import { runOffice, type OfficeWorkerLike } from './run';
 import { PNG_1X1, docx, encryptedOffice, p, pptx, row, xlsx } from './test-fixtures';
@@ -17,6 +18,7 @@ import {
 import { decodeEntities, parseXmlTree, scanXml, XmlError } from './xml';
 import {
   BOOK_TEXT_BUDGET,
+  MAX_MERGES,
   columnPx,
   formatGeneral,
   formatNumber,
@@ -229,6 +231,14 @@ describe('docx', () => {
     expect(html).toContain('<td rowspan="2">');
   });
 
+  it(`a document over ${DOC_HTML_BUDGET.toLocaleString('en-US')} HTML characters is too large to open in place`, () => {
+    const quotes = '&quot;'.repeat(DOC_HTML_BUDGET / 5);
+    const bytes = docx({ body: `<w:p><w:r><w:t>${quotes}</w:t></w:r></w:p>` });
+    expect(view(bytes)).toEqual({ ok: false, reason: 'too_large' });
+    // The thumbnail still reads its text.
+    expect(handleOfficeRequest({ op: 'thumb', bytes: buf(bytes), mime: null }).ok).toBe(true);
+  });
+
   it('the thumbnail text is a title and the first paragraphs, no pictures', () => {
     const res = handleOfficeRequest({
       op: 'thumb',
@@ -350,6 +360,32 @@ describe('xlsx', () => {
     const start = Date.now();
     expect(decodeEntities('&'.repeat(200_000)).length).toBe(200_000);
     expect(Date.now() - start).toBeLessThan(1000);
+  });
+
+  it('many overlapping merges collapse to non-overlapping ones (bounded merge index)', () => {
+    const merges =
+      '<mergeCell ref="A1:Z300"/>'.repeat(MAX_MERGES * 2) + '<mergeCell ref="AA1:AB2"/>';
+    const sheet = bookView(
+      xlsx([
+        {
+          name: 'M',
+          xml: `<sheetData>${row(300, ['AB', 'x'])}</sheetData><mergeCells>${merges}</mergeCells>`,
+        },
+      ]),
+    ).sheets[0];
+    expect(sheet?.merges).toEqual([{ r0: 0, c0: 0, r1: 299, c1: 25 }]);
+  });
+
+  it('empty cells are never kept; every kept cell costs the budget', () => {
+    const sheet = bookView(
+      xlsx([
+        {
+          name: 'E',
+          xml: '<sheetData><row r="1"><c r="A1" t="inlineStr"/><c r="B1" t="str"><v/></c><c r="C1"><v>1</v></c></row></sheetData>',
+        },
+      ]),
+    ).sheets[0];
+    expect(sheet?.cells).toEqual([{ r: 0, c: 2, text: '1', kind: 'n' }]);
   });
 
   it('booleans, errors and dates read as Excel shows them', () => {

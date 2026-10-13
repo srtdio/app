@@ -11,11 +11,17 @@
 import type { DocxThumbText, DocxView } from './types';
 import { THUMB_LINE_CHARS, THUMB_MAX_LINES } from './types';
 import { child, children, descendant, parseXmlTree, type XmlNode } from './xml';
+import { ZipError } from './zip';
 import type { OfficePackage, Relationship } from './package';
 
 /** Pictures: per image and for the whole document. */
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const IMAGES_MAX_BYTES = 15 * 1024 * 1024;
+/**
+ * HTML characters a document may produce (about 4 MB of text: hundreds of
+ * pages). Past it the file is too large to open in place; Download still works.
+ */
+export const DOC_HTML_BUDGET = 4_000_000;
 /** Nested tables deeper than this are dropped. */
 const MAX_TABLE_DEPTH = 8;
 /** EMU per CSS px (914400 per inch, 96 px per inch). */
@@ -134,6 +140,8 @@ class Writer {
   private cur = '';
   private imagesBytes = 0;
   private counters = new Map<string, number>();
+  /** HTML characters written, pictures excluded (they have their own byte cap). */
+  private htmlChars = 0;
   /** Inside a table a page break never splits the page (it would cut the table). */
   private tableDepth = 0;
 
@@ -146,6 +154,11 @@ class Writer {
   ) {}
 
   emit(html: string): void {
+    this.htmlChars += html.length;
+    // Everything here is sanitized and laid out on the main thread: too much is too large.
+    // (The thumbnail reads text only and never sends this HTML anywhere.)
+    if (this.withImages && this.htmlChars > DOC_HTML_BUDGET)
+      throw new ZipError('document too long', 'too_large');
     this.cur += html;
   }
 
@@ -185,7 +198,10 @@ class Writer {
       Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 && w < 20000 && h < 20000
         ? ` width="${w}" height="${h}"`
         : '';
-    return `<img alt="" src="data:${mime};base64,${base64(bytes)}"${size}>`;
+    const tag = `<img alt="" src="data:${mime};base64,${base64(bytes)}"${size}>`;
+    // The picture's bytes count against IMAGES_MAX_BYTES, not the HTML budget.
+    this.htmlChars -= tag.length;
+    return tag;
   }
 
   /** A paragraph's inline content; a page break inside it splits the paragraph. */

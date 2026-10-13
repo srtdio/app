@@ -33,6 +33,42 @@ const DEFAULT_COL_PX = 64;
  * into gigabytes on the way out of the Worker.
  */
 export const BOOK_TEXT_BUDGET = 8_000_000;
+/** What one kept cell costs the budget beyond its text (the object copied out of the Worker). */
+const CELL_COST = 16;
+/** Merges read per sheet, and kept after de-overlapping. */
+const MAX_MERGES_READ = 20_000;
+export const MAX_MERGES = 10_000;
+/** Cells visited while de-overlapping merges; past it the rest are dropped. */
+const MERGE_WORK_CAP = 4_000_000;
+
+/**
+ * At most MAX_MERGES merges that never overlap, so the viewer's merge index
+ * stays within one entry per shown cell however many merges a file declares.
+ * Overlapping (malformed) merges after the first are dropped. Pure.
+ */
+export function keepMerges(merges: SheetMerge[], rows: number, cols: number): SheetMerge[] {
+  const taken = new Uint8Array(Math.max(rows * cols, 0));
+  const out: SheetMerge[] = [];
+  let work = 0;
+  for (const m of merges) {
+    if (out.length >= MAX_MERGES || work >= MERGE_WORK_CAP) break;
+    let free = true;
+    for (let r = m.r0; r <= m.r1 && free; r++) {
+      for (let c = m.c0; c <= m.c1; c++) {
+        work++;
+        if (taken[r * cols + c] === 1) {
+          free = false;
+          break;
+        }
+      }
+    }
+    if (!free) continue;
+    for (let r = m.r0; r <= m.r1; r++) taken.fill(1, r * cols + m.c0, r * cols + m.c1 + 1);
+    out.push(m);
+  }
+  return out;
+}
+
 /** Thrown to end a sheet scan early; never escapes readSheet. */
 const STOP = new Error('stop');
 
@@ -459,7 +495,7 @@ function readSheet(
             const [a, b] = (attrs.ref ?? '').split(':');
             const from = a !== undefined ? parseRef(a) : null;
             const to = b !== undefined ? parseRef(b) : from;
-            if (from !== null && to !== null) {
+            if (from !== null && to !== null && merges.length < MAX_MERGES_READ) {
               merges.push({
                 r0: Math.min(from.r, to.r),
                 c0: Math.min(from.c, to.c),
@@ -484,22 +520,24 @@ function readSheet(
           const done = cell;
           cell = null;
           const shown = cellText(done, book);
-          if (shown === null) return;
+          // An empty cell shows nothing: never kept, never counted.
+          if (shown === null || shown.text === '') return;
           // Only rows and columns that hold a value count (formatting alone does not).
           lastRow = Math.max(lastRow, done.r);
           lastColAll = Math.max(lastColAll, done.c);
           if (done.r >= rowLimit || done.c >= maxCols) return;
           const text = cap(shown.text);
-          if (text.length > budget.chars) {
+          const cost = text.length + CELL_COST;
+          if (cost > budget.chars) {
             // Out of text budget: keep whole rows only; the cap note counts the rest.
             rowLimit = done.r;
             while (cells.length > 0 && (cells[cells.length - 1]?.r ?? -1) >= done.r) {
               const dropped = cells.pop();
-              budget.chars += dropped?.text.length ?? 0;
+              budget.chars += (dropped?.text.length ?? 0) + CELL_COST;
             }
             return;
           }
-          budget.chars -= text.length;
+          budget.chars -= cost;
           lastCol = Math.max(lastCol, done.c);
           cells.push({ r: done.r, c: done.c, text, kind: shown.kind });
         } else if (name === 'row') {
@@ -517,6 +555,10 @@ function readSheet(
     if (error !== STOP) throw error;
   }
 
+  // Rows may arrive out of order: drop anything past the budget cut, then
+  // recount the columns that still hold a value.
+  const kept = cells.filter((c) => c.r < rowLimit);
+  lastCol = kept.reduce((n, c) => Math.max(n, c.c), -1);
   const totalRows = lastRow + 1;
   const shownRows = Math.min(totalRows, rowLimit);
   let usedCols = lastCol + 1;
@@ -525,14 +567,18 @@ function readSheet(
   }
   const shownCols = Math.min(usedCols, maxCols);
   const colWidths = Array.from({ length: shownCols }, (_, c) => widths.get(c) ?? defaultPx);
-  const shownMerges = merges
-    .filter((m) => m.r0 < shownRows && m.c0 < shownCols && (m.r1 > m.r0 || m.c1 > m.c0))
-    .map((m) => ({
-      r0: m.r0,
-      c0: m.c0,
-      r1: Math.min(m.r1, shownRows - 1),
-      c1: Math.min(m.c1, shownCols - 1),
-    }));
+  const shownMerges = keepMerges(
+    merges
+      .filter((m) => m.r0 < shownRows && m.c0 < shownCols && (m.r1 > m.r0 || m.c1 > m.c0))
+      .map((m) => ({
+        r0: m.r0,
+        c0: m.c0,
+        r1: Math.min(m.r1, shownRows - 1),
+        c1: Math.min(m.c1, shownCols - 1),
+      })),
+    shownRows,
+    shownCols,
+  );
   return {
     name: sheet.name,
     totalRows,
@@ -541,7 +587,7 @@ function readSheet(
     totalCols: Math.max(usedCols, lastColAll + 1),
     colWidths,
     merges: shownMerges,
-    cells,
+    cells: kept,
   };
 }
 
