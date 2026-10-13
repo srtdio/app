@@ -162,11 +162,8 @@ describe('New plan create: one call, never half built', () => {
     expect(html).toContain('Save dates');
   });
 
-  it('no em-dashes, no hex, no dark: literals', () => {
-    for (const s of [src, pickerSrc]) {
-      expect(s).not.toContain(String.fromCharCode(0x2014));
-      expect(s).not.toMatch(/#[0-9a-fA-F]{3,6}\b|dark:/);
-    }
+  it('no em-dashes (chat-tokens.test.ts guards hex and theme literals)', () => {
+    for (const s of [src, pickerSrc]) expect(s).not.toContain(String.fromCharCode(0x2014));
   });
 });
 
@@ -189,7 +186,7 @@ describe('day picker sheet', () => {
     expect(html).toContain('In Pipeline: Wed 14 Oct');
     expect(html.match(/data-plan-day-tile=/g)).toHaveLength(7);
     expect(html).toContain('grid-cols-4');
-    expect(html).toMatch(/data-plan-day-tile="2026-10-15" aria-pressed="true"[^>]*bg-accent/);
+    expect(html).toMatch(/data-plan-day-tile="2026-10-15" aria-pressed="true"[^>]*bg-accent\b/);
     expect(html).toContain('2 items');
     expect(html).toContain('text-accent">Tue');
     expect(html).toContain('data-plan-day-pipeline');
