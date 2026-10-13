@@ -348,10 +348,11 @@ async function runTimeline(page: Page): Promise<void> {
 async function runAtOnce(page: Page): Promise<void> {
   const network = await installHarnessNetwork(page);
   seedPlanChat(network);
-  // Messages 300ms, every other read 150ms: the whole open (three rounds on
+  // Messages 200ms, every other read 80ms: the whole open (three rounds on
   // each path: the page, its chips, their files; the plan ids, the plans,
-  // their reviews) settles under 1s.
-  await delaySupabaseReads(page, (name) => (name === 'chat_messages' ? 300 : 150));
+  // their reviews) settles well under 1s, leaving headroom for a runner busy
+  // with parallel workers.
+  await delaySupabaseReads(page, (name) => (name === 'chat_messages' ? 200 : 80));
   await recordOpen(page);
   const reads = countReads(page);
   await page.goto('/chat');

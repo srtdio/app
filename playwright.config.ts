@@ -17,9 +17,11 @@ export default defineConfig({
   outputDir: 'e2e/results',
   forbidOnly: isCI,
   fullyParallel: true,
-  ...(isCI ? { workers: 4 } : {}),
-  // Four workers share the runner's CPUs with Vite: long flows get headroom
-  // (specs that set their own timeout keep it).
+  // Three workers on the 4-vCPU runner: the open-at-once paint test measures
+  // against the app's 1s hold, and a fourth worker starves the browser of CPU.
+  ...(isCI ? { workers: 3 } : {}),
+  // Parallel workers share the runner's CPUs with Vite: long flows get
+  // headroom (specs that set their own timeout keep it).
   timeout: 60_000,
   retries: 0,
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'list',
