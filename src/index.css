@@ -122,20 +122,6 @@
        in both light and dark. */
     background-color: var(--bg);
   }
-  /* While the on-screen keyboard is open (src/lib/keyboard-viewport.ts), pin
-     the app to the visible area above it so the composer sits on the
-     browser's bar with no gap. The page itself cannot scroll then, so the
-     browser has nothing to pan. Nothing changes with the keyboard closed. */
-  :root[data-keyboard='open'],
-  :root[data-keyboard='open'] body {
-    overflow: hidden;
-  }
-  :root[data-keyboard='open'] #root {
-    position: fixed;
-    inset-inline: 0;
-    top: var(--keyboard-vv-top, 0px);
-    height: var(--keyboard-vvh, 100%);
-  }
   /* No grey flash over tapped controls on touch screens (iOS / Android draw
      one on anything with a click handler); pressed and focus styles are the
      app's own. Inherited, so this one rule covers every element. */

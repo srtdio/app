@@ -5,7 +5,6 @@ import App from '@/App';
 import { initSentry } from '@/lib/sentry';
 import { TraceProvider } from '@/lib/trace-context';
 import { initTheme } from '@/lib/theme';
-import { initKeyboardViewport } from '@/lib/keyboard-viewport';
 import { initViewportLock } from '@/lib/viewport-lock';
 import { browserStaleDeployDeps, runStaleDeployGuard } from '@/lib/stale-deploy';
 import '@/index.css';
@@ -13,7 +12,6 @@ import '@/index.css';
 initSentry();
 initTheme();
 initViewportLock();
-initKeyboardViewport();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
