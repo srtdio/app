@@ -44,6 +44,8 @@ export const INBOX_EVENT_TYPES = [
   'plan_deleted',
   'plan_date_changed',
   'plan_updated',
+  'task_changed',
+  'task_due',
 ] as const;
 
 /** One inbox_entries.event_type value, derived from the canonical list. */

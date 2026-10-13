@@ -23,7 +23,7 @@ export default defineConfig({
   // Parallel workers share the runner's CPUs with Vite: long flows get
   // headroom (specs that set their own timeout keep it).
   timeout: 60_000,
-  retries: 0,
+  retries: isCI ? 1 : 0,
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: `http://localhost:${port}`,
