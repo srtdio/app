@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
+import { PresignCache } from '@/lib/asset-presign';
 import {
   canPage,
   clampPan,
@@ -8,8 +11,8 @@ import {
   dismissOpacity,
   dominantAxisSwipe,
   doubleTapTarget,
-  downloadLink,
   dragAxis,
+  imageDownload,
   lightboxCounter,
   shouldDismiss,
   wrapIndex,
@@ -178,36 +181,89 @@ describe('gesture axes', () => {
   });
 });
 
-describe('downloadLink', () => {
-  it('links the presigned GET url with the file name', () => {
-    expect(
-      downloadLink({
-        url: 'https://signed/a.png',
-        name: 'a.png',
-        presignEnabled: true,
-        local: false,
-      }),
-    ).toEqual({ href: 'https://signed/a.png', download: 'a.png' });
-  });
-
-  it('is disabled (null) while the presign is pending or presign is disabled', () => {
-    expect(
-      downloadLink({ url: null, name: 'a.png', presignEnabled: true, local: false }),
-    ).toBeNull();
-    expect(
-      downloadLink({
-        url: 'https://signed/a.png',
-        name: 'a.png',
-        presignEnabled: false,
-        local: false,
-      }),
-    ).toBeNull();
-  });
-
-  it('downloads a local preview without presigning, and names a blank file', () => {
-    expect(downloadLink({ url: 'blob:x', name: ' ', presignEnabled: false, local: true })).toEqual({
-      href: 'blob:x',
-      download: 'image',
+describe('imageDownload', () => {
+  function fakeCache(): { cache: PresignCache; calls: Array<[string, string]> } {
+    const calls: Array<[string, string]> = [];
+    const cache = new PresignCache({
+      endpoint: 'https://asset-read.test',
+      getAccessToken: async () => 'token',
+      fetcher: async () => new Response(null, { status: 500 }),
     });
+    vi.spyOn(cache, 'freshUrl').mockImplementation(async (id, disposition = 'inline') => {
+      calls.push([id, disposition]);
+      return { url: `https://signed/${id}?${disposition}`, expiresAt: Date.now() + 60_000 };
+    });
+    return { cache, calls };
+  }
+
+  it('mints a fresh attachment link from asset-read on every save, never a cached GET', async () => {
+    const { cache, calls } = fakeCache();
+    const target = imageDownload({
+      image: { assetId: 'v1', name: 'a.png' },
+      cache,
+      presignEnabled: true,
+    });
+    expect(target?.name).toBe('a.png');
+    // Nothing is fetched until the tap.
+    expect(calls).toEqual([]);
+    expect((await target?.getLink())?.url).toBe('https://signed/v1?attachment');
+    await target?.getLink();
+    expect(calls).toEqual([
+      ['v1', 'attachment'],
+      ['v1', 'attachment'],
+    ]);
+  });
+
+  // Regression: an image not stored yet (no version id, no preview) asked
+  // asset-read for version '' and showed an error.
+  it('is disabled (null) for an image not stored yet', () => {
+    const { cache, calls } = fakeCache();
+    expect(
+      imageDownload({ image: { assetId: '', name: 'a.png' }, cache, presignEnabled: true }),
+    ).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it('is disabled (null) while presign is disabled', () => {
+    const { cache } = fakeCache();
+    expect(
+      imageDownload({ image: { assetId: 'v1', name: 'a.png' }, cache, presignEnabled: false }),
+    ).toBeNull();
+  });
+
+  it('saves a local preview without presigning, never revoking it, and names a blank file', async () => {
+    const { cache, calls } = fakeCache();
+    const target = imageDownload({
+      image: { assetId: 'v1', name: ' ', src: 'blob:x' },
+      cache,
+      presignEnabled: false,
+    });
+    expect(target?.name).toBe('image');
+    const link = await target?.getLink();
+    expect(link?.url).toBe('blob:x');
+    const revoke = vi.fn();
+    vi.stubGlobal('URL', { revokeObjectURL: revoke });
+    link?.release();
+    expect(revoke).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('ImageLightbox Download never leaves the window', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('../ImageLightbox.tsx', import.meta.url)),
+    'utf8',
+  );
+
+  it('has no target="_blank", no window.open and no anchor href to the image', () => {
+    expect(source).not.toMatch(/_blank/);
+    expect(source).not.toMatch(/window\.open/);
+    expect(source).not.toMatch(/<a\b/);
+  });
+
+  it('saves through the shared download helper, the same one the FileViewer uses', () => {
+    expect(source).toMatch(/from '@\/lib\/files\/download'/);
+    expect(source).toMatch(/saveFromLink\(/);
   });
 });

@@ -1,5 +1,20 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+// The FileViewer portals to document.body, which this DOM-less environment has
+// none of: a marker stands in for it so a mount shows up in the markup.
+vi.mock('@/components/ui/FileViewer', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    FileViewer: (p: { kind: string; name: string }) => (
+      <div data-test-file-viewer={p.kind} data-test-name={p.name} />
+    ),
+  };
+});
 import {
   lightboxView,
   lightboxCounter,
@@ -9,7 +24,11 @@ import {
   pinPointFromRect,
   placePinFromEvent,
   createSwipeDismiss,
+  slideViewerKind,
+  markOpenFailed,
+  PostLightbox,
 } from '@/components/pages/pcs/PostLightbox';
+import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { DISMISS_DISTANCE, DISMISS_FLICK_VELOCITY } from '@/components/ui/ImageLightbox';
 import type { LightboxViewProps, StageGestures } from '@/components/pages/pcs/PostLightbox';
 import type { GalleryItem } from '@srtdio/posts';
@@ -638,5 +657,174 @@ describe('swipe-down dismiss', () => {
       'translateY(64px)',
     );
     expect(className(dragged)).not.toMatch(/\btranslate-|\brotate-/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Files in briefs and posts open in the FileViewer.
+// ---------------------------------------------------------------------------
+
+const PDF_MIME = 'application/pdf';
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+function fileItem(n: number, mimeType: string | null, kind = 'file'): GalleryItem {
+  return { ...item(n, null, null), filename: `file-${n}`, mimeType, kind };
+}
+
+const DEPS: PresignDeps = {
+  endpoint: 'https://asset-read.test',
+  getAccessToken: async () => 'token',
+  fetcher: async () => new Response(null, { status: 500 }),
+};
+
+function mount(items: GalleryItem[], index = 0, presignEnabled = true): string {
+  return renderToStaticMarkup(
+    <PostLightbox
+      items={items}
+      index={index}
+      presignEnabled={presignEnabled}
+      cache={new PresignCache(DEPS)}
+      deps={DEPS}
+      onIndexChange={() => {}}
+      onClose={() => {}}
+    />,
+  );
+}
+
+/** The file slide's card, rendered one level down (it is a component, not a tag). */
+function fileCard(tree: ReactNode): ReactElement {
+  const card = elements(tree).find(
+    (el) => typeof el.type === 'function' && 'onOpen' in (el.props as object),
+  );
+  if (card === undefined) throw new Error('no file card');
+  return (card.type as (p: unknown) => ReactElement)(card.props);
+}
+
+describe('files open in the FileViewer', () => {
+  it('routes pdf, office and other files by mime to the FileViewer; images and video stay inline', () => {
+    expect(slideViewerKind(fileItem(0, PDF_MIME))).toBe('pdf');
+    expect(slideViewerKind(fileItem(0, DOCX_MIME))).toBe('office');
+    expect(slideViewerKind(fileItem(0, 'application/zip'))).toBe('file');
+    expect(slideViewerKind(fileItem(0, null))).toBe('file');
+    expect(slideViewerKind(item(0))).toBeNull();
+    expect(slideViewerKind(fileItem(0, 'video/mp4', 'video'))).toBeNull();
+    expect(slideViewerKind(fileItem(0, null, 'video'))).toBeNull();
+    expect(slideViewerKind(fileItem(0, null, 'image'))).toBeNull();
+  });
+
+  it('never classifies by file name', () => {
+    expect(slideViewerKind({ ...fileItem(0, null), filename: 'deck.pdf' })).toBe('file');
+    expect(slideViewerKind({ ...fileItem(0, PDF_MIME), filename: 'clip.mp4' })).toBe('pdf');
+  });
+
+  it.each([
+    [PDF_MIME, 'pdf'],
+    [DOCX_MIME, 'office'],
+    ['application/zip', 'file'],
+  ])('a tapped %s slide opens straight in the FileViewer as %s', (mime, kind) => {
+    const html = mount([item(0), fileItem(1, mime)], 1);
+    expect(html).toContain(`data-test-file-viewer="${kind}"`);
+    expect(html).toContain('data-test-name="file-1"');
+  });
+
+  it('a tapped image or video slide opens no FileViewer', () => {
+    expect(mount([item(0), fileItem(1, PDF_MIME)], 0)).not.toContain('data-test-file-viewer');
+    expect(mount([fileItem(0, 'video/mp4', 'video')], 0)).not.toContain('data-test-file-viewer');
+  });
+
+  it('opens no FileViewer while presign is disabled', () => {
+    expect(mount([fileItem(0, PDF_MIME)], 0, false)).not.toContain('data-test-file-viewer');
+  });
+
+  it('a file slide shows its kind and Open, never "Preview unavailable." or a filename', () => {
+    const onOpenFile = vi.fn();
+    const pdf = fileItem(0, PDF_MIME);
+    const view = lightboxView(props({ items: [pdf], onOpenFile }));
+    expect(renderToStaticMarkup(view)).not.toContain('Preview unavailable.');
+    const tree = fileCard(view);
+    const all = strings(tree);
+    expect(all).not.toContain('Preview unavailable.');
+    expect(all).toContain('PDF');
+    expect(all.some((text) => text.includes('file-0'))).toBe(false);
+    const open = elements(tree).find((el) => el.type === 'button' && strings(el).includes('Open'));
+    if (open === undefined) throw new Error('no Open button');
+    expect(className(open)).toContain('min-h-[44px]');
+    const stop = vi.fn();
+    (open.props as { onClick: (e: { stopPropagation: () => void }) => void }).onClick({
+      stopPropagation: stop,
+    });
+    // The tap never reaches the stage (no chrome toggle) and opens this slide.
+    expect(stop).toHaveBeenCalled();
+    expect(onOpenFile).toHaveBeenCalledWith(pdf);
+  });
+
+  it('a failed open leaves "Couldn\'t open. Try again." on the slide', () => {
+    const tree = lightboxView(props({ items: [fileItem(0, PDF_MIME)], openFailedFor: () => true }));
+    expect(strings(fileCard(tree))).toContain("Couldn't open. Try again.");
+  });
+
+  it('images and video keep rendering inline, with no Open card', () => {
+    const tree = lightboxView(
+      props({ items: [item(0), fileItem(1, 'video/mp4', 'video')], onOpenFile: () => {} }),
+    );
+    expect(elements(tree).some((el) => el.type === 'img')).toBe(true);
+    expect(elements(tree).some((el) => el.type === 'video')).toBe(true);
+    expect(renderToStaticMarkup(tree)).not.toContain('data-file-slide');
+  });
+});
+
+describe('viewer wiring regressions', () => {
+  // Regression: a new object on every failure report re-rendered the lightbox,
+  // which handed the viewer a new callback, which reported again: a loop.
+  it('marking a failed open twice returns the same state, so it never re-renders', () => {
+    const once = markOpenFailed({}, 'v1');
+    expect(once).toEqual({ v1: true });
+    expect(markOpenFailed(once, 'v1')).toBe(once);
+    expect(markOpenFailed(once, 'v2')).toEqual({ v1: true, v2: true });
+  });
+
+  it('passes the FileViewer stable callbacks, never inline arrows', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./PostLightbox.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(source).toMatch(/onClose=\{closeViewer\}/);
+    expect(source).toMatch(/onLoadError=\{onViewerError\}/);
+  });
+});
+
+describe('a broken file never blanks the post or brief', () => {
+  it('mounts the boundary-wrapped FileViewer, never the bare sheet', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./PostLightbox.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(source).toMatch(/<FileViewer\b/);
+    expect(source).not.toMatch(/FileViewerSheet/);
+  });
+
+  it('the FileViewer sits inside the ErrorBoundary whose fallback is close + Download', async () => {
+    const actual = await vi.importActual<typeof import('@/components/ui/FileViewer')>(
+      '@/components/ui/FileViewer',
+    );
+    const { ErrorBoundary } = await import('@/components/ui/ErrorBoundary');
+    vi.stubGlobal('document', { body: { nodeType: 1 } });
+    try {
+      const portal = actual.FileViewer({
+        name: 'deck.pdf',
+        kind: 'pdf',
+        source: actual.remoteFileSource(new PresignCache(DEPS), 'v1'),
+        onClose: () => {},
+      }) as unknown as { children: ReactNode } | null;
+      if (portal === null) throw new Error('no portal');
+      const boundary = elements(portal.children).find((el) => el.type === ErrorBoundary);
+      if (boundary === undefined) throw new Error('no boundary');
+      const bp = boundary.props as { name: string; fallback: ReactElement; children: ReactElement };
+      expect(bp.name).toBe('file-viewer');
+      expect(bp.fallback.type).toBe(actual.FileViewerFallback);
+      expect(bp.children.type).toBe(actual.FileViewerSheet);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
