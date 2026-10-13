@@ -20,19 +20,17 @@ async function swipeDown(page: Page): Promise<void> {
     if (!(bar instanceof HTMLElement)) throw new Error('no viewer bar');
     const rect = bar.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
-    const touch = (y: number): Touch =>
-      new Touch({ identifier: 1, target: bar, clientX: x, clientY: y, pageX: x, pageY: y });
+    // WebKit has no Touch constructor: plain events carrying the touch lists
+    // the sheet reads (touches[0].clientX / clientY).
     const fire = (type: string, y: number, ended = false): void => {
-      const t = touch(y);
-      bar.dispatchEvent(
-        new TouchEvent(type, {
-          bubbles: true,
-          cancelable: true,
-          touches: ended ? [] : [t],
-          targetTouches: ended ? [] : [t],
-          changedTouches: [t],
-        }),
-      );
+      const point = { identifier: 1, target: bar, clientX: x, clientY: y };
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, {
+        touches: { value: ended ? [] : [point] },
+        targetTouches: { value: ended ? [] : [point] },
+        changedTouches: { value: [point] },
+      });
+      bar.dispatchEvent(event);
     };
     const start = rect.top + 20;
     fire('touchstart', start);
