@@ -214,7 +214,9 @@ describe('Create plan (item 1)', () => {
   it('has no audience toggle or hints; every new plan is a Draft (team)', () => {
     expect(src).not.toMatch(/data-plan-audience|AUDIENCE_HINTS|Who can see it/);
     expect(src).toContain("export const NEW_PLAN_AUDIENCE = 'team';");
-    expect(src).toContain('audience: NEW_PLAN_AUDIENCE');
+    // plan_create_with_items makes every plan a Draft: no audience is sent.
+    expect(src).toContain('planCreateWithItems(supabase, args)');
+    expect(src).not.toMatch(/p_audience/);
   });
   it('drafts are always allowed in the picker; the footer reads Create plan', () => {
     expect(src).toContain('data-plan-add-drafts');

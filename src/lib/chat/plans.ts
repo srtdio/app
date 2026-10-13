@@ -13,13 +13,19 @@
 // is plan_items.target_date. Framework-free: the create steps and the readers
 // are injected, so the contract is unit-tested directly.
 
-import type { Client, PlanConceptAddArgs, PlanConceptEditArgs, Result } from '@srtdio/rpc';
+import type {
+  Client,
+  PlanConceptAddArgs,
+  PlanConceptEditArgs,
+  PlanCreateWithItemsArgs,
+  Result,
+} from '@srtdio/rpc';
 import { planDraftRows } from '@srtdio/rpc';
 import { abortable, READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
 import type { Precheck } from '@/lib/asset-upload';
 import type { AttachmentUploader } from '@/lib/chat/attachments';
 import { openPlans } from '@/lib/chat/status-bar';
-import { civilDayOf } from '@/lib/plan-week';
+import { civilDayOf, civilDaysBetween, formatCivilDayHeader } from '@/lib/plan-week';
 
 /** Ids per IN read (the PostgREST URL stays short). */
 export const PLAN_READ_CHUNK = 100;
@@ -1604,4 +1610,287 @@ export async function runSlotWrite(input: {
   }
   if (!result.ok) input.apply(input.previous);
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// New plan: a day for every item, one-step create
+// ---------------------------------------------------------------------------
+
+/**
+ * An item's day on the New plan screen: a civil day inside the plan, 'none'
+ * (No date), or null (it needs a day: Create will not run).
+ */
+export type ComposeDay = string | 'none' | null;
+
+/** The plan's dates. */
+export interface ComposeRange {
+  startsOn: string;
+  endsOn: string;
+}
+
+export interface ComposeConcept {
+  kind: 'concept';
+  key: string;
+  title: string;
+  description: string;
+  files: Array<{ versionId: string; name: string }>;
+  day: ComposeDay;
+}
+
+export interface ComposePost {
+  kind: 'post' | 'draft';
+  /** The post id. */
+  key: string;
+  title: string;
+  stage: string;
+  /** The post's Pipeline day in the workspace zone; null when undated. */
+  orig: string | null;
+  day: ComposeDay;
+  /** The day was picked by hand (a range change never refills it). */
+  chosen: boolean;
+}
+
+export type ComposeItem = ComposeConcept | ComposePost;
+
+/** Max concepts and max posts plan_create_with_items takes. */
+export const COMPOSE_MAX_CONCEPTS = 50;
+export const COMPOSE_MAX_POSTS = 50;
+
+/** Longest plan the New plan screen allows: 5 weeks (end - start <= 34). */
+export const COMPOSE_MAX_SPAN_DAYS = 34;
+
+/** Whether a civil day is inside the plan (inclusive). Pure. */
+export function inComposeRange(day: string | null, range: ComposeRange): boolean {
+  return day !== null && day >= range.startsOn && day <= range.endsOn;
+}
+
+/**
+ * A picked post's row: its Pipeline date (civil day in the zone) prefills the
+ * day when inside the plan; undated is No date; dated outside needs a day. Pure.
+ */
+export function composePostItem(
+  post: { id: string; title: string; stage: string; target_date?: string | null | undefined },
+  kind: 'post' | 'draft',
+  range: ComposeRange,
+  timeZone: string,
+): ComposePost {
+  const orig = civilDayOf(post.target_date ?? null, timeZone);
+  // A row without the column is never read as undated (No date would clear it).
+  const known = post.target_date !== undefined;
+  const day: ComposeDay = !known
+    ? null
+    : orig === null
+      ? 'none'
+      : inComposeRange(orig, range)
+        ? orig
+        : null;
+  return { kind, key: post.id, title: post.title, stage: post.stage, orig, day, chosen: false };
+}
+
+/**
+ * After the plan dates change: a day now outside goes back to needing one; a
+ * post whose day was not picked by hand and whose Pipeline date is now inside
+ * gets it. Pure.
+ */
+export function recheckComposeItems(
+  items: readonly ComposeItem[],
+  range: ComposeRange,
+): ComposeItem[] {
+  return items.map((item) => {
+    let day = item.day;
+    if (day !== null && day !== 'none' && !inComposeRange(day, range)) day = null;
+    if (item.kind !== 'concept' && !item.chosen && inComposeRange(item.orig, range)) {
+      day = item.orig;
+    }
+    return day === item.day ? item : { ...item, day };
+  });
+}
+
+/** The items that still need a day, in screen order. Pure. */
+export function composeNeedsDay(items: readonly ComposeItem[]): ComposeItem[] {
+  return items.filter((i) => i.day === null);
+}
+
+/** Posts whose Pipeline date moves to a different day. Pure. */
+export function composeMoves(items: readonly ComposeItem[]): number {
+  return items.filter(
+    (i) => i.kind !== 'concept' && i.day !== null && i.day !== 'none' && i.day !== i.orig,
+  ).length;
+}
+
+/** Posts whose Pipeline date changes at all (a move, or a date cleared). Pure. */
+export function composePipelineUpdates(items: readonly ComposeItem[]): number {
+  return items.filter(
+    (i) =>
+      i.kind !== 'concept' &&
+      i.day !== null &&
+      (i.day === 'none' ? i.orig !== null : i.day !== i.orig),
+  ).length;
+}
+
+/** The line under Create: what still needs a day, how many dates move, or Ready. Pure. */
+export function composeSummary(items: readonly ComposeItem[]): string {
+  const need = composeNeedsDay(items).length;
+  if (need > 0) return `${need} ${need === 1 ? 'item needs' : 'items need'} a day`;
+  const moves = composeMoves(items);
+  if (moves > 0) return `${moves} Pipeline ${moves === 1 ? 'date' : 'dates'} will move to match`;
+  return 'Ready';
+}
+
+/** The note under a row; warn is the orange "outside this plan" line. Pure. */
+export function composeItemNote(item: ComposeItem): { text: string; warn: boolean } | null {
+  if (item.kind === 'concept') return null;
+  const fmt = formatCivilDayHeader;
+  if (item.day === null) {
+    return item.orig !== null
+      ? { text: `Dated ${fmt(item.orig)}, outside this plan. Pick a day.`, warn: true }
+      : null;
+  }
+  if (item.day === 'none') {
+    return item.orig !== null
+      ? { text: `Pipeline date ${fmt(item.orig)} will be cleared.`, warn: false }
+      : null;
+  }
+  if (item.day === item.orig) return null;
+  return {
+    text:
+      item.orig !== null
+        ? `Pipeline date moves from ${fmt(item.orig)} to ${fmt(item.day)}.`
+        : `Pipeline date moves to ${fmt(item.day)}.`,
+    warn: false,
+  };
+}
+
+/** Create's refusal while items need a day: the heading and one line per item. Pure. */
+export function composeNeedsDayError(
+  items: readonly ComposeItem[],
+): { heading: string; lines: string[] } | null {
+  const need = composeNeedsDay(items);
+  if (need.length === 0) return null;
+  return {
+    heading: `${need.length} ${need.length === 1 ? 'item needs' : 'items need'} a day before the plan can be created.`,
+    lines: need.map((i) =>
+      i.kind !== 'concept' && i.orig !== null
+        ? `${i.title} is dated ${formatCivilDayHeader(i.orig)}, outside this plan`
+        : i.title,
+    ),
+  };
+}
+
+/** Create's refusal when the plan has nothing in it. */
+export const COMPOSE_EMPTY = 'Add at least one item to create a plan.';
+
+/** Create's refusal past the proc's limits. */
+export const COMPOSE_TOO_MANY = 'A plan can hold up to 50 concepts and 50 posts.';
+
+/**
+ * plan_create_with_items' args: concepts in screen order, posts once each
+ * (first wins), a post's day or null (No date: clears its Pipeline date).
+ * Call only when nothing needs a day. Pure.
+ */
+export function composeCreateArgs(input: {
+  workspaceId: string;
+  title: string;
+  range: ComposeRange;
+  items: readonly ComposeItem[];
+  traceId: string;
+}): PlanCreateWithItemsArgs {
+  const dayOf = (day: ComposeDay): string | null => (day === null || day === 'none' ? null : day);
+  const seen = new Set<string>();
+  const posts: PlanCreateWithItemsArgs['p_posts'] = [];
+  const concepts: PlanCreateWithItemsArgs['p_concepts'] = [];
+  for (const item of input.items) {
+    if (item.kind === 'concept') {
+      concepts.push({
+        title: item.title.trim(),
+        description: item.description.trim(),
+        attachment_version_ids: item.files.map((f) => f.versionId),
+        target_date: dayOf(item.day),
+      });
+    } else if (!seen.has(item.key)) {
+      seen.add(item.key);
+      posts.push({ post_id: item.key, target_date: dayOf(item.day) });
+    }
+  }
+  return {
+    p_workspace_id: input.workspaceId,
+    p_title: input.title.trim(),
+    p_starts_on: input.range.startsOn,
+    p_ends_on: input.range.endsOn,
+    p_concepts: concepts,
+    p_posts: posts,
+    p_trace_id: input.traceId,
+  };
+}
+
+/** The toast after Create: "Plan created with 4 items. 2 Pipeline dates updated." Pure. */
+export function composeCreatedToast(items: number, updated: number): string {
+  const head = `Plan created with ${items} ${items === 1 ? 'item' : 'items'}`;
+  return updated > 0
+    ? `${head}. ${updated} Pipeline ${updated === 1 ? 'date' : 'dates'} updated.`
+    : `${head}.`;
+}
+
+/** The plan-dates sheet's check: end on or after start, at most 5 weeks. Pure. */
+export function composeRangeProblem(range: ComposeRange): string | null {
+  if (range.startsOn === '' || range.endsOn === '') {
+    return 'The end date must be on or after the start date.';
+  }
+  const span = civilDaysBetween(range.startsOn, range.endsOn).length - 1;
+  if (span < 0 || range.endsOn < range.startsOn) {
+    return 'The end date must be on or after the start date.';
+  }
+  if (span > COMPOSE_MAX_SPAN_DAYS) return 'A plan can cover up to 5 weeks. Shorten the dates.';
+  return null;
+}
+
+/** Words in a concept description (whitespace-separated). Pure. */
+export function wordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+/** The soft word guide for a concept description. */
+export const CONCEPT_WORD_AIM = 50;
+
+/** The counter under the description: "12 / 50 words", or past 50 the aim line. Pure. */
+export function wordCounterLabel(text: string): { label: string; over: boolean } {
+  const n = wordCount(text);
+  return n > CONCEPT_WORD_AIM
+    ? { label: `${n} words · aim for ${CONCEPT_WORD_AIM} so the client reads it all`, over: true }
+    : { label: `${n} / ${CONCEPT_WORD_AIM} words`, over: false };
+}
+
+/**
+ * Existing plan, header "+" then Pick a post: posts dated inside the plan or
+ * undated go in now (no day sent); posts dated outside wait for a day. Pure.
+ */
+export function splitPickedByRange<
+  T extends { id: string; target_date?: string | null | undefined },
+>(posts: readonly T[], range: ComposeRange, timeZone: string): { now: string[]; outside: T[] } {
+  const now: string[] = [];
+  const outside: T[] = [];
+  for (const post of posts) {
+    const day = civilDayOf(post.target_date ?? null, timeZone);
+    if (day === null || inComposeRange(day, range)) now.push(post.id);
+    else outside.push(post);
+  }
+  return { now, outside };
+}
+
+/** The picked days of the outside posts grouped into one add per day (first-seen order). Pure. */
+export function groupPostsByDay(
+  choices: ReadonlyArray<{ postId: string; day: string }>,
+): Array<{ day: string; postIds: string[] }> {
+  const byDay = new Map<string, string[]>();
+  for (const c of choices) {
+    const list = byDay.get(c.day);
+    if (list === undefined) byDay.set(c.day, [c.postId]);
+    else if (!list.includes(c.postId)) list.push(c.postId);
+  }
+  return [...byDay].map(([day, postIds]) => ({ day, postIds }));
+}
+
+/** The note when a post dated outside the plan was skipped. Pure. */
+export function skippedOutsideNote(title: string): string {
+  return `${title} was not added: its date is outside this plan.`;
 }

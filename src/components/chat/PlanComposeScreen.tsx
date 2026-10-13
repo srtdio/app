@@ -1,21 +1,27 @@
 // The New plan screen (full page, one history step), opened from the Plans
-// sheet. Title, From and To (this Monday to Sunday in the workspace zone by
-// default, at most 92 days), concepts (title, description, up to 20 library
-// files) and posts from Pipeline (drafts allowed). Every new plan is a Draft
-// (audience team); there is no audience choice. Nothing is written until
-// "Create plan": then plan_create, each concept in order and the posts in one
-// call, in sequence with one trace id. No card is ever sent to chat. A failed
-// step keeps what was created and offers Retry, which resumes from that step
-// (the form locks once the plan exists, so a retry never adds a concept
-// twice). On success the screen closes and the new plan's Plan screen opens.
-// Tokens only; translateY motion only.
+// sheet. Title, the plan dates (this Monday to Sunday in the workspace zone by
+// default; Change opens a From / To sheet, at most 5 weeks) and one list of
+// items in screen order: concepts (title, description, up to 20 library
+// files), posts from Pipeline and drafts. Every item has a day button: a day
+// of the plan, No date, or (a post dated outside the plan, or a day the dates
+// dropped) "Pick a day" in warning colour. A picked post's day comes from its
+// Pipeline date when that is inside the plan; picking another day, or No date
+// on a dated post, says so under the row. Every new plan is a Draft (audience
+// team). Nothing is written until "Create plan": then one
+// plan_create_with_items call with one trace id saves the plan, its items and
+// the Pipeline dates together, or nothing (the form is never locked; a failure
+// says what to do and nothing is half built). While an item needs a day the
+// server is never called. On success the screen closes and the new plan's Plan
+// screen opens. No card is ever sent to chat. Tokens only; translateY motion
+// for sheets, a short translateX shake on the first flagged row.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { PostCardFields } from '@srtdio/posts';
-import { planConceptAdd, planCreate, planPostsAdd } from '@srtdio/rpc';
+import { planCreateWithItems } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
-import { IconX } from '@/components/ui/icons';
+import { IconCalendar, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
+import { useToast } from '@/components/ui/toast';
 import {
   ConceptSheet,
   EMPTY_CONCEPT,
@@ -24,39 +30,136 @@ import {
   type ConceptForm,
 } from '@/components/chat/ConceptSheet';
 import { PostPicker } from '@/components/chat/PostPicker';
-import { togglePost } from '@/components/chat/post-picker';
 import { PlanPage } from '@/components/chat/PlanScreen';
+import {
+  PlanDatesSheet,
+  PlanDayPickerSheet,
+  dayPickerSubline,
+} from '@/components/chat/PlanDayPickerSheet';
 import {
   CREATE_PLAN_LABEL,
   DRAFT_PROBLEM_COPY,
   NO_DATE_LABEL,
+  PLAN_CREATE_ERROR_COPY,
+  PLAN_CREATE_FAILED_COPY,
   PLAN_TITLE_MAX,
   defaultPlanRange,
   draftProblem,
-  shortDay,
+  planWriteErrorCopy,
   stageLabel,
 } from '@/components/chat/plan-card';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { newMessageId } from '@/lib/chat/message-id';
 import {
-  PLAN_CREATE_FAILED,
-  conceptAddArgs,
+  COMPOSE_EMPTY,
+  COMPOSE_MAX_CONCEPTS,
+  COMPOSE_MAX_POSTS,
+  COMPOSE_TOO_MANY,
+  composeCreateArgs,
+  composeCreatedToast,
+  composeItemNote,
+  composeNeedsDay,
+  composeNeedsDayError,
+  composePipelineUpdates,
+  composePostItem,
+  composeSummary,
   createShareEpoch,
-  initialShareProgress,
-  runPlanShare,
-  type DraftConcept,
-  type PlanDraft,
+  inComposeRange,
+  recheckComposeItems,
+  type ComposeConcept,
+  type ComposeDay,
+  type ComposeItem,
+  type ComposeRange,
   type ShareEpoch,
-  type ShareProgress,
 } from '@/lib/chat/plans';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
+import { civilDaysBetween, civilToday, formatCivilDayHeader } from '@/lib/plan-week';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 
-/** Every new plan is a Draft: plan_create's audience. */
+export { DATE_FIELD, DATE_FIT } from '@/components/chat/PlanDayPickerSheet';
+
+/** Every new plan is a Draft (audience team); plan_create_with_items makes it so. */
 export const NEW_PLAN_AUDIENCE = 'team';
+
+/** The empty list's line. */
+export const COMPOSE_NO_ITEMS = 'No items yet. Add a concept, a Pipeline post or a draft.';
+
+/** The day button while an item needs a day. */
+export const PICK_A_DAY = 'Pick a day';
+
+/** Create's button while the one call is in flight. */
+export const CREATING_LABEL = 'Creating…';
+
+/**
+ * A concept form's date standing for "needs a day": before any plan day, so
+ * the tiles select nothing and a Save without a pick keeps it flagged.
+ */
+const CONCEPT_DAY_UNSET = '0000-00-00';
+
+/** An inline error under Create: a heading plus per-item lines, or one sentence. */
+interface ComposeError {
+  heading: string;
+  lines: string[];
+  /** The lines are a list of items (the needs-a-day refusal). */
+  list?: boolean;
+}
+
+/** The concept form for a row (its day mapped to the form's date). Pure. */
+export function composeConceptForm(item: ComposeConcept): ConceptForm {
+  return {
+    title: item.title,
+    description: item.description,
+    files: [...item.files],
+    date: item.day === null ? CONCEPT_DAY_UNSET : item.day === 'none' ? '' : item.day,
+  };
+}
+
+/** A concept row from the sheet's form: '' is No date, a day outside the plan needs one. Pure. */
+export function composeConceptFrom(
+  key: string,
+  form: ConceptForm,
+  range: ComposeRange,
+): ComposeConcept {
+  const day: ComposeDay =
+    form.date === '' ? 'none' : inComposeRange(form.date, range) ? form.date : null;
+  return {
+    kind: 'concept',
+    key,
+    title: form.title.trim(),
+    description: form.description.trim(),
+    files: [...form.files],
+    day,
+  };
+}
+
+/** Items per plan day (the tiles' counts). Pure. */
+export function composeDayCounts(items: readonly ComposeItem[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const i of items) {
+    if (i.day !== null && i.day !== 'none') counts[i.day] = (counts[i.day] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/** A server failure's copy, split so the first sentence can lead in bold. Pure. */
+export function composeServerError(message: string): ComposeError {
+  const copy = planWriteErrorCopy(message, PLAN_CREATE_FAILED_COPY, PLAN_CREATE_ERROR_COPY);
+  const at = copy.indexOf('. ');
+  return at === -1
+    ? { heading: copy, lines: [] }
+    : { heading: copy.slice(0, at + 1), lines: [copy.slice(at + 2)] };
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
 export function PlanComposeScreen(props: {
   open: boolean;
@@ -64,30 +167,31 @@ export function PlanComposeScreen(props: {
   timeZone: string;
   onClose: () => void;
   /**
-   * The plan exists with its concepts and posts: open its Plan screen.
-   * `stale` is true when the screen was closed (or reopened) meanwhile: the
-   * current form is left alone and nothing opens.
+   * The plan exists with its items: open its Plan screen. `stale` is true when
+   * the screen was closed (or reopened) meanwhile: nothing opens.
    */
   onCreated: (planId: string, stale: boolean) => void;
 }): ReactElement | null {
+  const toast = useToast();
   const [title, setTitle] = useState('');
   const [range, setRange] = useState(() => defaultPlanRange(new Date(), props.timeZone));
-  const [concepts, setConcepts] = useState<DraftConceptItem[]>([]);
-  const [posts, setPosts] = useState<PostCardFields[]>([]);
+  const [items, setItems] = useState<ComposeItem[]>([]);
+  // The picker's rows for the posts in the list (the picker's selection).
+  const [picked, setPicked] = useState<PostCardFields[]>([]);
   const [picker, setPicker] = useState<'posts' | 'drafts' | null>(null);
   const [conceptOpen, setConceptOpen] = useState(false);
-  // The draft concept the sheet edits; null while it adds a new one.
+  // The concept the sheet edits; null while it adds a new one.
   const [editKey, setEditKey] = useState<string | null>(null);
+  const [dayFor, setDayFor] = useState<string | null>(null);
+  const [datesOpen, setDatesOpen] = useState(false);
   // Concept uploads go as comments' do (library origin).
   const { canAttach, uploadFile } = useCommentAttachments();
   const [conceptForm, setConceptForm] = useState<ConceptForm>(EMPTY_CONCEPT);
-  const [progress, setProgress] = useState<ShareProgress>(() =>
-    initialShareProgress(newMessageId()),
-  );
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ComposeError | null>(null);
   const [triedShare, setTriedShare] = useState(false);
-  const traceRef = useRef<string | null>(null);
+  const inFlight = useRef(false);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -96,8 +200,8 @@ export function PlanComposeScreen(props: {
     };
   }, []);
 
-  // Every open and close starts a new epoch: a share still running from an
-  // earlier form never lands its progress or error on the current one.
+  // Every open and close starts a new epoch: a create still running from an
+  // earlier form never lands its result on the current one.
   const open = props.open;
   const epochRef = useRef<ShareEpoch | null>(null);
   epochRef.current ??= createShareEpoch();
@@ -112,113 +216,108 @@ export function PlanComposeScreen(props: {
     if (!open) return;
     setTitle('');
     setRange(defaultPlanRange(new Date(), timeZone));
-    setConcepts([]);
-    setPosts([]);
+    setItems([]);
+    setPicked([]);
     setPicker(null);
     setConceptOpen(false);
     setEditKey(null);
+    setDayFor(null);
+    setDatesOpen(false);
     setConceptForm(EMPTY_CONCEPT);
-    setProgress(initialShareProgress(newMessageId()));
     setBusy(false);
     setError(null);
     setTriedShare(false);
-    traceRef.current = null;
+    inFlight.current = false;
   }, [open, timeZone]);
 
-  // Once the plan exists the form is fixed: a retry resumes, never re-adds.
-  const locked = progress.planId !== null || busy;
   const problem = draftProblem({ title, startsOn: range.startsOn, endsOn: range.endsOn });
+  const today = civilToday(new Date(), timeZone);
+  const counts = composeDayCounts(items);
+  const dayCount = civilDaysBetween(range.startsOn, range.endsOn).length;
 
-  // Drafts list in the plan's order: dated by day, undated last (stable).
-  const shownConcepts = useMemo(
-    () =>
-      concepts
-        .map((c, at) => ({ c, at }))
-        .sort(
-          (a, b) =>
-            (a.c.date === '' ? 1 : 0) - (b.c.date === '' ? 1 : 0) ||
-            a.c.date.localeCompare(b.c.date) ||
-            a.at - b.at,
-        )
-        .map(({ c }) => c),
-    [concepts],
-  );
+  const flash = (key: string): void => {
+    const row = rowRefs.current.get(key);
+    if (row === undefined) return;
+    row.scrollIntoView({ block: 'center' });
+    if (!prefersReducedMotion() && typeof row.animate === 'function') {
+      row.animate(
+        [
+          { transform: 'translateX(0)' },
+          { transform: 'translateX(-4px)' },
+          { transform: 'translateX(4px)' },
+          { transform: 'translateX(0)' },
+        ],
+        { duration: 300, easing: 'ease-out' },
+      );
+    }
+  };
 
   const create = async (): Promise<void> => {
+    if (inFlight.current) return;
     setTriedShare(true);
-    if (busy || problem !== null) return;
+    if (problem === 'title') return;
+    if (items.length === 0) {
+      setError({ heading: COMPOSE_EMPTY, lines: [] });
+      return;
+    }
+    const need = composeNeedsDayError(items);
+    if (need !== null) {
+      setError({ ...need, list: true });
+      const first = composeNeedsDay(items)[0];
+      if (first !== undefined) flash(first.key);
+      return;
+    }
+    const concepts = items.filter((i) => i.kind === 'concept').length;
+    if (concepts > COMPOSE_MAX_CONCEPTS || items.length - concepts > COMPOSE_MAX_POSTS) {
+      setError({ heading: COMPOSE_TOO_MANY, lines: [] });
+      return;
+    }
+    inFlight.current = true;
     const token = epoch.current();
     setBusy(true);
     setError(null);
-    const traceId = traceRef.current ?? generateTraceId();
-    traceRef.current = traceId;
-    const draft: PlanDraft = {
+    const traceId = generateTraceId();
+    const args = composeCreateArgs({
       workspaceId: props.workspaceId,
-      title: title.trim(),
-      startsOn: range.startsOn,
-      endsOn: range.endsOn,
-      audience: NEW_PLAN_AUDIENCE,
-      concepts: concepts.map(
-        (c): DraftConcept => ({
-          key: c.key,
-          title: c.title.trim(),
-          description: c.description.trim(),
-          versionIds: c.files.map((f) => f.versionId),
-          targetDate: c.date !== '' ? c.date : null,
-        }),
-      ),
-      postIds: posts.map((p) => p.id),
-    };
-    const result = await runPlanShare(
-      {
-        create: (d, trace) =>
-          planCreate(supabase, {
-            p_workspace_id: d.workspaceId,
-            p_title: d.title,
-            p_starts_on: d.startsOn,
-            p_ends_on: d.endsOn,
-            p_audience: d.audience,
-            p_trace_id: trace,
-          }),
-        conceptAdd: (planId, c, trace) =>
-          planConceptAdd(supabase, conceptAddArgs(planId, c, trace)),
-        postsAdd: (planId, ids, trace) =>
-          planPostsAdd(supabase, { p_plan_id: planId, p_post_ids: ids, p_trace_id: trace }),
-      },
-      draft,
-      progress,
+      title,
+      range,
+      items,
       traceId,
-    );
-    const planId = result.progress.planId;
+    });
+    let result: Awaited<ReturnType<typeof planCreateWithItems>>;
+    try {
+      result = await planCreateWithItems(supabase, args);
+    } catch (thrown) {
+      result = { ok: false, error: { code: 'unknown', message: String(thrown) } };
+    }
+    inFlight.current = false;
     if (!mounted.current || !epoch.isCurrent(token)) {
       // The form this create started from is gone: nothing opens.
-      if (result.ok && planId !== null) props.onCreated(planId, true);
+      if (result.ok) props.onCreated(result.data, true);
       return;
     }
     setBusy(false);
-    setProgress(result.progress);
     if (!result.ok) {
       logger.warn('chat: plan create failed', {
         trace_id: traceId,
-        step: result.step,
-        plan_id: result.progress.planId,
-        error: result.message,
+        error: result.error.message,
       });
-      setError(PLAN_CREATE_FAILED);
+      setError(composeServerError(result.error.message));
       return;
     }
-    if (planId !== null) props.onCreated(planId, false);
+    toast.show({ title: composeCreatedToast(items.length, composePipelineUpdates(items)) });
+    const planId = result.data;
+    props.onCreated(planId, false);
   };
 
-  // Add appends a new concept; Edit replaces the draft in place (same key,
-  // same position). Local only: nothing is written until Share.
+  // Add appends a new concept; Edit replaces it in place (same key, same
+  // position). Local only: nothing is written until Create.
   const submitConcept = (): void => {
     if (!conceptFormValid(conceptForm)) return;
-    const form = conceptForm;
-    setConcepts((prev) =>
-      editKey !== null
-        ? replaceDraftConcept(prev, editKey, form)
-        : [...prev, { ...form, key: newMessageId() }],
+    const key = editKey ?? newMessageId();
+    const next = composeConceptFrom(key, conceptForm, range);
+    setItems((prev) =>
+      editKey !== null ? prev.map((i) => (i.key === editKey ? next : i)) : [...prev, next],
     );
     setConceptForm(EMPTY_CONCEPT);
     setEditKey(null);
@@ -226,33 +325,100 @@ export function PlanComposeScreen(props: {
   };
 
   const editConcept = (key: string): void => {
-    if (locked) return;
-    const form = draftConceptForm(concepts, key);
-    if (form === null) return;
-    setConceptForm(form);
+    const item = items.find((i) => i.key === key);
+    if (item === undefined || item.kind !== 'concept') return;
+    setConceptForm(composeConceptForm(item));
     setEditKey(key);
     setConceptOpen(true);
   };
 
+  const removeItem = (key: string): void => {
+    setItems((prev) => prev.filter((i) => i.key !== key));
+    setPicked((prev) => prev.filter((p) => p.id !== key));
+    setError(null);
+  };
+
+  // The picker toggles a post in or out; a new row's day is worked out here,
+  // before it renders, so it paints in its final state.
+  const togglePicked = (post: PostCardFields): void => {
+    if (picked.some((p) => p.id === post.id)) {
+      removeItem(post.id);
+      return;
+    }
+    const row = composePostItem(
+      post as PostCardFields & { target_date?: string | null },
+      post.stage === 'draft' ? 'draft' : 'post',
+      range,
+      timeZone,
+    );
+    setPicked((prev) => [...prev, post]);
+    setItems((prev) => (prev.some((i) => i.key === row.key) ? prev : [...prev, row]));
+    setError(null);
+  };
+
+  const pickDay = (day: string | 'none'): void => {
+    const key = dayFor;
+    setDayFor(null);
+    if (key === null) return;
+    const next = items.map((i) =>
+      i.key !== key ? i : i.kind === 'concept' ? { ...i, day } : { ...i, day, chosen: true },
+    );
+    setItems(next);
+    if (composeNeedsDay(next).length === 0) setError(null);
+  };
+
+  const saveDates = (next: ComposeRange): void => {
+    setRange(next);
+    setItems((prev) => recheckComposeItems(prev, next));
+    setDatesOpen(false);
+    setError(null);
+  };
+
+  const dayItem = items.find((i) => i.key === dayFor) ?? null;
+  // The sheet keeps its last item's header through its exit.
+  const lastDayItem = useRef<ComposeItem | null>(null);
+  if (dayItem !== null) lastDayItem.current = dayItem;
+  const shownDayItem = dayItem ?? lastDayItem.current;
+
   const footer = (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       {error !== null ? (
-        <p role="alert" data-plan-share-error="" className="text-[13px] text-bad">
-          {error}
-        </p>
+        <div
+          role="alert"
+          data-plan-share-error=""
+          className="rounded-xl bg-bad-soft px-3 py-2.5 text-[13.5px] leading-[1.45] text-bad"
+        >
+          <p className="font-semibold">{error.heading}</p>
+          {error.list === true ? (
+            <ul className="mt-1 list-disc pl-[18px]">
+              {error.lines.map((line, at) => (
+                <li key={at}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            error.lines.map((line, at) => <p key={at}>{line}</p>)
+          )}
+        </div>
       ) : null}
       <Button
         size="lg"
         variant="primary"
         data-plan-create=""
         className="min-h-[50px] w-full"
-        disabled={busy || problem !== null}
+        aria-busy={busy}
+        disabled={busy}
         onClick={() => void create()}
       >
-        {busy ? 'Creating…' : error !== null ? 'Retry' : CREATE_PLAN_LABEL}
+        {busy ? CREATING_LABEL : CREATE_PLAN_LABEL}
       </Button>
+      <p data-plan-compose-summary="" className="text-center text-[12.5px] text-fg-3">
+        {composeSummary(items)}
+      </p>
     </div>
   );
+
+  const addClass =
+    'flex min-h-[48px] w-full items-center gap-2.5 rounded-xl border border-dashed border-border-strong px-3 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
   return (
     <>
@@ -265,118 +431,101 @@ export function PlanComposeScreen(props: {
         onBack={props.onClose}
         footer={footer}
       >
-        <div className="flex flex-col gap-[18px] p-4">
-          <div className="flex flex-col gap-2">
-            <label htmlFor="plan-title" className="text-[13px] text-fg-3">
-              Title
-            </label>
+        <div className="flex flex-col gap-3.5 p-3">
+          <div className="flex flex-col gap-1.5">
             <input
               id="plan-title"
               data-plan-title=""
+              aria-label="Plan name"
               value={title}
               maxLength={PLAN_TITLE_MAX}
-              disabled={locked}
               autoComplete="off"
               placeholder="Week of 12 Oct"
               onChange={(e) => setTitle(e.target.value)}
-              className={FIELD}
+              className={cn(FIELD, 'font-semibold')}
             />
             {triedShare && problem === 'title' ? (
               <p className="text-[13px] text-bad">{DRAFT_PROBLEM_COPY.title}</p>
             ) : null}
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  ['startsOn', 'From'],
-                  ['endsOn', 'To'],
-                ] as const
-              ).map(([field, label]) => (
-                <label key={field} className="flex w-full min-w-0 flex-col gap-1">
-                  <span className="text-[13px] text-fg-3">{label}</span>
-                  <input
-                    type="date"
-                    data-plan-date={field}
-                    value={range[field]}
-                    disabled={locked}
-                    onChange={(e) => setRange((r) => ({ ...r, [field]: e.target.value }))}
-                    className={DATE_FIELD}
-                  />
-                </label>
-              ))}
-            </div>
-            {problem === 'dates' || problem === 'too_long' ? (
-              <p className="text-[13px] text-bad">{DRAFT_PROBLEM_COPY[problem]}</p>
-            ) : null}
           </div>
 
-          <section className="flex flex-col gap-2" aria-label="Concepts">
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="text-[15px] font-semibold text-fg">Concepts</h3>
-              <span className="text-[13px] text-fg-3">Ideas before they are posts</span>
+          <div
+            data-plan-dates-row=""
+            className="flex min-h-[48px] items-center justify-between gap-2 rounded-xl bg-panel-2 pl-3 pr-1"
+          >
+            <div className="flex min-w-0 flex-col">
+              <span className="text-sm text-fg">
+                {formatCivilDayHeader(range.startsOn)} to {formatCivilDayHeader(range.endsOn)}
+              </span>
+              <span className="text-[12.5px] text-fg-3">
+                Plan dates · <span className="font-mono tabular-nums">{dayCount}</span> days
+              </span>
             </div>
-            {shownConcepts.map((c) => (
-              <DraftConceptRow
-                key={c.key}
-                concept={c}
-                locked={locked}
-                onEdit={() => editConcept(c.key)}
-                onRemove={() => setConcepts((prev) => removeDraftConcept(prev, c.key))}
+            <button
+              type="button"
+              data-plan-dates-change=""
+              onClick={() => setDatesOpen(true)}
+              className="min-h-[44px] shrink-0 rounded-md px-2.5 text-sm font-semibold text-accent hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              Change
+            </button>
+          </div>
+
+          <section className="flex flex-col gap-2" aria-label="Items">
+            <h3 className="mx-1 text-xs uppercase tracking-[0.06em] text-fg-3">
+              Items · <span className="font-mono tabular-nums">{items.length}</span>
+            </h3>
+            {items.length === 0 ? (
+              <p className="px-0.5 text-[12.5px] leading-[1.4] text-fg-3">{COMPOSE_NO_ITEMS}</p>
+            ) : null}
+            {items.map((item) => (
+              <ComposeItemRow
+                key={item.key}
+                item={item}
+                rowRef={(el) => {
+                  if (el !== null) rowRefs.current.set(item.key, el);
+                  else rowRefs.current.delete(item.key);
+                }}
+                onDay={() => setDayFor(item.key)}
+                onEdit={() => editConcept(item.key)}
+                onRemove={() => removeItem(item.key)}
               />
             ))}
+          </section>
+
+          <div className="flex flex-col gap-2">
             <button
               type="button"
               data-plan-add-concept=""
-              disabled={locked}
               onClick={() => {
                 setConceptForm(EMPTY_CONCEPT);
                 setEditKey(null);
                 setConceptOpen(true);
               }}
-              className="min-h-[44px] rounded-lg border border-dashed border-border-strong text-[15px] font-medium text-accent disabled:opacity-60"
+              className={addClass}
             >
-              + Add concept
+              <IconPlus size={20} />
+              Add concept
             </button>
-          </section>
-
-          <section className="flex flex-col gap-2" aria-label="Posts">
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="text-[15px] font-semibold text-fg">Posts</h3>
-              <span className="text-[13px] text-fg-3">From Pipeline</span>
-            </div>
-            {posts.map((p) => (
-              <div
-                key={p.id}
-                data-plan-draft-post=""
-                className="flex items-center gap-3 rounded-lg border border-border bg-panel p-3"
-              >
-                <span className="h-12 w-12 shrink-0 rounded-md bg-accent-soft" />
-                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-fg">
-                  {p.title}
-                </span>
-                <span className="rounded-md bg-panel-2 px-2 py-0.5 text-[13px] text-fg-2">
-                  {stageLabel(p.stage)}
-                </span>
-              </div>
-            ))}
             <button
               type="button"
               data-plan-add-posts=""
-              disabled={locked}
               onClick={() => setPicker('posts')}
-              className="min-h-[44px] rounded-lg border border-dashed border-border-strong text-[15px] font-medium text-accent disabled:opacity-60"
+              className={addClass}
             >
-              + Add from Pipeline
+              <IconPlus size={20} />
+              Add from Pipeline
             </button>
             <button
               type="button"
               data-plan-add-drafts=""
-              disabled={locked}
               onClick={() => setPicker('drafts')}
-              className="min-h-[44px] rounded-lg border border-dashed border-border-strong text-[15px] font-medium text-accent disabled:opacity-60"
+              className={addClass}
             >
-              + Add drafts
+              <IconPlus size={20} />
+              Add drafts
             </button>
-          </section>
+          </div>
         </div>
       </PlanPage>
 
@@ -384,8 +533,8 @@ export function PlanComposeScreen(props: {
         open={props.open && picker !== null}
         onClose={() => setPicker(null)}
         mode={picker ?? 'posts'}
-        selected={posts}
-        onToggle={(post) => setPosts((prev) => togglePost(prev, post))}
+        selected={picked}
+        onToggle={togglePicked}
         selectedBriefs={[]}
         onToggleBrief={() => {}}
         // A Draft plan allows drafts (the picker's own drafts gate reads this).
@@ -399,117 +548,162 @@ export function PlanComposeScreen(props: {
         onChange={setConceptForm}
         onSubmit={submitConcept}
         onClose={() => setConceptOpen(false)}
+        range={range}
+        today={today}
+        dayCounts={counts}
         {...(canAttach ? { uploadFile } : {})}
+      />
+
+      <PlanDayPickerSheet
+        open={props.open && dayItem !== null}
+        title={shownDayItem?.title ?? ''}
+        subline={shownDayItem !== null ? dayPickerSubline(shownDayItem, range) : ''}
+        range={range}
+        selected={shownDayItem?.day ?? null}
+        today={today}
+        counts={counts}
+        pipelineDay={
+          shownDayItem !== null && shownDayItem.kind !== 'concept' ? shownDayItem.orig : null
+        }
+        onPick={pickDay}
+        onClose={() => setDayFor(null)}
+      />
+
+      <PlanDatesSheet
+        open={props.open && datesOpen}
+        range={range}
+        onSave={saveDates}
+        onClose={() => setDatesOpen(false)}
       />
     </>
   );
 }
 
-/** A concept added on the New plan screen, before the plan exists. */
-export type DraftConceptItem = ConceptForm & { key: string };
-
-/**
- * The From / To inputs shrink to their half of the row: WebKit's date input
- * keeps an intrinsic min width (and centres its value) unless its native look
- * is reset, which on a 320px iPhone pushed To past the screen edge.
- */
-export const DATE_FIT =
-  'block min-w-0 appearance-none [-webkit-appearance:none] [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-calendar-picker-indicator]:m-0';
-
-/** The date inputs: the field look with a slimmer side padding so the date fits at 320px. */
-export const DATE_FIELD = cn(
-  FIELD.replace(' px-3.5 ', ' px-2.5 '),
-  DATE_FIT,
-  'font-mono text-[15px]',
-);
-
-/** The sheet's form for a draft concept (its fields and files); null when gone. Pure. */
-export function draftConceptForm(
-  concepts: readonly DraftConceptItem[],
-  key: string,
-): ConceptForm | null {
-  const c = concepts.find((x) => x.key === key);
-  if (c === undefined) return null;
-  return { title: c.title, description: c.description, date: c.date, files: [...c.files] };
-}
-
-/** The list with the draft at `key` replaced in place (same key, same position). Pure. */
-export function replaceDraftConcept(
-  concepts: readonly DraftConceptItem[],
-  key: string,
-  form: ConceptForm,
-): DraftConceptItem[] {
-  return concepts.map((c) => (c.key === key ? { ...form, key } : c));
-}
-
-/** The list without the draft at `key`. Pure. */
-export function removeDraftConcept(
-  concepts: readonly DraftConceptItem[],
-  key: string,
-): DraftConceptItem[] {
-  return concepts.filter((c) => c.key !== key);
+/** A row's type line: "Concept", "Draft", or "Post · In review". Pure. */
+export function composeKindLabel(item: ComposeItem): string {
+  if (item.kind === 'concept') return 'Concept';
+  if (item.kind === 'draft') return 'Draft';
+  return `Post · ${stageLabel(item.stage)}`;
 }
 
 /**
- * A draft concept on the New plan screen: the whole row (but the X) opens it
- * in the concept sheet; the X removes it. Both are off while the screen is
- * locked (a share is running or the plan exists).
+ * One item on the New plan screen: thumb, title and type line, the remove X
+ * (44px), a concept's description (2 lines), the full-width day button and
+ * its note. A row that needs a day is drawn in warning colour. A concept's
+ * title area opens it in the concept sheet.
  */
-export function DraftConceptRow(props: {
-  concept: DraftConceptItem;
-  locked: boolean;
+export function ComposeItemRow(props: {
+  item: ComposeItem;
+  rowRef?: (el: HTMLDivElement | null) => void;
+  onDay: () => void;
   onEdit: () => void;
   onRemove: () => void;
 }): ReactElement {
-  const c = props.concept;
-  return (
-    <div
-      data-plan-draft-concept=""
-      className="flex items-start rounded-lg border border-border bg-panel"
-    >
-      <button
-        type="button"
-        data-plan-draft-concept-edit=""
-        aria-label={`Edit ${c.title}`}
-        disabled={props.locked}
-        onClick={props.onEdit}
-        onContextMenu={(event) => event.preventDefault()}
+  const { item } = props;
+  const need = item.day === null;
+  const note = composeItemNote(item);
+  const head = (
+    <>
+      <span
+        aria-hidden="true"
         className={cn(
-          'flex min-h-[44px] min-w-0 flex-1 items-start gap-3 rounded-lg p-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:hover:bg-transparent',
-          NO_TOUCH_SELECT,
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-sm font-semibold',
+          item.kind === 'concept' && 'border-[1.5px] border-dashed border-border-strong text-fg-3',
+          item.kind === 'post' && 'bg-accent-soft text-accent',
+          item.kind === 'draft' && 'bg-panel-2 text-fg-3',
         )}
       >
-        <span className="h-12 w-12 shrink-0 rounded-md border border-dashed border-border-strong bg-panel-3" />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span
-            data-plan-draft-concept-title=""
-            className="truncate text-[15px] font-semibold text-fg"
-          >
-            {c.title}
-          </span>
-          <span className="line-clamp-2 text-[13px] text-fg-3">
-            {c.description !== ''
-              ? c.description
-              : `${c.files.length} ${c.files.length === 1 ? 'file' : 'files'}`}
-          </span>
-          <span
-            data-plan-draft-concept-date={c.date !== '' ? 'dated' : 'none'}
-            className={cn('text-[13px] text-fg-3', c.date !== '' && 'font-mono')}
-          >
-            {c.date !== '' ? shortDay(c.date) : NO_DATE_LABEL}
-          </span>
+        {item.kind === 'concept' ? 'C' : item.title.charAt(0).toUpperCase()}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+        <span data-plan-item-title="" className="truncate text-[15px] font-semibold text-fg">
+          {item.title}
         </span>
-      </button>
+        <span className="text-[12.5px] text-fg-3">{composeKindLabel(item)}</span>
+      </span>
+    </>
+  );
+  return (
+    <div
+      ref={props.rowRef}
+      data-plan-compose-item={item.kind}
+      data-plan-compose-flag={need ? 'need' : 'ok'}
+      className={cn(
+        'flex flex-col gap-2 rounded-[14px] border p-2.5',
+        need ? 'border-warn bg-warn-soft' : 'border-border bg-panel',
+      )}
+    >
+      <div className="flex items-center gap-2.5">
+        {item.kind === 'concept' ? (
+          <button
+            type="button"
+            data-plan-draft-concept-edit=""
+            aria-label={`Edit ${item.title}`}
+            onClick={props.onEdit}
+            onContextMenu={(event) => event.preventDefault()}
+            className={cn(
+              '-m-1 flex min-h-[44px] min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              NO_TOUCH_SELECT,
+            )}
+          >
+            {head}
+          </button>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">{head}</div>
+        )}
+        <button
+          type="button"
+          data-plan-compose-remove=""
+          aria-label={`Remove ${item.title}`}
+          onClick={props.onRemove}
+          className="-my-1.5 -mr-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <IconX size={18} />
+        </button>
+      </div>
+      {item.kind === 'concept' && item.description !== '' ? (
+        <p className="line-clamp-2 px-0.5 text-[13.5px] leading-[1.45] text-fg-3">
+          {item.description}
+        </p>
+      ) : null}
       <button
         type="button"
-        data-plan-draft-concept-remove=""
-        aria-label={`Remove ${c.title}`}
-        disabled={props.locked}
-        onClick={props.onRemove}
-        className="m-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60 disabled:hover:bg-transparent"
+        data-plan-day-button={need ? 'need' : item.day === 'none' ? 'none' : 'day'}
+        onClick={props.onDay}
+        className={cn(
+          'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-[10px] border px-3 text-left text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          need ? 'border-warn bg-panel text-warn' : 'border-border bg-panel-2 text-fg',
+        )}
       >
-        <IconX size={18} />
+        {need ? (
+          <>
+            {PICK_A_DAY}
+            <IconChevronRight size={18} />
+          </>
+        ) : (
+          <>
+            {item.day === 'none' ? (
+              <span className="font-medium text-fg-3">{NO_DATE_LABEL}</span>
+            ) : (
+              <span>{formatCivilDayHeader(item.day as string)}</span>
+            )}
+            <span className="text-fg-3">
+              <IconCalendar size={18} />
+            </span>
+          </>
+        )}
       </button>
+      {note !== null ? (
+        <p
+          data-plan-compose-note={note.warn ? 'warn' : 'info'}
+          className={cn(
+            'px-0.5 text-[12.5px] leading-[1.4]',
+            note.warn ? 'font-medium text-warn' : 'text-fg-3',
+          )}
+        >
+          {note.text}
+        </p>
+      ) : null}
     </div>
   );
 }
