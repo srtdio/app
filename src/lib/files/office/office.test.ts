@@ -15,7 +15,14 @@ import {
   type XlsxView,
 } from './types';
 import { decodeEntities, parseXmlTree, scanXml, XmlError } from './xml';
-import { columnPx, formatGeneral, formatNumber, formatSerialDate, parseFormat } from './xlsx';
+import {
+  BOOK_TEXT_BUDGET,
+  columnPx,
+  formatGeneral,
+  formatNumber,
+  formatSerialDate,
+  parseFormat,
+} from './xlsx';
 import { readZipDirectory, readZipEntry, ZipError } from './zip';
 
 function buf(bytes: Uint8Array): ArrayBuffer {
@@ -301,6 +308,48 @@ describe('xlsx', () => {
       xlsx([{ name: 'L', xml: `<sheetData>${row(1, ['A', long])}</sheetData>` }]),
     ).sheets[0];
     expect(sheet?.cells[0]?.text.length).toBe(CELL_TEXT_CAP);
+  });
+
+  it('one long shared string in every cell cannot blow up the copy out of the Worker', () => {
+    const long = 'y'.repeat(CELL_TEXT_CAP);
+    let rows = '';
+    const perRow = 20;
+    for (let r = 1; r <= 400; r++) {
+      let cells = '';
+      for (let c = 0; c < perRow; c++)
+        cells += `<c r="${String.fromCharCode(65 + c)}${r}" t="s"><v>0</v></c>`;
+      rows += `<row r="${r}">${cells}</row>`;
+    }
+    const sheet = bookView(xlsx([{ name: 'Bomb', xml: `<sheetData>${rows}</sheetData>` }], [long]))
+      .sheets[0];
+    const kept = (sheet?.cells ?? []).reduce((n, c) => n + c.text.length, 0);
+    expect(kept).toBeLessThanOrEqual(BOOK_TEXT_BUDGET);
+    expect(sheet?.totalRows).toBe(400);
+    expect(sheet?.shownRows).toBeLessThan(400);
+    // Whole rows only.
+    expect(sheet?.cells.length).toBe((sheet?.shownRows ?? 0) * perRow);
+  });
+
+  it('columns past the cap are counted (for the cap note); phonetic text stays out', () => {
+    const sheet = bookView(
+      xlsx([
+        {
+          name: 'Wide',
+          xml:
+            '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><r><t>漢字</t></r><rPh sb="0" eb="2"><t>かんじ</t></rPh></is></c>' +
+            '<c r="IW1"><v>1</v></c></row></sheetData>',
+        },
+      ]),
+    ).sheets[0];
+    expect(sheet?.cells[0]?.text).toBe('漢字');
+    expect(sheet?.totalCols).toBe(257);
+    expect(sheet?.shownCols).toBe(1);
+  });
+
+  it('an unterminated entity run stays linear', () => {
+    const start = Date.now();
+    expect(decodeEntities('&'.repeat(200_000)).length).toBe(200_000);
+    expect(Date.now() - start).toBeLessThan(1000);
   });
 
   it('booleans, errors and dates read as Excel shows them', () => {

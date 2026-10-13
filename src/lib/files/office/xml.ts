@@ -48,8 +48,10 @@ export function decodeEntities(raw: string): string {
       break;
     }
     out += raw.slice(i, amp);
-    const semi = raw.indexOf(';', amp + 1);
-    if (semi === -1 || semi - amp > 12) {
+    // Look for ';' only within the longest reference (keeps this linear).
+    const rel = raw.slice(amp + 1, amp + 13).indexOf(';');
+    const semi = rel === -1 ? -1 : amp + 1 + rel;
+    if (semi === -1) {
       out += '&';
       i = amp + 1;
       continue;

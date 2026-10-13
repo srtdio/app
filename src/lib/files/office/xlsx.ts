@@ -27,6 +27,12 @@ import type { OfficePackage } from './package';
 import { scanXml } from './xml';
 
 const DEFAULT_COL_PX = 64;
+/**
+ * Characters of cell text kept for a whole book. Structured clone copies every
+ * string, so many cells pointing at one long shared string must not multiply
+ * into gigabytes on the way out of the Worker.
+ */
+export const BOOK_TEXT_BUDGET = 8_000_000;
 /** Thrown to end a sheet scan early; never escapes readSheet. */
 const STOP = new Error('stop');
 
@@ -351,6 +357,8 @@ function readSheet(
   maxCols: number,
   /** Stop reading past the cap (the thumbnail needs no row count). */
   stopAtCap = false,
+  /** Characters this sheet may still keep (shared with the rest of the book). */
+  budget: { chars: number } = { chars: BOOK_TEXT_BUDGET },
 ): SheetView {
   const xml = pkg.text(sheet.path);
   if (xml === null) throw new Error('sheet missing');
@@ -360,6 +368,10 @@ function readSheet(
   let defaultPx = DEFAULT_COL_PX;
   let lastRow = -1;
   let lastCol = -1;
+  // The highest column with a value anywhere, before the column cap.
+  let lastColAll = -1;
+  // Rows kept: lowered when the text budget runs out mid-sheet.
+  let rowLimit = maxRows;
   let rowIndex = -1;
   let colCursor = 0;
   let cell: {
@@ -373,6 +385,8 @@ function readSheet(
   } | null = null;
   let field: 'v' | 'f' | 'is' | null = null;
   let inIsT = false;
+  // Inside <rPh> (phonetic reading): its <t> is not cell text.
+  let phonetic = 0;
   let isText = '';
 
   try {
@@ -433,10 +447,13 @@ function readSheet(
             }
             break;
           case 't':
-            if (field === 'is') inIsT = true;
+            if (field === 'is' && phonetic === 0) inIsT = true;
             break;
           case 'rPh':
-            if (field === 'is') inIsT = false;
+            if (field === 'is') {
+              phonetic++;
+              inIsT = false;
+            }
             break;
           case 'mergeCell': {
             const [a, b] = (attrs.ref ?? '').split(':');
@@ -459,20 +476,33 @@ function readSheet(
       close(name) {
         if (name === 'v' || name === 'f') field = null;
         else if (name === 't') inIsT = false;
+        else if (name === 'rPh') phonetic = Math.max(0, phonetic - 1);
         else if (name === 'is') {
           if (cell !== null) cell.v = isText;
           field = null;
         } else if (name === 'c' && cell !== null) {
           const done = cell;
           cell = null;
-          lastRow = Math.max(lastRow, done.r);
-          if (done.r >= maxRows || done.c >= maxCols) return;
           const shown = cellText(done, book);
           if (shown === null) return;
+          // Only rows and columns that hold a value count (formatting alone does not).
+          lastRow = Math.max(lastRow, done.r);
+          lastColAll = Math.max(lastColAll, done.c);
+          if (done.r >= rowLimit || done.c >= maxCols) return;
+          const text = cap(shown.text);
+          if (text.length > budget.chars) {
+            // Out of text budget: keep whole rows only; the cap note counts the rest.
+            rowLimit = done.r;
+            while (cells.length > 0 && (cells[cells.length - 1]?.r ?? -1) >= done.r) {
+              const dropped = cells.pop();
+              budget.chars += dropped?.text.length ?? 0;
+            }
+            return;
+          }
+          budget.chars -= text.length;
           lastCol = Math.max(lastCol, done.c);
-          cells.push({ r: done.r, c: done.c, text: cap(shown.text), kind: shown.kind });
+          cells.push({ r: done.r, c: done.c, text, kind: shown.kind });
         } else if (name === 'row') {
-          lastRow = Math.max(lastRow, rowIndex);
           if (stopAtCap && rowIndex + 1 >= maxRows) throw STOP;
         }
       },
@@ -488,7 +518,7 @@ function readSheet(
   }
 
   const totalRows = lastRow + 1;
-  const shownRows = Math.min(totalRows, maxRows);
+  const shownRows = Math.min(totalRows, rowLimit);
   let usedCols = lastCol + 1;
   for (const m of merges) {
     if (m.r0 < shownRows) usedCols = Math.max(usedCols, Math.min(m.c1, maxCols - 1) + 1);
@@ -508,7 +538,7 @@ function readSheet(
     totalRows,
     shownRows,
     shownCols,
-    totalCols: Math.max(usedCols, lastCol + 1),
+    totalCols: Math.max(usedCols, lastColAll + 1),
     colWidths,
     merges: shownMerges,
     cells,
@@ -556,7 +586,13 @@ export function readXlsxView(pkg: OfficePackage, part: string): XlsxView {
   if (book.sheets.length === 0) throw new Error('no visible worksheet');
   return {
     kind: 'xlsx',
-    sheets: book.sheets.map((s) => readSheet(pkg, book, s, SHEET_ROW_CAP, SHEET_COL_CAP)),
+    sheets: (() => {
+      // One text budget for the whole book: every cell's string is copied out of the Worker.
+      const budget = { chars: BOOK_TEXT_BUDGET };
+      return book.sheets.map((s) =>
+        readSheet(pkg, book, s, SHEET_ROW_CAP, SHEET_COL_CAP, false, budget),
+      );
+    })(),
   };
 }
 

@@ -814,7 +814,7 @@ function OfficeRenderer(props: RendererProps): ReactElement {
       {state.kind === 'docx' ? (
         <WordViewer name={props.name} doc={state.doc} />
       ) : (
-        <SheetViewer book={state.book} scrollerRef={scrollerRef} />
+        <SheetViewer key={attempt} book={state.book} scrollerRef={scrollerRef} />
       )}
     </Suspense>
   );
