@@ -75,8 +75,10 @@ export interface SheetView {
 
 export interface XlsxView {
   kind: 'xlsx';
-  /** Visible worksheets only, in workbook order. */
+  /** Visible worksheets only, in workbook order (at most 64). */
   sheets: SheetView[];
+  /** Visible worksheets in the file, for the cap note. */
+  totalSheets: number;
 }
 
 export interface DocxThumbText {

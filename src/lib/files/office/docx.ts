@@ -22,6 +22,9 @@ const IMAGES_MAX_BYTES = 15 * 1024 * 1024;
  * pages). Past it the file is too large to open in place; Download still works.
  */
 export const DOC_HTML_BUDGET = 4_000_000;
+/** Page sections and pictures a document may produce; past them breaks are ignored and pictures dropped. */
+export const MAX_PAGES = 500;
+export const MAX_IMAGES = 500;
 /** Nested tables deeper than this are dropped. */
 const MAX_TABLE_DEPTH = 8;
 /** EMU per CSS px (914400 per inch, 96 px per inch). */
@@ -142,6 +145,7 @@ class Writer {
   private counters = new Map<string, number>();
   /** HTML characters written, pictures excluded (they have their own byte cap). */
   private htmlChars = 0;
+  private imageCount = 0;
   /** Inside a table a page break never splits the page (it would cut the table). */
   private tableDepth = 0;
 
@@ -163,7 +167,8 @@ class Writer {
   }
 
   pageBreak(): void {
-    if (this.tableDepth > 0) return;
+    // Past MAX_PAGES the rest flows on the last page (each page is laid out on the main thread).
+    if (this.tableDepth > 0 || this.pages.length >= MAX_PAGES - 1) return;
     this.pages.push(this.cur);
     this.cur = '';
   }
@@ -189,7 +194,14 @@ class Writer {
     }
     if (bytes === null) return '';
     const mime = sniffImage(bytes);
-    if (mime === null || this.imagesBytes + bytes.length > IMAGES_MAX_BYTES) return '';
+    if (
+      mime === null ||
+      this.imageCount >= MAX_IMAGES ||
+      this.imagesBytes + bytes.length > IMAGES_MAX_BYTES
+    ) {
+      return '';
+    }
+    this.imageCount++;
     this.imagesBytes += bytes.length;
     const extent = descendant(node, 'extent');
     const w = Math.round(Number(extent?.attrs.cx ?? 0) / EMU_PER_PX);
@@ -198,10 +210,10 @@ class Writer {
       Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 && w < 20000 && h < 20000
         ? ` width="${w}" height="${h}"`
         : '';
-    const tag = `<img alt="" src="data:${mime};base64,${base64(bytes)}"${size}>`;
-    // The picture's bytes count against IMAGES_MAX_BYTES, not the HTML budget.
-    this.htmlChars -= tag.length;
-    return tag;
+    const payload = base64(bytes);
+    // The picture's bytes count against IMAGES_MAX_BYTES; the tag itself still costs the budget.
+    this.htmlChars -= payload.length;
+    return `<img alt="" src="data:${mime};base64,${payload}"${size}>`;
   }
 
   /** A paragraph's inline content; a page break inside it splits the paragraph. */

@@ -12,6 +12,7 @@ import {
   columnLabel,
   rowWindow,
   sheetTitle,
+  windowMerges,
 } from '@/components/ui/viewers/SheetViewer';
 import { handleOfficeRequest } from '@/lib/files/office/handle';
 import { row, xlsx } from '@/lib/files/office/test-fixtures';
@@ -55,6 +56,19 @@ describe('pure helpers', () => {
     expect(capNote(sheet({ totalRows: 5001, shownRows: 5000 }))).toBe(
       'Showing 5,000 of 5,001 rows. Download to see all.',
     );
+  });
+
+  it('the sheet cap joins the note; merges index only the rendered window', () => {
+    expect(capNote(sheet(), { shown: 64, total: 300 })).toBe(
+      'Showing 64 of 300 sheets. Download to see all.',
+    );
+    const big = sheet({
+      shownRows: 5000,
+      totalRows: 5000,
+      shownCols: 256,
+      merges: [{ r0: 0, c0: 0, r1: 4999, c1: 255 }],
+    });
+    expect(windowMerges(big, 100, 160).size).toBe(60 * 256);
   });
 
   it('virtualizes beyond 200 rows: a window near the viewport', () => {
@@ -148,6 +162,7 @@ describe('the grid', () => {
   it('light and dark parity: theme tokens only, no hex, no dark: literals, no HTML injection', () => {
     const html = markup({
       kind: 'xlsx',
+      totalSheets: 1,
       sheets: [sheet({ cells: [{ r: 0, c: 0, text: '<b>x</b>', kind: 's' }] })],
     });
     expect(html).toContain('&lt;b&gt;x&lt;/b&gt;');

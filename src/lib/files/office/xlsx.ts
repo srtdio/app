@@ -35,6 +35,9 @@ const DEFAULT_COL_PX = 64;
 export const BOOK_TEXT_BUDGET = 8_000_000;
 /** What one kept cell costs the budget beyond its text (the object copied out of the Worker). */
 const CELL_COST = 16;
+/** Visible sheets shown per book (tabs), and what each costs the budget. */
+export const MAX_SHEETS = 64;
+const SHEET_COST = 1024;
 /** Merges read per sheet, and kept after de-overlapping. */
 const MAX_MERGES_READ = 20_000;
 export const MAX_MERGES = 10_000;
@@ -290,6 +293,8 @@ export function formatNumber(raw: string, format: Format, date1904: boolean): st
 interface Workbook {
   date1904: boolean;
   sheets: Array<{ name: string; path: string }>;
+  /** Visible worksheets in the file (sheets holds at most MAX_SHEETS of them). */
+  visibleSheets: number;
   strings: string[];
   formats: Format[];
 }
@@ -364,11 +369,13 @@ function readWorkbook(pkg: OfficePackage, part: string): Workbook {
     text() {},
   });
   const sheets: Array<{ name: string; path: string }> = [];
+  let visibleSheets = 0;
   for (const s of listed) {
     const rel = rels.get(s.id);
     // Worksheets only: chart sheets, dialog and macro sheets have nothing to show here.
-    if (rel !== undefined && rel.type.endsWith('/worksheet'))
-      sheets.push({ name: s.name, path: rel.target });
+    if (rel === undefined || !rel.type.endsWith('/worksheet')) continue;
+    visibleSheets++;
+    if (sheets.length < MAX_SHEETS) sheets.push({ name: s.name, path: rel.target });
   }
   let strings: string | null = null;
   let styles: string | null = null;
@@ -379,6 +386,7 @@ function readWorkbook(pkg: OfficePackage, part: string): Workbook {
   return {
     date1904,
     sheets,
+    visibleSheets,
     strings: readStrings(pkg, strings),
     formats: readFormats(pkg, styles),
   };
@@ -632,12 +640,19 @@ export function readXlsxView(pkg: OfficePackage, part: string): XlsxView {
   if (book.sheets.length === 0) throw new Error('no visible worksheet');
   return {
     kind: 'xlsx',
+    totalSheets: book.visibleSheets,
     sheets: (() => {
-      // One text budget for the whole book: every cell's string is copied out of the Worker.
+      // One budget for the whole book: every cell, merge and sheet is copied out of the Worker.
       const budget = { chars: BOOK_TEXT_BUDGET };
-      return book.sheets.map((s) =>
-        readSheet(pkg, book, s, SHEET_ROW_CAP, SHEET_COL_CAP, false, budget),
-      );
+      const out: SheetView[] = [];
+      for (const s of book.sheets) {
+        if (budget.chars <= 0) break;
+        const sheet = readSheet(pkg, book, s, SHEET_ROW_CAP, SHEET_COL_CAP, false, budget);
+        budget.chars -=
+          SHEET_COST + sheet.name.length + sheet.shownCols * 8 + sheet.merges.length * CELL_COST;
+        out.push(sheet);
+      }
+      return out;
     })(),
   };
 }

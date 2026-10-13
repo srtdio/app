@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
-import { DOC_HTML_BUDGET } from './docx';
+import { DOC_HTML_BUDGET, MAX_IMAGES, MAX_PAGES } from './docx';
 import { handleOfficeRequest } from './handle';
 import { runOffice, type OfficeWorkerLike } from './run';
 import { PNG_1X1, docx, encryptedOffice, p, pptx, row, xlsx } from './test-fixtures';
@@ -19,6 +19,7 @@ import { decodeEntities, parseXmlTree, scanXml, XmlError } from './xml';
 import {
   BOOK_TEXT_BUDGET,
   MAX_MERGES,
+  MAX_SHEETS,
   columnPx,
   formatGeneral,
   formatNumber,
@@ -216,6 +217,23 @@ describe('docx', () => {
     expect(doc.pages.join('')).not.toMatch(/gone|HYPERLINK/);
   });
 
+  it(`page breaks stop splitting at ${MAX_PAGES} pages; pictures stop at ${MAX_IMAGES}`, () => {
+    const breaks = '<w:br w:type="page"/>'.repeat(MAX_PAGES * 3);
+    expect(
+      docView(docx({ body: `<w:p><w:r>${breaks}<w:t>end</w:t></w:r></w:p>` })).pages,
+    ).toHaveLength(MAX_PAGES);
+    const pic =
+      '<w:p><w:r><w:drawing><a:blip xmlns:a="y" r:embed="rIdImg"/></w:drawing></w:r></w:p>';
+    const html = docView(
+      docx({
+        body: pic.repeat(MAX_IMAGES + 20),
+        rels: [{ id: 'rIdImg', type: 'image', target: 'media/a.png' }],
+        files: { 'word/media/a.png': PNG_1X1 },
+      }),
+    ).pages.join('');
+    expect(html.match(/<img/g)).toHaveLength(MAX_IMAGES);
+  });
+
   it('tables keep colspan and rowspan', () => {
     const tc = (text: string, pr = ''): string => `<w:tc><w:tcPr>${pr}</w:tcPr>${p(text)}</w:tc>`;
     const html = docView(
@@ -374,6 +392,16 @@ describe('xlsx', () => {
       ]),
     ).sheets[0];
     expect(sheet?.merges).toEqual([{ r0: 0, c0: 0, r1: 299, c1: 25 }]);
+  });
+
+  it(`at most ${MAX_SHEETS} sheets are shown; the rest are counted`, () => {
+    const sheets = Array.from({ length: MAX_SHEETS + 6 }, (_, i) => ({
+      name: `S${i}`,
+      xml: `<sheetData>${row(1, ['A', i])}</sheetData>`,
+    }));
+    const book = bookView(xlsx(sheets));
+    expect(book.sheets).toHaveLength(MAX_SHEETS);
+    expect(book.totalSheets).toBe(MAX_SHEETS + 6);
   });
 
   it('empty cells are never kept; every kept cell costs the budget', () => {

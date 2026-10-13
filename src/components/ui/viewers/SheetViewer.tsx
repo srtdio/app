@@ -44,8 +44,14 @@ export function sheetTitle(sheet: SheetView): string {
 }
 
 /** The cap note, or null when everything is shown. Pure. */
-export function capNote(sheet: SheetView): string | null {
+export function capNote(
+  sheet: SheetView,
+  sheets?: { shown: number; total: number },
+): string | null {
   const parts: string[] = [];
+  if (sheets !== undefined && sheets.total > sheets.shown) {
+    parts.push(`Showing ${fmt(sheets.shown)} of ${fmt(sheets.total)} sheets.`);
+  }
   if (sheet.totalRows > sheet.shownRows) {
     parts.push(`Showing ${fmt(sheet.shownRows)} of ${fmt(sheet.totalRows)} rows.`);
   }
@@ -70,20 +76,30 @@ export function rowWindow(
 
 interface Index {
   cells: Map<number, SheetCell>;
+  /** Merges covering cells of the rendered rows only (bounded by the window). */
   merges: Map<number, SheetMerge>;
 }
 
-function indexSheet(sheet: SheetView): Index {
-  const key = (r: number, c: number): number => r * sheet.shownCols + c;
+function indexCells(sheet: SheetView): Map<number, SheetCell> {
   const cells = new Map<number, SheetCell>();
-  for (const cell of sheet.cells) cells.set(key(cell.r, cell.c), cell);
+  for (const cell of sheet.cells) cells.set(cell.r * sheet.shownCols + cell.c, cell);
+  return cells;
+}
+
+/** The merge covering each cell of rows start..end-1: at most one entry per rendered cell. */
+export function windowMerges(
+  sheet: SheetView,
+  start: number,
+  end: number,
+): Map<number, SheetMerge> {
   const merges = new Map<number, SheetMerge>();
   for (const m of sheet.merges) {
-    for (let r = m.r0; r <= m.r1; r++) {
-      for (let c = m.c0; c <= m.c1; c++) merges.set(key(r, c), m);
+    if (m.r1 < start || m.r0 >= end) continue;
+    for (let r = Math.max(m.r0, start); r <= Math.min(m.r1, end - 1); r++) {
+      for (let c = m.c0; c <= m.c1; c++) merges.set(r * sheet.shownCols + c, m);
     }
   }
-  return { cells, merges };
+  return merges;
 }
 
 const CELL =
@@ -143,7 +159,7 @@ function SheetGrid(props: {
   scrollerRef: MutableRefObject<HTMLDivElement | null>;
 }): ReactElement {
   const { sheet, scrollerRef } = props;
-  const index = useMemo(() => indexSheet(sheet), [sheet]);
+  const cellIndex = useMemo(() => indexCells(sheet), [sheet]);
   const [view, setView] = useState({ top: 0, height: 800 });
 
   useBrowserLayoutEffect(() => {
@@ -161,6 +177,10 @@ function SheetGrid(props: {
   }, [scrollerRef, sheet.shownRows]);
 
   const { start, end } = rowWindow(view.top, view.height, sheet.shownRows);
+  const index = useMemo<Index>(
+    () => ({ cells: cellIndex, merges: windowMerges(sheet, start, end) }),
+    [cellIndex, sheet, start, end],
+  );
   const width = ROW_HEAD_WIDTH + sheet.colWidths.reduce((a, b) => a + b, 0);
   const rows: ReactNode[] = [];
   for (let r = start; r < end; r++) {
@@ -231,7 +251,7 @@ export function SheetViewer(props: {
   const [active, setActive] = useState(0);
   const sheet = book.sheets[Math.min(active, book.sheets.length - 1)] ?? book.sheets[0];
   if (sheet === undefined) return <div />;
-  const note = capNote(sheet);
+  const note = capNote(sheet, { shown: book.sheets.length, total: book.totalSheets });
   return (
     <div
       data-sheet-viewer=""

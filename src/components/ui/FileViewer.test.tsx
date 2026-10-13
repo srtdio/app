@@ -259,6 +259,7 @@ describe('office: docx and xlsx open in place, pptx keeps the fallback', () => {
     op: 'view',
     result: {
       kind: 'xlsx',
+      totalSheets: 1,
       sheets: [
         {
           name: 'Calendar',
