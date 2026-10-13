@@ -859,7 +859,7 @@ describe('xhrPost honours an AbortSignal (cancelled chat send)', () => {
   });
 });
 
-describe('uploadAssetFile: sender-side thumbnail (pdf/video only)', () => {
+describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx)', () => {
   const okBody = { asset: { assetId: 'a-1', versionId: 'v-1', reused: false } };
   const thumbBlob = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' });
 
@@ -910,9 +910,9 @@ describe('uploadAssetFile: sender-side thumbnail (pdf/video only)', () => {
     ['image', 'logo.png', 'image/png'],
     ['audio', 'note.webm', 'audio/webm'],
     [
-      'docx',
-      'brief.docx',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'pptx',
+      'deck.pptx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     ],
   ])('%s never makes or sends a thumbnail', async (_label, name, type) => {
     const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
@@ -922,6 +922,41 @@ describe('uploadAssetFile: sender-side thumbnail (pdf/video only)', () => {
       makeThumbnail,
     });
     expect(makeThumbnail).not.toHaveBeenCalled();
+    expect(sentForm(fetcher).get('thumbnail')).toBeNull();
+  });
+
+  it.each([
+    [
+      'docx',
+      'brief.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
+    ['xlsx', 'plan.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ])('a %s adds the thumbnail part with no page count', async (_label, name, type) => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+    const makeThumbnail = vi.fn(async () => ({
+      ok: true as const,
+      blob: thumbBlob,
+      width: 580,
+      height: 754,
+    }));
+    await uploadAssetFile(fakeFile(name, type, 10), {
+      ...baseConfig(fetcher, name),
+      makeThumbnail,
+    });
+    expect(makeThumbnail).toHaveBeenCalledTimes(1);
+    expect(sentForm(fetcher).get('thumbnail')).toBeInstanceOf(Blob);
+    expect(sentForm(fetcher).get('thumbnail_page_count')).toBeNull();
+  });
+
+  it('a docx whose thumbnail fails still uploads, with no thumbnail part', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+    const type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const outcome = await uploadAssetFile(fakeFile('locked.docx', type, 10), {
+      ...baseConfig(fetcher, 'locked.docx'),
+      makeThumbnail: async () => ({ ok: false as const, reason: 'failed' as const }),
+    });
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
     expect(sentForm(fetcher).get('thumbnail')).toBeNull();
   });
 

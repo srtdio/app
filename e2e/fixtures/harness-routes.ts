@@ -1136,7 +1136,26 @@ export async function installHarnessNetwork(
       }
       const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
       const id = String(body.asset_version_id ?? body.id ?? 'x');
-      // The file viewer's PDF bytes come through the Worker (stream mode).
+      // The file viewer's PDF bytes come through the Worker (stream mode). Like
+      // the real Worker, a chat file that is not a PDF, Word or Excel file
+      // (a pptx) has no stream: 400.
+      const streamMime = Object.values(world.tables.chat_messages ?? [])
+        .map((m) => (m.attachment_meta as Record<string, { mime?: string }> | null)?.[id]?.mime)
+        .find((mime) => mime !== undefined);
+      if (
+        body.stream === true &&
+        streamMime !== undefined &&
+        !/^application\/(pdf|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet))$/.test(
+          streamMime,
+        )
+      ) {
+        await route.fulfill({
+          status: 400,
+          headers: { ...CORS, 'content-type': 'application/json' },
+          body: JSON.stringify({ error: { code: 'bad_request' } }),
+        });
+        return;
+      }
       if (body.stream === true) {
         await route.fulfill({
           status: 200,

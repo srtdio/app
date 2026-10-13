@@ -8,23 +8,26 @@
 //    released, so at most LIVE_PAGE_WINDOW * 2 + 1 canvases exist at once.
 //    Pinch and double-tap zoom; a mono "3 / 12" counter.
 //  - video: the native player on a fresh presigned URL.
-//  - office and any other file: "Preview not available yet" with Download
-//    (Office gets real renderers in the next PR, in the same slot).
+//  - office: docx and xlsx are parsed on the device in a Web Worker (10 s cap,
+//    20 MiB cap, terminated on close) and drawn by WordViewer (a sandboxed
+//    iframe) or SheetViewer (React text nodes only); both load lazily, never
+//    in the main chunk. pptx keeps "Preview not available yet" with Download.
+//  - any other file: "Preview not available yet" with Download.
 //
-// Every open asks for fresh bytes or a fresh link (PDFs come through the
-// asset-read Worker, never storage CORS). A load failure shows "Couldn't open.
+// Every open asks for fresh bytes or a fresh link (PDF, docx and xlsx bytes
+// come through the asset-read Worker's stream mode, never storage CORS). A load failure shows "Couldn't open.
 // Try again." with Download, never a blank sheet; a render crash is caught by
 // the viewer's own ErrorBoundary. Colours come from the theme-independent
 // overlay tokens, the same dark backdrop in light and dark mode.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { MutableRefObject, ReactElement, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { IconDownload, IconFileText, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { humanizeSize } from '@/lib/assets';
-import type { PresignCache } from '@/lib/asset-presign';
+import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
 import {
@@ -36,6 +39,20 @@ import {
   type PdfLoadingTaskLike,
   type PdfRenderTaskLike,
 } from '@/lib/files/thumbnail';
+import {
+  OFFICE_MAX_BYTES,
+  OFFICE_VIEW_TIMEOUT_MS,
+  type DocxView,
+  type OfficeResponse,
+  type XlsxView,
+} from '@/lib/files/office/types';
+
+const WordViewer = lazy(() =>
+  import('@/components/ui/viewers/WordViewer').then((m) => ({ default: m.WordViewer })),
+);
+const SheetViewer = lazy(() =>
+  import('@/components/ui/viewers/SheetViewer').then((m) => ({ default: m.SheetViewer })),
+);
 
 /** Which renderer a file gets. */
 export type ViewerKind = 'pdf' | 'video' | 'office' | 'file';
@@ -115,9 +132,28 @@ export function shouldDismiss(dy: number, ms: number): boolean {
 /** A link the viewer holds while it is open; release() frees a local blob URL. */
 export type { HeldLink };
 
+/** An Office file's bytes and the mime the server stated (null for the sender's own file). */
+export interface OfficeBytes {
+  bytes: Uint8Array;
+  mime: string | null;
+}
+
+/** The file is over the 20 MiB office cap: never read in full, never parsed. */
+export class OfficeTooLargeError extends Error {
+  constructor() {
+    super('office file over the size cap');
+    this.name = 'OfficeTooLargeError';
+  }
+}
+
 export interface FileViewerSource {
   /** The PDF's bytes, fetched fresh on every call. */
   pdfBytes(signal: AbortSignal): Promise<Uint8Array>;
+  /**
+   * A docx or xlsx file's bytes, fresh on every call, at most 20 MiB; null
+   * when the server has no preview for its type (pptx).
+   */
+  officeBytes(signal: AbortSignal): Promise<OfficeBytes | null>;
   /** A playable link for the video, fresh on every call. */
   videoLink(): Promise<HeldLink>;
   /** A link that saves the file (Content-Disposition: attachment), fresh on every call. */
@@ -126,12 +162,71 @@ export interface FileViewerSource {
 
 const NOOP = (): void => undefined;
 
+/**
+ * Read a response body up to `max` bytes; past it (by Content-Length or as it
+ * streams) the body is cancelled and OfficeTooLargeError thrown.
+ */
+export async function readCapped(response: Response, max: number): Promise<Uint8Array> {
+  const declared = Number(response.headers.get('Content-Length') ?? NaN);
+  if (Number.isFinite(declared) && declared > max) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new OfficeTooLargeError();
+  }
+  const body = response.body;
+  if (body === null) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > max) throw new OfficeTooLargeError();
+    return bytes;
+  }
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > max) {
+        await reader.cancel().catch(() => undefined);
+        throw new OfficeTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return out;
+}
+
+/** asset-read answers 400 to a stream of a type it has no preview for (pptx). */
+function isNoPreview(error: unknown): boolean {
+  return error instanceof PresignError && /status 400\b/.test(error.message);
+}
+
 /** A stored version: PDFs through the asset-read Worker, links presigned fresh. */
 export function remoteFileSource(cache: PresignCache, versionId: string): FileViewerSource {
   return {
     async pdfBytes(signal) {
       const response = await cache.pdf(versionId, signal);
       return new Uint8Array(await response.arrayBuffer());
+    },
+    async officeBytes(signal) {
+      let response: Response;
+      try {
+        // The same authorized stream read as a PDF, fresh on every open.
+        response = await cache.pdf(versionId, signal);
+      } catch (error) {
+        if (isNoPreview(error)) return null;
+        throw error;
+      }
+      const mime = (response.headers.get('Content-Type') ?? '').split(';')[0]?.trim() ?? '';
+      return { bytes: await readCapped(response, OFFICE_MAX_BYTES), mime };
     },
     async videoLink() {
       return { url: (await cache.freshUrl(versionId, 'inline')).url, release: NOOP };
@@ -149,6 +244,11 @@ export function localFileSource(file: File): FileViewerSource {
   return {
     async pdfBytes() {
       return new Uint8Array(await file.arrayBuffer());
+    },
+    async officeBytes() {
+      if (file.size > OFFICE_MAX_BYTES) throw new OfficeTooLargeError();
+      // No server mime yet: the Worker reads the type from the package itself.
+      return { bytes: new Uint8Array(await file.arrayBuffer()), mime: null };
     },
     videoLink: blobLink,
     downloadLink: blobLink,
@@ -182,7 +282,7 @@ const NO_SELECT = 'select-none [-webkit-touch-callout:none] [-webkit-user-select
 function focusable(root: HTMLElement): HTMLElement[] {
   return Array.from(
     root.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), a[href], video[controls], [data-pdf-scroller]',
+      'button:not([disabled]), a[href], video[controls], [data-pdf-scroller], [data-sheet-scroller], iframe',
     ),
   );
 }
@@ -243,7 +343,7 @@ interface RendererProps {
   onFailed: () => void;
 }
 
-/** "Preview not available yet": Office (until its renderer lands) and other files. */
+/** "Preview not available yet": pptx and other files. */
 function UnavailableRenderer(props: RendererProps): ReactElement {
   return (
     <div
@@ -643,11 +743,88 @@ function PdfRenderer(props: RendererProps): ReactElement {
   );
 }
 
-/** The renderer slot, keyed by kind. Office gets its own renderer in the next PR. */
+export type OfficeState =
+  | { kind: 'loading' }
+  | { kind: 'error' }
+  | { kind: 'unavailable' }
+  | { kind: 'docx'; doc: DocxView }
+  | { kind: 'xlsx'; book: XlsxView };
+
+/** Which office view a Worker answer opens; any failure is the error card. Pure. */
+export function officeState(response: OfficeResponse): OfficeState {
+  if (!response.ok || response.op !== 'view') return { kind: 'error' };
+  const result = response.result;
+  if (result.kind === 'unsupported') return { kind: 'unavailable' };
+  if (result.kind === 'docx') return { kind: 'docx', doc: result };
+  return result.sheets.length > 0 ? { kind: 'xlsx', book: result } : { kind: 'error' };
+}
+
+/**
+ * docx and xlsx: fresh bytes, then one parse in a Web Worker (10 s cap; the
+ * Worker is terminated on close or retry), then the lazy Word or Sheet view.
+ * pptx (no preview from the server, or a pptx package locally) is the
+ * "Preview not available yet" card; anything that fails is the error card.
+ */
+function OfficeRenderer(props: RendererProps): ReactElement {
+  const { source, onFailed, onDownload, scrollerRef } = props;
+  const [state, setState] = useState<OfficeState>({ kind: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setState({ kind: 'loading' });
+    void (async () => {
+      try {
+        const [office, runner] = await Promise.all([
+          source.officeBytes(controller.signal),
+          import('@/lib/files/office/run'),
+        ]);
+        if (controller.signal.aborted) return;
+        if (office === null) {
+          setState({ kind: 'unavailable' });
+          return;
+        }
+        const response = await runner.runOffice({
+          op: 'view',
+          bytes: office.bytes,
+          mime: office.mime,
+          timeoutMs: OFFICE_VIEW_TIMEOUT_MS,
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted) setState(officeState(response));
+      } catch {
+        if (!controller.signal.aborted) setState({ kind: 'error' });
+      }
+    })();
+    // Aborting terminates a Worker still parsing.
+    return () => controller.abort();
+  }, [source, attempt]);
+
+  useEffect(() => {
+    if (state.kind === 'error') onFailed();
+  }, [state.kind, onFailed]);
+
+  if (state.kind === 'error') {
+    return <ViewerError onRetry={() => setAttempt((n) => n + 1)} onDownload={onDownload} />;
+  }
+  if (state.kind === 'unavailable') return <UnavailableRenderer {...props} />;
+  if (state.kind === 'loading') return <Spinner />;
+  return (
+    <Suspense fallback={<Spinner />}>
+      {state.kind === 'docx' ? (
+        <WordViewer name={props.name} doc={state.doc} />
+      ) : (
+        <SheetViewer book={state.book} scrollerRef={scrollerRef} />
+      )}
+    </Suspense>
+  );
+}
+
+/** The renderer slot, keyed by kind. */
 const RENDERERS: Record<ViewerKind, (props: RendererProps) => ReactElement> = {
   pdf: PdfRenderer,
   video: VideoRenderer,
-  office: UnavailableRenderer,
+  office: OfficeRenderer,
   file: UnavailableRenderer,
 };
 

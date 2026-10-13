@@ -747,11 +747,42 @@ describe('authorizeAndStream', () => {
     if (result.ok) expect(result.value.headers.get('Content-Type')).toBe('application/pdf');
   });
 
+  it('streams a Word or Excel version with its own mime pinned (nosniff, no-store)', async () => {
+    const cases: Array<[string, string]> = [
+      ['document', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      ['spreadsheet', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    ];
+    for (const [kind, mimeType] of cases) {
+      const fetcher = new RecordingFetcher(() =>
+        upstreamResponse(200, { 'Content-Type': 'text/html' }),
+      );
+      const result = await authorizeAndStream(
+        {
+          store: new FakeStore({ ...pdfLocated, kind, mimeType }, memberOfWorkspace),
+          signer: new RecordingSigner(),
+          fetchObject: fetcher.fetchObject,
+        },
+        { userId: USER, assetVersionId: VERSION_ID, range: null },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      expect(result.value.headers.get('Content-Type')).toBe(mimeType);
+      expect(result.value.headers.get('X-Content-Type-Options')).toBe('nosniff');
+      expect(result.value.headers.get('Cache-Control')).toBe('private, no-store');
+    }
+  });
+
   it('returns 400 bad_request for a non-PDF version without signing or fetching', async () => {
+    const pptx = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    const docxMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     const cases: AssetVersionLocator[] = [
       { ...located, mimeType: 'image/jpeg' },
       { ...pdfLocated, kind: 'document' },
       { ...pdfLocated, mimeType: 'image/png' },
+      // PowerPoint has no in-app preview yet.
+      { ...pdfLocated, kind: 'presentation', mimeType: pptx },
+      // Kind and mime must agree.
+      { ...pdfLocated, kind: 'spreadsheet', mimeType: docxMime },
     ];
     for (const version of cases) {
       const signer = new RecordingSigner();

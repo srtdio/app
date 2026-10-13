@@ -3,15 +3,15 @@ import { FIXTURE_PDF_PAGES, installHarnessNetwork } from '../fixtures/harness-ro
 import { PEER_NAME } from '../fixtures/chat-data';
 
 // Files open inside chat: a PDF message opens the in-app viewer (pdf.js page 1
-// and "1 / N"), a swipe down closes it, and a docx shows "Preview not
+// and "1 / N"), a swipe down closes it, and a pptx shows "Preview not
 // available yet" with Download. Nothing opens a new tab or window. One spec,
 // tagged @theme so it runs in light and dark. Linux WebKit approximates iOS
 // WebKit; it is not iOS.
 
 const PDF_ID = '0190f200-0000-7000-8000-000000000001';
-const DOCX_ID = '0190f200-0000-7000-8000-000000000002';
-const LONG_DOCX =
-  'Brand guidelines - client review round two - final final - approved by Priya v12.docx';
+const PPTX_ID = '0190f200-0000-7000-8000-000000000002';
+const LONG_PPTX =
+  'Brand guidelines - client review round two - final final - approved by Priya v12.pptx';
 
 /** A downward one-finger drag on the viewer's top bar, as touch events. */
 async function swipeDown(page: Page): Promise<void> {
@@ -44,7 +44,7 @@ async function swipeDown(page: Page): Promise<void> {
 
 test('chat files open in the in-app viewer @theme', async ({ page, context }) => {
   const harness = await installHarnessNetwork(page);
-  // The DM's last two messages (the peer's) carry a PDF and a long-named docx.
+  // The DM's last two messages (the peer's) carry a PDF and a long-named pptx.
   const dm = harness.world.dmMessages;
   const pdfRow = dm[dm.length - 2];
   const docxRow = dm[dm.length - 1];
@@ -65,11 +65,11 @@ test('chat files open in the in-app viewer @theme', async ({ page, context }) =>
   });
   Object.assign(docxRow, {
     body: null,
-    attachment_asset_ids: [DOCX_ID],
+    attachment_asset_ids: [PPTX_ID],
     attachment_meta: {
-      [DOCX_ID]: {
-        mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        name: LONG_DOCX,
+      [PPTX_ID]: {
+        mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        name: LONG_PPTX,
         size: 48_000,
       },
     },
@@ -90,11 +90,11 @@ test('chat files open in the in-app viewer @theme', async ({ page, context }) =>
   await expect(pdfBubble.locator('img')).toHaveJSProperty('complete', true);
   const after = await pdfBubble.boundingBox();
   expect(after?.height).toBe(before?.height);
-  // Width is the text bubble max, not the name: the long docx name is no wider.
+  // Width is the text bubble max, not the name: the long pptx name is no wider.
   const docxBox = await docxBubble.boundingBox();
   expect(Math.round(docxBox?.width ?? 0)).toBe(Math.round(after?.width ?? -1));
   // The long name keeps its extension after a middle cut.
-  await expect(docxBubble.locator('[data-file-name]')).toHaveText(/….*\.docx$/);
+  await expect(docxBubble.locator('[data-file-name]')).toHaveText(/….*\.pptx$/);
 
   // PDF: page 1 renders, the counter reads "1 / N".
   await pdfBubble.click();
@@ -111,7 +111,7 @@ test('chat files open in the in-app viewer @theme', async ({ page, context }) =>
   await swipeDown(page);
   await expect(viewer).toHaveCount(0);
 
-  // docx: "Preview not available yet" with Download, then the X closes.
+  // pptx: "Preview not available yet" with Download, then the X closes.
   await docxBubble.scrollIntoViewIfNeeded();
   await docxBubble.click();
   const office = page.locator('[data-file-viewer="office"]');

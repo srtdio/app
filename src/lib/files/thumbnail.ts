@@ -1,14 +1,19 @@
 // Sender-side thumbnails for chat files (decision 149: new uploads only). A PDF
 // gets page 1 drawn by pdf.js plus its page count; a video gets one frame near
-// its start. Everything else has no thumbnail. The result is a JPEG at most
+// its start; a docx or xlsx gets its plain text drawn by our own code (see
+// office/thumbnail-draw.ts, decision 154). Everything else, pptx included, has
+// no thumbnail. The result is a JPEG at most
 // 580px wide (never upscaled) and 1160px tall (cropped from the top), quality
 // 0.8, stepped to 0.6 when over 300 KiB; still over that is no thumbnail.
 //
 // makeThumbnail never throws and never runs past THUMBNAIL_TIMEOUT_MS: any
 // error, timeout or abort is NoThumbnail, so an upload never waits on it or
 // fails because of it. pdf.js is loaded with a dynamic import only (never in
-// the main chunk), its worker through a Vite asset URL. Every pdf.js task,
-// canvas, blob URL and timer is released in a finally.
+// the main chunk), its worker through a Vite asset URL; the office drawer and
+// its Worker are a dynamic import too, capped at 20 MiB. Every pdf.js task,
+// office Worker, canvas, blob URL and timer is released in a finally.
+
+import { DOCX_MIME, OFFICE_MAX_BYTES, XLSX_MIME } from './office/types';
 
 /** Files larger than this are never decoded for a thumbnail. */
 export const THUMBNAIL_SOURCE_MAX_BYTES = 60 * 1024 * 1024;
@@ -36,11 +41,15 @@ export interface NoThumbnail {
 
 export type ThumbnailResult = Thumbnail | NoThumbnail;
 
-/** Which thumbnail path a mime takes, or null for none. */
-export function thumbnailKind(mime: string): 'pdf' | 'video' | null {
+export type ThumbnailKind = 'pdf' | 'video' | 'docx' | 'xlsx';
+
+/** Which thumbnail path a mime takes, or null for none (pptx and the rest). */
+export function thumbnailKind(mime: string): ThumbnailKind | null {
   const m = mime.toLowerCase();
   if (m === 'application/pdf') return 'pdf';
   if (m.startsWith('video/')) return 'video';
+  if (m === DOCX_MIME) return 'docx';
+  if (m === XLSX_MIME) return 'xlsx';
   return null;
 }
 
@@ -145,6 +154,15 @@ export interface ThumbnailDeps {
   /** Draw one early frame of a video file onto a fresh canvas; see grabVideoFrame. */
   videoFrame: (file: File, signal: AbortSignal) => Promise<HTMLCanvasElement>;
   readBytes: (file: File) => Promise<Uint8Array>;
+  /**
+   * Parse a docx/xlsx in the office Worker and draw its thumbnail onto a fresh
+   * canvas put in `held` (the caller releases it). Throws on any failure.
+   */
+  officeFrame: (
+    file: File,
+    signal: AbortSignal,
+    held: { canvas: HTMLCanvasElement | null },
+  ) => Promise<void>;
 }
 
 function createBrowserCanvas(): HTMLCanvasElement {
@@ -238,12 +256,29 @@ async function readFileBytes(file: File): Promise<Uint8Array> {
   return new Uint8Array(await file.arrayBuffer());
 }
 
+/** The office drawer, loaded on first use (never in the main chunk). */
+async function drawOfficeFrame(
+  file: File,
+  signal: AbortSignal,
+  held: { canvas: HTMLCanvasElement | null },
+): Promise<void> {
+  const { officeThumbnailCanvas } = await import('./office/thumbnail-draw');
+  await officeThumbnailCanvas(
+    file,
+    signal,
+    THUMBNAIL_TIMEOUT_MS,
+    { createCanvas: createBrowserCanvas, readBytes: readFileBytes },
+    held,
+  );
+}
+
 export const browserThumbnailDeps: ThumbnailDeps = {
   loadPdf: loadPdfJs,
   createCanvas: createBrowserCanvas,
   encode: encodeJpeg,
   videoFrame: grabVideoFrame,
   readBytes: readFileBytes,
+  officeFrame: drawOfficeFrame,
 };
 
 // ---------------------------------------------------------------------------
@@ -330,7 +365,10 @@ export async function makeThumbnail(
 ): Promise<ThumbnailResult> {
   const kind = thumbnailKind(file.type);
   if (kind === null) return { ok: false, reason: 'unsupported' };
-  if (file.size > THUMBNAIL_SOURCE_MAX_BYTES) return { ok: false, reason: 'too_large' };
+  const office = kind === 'docx' || kind === 'xlsx';
+  if (file.size > (office ? OFFICE_MAX_BYTES : THUMBNAIL_SOURCE_MAX_BYTES)) {
+    return { ok: false, reason: 'too_large' };
+  }
   if (signal.aborted) return { ok: false, reason: 'aborted' };
   // No DOM (a Worker or a unit test runtime): nothing to draw on.
   if (deps === browserThumbnailDeps && typeof document === 'undefined') {
@@ -369,6 +407,8 @@ export async function makeThumbnail(
       let pageCount: number | undefined;
       if (kind === 'pdf') {
         pageCount = (await renderPdfPage1(deps, file, local.signal, held)).pageCount;
+      } else if (office) {
+        await deps.officeFrame(file, local.signal, held);
       } else {
         held.canvas = await deps.videoFrame(file, local.signal);
       }

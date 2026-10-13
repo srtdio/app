@@ -360,11 +360,29 @@ describe('checkThumbnail', () => {
     }
   });
 
-  it('rejects an image or document parent', () => {
+  it('accepts a docx or xlsx parent (decision 154) and drops the page count', () => {
+    for (const mimeType of [
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ]) {
+      expect(checkThumbnail(thumbInput({ summary: summary({ mimeType }) }))).toEqual({
+        ok: true,
+        width: 400,
+        height: 566,
+        pageCount: null,
+      });
+      // The JPEG checks are unchanged for an office parent.
+      expect(
+        checkThumbnail(thumbInput({ summary: summary({ mimeType }), bytes: jpeg(600, 100) })),
+      ).toEqual({ ok: false, reason: 'dimensions' });
+    }
+  });
+
+  it('rejects an image, pptx or audio parent', () => {
     for (const mimeType of [
       'image/png',
       'image/jpeg',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'audio/mp4',
     ]) {
       expect(checkThumbnail(thumbInput({ summary: summary({ mimeType }) }))).toEqual({
@@ -470,6 +488,33 @@ describe('storeThumbnailRendition', () => {
     await storeThumbnailRendition(d, thumbInput());
     expect(d.storage.get('assets-acme', `pdf/${ASSET}/v1-thumb.jpg`)).toBeDefined();
     expect(d.storage.get('assets-test-ws', `pdf/${ASSET}/v1-thumb.jpg`)).toBeUndefined();
+  });
+
+  it('keys a docx or xlsx thumbnail next to its file and drops the page count', async () => {
+    const cases = [
+      ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docs'],
+      ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'spreadsheet'],
+    ] as const;
+    for (const [mimeType, folder] of cases) {
+      const d = thumbDeps();
+      const outcome = await storeThumbnailRendition(
+        d,
+        thumbInput({ summary: summary({ mimeType, r2Key: `${folder}/${ASSET}/v1-a` }) }),
+      );
+      expect(outcome).toEqual({ stored: true, width: 400, height: 566 });
+      expect(d.storage.get('assets-test-ws', `${folder}/${ASSET}/v1-thumb.jpg`)).toBeDefined();
+    }
+  });
+
+  it('a pptx parent writes nothing', async () => {
+    const d = thumbDeps();
+    const mimeType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    const outcome = await storeThumbnailRendition(
+      d,
+      thumbInput({ summary: summary({ mimeType }) }),
+    );
+    expect(outcome).toEqual({ stored: false, reason: 'parent_not_pdf_or_video' });
+    expect(d.renditions.rows).toHaveLength(0);
   });
 
   it('omits pageCount when the field is absent', async () => {

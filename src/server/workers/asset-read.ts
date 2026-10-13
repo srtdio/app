@@ -22,9 +22,10 @@
 // Two additive modes, each authorized exactly as above on the PARENT version:
 //   { asset_version_id, rendition: 'thumbnail' } -> the version's thumbnail
 //     rendition presigned inline (900 s), or 404 { error: 'no_rendition' };
-//   { asset_version_id, stream: true } -> a PDF version's bytes piped through
-//     this Worker (never buffered), Range/206 passed through, so the in-app
-//     viewer never depends on per-bucket storage CORS. Non-PDF is a 400.
+//   { asset_version_id, stream: true } -> a PDF, Word (docx) or Excel (xlsx)
+//     version's bytes piped through this Worker (never buffered), Range/206
+//     passed through, so the in-app viewer never depends on per-bucket
+//     storage CORS. Any other version (pptx included) is a 400.
 // A body without either field is handled byte-for-byte as before.
 //
 // This is a read/query endpoint: no idempotency key, no state mutation, no
@@ -320,22 +321,31 @@ export async function authorizeAndSignRendition(
   return ok({ url, expires_at });
 }
 
-/** True for a stored PDF version (kind and mime both say so). */
-function isPdfVersion(version: AssetVersionLocator): boolean {
-  return version.kind === 'pdf' && (version.mimeType ?? '').toLowerCase() === 'application/pdf';
+/** The kinds the stream mode serves, each with the one mime it must carry. */
+const STREAM_MIME_BY_KIND: Readonly<Record<string, string>> = {
+  pdf: 'application/pdf',
+  document: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  spreadsheet: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+/** The Content-Type a stream pins for a stored version, or null when it has no stream. */
+function streamMime(version: AssetVersionLocator): string | null {
+  const mime = STREAM_MIME_BY_KIND[version.kind];
+  return mime !== undefined && (version.mimeType ?? '').toLowerCase() === mime ? mime : null;
 }
 
 /** Fetches an object's bytes from a presigned URL; Range passes through. */
 export type ObjectFetcher = (url: string, range: string | null) => Promise<Response>;
 
-/** Upstream headers a PDF stream passes back to the browser. */
+/** Upstream headers a stream passes back to the browser. */
 const STREAM_PASS_HEADERS = ['Content-Length', 'Content-Range', 'Accept-Ranges', 'ETag'] as const;
 
 /**
  * The stream mode: authorize the PARENT version exactly as a plain read, then
- * fetch the PDF server-side and pipe its body back (never buffered), passing
- * a Range request and a 206 through. Content-Type is pinned to
- * application/pdf with nosniff and no caching. A non-PDF version is a 400.
+ * fetch the file server-side and pipe its body back (never buffered), passing
+ * a Range request and a 206 through. Content-Type is pinned to the version's
+ * own pdf, docx or xlsx mime (kind and mime must agree) with nosniff and no
+ * caching. Any other version is a 400.
  */
 export async function authorizeAndStream(
   deps: { store: AssetReadStore; signer: PresignedUrlSigner; fetchObject: ObjectFetcher },
@@ -345,8 +355,9 @@ export async function authorizeAndStream(
   if (!readable.ok) {
     return readable;
   }
-  if (!isPdfVersion(readable.value.version)) {
-    return err({ code: 'bad_request', message: 'stream is only for PDF files.' });
+  const contentType = streamMime(readable.value.version);
+  if (contentType === null) {
+    return err({ code: 'bad_request', message: 'stream is only for PDF, Word and Excel files.' });
   }
   const url = await deps.signer.presignGetUrl({
     bucket: readable.value.bucket,
@@ -363,7 +374,7 @@ export async function authorizeAndStream(
     throw new Error(`object fetch failed with status ${upstream.status}`);
   }
   const headers = new Headers({
-    'Content-Type': 'application/pdf',
+    'Content-Type': contentType,
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': 'private, no-store',
   });
