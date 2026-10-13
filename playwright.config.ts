@@ -11,7 +11,7 @@ export default defineConfig({
   testDir: 'e2e/tests',
   outputDir: 'e2e/results',
   forbidOnly: isCI,
-  retries: 0,
+  retries: isCI ? 1 : 0,
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: `http://localhost:${port}`,

@@ -2,12 +2,17 @@ name: E2E WebKit
 
 # changes: diffs against the merge base with main (push: previous commit) and outputs run=true only for UI-relevant paths.
 # webkit-shard: on a UI change, runs the Playwright WebKit iPhone suite (e2e/harness, no DB, no secrets) in 3 parallel shards.
-# e2e-webkit: the required check; fails if any shard failed or was cancelled, passes on success or skip, and type-checks e2e on a UI change.
+# e2e-typecheck: on a UI change, type-checks the e2e workspace in parallel with the shards.
+# e2e-webkit: the required check; fails if any shard or the typecheck failed or was cancelled, passes on success or skip.
 # No workflow-level paths filter, so the required check always reports. Linux WebKit is close to, not identical to, iOS Safari.
 on:
   pull_request:
   push:
     branches: [main]
+
+concurrency:
+  group: e2e-webkit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
@@ -93,43 +98,47 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  e2e-webkit:
-    needs: [changes, webkit-shard]
-    if: always()
+  e2e-typecheck:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Check shard results
-        env:
-          SHARD_RESULT: ${{ needs.webkit-shard.result }}
-          CHANGES_RESULT: ${{ needs.changes.result }}
-        run: |
-          echo "changes: $CHANGES_RESULT, webkit-shard: $SHARD_RESULT"
-          if [ "$CHANGES_RESULT" != "success" ]; then exit 1; fi
-          case "$SHARD_RESULT" in
-            success|skipped) ;;
-            *) exit 1 ;;
-          esac
-
-      - name: Skip note
-        if: needs.changes.outputs.run != 'true'
-        run: echo "no UI change, WebKit suite skipped"
-
       - uses: actions/checkout@v4
-        if: needs.changes.outputs.run == 'true'
 
       - uses: pnpm/action-setup@v4
-        if: needs.changes.outputs.run == 'true'
 
       - uses: actions/setup-node@v4
-        if: needs.changes.outputs.run == 'true'
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dependencies
-        if: needs.changes.outputs.run == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Type-check the e2e workspace
-        if: needs.changes.outputs.run == 'true'
         run: pnpm exec tsc -p e2e/tsconfig.json --noEmit
+
+  e2e-webkit:
+    needs: [changes, webkit-shard, e2e-typecheck]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check shard and typecheck results
+        env:
+          SHARD_RESULT: ${{ needs.webkit-shard.result }}
+          TYPECHECK_RESULT: ${{ needs.e2e-typecheck.result }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+        run: |
+          echo "changes: $CHANGES_RESULT, webkit-shard: $SHARD_RESULT, e2e-typecheck: $TYPECHECK_RESULT"
+          if [ "$CHANGES_RESULT" != "success" ]; then exit 1; fi
+          case "$SHARD_RESULT" in
+            success|skipped) ;;
+            *) exit 1 ;;
+          esac
+          case "$TYPECHECK_RESULT" in
+            failure|cancelled) exit 1 ;;
+          esac
+
+      - name: Skip note
+        if: needs.changes.outputs.run != 'true'
+        run: echo "no UI change, WebKit suite skipped"
