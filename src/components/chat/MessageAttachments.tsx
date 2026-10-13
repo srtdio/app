@@ -9,10 +9,17 @@
 // swaps to the presigned URL. While its upload runs the image is dimmed and an
 // UploadRing (X in a circle, ring = progress; tap cancels the send) sits
 // centred on it (56px): one ring over a whole album (progress across every
-// attachment's bytes), one in flow in a file chip's icon spot (44px), one in
-// a voice note's play spot (40px). The ring never positions itself; each spot
-// here does. When the upload finishes the X is gone; only opacity and the
-// ring's stroke animate, and nothing changes size.
+// attachment's bytes), one in a voice note's play spot (40px). The ring never
+// positions itself; each spot here does. When the upload finishes the X is
+// gone; only opacity and the ring's stroke animate, and nothing changes size.
+//
+// Every other file (PDF, video, Office, anything else) is a FileBubble: a
+// fixed-width card with its thumbnail, that sends with a thin progress bar and
+// opens in the in-app FileViewer. Nothing here opens a new tab or window.
+//
+// The whole attachment area sits in its own ErrorBoundary: an attachment that
+// throws while rendering shows a compact "Couldn't show this file" card with
+// Download, and the rest of the message, thread and app carry on.
 //
 // Chat groups a message's images into one album (AlbumGrid): the grid is sized
 // from the image COUNT alone, so first paint is final and a presigned image
@@ -21,11 +28,14 @@
 
 import { useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { IconFile, IconImage } from '@/components/ui/icons';
+import { IconDownload, IconFile, IconImage } from '@/components/ui/icons';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
 import { VoiceNote } from '@/components/chat/VoiceNote';
 import { UploadRing } from '@/components/chat/UploadRing';
-import { fileExtension } from '@/lib/assets';
+import { FileBubble } from '@/components/chat/FileBubble';
 import { cn } from '@/lib/cn';
+import { middleTruncate } from '@/lib/files/display-name';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   classifyAttachment,
@@ -36,10 +46,6 @@ import {
   uploadRing,
   type MessageAttachment,
 } from '@/lib/chat/attachments';
-
-/** The file chip's Open link, styled as the shared ghost sm Button (it navigates, so it stays a link). */
-const OPEN_BUTTON =
-  'inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium text-fg-2 transition-colors hover:bg-panel-2';
 
 /** Presign one attachment id once, refreshing shortly before expiry; never throws. */
 export function useAttachmentUrl(
@@ -80,9 +86,6 @@ export function useAttachmentUrl(
   return { url, failed };
 }
 
-/** The file chip's icon spot: 44px (the ring's size) laid out as 36px. */
-export const FILE_ICON_SPOT = '-m-1 flex h-11 w-11 shrink-0 items-center justify-center';
-
 /**
  * Centres an UploadRing over its (relative) image or grid without taking
  * layout space. The container clips (overflow-hidden), so the 56px ring never
@@ -102,61 +105,11 @@ export function ringFor(
   return onCancelUpload !== undefined ? uploadRing(attachments) : null;
 }
 
-function FileChip({
-  name,
-  url,
-  ring,
-  onCancelUpload,
-}: {
-  name: string;
-  url: string | null;
-  /** The upload ring in the icon's spot while the file uploads; null: the icon. */
-  ring?: { progress: number | null } | null | undefined;
-  onCancelUpload?: (() => void) | undefined;
-}): ReactElement {
-  const ext = fileExtension(name);
-  const label = name.trim() !== '' ? name : 'Attachment';
-  const uploading = ring != null;
-  return (
-    <div className="relative flex items-center gap-2 overflow-hidden rounded-lg border border-border bg-panel px-2.5 py-2">
-      {/* The icon spot is 44px with a -4px margin, so it takes the 36px icon's
-          room: the 44px ring sits in it, in flow, inside the chip's padding. */}
-      <span data-file-icon-spot="" className={FILE_ICON_SPOT}>
-        {uploading ? (
-          <UploadRing progress={ring.progress} onCancel={onCancelUpload} variant="file" />
-        ) : (
-          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-panel-3 text-fg-3">
-            <IconFile size={18} />
-          </span>
-        )}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-xs font-medium text-fg" title={label}>
-          {label}
-        </span>
-        <span className="text-[11px] text-fg-3">{ext !== '' ? ext : 'File'}</span>
-      </span>
-      {url !== null ? (
-        // The 32px ghost button sits in a 44px-tall hit wrapper.
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          draggable={false}
-          className="flex min-h-[44px] shrink-0 items-center"
-        >
-          <span className={OPEN_BUTTON}>Open</span>
-        </a>
-      ) : null}
-    </div>
-  );
-}
-
 /**
  * The render branch for one attachment, derived purely from its kind and presign
  * lifecycle so it is unit-testable without a DOM (this codebase renders no React
  * in tests). `image` is a resolved thumbnail, `image-pending` its loading shimmer,
- * `file` the chip (whose Open link appears once `url` is non-null). PR6 extension
+ * `file` the FileBubble (pdf, video, office, other). PR6 extension
  * point: add a 'post' variant here and a case below; the image / file branches
  * stay untouched.
  */
@@ -252,10 +205,13 @@ function AttachmentItem({
   // the session: it never presigns.
   const localUrl = isVoiceAttachment(attachment) ? localAudioUrl(attachment) : null;
   const hasPreview = attachment.local?.previewUrl != null || localUrl !== null;
+  // A file bubble never uses the file's own link (it presigns its thumbnail
+  // and the viewer asks for a fresh link on open): only images and voice notes do.
+  const needsUrl = classifyAttachment(attachment.mime) !== 'file' || isVoiceAttachment(attachment);
   const { url, failed } = useAttachmentUrl(
     attachment.assetId,
     cache,
-    presignEnabled && !hasPreview,
+    presignEnabled && !hasPreview && needsUrl,
   );
   const view = attachmentView({ attachment, presignEnabled, url, failed, localUrl });
 
@@ -333,9 +289,8 @@ function AttachmentItem({
         </div>
       );
     case 'file':
-      return (
-        <FileChip name={view.name} url={view.url} ring={ring} onCancelUpload={onCancelUpload} />
-      );
+      // Sends with its own thin bar, no cancel; tap opens the in-app viewer.
+      return <FileBubble attachment={attachment} cache={cache} presignEnabled={presignEnabled} />;
   }
 }
 
@@ -507,17 +462,8 @@ export function AlbumGrid({
   );
 }
 
-export function MessageAttachments({
-  attachments,
-  cache,
-  presignEnabled,
-  onImageClick,
-  voiceSpacer,
-  voice,
-  album,
-  caption,
-  onCancelUpload,
-}: {
+/** The props of one message's attachment area. */
+export interface MessageAttachmentsProps {
   attachments: readonly MessageAttachment[];
   cache: PresignCache;
   presignEnabled: boolean;
@@ -545,7 +491,93 @@ export function MessageAttachments({
    * album, file or voice note shows the UploadRing, whose X calls this.
    */
   onCancelUpload?: (() => void) | undefined;
-}): ReactElement | null {
+}
+
+/** "Couldn't show this file": the attachment area's crash fallback. */
+export const ATTACHMENT_FALLBACK = "Couldn't show this file";
+
+/**
+ * What a message shows when its attachment area threw while rendering: one
+ * compact card per attachment, its name, the line above and Download (a fresh
+ * attachment link, same window). Hook-free, so it cannot throw the same way.
+ */
+export function AttachmentsFallback(props: {
+  attachments: readonly MessageAttachment[];
+  cache: PresignCache;
+  presignEnabled: boolean;
+}): ReactElement {
+  return (
+    <div data-attachments-fallback="" className="mt-1.5 flex flex-col gap-1.5">
+      {props.attachments.map((attachment, index) => {
+        const name = attachment.name.trim() !== '' ? attachment.name : 'Attachment';
+        const canDownload = props.presignEnabled && attachment.assetId !== '';
+        return (
+          <div
+            key={`${attachment.assetId}-${index}`}
+            className="flex w-[100vw] max-w-full items-center gap-2.5 rounded-xl border border-border bg-panel px-3 py-2"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
+              <IconFile size={18} />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-sm font-medium text-fg [overflow-wrap:anywhere]" title={name}>
+                {middleTruncate(name)}
+              </span>
+              <span className="text-xs text-fg-3">{ATTACHMENT_FALLBACK}</span>
+            </span>
+            {canDownload ? (
+              <button
+                type="button"
+                aria-label={`Download ${name}`}
+                onClick={() =>
+                  void downloadFile(remoteFileSource(props.cache, attachment.assetId), name)
+                }
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <IconDownload size={18} />
+              </button>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * One message's attachments inside their own error boundary: a throw in any
+ * attachment shows AttachmentsFallback for this message only.
+ */
+export function MessageAttachments(props: MessageAttachmentsProps): ReactElement | null {
+  if (props.attachments.length === 0) return null;
+  return (
+    <ErrorBoundary
+      name="chat-attachment"
+      context={{ attachment_count: props.attachments.length }}
+      fallback={
+        <AttachmentsFallback
+          attachments={props.attachments}
+          cache={props.cache}
+          presignEnabled={props.presignEnabled}
+        />
+      }
+    >
+      <MessageAttachmentsBody {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function MessageAttachmentsBody({
+  attachments,
+  cache,
+  presignEnabled,
+  onImageClick,
+  voiceSpacer,
+  voice,
+  album,
+  caption,
+  onCancelUpload,
+}: MessageAttachmentsProps): ReactElement | null {
   if (attachments.length === 0) return null;
   if (album === true) {
     const { images, others } = splitAlbum(attachments);

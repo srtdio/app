@@ -176,12 +176,11 @@ describe('T5: UploadRing positioning and sizes', () => {
     expect(html).toContain('data-ring-variant="image"');
   });
 
-  it('file: 44px ring in flow in the icon spot, inside the clipped chip', () => {
+  it('file: the file bubble sends with a thin progress bar and no ring', () => {
     const html = paint([fileUploading], 'light');
-    expect(ringParent(html)).toContain('data-file-icon-spot=""');
-    expect(ringClass(html)).not.toContain('absolute');
-    expect(html).toContain('data-ring-variant="file"');
-    expect(html).toMatch(/class="relative flex items-center gap-2 overflow-hidden rounded-lg/);
+    expect(html).not.toContain('data-upload-ring');
+    expect(html).toContain('data-file-state="sending"');
+    expect(html).toContain('data-file-progress=""');
   });
 });
 

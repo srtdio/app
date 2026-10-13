@@ -10,6 +10,11 @@
 // unit-tested with fakes. PresignCache adds the two properties the grid needs:
 // a concurrency cap (a screen of ~200 image cards must not fire 200 presigns at
 // once) and a per-version cache reused until just before expiry.
+//
+// The chat file bubble and viewer add two asset-read modes: a version's
+// thumbnail rendition (404 'no_rendition' is cached as absent for the session)
+// and a PDF's bytes streamed through the Worker. The viewer never reuses a
+// cached link: freshUrl and pdf ask the Worker again on every open.
 
 /** A successfully minted URL with its absolute expiry in epoch milliseconds. */
 export interface PresignedUrl {
@@ -34,6 +39,80 @@ export class PresignError extends Error {
     super(message);
     this.name = 'PresignError';
   }
+}
+
+/** POST one JSON body to asset-read with the caller's bearer token. */
+async function postRead(
+  deps: PresignDeps,
+  body: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<Response> {
+  if (deps.endpoint === null || deps.endpoint === '') {
+    throw new PresignError('Asset read endpoint is not configured.', 'unconfigured');
+  }
+  const token = await deps.getAccessToken();
+  if (token === null || token === '') {
+    throw new PresignError('No active session.', 'unauthenticated');
+  }
+  return deps.fetcher(deps.endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+    ...(signal !== undefined ? { signal } : {}),
+  });
+}
+
+/** Read {url, expires_at} off a 2xx presign response. */
+async function readPresigned(response: Response): Promise<PresignedUrl> {
+  const body = (await response.json()) as { url?: unknown; expires_at?: unknown };
+  if (typeof body.url !== 'string' || typeof body.expires_at !== 'string') {
+    throw new PresignError('Presign response was malformed.', 'request_failed');
+  }
+  const expiresAt = Date.parse(body.expires_at);
+  return { url: body.url, expiresAt: Number.isNaN(expiresAt) ? Date.now() : expiresAt };
+}
+
+/**
+ * The version's stored thumbnail, presigned; null when the version has none
+ * (404 'no_rendition'). Throws PresignError for every other failure.
+ */
+export async function requestThumbnailUrl(
+  deps: PresignDeps,
+  assetVersionId: string,
+): Promise<PresignedUrl | null> {
+  const response = await postRead(deps, {
+    asset_version_id: assetVersionId,
+    rendition: 'thumbnail',
+  });
+  if (response.status === 404) {
+    const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    if (body?.error === 'no_rendition') return null;
+  }
+  if (!response.ok) {
+    throw new PresignError(
+      `Thumbnail presign failed with status ${response.status}.`,
+      'request_failed',
+    );
+  }
+  return readPresigned(response);
+}
+
+/**
+ * A PDF's bytes through the asset-read Worker (never storage CORS). Resolves
+ * to the 2xx Response so the caller reads (or streams) its body; throws
+ * PresignError otherwise. Each call is a fresh, authorized read.
+ */
+export async function fetchPdfStream(
+  deps: PresignDeps,
+  assetVersionId: string,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const response = await postRead(deps, { asset_version_id: assetVersionId, stream: true }, signal);
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new PresignError(`PDF stream failed with status ${response.status}.`, 'request_failed');
+  }
+  return response;
 }
 
 /**
@@ -95,6 +174,10 @@ export class PresignCache {
   private readonly cache = new Map<string, PresignedUrl>();
   private readonly inflight = new Map<string, Promise<PresignedUrl>>();
   private readonly waiters: Array<() => void> = [];
+  private readonly thumbCache = new Map<string, PresignedUrl>();
+  private readonly thumbInflight = new Map<string, Promise<PresignedUrl | null>>();
+  /** Versions asset-read answered 'no_rendition' for: absent for the session. */
+  private readonly noThumbnail = new Set<string>();
   private active = 0;
 
   constructor(
@@ -108,6 +191,50 @@ export class PresignCache {
     const hit = this.cache.get(assetVersionId);
     if (hit !== undefined && Date.now() < hit.expiresAt - this.refreshSkewMs) return hit;
     return null;
+  }
+
+  /**
+   * The thumbnail rendition's URL for a version, cached until 60 s before it
+   * expires; a version with none is remembered as absent for the session.
+   * Bounded by the same concurrency cap; concurrent asks share one request.
+   */
+  thumbnail(assetVersionId: string): Promise<PresignedUrl | null> {
+    if (this.noThumbnail.has(assetVersionId)) return Promise.resolve(null);
+    const cached = this.peekThumbnail(assetVersionId);
+    if (cached !== null) return Promise.resolve(cached);
+    const existing = this.thumbInflight.get(assetVersionId);
+    if (existing !== undefined) return existing;
+    const promise = this.withSlot(() => requestThumbnailUrl(this.deps, assetVersionId))
+      .then((url) => {
+        if (url === null) this.noThumbnail.add(assetVersionId);
+        else this.thumbCache.set(assetVersionId, url);
+        return url;
+      })
+      .finally(() => {
+        this.thumbInflight.delete(assetVersionId);
+      });
+    this.thumbInflight.set(assetVersionId, promise);
+    return promise;
+  }
+
+  /** A cached, still-valid thumbnail URL for synchronous render, or null. */
+  peekThumbnail(assetVersionId: string): PresignedUrl | null {
+    const hit = this.thumbCache.get(assetVersionId);
+    if (hit !== undefined && Date.now() < hit.expiresAt - this.refreshSkewMs) return hit;
+    return null;
+  }
+
+  /** A fresh URL every call (never the cache): the viewer's video and Download links. */
+  freshUrl(
+    assetVersionId: string,
+    disposition: 'inline' | 'attachment' = 'inline',
+  ): Promise<PresignedUrl> {
+    return requestPresignedUrl(this.deps, assetVersionId, disposition);
+  }
+
+  /** A PDF's bytes through the Worker, fresh on every call. */
+  pdf(assetVersionId: string, signal?: AbortSignal): Promise<Response> {
+    return fetchPdfStream(this.deps, assetVersionId, signal);
   }
 
   /** Resolve a presigned URL, using the cache and respecting the concurrency cap. */

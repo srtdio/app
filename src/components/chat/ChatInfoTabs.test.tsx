@@ -1,4 +1,5 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('agora-chat', () => ({
@@ -369,5 +370,31 @@ describe('sender names', () => {
     await resolve(['a']);
     expect(read).toHaveBeenCalledTimes(1);
     expect(SENDER_READ_TIMEOUT_MS).toBe(5000);
+  });
+});
+
+describe('Files tab opens files in the in-app viewer', () => {
+  it('each Files row is a button (no link out, no new tab), keyed by file kind', () => {
+    const attachments = feed([
+      item(1, { mime: 'application/pdf', name: 'deck.pdf' }),
+      item(2, { mime: 'video/mp4', name: 'clip.mp4' }),
+      item(3, {
+        mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        name: 'brief.docx',
+      }),
+    ]);
+    const html = renderToStaticMarkup(
+      view(props({ tab: 'files', attachments, presignEnabled: true, mode: 'full' })),
+    );
+    expect(html).toContain('data-file-row="pdf"');
+    expect(html).toContain('data-file-row="video"');
+    expect(html).toContain('data-file-row="office"');
+    expect(html).not.toMatch(/<a[^>]*data-file-row/);
+    expect(html).not.toContain('target="_blank"');
+  });
+
+  it('the Links tab is unchanged: external links still open outside', () => {
+    const html = renderToStaticMarkup(view(props({ tab: 'links', links: feed([link(1)]) })));
+    expect(html).toContain('target="_blank"');
   });
 });

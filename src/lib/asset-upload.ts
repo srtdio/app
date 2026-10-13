@@ -10,6 +10,12 @@
 
 import { ALLOWED_MIME_TYPES, isAllowedMime } from '@srtdio/storage';
 import { TRACE_ID_HEADER } from '@/lib/trace';
+import {
+  sharedThumbnail,
+  thumbnailKind,
+  THUMBNAIL_TIMEOUT_MS,
+  type ThumbnailResult,
+} from '@/lib/files/thumbnail';
 
 // Hard ceiling mirrored from the worker pipeline (MAX_FILE_SIZE_BYTES, 100 MB).
 // The worker rejects strictly greater than this, so the client matches exactly:
@@ -68,9 +74,27 @@ export function uploadErrorMessage(code: string): string {
   }
 }
 
+/** The thumbnail the worker stored for this version (pdf/video only). */
+export interface StoredThumbnail {
+  width: number;
+  height: number;
+  /** PDFs only: the page count the thumbnail was made with. */
+  pageCount?: number;
+}
+
 export type UploadOutcome =
-  | { ok: true; reused: boolean; assetId: string; assetVersionId?: string }
+  | {
+      ok: true;
+      reused: boolean;
+      assetId: string;
+      assetVersionId?: string;
+      /** Present only when the worker stored a thumbnail rendition. */
+      thumbnail?: StoredThumbnail;
+    }
   | { ok: false; message: string };
+
+/** Makes the thumbnail sent with a pdf/video upload; tests inject a fake. */
+export type ThumbnailMaker = (file: File) => Promise<ThumbnailResult>;
 
 export type UploadConfig = UploadConfigBase & UploadTransport;
 
@@ -102,6 +126,11 @@ interface UploadConfigBase {
   displayName?: string | null;
   /** Destination folder id; sent as folder_id, omitted at the library root (null). */
   folderId?: string | null;
+  /**
+   * Thumbnail maker for pdf/video files; defaults to the shared sender-side
+   * one (one attempt per File, also shown on the sending bubble).
+   */
+  makeThumbnail?: ThumbnailMaker;
 }
 
 /**
@@ -223,6 +252,15 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   if (config.folderId != null) {
     form.append('folder_id', config.folderId);
   }
+  if (thumbnailKind(file.type) !== null) {
+    const thumbnail = await boundedThumbnail(file, config.makeThumbnail ?? sharedThumbnail);
+    if (thumbnail.ok) {
+      form.append('thumbnail', thumbnail.blob, 'thumbnail.jpg');
+      if (thumbnail.pageCount !== undefined) {
+        form.append('thumbnail_page_count', String(thumbnail.pageCount));
+      }
+    }
+  }
 
   let response: UploadResponse;
   try {
@@ -246,12 +284,54 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   }
   // assetVersionId is the version the gallery add flow pins; include the key only
   // when the worker returned it, so callers that ignore it are unaffected.
+  const thumbnail = thumbnailField(response.body);
   return {
     ok: true,
     reused: asset.reused,
     assetId: asset.assetId,
     ...(asset.assetVersionId !== null ? { assetVersionId: asset.assetVersionId } : {}),
+    ...(thumbnail !== null ? { thumbnail } : {}),
   };
+}
+
+/**
+ * Wait for the file's thumbnail, never longer than THUMBNAIL_TIMEOUT_MS and
+ * never failing: a maker that throws, rejects or hangs is NoThumbnail, so the
+ * upload itself goes on without one.
+ */
+async function boundedThumbnail(file: File, make: ThumbnailMaker): Promise<ThumbnailResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cap = new Promise<ThumbnailResult>((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false, reason: 'timeout' }), THUMBNAIL_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([
+      Promise.resolve()
+        .then(() => make(file))
+        .catch((): ThumbnailResult => ({ ok: false, reason: 'failed' })),
+      cap,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** A positive integer, or null. */
+function positiveInt(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
+}
+
+/** Read the stored thumbnail ({thumbnail:{width,height,page_count?}}); null when absent or malformed. */
+function thumbnailField(body: unknown): StoredThumbnail | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const raw = (body as { thumbnail?: unknown }).thumbnail;
+  if (typeof raw !== 'object' || raw === null) return null;
+  const t = raw as { width?: unknown; height?: unknown; page_count?: unknown };
+  const width = positiveInt(t.width);
+  const height = positiveInt(t.height);
+  if (width === null || height === null) return null;
+  const pageCount = positiveInt(t.page_count);
+  return { width, height, ...(pageCount !== null ? { pageCount } : {}) };
 }
 
 async function readJson(response: Response): Promise<unknown> {

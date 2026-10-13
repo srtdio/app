@@ -76,6 +76,19 @@ export function buildR2Key(input: {
   return `${kindFolder(input.kind)}/${input.assetId}/v${input.versionNumber}-${safeName}`;
 }
 
+/**
+ * Object key of a version's thumbnail rendition, next to the version's own
+ * bytes: {kindFolder}/{asset_id}/v{n}-thumb.jpg. Additive: buildR2Key is
+ * unchanged, so existing keys never move.
+ */
+export function buildThumbnailKey(input: {
+  kind: string;
+  assetId: string;
+  versionNumber: number;
+}): string {
+  return `${kindFolder(input.kind)}/${input.assetId}/v${input.versionNumber}-thumb.jpg`;
+}
+
 // ---------------------------------------------------------------------------
 // R2 (S3-compatible) implementation with AWS SigV4 signing.
 // ---------------------------------------------------------------------------

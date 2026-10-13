@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   PresignCache,
   PresignError,
+  fetchPdfStream,
   requestPresignedUrl,
+  requestThumbnailUrl,
   type PresignDeps,
 } from '@/lib/asset-presign';
 
@@ -117,5 +119,109 @@ describe('PresignCache', () => {
     await all;
     expect(max).toBe(3);
     expect(calls).toBe(10);
+  });
+});
+
+describe('requestThumbnailUrl and the thumbnail cache', () => {
+  const noRendition = (): Response =>
+    new Response(JSON.stringify({ error: 'no_rendition' }), { status: 404 });
+
+  it('asks asset-read for the thumbnail rendition of the version', async () => {
+    const fetcher = vi.fn<PresignDeps['fetcher']>(async () => okResponse('https://signed/thumb'));
+    const url = await requestThumbnailUrl(baseDeps({ fetcher }), 'v1');
+    expect(url?.url).toBe('https://signed/thumb');
+    const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      asset_version_id: 'v1',
+      rendition: 'thumbnail',
+    });
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer token');
+  });
+
+  it('404 no_rendition is null; any other failure throws', async () => {
+    expect(await requestThumbnailUrl(baseDeps({ fetcher: async () => noRendition() }), 'v1')).toBe(
+      null,
+    );
+    await expect(
+      requestThumbnailUrl(
+        baseDeps({ fetcher: async () => new Response('{}', { status: 403 }) }),
+        'v1',
+      ),
+    ).rejects.toBeInstanceOf(PresignError);
+    await expect(
+      requestThumbnailUrl(
+        baseDeps({ fetcher: async () => new Response('{"error":{}}', { status: 404 }) }),
+        'v1',
+      ),
+    ).rejects.toBeInstanceOf(PresignError);
+  });
+
+  it('caches a thumbnail until 60 s before expiry, then asks again', async () => {
+    const fetcher = vi.fn<PresignDeps['fetcher']>(async () =>
+      okResponse('https://signed/thumb', 120_000),
+    );
+    const cache = new PresignCache(baseDeps({ fetcher }));
+    await cache.thumbnail('v1');
+    await cache.thumbnail('v1');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(cache.peekThumbnail('v1')?.url).toBe('https://signed/thumb');
+
+    const short = vi.fn<PresignDeps['fetcher']>(async () => okResponse('https://signed/s', 30_000));
+    const near = new PresignCache(baseDeps({ fetcher: short }));
+    await near.thumbnail('v1');
+    await near.thumbnail('v1');
+    expect(short).toHaveBeenCalledTimes(2);
+  });
+
+  it('no_rendition is remembered as absent for the session (one request)', async () => {
+    const fetcher = vi.fn<PresignDeps['fetcher']>(async () => noRendition());
+    const cache = new PresignCache(baseDeps({ fetcher }));
+    expect(await cache.thumbnail('v1')).toBe(null);
+    expect(await cache.thumbnail('v1')).toBe(null);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('concurrent asks share one request; the thumbnail never touches the file URL cache', async () => {
+    const fetcher = vi.fn<PresignDeps['fetcher']>(async () => okResponse('https://signed/thumb'));
+    const cache = new PresignCache(baseDeps({ fetcher }));
+    await Promise.all([cache.thumbnail('v1'), cache.thumbnail('v1')]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(cache.peek('v1')).toBe(null);
+  });
+
+  it('freshUrl never uses the cache (a fresh link on every viewer open)', async () => {
+    const fetcher = vi.fn<PresignDeps['fetcher']>(async () => okResponse('https://signed/x'));
+    const cache = new PresignCache(baseDeps({ fetcher }));
+    await cache.resolve('v1');
+    await cache.freshUrl('v1');
+    await cache.freshUrl('v1', 'attachment');
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    const last = fetcher.mock.calls[2] as [string, RequestInit];
+    expect(JSON.parse(String(last[1].body))).toEqual({
+      asset_version_id: 'v1',
+      disposition: 'attachment',
+    });
+  });
+});
+
+describe('fetchPdfStream', () => {
+  it('posts stream:true with the signal and resolves the 2xx response', async () => {
+    const body = new Response('%PDF-1.4');
+    const fetcher = vi.fn<PresignDeps['fetcher']>(async () => body);
+    const controller = new AbortController();
+    const response = await fetchPdfStream(baseDeps({ fetcher }), 'v1', controller.signal);
+    expect(response).toBe(body);
+    const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ asset_version_id: 'v1', stream: true });
+    expect(init.signal).toBe(controller.signal);
+  });
+
+  it('a refusal throws PresignError (the viewer shows its error card)', async () => {
+    await expect(
+      fetchPdfStream(baseDeps({ fetcher: async () => new Response('{}', { status: 403 }) }), 'v1'),
+    ).rejects.toMatchObject({ code: 'request_failed' });
+    await expect(fetchPdfStream(baseDeps({ endpoint: null }), 'v1')).rejects.toMatchObject({
+      code: 'unconfigured',
+    });
   });
 });

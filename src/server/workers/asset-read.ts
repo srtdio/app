@@ -19,6 +19,14 @@
 // A caller it rejects gets the exact non-member 403, so a chat file's existence
 // is never revealed. Library versions keep the workspace-member check.
 //
+// Two additive modes, each authorized exactly as above on the PARENT version:
+//   { asset_version_id, rendition: 'thumbnail' } -> the version's thumbnail
+//     rendition presigned inline (900 s), or 404 { error: 'no_rendition' };
+//   { asset_version_id, stream: true } -> a PDF version's bytes piped through
+//     this Worker (never buffered), Range/206 passed through, so the in-app
+//     viewer never depends on per-bucket storage CORS. Non-PDF is a 400.
+// A body without either field is handled byte-for-byte as before.
+//
 // This is a read/query endpoint: no idempotency key, no state mutation, no
 // audit row. Expected failures (missing/invalid token, unknown version,
 // non-member) are returned as typed Results and mapped to 4xx; system faults
@@ -30,6 +38,11 @@ import type { Database } from '@srtdio/schemas';
 import { R2StorageClient } from '@srtdio/storage';
 import { tracedFetch } from '@/server/traced-fetch';
 import { err, ok, type AssetOrigin, type Result } from '@/server/assets/types';
+import {
+  createSupabaseRenditionStore,
+  type RenditionRef,
+  type RenditionRole,
+} from '@/server/assets/repository';
 import { extractTraceId } from '@/server/trace';
 import { logger } from '@/server/logger';
 import { TRACE_ID_HEADER } from '@/lib/trace';
@@ -198,19 +211,26 @@ export interface SignedUrlResult {
   expires_at: string;
 }
 
+/** A version the caller may read, with the stored bytes' location resolved. */
+export interface ReadableVersion {
+  version: AssetVersionLocator;
+  bucket: string;
+  r2Key: string;
+}
+
 /**
- * Authorize the caller for the asset version, then mint the signed URL. The
- * order is fixed: not-found before forbidden, the membership gate always runs
- * before anything is signed, and the stored-file check runs only after the
- * caller is proven a member. Crashes loudly if a located version is missing its
+ * Authorize the caller for the asset version. The order is fixed: not-found
+ * before forbidden, the membership gate always runs before anything is
+ * signed or streamed, and the stored-file check runs only after the caller is
+ * proven a member. Crashes loudly if a located version is missing its
  * workspace - that is a data-integrity fault, not a 404. A link version (or any
  * version with a null r2_key) has no bytes to sign and is a domain error.
  */
-export async function authorizeAndSign(
-  deps: AuthorizeDeps,
-  input: { userId: string; assetVersionId: string; disposition?: Disposition },
-): Promise<Result<SignedUrlResult, ReadError>> {
-  const version = await deps.store.findVersion(input.assetVersionId);
+export async function authorizeVersion(
+  store: AssetReadStore,
+  input: { userId: string; assetVersionId: string },
+): Promise<Result<ReadableVersion, ReadError>> {
+  const version = await store.findVersion(input.assetVersionId);
   if (!version) {
     return err({ code: 'not_found', message: 'Asset version not found.' });
   }
@@ -220,11 +240,11 @@ export async function authorizeAndSign(
 
   const allowed =
     version.origin === 'chat'
-      ? await deps.store.isChatAttachmentReadable({
+      ? await store.isChatAttachmentReadable({
           userId: input.userId,
           assetVersionId: input.assetVersionId,
         })
-      : await deps.store.isActiveMember({
+      : await store.isActiveMember({
           userId: input.userId,
           workspaceId: version.workspaceId,
         });
@@ -238,10 +258,26 @@ export async function authorizeAndSign(
   if (version.bucket === null) {
     throw new Error(`workspace ${version.workspaceId} is missing asset_bucket`);
   }
+  return ok({ version, bucket: version.bucket, r2Key: version.r2Key });
+}
+
+/**
+ * Authorize the caller for the asset version, then mint the signed URL (see
+ * {@link authorizeVersion} for the gate's order).
+ */
+export async function authorizeAndSign(
+  deps: AuthorizeDeps,
+  input: { userId: string; assetVersionId: string; disposition?: Disposition },
+): Promise<Result<SignedUrlResult, ReadError>> {
+  const readable = await authorizeVersion(deps.store, input);
+  if (!readable.ok) {
+    return readable;
+  }
+  const { version, bucket, r2Key } = readable.value;
 
   const url = await deps.signer.presignGetUrl({
-    bucket: version.bucket,
-    key: version.r2Key,
+    bucket,
+    key: r2Key,
     expiresInSeconds: URL_TTL_SECONDS,
     // Inline (default) leaves the signing path byte-identical; attachment adds
     // the response-content-disposition override so the browser saves the file.
@@ -251,6 +287,91 @@ export async function authorizeAndSign(
   });
   const expires_at = new Date(Date.now() + URL_TTL_SECONDS * 1000).toISOString();
   return ok({ url, expires_at });
+}
+
+/** Reads a version's rendition (service role; asset_renditions has no client SELECT). */
+export interface RenditionReader {
+  findRendition(assetVersionId: string, role: RenditionRole): Promise<RenditionRef | null>;
+}
+
+/**
+ * The thumbnail mode: authorize the PARENT version exactly as a plain read,
+ * then presign its thumbnail rendition inline for 900 s. A version without
+ * one is the 'no_rendition' miss (404).
+ */
+export async function authorizeAndSignRendition(
+  deps: AuthorizeDeps & { renditions: RenditionReader },
+  input: { userId: string; assetVersionId: string },
+): Promise<Result<SignedUrlResult, ReadError | 'no_rendition'>> {
+  const readable = await authorizeVersion(deps.store, input);
+  if (!readable.ok) {
+    return readable;
+  }
+  const rendition = await deps.renditions.findRendition(input.assetVersionId, 'thumbnail');
+  if (rendition === null) {
+    return err('no_rendition');
+  }
+  const url = await deps.signer.presignGetUrl({
+    bucket: readable.value.bucket,
+    key: rendition.r2Key,
+    expiresInSeconds: URL_TTL_SECONDS,
+  });
+  const expires_at = new Date(Date.now() + URL_TTL_SECONDS * 1000).toISOString();
+  return ok({ url, expires_at });
+}
+
+/** True for a stored PDF version (kind and mime both say so). */
+function isPdfVersion(version: AssetVersionLocator): boolean {
+  return version.kind === 'pdf' && (version.mimeType ?? '').toLowerCase() === 'application/pdf';
+}
+
+/** Fetches an object's bytes from a presigned URL; Range passes through. */
+export type ObjectFetcher = (url: string, range: string | null) => Promise<Response>;
+
+/** Upstream headers a PDF stream passes back to the browser. */
+const STREAM_PASS_HEADERS = ['Content-Length', 'Content-Range', 'Accept-Ranges', 'ETag'] as const;
+
+/**
+ * The stream mode: authorize the PARENT version exactly as a plain read, then
+ * fetch the PDF server-side and pipe its body back (never buffered), passing
+ * a Range request and a 206 through. Content-Type is pinned to
+ * application/pdf with nosniff and no caching. A non-PDF version is a 400.
+ */
+export async function authorizeAndStream(
+  deps: { store: AssetReadStore; signer: PresignedUrlSigner; fetchObject: ObjectFetcher },
+  input: { userId: string; assetVersionId: string; range: string | null },
+): Promise<Result<Response, ReadError>> {
+  const readable = await authorizeVersion(deps.store, input);
+  if (!readable.ok) {
+    return readable;
+  }
+  if (!isPdfVersion(readable.value.version)) {
+    return err({ code: 'bad_request', message: 'stream is only for PDF files.' });
+  }
+  const url = await deps.signer.presignGetUrl({
+    bucket: readable.value.bucket,
+    key: readable.value.r2Key,
+    expiresInSeconds: URL_TTL_SECONDS,
+  });
+  const upstream = await deps.fetchObject(url, input.range);
+  if (upstream.status !== 200 && upstream.status !== 206) {
+    // Release the upstream body before failing (nothing is piped).
+    await upstream.body?.cancel();
+    if (upstream.status === 416) {
+      return err({ code: 'bad_request', message: 'Range not satisfiable.' });
+    }
+    throw new Error(`object fetch failed with status ${upstream.status}`);
+  }
+  const headers = new Headers({
+    'Content-Type': 'application/pdf',
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'private, no-store',
+  });
+  for (const name of STREAM_PASS_HEADERS) {
+    const value = upstream.headers.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  return ok(new Response(upstream.body, { status: upstream.status, headers }));
 }
 
 /** Path to a Supabase project's published JWKS (asymmetric signing keys). */
@@ -361,6 +482,8 @@ function fail(error: ReadError, traceId: string, acao: string | null): Response 
 export interface ReadRequest {
   assetVersionId: string;
   disposition: Disposition;
+  /** 'sign' (as before), 'thumbnail' (rendition) or 'stream' (PDF bytes). */
+  mode: 'sign' | 'thumbnail' | 'stream';
 }
 
 /**
@@ -388,7 +511,24 @@ async function readRequestBody(request: Request): Promise<Result<ReadRequest, Re
     }
     disposition = rawDisposition;
   }
-  return ok({ assetVersionId: id, disposition });
+  const rendition = obj?.rendition;
+  const stream = obj?.stream;
+  if (rendition !== undefined && rendition !== 'thumbnail') {
+    return err({ code: 'bad_request', message: 'rendition must be thumbnail.' });
+  }
+  if (stream !== undefined && typeof stream !== 'boolean') {
+    return err({ code: 'bad_request', message: 'stream must be a boolean.' });
+  }
+  const streaming = stream === true;
+  // A rendition or a stream is inline by nature and one mode at a time.
+  if ((rendition !== undefined || streaming) && rawDisposition !== undefined) {
+    return err({ code: 'bad_request', message: 'disposition applies to a plain read only.' });
+  }
+  if (rendition !== undefined && streaming) {
+    return err({ code: 'bad_request', message: 'Ask for a rendition or a stream, not both.' });
+  }
+  const mode = rendition !== undefined ? 'thumbnail' : streaming ? 'stream' : 'sign';
+  return ok({ assetVersionId: id, disposition, mode });
 }
 
 /**
@@ -498,18 +638,65 @@ async function handlePost(
     return fail(parsed.error, traceId, acao);
   }
 
-  const result = await authorizeAndSign(
+  const store = createSupabaseAssetReadStore(env, traceId);
+  const signer = new R2StorageClient(
     {
-      store: createSupabaseAssetReadStore(env, traceId),
-      signer: new R2StorageClient(
-        {
-          CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
-          CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
-          CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-        },
-        tracedFetch,
-      ),
+      CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
+      CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
     },
+    tracedFetch,
+  );
+  const target = { userId: caller.value, assetVersionId: parsed.value.assetVersionId };
+  const denied = (error: ReadError): Response => {
+    if (error.code === 'forbidden') {
+      logger.warn('asset read denied', {
+        asset_version_id: parsed.value.assetVersionId,
+      });
+    }
+    return fail(error, traceId, acao);
+  };
+
+  if (parsed.value.mode === 'thumbnail') {
+    const result = await authorizeAndSignRendition(
+      { store, signer, renditions: createSupabaseRenditionStore(env, traceId) },
+      target,
+    );
+    if (!result.ok) {
+      return result.error === 'no_rendition'
+        ? json(404, { error: 'no_rendition' }, traceId, acao)
+        : denied(result.error);
+    }
+    return json(200, result.value, traceId, acao);
+  }
+
+  if (parsed.value.mode === 'stream') {
+    const result = await authorizeAndStream(
+      {
+        store,
+        signer,
+        fetchObject: (url, range) =>
+          tracedFetch(url, range !== null ? { headers: { Range: range } } : {}, traceId),
+      },
+      { ...target, range: request.headers.get('Range') },
+    );
+    if (!result.ok) {
+      return denied(result.error);
+    }
+    const response = result.value;
+    response.headers.set(TRACE_ID_HEADER, traceId);
+    applyCors(response.headers, acao);
+    if (acao !== null) {
+      response.headers.set(
+        'Access-Control-Expose-Headers',
+        'Content-Length, Content-Range, Accept-Ranges',
+      );
+    }
+    return response;
+  }
+
+  const result = await authorizeAndSign(
+    { store, signer },
     {
       userId: caller.value,
       assetVersionId: parsed.value.assetVersionId,
@@ -517,12 +704,7 @@ async function handlePost(
     },
   );
   if (!result.ok) {
-    if (result.error.code === 'forbidden') {
-      logger.warn('asset read denied', {
-        asset_version_id: parsed.value.assetVersionId,
-      });
-    }
-    return fail(result.error, traceId, acao);
+    return denied(result.error);
   }
   return json(200, result.value, traceId, acao);
 }

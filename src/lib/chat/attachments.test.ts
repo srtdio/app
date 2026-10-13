@@ -23,6 +23,9 @@ import {
   type MessageAttachment,
   type ReplyQuote,
   uploadRing,
+  classifyFileKind,
+  rememberThumbnail,
+  thumbnailMetaOf,
 } from '@/lib/chat/attachments';
 
 function fakeFile(name: string, type: string): File {
@@ -635,5 +638,148 @@ describe('uploadRing (the X and its progress)', () => {
         att({ size: 300 }, { progress: 0.5, uploading: true }),
       ]),
     ).toEqual({ progress: 250 / 400 });
+  });
+});
+
+describe('classifyFileKind (the file bubble branch)', () => {
+  it.each([
+    ['application/pdf', 'pdf'],
+    ['video/mp4', 'video'],
+    ['video/quicktime', 'video'],
+    ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'office'],
+    ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'office'],
+    ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'office'],
+    ['text/csv', 'file'],
+    ['application/zip', 'file'],
+    ['', 'file'],
+  ] as const)('%s -> %s', (mime, kind) => {
+    expect(classifyFileKind(mime)).toBe(kind);
+  });
+
+  it('classifyAttachment keeps its three list-preview kinds', () => {
+    expect(classifyAttachment('application/pdf')).toBe('file');
+    expect(classifyAttachment('video/mp4')).toBe('file');
+  });
+});
+
+describe('thumbnail meta: send, read back, invalid values dropped', () => {
+  const pdf: MessageAttachment = {
+    assetId: 'v-pdf',
+    name: 'deck.pdf',
+    mime: 'application/pdf',
+    size: 900,
+    pageCount: 12,
+    thumbW: 580,
+    thumbH: 751,
+  };
+
+  it('live ext round-trip keeps pageCount / thumbW / thumbH', () => {
+    const ext = buildAttachmentExt([pdf]);
+    expect(ext.attachment_meta[0]).toMatchObject({ pageCount: 12, thumbW: 580, thumbH: 751 });
+    expect(parseAttachments(JSON.parse(JSON.stringify(ext)))).toEqual([pdf]);
+  });
+
+  it('Postgres attachment_meta round-trip keeps page_count / thumb_w / thumb_h', () => {
+    const meta = buildAttachmentMeta([pdf]);
+    expect(meta['v-pdf']).toEqual({
+      mime: 'application/pdf',
+      name: 'deck.pdf',
+      size: 900,
+      page_count: 12,
+      thumb_w: 580,
+      thumb_h: 751,
+    });
+    expect(parseAttachmentMeta(JSON.parse(JSON.stringify(meta)), ['v-pdf'])).toEqual([pdf]);
+  });
+
+  it('a file with no stored thumbnail writes none of the keys', () => {
+    const plain: MessageAttachment = { assetId: 'v-x', name: 'a.csv', mime: 'text/csv', size: 3 };
+    expect(buildAttachmentMeta([plain])['v-x']).toEqual({
+      mime: 'text/csv',
+      name: 'a.csv',
+      size: 3,
+    });
+    expect(buildAttachmentExt([plain]).attachment_meta[0]).toEqual(plain);
+  });
+
+  it.each([
+    ['negative', { page_count: -1, thumb_w: 580, thumb_h: 751 }, { thumbW: 580, thumbH: 751 }],
+    ['fraction', { page_count: 2, thumb_w: 580.5, thumb_h: 751 }, {}],
+    ['zero', { page_count: 2, thumb_w: 0, thumb_h: 751 }, {}],
+    ['strings', { page_count: '2', thumb_w: '580', thumb_h: '751' }, {}],
+    ['half a size', { page_count: 2, thumb_w: 580 }, {}],
+  ])('parseAttachmentMeta drops %s values', (_label, extra, kept) => {
+    const [parsed] = parseAttachmentMeta(
+      { v1: { mime: 'application/pdf', name: 'a.pdf', size: 1, ...extra } },
+      ['v1'],
+    );
+    expect(parsed).toEqual({
+      assetId: 'v1',
+      mime: 'application/pdf',
+      name: 'a.pdf',
+      size: 1,
+      ...kept,
+    });
+  });
+
+  it('parseAttachments drops invalid values the same way', () => {
+    const [parsed] = parseAttachments({
+      attachment_meta: [
+        {
+          assetId: 'v1',
+          name: 'a.pdf',
+          mime: 'application/pdf',
+          pageCount: 0,
+          thumbW: 'x',
+          thumbH: 9,
+        },
+      ],
+    });
+    expect(parsed).toEqual({ assetId: 'v1', name: 'a.pdf', mime: 'application/pdf' });
+  });
+
+  it('the meta of a fresh upload comes from the Worker-stored thumbnail of its version', async () => {
+    const params = {
+      file: new File(['%PDF'], 'deck.pdf', { type: 'application/pdf' }),
+      workspaceId: 'ws',
+      origin: 'chat',
+      token: 'tok',
+      endpoint: 'https://upload',
+      fetcher: vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              asset: { assetId: 'a', versionId: 'v-fresh', reused: false },
+              thumbnail: { width: 580, height: 751, page_count: 4 },
+            }),
+            { status: 201 },
+          ),
+      ),
+    } satisfies ChatUploadParams;
+    const result = await uploadChatAttachment(params);
+    expect(result).toEqual({
+      ok: true,
+      reused: false,
+      versionId: 'v-fresh',
+      thumbnail: { width: 580, height: 751, pageCount: 4 },
+    });
+    // The outbox fills only the version id; the record-time meta still has the thumbnail.
+    const sent: MessageAttachment = {
+      assetId: 'v-fresh',
+      name: 'deck.pdf',
+      mime: 'application/pdf',
+    };
+    expect(thumbnailMetaOf(sent)).toEqual({ thumbW: 580, thumbH: 751, pageCount: 4 });
+    expect(buildAttachmentMeta([sent])['v-fresh']).toMatchObject({
+      thumb_w: 580,
+      thumb_h: 751,
+      page_count: 4,
+    });
+  });
+
+  it('rememberThumbnail ignores an empty version id or a bad size', () => {
+    rememberThumbnail('', { width: 1, height: 1 });
+    rememberThumbnail('v-bad', { width: 0, height: 10 });
+    expect(thumbnailMetaOf({ assetId: 'v-bad', name: '', mime: '' })).toBe(null);
   });
 });

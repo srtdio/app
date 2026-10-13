@@ -22,6 +22,7 @@ import { stripJpegMetadata } from './exif';
 import type { VirusScanner } from './virus-scan';
 import {
   buildR2Key,
+  buildThumbnailKey,
   computeSha256,
   inspectUpload,
   isAllowedMime,
@@ -33,7 +34,12 @@ import {
   type StorageClient,
 } from '@srtdio/storage';
 import { logger } from '../logger';
-import { isFileVersionRef, type AssetRepository, type FileVersionKind } from './repository';
+import {
+  isFileVersionRef,
+  type AssetRepository,
+  type FileVersionKind,
+  type RenditionStore,
+} from './repository';
 import {
   err,
   ok,
@@ -535,4 +541,144 @@ export async function getAssetSummary(
     r2Key: current.r2Key,
     reused: false,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Thumbnail rendition (sender-made JPEG for a pdf/video upload).
+// ---------------------------------------------------------------------------
+
+/** Server-side caps; the client's numbers are never trusted. */
+export const THUMBNAIL_MAX_BYTES = 300 * 1024;
+export const THUMBNAIL_MAX_WIDTH = 580;
+export const THUMBNAIL_MAX_HEIGHT = 1160;
+export const THUMBNAIL_MAX_PAGE_COUNT = 10_000;
+
+export interface ThumbnailDeps {
+  storage: StorageClient;
+  repository: AssetRepository;
+  renditions: RenditionStore;
+}
+
+export interface ThumbnailInput {
+  /** The upload's result: the parent version the thumbnail belongs to. */
+  summary: AssetSummary;
+  /** The `thumbnail` part's bytes. */
+  bytes: Uint8Array;
+  /** The raw `thumbnail_page_count` field, or null when absent. */
+  pageCountField: string | null;
+  traceId: string;
+}
+
+export type ThumbnailOutcome =
+  | { stored: true; width: number; height: number; pageCount?: number }
+  | { stored: false; reason: string };
+
+/** The page count field: absent is null, a decimal 1..10000 is the number, else invalid. */
+export function parsePageCount(field: string | null): number | null | 'invalid' {
+  if (field === null) return null;
+  if (!/^[0-9]{1,5}$/.test(field)) return 'invalid';
+  const n = Number(field);
+  return n >= 1 && n <= THUMBNAIL_MAX_PAGE_COUNT ? n : 'invalid';
+}
+
+/**
+ * Validate a thumbnail part against the server's own reading of it: the
+ * parent version must be a pdf or video, the bytes a JPEG (FF D8 FF) of at
+ * most 300 KiB whose SOF frame (parsed here) is at most 580 x 1160, and the
+ * page count absent or 1..10000. Pure; the reason names the first miss.
+ */
+export function checkThumbnail(
+  input: Pick<ThumbnailInput, 'summary' | 'bytes' | 'pageCountField'>,
+):
+  | { ok: true; width: number; height: number; pageCount: number | null }
+  | { ok: false; reason: string } {
+  const parent = normalizeMime(input.summary.mimeType);
+  const kind = parent === 'application/pdf' ? 'pdf' : parent.startsWith('video/') ? 'video' : null;
+  if (kind === null) return { ok: false, reason: 'parent_not_pdf_or_video' };
+  const { bytes } = input;
+  if (bytes.byteLength === 0 || bytes.byteLength > THUMBNAIL_MAX_BYTES) {
+    return { ok: false, reason: 'size' };
+  }
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
+    return { ok: false, reason: 'not_jpeg' };
+  }
+  const dims = readImageDimensions(bytes, 'image/jpeg');
+  if (!dims.ok) return { ok: false, reason: 'no_frame' };
+  if (dims.width > THUMBNAIL_MAX_WIDTH || dims.height > THUMBNAIL_MAX_HEIGHT) {
+    return { ok: false, reason: 'dimensions' };
+  }
+  const pages = parsePageCount(input.pageCountField);
+  if (pages === 'invalid') return { ok: false, reason: 'page_count' };
+  // A page count only means something on a PDF.
+  return {
+    ok: true,
+    width: dims.width,
+    height: dims.height,
+    pageCount: kind === 'pdf' ? pages : null,
+  };
+}
+
+/**
+ * Store the sender's thumbnail as the version's 'thumbnail' rendition: R2 put
+ * at {kindFolder}/{asset_id}/v{n}-thumb.jpg, then the row (ON CONFLICT DO
+ * NOTHING). A deduped upload writes only when the version has none yet. An
+ * invalid thumbnail is ignored ({stored:false}); a storage or DB fault throws
+ * and the caller logs it, the upload itself having already succeeded. An R2
+ * object whose row insert then fails stays as an orphan (accepted).
+ */
+export async function storeThumbnailRendition(
+  deps: ThumbnailDeps,
+  input: ThumbnailInput,
+): Promise<ThumbnailOutcome> {
+  const checked = checkThumbnail(input);
+  if (!checked.ok) return { stored: false, reason: checked.reason };
+  const pageCount = checked.pageCount !== null ? { pageCount: checked.pageCount } : {};
+  const { summary } = input;
+
+  const existing = await deps.renditions.findRendition(summary.versionId, 'thumbnail');
+  if (existing !== null) {
+    if (existing.width === null || existing.height === null) {
+      return { stored: false, reason: 'existing_without_size' };
+    }
+    return { stored: true, width: existing.width, height: existing.height, ...pageCount };
+  }
+
+  const kind = fileKindForMime(normalizeMime(summary.mimeType));
+  const r2Key = buildThumbnailKey({
+    kind,
+    assetId: summary.assetId,
+    versionNumber: summary.versionNumber,
+  });
+  // A file literally named "thumb.jpg" keys to the same object: never overwrite it.
+  if (r2Key === summary.r2Key) return { stored: false, reason: 'key_collision' };
+
+  const bucket = await deps.repository.getAssetBucket(summary.workspaceId);
+  await deps.storage.putObject({
+    bucket,
+    key: r2Key,
+    body: input.bytes,
+    contentType: 'image/jpeg',
+    traceId: input.traceId,
+  });
+  const inserted = await deps.renditions.insertRendition({
+    id: uuidv7(),
+    assetVersionId: summary.versionId,
+    workspaceId: summary.workspaceId,
+    role: 'thumbnail',
+    r2Key,
+    mimeType: 'image/jpeg',
+    sha256: await computeSha256(input.bytes),
+    sizeBytes: input.bytes.byteLength,
+    width: checked.width,
+    height: checked.height,
+  });
+  if (!inserted) {
+    // Another upload of the same version won the insert: report its row.
+    const winner = await deps.renditions.findRendition(summary.versionId, 'thumbnail');
+    if (winner === null || winner.width === null || winner.height === null) {
+      return { stored: false, reason: 'conflict' };
+    }
+    return { stored: true, width: winner.width, height: winner.height, ...pageCount };
+  }
+  return { stored: true, width: checked.width, height: checked.height, ...pageCount };
 }

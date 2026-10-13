@@ -22,6 +22,7 @@ import {
   type UploadTransport,
 } from '@/lib/asset-upload';
 import { parsePeaks } from '@/lib/chat/waveform-peaks';
+import { isOfficeMime } from '@/lib/files/display-name';
 
 /**
  * One Sorted asset version referenced by a chat message: the asset VERSION id to
@@ -47,6 +48,15 @@ export interface MessageAttachment {
    * audio (waveform-peaks.ts). Absent on older notes and non-audio files.
    */
   peaks?: number[];
+  /** PDFs with a stored thumbnail: the document's page count. */
+  pageCount?: number;
+  /**
+   * The stored thumbnail's pixel size (pdf/video), present only when the
+   * upload stored one. The file bubble reserves its thumbnail area from these,
+   * so its height is final on first paint.
+   */
+  thumbW?: number;
+  thumbH?: number;
   /**
    * Sender-side only: the picked file behind an instant send. Present from the
    * Send tap; `assetId` stays '' until the background upload returns the version
@@ -212,6 +222,83 @@ export function classifyAttachment(mime: string): AttachmentKind {
 }
 
 /**
+ * The file bubble's branch for a non-image, non-voice attachment: pdf, video,
+ * office (docx, xlsx, pptx) or any other file. It refines classifyAttachment's
+ * 'file' without widening AttachmentKind, which the chat list previews key on.
+ */
+export type FileKind = 'pdf' | 'video' | 'office' | 'file';
+
+export function classifyFileKind(mime: string): FileKind {
+  const m = mime.toLowerCase();
+  if (m === 'application/pdf') return 'pdf';
+  if (m.startsWith('video/')) return 'video';
+  if (isOfficeMime(m)) return 'office';
+  return 'file';
+}
+
+/** A positive integer, or undefined. */
+function positiveInt(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+/** The thumbnail meta an attachment carries: page count and stored thumbnail size. */
+export interface ThumbnailMeta {
+  pageCount?: number;
+  thumbW: number;
+  thumbH: number;
+}
+
+/**
+ * Thumbnails the upload Worker confirmed this session, by asset version id.
+ * The outbox fills in only the version id after an upload, so the meta built
+ * at record time (buildAttachmentExt, buildAttachmentMeta) reads the stored
+ * thumbnail's size from here. Never persisted.
+ */
+const storedThumbnails = new Map<string, ThumbnailMeta>();
+
+/** Record the thumbnail the Worker stored for a version (upload response). */
+export function rememberThumbnail(
+  versionId: string,
+  thumbnail: { width: number; height: number; pageCount?: number },
+): void {
+  const thumbW = positiveInt(thumbnail.width);
+  const thumbH = positiveInt(thumbnail.height);
+  if (versionId === '' || thumbW === undefined || thumbH === undefined) return;
+  const pageCount = positiveInt(thumbnail.pageCount);
+  storedThumbnails.set(versionId, {
+    thumbW,
+    thumbH,
+    ...(pageCount !== undefined ? { pageCount } : {}),
+  });
+}
+
+/** The attachment's thumbnail meta: its own, else the one recorded for its version. */
+export function thumbnailMetaOf(attachment: MessageAttachment): ThumbnailMeta | null {
+  if (attachment.thumbW !== undefined && attachment.thumbH !== undefined) {
+    return {
+      thumbW: attachment.thumbW,
+      thumbH: attachment.thumbH,
+      ...(attachment.pageCount !== undefined ? { pageCount: attachment.pageCount } : {}),
+    };
+  }
+  return storedThumbnails.get(attachment.assetId) ?? null;
+}
+
+/** Read page_count / thumb_w / thumb_h (or their camelCase twins) as positive ints. */
+function parseThumbnailKeys(
+  pageCount: unknown,
+  thumbW: unknown,
+  thumbH: unknown,
+): Pick<MessageAttachment, 'pageCount' | 'thumbW' | 'thumbH'> {
+  const w = positiveInt(thumbW);
+  const h = positiveInt(thumbH);
+  // The thumbnail size is one fact: half of it is dropped.
+  if (w === undefined || h === undefined) return {};
+  const pages = positiveInt(pageCount);
+  return { thumbW: w, thumbH: h, ...(pages !== undefined ? { pageCount: pages } : {}) };
+}
+
+/**
  * Custom-extension payload carried on the Agora message. `attachment_asset_ids`
  * is the canonical id list the webhook mirror persists (chat-webhook-mirror's
  * extractAssetIds reads this exact key); `attachment_meta` is client-only render
@@ -225,14 +312,18 @@ export interface AttachmentExt {
 export function buildAttachmentExt(attachments: readonly MessageAttachment[]): AttachmentExt {
   return {
     attachment_asset_ids: attachments.map((attachment) => attachment.assetId),
-    attachment_meta: attachments.map((a) => ({
-      assetId: a.assetId,
-      name: a.name,
-      mime: a.mime,
-      ...(a.size !== undefined ? { size: a.size } : {}),
-      ...(a.durationMs !== undefined ? { durationMs: a.durationMs } : {}),
-      ...(a.peaks !== undefined ? { peaks: [...a.peaks] } : {}),
-    })),
+    attachment_meta: attachments.map((a) => {
+      const thumb = thumbnailMetaOf(a);
+      return {
+        assetId: a.assetId,
+        name: a.name,
+        mime: a.mime,
+        ...(a.size !== undefined ? { size: a.size } : {}),
+        ...(a.durationMs !== undefined ? { durationMs: a.durationMs } : {}),
+        ...(a.peaks !== undefined ? { peaks: [...a.peaks] } : {}),
+        ...(thumb !== null ? thumb : {}),
+      };
+    }),
   };
 }
 
@@ -245,6 +336,11 @@ export type AttachmentMetaEntry = {
   transcript?: string;
   /** A voice note's waveform (waveform-peaks.ts); absent on older notes. */
   peaks?: number[];
+  /** PDFs with a stored thumbnail: the page count. */
+  page_count?: number;
+  /** The stored thumbnail's pixel size; present only when one was stored. */
+  thumb_w?: number;
+  thumb_h?: number;
 };
 
 /** chat_messages.attachment_meta: render metadata keyed by asset (version) id. */
@@ -258,12 +354,20 @@ export type AttachmentMetaMap = Record<string, AttachmentMetaEntry>;
 export function buildAttachmentMeta(attachments: readonly MessageAttachment[]): AttachmentMetaMap {
   const meta: AttachmentMetaMap = {};
   for (const a of attachments) {
+    const thumb = thumbnailMetaOf(a);
     meta[a.assetId] = {
       mime: a.mime,
       name: a.name,
       size: a.size ?? 0,
       ...(a.durationMs !== undefined ? { duration_ms: a.durationMs } : {}),
       ...(a.peaks !== undefined ? { peaks: [...a.peaks] } : {}),
+      ...(thumb !== null
+        ? {
+            thumb_w: thumb.thumbW,
+            thumb_h: thumb.thumbH,
+            ...(thumb.pageCount !== undefined ? { page_count: thumb.pageCount } : {}),
+          }
+        : {}),
     };
   }
   return meta;
@@ -297,6 +401,7 @@ export function parseAttachmentMeta(
       ...(typeof entry.size === 'number' ? { size: entry.size } : {}),
       ...(typeof entry.duration_ms === 'number' ? { durationMs: entry.duration_ms } : {}),
       ...(peaks !== undefined ? { peaks } : {}),
+      ...parseThumbnailKeys(entry.page_count, entry.thumb_w, entry.thumb_h),
     };
   });
 }
@@ -430,6 +535,7 @@ export function parseAttachments(ext: unknown): MessageAttachment[] {
     // Only known keys are kept; `peaks` that do not validate are dropped.
     const parsed = meta.filter(isMessageAttachment).map((a): MessageAttachment => {
       const peaks = parsePeaks((a as { peaks?: unknown }).peaks);
+      const raw = a as { pageCount?: unknown; thumbW?: unknown; thumbH?: unknown };
       return {
         assetId: a.assetId,
         name: a.name,
@@ -438,6 +544,7 @@ export function parseAttachments(ext: unknown): MessageAttachment[] {
         ...(a.size !== undefined ? { size: a.size } : {}),
         ...(a.durationMs !== undefined ? { durationMs: a.durationMs } : {}),
         ...(peaks !== undefined ? { peaks } : {}),
+        ...parseThumbnailKeys(raw.pageCount, raw.thumbW, raw.thumbH),
       };
     });
     if (parsed.length > 0) return parsed;
@@ -532,7 +639,13 @@ export type ChatUploadParams = {
  * instead of 404ing. Never throws: it inherits asset-upload's Result contract.
  */
 export type ChatAttachmentUpload =
-  | { ok: true; reused: boolean; versionId: string }
+  | {
+      ok: true;
+      reused: boolean;
+      versionId: string;
+      /** The thumbnail the Worker stored (pdf/video); absent when none was. */
+      thumbnail?: { width: number; height: number; pageCount?: number };
+    }
   | { ok: false; message: string };
 
 /**
@@ -573,6 +686,10 @@ export async function uploadChatAttachment(
   const versionId = outcome.assetVersionId ?? '';
   if (versionId === '') {
     return { ok: false, message: CHAT_UPLOAD_FAILED };
+  }
+  if (outcome.thumbnail !== undefined) {
+    rememberThumbnail(versionId, outcome.thumbnail);
+    return { ok: true, reused: outcome.reused, versionId, thumbnail: outcome.thumbnail };
   }
   return { ok: true, reused: outcome.reused, versionId };
 }

@@ -416,7 +416,7 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html).toContain('animate-pulse motion-reduce:animate-none');
   });
 
-  it('T6: a file chip shows the ring in the icon spot while uploading', () => {
+  it('T6: a sending file is a FileBubble with a thin bar and no ring (no cancel)', () => {
     const { cache } = spiedCache();
     const pdf: MessageAttachment = {
       assetId: '',
@@ -434,21 +434,21 @@ describe('instant send tile (local preview + upload progress)', () => {
       />,
     );
     expect(html).toContain('brief.pdf');
-    expect(html).toContain('data-upload-progress="50"');
-    // The 44px icon spot (laid out as 36px) holds the ring in flow, not the icon.
-    expect(html).toContain('data-file-icon-spot="" class="-m-1 flex h-11 w-11 shrink-0');
-    expect(html).toContain('data-ring-variant="file"');
-    expect(html).not.toContain('rounded-md bg-panel-3 text-fg-3');
-    expect(html).not.toContain('progressbar');
+    expect(html).toContain('data-file-state="sending"');
+    expect(html).toContain('style="transform:scaleX(0.5)"');
+    expect(html).not.toContain('data-upload-ring');
     const sent = renderToStaticMarkup(
       <MessageAttachments
-        attachments={[{ ...pdf, assetId: FILE_VERSION }]}
+        attachments={[
+          { assetId: FILE_VERSION, name: 'brief.pdf', mime: 'application/pdf', size: 10 },
+        ]}
         cache={cache}
         presignEnabled
         onCancelUpload={() => {}}
       />,
     );
-    expect(sent).not.toContain('data-upload-ring');
+    expect(sent).toContain('data-file-state="sent"');
+    expect(sent).not.toContain('data-file-progress');
   });
 
   it('is plain once uploaded: same preview, no dim, no ring', () => {

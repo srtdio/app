@@ -21,6 +21,9 @@ const state = vi.hoisted(() => ({
   repo: null as unknown as InMemoryAssetRepository,
   /** When set, POST runs the real pipeline over in-memory storage and this repo. */
   realPipeline: false,
+  /** Per-test storage and rendition store the (real) thumbnail step writes to. */
+  thumbStorage: null as unknown as InMemoryStorageClient,
+  renditions: null as unknown as InMemoryRenditionStore,
 }));
 
 // Substitute the service-role membership store with an in-memory set; keep the
@@ -48,6 +51,14 @@ vi.mock('@/server/assets', async (importOriginal) => {
   return {
     ...actual,
     createSupabaseAssetRepository: () => state.repo,
+    createSupabaseRenditionStore: () => state.renditions,
+    // The real thumbnail step over in-memory storage, the test repo, and the
+    // per-test rendition store (the worker's R2 client is never used).
+    storeThumbnailRendition: (_deps: unknown, input: ThumbnailInput) =>
+      actual.storeThumbnailRendition(
+        { storage: state.thumbStorage, repository: state.repo, renditions: state.renditions },
+        input,
+      ),
     runUploadPipeline: async (_deps: unknown, input: Record<string, unknown>) => {
       state.capturedInput = input;
       if (state.realPipeline) {
@@ -81,7 +92,13 @@ vi.mock('@/server/assets', async (importOriginal) => {
 });
 
 import worker, { serializeError, type AssetUploadEnv } from './asset-upload';
-import { InMemoryAssetRepository, type UploadInput } from '@/server/assets';
+import {
+  InMemoryAssetRepository,
+  InMemoryRenditionStore,
+  type ThumbnailInput,
+  type UploadInput,
+} from '@/server/assets';
+import { InMemoryStorageClient } from '@srtdio/storage';
 import {
   MIME,
   buildZip,
@@ -128,6 +145,8 @@ beforeEach(() => {
   state.capturedInput = null;
   state.repo = new InMemoryAssetRepository();
   state.realPipeline = false;
+  state.thumbStorage = new InMemoryStorageClient();
+  state.renditions = new InMemoryRenditionStore();
 });
 
 async function mintToken(sub: string, expSecondsFromNow = 3600): Promise<string> {
@@ -1135,4 +1154,186 @@ describe('asset-upload file-safety refusals (real pipeline)', () => {
       expect(state.repo.versions).toHaveLength(1);
     });
   }
+});
+
+describe('asset-upload thumbnail part', () => {
+  /** SOI, an SOF0 frame of the given size (3 components), zero padding, EOI. */
+  function jpegThumb(width: number, height: number, padTo = 0): Uint8Array {
+    const head = [
+      0xff,
+      0xd8,
+      0xff,
+      0xc0,
+      0x00,
+      0x11,
+      0x08,
+      (height >> 8) & 0xff,
+      height & 0xff,
+      (width >> 8) & 0xff,
+      width & 0xff,
+      0x03,
+      0x01,
+      0x22,
+      0x00,
+      0x02,
+      0x11,
+      0x01,
+      0x03,
+      0x11,
+      0x01,
+    ];
+    const total = Math.max(padTo, head.length + 2);
+    const out = new Uint8Array(total);
+    out.set(head, 0);
+    out.set([0xff, 0xd9], total - 2);
+    return out;
+  }
+
+  interface ThumbRequestOptions {
+    name?: string;
+    type?: string;
+    bytes?: Uint8Array;
+    thumbnail?: Uint8Array | string;
+    pageCount?: string;
+  }
+
+  async function postWithThumb(options: ThumbRequestOptions = {}): Promise<Response> {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const form = new FormData();
+    form.set(
+      'file',
+      new File([new Uint8Array(options.bytes ?? pdf())], options.name ?? 'doc.pdf', {
+        type: options.type ?? MIME.pdf,
+      }),
+    );
+    form.set('workspace_id', WORKSPACE);
+    if (typeof options.thumbnail === 'string') {
+      form.set('thumbnail', options.thumbnail);
+    } else if (options.thumbnail !== undefined) {
+      form.set(
+        'thumbnail',
+        new Blob([new Uint8Array(options.thumbnail)], { type: 'image/jpeg' }),
+        'thumb.jpg',
+      );
+    }
+    if (options.pageCount !== undefined) {
+      form.set('thumbnail_page_count', options.pageCount);
+    }
+    return worker.fetch(
+      new Request('https://worker.test/', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      }),
+      env,
+    );
+  }
+
+  interface UploadBody {
+    asset: { versionId: string; assetId: string };
+    thumbnail?: { width: number; height: number; page_count?: number };
+  }
+
+  it('stores a valid jpeg for a pdf upload and returns its size and page count', async () => {
+    const thumb = jpegThumb(400, 566);
+    const res = await postWithThumb({ thumbnail: thumb, pageCount: '12' });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as UploadBody;
+    expect(body.thumbnail).toEqual({ width: 400, height: 566, page_count: 12 });
+
+    expect(state.renditions.rows).toHaveLength(1);
+    expect(state.renditions.rows[0]).toMatchObject({
+      assetVersionId: 'vvvv',
+      workspaceId: WORKSPACE,
+      role: 'thumbnail',
+      r2Key: 'pdf/aaaa/v1-thumb.jpg',
+      width: 400,
+      height: 566,
+    });
+    const object = state.thumbStorage.get('assets-test-ws', 'pdf/aaaa/v1-thumb.jpg');
+    expect(object?.contentType).toBe('image/jpeg');
+    expect(object?.body).toEqual(thumb);
+  });
+
+  it('omits page_count when the field is absent', async () => {
+    const res = await postWithThumb({ thumbnail: jpegThumb(300, 300) });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as UploadBody;
+    expect(body.thumbnail).toEqual({ width: 300, height: 300 });
+  });
+
+  it('answers exactly as before when there is no thumbnail part', async () => {
+    const res = await postWithThumb();
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(Object.keys(body)).toEqual(['asset']);
+    expect(state.renditions.rows).toHaveLength(0);
+    expect(state.thumbStorage.objects.size).toBe(0);
+  });
+
+  const ignored: ReadonlyArray<[string, ThumbRequestOptions]> = [
+    ['bad magic bytes', { thumbnail: Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]) }],
+    ['a part over 300 KiB', { thumbnail: jpegThumb(100, 100, 300 * 1024 + 1) }],
+    ['a frame wider than 580', { thumbnail: jpegThumb(600, 100) }],
+    ['a frame taller than 1160', { thumbnail: jpegThumb(100, 1200) }],
+    ['an invalid page count', { thumbnail: jpegThumb(100, 100), pageCount: '0' }],
+    ['a text field instead of a file', { thumbnail: 'not-a-file' }],
+    [
+      'an image parent',
+      { name: 'a.png', type: MIME.png, bytes: png(), thumbnail: jpegThumb(100, 100) },
+    ],
+  ];
+  for (const [label, options] of ignored) {
+    it(`ignores ${label}: 201, no thumbnail field, no row`, async () => {
+      const res = await postWithThumb(options);
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body).not.toHaveProperty('thumbnail');
+      expect(body).toHaveProperty('asset');
+      expect(state.renditions.rows).toHaveLength(0);
+      expect(state.thumbStorage.objects.size).toBe(0);
+    });
+  }
+
+  it('dedups a reused upload: existing rendition, no second row or put, 200', async () => {
+    state.realPipeline = true;
+    const first = await postWithThumb({ thumbnail: jpegThumb(400, 566), pageCount: '3' });
+    expect(first.status).toBe(201);
+    const firstBody = (await first.json()) as UploadBody;
+    expect(firstBody.thumbnail).toEqual({ width: 400, height: 566, page_count: 3 });
+    expect(state.renditions.rows).toHaveLength(1);
+    state.thumbStorage.objects.clear();
+
+    // Same bytes again: the pipeline reuses the version, which already has a thumbnail.
+    const second = await postWithThumb({ thumbnail: jpegThumb(200, 200), pageCount: '3' });
+    expect(second.status).toBe(200);
+    const secondBody = (await second.json()) as UploadBody;
+    expect(secondBody.asset.versionId).toBe(firstBody.asset.versionId);
+    expect(secondBody.thumbnail).toEqual({ width: 400, height: 566, page_count: 3 });
+    expect(state.renditions.rows).toHaveLength(1);
+    expect(state.thumbStorage.objects.size).toBe(0);
+  });
+
+  it('a reused upload sent without a thumbnail part still reports the stored one', async () => {
+    state.realPipeline = true;
+    const first = await postWithThumb({ thumbnail: jpegThumb(400, 566), pageCount: '3' });
+    const firstBody = (await first.json()) as UploadBody;
+    const again = await postWithThumb();
+    expect(again.status).toBe(200);
+    const body = (await again.json()) as UploadBody;
+    expect(body.asset.versionId).toBe(firstBody.asset.versionId);
+    expect(body.thumbnail).toEqual({ width: 400, height: 566 });
+    expect(state.renditions.rows).toHaveLength(1);
+  });
+
+  it('still answers 201 with no thumbnail field when the rendition insert fails', async () => {
+    state.renditions.failInsert = new Error('insert failed');
+    const res = await postWithThumb({ thumbnail: jpegThumb(400, 566), pageCount: '2' });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).not.toHaveProperty('thumbnail');
+    expect(body).toHaveProperty('asset');
+    expect(state.renditions.rows).toHaveLength(0);
+  });
 });
