@@ -5939,7 +5939,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
       {taskChannel !== null ? (
         <TaskSheet
           open={taskSheet.open}
-          onClose={() => setTaskSheet((prev) => ({ ...prev, open: false }))}
+          onClose={() => setTaskSheet((prev) => (prev.open ? { ...prev, open: false } : prev))}
           tasks={chatTasks}
           timeZone={props.timeZone}
           focusTaskId={taskSheet.focus}
