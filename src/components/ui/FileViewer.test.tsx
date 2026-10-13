@@ -70,10 +70,10 @@ describe('pure helpers', () => {
     expect(live).toEqual([98, 99, 100, 101, 102]);
   });
 
-  it('a canvas stays under the iOS pixel cap', () => {
+  it('a canvas stays near 4M pixels (five live pages fit iOS canvas memory)', () => {
     expect(renderWidthPx(390, 3, 1.294)).toBe(1170);
     const huge = renderWidthPx(390 * 4, 3, 1.294);
-    expect(huge * huge * 1.294).toBeLessThanOrEqual(16_000_000);
+    expect(huge * huge * 1.294).toBeLessThanOrEqual(4_000_000);
   });
 
   it('swipe down closes past the distance or on a quick flick', () => {

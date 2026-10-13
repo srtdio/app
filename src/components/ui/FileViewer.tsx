@@ -52,8 +52,14 @@ export const ZOOM_MIN = 1;
 export const ZOOM_MAX = 4;
 const DOUBLE_TAP_ZOOM = 2;
 const DOUBLE_TAP_MS = 300;
-/** iOS caps a canvas at about 16.7M pixels; stay under it. */
-const MAX_CANVAS_PIXELS = 16_000_000;
+/** Movement under this many px between touch start and end is still a tap. */
+const TAP_SLOP_PX = 10;
+/**
+ * Pixels per page canvas. iOS caps one canvas near 16.7M pixels and all live
+ * canvases together near 224-384 MB, so with up to five live pages each
+ * stays near 4M pixels (16 MB): zoomed in, pages trade sharpness for memory.
+ */
+const MAX_CANVAS_PIXELS = 4_000_000;
 const PAGE_GAP_PX = 8;
 
 /** Layout effect in the browser; a plain effect where there is no DOM (server render, tests). */
@@ -359,10 +365,15 @@ function PdfPage(props: {
     void doc
       .getPage(pageNumber)
       .then((page) => {
+        // Cancelled before the page arrived: clean it up here, the effect's
+        // cleanup has already run.
+        if (cancelled) {
+          page.cleanup();
+          return;
+        }
         cleanupPage = () => {
           page.cleanup();
         };
-        if (cancelled) return;
         const natural = page.getViewport({ scale: 1 });
         const widthPx = renderWidthPx(cssWidth, dpr, natural.height / natural.width);
         const viewport = page.getViewport({ scale: widthPx / natural.width });
@@ -432,6 +443,7 @@ function PdfRenderer(props: RendererProps): ReactElement {
         const doc = await task.promise;
         const first = await doc.getPage(1);
         const natural = first.getViewport({ scale: 1 });
+        first.cleanup();
         if (controller.signal.aborted) return;
         setState({ kind: 'ready', pdfjs, doc, aspect: natural.height / natural.width });
       } catch {
@@ -510,6 +522,8 @@ function PdfRenderer(props: RendererProps): ReactElement {
     if (el === null || state.kind !== 'ready') return;
     let pinch: { d: number; zoom: number } | null = null;
     let lastTap = 0;
+    // A finger that moved (a scroll) or a pinch that just ended is not a tap.
+    let tapStart: { x: number; y: number } | null = null;
     let current = zoom;
     const distance = (t: TouchList): number => {
       const a = t[0];
@@ -518,8 +532,14 @@ function PdfRenderer(props: RendererProps): ReactElement {
       return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     };
     const onStart = (event: TouchEvent): void => {
+      const first = event.touches[0];
+      tapStart =
+        event.touches.length === 1 && first !== undefined
+          ? { x: first.clientX, y: first.clientY }
+          : null;
       if (event.touches.length === 2) {
         pinch = { d: distance(event.touches), zoom: current };
+        lastTap = 0;
         event.preventDefault();
       }
     };
@@ -532,7 +552,19 @@ function PdfRenderer(props: RendererProps): ReactElement {
     const onEnd = (event: TouchEvent): void => {
       if (pinch !== null && event.touches.length < 2) {
         pinch = null;
+        tapStart = null;
+        lastTap = 0;
         setRenderZoom(current);
+        return;
+      }
+      const lifted = event.changedTouches[0];
+      const still =
+        tapStart !== null &&
+        lifted !== undefined &&
+        Math.hypot(lifted.clientX - tapStart.x, lifted.clientY - tapStart.y) <= TAP_SLOP_PX;
+      tapStart = null;
+      if (!still) {
+        lastTap = 0;
         return;
       }
       if (event.touches.length === 0 && event.changedTouches.length === 1) {
@@ -675,7 +707,12 @@ function TopBar(props: {
 }
 
 export function FileViewerSheet(props: FileViewerProps): ReactElement {
-  const { name, kind, size, source, onClose, onLoadError } = props;
+  const { name, kind, size, source, onLoadError } = props;
+  // Callers pass a fresh onClose each render: keep the latest in a ref so the
+  // key and swipe listeners are not re-attached (and a drag not dropped).
+  const onCloseRef = useRef(props.onClose);
+  onCloseRef.current = props.onClose;
+  const onClose = useCallback(() => onCloseRef.current(), []);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -886,6 +923,20 @@ export function FileViewerFallback(props: {
   source: FileViewerSource;
   onClose: () => void;
 }): ReactElement {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const { onClose } = props;
+  // Still keyboard-closable: Esc closes, focus starts on Close.
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
   return (
     <div
       role="dialog"
@@ -895,7 +946,13 @@ export function FileViewerFallback(props: {
       className={cn('fixed inset-0 z-[80] flex flex-col bg-overlay', NO_SELECT)}
     >
       <div className="flex shrink-0 items-center px-1 pt-[max(env(safe-area-inset-top),4px)]">
-        <button type="button" aria-label="Close" onClick={props.onClose} className={BAR_BUTTON}>
+        <button
+          ref={closeRef}
+          type="button"
+          aria-label="Close"
+          onClick={props.onClose}
+          className={BAR_BUTTON}
+        >
           <IconX size={22} />
         </button>
       </div>

@@ -318,6 +318,32 @@ interface ThumbnailBody {
 }
 
 /**
+ * A deduped pdf/video upload sent without a thumbnail part (the sender's
+ * attempt timed out, say) still reports the version's stored thumbnail, so
+ * the message meta keeps its size. Never throws.
+ */
+async function existingThumbnail(
+  env: AssetUploadEnv,
+  summary: AssetSummary,
+): Promise<ThumbnailBody | null> {
+  const mime = summary.mimeType.toLowerCase();
+  if (mime !== 'application/pdf' && !mime.startsWith('video/')) return null;
+  try {
+    const found = await createSupabaseRenditionStore({
+      SUPABASE_URL: env.SUPABASE_URL,
+      SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY,
+    }).findRendition(summary.versionId, 'thumbnail');
+    if (found === null || found.width === null || found.height === null) return null;
+    return { width: found.width, height: found.height };
+  } catch (error) {
+    logger.error(`asset upload thumbnail lookup failed: ${serializeError(error)}`, {
+      asset_version_id: summary.versionId,
+    });
+    return null;
+  }
+}
+
+/**
  * Store the upload's thumbnail part, when there is one. Never throws and never
  * changes the upload's status: an invalid part is logged and ignored, a
  * storage or DB fault is logged and the response simply has no thumbnail.
@@ -332,7 +358,9 @@ async function attachThumbnail(
   },
 ): Promise<ThumbnailBody | null> {
   const { part } = input;
-  if (part === null) return null;
+  if (part === null) {
+    return input.summary.reused ? existingThumbnail(env, input.summary) : null;
+  }
   if (!(part instanceof Blob)) {
     logger.warn('asset upload thumbnail ignored', { reason: 'not_a_file' });
     return null;

@@ -1315,6 +1315,18 @@ describe('asset-upload thumbnail part', () => {
     expect(state.thumbStorage.objects.size).toBe(0);
   });
 
+  it('a reused upload sent without a thumbnail part still reports the stored one', async () => {
+    state.realPipeline = true;
+    const first = await postWithThumb({ thumbnail: jpegThumb(400, 566), pageCount: '3' });
+    const firstBody = (await first.json()) as UploadBody;
+    const again = await postWithThumb();
+    expect(again.status).toBe(200);
+    const body = (await again.json()) as UploadBody;
+    expect(body.asset.versionId).toBe(firstBody.asset.versionId);
+    expect(body.thumbnail).toEqual({ width: 400, height: 566 });
+    expect(state.renditions.rows).toHaveLength(1);
+  });
+
   it('still answers 201 with no thumbnail field when the rendition insert fails', async () => {
     state.renditions.failInsert = new Error('insert failed');
     const res = await postWithThumb({ thumbnail: jpegThumb(400, 566), pageCount: '2' });

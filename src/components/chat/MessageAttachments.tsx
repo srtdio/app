@@ -204,10 +204,13 @@ function AttachmentItem({
   // the session: it never presigns.
   const localUrl = isVoiceAttachment(attachment) ? localAudioUrl(attachment) : null;
   const hasPreview = attachment.local?.previewUrl != null || localUrl !== null;
+  // A file bubble never uses the file's own link (it presigns its thumbnail
+  // and the viewer asks for a fresh link on open): only images and voice notes do.
+  const needsUrl = classifyAttachment(attachment.mime) !== 'file' || isVoiceAttachment(attachment);
   const { url, failed } = useAttachmentUrl(
     attachment.assetId,
     cache,
-    presignEnabled && !hasPreview,
+    presignEnabled && !hasPreview && needsUrl,
   );
   const view = attachmentView({ attachment, presignEnabled, url, failed, localUrl });
 

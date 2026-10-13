@@ -13,7 +13,7 @@
 --           drop index public.asset_renditions_workspace_idx;
 --           revoke select, insert on public.asset_renditions from service_role;
 
-REVOKE SELECT, INSERT, UPDATE, DELETE ON public.asset_renditions FROM anon, authenticated;
+REVOKE ALL ON public.asset_renditions FROM anon, authenticated;
 
 GRANT SELECT, INSERT ON public.asset_renditions TO service_role;
 

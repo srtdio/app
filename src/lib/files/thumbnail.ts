@@ -203,16 +203,16 @@ async function grabVideoFrame(file: File, signal: AbortSignal): Promise<HTMLCanv
     video.playsInline = true;
     video.setAttribute('playsinline', '');
     video.preload = 'auto';
-    const loaded = once(video, 'loadeddata', signal);
+    // iOS Safari may skip preloading a paused blob, so loadeddata can never
+    // fire: wait for metadata only, then always seek, which decodes a frame.
+    const loaded = once(video, 'loadedmetadata', signal);
     video.src = url;
     await loaded;
     const duration = Number.isFinite(video.duration) ? video.duration : 0;
-    const at = Math.min(1, duration * 0.1);
-    if (at > 0) {
-      const seeked = once(video, 'seeked', signal);
-      video.currentTime = at;
-      await seeked;
-    }
+    const at = Math.max(Math.min(1, duration * 0.1), 0.001);
+    const seeked = once(video, 'seeked', signal);
+    video.currentTime = at;
+    await seeked;
     const width = video.videoWidth;
     const height = video.videoHeight;
     if (width <= 0 || height <= 0) throw new Error('video has no frame size');
