@@ -15,6 +15,7 @@ import {
   markMessagesDeleted,
   mapLiveTextMessage,
   markEventExt,
+  taskEventExt,
   missingReplyIds,
   markReadUpTo,
   markReadUpToMessage,
@@ -209,6 +210,17 @@ describe('parseLiveIds / parseLiveEvent', () => {
       parseLiveEvent({ sorted_event: 'reaction', message_id: 'm', emoji: '👍', op: 'x' }),
     ).toEqual({ kind: 'unknown' });
     expect(parseLiveEvent(undefined)).toEqual({ kind: 'unknown' });
+  });
+
+  it('builds and parses a task signal (channel and task ids), rejecting a partial one', () => {
+    const ext = taskEventExt({ channelId: 'c1', taskId: 't1' });
+    expect(ext).toEqual({ sorted_event: 'task', channel_id: 'c1', task_id: 't1' });
+    expect(parseLiveEvent(ext)).toEqual({ kind: 'task', channelId: 'c1', taskId: 't1' });
+    expect(parseLiveEvent({ sorted_event: 'task', channel_id: 'c1' })).toEqual({ kind: 'unknown' });
+    expect(parseLiveEvent({ sorted_event: 'task', task_id: 't1' })).toEqual({ kind: 'unknown' });
+    expect(parseLiveEvent({ sorted_event: 'task', channel_id: '', task_id: 't1' })).toEqual({
+      kind: 'unknown',
+    });
   });
 });
 

@@ -4,6 +4,7 @@ import type {
   KeyboardEvent,
   MutableRefObject,
   ReactElement,
+  ReactNode,
   SyntheticEvent,
 } from 'react';
 import { logger } from '@/lib/logger';
@@ -87,6 +88,7 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { clearDraft, EMPTY_DRAFT, getDraft, setDraft, type DraftFile } from '@/lib/chat/drafts';
 import { deletedMessageLabel } from '@/lib/chat/thread';
+import { continueList, isListNewlineKeydown, listPickerOpen } from '@/lib/chat/list-continue';
 import {
   addPick,
   deserializeMentions,
@@ -141,6 +143,12 @@ export interface ComposerProps {
    * an agency-side viewer (and when this is set); otherwise faded and disabled.
    */
   onOpenPlanCompose?: (() => void) | undefined;
+  /**
+   * The chat's task list button, drawn after the emoji button and before Mic /
+   * Send in the default row (never while recording or sending a voice note).
+   * Absent: none (Personal notes, the thread view).
+   */
+  taskButton?: ReactNode | undefined;
   /**
    * Queues the trimmed text plus any picked files (local attachments that upload
    * in the background) and shared posts and briefs. Synchronous: uploads,
@@ -1298,6 +1306,35 @@ export function Composer(props: ComposerProps): ReactElement {
       setHashDismissed(true);
       return;
     }
+    // A newline on a numbered line continues the list ("2. "); on an empty
+    // item it ends the list; never while the mention or hash picker is open.
+    // Nothing else about Enter changes.
+    if (
+      !held &&
+      !scheduleBusy &&
+      isListNewlineKeydown({
+        key: event.key,
+        shiftKey: event.shiftKey,
+        isComposing: event.nativeEvent.isComposing,
+        coarsePointer: isCoarsePointer(),
+        pickerOpen: listPickerOpen(mentionRows.length, hashQuery),
+      })
+    ) {
+      const area = event.currentTarget;
+      const edit = continueList(text, area.selectionStart, area.selectionEnd);
+      if (edit !== null) {
+        event.preventDefault();
+        setText(edit.value);
+        setCaret(edit.caret);
+        props.onTyping?.();
+        requestAnimationFrame(() => {
+          const el = textareaRef.current;
+          if (el === null) return;
+          el.setSelectionRange(edit.caret, edit.caret);
+        });
+        return;
+      }
+    }
     if (
       !isSendKeydown({
         key: event.key,
@@ -1993,6 +2030,7 @@ export function Composer(props: ComposerProps): ReactElement {
                 className={sized(COMPOSER_INPUT_TYPE, layout)}
               />
               {showsEmojiButton(layout) && !held ? <ComposerEmoji onPick={insertEmoji} /> : null}
+              {props.taskButton ?? null}
               {showMic ? (
                 <Button
                   type="button"

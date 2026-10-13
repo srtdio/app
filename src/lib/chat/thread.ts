@@ -369,6 +369,7 @@ export type LiveEvent =
   | { kind: 'mark'; messageId: string }
   | { kind: 'delete'; messageIds: string[] }
   | { kind: 'edit'; messageId: string; body: string; editedAt: string }
+  | { kind: 'task'; channelId: string; taskId: string }
   | { kind: 'unknown' };
 
 /** Read a live signal off a command message's `ext`; 'unknown' for anything else. */
@@ -394,6 +395,13 @@ export function parseLiveEvent(ext: unknown): LiveEvent {
       return { kind: 'unknown' };
     }
     return { kind: 'edit', messageId: id, body, editedAt };
+  }
+  if (event === 'task') {
+    const channelId = record.channel_id;
+    const taskId = record.task_id;
+    if (typeof channelId !== 'string' || channelId === '') return { kind: 'unknown' };
+    if (typeof taskId !== 'string' || taskId === '') return { kind: 'unknown' };
+    return { kind: 'task', channelId, taskId };
   }
   const messageId = record.message_id;
   if (typeof messageId !== 'string' || messageId === '') return { kind: 'unknown' };
@@ -438,6 +446,18 @@ export function readEventExt(input: {
 /** Build the `ext` for a live mark signal (receivers re-read that one mark row). */
 export function markEventExt(input: { messageId: string }): Record<string, unknown> {
   return { [LIVE_EVENT_KEY]: 'mark', message_id: input.messageId };
+}
+
+/**
+ * Build the `ext` for a live task signal: one task of one chat changed (a
+ * create or a field write the record accepted). Receivers re-read that task
+ * and the chat's events newer than their latest.
+ */
+export function taskEventExt(input: {
+  channelId: string;
+  taskId: string;
+}): Record<string, unknown> {
+  return { [LIVE_EVENT_KEY]: 'task', channel_id: input.channelId, task_id: input.taskId };
 }
 
 /** Build the `ext` for a live delete signal (receivers turn these ids into tombstones). */
@@ -1427,6 +1447,8 @@ export function subscribeIncoming(params: {
       }
       // Mark signals are consumed by the marks subscription (subscribeMarkEvents).
       if (event.kind === 'mark') return;
+      // Task signals are consumed by the task list (subscribeTaskEvents).
+      if (event.kind === 'task') return;
       if (event.channelId === channelId) onRead({ messageId: event.messageId, fromUserId });
     },
   });

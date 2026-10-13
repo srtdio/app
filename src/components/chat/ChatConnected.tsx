@@ -785,6 +785,27 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       { replace: true, state: entryUsr(window.history.state) },
     );
   }, [setSearchParams]);
+  // A bell task row's ?task=: the chat opens with its task sheet up and that
+  // item expanded. Consumed once, like ?message= (a replace keeps the entry).
+  const [pendingTask, setPendingTask] = useState<{ channelId: string; taskId: string } | null>(
+    null,
+  );
+  const taskParam = searchParams.get('task');
+  const taskChannelParam = searchParams.get('channel');
+  useEffect(() => {
+    if (taskParam === null || taskParam === '') return;
+    if (taskChannelParam !== null && taskChannelParam !== '') {
+      setPendingTask({ channelId: taskChannelParam, taskId: taskParam });
+    }
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('task');
+        return next;
+      },
+      { replace: true, state: entryUsr(window.history.state) },
+    );
+  }, [taskParam, taskChannelParam, setSearchParams]);
   const toastRef = useRef(toast);
   toastRef.current = toast;
   // A layout effect: back or forward onto another chat's entry selects it
@@ -1988,6 +2009,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       cardJump={cardJump?.channelId === selected.channelId ? cardJump : null}
                       initialMessageId={initialJumpFor(pendingJump, selected.channelId)}
                       onInitialJumpTaken={() => setPendingJump(null)}
+                      initialTaskId={
+                        pendingTask?.channelId === selected.channelId ? pendingTask.taskId : null
+                      }
+                      onInitialTaskTaken={() => setPendingTask(null)}
                       searchRequest={
                         searchRequest?.channelId === selected.channelId ? searchRequest : null
                       }

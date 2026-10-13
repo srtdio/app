@@ -5,7 +5,9 @@
 // and opens the chat at the message), Scheduled (sent: a tap marks it read and
 // opens the chat, "Clear sent" clears them all; failed: "Not sent" with the
 // reason, Retry and Edit), Plans (the plan alerts: a tap marks it read and
-// opens the plan, a deleted plan's row only toasts "This plan was deleted").
+// opens the plan, a deleted plan's row only toasts "This plan was deleted"),
+// Tasks (a change or a missed due time: a tap marks it read and opens the chat
+// with its task sheet on that item).
 // Sections hide when empty; all empty reads "You're all caught up".
 // Upcoming: pending Reminders (Change time, Cancel) and Scheduled messages (a
 // tap opens that chat's scheduled sheet), soonest first; empty reads "Nothing
@@ -26,6 +28,7 @@ import {
   IconCalendarClock,
   IconPlan,
   IconSend,
+  IconTaskSquare,
 } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
@@ -47,6 +50,9 @@ import {
   type BellEntry,
 } from '@/lib/chat/bell';
 import { formatSendLabel } from '@/lib/chat/scheduled';
+import { eventText, type TaskEventKind } from '@/lib/chat/tasks';
+import { workspaceTimeZone } from '@/lib/chat/time-format';
+import { taskLinkToken } from '@/lib/inbox/bell-types';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import { useWorkspace } from '@/lib/workspace-context';
 
@@ -64,7 +70,11 @@ export function visibleNowSections(
   entries: readonly BellEntry[],
   hidden: ReadonlySet<string>,
   nowMs: number,
-): { key: 'reminders' | 'mentions' | 'scheduled' | 'plans'; title: string; rows: BellEntry[] }[] {
+): {
+  key: 'reminders' | 'mentions' | 'scheduled' | 'plans' | 'tasks';
+  title: string;
+  rows: BellEntry[];
+}[] {
   const s = bellSections(
     entries.filter((e) => !hidden.has(e.id)),
     nowMs,
@@ -74,6 +84,7 @@ export function visibleNowSections(
     { key: 'mentions' as const, title: 'Mentions', rows: s.mentions },
     { key: 'scheduled' as const, title: 'Scheduled', rows: s.scheduled },
     { key: 'plans' as const, title: 'Plans', rows: s.plans },
+    { key: 'tasks' as const, title: 'Tasks', rows: s.tasks },
   ];
   return all.filter((section) => section.rows.length > 0);
 }
@@ -267,6 +278,80 @@ function PlanRowView(props: { bell: BellContextValue; entry: BellEntry }): React
   );
 }
 
+const TASK_KINDS = new Set<string>([
+  'created',
+  'status',
+  'priority',
+  'due',
+  'side',
+  'title',
+  'note',
+  'due_passed',
+]);
+
+/**
+ * A task row's line: task_changed "<actor> · <change>", task_due "<time>
+ * passed · <n> <title>" (the payload's number and title; no extra read). Pure.
+ */
+export function taskBellLine(
+  entry: Pick<BellEntry, 'eventType' | 'task'>,
+  actor: string | null,
+  nowMs: number,
+  timeZone: string,
+): string {
+  const f = entry.task;
+  const kind: TaskEventKind =
+    entry.eventType === 'task_due'
+      ? 'due_passed'
+      : f?.kind != null && TASK_KINDS.has(f.kind)
+        ? (f.kind as TaskEventKind)
+        : 'note';
+  const text = eventText(
+    { kind, oldValue: f?.old ?? null, newValue: f?.new ?? null },
+    { number: f?.number ?? null, title: f?.title ?? 'Item', side: null },
+    nowMs,
+    timeZone,
+  );
+  return entry.eventType === 'task_due' ? text : `${actor ?? 'Someone'} · ${text}`;
+}
+
+/**
+ * A task alert: the task icon (alarm clock in bad for a missed due time), the
+ * line and the chat. A tap marks it read and opens the chat with its task
+ * sheet on that item.
+ */
+function TaskBellRowView(props: { bell: BellContextValue; entry: BellEntry }): ReactElement {
+  const { bell, entry } = props;
+  const { workspaces, workspaceId } = useWorkspace();
+  const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
+  const due = entry.eventType === 'task_due';
+  const actor = entry.actorId !== null ? (bell.nameOf(entry.actorId) ?? null) : null;
+  const taskId = entry.task?.taskId ?? null;
+  return (
+    <li data-bell-row={due ? 'task-due' : 'task'} data-bell-entry={entry.id} className={ROW}>
+      <RowBody
+        testId={entry.id}
+        icon={
+          <RowIcon {...(due ? { tone: 'bad' as const } : {})}>
+            {due ? <IconAlarmClock size={18} /> : <IconTaskSquare size={18} />}
+          </RowIcon>
+        }
+        title={
+          <span className={due ? 'text-bad' : undefined}>
+            {taskBellLine(entry, actor, Date.now(), timeZone)}
+          </span>
+        }
+        time={rowTime(entry.createdAt, new Date())}
+        preview="Task list"
+        chat={bell.chatNameOf(entry.channelId)}
+        onClick={() =>
+          bell.openEntry(taskId !== null ? { ...entry, messageId: taskLinkToken(taskId) } : entry)
+        }
+      />
+    </li>
+  );
+}
+
 function ScheduledRowView(props: { bell: BellContextValue; entry: BellEntry }): ReactElement {
   const { bell, entry } = props;
   const chat = bell.chatNameOf(entry.channelId);
@@ -413,6 +498,8 @@ export function NowTab(props: { bell: BellContextValue }): ReactElement {
                 <MentionRowView key={entry.id} bell={bell} entry={entry} />
               ) : section.key === 'plans' ? (
                 <PlanRowView key={entry.id} bell={bell} entry={entry} />
+              ) : section.key === 'tasks' ? (
+                <TaskBellRowView key={entry.id} bell={bell} entry={entry} />
               ) : (
                 <ScheduledRowView key={entry.id} bell={bell} entry={entry} />
               ),

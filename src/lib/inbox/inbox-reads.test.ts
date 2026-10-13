@@ -369,7 +369,7 @@ describe('bell rows stay out of the Activity counts', () => {
       args: [
         'event_type',
         'in',
-        '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment)',
+        '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment,task_changed,task_due)',
       ],
     });
     expect(calls).toContainEqual({
