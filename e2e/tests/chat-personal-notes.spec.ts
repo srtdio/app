@@ -83,23 +83,20 @@ async function firstPaintTile(page: Page): Promise<void> {
   await tileAboveGroups(page);
 }
 
-test('personal notes: phone', async ({ page }, testInfo) => {
+test('personal notes: phone', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   seedNotes(network.world);
   const ensures = rpcCalls(page, 'notes_channel_ensure');
   const searches = rpcCalls(page, 'chat_message_search');
-  const shot = (name: string): Promise<Buffer> =>
-    page.screenshot({ path: testInfo.outputPath(`notes-phone-${name}.png`) });
 
   await firstPaintTile(page);
-  await shot('1-home-tile');
   // Ensured once on Chat home load, with a uuid_v7 trace.
   await expect.poll(() => ensures.length).toBe(1);
   expect(String(ensures[0]?.p_trace_id)).toMatch(UUID_V7);
 
   // Open notes: C1 list > 200px, C2 centre on a message or skeleton, C3 one composer.
   await page.locator('[data-notes-tile]').click();
-  const report = await checkStep(page, testInfo, 'notes-phone-2-open', {
+  const report = await checkStep(page, 'notes-phone-2-open', {
     allowSkeleton: true,
     requireComposer: true,
   });
@@ -110,14 +107,12 @@ test('personal notes: phone', async ({ page }, testInfo) => {
   await expect(page.locator('[data-loops-strip]')).toHaveCount(0);
   const savedLine = page.locator('[data-saved-from="source"]').first();
   await expect(savedLine).toContainText(`Saved from ${PEER_NAME} · Priya`);
-  await shot('3-thread');
 
   // The tray offers Photos, File, Post and no Schedule.
   await page.locator('[data-plus]').click();
   await expect(page.locator('#composer-tray')).toBeVisible();
   await expect(page.locator('#composer-tray').getByText('Schedule')).toHaveCount(0);
   await expect(page.locator('#composer-tray').getByText('Photos')).toBeVisible();
-  await shot('4-tray-no-schedule');
   await page.keyboard.press('Escape');
 
   // Back home, open the DM, long-press a peer message: Save to notes.
@@ -136,12 +131,10 @@ test('personal notes: phone', async ({ page }, testInfo) => {
   const remindAt = keys.indexOf('remind');
   expect(saveAt).toBeGreaterThan(copyAt);
   expect(remindAt).toBeGreaterThan(saveAt);
-  await shot('5-menu-save-to-notes');
   const sends = rpcCalls(page, 'chat_message_send');
   await menu.locator('[data-menu-item="save-notes"]').click();
   const toast = page.getByRole('button', { name: /Saved to Personal notes/ });
   await expect(toast).toBeVisible();
-  await shot('6-toast');
   await expect.poll(() => sends.length).toBeGreaterThan(0);
   const send = sends[sends.length - 1] ?? {};
   expect(String(send.p_channel_id)).toMatch(/^notes__/);
@@ -154,7 +147,6 @@ test('personal notes: phone', async ({ page }, testInfo) => {
   await expect(page.locator('[data-notes-avatar]').first()).toBeVisible();
   await expect(page.locator('[data-saved-from="source"]')).toHaveCount(2);
   await expect(page.locator('[data-bubble]', { hasText: peerLine }).last()).toBeVisible();
-  await shot('7-saved-copy');
 
   // Back returns where notes were opened from: the DM, then the list.
   await page.getByRole('button', { name: 'Back to conversations' }).click();
@@ -169,7 +161,6 @@ test('personal notes: phone', async ({ page }, testInfo) => {
   const chipCall = searches[searches.length - 1] ?? {};
   expect(chipCall.p_kind).toBe('photo');
   expect(chipCall.p_query).toBe('');
-  await shot('8-photos-chip');
   // Tap again: the chip clears and the list is back.
   await page.locator('[data-search-chip="photo"]').click();
   await expect(page.locator('[data-search-results]')).toHaveCount(0);
@@ -180,7 +171,7 @@ test('personal notes: phone', async ({ page }, testInfo) => {
 test.describe('laptop', () => {
   test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
 
-  test('personal notes: laptop', async ({ page }, testInfo) => {
+  test('personal notes: laptop', async ({ page }) => {
     const network = await installHarnessNetwork(page);
     seedNotes(network.world);
     await firstPaintTile(page);
@@ -204,11 +195,10 @@ test.describe('laptop', () => {
     );
     expect(native, 'the native search cancel button is hidden').toBe(true);
     await expect(page.getByRole('button', { name: 'Clear search' })).toHaveCount(1);
-    await page.screenshot({ path: testInfo.outputPath('notes-laptop-1-search.png') });
     await page.getByRole('button', { name: 'Clear search' }).click();
 
     await page.locator('[data-notes-tile]').click();
-    const report = await checkStep(page, testInfo, 'notes-laptop-2-open', {
+    const report = await checkStep(page, 'notes-laptop-2-open', {
       allowSkeleton: true,
       requireComposer: true,
     });
@@ -217,7 +207,6 @@ test.describe('laptop', () => {
     // No schedule chevron beside Send in notes.
     await page.locator('form textarea').fill('A quick note');
     await expect(page.locator('[data-schedule-chevron]')).toHaveCount(0);
-    await page.screenshot({ path: testInfo.outputPath('notes-laptop-3-thread.png') });
     expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   });
 });
@@ -242,11 +231,10 @@ test('personal notes: a failed ensure shows the Retry state, not a skeleton', as
 
 for (const photo of [true, false]) {
   const name = photo ? 'with photo' : 'without photo';
-  test(`notes avatar: ${name}`, async ({ page }, testInfo) => {
+  test(`notes avatar: ${name}`, async ({ page }) => {
     const network = await installHarnessNetwork(page);
     seedNotes(network.world);
     setOwnAvatar(network.world, photo ? OWN_PHOTO_URL : null);
-    const tag = photo ? 'photo' : 'nophoto';
     await page.goto('/chat');
     const tile = page.locator('[data-notes-tile]');
     await tile.waitFor({ state: 'visible', timeout: 30_000 });
@@ -256,7 +244,6 @@ for (const photo of [true, false]) {
     await expect(avatar).toHaveAttribute('aria-label', 'Personal notes');
     const box = await avatar.boundingBox();
     expect(Math.round(box?.width ?? 0)).toBe(76);
-    await page.screenshot({ path: testInfo.outputPath(`notes-avatar-${tag}-1-tile.png`) });
 
     await tile.click();
     const header = page.locator('[data-header-line]');
@@ -265,7 +252,6 @@ for (const photo of [true, false]) {
     await expect(headAvatar).toHaveAttribute('data-notes-avatar', photo ? 'photo' : 'notebook');
     expect(Math.round((await headAvatar.boundingBox())?.width ?? 0)).toBe(40);
     await expect(page.locator('[data-contact-open]')).toHaveCount(0);
-    await page.screenshot({ path: testInfo.outputPath(`notes-avatar-${tag}-2-header.png`) });
     expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   });
 }

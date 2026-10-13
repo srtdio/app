@@ -70,7 +70,7 @@ for (const scenario of SCENARIOS) {
     await target.click();
     await page.waitForTimeout(400);
     reports.push(
-      await checkStep(page, testInfo, `${scenario.name}-1-first-paint`, {
+      await checkStep(page, `${scenario.name}-1-first-paint`, {
         allowSkeleton: true,
         requireComposer: false,
       }),
@@ -84,7 +84,7 @@ for (const scenario of SCENARIOS) {
       .catch(() => undefined);
     await page.waitForTimeout(800);
     reports.push(
-      await checkStep(page, testInfo, `${scenario.name}-2-loaded`, {
+      await checkStep(page, `${scenario.name}-2-loaded`, {
         allowSkeleton: false,
         requireComposer: true,
       }),
@@ -92,7 +92,7 @@ for (const scenario of SCENARIOS) {
 
     await scrollList(page, 'up');
     reports.push(
-      await checkStep(page, testInfo, `${scenario.name}-3-scrolled-up`, {
+      await checkStep(page, `${scenario.name}-3-scrolled-up`, {
         allowSkeleton: false,
         requireComposer: true,
       }),
@@ -100,7 +100,7 @@ for (const scenario of SCENARIOS) {
 
     await scrollList(page, 'bottom');
     reports.push(
-      await checkStep(page, testInfo, `${scenario.name}-4-back-to-latest`, {
+      await checkStep(page, `${scenario.name}-4-back-to-latest`, {
         allowSkeleton: false,
         requireComposer: true,
       }),

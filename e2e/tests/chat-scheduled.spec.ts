@@ -62,10 +62,6 @@ function composer(page: Page) {
   return page.locator('form:has(textarea)').first();
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -122,14 +118,12 @@ test.describe('phone', () => {
     await page.waitForTimeout(500);
     expect(await page.locator('[data-msg-id]').count()).toBe(before);
     await expect(textarea).toHaveValue('Can we move the shoot to Monday?');
-    await shot(page, 'scheduled-2-sheet');
 
     // S3: the Custom step.
     await sheet.locator('[data-schedule-row="custom"]').click();
     await expect(sheet.locator('[data-schedule-summary]')).toContainText('Sends ');
     await expect(sheet.getByText('Any time from 1 minute to 1 year ahead.')).toBeVisible();
     await expect(sheet.getByRole('button', { name: 'Schedule', exact: true })).toBeEnabled();
-    await shot(page, 'scheduled-3-custom');
     await sheet.getByRole('button', { name: 'Cancel' }).last().click();
     await expect(sheet).toBeHidden();
 
@@ -159,8 +153,6 @@ test.describe('phone', () => {
     expect(
       await tiles.evaluateAll((els) => els.map((e) => e.getAttribute('data-tray-tile'))),
     ).toEqual(['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan', 'schedule']);
-    await page.waitForTimeout(250);
-    await shot(page, 'scheduled-1-tray');
 
     // S4: an empty draft opens the sheet without a preview.
     await page.locator('[data-tray-tile="schedule"]').click();
@@ -172,8 +164,6 @@ test.describe('phone', () => {
     await expect(mode).toContainText('Sends tomorrow 9:00 AM');
     await composer(page).locator('textarea').fill('Weekly numbers are in the deck');
     await expect(page.getByRole('button', { name: 'Schedule message' })).toBeEnabled();
-    await page.waitForTimeout(300);
-    await shot(page, 'scheduled-4-schedule-mode');
 
     // Submitting schedules (not sends): the draft clears, the strip appears.
     const before = await page.locator('[data-msg-id]').count();
@@ -246,15 +236,11 @@ test.describe('phone', () => {
     const strip = page.locator('[data-scheduled-strip]');
     await expect(strip).toContainText('1 scheduled message');
     await expect(strip).toContainText('Tomorrow 9:00 AM');
-    await page.waitForTimeout(300);
-    await shot(page, 'scheduled-6-strip-dm');
 
     // S7: the list sheet.
     await strip.click();
     const list = page.getByRole('dialog', { name: 'Scheduled in this chat' });
     await expect(list.locator('[data-scheduled-card]')).toHaveCount(1);
-    await page.waitForTimeout(400);
-    await shot(page, 'scheduled-7-list-dm');
 
     // Send now: the row joins the thread, the strip goes.
     await list.getByRole('button', { name: 'Send now' }).click();
@@ -265,13 +251,9 @@ test.describe('phone', () => {
     await page.goBack().catch(() => undefined);
     await openChat(page, GROUP_NAME);
     await expect(strip).toContainText('2 scheduled messages');
-    await page.waitForTimeout(300);
-    await shot(page, 'scheduled-8-strip-group');
     await strip.click();
     await expect(list.locator('[data-scheduled-card]')).toHaveCount(2);
     await expect(list.locator('[data-scheduled-preview]').first()).toHaveText('Kickoff notes');
-    await page.waitForTimeout(400);
-    await shot(page, 'scheduled-9-list-group');
     await list.getByRole('button', { name: 'Cancel' }).first().click();
     const confirm = page.getByRole('dialog', { name: 'Cancel this scheduled message?' });
     await expect(confirm.getByRole('button', { name: 'Keep' })).toBeVisible();
@@ -313,8 +295,6 @@ test.describe('phone: photos and files (UI-3)', () => {
     await sheet.locator('[data-schedule-row="tomorrow"]').click();
     await expect(page.locator('[data-scheduling]')).toHaveText('Scheduling...');
     await expect(composer(page).locator('[data-schedule-upload-bar]')).toBeVisible();
-    await page.waitForTimeout(200);
-    await shot(page, 'ui3-1-uploading');
     gate.release();
 
     await expect(page.getByText('Scheduled for tomorrow 9:00 AM')).toBeVisible();
@@ -332,22 +312,16 @@ test.describe('phone: photos and files (UI-3)', () => {
     // S4: the strip and the card show the thumbnail.
     const strip = page.locator('[data-scheduled-strip]');
     await expect(strip.locator('[data-scheduled-thumb]')).toHaveCount(1);
-    await page.waitForTimeout(300);
-    await shot(page, 'ui3-2-strip-thumb');
     await strip.click();
     const list = page.getByRole('dialog', { name: 'Scheduled in this chat' });
     const card = list.locator('[data-scheduled-card]');
     await expect(card.locator('[data-scheduled-thumb] img')).toBeVisible();
-    await page.waitForTimeout(400);
-    await shot(page, 'ui3-3-card-thumb');
 
     // S5: Edit is text only; the files are read-only with the line.
     await card.getByRole('button', { name: 'Edit' }).click();
     const files = card.locator('[data-scheduled-files-readonly]');
     await expect(files).toContainText('To change files, cancel and schedule again.');
     await expect(files.locator('[data-scheduled-thumb]')).toHaveCount(1);
-    await page.waitForTimeout(300);
-    await shot(page, 'ui3-4-edit-files-readonly');
     expectClean(network);
   });
 
@@ -360,8 +334,6 @@ test.describe('phone: photos and files (UI-3)', () => {
     await expect(composer(page).getByText('final-cut.png')).toHaveCount(0);
     await expect.poll(() => network.uploads).toEqual(['final-cut.png']);
     expect(network.world.tables.chat_scheduled_messages ?? []).toEqual([]);
-    await page.waitForTimeout(400);
-    await shot(page, 'ui3-5-tap-send-photo');
     expectClean(network);
   });
 });
@@ -384,8 +356,6 @@ test.describe('laptop', () => {
     await expect(menu.locator('[data-schedule-preview]')).toHaveText(
       `To ${PEER_NAME}: Draft for Monday`,
     );
-    await page.waitForTimeout(250);
-    await shot(page, 'scheduled-10-laptop-menu');
     await page.keyboard.press('Escape');
     await expect(menu).toHaveCount(0);
 

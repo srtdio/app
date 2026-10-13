@@ -137,9 +137,7 @@ async function expectMenuStyle(page: Page): Promise<void> {
 }
 
 test.describe('iPhone', () => {
-  test('menu opens below the bottom-most bubble, styled from tokens', async ({
-    page,
-  }, testInfo) => {
+  test('menu opens below the bottom-most bubble, styled from tokens', async ({ page }) => {
     await openDm(page);
     const last = page.locator('[data-msg-id]:has([data-msg-body]) [data-bubble]').last();
     await hold(page, last);
@@ -153,7 +151,6 @@ test.describe('iPhone', () => {
     await expect(menu(page).locator('[data-menu-item="select-text"]')).toBeVisible();
     await expect(menu(page).locator('[data-menu-item="select"]')).toHaveCount(0);
     await expectMenuStyle(page);
-    await page.screenshot({ path: testInfo.outputPath(`menu-${testInfo.project.name}.png`) });
   });
 
   test('Select selects the displayed body; only that body is selectable; tap outside clears', async ({
@@ -301,16 +298,13 @@ test.describe('laptop', () => {
 
   test('right-click Select; drag selects in the body; browser menu inside; Escape clears', async ({
     page,
-  }, testInfo) => {
+  }) => {
     await openDm(page);
     const target = bubbleWith(page, PEER_LINE);
     await settle(page, target);
     await target.click({ button: 'right' });
     await expect(menu(page)).toBeVisible();
     await expectMenuStyle(page);
-    await page.screenshot({
-      path: testInfo.outputPath(`menu-laptop-${testInfo.project.name}.png`),
-    });
     await pickSelect(page);
     const displayed = await displayedBody(target);
     expect((await selectionText(page)).trim()).toBe(displayed.trim());

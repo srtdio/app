@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { COLLEAGUE_A, ME, POST_IDS, WORKSPACE_ID } from '../fixtures/chat-data';
 
@@ -9,10 +9,6 @@ import { COLLEAGUE_A, ME, POST_IDS, WORKSPACE_ID } from '../fixtures/chat-data';
 // data in both colour schemes; Linux WebKit approximates iOS WebKit, it is not iOS.
 
 const KEY = 'hs';
-
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
 
 function expectNoBlocked(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
@@ -41,7 +37,6 @@ test('PCS: agency approves with the on-behalf line in the confirm', async ({ pag
   const line = page.locator('[data-approve-on-behalf]');
   await expect(line).toHaveText('You are approving on behalf of client.');
   await expect(page.locator('[data-approve-confirm-button]')).toHaveText('Approve HS-101');
-  await shot(page, 'agency-approve-confirm');
   // Back sends nothing.
   await page.locator('[data-approve-back]').click();
   await expect(line).toHaveCount(0);
@@ -97,6 +92,5 @@ test('Activity: "<Name> approved KEY-N on behalf of client"', async ({ page }) =
   });
   await expect(page.getByText('Leo Martins deleted 3 assets', { exact: true })).toBeVisible();
   await expect(page.getByText('Moved to', { exact: false })).toHaveCount(0);
-  await shot(page, 'activity-on-behalf');
   expectNoBlocked(network);
 });

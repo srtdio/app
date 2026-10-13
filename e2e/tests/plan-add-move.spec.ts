@@ -36,10 +36,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -75,14 +71,9 @@ const dated = (title: string) => {
 
 /**
  * Long-press a row, carry it to `y` (a viewport y inside the target day),
- * optionally shoot mid-way, and let go.
+ * and let go.
  */
-async function dragTo(
-  page: Page,
-  row: Locator,
-  target: () => Promise<number>,
-  midShot?: string,
-): Promise<void> {
+async function dragTo(page: Page, row: Locator, target: () => Promise<number>): Promise<void> {
   // Keep the row mid-screen so the pointer never rests in an auto-scroll edge.
   await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   const box = await row.boundingBox();
@@ -100,10 +91,6 @@ async function dragTo(
   await page.waitForTimeout(150);
   await page.mouse.move(x, await target(), { steps: 2 });
   await expect(page.locator('[data-plan-drop-slot]')).toBeVisible();
-  if (midShot !== undefined) {
-    await page.waitForTimeout(200);
-    await shot(page, midShot);
-  }
   await page.mouse.up();
   await expect(page.locator('[data-plan-drag-card]')).toHaveCount(0);
 }
@@ -112,10 +99,11 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
   seedClientPlan(network.world, { channelId: DM_CHANNEL, sender: ME, fileVersionId: FILE_VERSION });
-  // Post dates are seeded from the wall clock; pin the plan's post to Tue 13 Oct
-  // so Wed 14 and Thu 15 stay empty on any run date.
-  const planPost = (network.world.tables.posts ?? []).find((p) => p.id === POST_IDS[0]);
-  if (planPost !== undefined) planPost.target_date = '2026-10-13T09:00:00.000Z';
+  // The plan's post is dated "tomorrow" by the fixture; pin it to Tue 13 Oct so
+  // Wed 14 Oct stays the empty day this test adds to, whatever today is.
+  for (const p of network.world.tables.posts ?? []) {
+    if (p.id === POST_IDS[0]) p.target_date = '2026-10-13T09:00:00Z';
+  }
   const ownDate = (network.world.tables.posts ?? []).find((p) => p.id === POST_IDS[1])?.target_date;
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, PLAN_ID);
@@ -145,15 +133,11 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   const add = wed.locator('[data-plan-add="2026-10-14"]');
   expectMinTouchTarget(await add.boundingBox());
   await expect(wed.locator('[data-plan-day-empty]')).toHaveText('Nothing planned');
-  await page.waitForTimeout(300);
-  await shot(page, 'add-01-agency-list');
 
   // Add on an empty day, New concept: it lands under that day.
   await add.click();
   const sheet = page.getByRole('dialog', { name: 'Add to Wed 14 Oct' });
   await expect(sheet).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, 'add-02-add-sheet');
   await sheet.getByRole('button', { name: /New concept/ }).click();
   const concept = page.locator('[data-plan-concept-title]');
   await expect(concept).toBeVisible();
@@ -203,19 +187,14 @@ test('agency: long-press drag moves a Thu item to Wed and resets its ticks', asy
     1,
   );
 
-  await dragTo(
-    page,
-    row,
-    async () => {
-      const first = await dayBlock(plan, '2026-10-14')
-        .locator('[data-plan-row-wrap]')
-        .first()
-        .boundingBox();
-      if (first === null) throw new Error('target');
-      return first.y + 4;
-    },
-    'move-01-drag-mid-way',
-  );
+  await dragTo(page, row, async () => {
+    const first = await dayBlock(plan, '2026-10-14')
+      .locator('[data-plan-row-wrap]')
+      .first()
+      .boundingBox();
+    if (first === null) throw new Error('target');
+    return first.y + 4;
+  });
   await expect(page.getByText('Moved to Wed 14 Oct. Its ticks were reset.')).toBeVisible();
   await expect
     .poll(() => titlesOn(plan, '2026-10-14'))
@@ -235,8 +214,6 @@ test('agency: long-press drag moves a Thu item to Wed and resets its ticks', asy
     'aria-checked',
     'false',
   );
-  await page.waitForTimeout(300);
-  await shot(page, 'move-02-dropped');
   expectClean(network);
 });
 
@@ -317,8 +294,6 @@ test('agency: Move to another day from the item overflow; Remove from plan is th
     'true',
   );
   await expect(days.locator('[data-plan-move-day="none"]')).toHaveText('No date');
-  await page.waitForTimeout(300);
-  await shot(page, 'move-03-move-sheet');
   await days.locator('[data-plan-move-day="2026-10-13"]').click();
   await expect(page.getByText(/^Moved to Tue 13 Oct\.$/)).toBeVisible();
   await expect
@@ -337,8 +312,6 @@ test('agency: Move to another day from the item overflow; Remove from plan is th
   await remove.scrollIntoViewIfNeeded();
   await expect(remove).toHaveText(/Remove from plan/);
   expectMinTouchTarget(await remove.boundingBox());
-  await page.waitForTimeout(300);
-  await shot(page, 'move-04-remove-button');
   await remove.click();
   await page.locator('[data-plan-remove-confirm]').click();
   await expect(page.getByText('Removed from plan')).toBeVisible();
@@ -368,8 +341,6 @@ test('client: same list, no Add or +, long-press does nothing, no Move or Remove
   const plan = await openPlan(page, DATED_PLAN_ID);
   await expect(plan.locator('[data-plan-add], [data-plan-add-header]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row-status]')).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'client-01-list');
 
   const concept = dated('Rangoli timelapse');
   const row = plan.locator(`[data-plan-row="${concept.id}"]`);
@@ -419,7 +390,5 @@ test("client: a draft row sits under its post's target_date read in the workspac
   await draft.scrollIntoViewIfNeeded();
   await expect(draft).toHaveAttribute('data-plan-row-draft', 'locked');
   await expect(dayBlock(list, ownDay).locator(`[data-plan-row="${DRAFT_ITEM_ID}"]`)).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'client-02-draft-on-plan-day');
   expectClean(network);
 });

@@ -1,7 +1,7 @@
 name: E2E WebKit
 
 # changes: diffs against the merge base with main (push: previous commit) and outputs run=true only for UI-relevant paths.
-# webkit-shard: on a UI change, runs the Playwright WebKit iPhone suite (e2e/harness, no DB, no secrets) in 3 parallel shards.
+# webkit-shard: on a UI change, runs the Playwright WebKit iPhone suite (e2e/harness, no DB, no secrets; every spec dark, @theme specs light too) in 3 parallel shards.
 # e2e-typecheck: on a UI change, type-checks the e2e workspace in parallel with the shards.
 # e2e-webkit: the required check; fails if any shard or the typecheck failed or was cancelled, passes on success or skip.
 # No workflow-level paths filter, so the required check always reports. Linux WebKit is close to, not identical to, iOS Safari.
@@ -51,6 +51,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -68,20 +69,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
-        id: pw-cache
+        id: playwright-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
+          key: playwright-webkit-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       - name: Install Playwright WebKit
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install webkit
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps webkit
 
-      - name: Install WebKit system deps
+      - name: Install Playwright WebKit system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps webkit
 
       - name: Run WebKit e2e shard

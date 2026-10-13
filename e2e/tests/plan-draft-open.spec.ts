@@ -9,6 +9,7 @@ import {
   PEER,
   PEER_NAME,
   WORKSPACE_ID,
+  lengthenDatedTitles,
   seedDatedPlan,
 } from '../fixtures/chat-data';
 import { expectMinTouchTarget } from '../helpers/touch-target';
@@ -16,8 +17,8 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 // Draft / Open wave, screens: the Plan screen's title menu (Rename inline,
 // Delete plan for its creator or an owner/admin), the deleted card, "Approved
 // by" under a client-approved row, the "Also in" pill, the keep-approval sheet
-// on a move, and the plan alerts as chat bell rows. Every new element is shot
-// in both colour schemes (the dark and light projects) on the iPhone viewport.
+// on a move, and the plan alerts as chat bell rows, on the iPhone viewport.
+// The 120+ character titles test is the plan family's @theme test (light too).
 
 async function openChat(page: Page, name: string): Promise<void> {
   await page.goto('/chat');
@@ -26,10 +27,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await row.click();
   await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
   await page.waitForTimeout(300);
-}
-
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
 }
 
 function expectClean(network: HarnessNetwork): void {
@@ -106,8 +103,6 @@ test('agency: title menu, inline rename, delete (Open plan copy), the card reads
   const menuBox = await menu.boundingBox();
   if (header === null || menuBox === null) throw new Error('boxes');
   expect(menuBox.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
-  await page.waitForTimeout(300);
-  await shot(page, 'draft-open-01-title-menu');
 
   // Rename: the title turns into a field with Cancel (X) and Done.
   await menu.getByRole('menuitem', { name: 'Rename' }).click();
@@ -119,8 +114,6 @@ test('agency: title menu, inline rename, delete (Open plan copy), the card reads
   await field.fill('   ');
   await expect(plan.locator('[data-plan-rename-done]')).toBeDisabled();
   await field.fill('  Festive fortnight v2  ');
-  await page.waitForTimeout(300);
-  await shot(page, 'draft-open-02-inline-rename');
   await plan.locator('[data-plan-rename-done]').click();
   await expect(page.getByText('Renamed', { exact: true })).toBeVisible();
   await expect(title).toContainText('Festive fortnight v2');
@@ -142,16 +135,12 @@ test('agency: title menu, inline rename, delete (Open plan copy), the card reads
     'Cards already in chat will show Plan deleted. Client gets a notification. This cannot be undone.',
   );
   await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, 'draft-open-03-delete-confirm');
   await confirm.locator('[data-plan-confirm]').click();
   await expect(page.getByText('Plan deleted', { exact: true }).first()).toBeVisible();
   await expect(plan).toBeHidden();
   const card = page.locator('[data-plan-card="unavailable"]');
   await card.scrollIntoViewIfNeeded();
   await expect(card).toHaveText('Plan deleted');
-  await page.waitForTimeout(300);
-  await shot(page, 'draft-open-04-card-deleted');
   expectClean(network);
 });
 
@@ -219,8 +208,6 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
   // The agency sees the client's tick, read-only.
   await expect(wrap.locator('[data-plan-slot="client"]')).toHaveAttribute('aria-checked', 'true');
   await expect(wrap.locator('[data-plan-slot="client"]')).toBeDisabled();
-  await page.waitForTimeout(300);
-  await shot(page, 'draft-open-05-approved-by-also-in');
 
   // Moving the approved slot to another day asks first; cancelling cancels.
   const row = plan.locator(`[data-plan-row="${offer.id}"]`);
@@ -232,8 +219,6 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
   for (const sel of ['[data-plan-keep-yes]', '[data-plan-keep-no]']) {
     expectMinTouchTarget(await keep.locator(sel).boundingBox());
   }
-  await page.waitForTimeout(300);
-  await shot(page, 'draft-open-06-keep-approval-sheet');
   await page.keyboard.press('Escape');
   await expect(keep).toBeHidden();
   expect(moves()).toEqual([]);
@@ -327,8 +312,6 @@ test('the chat bell: plan alerts as bell rows; a deleted plan only toasts; a tap
   for (const open of await section.locator('[data-bell-open]').all()) {
     expectMinTouchTarget(await open.boundingBox());
   }
-  await page.waitForTimeout(300);
-  await shot(page, 'draft-open-07-bell-plan-rows');
 
   // A deleted plan's row opens nothing: it toasts and is marked read.
   await line('plan_deleted').locator('[data-bell-open]').click();
@@ -399,7 +382,6 @@ test('agency: swipe left to Remove, Undo restores with no request, expiry sends 
   expectMinTouchTarget(actionBox);
   await expect(action).toHaveClass(/bg-bad/);
   await expect(action).toHaveText('Remove');
-  await shot(page, 'swipe-01-open-action');
 
   // Opening another row closes the first: one open row at a time.
   const other = plan.locator(`[data-plan-row-swipe="${portraits.id}"]`);
@@ -457,6 +439,146 @@ test('agency: swipe left to Remove, Undo restores with no request, expiry sends 
   expectClean(network);
 });
 
+/** Layout of the plan screen at rest: no sideways page, rows inside the column. */
+async function planLayout(page: Page) {
+  return page.evaluate(() => {
+    const root = document.scrollingElement;
+    const list = document.querySelector('[data-plan-page="plan"] [data-plan-list]');
+    const body = list?.closest<HTMLElement>('.overflow-y-auto') ?? null;
+    const vw = window.innerWidth;
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-plan-row-wrap]')].map((wrap) => {
+      const box = wrap.getBoundingClientRect();
+      const title = wrap.querySelector<HTMLElement>('[data-plan-row-title]');
+      const tick = wrap.querySelector<HTMLElement>('[data-plan-slot]')?.getBoundingClientRect();
+      const t = title?.getBoundingClientRect();
+      return {
+        id: wrap.getAttribute('data-plan-row-wrap') ?? '',
+        left: box.left,
+        right: box.right,
+        titleRight: t?.right ?? 0,
+        titleClipped: title !== null && title.scrollWidth > title.clientWidth,
+        titleEllipsis: title !== null && getComputedStyle(title).textOverflow === 'ellipsis',
+        tick: tick === undefined ? null : { left: tick.left, right: tick.right, width: tick.width },
+      };
+    });
+    return {
+      vw,
+      rootScroll: root === null ? -1 : root.scrollWidth - root.clientWidth,
+      bodyScroll: body === null ? -1 : body.scrollWidth - body.clientWidth,
+      scrollX: window.scrollX,
+      bodyLeft: body?.scrollLeft ?? -1,
+      rows,
+    };
+  });
+}
+
+test(
+  'agency, 120+ character titles: no sideways page, titles truncate, ticks on screen, swipe still works',
+  {
+    tag: '@theme',
+  },
+  async ({ page }) => {
+    test.setTimeout(120_000);
+    const network = await installHarnessNetwork(page);
+    seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
+    const long = lengthenDatedTitles(network.world);
+    await openChat(page, PEER_NAME);
+    const plan = await openPlan(page, DATED_PLAN_ID);
+    for (const id of [long.concept, long.post]) {
+      await expect(plan.locator(`[data-plan-row="${id}"] [data-plan-row-title]`)).toHaveText(
+        /.{120,}/,
+      );
+    }
+
+    const expectAtRest = async (): Promise<void> => {
+      const layout = await planLayout(page);
+      // The page never scrolls sideways: the document and the plan body fit the viewport.
+      expect(layout.rootScroll).toBeLessThanOrEqual(0);
+      expect(layout.bodyScroll).toBeLessThanOrEqual(0);
+      expect(layout.scrollX).toBe(0);
+      expect(layout.bodyLeft).toBe(0);
+      for (const row of layout.rows) {
+        expect(row.right, `row ${row.id} inside the viewport`).toBeLessThanOrEqual(layout.vw + 0.5);
+        expect(row.titleRight, `title ${row.id} inside its row`).toBeLessThanOrEqual(row.right);
+        expect(row.titleEllipsis).toBe(true);
+        if (row.tick !== null) {
+          expect(row.tick.left, `tick ${row.id}`).toBeGreaterThanOrEqual(0);
+          expect(row.tick.right, `tick ${row.id}`).toBeLessThanOrEqual(layout.vw + 0.5);
+          expect(Math.round(row.tick.width)).toBeGreaterThanOrEqual(44);
+        }
+      }
+      for (const id of [long.concept, long.post]) {
+        expect(layout.rows.find((r) => r.id === id)?.titleClipped, `title ${id} truncated`).toBe(
+          true,
+        );
+      }
+      // No red action shows at rest.
+      for (const action of await plan.locator('[data-plan-row-remove]').all()) {
+        await expect(action).toBeHidden();
+      }
+    };
+    await expectAtRest();
+
+    // A vertical drag on a long row moves no row sideways; the list scrolls on Y only.
+    const row = plan.locator(`[data-plan-row-swipe="${long.concept}"]`);
+    await expect(row).toHaveCSS('touch-action', 'pan-y');
+    await swipeRow(page, row, -6, 80);
+    await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
+    await expect(plan.locator('[data-plan-row-swipe]:not([style*="translateX(0px)"])')).toHaveCount(
+      0,
+    );
+    // The list scrolls on Y; neither it nor the page can be moved on X (WebKit has
+    // no touch scroll in Playwright, so the scroller is driven directly).
+    const scrolled = await plan.locator('[data-plan-list]').evaluate((el) => {
+      const body = el.closest<HTMLElement>('.overflow-y-auto');
+      const root = document.scrollingElement;
+      if (body === null || root === null) throw new Error('scrollers');
+      const top = body.scrollTop;
+      body.scrollBy(0, 200);
+      body.scrollBy(300, 0);
+      root.scrollBy(300, 0);
+      return { dy: body.scrollTop - top, bodyX: body.scrollLeft, rootX: root.scrollLeft };
+    });
+    expect(scrolled.dy).toBeGreaterThan(0);
+    expect(scrolled.bodyX).toBe(0);
+    expect(scrolled.rootX).toBe(0);
+    await expectAtRest();
+
+    // A leftward swipe opens the long row to exactly 88px; the action sits inside the viewport.
+    await swipeRow(page, row, -70);
+    await expect(row).toHaveAttribute('data-plan-row-open', '');
+    await expect(row).toHaveAttribute('style', /translateX\(-88px\)/);
+    const action = plan.locator(`[data-plan-row-remove="${long.concept}"]`);
+    await expect(action).toBeVisible();
+    const actionBox = await action.boundingBox();
+    const vw = page.viewportSize()?.width ?? 0;
+    if (actionBox === null) throw new Error('action box');
+    expect(Math.round(actionBox.width)).toBe(88);
+    expect(actionBox.x + actionBox.width).toBeLessThanOrEqual(vw + 0.5);
+    expect((await planLayout(page)).rootScroll).toBeLessThanOrEqual(0);
+
+    // Remove, then Undo: the row is back, nothing sent.
+    await action.click();
+    await expect(plan.locator(`[data-plan-row-wrap="${long.concept}"]`)).toHaveCount(0);
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(
+      dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${long.concept}"]`),
+    ).toHaveCount(1);
+    expect(removes(network)).toEqual([]);
+    await page.waitForTimeout(400);
+    await expectAtRest();
+
+    // The long-press drag still reorders a long row.
+    await dragToDay(page, plan, plan.locator(`[data-plan-row="${long.post}"]`), '2026-10-16');
+    await expect(
+      dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${long.post}"]`),
+    ).toHaveCount(1);
+    expect(network.rpcCalls.filter((c) => c.name === 'plan_item_move')).toHaveLength(1);
+    await expectAtRest();
+    expectClean(network);
+  },
+);
+
 test('agency: a removal waiting on Undo is sent at once when the screen closes', async ({
   page,
 }) => {
@@ -504,8 +626,6 @@ test('agency: the one-time peek slides the first visible row, once per device', 
   const plan = await openPlan(page, DATED_PLAN_ID);
   const peeking = plan.locator('[data-plan-row-swipe][style*="translateX(-72px)"]');
   await expect(peeking).toHaveCount(1, { timeout: 3_000 });
-  await page.waitForTimeout(250);
-  await shot(page, 'swipe-02-peek');
   // Back at rest, and the device is marked.
   await expect(peeking).toHaveCount(0, { timeout: 3_000 });
   await expect(
@@ -618,7 +738,6 @@ test('a plan holding today opens with today at the top, no jump; earlier days ab
   // Directly at the top (scrollTop is whole pixels; WebKit rounds layout to 1px).
   expect(Math.abs(gap)).toBeLessThanOrEqual(1);
   await expect(dayBlock(plan, today).locator('[data-plan-today]')).toHaveCount(1);
-  await shot(page, 'today-01-open-at-today');
   // Earlier days are still there, above.
   const first = dayBlock(plan, shiftDay(today, -3));
   await expect(first).not.toBeInViewport();

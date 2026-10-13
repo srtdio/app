@@ -9,10 +9,6 @@ import { DM_CHANNEL, ME, MENTION_PREVIEW, PEER_NAME, WORKSPACE_ID } from '../fix
 // against fixture data in both colour schemes; Linux WebKit approximates iOS
 // WebKit, it is not iOS.
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -38,49 +34,50 @@ async function holdBubble(page: Page, text: string): Promise<void> {
   await bubble.dispatchEvent('pointerup', { ...at, pointerType: 'touch', isPrimary: true });
 }
 
-test('bell: between Select and +, chat mention in Now, Activity shows no chat mention', async ({
-  page,
-}) => {
-  const network = await installHarnessNetwork(page);
+test(
+  'bell: between Select and +, chat mention in Now, Activity shows no chat mention',
+  { tag: '@theme' },
+  async ({ page }) => {
+    const network = await installHarnessNetwork(page);
 
-  // Activity is posts only: the seeded chat mention is not there.
-  await page.goto('/activity');
-  await page.waitForTimeout(1200);
-  await expect(page.getByText(MENTION_PREVIEW, { exact: false })).toHaveCount(0);
-  await shot(page, 'bell-1-activity-no-chat-mention');
+    // Activity is posts only: the seeded chat mention is not there.
+    await page.goto('/activity');
+    await page.waitForTimeout(1200);
+    await expect(page.getByText(MENTION_PREVIEW, { exact: false })).toHaveCount(0);
 
-  await page.goto('/chat');
-  const bell = page.locator('[data-bell-button]');
-  await bell.waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Select', exact: true }).waitFor({ state: 'visible' });
-  // The order in the search row: Select, the bell, the blue +.
-  const order = await page.evaluate(() => {
-    const plus = document.querySelector('[aria-label="New chat"]');
-    const bellEl = document.querySelector('[data-bell-button]');
-    const select = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Select');
-    if (!plus || !bellEl || !select) return null;
-    const pos = (a: Element, b: Element): boolean =>
-      (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-    return pos(select, bellEl) && pos(bellEl, plus);
-  });
-  expect(order).toBe(true);
-  const size = await bell.boundingBox();
-  expectMinTouchTarget(size);
-  await expect(page.locator('[data-bell-badge]')).toHaveText('1');
-  await shot(page, 'bell-2-home');
+    await page.goto('/chat');
+    const bell = page.locator('[data-bell-button]');
+    await bell.waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Select', exact: true }).waitFor({ state: 'visible' });
+    // The order in the search row: Select, the bell, the blue +.
+    const order = await page.evaluate(() => {
+      const plus = document.querySelector('[aria-label="New chat"]');
+      const bellEl = document.querySelector('[data-bell-button]');
+      const select = [...document.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Select',
+      );
+      if (!plus || !bellEl || !select) return null;
+      const pos = (a: Element, b: Element): boolean =>
+        (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+      return pos(select, bellEl) && pos(bellEl, plus);
+    });
+    expect(order).toBe(true);
+    const size = await bell.boundingBox();
+    expectMinTouchTarget(size);
+    await expect(page.locator('[data-bell-badge]')).toHaveText('1');
 
-  await openBell(page);
-  const mention = page.locator('[data-bell-row="mention"]');
-  await expect(mention).toContainText(`${PEER_NAME} mentioned you`);
-  await expect(mention).toContainText(MENTION_PREVIEW);
-  await shot(page, 'bell-3-now');
+    await openBell(page);
+    const mention = page.locator('[data-bell-row="mention"]');
+    await expect(mention).toContainText(`${PEER_NAME} mentioned you`);
+    await expect(mention).toContainText(MENTION_PREVIEW);
 
-  // Tap: marks it read and opens the chat at that message.
-  await mention.locator('[data-bell-open]').click();
-  await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
-  await expect(page).toHaveURL(/\/chat/);
-  expectClean(network);
-});
+    // Tap: marks it read and opens the chat at that message.
+    await mention.locator('[data-bell-open]').click();
+    await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
+    await expect(page).toHaveURL(/\/chat/);
+    expectClean(network);
+  },
+);
 
 test('Remind me from a held message, then Upcoming', async ({ page }) => {
   const network = await installHarnessNetwork(page);
@@ -100,13 +97,11 @@ test('Remind me from a held message, then Upcoming', async ({ page }) => {
   // Remind me sits directly before Mark as.
   const markAt = rows.findIndex((r) => r === 'mark' || r === 'marked');
   expect(rows[markAt - 1]).toBe('remind');
-  await shot(page, 'remind-1-menu');
 
   await menu.locator('[data-menu-item="remind"]').click();
   const sheet = page.getByRole('dialog', { name: 'Remind me' });
   await expect(sheet).toBeVisible();
   await expect(sheet.locator('[data-reminder-preview]')).toContainText(MENTION_PREVIEW);
-  await shot(page, 'remind-2-sheet');
   await sheet.locator('[data-reminder-row="1h"]').click();
   await expect(page.getByText(/^Reminder set for /)).toBeVisible();
   const stored = network.world.tables.chat_message_reminders ?? [];
@@ -120,7 +115,6 @@ test('Remind me from a held message, then Upcoming', async ({ page }) => {
   const row = page.locator('[data-bell-row="upcoming-reminder"]');
   await expect(row).toContainText(MENTION_PREVIEW);
   await expect(row.locator('[data-bell-action="change-time"]')).toBeVisible();
-  await shot(page, 'remind-3-upcoming');
   expectClean(network);
 });
 
@@ -150,16 +144,12 @@ test('reminder state lives in the long-press menu: set, change, cancel', async (
   await holdBubble(page, MENTION_PREVIEW);
   await expect(remind).toContainText('Reminder · ');
   await expect(remind.locator('[data-menu-mono]')).toHaveText('Tomorrow 9:00 AM');
-  await page.waitForTimeout(250);
-  await shot(page, 'ui3-remind-1-menu-set');
 
   // Change mode: "Reminder", the presets, then "Cancel reminder".
   await remind.click();
   const sheet = page.getByRole('dialog', { name: 'Reminder' });
   await expect(sheet.locator('[data-reminder-row="1h"]')).toBeVisible();
   await expect(sheet.locator('[data-reminder-row="cancel"]')).toHaveText('Cancel reminder');
-  await page.waitForTimeout(300);
-  await shot(page, 'ui3-remind-2-change-sheet');
   await sheet.locator('[data-reminder-row="cancel"]').click();
   await expect(page.getByText('Reminder cancelled')).toBeVisible();
   const stored = network.world.tables.chat_message_reminders ?? [];
@@ -168,7 +158,6 @@ test('reminder state lives in the long-press menu: set, change, cancel', async (
   // Back to "Remind me".
   await holdBubble(page, MENTION_PREVIEW);
   await expect(remind).toHaveText('Remind me');
-  await shot(page, 'ui3-remind-3-menu-cleared');
   expectClean(network);
 });
 
@@ -198,7 +187,6 @@ test('a reminder fires while the app is open: toast, then it shows in Now', asyn
   await page.clock.fastForward(2 * 60_000);
   const toast = page.getByText(`Reminder: ${String(dm.body)}`);
   await expect(toast).toBeVisible();
-  await shot(page, 'fire-1-toast');
 
   // The cron's side: the reminder fired and its inbox row landed.
   const pending = network.world.tables.chat_message_reminders?.[0];
@@ -227,6 +215,5 @@ test('a reminder fires while the app is open: toast, then it shows in Now', asyn
   await expect(row).toContainText(String(dm.body));
   await expect(row.locator('[data-bell-action="snooze"]')).toBeVisible();
   await expect(row.locator('[data-bell-action="done"]')).toBeVisible();
-  await shot(page, 'fire-2-now');
   expectClean(network);
 });
