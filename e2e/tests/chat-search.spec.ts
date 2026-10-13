@@ -65,13 +65,14 @@ async function runSearchFlow(page: Page): Promise<void> {
   await box.fill(QUERY);
   await expect(firstHit).toBeVisible();
   await firstHit.click();
+  // The jump ring is a 2s flash: check it first, before the slower bar checks.
+  await expect(page.locator('[data-bubble].ring-2').first()).toBeVisible();
   const bar = page.locator('[data-chat-search-bar]');
   await expect(bar).toBeVisible();
   await expect(bar.locator('input')).toHaveValue(QUERY);
   const counter = bar.locator('[data-search-counter]');
   await expect(counter).toHaveText(/^1 of \d+\+?$/);
   await expect(page.locator('[data-msg-id] mark[data-search-mark]').first()).toBeVisible();
-  await expect(page.locator('[data-bubble].ring-2').first()).toBeVisible();
 
   // Up is the older match, down the newer one.
   const total = Number(/of (\d+)/.exec((await counter.textContent()) ?? '')?.[1] ?? '0');

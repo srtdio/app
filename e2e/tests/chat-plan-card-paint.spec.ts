@@ -192,9 +192,17 @@ async function run(page: Page, scenario: Scenario): Promise<void> {
   await row.waitFor({ state: 'visible' });
   const gate = scenario.slowMs !== undefined ? network.holdTable('plans') : null;
   await row.click();
+  // The hold is timed from the held request, not from the thread's paint: on a
+  // loaded runner the two can be seconds apart, and the read's own 5s timeout
+  // (a retry, so a second read) must never be what this scenario measures.
+  let askedAt = 0;
+  if (gate !== null) {
+    await expect.poll(planReads).toBe(1);
+    askedAt = Date.now();
+  }
   await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
   if (gate !== null) {
-    await page.waitForTimeout(scenario.slowMs ?? 0);
+    await page.waitForTimeout(Math.max(0, (scenario.slowMs ?? 0) - (Date.now() - askedAt)));
     // The skeleton holds while the read is slow.
     expect(await paintsOf(page)).toEqual(
       expect.arrayContaining([expect.stringMatching(/^skeleton/)]),
