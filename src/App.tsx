@@ -19,6 +19,7 @@ import { AcceptInvitePage } from '@/components/auth/AcceptInvitePage';
 import { PostRefResolver } from '@/components/refs/PostRefResolver';
 import { BriefRefResolver } from '@/components/refs/BriefRefResolver';
 import { RequireAuth, RequireGuest } from '@/components/auth/RouteGuards';
+import { HomeGate } from '@/components/home/HomeGate';
 import { SessionProvider } from '@/lib/session-context';
 import { WorkspaceProvider } from '@/lib/workspace-context';
 import { ChatProvider } from '@/lib/chat';
@@ -45,6 +46,7 @@ export default function App() {
     <BrowserRouter>
       <SessionProvider>
         <Routes>
+          <Route path="/" element={<HomeGate />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/legal/:policy" element={<LegalPolicyPage />} />
           <Route element={<RequireGuest />}>
@@ -55,7 +57,6 @@ export default function App() {
             <Route path="/invite/accept" element={<AcceptInvitePage />} />
             <Route path="/invite/accept/:inviteId" element={<AcceptInvitePage />} />
             <Route element={<WorkspaceLayout />}>
-              <Route path="/" element={<Navigate to="/pipeline" replace />} />
               <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/posts/:postId" element={<PostDetailPage />} />
               <Route path="/p/:ref" element={<PostRefResolver />} />
