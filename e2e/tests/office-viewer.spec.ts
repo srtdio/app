@@ -160,27 +160,35 @@ test('Word and Excel open inside Sorted @theme', async ({ page, context }) => {
     (r) => r.method() === 'POST' && r.url().includes('asset-upload.harness.test'),
   );
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  const body = (await upload).postDataBuffer() ?? Buffer.alloc(0);
-  const head = body.indexOf('filename="thumbnail.jpg"');
-  expect(head).toBeGreaterThan(-1);
-  const start = body.indexOf('\r\n\r\n', head) + 4;
-  const boundary = body.subarray(0, body.indexOf('\r\n'));
-  const jpeg = body.subarray(start, body.indexOf(boundary, start) - 2);
-  expect([...jpeg.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
-  expect(jpeg.length).toBeLessThanOrEqual(300 * 1024);
+  // WebKit does not expose file bytes of a multipart body: check the part's
+  // headers here and the JPEG bytes from the bubble's own blob below.
+  const body = (await upload).postDataBuffer()?.toString('latin1') ?? '';
+  expect(body).toMatch(/name="thumbnail"; filename="thumbnail\.jpg"\r\nContent-Type: image\/jpeg/);
 
   const sent = page.locator('[data-file-bubble="office"]').last();
   await sent.scrollIntoViewIfNeeded();
   const thumb = sent.locator('[data-file-thumb] img');
   await expect(thumb).toBeVisible();
-  const size = await thumb.evaluate(async (img) => {
+  const info = await thumb.evaluate(async (img) => {
     const el = img as HTMLImageElement;
     await el.decode();
-    return { width: el.naturalWidth, height: el.naturalHeight };
+    // A same-document blob: read back through XHR (no network involved).
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', el.src);
+      xhr.responseType = 'blob';
+      xhr.onload = () => resolve(xhr.response as Blob);
+      xhr.onerror = () => reject(new Error('blob read failed'));
+      xhr.send();
+    });
+    const head = new Uint8Array(await blob.slice(0, 3).arrayBuffer());
+    return { width: el.naturalWidth, height: el.naturalHeight, bytes: blob.size, head: [...head] };
   });
-  expect(size.width).toBeGreaterThan(0);
-  expect(size.width).toBeLessThanOrEqual(580);
-  expect(size.height).toBeLessThanOrEqual(1160);
+  expect(info.head).toEqual([0xff, 0xd8, 0xff]);
+  expect(info.width).toBeGreaterThan(0);
+  expect(info.width).toBeLessThanOrEqual(580);
+  expect(info.height).toBeLessThanOrEqual(1160);
+  expect(info.bytes).toBeLessThanOrEqual(300 * 1024);
 
   // Nothing left the tab, and no request escaped the fixtures.
   expect(popups).toEqual([]);
