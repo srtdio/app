@@ -162,7 +162,9 @@ describe('draggable attributes on chat media', () => {
       />,
     );
     expect(html).toMatch(/<img[^>]*draggable="false"/);
-    expect(html).toMatch(/<a[^>]*draggable="false"/);
+    // The file is a FileBubble button now (in-app viewer), never a link out.
+    expect(html).toContain('data-file-bubble="pdf"');
+    expect(html).not.toMatch(/<a[^>]*target="_blank"/);
     const album = renderToStaticMarkup(
       <MessageAttachments
         attachments={[

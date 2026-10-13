@@ -1076,3 +1076,110 @@ export class InMemoryAssetRepository implements AssetRepository {
     return Promise.resolve();
   }
 }
+
+// ---------------------------------------------------------------------------
+// Renditions (asset_renditions). Only the thumbnail role is written today, by
+// asset-upload for pdf/video versions, and read by asset-read. The table has
+// no client SELECT: the service role is its only reader and writer.
+// ---------------------------------------------------------------------------
+
+export type RenditionRole = 'thumbnail';
+
+/** A stored rendition: where its bytes live and its pixel size. */
+export interface RenditionRef {
+  r2Key: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface NewRendition {
+  id: string;
+  assetVersionId: string;
+  workspaceId: string;
+  role: RenditionRole;
+  r2Key: string;
+  mimeType: string;
+  sha256: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+}
+
+export interface RenditionStore {
+  /** The version's rendition for a role, or null. */
+  findRendition(assetVersionId: string, role: RenditionRole): Promise<RenditionRef | null>;
+  /**
+   * Insert one rendition, ON CONFLICT (asset_version_id, role) DO NOTHING.
+   * True when this call inserted the row, false when one was already there.
+   */
+  insertRendition(rendition: NewRendition): Promise<boolean>;
+}
+
+/** Service-role rendition store (SELECT and INSERT are its only grants). */
+export function createSupabaseRenditionStore(env: SupabaseAssetEnv): RenditionStore {
+  const client: SupabaseClient<Database> = createClient<Database>(
+    env.SUPABASE_URL,
+    env.SUPABASE_SECRET_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  return {
+    async findRendition(assetVersionId, role) {
+      const { data, error } = await client
+        .from('asset_renditions')
+        .select('r2_key,width,height')
+        .eq('asset_version_id', assetVersionId)
+        .eq('role', role)
+        .maybeSingle();
+      if (error) {
+        throw error;
+      }
+      return data ? { r2Key: data.r2_key, width: data.width, height: data.height } : null;
+    },
+
+    async insertRendition(rendition) {
+      const { data, error } = await client
+        .from('asset_renditions')
+        .upsert(
+          {
+            id: rendition.id,
+            asset_version_id: rendition.assetVersionId,
+            workspace_id: rendition.workspaceId,
+            role: rendition.role,
+            r2_key: rendition.r2Key,
+            mime_type: rendition.mimeType,
+            sha256: rendition.sha256,
+            size_bytes: rendition.sizeBytes,
+            width: rendition.width,
+            height: rendition.height,
+          },
+          { onConflict: 'asset_version_id,role', ignoreDuplicates: true },
+        )
+        .select('id');
+      if (error) {
+        throw error;
+      }
+      return (data ?? []).length > 0;
+    },
+  };
+}
+
+/** In-memory rendition store for tests. `failInsert` makes the insert throw. */
+export class InMemoryRenditionStore implements RenditionStore {
+  readonly rows: NewRendition[] = [];
+  failInsert: Error | null = null;
+
+  findRendition(assetVersionId: string, role: RenditionRole): Promise<RenditionRef | null> {
+    const row = this.rows.find((r) => r.assetVersionId === assetVersionId && r.role === role);
+    return Promise.resolve(row ? { r2Key: row.r2Key, width: row.width, height: row.height } : null);
+  }
+
+  insertRendition(rendition: NewRendition): Promise<boolean> {
+    if (this.failInsert !== null) return Promise.reject(this.failInsert);
+    const taken = this.rows.some(
+      (r) => r.assetVersionId === rendition.assetVersionId && r.role === rendition.role,
+    );
+    if (taken) return Promise.resolve(false);
+    this.rows.push({ ...rendition });
+    return Promise.resolve(true);
+  }
+}

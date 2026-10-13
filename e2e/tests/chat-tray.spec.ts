@@ -185,10 +185,10 @@ async function libraryImageAndPdf(page: Page): Promise<void> {
     [LIB_PDF_VERSION]: { mime: 'application/pdf', name: 'brand-deck.pdf', size: 98765 },
   });
 
-  // The image renders as an image; the PDF as the existing file chip.
+  // The image renders as an image; the PDF as the file bubble.
   const bubble = page.locator('[data-msg-id]').last();
   await expect(bubble.locator('[data-album] img')).toBeVisible();
-  await expect(bubble.locator('[data-file-icon-spot]')).toBeVisible();
+  await expect(bubble.locator('[data-file-bubble="pdf"]')).toBeVisible();
   await expect(bubble.getByText('brand-deck.pdf')).toBeVisible();
   expectClean(network);
 }

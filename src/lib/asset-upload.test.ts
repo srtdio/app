@@ -858,3 +858,136 @@ describe('xhrPost honours an AbortSignal (cancelled chat send)', () => {
     expect(abort).not.toHaveBeenCalled();
   });
 });
+
+describe('uploadAssetFile: sender-side thumbnail (pdf/video only)', () => {
+  const okBody = { asset: { assetId: 'a-1', versionId: 'v-1', reused: false } };
+  const thumbBlob = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' });
+
+  function sentForm(fetcher: ReturnType<typeof vi.fn>): FormData {
+    const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    return init.body as FormData;
+  }
+
+  it('a pdf adds the thumbnail part and its page count', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+    const makeThumbnail = vi.fn(async () => ({
+      ok: true as const,
+      blob: thumbBlob,
+      width: 580,
+      height: 751,
+      pageCount: 12,
+    }));
+    await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+      ...baseConfig(fetcher, 'deck.pdf'),
+      makeThumbnail,
+    });
+    const form = sentForm(fetcher);
+    expect(form.get('thumbnail')).toBeInstanceOf(Blob);
+    expect((form.get('thumbnail') as File).name).toBe('thumbnail.jpg');
+    expect(form.get('thumbnail_page_count')).toBe('12');
+    // The file part is unchanged.
+    expect((form.get('file') as File).name).toBe('deck.pdf');
+  });
+
+  it('a video adds the thumbnail part with no page count', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+    const makeThumbnail = vi.fn(async () => ({
+      ok: true as const,
+      blob: thumbBlob,
+      width: 580,
+      height: 326,
+    }));
+    await uploadAssetFile(fakeFile('clip.mp4', 'video/mp4', 10), {
+      ...baseConfig(fetcher, 'clip.mp4'),
+      makeThumbnail,
+    });
+    const form = sentForm(fetcher);
+    expect(form.get('thumbnail')).toBeInstanceOf(Blob);
+    expect(form.get('thumbnail_page_count')).toBeNull();
+  });
+
+  it.each([
+    ['image', 'logo.png', 'image/png'],
+    ['audio', 'note.webm', 'audio/webm'],
+    [
+      'docx',
+      'brief.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
+  ])('%s never makes or sends a thumbnail', async (_label, name, type) => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+    const makeThumbnail = vi.fn();
+    await uploadAssetFile(fakeFile(name, type, 10), {
+      ...baseConfig(fetcher, name),
+      makeThumbnail,
+    });
+    expect(makeThumbnail).not.toHaveBeenCalled();
+    expect(sentForm(fetcher).get('thumbnail')).toBeNull();
+  });
+
+  it.each([
+    ['NoThumbnail', async () => ({ ok: false as const, reason: 'failed' as const })],
+    [
+      'a throwing maker',
+      async () => {
+        throw new Error('boom');
+      },
+    ],
+  ])('%s still uploads the file, with no thumbnail part', async (_label, maker) => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+    const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+      ...baseConfig(fetcher, 'deck.pdf'),
+      makeThumbnail: maker,
+    });
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+    expect(sentForm(fetcher).get('thumbnail')).toBeNull();
+  });
+
+  it('a maker that hangs never holds the upload past the 4 s cap', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+      const pending = uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+        ...baseConfig(fetcher, 'deck.pdf'),
+        makeThumbnail: () => new Promise(() => undefined),
+      });
+      await vi.advanceTimersByTimeAsync(3_999);
+      expect(fetcher).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      const outcome = await pending;
+      expect(outcome.ok).toBe(true);
+      expect(sentForm(fetcher).get('thumbnail')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reads the stored thumbnail off the response; malformed is ignored', async () => {
+    const stored = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(201, { ...okBody, thumbnail: { width: 580, height: 751, page_count: 3 } }),
+      );
+    const noThumb = async () => ({ ok: false as const, reason: 'failed' as const });
+    expect(
+      await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+        ...baseConfig(stored, 'deck.pdf'),
+        makeThumbnail: noThumb,
+      }),
+    ).toEqual({
+      ok: true,
+      reused: false,
+      assetId: 'a-1',
+      assetVersionId: 'v-1',
+      thumbnail: { width: 580, height: 751, pageCount: 3 },
+    });
+    const malformed = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(201, { ...okBody, thumbnail: { width: -1, height: 'x' } }));
+    const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+      ...baseConfig(malformed, 'deck.pdf'),
+      makeThumbnail: noThumb,
+    });
+    expect(outcome.ok && outcome.thumbnail).toBe(undefined);
+  });
+});

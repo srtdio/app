@@ -74,6 +74,39 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([length, body, crc]);
 }
 
+/**
+ * A small valid PDF of `pages` US Letter pages (a filled box on each), the
+ * bytes the asset-read stream mode serves for the file viewer.
+ */
+export function fixturePdf(pages: number): Buffer {
+  const objects: string[] = ['<< /Type /Catalog /Pages 2 0 R >>', ''];
+  const kids: string[] = [];
+  for (let i = 0; i < pages; i += 1) {
+    const pageId = objects.length + 1;
+    kids.push(`${pageId} 0 R`);
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${pageId + 1} 0 R >>`,
+    );
+    const stream = `0.2 0.4 0.8 rg 72 ${500 - i * 40} 468 200 re f`;
+    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  }
+  objects[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages} >>`;
+  let out = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  out += offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('');
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1');
+}
+
+/** Pages in the PDF the stream mode serves. */
+export const FIXTURE_PDF_PAGES = 3;
+
 /** A solid-colour PNG so photo tiles have real pixels without any network. */
 export function solidPng(width: number, height: number, rgb: [number, number, number]): Buffer {
   const header = Buffer.alloc(13);
@@ -951,6 +984,7 @@ export async function installHarnessNetwork(
 
   const png = solidPng(64, 48, [96, 128, 160]);
   const wav = silentWav();
+  const pdf = fixturePdf(FIXTURE_PDF_PAGES);
 
   const handle = async (route: Route): Promise<void> => {
     const request = route.request();
@@ -1102,6 +1136,40 @@ export async function installHarnessNetwork(
       }
       const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
       const id = String(body.asset_version_id ?? body.id ?? 'x');
+      // The file viewer's PDF bytes come through the Worker (stream mode).
+      if (body.stream === true) {
+        await route.fulfill({
+          status: 200,
+          headers: {
+            ...CORS,
+            'content-type': 'application/pdf',
+            'x-content-type-options': 'nosniff',
+            'cache-control': 'private, no-store',
+          },
+          body: pdf,
+        });
+        return;
+      }
+      // A thumbnail rendition: the fixture PNG for any version whose meta has one.
+      if (body.rendition === 'thumbnail') {
+        const has = Object.values(world.tables.chat_messages ?? []).some((m) => {
+          const meta = m.attachment_meta as Record<string, { thumb_w?: number }> | null;
+          return typeof meta?.[id]?.thumb_w === 'number';
+        });
+        await route.fulfill({
+          status: has ? 200 : 404,
+          headers: { ...CORS, 'content-type': 'application/json' },
+          body: JSON.stringify(
+            has
+              ? {
+                  url: `https://${ASSET_READ_HOST}/blob/image/${id}`,
+                  expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+                }
+              : { error: 'no_rendition' },
+          ),
+        });
+        return;
+      }
       const isAudio = Object.values(world.tables.chat_messages ?? []).some((m) => {
         const meta = m.attachment_meta as Record<string, { mime?: string }> | null;
         return meta?.[id]?.mime?.startsWith('audio/') === true;

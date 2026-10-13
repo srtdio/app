@@ -123,6 +123,7 @@ import {
 import { formatClockTime } from '@/lib/chat/time-format';
 import { Link } from 'react-router-dom';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
+import { UploadRing } from '@/components/chat/UploadRing';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import { PresignCache } from '@/lib/asset-presign';
 import type { ChatProfile } from '@/lib/chat-reads';
@@ -3626,16 +3627,27 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     return html.slice(at, html.indexOf('</button>', at) + '</button>'.length);
   }
   function paint(attachments: MessageAttachment[], mine: boolean, theme: 'light' | 'dark') {
+    // A file no longer carries a ring (the file bubble sends with a thin bar),
+    // so the 44px file ring is painted on its own inside the same bubble.
+    const file = attachments[0]?.mime === 'application/pdf' ? attachments[0] : undefined;
     return renderStrip(
       <div className={theme === 'dark' ? 'dark' : undefined}>
         <div className={mine ? OWN_BUBBLE_CONTENT : undefined}>
-          <MessageAttachments
-            attachments={attachments}
-            cache={cache}
-            presignEnabled
-            album={attachments[0]?.mime === 'image/png'}
-            onCancelUpload={() => {}}
-          />
+          {file !== undefined ? (
+            <UploadRing
+              progress={file.local?.uploading === true ? (file.local?.progress ?? null) : null}
+              onCancel={() => {}}
+              variant="file"
+            />
+          ) : (
+            <MessageAttachments
+              attachments={attachments}
+              cache={cache}
+              presignEnabled
+              album={attachments[0]?.mime === 'image/png'}
+              onCancelUpload={() => {}}
+            />
+          )}
         </div>
       </div>,
     );

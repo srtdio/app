@@ -18,6 +18,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconBookmark, IconFile, IconImage, IconLink, IconStar } from '@/components/ui/icons';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
+import { FileViewer, remoteFileSource } from '@/components/ui/FileViewer';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { MarksList, type MarksListProps } from '@/components/chat/MarksSheet';
 import { StarredList } from '@/components/chat/StarredList';
@@ -29,6 +30,8 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { Result } from '@srtdio/rpc';
 import type { MessageCursor } from '@/lib/chat/thread';
 import { formatClockTime, formatShortDate } from '@/lib/chat/time-format';
+import { classifyFileKind } from '@/lib/chat/attachments';
+import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { APP_ENTITY_ROUTES, currentOrigin, displayUrl } from '@/lib/chat/message-links';
 import {
   listChannelAttachments,
@@ -309,33 +312,52 @@ export function fileMetaLine(item: ChannelAttachmentItem, timeZone: string): str
   return `${humanizeSize(item.size)} · ${formatShortDate(item.createdAt, timeZone)}`;
 }
 
-/** One Files row: an anchor to the presigned url (new tab, download). */
+/**
+ * One Files row: a button that opens the file in the in-app FileViewer (pdf
+ * pages, the video player, or "Preview not available yet" with Download),
+ * never a new tab. The viewer reads fresh bytes or a fresh link on each open.
+ */
 function FileRow(props: {
   item: ChannelAttachmentItem;
   cache: PresignCache;
   presignEnabled: boolean;
   timeZone: string;
 }): ReactElement {
-  const { item } = props;
-  const { url } = useAttachmentUrl(item.versionId, props.cache, props.presignEnabled);
+  const { item, cache, presignEnabled } = props;
+  const [open, setOpen] = useState(false);
   const name = item.name !== '' ? item.name : 'File';
+  const source = useMemo(
+    () => (presignEnabled ? remoteFileSource(cache, item.versionId) : null),
+    [presignEnabled, cache, item.versionId],
+  );
   return (
     <li>
-      <a
-        {...(url !== null ? { href: url } : { 'aria-disabled': true })}
-        target="_blank"
-        rel="noopener noreferrer"
-        download={name}
-        className={cn(ROW, 'rounded-md text-left hover:bg-panel-2')}
+      <button
+        type="button"
+        data-file-row={classifyFileKind(item.mime)}
+        disabled={source === null}
+        onClick={() => setOpen(true)}
+        className={cn(ROW, 'rounded-md text-left hover:bg-panel-2 disabled:opacity-60')}
       >
         <span className={ROW_ICON}>
           <IconFile size={20} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-sm font-medium text-fg">{name}</span>
+          <span title={name} className="truncate text-sm font-medium text-fg">
+            {middleTruncate(name, VIEWER_NAME_BUDGET)}
+          </span>
           <span className="truncate text-xs text-fg-2">{fileMetaLine(item, props.timeZone)}</span>
         </span>
-      </a>
+      </button>
+      {open && source !== null ? (
+        <FileViewer
+          name={name}
+          kind={classifyFileKind(item.mime)}
+          size={item.size ?? undefined}
+          source={source}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </li>
   );
 }

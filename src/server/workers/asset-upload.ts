@@ -1,12 +1,17 @@
 // Cloudflare Worker: asset upload + read route.
 //
-// POST  multipart/form-data { file, workspace_id, origin?, asset_id?, folder_id? }
+// POST  multipart/form-data { file, workspace_id, origin?, asset_id?, folder_id?,
+//                             thumbnail?, thumbnail_page_count? }
 //   origin is 'library' (default when missing) or 'chat'. A chat file never
 //   becomes a version of another asset and never goes into a folder.
 //   -> verifies the caller's Bearer token, confirms they are an active member of
 //      workspace_id, runs the upload pipeline, and returns the asset summary.
 //      The acting user is the verified token's `sub` claim only - the body never
 //      carries an uploaded_by id.
+//      An optional `thumbnail` JPEG (pdf/video only, made on the sender's
+//      device) is validated here and stored as the version's thumbnail
+//      rendition; an invalid or failed thumbnail is ignored and never fails
+//      the upload. The response then carries thumbnail {width,height,page_count?}.
 // GET   ?workspace_id=&asset_id=
 //   -> same auth + membership gate, then returns the current summary scoped to
 //      the workspace (cross-tenant 404).
@@ -20,6 +25,8 @@
 import {
   createLinkAsset,
   createSupabaseAssetRepository,
+  createSupabaseRenditionStore,
+  storeThumbnailRendition,
   getAssetSummary,
   renameAsset,
   runUploadPipeline,
@@ -30,6 +37,7 @@ import {
   type AssetRepository,
   type AssetSummary,
   type Result,
+  type ThumbnailOutcome,
   type UploadError,
   type UploadErrorCode,
   type UploadInput,
@@ -302,6 +310,75 @@ function buildPipelineRunner(env: AssetUploadEnv): PipelineRunner {
   return (input) => runUploadPipeline(deps, input);
 }
 
+/** The thumbnail fields of a stored rendition, as the response carries them. */
+interface ThumbnailBody {
+  width: number;
+  height: number;
+  page_count?: number;
+}
+
+/**
+ * Store the upload's thumbnail part, when there is one. Never throws and never
+ * changes the upload's status: an invalid part is logged and ignored, a
+ * storage or DB fault is logged and the response simply has no thumbnail.
+ */
+async function attachThumbnail(
+  env: AssetUploadEnv,
+  input: {
+    summary: AssetSummary;
+    part: FormDataEntryValue | null;
+    pageCountField: FormDataEntryValue | null;
+    traceId: string;
+  },
+): Promise<ThumbnailBody | null> {
+  const { part } = input;
+  if (part === null) return null;
+  if (!(part instanceof Blob)) {
+    logger.warn('asset upload thumbnail ignored', { reason: 'not_a_file' });
+    return null;
+  }
+  try {
+    // Refuse to buffer an oversize part: the cap is checked again on the bytes.
+    if (part.size > 300 * 1024) {
+      logger.warn('asset upload thumbnail ignored', { reason: 'size' });
+      return null;
+    }
+    const outcome: ThumbnailOutcome = await storeThumbnailRendition(
+      {
+        storage: buildStorage(env),
+        repository: buildRepository(env),
+        renditions: createSupabaseRenditionStore({
+          SUPABASE_URL: env.SUPABASE_URL,
+          SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY,
+        }),
+      },
+      {
+        summary: input.summary,
+        bytes: new Uint8Array(await part.arrayBuffer()),
+        pageCountField: typeof input.pageCountField === 'string' ? input.pageCountField : null,
+        traceId: input.traceId,
+      },
+    );
+    if (!outcome.stored) {
+      logger.warn('asset upload thumbnail ignored', {
+        reason: outcome.reason,
+        asset_version_id: input.summary.versionId,
+      });
+      return null;
+    }
+    return {
+      width: outcome.width,
+      height: outcome.height,
+      ...(outcome.pageCount !== undefined ? { page_count: outcome.pageCount } : {}),
+    };
+  } catch (error) {
+    logger.error(`asset upload thumbnail failed: ${serializeError(error)}`, {
+      asset_version_id: input.summary.versionId,
+    });
+    return null;
+  }
+}
+
 async function handlePost(
   request: Request,
   env: AssetUploadEnv,
@@ -333,6 +410,8 @@ async function handlePost(
   const folderIdField = form.get('folder_id');
   const displayNameField = form.get('display_name');
   const originField = form.get('origin');
+  const thumbnailPart = form.get('thumbnail');
+  const thumbnailPageCount = form.get('thumbnail_page_count');
 
   if (!(file instanceof File)) {
     return json(
@@ -456,7 +535,18 @@ async function handlePost(
     }
     return json(STATUS_BY_CODE[outcome.error.code], { error: outcome.error }, traceId, acao);
   }
-  return json(outcome.value.reused ? 200 : 201, { asset: outcome.value.summary }, traceId, acao);
+  const thumbnail = await attachThumbnail(env, {
+    summary: outcome.value.summary,
+    part: thumbnailPart,
+    pageCountField: thumbnailPageCount,
+    traceId,
+  });
+  return json(
+    outcome.value.reused ? 200 : 201,
+    { asset: outcome.value.summary, ...(thumbnail !== null ? { thumbnail } : {}) },
+    traceId,
+    acao,
+  );
 }
 
 async function handleGet(

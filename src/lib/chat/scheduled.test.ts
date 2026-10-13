@@ -38,6 +38,7 @@ import {
   toLocalAttachment,
   withoutLocal,
   type AttachmentUploader,
+  rememberThumbnail,
 } from '@/lib/chat/attachments';
 import { rowToThreadMessage, type ChatMessageRow } from '@/lib/chat/thread';
 
@@ -666,5 +667,50 @@ describe('UI-3 S8: sorted:scheduled-changed', () => {
   it('without a window it is a no-op', () => {
     expect(() => announceScheduledChanged('c1')).not.toThrow();
     expect(onScheduledChanged('c1', () => undefined)()).toBeUndefined();
+  });
+});
+
+describe('scheduled send carries the thumbnail meta', () => {
+  it('a scheduled PDF writes page_count / thumb_w / thumb_h and the dispatch parser keeps them', () => {
+    const args = scheduleAttachmentArgs([
+      {
+        assetId: 'v-pdf',
+        name: 'deck.pdf',
+        mime: 'application/pdf',
+        size: 900,
+        pageCount: 3,
+        thumbW: 580,
+        thumbH: 751,
+      },
+    ]);
+    expect(args.attachmentMeta['v-pdf']).toEqual({
+      mime: 'application/pdf',
+      name: 'deck.pdf',
+      size: 900,
+      page_count: 3,
+      thumb_w: 580,
+      thumb_h: 751,
+    });
+    // chat-scheduled-send reads the row back with the shared parser.
+    expect(parseAttachmentMeta(args.attachmentMeta, args.attachmentAssetIds)).toEqual([
+      {
+        assetId: 'v-pdf',
+        name: 'deck.pdf',
+        mime: 'application/pdf',
+        size: 900,
+        pageCount: 3,
+        thumbW: 580,
+        thumbH: 751,
+      },
+    ]);
+  });
+
+  it('a file uploaded for a schedule gets the thumbnail the Worker stored for its version', () => {
+    rememberThumbnail('v-sched', { width: 580, height: 326 });
+    const args = scheduleAttachmentArgs([
+      { assetId: 'v-sched', name: 'clip.mp4', mime: 'video/mp4', size: 10 },
+    ]);
+    expect(args.attachmentMeta['v-sched']).toMatchObject({ thumb_w: 580, thumb_h: 326 });
+    expect(args.attachmentMeta['v-sched']?.page_count).toBeUndefined();
   });
 });

@@ -365,6 +365,10 @@ Chat files stay in chat (20261005040000_chat_files_stay_in_chat.sql):
   - workspace_role_permissions: agency has post.delete (post_soft_delete is owner, admin, agency).
   - workspace_role_permissions: client has asset.delete (all workspaces and seed_workspace_role_defaults).
 
+### asset_renditions
+
+thumbnail rendition written by asset-upload for pdf/video; read via asset-read rendition param; no client SELECT.
+
 ### asset_attachments
 
 NO ACTION on delete: live attachments block asset hard-delete.

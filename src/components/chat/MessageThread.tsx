@@ -133,6 +133,7 @@ import {
   type EditingDraft,
 } from '@/components/chat/Composer';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import {
   ImageLightbox,
   type LightboxDetails,
@@ -3862,73 +3863,89 @@ function ThreadBody(
                       onOpen={() => openThread(chipRoot)}
                     />
                   ) : null}
-                  <MessageRow
-                    message={row.message}
-                    profiles={props.profiles}
-                    cache={props.cache}
-                    presignEnabled={props.presignEnabled}
-                    showTicks={props.showTicks}
-                    isGroup={props.isGroup}
-                    head={row.head}
-                    tail={row.tail}
-                    afterLabel={afterLabel}
-                    timeZone={props.timeZone}
-                    layout={props.layout}
-                    viewerUserId={props.viewerUserId}
-                    mentions={props.mentions}
-                    workspaceId={props.workspaceId}
-                    meta={row.meta}
-                    onOpen={(m, rect, held, reactionsOnly) => {
-                      if (m.deleted === true) return;
-                      // Another menu opening ends text selection.
-                      setSelectingTextId(null);
-                      setMenu({
-                        message: m,
-                        rect,
-                        held,
-                        openedAt: serverNow(),
-                        reactionsOnly: reactionsOnly === true,
-                      });
-                    }}
-                    onOpenImage={(m, index) => setViewer({ messageId: m.id, index })}
-                    hoverMenu={hoverMenu}
-                    coarsePointer={coarsePointer}
-                    reducedMotion={reducedMotion}
-                    onSwipeReply={props.onReply}
-                    onJumpToMessage={scrollToMessage}
-                    nextVoiceId={voiceNext.get(row.message.id) ?? null}
-                    onTranscribe={props.onTranscribe}
-                    quoted={
-                      row.message.reply !== null
-                        ? messagesById.get(row.message.reply.id)
-                        : undefined
+                  {/* One broken message never blanks the thread: it shows a line instead. */}
+                  <ErrorBoundary
+                    name="chat-message"
+                    fallback={
+                      <p
+                        data-message-fallback=""
+                        className={cn(
+                          'px-4 py-1 text-xs text-fg-3',
+                          row.message.mine && 'text-right',
+                        )}
+                      >
+                        {"Couldn't show this message"}
+                      </p>
                     }
-                    postRefs={{
-                      chip: props.chipFor?.(row.message),
-                      onTalkAbout: props.onTalkAbout,
-                      onTalkAboutFocus: props.onTalkAboutFocus,
-                      onOpenThread: rootCard ? props.onOpenThread : undefined,
-                    }}
-                    threadMember={memberOf?.(row.message) != null}
-                    rail={rowRail}
-                    mark={props.marks.get(row.message.id)}
-                    {...(props.onChangePriority !== undefined
-                      ? { onChangePriority: props.onChangePriority }
-                      : {})}
-                    {...(props.selection !== undefined
-                      ? {
-                          selection: rowSelection(row.message, props.selection),
-                        }
-                      : {})}
-                    {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
-                    {...(props.onCancelUpload !== undefined
-                      ? { onCancelUpload: props.onCancelUpload }
-                      : {})}
-                    {...(props.onOpenReactions !== undefined && props.selection === undefined
-                      ? { onOpenReactions: props.onOpenReactions }
-                      : {})}
-                    selectingText={selectingTextId === row.message.id}
-                  />
+                  >
+                    <MessageRow
+                      message={row.message}
+                      profiles={props.profiles}
+                      cache={props.cache}
+                      presignEnabled={props.presignEnabled}
+                      showTicks={props.showTicks}
+                      isGroup={props.isGroup}
+                      head={row.head}
+                      tail={row.tail}
+                      afterLabel={afterLabel}
+                      timeZone={props.timeZone}
+                      layout={props.layout}
+                      viewerUserId={props.viewerUserId}
+                      mentions={props.mentions}
+                      workspaceId={props.workspaceId}
+                      meta={row.meta}
+                      onOpen={(m, rect, held, reactionsOnly) => {
+                        if (m.deleted === true) return;
+                        // Another menu opening ends text selection.
+                        setSelectingTextId(null);
+                        setMenu({
+                          message: m,
+                          rect,
+                          held,
+                          openedAt: serverNow(),
+                          reactionsOnly: reactionsOnly === true,
+                        });
+                      }}
+                      onOpenImage={(m, index) => setViewer({ messageId: m.id, index })}
+                      hoverMenu={hoverMenu}
+                      coarsePointer={coarsePointer}
+                      reducedMotion={reducedMotion}
+                      onSwipeReply={props.onReply}
+                      onJumpToMessage={scrollToMessage}
+                      nextVoiceId={voiceNext.get(row.message.id) ?? null}
+                      onTranscribe={props.onTranscribe}
+                      quoted={
+                        row.message.reply !== null
+                          ? messagesById.get(row.message.reply.id)
+                          : undefined
+                      }
+                      postRefs={{
+                        chip: props.chipFor?.(row.message),
+                        onTalkAbout: props.onTalkAbout,
+                        onTalkAboutFocus: props.onTalkAboutFocus,
+                        onOpenThread: rootCard ? props.onOpenThread : undefined,
+                      }}
+                      threadMember={memberOf?.(row.message) != null}
+                      rail={rowRail}
+                      mark={props.marks.get(row.message.id)}
+                      {...(props.onChangePriority !== undefined
+                        ? { onChangePriority: props.onChangePriority }
+                        : {})}
+                      {...(props.selection !== undefined
+                        ? {
+                            selection: rowSelection(row.message, props.selection),
+                          }
+                        : {})}
+                      {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
+                      {...(props.onCancelUpload !== undefined
+                        ? { onCancelUpload: props.onCancelUpload }
+                        : {})}
+                      {...(props.onOpenReactions !== undefined && props.selection === undefined
+                        ? { onOpenReactions: props.onOpenReactions }
+                        : {})}
+                      selectingText={selectingTextId === row.message.id}
+                    />
+                  </ErrorBoundary>
                   {replies !== null && !viewRoot ? (
                     <RepliesButtonRow
                       label={replies}

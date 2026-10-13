@@ -315,3 +315,33 @@ describe('runForward', () => {
     expect(sendOne).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('forwardRecordInput: thumbnail meta rides along', () => {
+  it('a forwarded PDF keeps page_count and the stored thumbnail size', () => {
+    const source = msg({
+      id: 'src',
+      attachments: [
+        {
+          assetId: 'v-pdf',
+          name: 'deck.pdf',
+          mime: 'application/pdf',
+          size: 900,
+          pageCount: 12,
+          thumbW: 580,
+          thumbH: 751,
+        },
+      ],
+    });
+    const input = forwardRecordInput(source, { id: 'new', channelId: 'c2', traceId: 't' });
+    expect(input.attachmentMeta).toEqual({
+      'v-pdf': {
+        mime: 'application/pdf',
+        name: 'deck.pdf',
+        size: 900,
+        page_count: 12,
+        thumb_w: 580,
+        thumb_h: 751,
+      },
+    });
+  });
+});
