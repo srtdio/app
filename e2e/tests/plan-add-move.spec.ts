@@ -112,6 +112,10 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
   seedClientPlan(network.world, { channelId: DM_CHANNEL, sender: ME, fileVersionId: FILE_VERSION });
+  // Post dates are seeded from the wall clock; pin the plan's post to Tue 13 Oct
+  // so Wed 14 and Thu 15 stay empty on any run date.
+  const planPost = (network.world.tables.posts ?? []).find((p) => p.id === POST_IDS[0]);
+  if (planPost !== undefined) planPost.target_date = '2026-10-13T09:00:00.000Z';
   const ownDate = (network.world.tables.posts ?? []).find((p) => p.id === POST_IDS[1])?.target_date;
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, PLAN_ID);
