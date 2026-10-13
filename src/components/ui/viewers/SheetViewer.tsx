@@ -160,23 +160,33 @@ function SheetGrid(props: {
 }): ReactElement {
   const { sheet, scrollerRef } = props;
   const cellIndex = useMemo(() => indexCells(sheet), [sheet]);
-  const [view, setView] = useState({ top: 0, height: 800 });
+  // The rendered row window; a scroll that keeps the same window renders nothing.
+  const [win, setWin] = useState(() => rowWindow(0, 800, sheet.shownRows));
+  const updateWindow = useCallback(
+    (top: number, height: number) => {
+      const next = rowWindow(top, height, sheet.shownRows);
+      setWin((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
+    },
+    [sheet.shownRows],
+  );
 
   useBrowserLayoutEffect(() => {
     const el = scrollerRef.current;
     if (el === null) return;
     el.scrollTop = 0;
     el.scrollLeft = 0;
-    setView({ top: 0, height: el.clientHeight || 800 });
-  }, [sheet, scrollerRef]);
+    updateWindow(0, el.clientHeight || 800);
+  }, [sheet, scrollerRef, updateWindow]);
 
   const onScroll = useCallback(() => {
     const el = scrollerRef.current;
     if (el === null || sheet.shownRows <= VIRTUALIZE_AFTER) return;
-    setView({ top: el.scrollTop, height: el.clientHeight });
-  }, [scrollerRef, sheet.shownRows]);
+    updateWindow(el.scrollTop, el.clientHeight);
+  }, [scrollerRef, sheet.shownRows, updateWindow]);
 
-  const { start, end } = rowWindow(view.top, view.height, sheet.shownRows);
+  // Clamped: a tab switch renders once before the layout effect resets the window.
+  const start = Math.min(win.start, sheet.shownRows);
+  const end = Math.min(win.end, sheet.shownRows);
   const index = useMemo<Index>(
     () => ({ cells: cellIndex, merges: windowMerges(sheet, start, end) }),
     [cellIndex, sheet, start, end],
