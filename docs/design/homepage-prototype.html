@@ -1,253 +1,1421 @@
 <title>srtd Homepage</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=Fraunces:ital,opsz,wght,SOFT@1,9..144,600,100&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=Fraunces:ital,opsz,wght,SOFT@1,9..144,600,100&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
+/>
 <style>
-/* Layout: light-only, everything centre-aligned on a 1200px column. Pinned bar, hero, phone film (all copy inside the phone), feature rail, dark signup band, sticky benefit stack, close, footer. */
-:root{
-  --bg:#ffffff; --ink:#16161d; --ink-2:#3b3b47; --muted:#6b6b7c; --line:#e6e6ee; --wash:#f6f6f9;
-  --accent:#5e6ad2; --accent-ink:#3f49a8; --accent-soft:#eceefb; --on-accent:#ffffff;
-  --ok:#1b8f5a; --ok-soft:#e2f4ea;
-  --wa:#e7f6ea; --wa-out:#d9fdd3; --wa-head:#f0f2f5;
-  --t1:#eceefb; --t1-ink:#2f378f;
-  --t2:#f5eee2; --t2-ink:#6d4a12;
-  --t3:#e7f1ea; --t3-ink:#1f5a3a;
-  --t4:#e6eef7; --t4-ink:#1d4b78;
-  --t5:#f8e9ec; --t5-ink:#8a2f44;
-  --shadow:0 14px 40px rgba(22,22,40,.10), 0 2px 6px rgba(22,22,40,.06);
-  --display:"Bricolage Grotesque","Inter",ui-sans-serif,system-ui,sans-serif;
-  --sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
-  color-scheme:light;
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-feature-settings:"cv02","cv03","cv04","ss01";letter-spacing:-.006em;line-height:1.5;font-size:16px;text-align:center}
-img{max-width:100%}
-a{color:inherit}
-.wrap{max-width:1200px;margin:0 auto;padding-inline:20px}
-h1,h2,h3{margin:0;text-wrap:balance}
-.d{font-family:var(--display);font-weight:700;letter-spacing:-.03em;font-variation-settings:"opsz" 96,"wdth" 92}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:46px;min-width:168px;padding:0 20px;border-radius:12px;font:600 15px var(--sans);text-decoration:none;cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:var(--bg);white-space:nowrap}
-.btn:hover{background:#000}
-.btn.sm{height:38px;min-width:0;padding:0 14px;font-size:14px;border-radius:10px}
-.btn.inv{background:var(--bg);color:var(--ink)}
-.btn:focus-visible,.icon-btn:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.cta{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
-.note{font-size:13px;color:var(--muted);margin-top:14px}
-.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink);white-space:nowrap}
-.chip.ok{background:var(--ok-soft);color:var(--ok)}
-.chip.g{background:var(--wash);color:var(--muted)}
-.tick{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  /* Layout: light-only, everything centre-aligned on a 1200px column. Pinned bar, hero, phone film (all copy inside the phone), feature rail, dark signup band, sticky benefit stack, close, footer. */
+  :root {
+    --bg: #ffffff;
+    --ink: #16161d;
+    --ink-2: #3b3b47;
+    --muted: #6b6b7c;
+    --line: #e6e6ee;
+    --wash: #f6f6f9;
+    --accent: #5e6ad2;
+    --accent-ink: #3f49a8;
+    --accent-soft: #eceefb;
+    --on-accent: #ffffff;
+    --ok: #1b8f5a;
+    --ok-soft: #e2f4ea;
+    --wa: #e7f6ea;
+    --wa-out: #d9fdd3;
+    --wa-head: #f0f2f5;
+    --t1: #eceefb;
+    --t1-ink: #2f378f;
+    --t2: #f5eee2;
+    --t2-ink: #6d4a12;
+    --t3: #e7f1ea;
+    --t3-ink: #1f5a3a;
+    --t4: #e6eef7;
+    --t4-ink: #1d4b78;
+    --t5: #f8e9ec;
+    --t5-ink: #8a2f44;
+    --shadow: 0 14px 40px rgba(22, 22, 40, 0.1), 0 2px 6px rgba(22, 22, 40, 0.06);
+    --display: 'Bricolage Grotesque', 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    color-scheme: light;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+    letter-spacing: -0.006em;
+    line-height: 1.5;
+    font-size: 16px;
+    text-align: center;
+  }
+  img {
+    max-width: 100%;
+  }
+  a {
+    color: inherit;
+  }
+  .wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-inline: 20px;
+  }
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+    text-wrap: balance;
+  }
+  .d {
+    font-family: var(--display);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-variation-settings:
+      'opsz' 96,
+      'wdth' 92;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 46px;
+    min-width: 168px;
+    padding: 0 20px;
+    border-radius: 12px;
+    font: 600 15px var(--sans);
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--bg);
+    white-space: nowrap;
+  }
+  .btn:hover {
+    background: #000;
+  }
+  .btn.sm {
+    height: 38px;
+    min-width: 0;
+    padding: 0 14px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+  .btn.inv {
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .btn:focus-visible,
+  .icon-btn:focus-visible,
+  input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .cta {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .note {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 14px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    white-space: nowrap;
+  }
+  .chip.ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+  .chip.g {
+    background: var(--wash);
+    color: var(--muted);
+  }
+  .tick {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex: none;
+  }
 
-/* header */
-.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:rgba(255,255,255,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid transparent}
-.top.on{border-bottom-color:var(--line)}
-.top .wrap{height:64px;display:flex;align-items:center;gap:14px}
-.logo{font-family:"Fraunces",Georgia,serif;font-style:italic;font-weight:600;font-size:30px;letter-spacing:-.03em;font-variation-settings:"SOFT" 100,"opsz" 48;text-decoration:none;line-height:1}
-.logo b{color:var(--accent)}
-.top .sp{flex:1}
-.icon-btn{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--bg);display:grid;place-items:center;cursor:pointer}
-.icon-btn svg{width:20px;height:20px;stroke:var(--ink);stroke-width:1.7;fill:none;stroke-linecap:round}
-.menu{position:fixed;inset:0;z-index:60;background:rgba(22,22,29,.4);display:none}
-.menu.open{display:block}
-.menu .panel{position:absolute;right:0;top:0;bottom:0;width:min(360px,100%);background:var(--bg);padding:24px;display:flex;flex-direction:column;gap:6px;padding-top:calc(24px + env(safe-area-inset-top,0px));text-align:left}
-.menu .panel a{display:block;padding:14px 10px;font-size:20px;font-weight:500;text-decoration:none;border-radius:12px}
-.menu .panel a:hover{background:var(--wash)}
-.menu .close{align-self:flex-end;margin-bottom:12px}
-.menu .foot{margin-top:auto;display:grid;gap:8px}
-.menu .foot .btn{width:100%}
+  /* header */
+  .top {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 50;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid transparent;
+  }
+  .top.on {
+    border-bottom-color: var(--line);
+  }
+  .top .wrap {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .logo {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: 30px;
+    letter-spacing: -0.03em;
+    font-variation-settings:
+      'SOFT' 100,
+      'opsz' 48;
+    text-decoration: none;
+    line-height: 1;
+  }
+  .logo b {
+    color: var(--accent);
+  }
+  .top .sp {
+    flex: 1;
+  }
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  .icon-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke: var(--ink);
+    stroke-width: 1.7;
+    fill: none;
+    stroke-linecap: round;
+  }
+  .menu {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(22, 22, 29, 0.4);
+    display: none;
+  }
+  .menu.open {
+    display: block;
+  }
+  .menu .panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(360px, 100%);
+    background: var(--bg);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    text-align: left;
+  }
+  .menu .panel a {
+    display: block;
+    padding: 14px 10px;
+    font-size: 20px;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 12px;
+  }
+  .menu .panel a:hover {
+    background: var(--wash);
+  }
+  .menu .close {
+    align-self: flex-end;
+    margin-bottom: 12px;
+  }
+  .menu .foot {
+    margin-top: auto;
+    display: grid;
+    gap: 8px;
+  }
+  .menu .foot .btn {
+    width: 100%;
+  }
 
-/* hero */
-.hero{padding-block:96px 48px}
-.hero h1{font-size:clamp(48px,8vw,104px);line-height:.96}
-.hero h1 em{font-style:normal;color:var(--accent)}
-.hero p{font-size:19px;line-height:1.5;color:var(--ink-2);max-width:46ch;margin:22px auto 0}
-.hero .cta{margin-top:30px}
-@media (max-width:700px){.hero{padding-block:56px 32px}.hero p{font-size:17px}}
+  /* hero */
+  .hero {
+    padding-block: 96px 48px;
+  }
+  .hero h1 {
+    font-size: clamp(48px, 8vw, 104px);
+    line-height: 0.96;
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .hero p {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 46ch;
+    margin: 22px auto 0;
+  }
+  .hero .cta {
+    margin-top: 30px;
+  }
+  @media (max-width: 700px) {
+    .hero {
+      padding-block: 56px 32px;
+    }
+    .hero p {
+      font-size: 17px;
+    }
+  }
 
-/* film */
-.film{padding-block:24px 80px}
-.phone-wrap{margin:0 auto;width:min(340px,100%);aspect-ratio:340/680}
-.phone{position:relative;width:340px;height:680px;transform-origin:0 0;border-radius:44px;background:#111;padding:10px;box-shadow:var(--shadow);text-align:left}
-.scr{position:absolute;inset:10px;border-radius:36px;background:var(--wa);overflow:hidden;font-size:14px;color:#111}
-.scn{position:absolute;inset:0}
-.prog{position:absolute;left:14px;right:14px;top:12px;display:flex;gap:4px;z-index:5}
-.prog i{height:3px;flex:1;background:rgba(0,0,0,.14);border-radius:2px;overflow:hidden}
-.prog i b{display:block;height:100%;background:#111;width:0}
-.ov{position:absolute;left:14px;right:14px;bottom:72px;z-index:6;background:rgba(17,17,24,.92);color:#fff;border-radius:16px;padding:14px 16px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-.ov .l{font-family:var(--display);font-weight:700;font-size:21px;line-height:1.15;letter-spacing:-.02em}
-.ov .s{font-size:12.5px;color:#c9c9d6;margin-top:5px}
-.wah{height:84px;background:var(--wa-head);padding:34px 16px 0;display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px;border-bottom:1px solid #e3e5e8}
-.wah .bk{color:#1a73e8;font-weight:500;font-size:14px}
-.wah .sub{display:block;font-weight:400;font-size:11px;color:#667}
-.rows{position:absolute;left:0;right:0;top:84px}
-.row{position:absolute;left:0;right:0;height:74px;display:flex;align-items:center;gap:12px;padding:0 16px;background:#fff;border-bottom:1px solid #f0f0f0}
-.row .pa{width:48px;height:48px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;color:#fff;font-size:15px}
-.row .tx{flex:1;min-width:0}
-.row .tx b{display:flex;justify-content:space-between;font-size:15px}
-.row .tx b small{font-weight:400;font-size:11px;color:#667}
-.row .tx span{display:block;color:#667;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row .bd{position:absolute;right:16px;bottom:12px;min-width:20px;height:20px;border-radius:10px;background:#25d366;color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;padding:0 6px}
-.thr{position:absolute;left:0;right:0;top:84px;bottom:160px;padding:10px 12px;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;overflow:hidden}
-.m{max-width:80%;padding:7px 10px;border-radius:10px;background:#fff;font-size:13.5px;line-height:1.35;box-shadow:0 1px 1px rgba(0,0,0,.06)}
-.m.o{align-self:flex-end;background:var(--wa-out)}
-.m .n{font-size:11px;font-weight:600;color:#1a73e8;display:block}
-.m .f{display:flex;align-items:center;gap:8px;background:#f0f0f0;border-radius:8px;padding:8px;margin-top:4px;font-size:12px}
-.m .f i{width:26px;height:32px;border-radius:4px;background:#d9536f;flex:none}
-.m .tm{font-size:10px;color:#889;text-align:right;margin-top:2px}
-.m.pinned{outline:2px solid #1a73e8}
-.pinbar{position:absolute;left:0;right:0;top:84px;background:#fff;border-bottom:1px solid #e3e5e8;padding:8px 14px;font-size:12.5px;display:flex;gap:8px;align-items:center;transform:translateY(-100%)}
-.pinbar b{color:#1a73e8}
-.comp{position:absolute;left:0;right:0;bottom:0;height:60px;background:var(--wa-head);display:flex;align-items:center;gap:8px;padding:0 12px 10px}
-.comp .in{flex:1;height:38px;border-radius:19px;background:#fff;padding:0 14px;display:flex;align-items:center;color:#889;font-size:14px;overflow:hidden;white-space:nowrap}
-.comp .mic{width:38px;height:38px;border-radius:50%;background:#25d366}
-.srch{background:#fff}
-.srch .bar{margin:34px 12px 8px;height:40px;border-radius:10px;background:#f0f2f5;display:flex;align-items:center;padding:0 12px;font-size:15px;gap:8px}
-.srch .bar .q{flex:1;color:#111}
-.srch .cnt{padding:6px 14px;font-size:12.5px;color:#667}
-.srch .r{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid #f0f0f0;font-size:13px}
-.srch .r b{display:block;font-size:13.5px}
-.srch .r span{color:#667}
-.srch .r mark{background:#fff3b0}
-.srch .r .pa{width:40px;height:40px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-weight:700}
-.noti{position:absolute;left:8px;right:8px;top:8px;background:rgba(255,255,255,.97);border-radius:16px;padding:10px 12px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.18);display:flex;gap:10px;align-items:center;transform:translateY(-130%);z-index:7}
-.noti .pa{width:30px;height:30px;border-radius:8px;background:#25d366;flex:none}
-.noti b{display:block}
-.noti span{color:#667}
-.end{background:#fff;display:grid;place-items:center;text-align:center;padding:30px}
-.end .ck{width:72px;height:72px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;margin:0 auto 18px}
-.end .ck svg{width:34px;height:34px;stroke-width:3}
-.end .l{font-family:var(--display);font-weight:700;font-size:30px;line-height:1.08;letter-spacing:-.03em}
-.end .l em{font-style:normal;color:var(--accent)}
-.end .s{color:var(--muted);font-size:14px;margin-top:10px}
-.end .lg{font-family:"Fraunces",Georgia,serif;font-style:italic;font-weight:600;font-size:28px;letter-spacing:-.03em;font-variation-settings:"SOFT" 100,"opsz" 48;margin-top:26px}
-.end .lg b{color:var(--accent)}
+  /* film */
+  .film {
+    padding-block: 24px 80px;
+  }
+  .phone-wrap {
+    margin: 0 auto;
+    width: min(340px, 100%);
+    aspect-ratio: 340/680;
+  }
+  .phone {
+    position: relative;
+    width: 340px;
+    height: 680px;
+    transform-origin: 0 0;
+    border-radius: 44px;
+    background: #111;
+    padding: 10px;
+    box-shadow: var(--shadow);
+    text-align: left;
+  }
+  .scr {
+    position: absolute;
+    inset: 10px;
+    border-radius: 36px;
+    background: var(--wa);
+    overflow: hidden;
+    font-size: 14px;
+    color: #111;
+  }
+  .scn {
+    position: absolute;
+    inset: 0;
+  }
+  .prog {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    top: 12px;
+    display: flex;
+    gap: 4px;
+    z-index: 5;
+  }
+  .prog i {
+    height: 3px;
+    flex: 1;
+    background: rgba(0, 0, 0, 0.14);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .prog i b {
+    display: block;
+    height: 100%;
+    background: #111;
+    width: 0;
+  }
+  .ov {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 72px;
+    z-index: 6;
+    background: rgba(17, 17, 24, 0.92);
+    color: #fff;
+    border-radius: 16px;
+    padding: 14px 16px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  }
+  .ov .l {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 21px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+  .ov .s {
+    font-size: 12.5px;
+    color: #c9c9d6;
+    margin-top: 5px;
+  }
+  .wah {
+    height: 84px;
+    background: var(--wa-head);
+    padding: 34px 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 16px;
+    border-bottom: 1px solid #e3e5e8;
+  }
+  .wah .bk {
+    color: #1a73e8;
+    font-weight: 500;
+    font-size: 14px;
+  }
+  .wah .sub {
+    display: block;
+    font-weight: 400;
+    font-size: 11px;
+    color: #667;
+  }
+  .rows {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 84px;
+  }
+  .row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 74px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    background: #fff;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .row .pa {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    flex: none;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    color: #fff;
+    font-size: 15px;
+  }
+  .row .tx {
+    flex: 1;
+    min-width: 0;
+  }
+  .row .tx b {
+    display: flex;
+    justify-content: space-between;
+    font-size: 15px;
+  }
+  .row .tx b small {
+    font-weight: 400;
+    font-size: 11px;
+    color: #667;
+  }
+  .row .tx span {
+    display: block;
+    color: #667;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row .bd {
+    position: absolute;
+    right: 16px;
+    bottom: 12px;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    background: #25d366;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    padding: 0 6px;
+  }
+  .thr {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 84px;
+    bottom: 160px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 6px;
+    overflow: hidden;
+  }
+  .m {
+    max-width: 80%;
+    padding: 7px 10px;
+    border-radius: 10px;
+    background: #fff;
+    font-size: 13.5px;
+    line-height: 1.35;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06);
+  }
+  .m.o {
+    align-self: flex-end;
+    background: var(--wa-out);
+  }
+  .m .n {
+    font-size: 11px;
+    font-weight: 600;
+    color: #1a73e8;
+    display: block;
+  }
+  .m .f {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    padding: 8px;
+    margin-top: 4px;
+    font-size: 12px;
+  }
+  .m .f i {
+    width: 26px;
+    height: 32px;
+    border-radius: 4px;
+    background: #d9536f;
+    flex: none;
+  }
+  .m .tm {
+    font-size: 10px;
+    color: #889;
+    text-align: right;
+    margin-top: 2px;
+  }
+  .m.pinned {
+    outline: 2px solid #1a73e8;
+  }
+  .pinbar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 84px;
+    background: #fff;
+    border-bottom: 1px solid #e3e5e8;
+    padding: 8px 14px;
+    font-size: 12.5px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    transform: translateY(-100%);
+  }
+  .pinbar b {
+    color: #1a73e8;
+  }
+  .comp {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 60px;
+    background: var(--wa-head);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 10px;
+  }
+  .comp .in {
+    flex: 1;
+    height: 38px;
+    border-radius: 19px;
+    background: #fff;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    color: #889;
+    font-size: 14px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .comp .mic {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #25d366;
+  }
+  .srch {
+    background: #fff;
+  }
+  .srch .bar {
+    margin: 34px 12px 8px;
+    height: 40px;
+    border-radius: 10px;
+    background: #f0f2f5;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 15px;
+    gap: 8px;
+  }
+  .srch .bar .q {
+    flex: 1;
+    color: #111;
+  }
+  .srch .cnt {
+    padding: 6px 14px;
+    font-size: 12.5px;
+    color: #667;
+  }
+  .srch .r {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+  }
+  .srch .r b {
+    display: block;
+    font-size: 13.5px;
+  }
+  .srch .r span {
+    color: #667;
+  }
+  .srch .r mark {
+    background: #fff3b0;
+  }
+  .srch .r .pa {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    flex: none;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 700;
+  }
+  .noti {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    background: rgba(255, 255, 255, 0.97);
+    border-radius: 16px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    transform: translateY(-130%);
+    z-index: 7;
+  }
+  .noti .pa {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: #25d366;
+    flex: none;
+  }
+  .noti b {
+    display: block;
+  }
+  .noti span {
+    color: #667;
+  }
+  .end {
+    background: #fff;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 30px;
+  }
+  .end .ck {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    margin: 0 auto 18px;
+  }
+  .end .ck svg {
+    width: 34px;
+    height: 34px;
+    stroke-width: 3;
+  }
+  .end .l {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 30px;
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+  }
+  .end .l em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .end .s {
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 10px;
+  }
+  .end .lg {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: 28px;
+    letter-spacing: -0.03em;
+    font-variation-settings:
+      'SOFT' 100,
+      'opsz' 48;
+    margin-top: 26px;
+  }
+  .end .lg b {
+    color: var(--accent);
+  }
 
-/* section scaffolding */
-.sec{padding-block:72px}
-.sec .head{margin-bottom:36px}
-.sec h2{font-size:clamp(34px,4.6vw,56px);line-height:1.02}
-.sec .head p{margin:14px auto 0;font-size:17px;color:var(--ink-2);max-width:46ch}
-@media (max-width:800px){.sec{padding-block:56px}}
+  /* section scaffolding */
+  .sec {
+    padding-block: 72px;
+  }
+  .sec .head {
+    margin-bottom: 36px;
+  }
+  .sec h2 {
+    font-size: clamp(34px, 4.6vw, 56px);
+    line-height: 1.02;
+  }
+  .sec .head p {
+    margin: 14px auto 0;
+    font-size: 17px;
+    color: var(--ink-2);
+    max-width: 46ch;
+  }
+  @media (max-width: 800px) {
+    .sec {
+      padding-block: 56px;
+    }
+  }
 
-/* feature rail */
-.rail{display:flex;gap:18px;overflow-x:auto;scroll-snap-type:x mandatory;padding:8px 20px 28px;margin:0 -20px;scrollbar-width:none;text-align:left}
-.rail::-webkit-scrollbar{display:none}
-.card{flex:0 0 min(440px,86vw);scroll-snap-align:center;border-radius:24px;padding:26px 26px 0;display:flex;flex-direction:column;gap:16px;min-height:560px;overflow:hidden}
-.card .k{align-self:flex-start;font-family:var(--display);font-weight:800;font-size:14px;letter-spacing:.02em;text-transform:uppercase;background:#fff;padding:7px 12px;border-radius:9px;box-shadow:0 1px 2px rgba(22,22,40,.08)}
-.card h3{font-family:var(--display);font-size:32px;line-height:1.06;letter-spacing:-.03em;font-weight:700;font-variation-settings:"opsz" 96,"wdth" 90}
-.card p{margin:0;font-size:15px;line-height:1.5;opacity:.85;max-width:38ch}
-.card .mock{margin-top:auto;background:#fff;border-radius:18px 18px 0 0;box-shadow:0 -6px 30px rgba(22,22,40,.08);padding:16px;color:var(--ink);font-size:13px;min-height:250px;position:relative;overflow:hidden}
-.c1{background:var(--t1);color:var(--t1-ink)}.c2{background:var(--t2);color:var(--t2-ink)}.c3{background:var(--t3);color:var(--t3-ink)}.c4{background:var(--t4);color:var(--t4-ink)}.c5{background:var(--t5);color:var(--t5-ink)}
-.mock .hd{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:10px}
-.mock .hd .sq{width:34px;height:34px;border-radius:10px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:12px}
-.mock .hd b{display:block;font-size:14px}
-.mock .hd span{font-size:11px;color:var(--muted)}
-.bl{max-width:82%;padding:8px 11px;border-radius:14px;font-size:13px;line-height:1.35;background:var(--wash);margin-bottom:6px}
-.bl.o{margin-left:auto;background:var(--accent);color:#fff;border-bottom-right-radius:5px}
-.tsk{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:12px;margin-bottom:6px}
-.tsk .n{font:500 12px var(--mono);color:var(--muted)}
-.tsk b{display:block;font-size:13px}
-.tsk span{font-size:11px;color:var(--muted)}
-.tsk .chip{margin-left:auto}
-.sysl{font-size:11.5px;color:var(--muted);text-align:center;margin:8px 0}
-.sysl b{color:var(--ink)}
-.cmt{display:flex;gap:9px;font-size:13px;line-height:1.4}
-.av{flex:none;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;font-style:normal}
-.av.ag{background:#d2d2dc;color:var(--ink)}
-.cmt .ok{color:var(--ok);font-weight:600}
-.plan .day{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
-.plan .day .dt{font:500 11px var(--mono);color:var(--muted);width:52px}
-.plan .day .th{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#f2b45a,#d9536f);flex:none}
-.plan .day .th.b{background:linear-gradient(135deg,#8fb3e8,#5e6ad2)}
-.plan .day .th.c{background:linear-gradient(135deg,#9fd3b4,#2f8f5a)}
-.plan .day b{display:block;font-size:13px}
-.plan .day span{font-size:11px;color:var(--ok)}
-.plan .day .bx{margin-left:auto;width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line);display:grid;place-items:center;color:var(--ok)}
-.plan .day .bx.on{border-color:var(--ok);background:var(--ok-soft)}
-.stages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
-.stages .chip.cur{background:var(--ink);color:#fff}
-.pp{display:grid;grid-template-columns:84px 1fr;gap:12px;align-items:start}
-.pp .th{height:84px;border-radius:12px;background:linear-gradient(135deg,#f2b45a,#d9536f)}
-.pp .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
-.pp .btns div{height:34px;border-radius:9px;display:grid;place-items:center;font-size:12px;font-weight:600;border:1px solid var(--line)}
-.pp .btns .p{background:var(--accent);color:#fff;border-color:var(--accent)}
-.fold{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
-.fold div{border:1px solid var(--line);border-radius:12px;padding:10px;font-size:12px;font-weight:600}
-.fold div small{display:block;font-weight:400;color:var(--muted);font-size:11px}
-.fold div::before{content:"";display:block;width:26px;height:20px;border-radius:5px 5px 4px 4px;background:var(--accent-soft);margin-bottom:8px}
-.pdf{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;font-size:12px}
-.pdf .ic{width:36px;height:44px;border-radius:5px;background:#f3d7dc;border:1px solid #e9b8c1;position:relative;flex:none}
-.pdf .ic::after{content:"PDF";position:absolute;left:0;right:0;bottom:4px;text-align:center;font:600 8px var(--mono);color:#8a2f44}
-.pdf .ic.x{background:#dfeee5;border-color:#b6d6c3}.pdf .ic.x::after{content:"XLS";color:#1f5a3a}
-.pdf b{display:block;font-size:13px}
-.pdf span{color:var(--muted)}
-.pdf .chip{margin-left:auto}
-.mail{font-size:12.5px}
-.mail .fr{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px}
-.mail h4{margin:0 0 8px;font-size:15px;font-family:var(--display);font-weight:700}
-.mail ul{margin:0;padding:0;list-style:none;display:grid;gap:6px;text-align:left}
-.mail li{display:flex;gap:8px}
-.mail li i{width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:7px;flex:none}
-.mail .q{margin-top:10px;background:var(--wash);border-left:3px solid var(--accent);padding:8px 10px;border-radius:0 8px 8px 0;color:var(--muted)}
-.mail .q b{color:var(--ink)}
-.mail .go{margin-top:10px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:600;font-size:12px}
+  /* feature rail */
+  .rail {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding: 8px 20px 28px;
+    margin: 0 -20px;
+    scrollbar-width: none;
+    text-align: left;
+  }
+  .rail::-webkit-scrollbar {
+    display: none;
+  }
+  .card {
+    flex: 0 0 min(440px, 86vw);
+    scroll-snap-align: center;
+    border-radius: 24px;
+    padding: 26px 26px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 560px;
+    overflow: hidden;
+  }
+  .card .k {
+    align-self: flex-start;
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: #fff;
+    padding: 7px 12px;
+    border-radius: 9px;
+    box-shadow: 0 1px 2px rgba(22, 22, 40, 0.08);
+  }
+  .card h3 {
+    font-family: var(--display);
+    font-size: 32px;
+    line-height: 1.06;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+    font-variation-settings:
+      'opsz' 96,
+      'wdth' 90;
+  }
+  .card p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+    opacity: 0.85;
+    max-width: 38ch;
+  }
+  .card .mock {
+    margin-top: auto;
+    background: #fff;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -6px 30px rgba(22, 22, 40, 0.08);
+    padding: 16px;
+    color: var(--ink);
+    font-size: 13px;
+    min-height: 250px;
+    position: relative;
+    overflow: hidden;
+  }
+  .c1 {
+    background: var(--t1);
+    color: var(--t1-ink);
+  }
+  .c2 {
+    background: var(--t2);
+    color: var(--t2-ink);
+  }
+  .c3 {
+    background: var(--t3);
+    color: var(--t3-ink);
+  }
+  .c4 {
+    background: var(--t4);
+    color: var(--t4-ink);
+  }
+  .c5 {
+    background: var(--t5);
+    color: var(--t5-ink);
+  }
+  .mock .hd {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 10px;
+  }
+  .mock .hd .sq {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .mock .hd b {
+    display: block;
+    font-size: 14px;
+  }
+  .mock .hd span {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .bl {
+    max-width: 82%;
+    padding: 8px 11px;
+    border-radius: 14px;
+    font-size: 13px;
+    line-height: 1.35;
+    background: var(--wash);
+    margin-bottom: 6px;
+  }
+  .bl.o {
+    margin-left: auto;
+    background: var(--accent);
+    color: #fff;
+    border-bottom-right-radius: 5px;
+  }
+  .tsk {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-bottom: 6px;
+  }
+  .tsk .n {
+    font: 500 12px var(--mono);
+    color: var(--muted);
+  }
+  .tsk b {
+    display: block;
+    font-size: 13px;
+  }
+  .tsk span {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .tsk .chip {
+    margin-left: auto;
+  }
+  .sysl {
+    font-size: 11.5px;
+    color: var(--muted);
+    text-align: center;
+    margin: 8px 0;
+  }
+  .sysl b {
+    color: var(--ink);
+  }
+  .cmt {
+    display: flex;
+    gap: 9px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .av {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    font-style: normal;
+  }
+  .av.ag {
+    background: #d2d2dc;
+    color: var(--ink);
+  }
+  .cmt .ok {
+    color: var(--ok);
+    font-weight: 600;
+  }
+  .plan .day {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .plan .day .dt {
+    font: 500 11px var(--mono);
+    color: var(--muted);
+    width: 52px;
+  }
+  .plan .day .th {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #f2b45a, #d9536f);
+    flex: none;
+  }
+  .plan .day .th.b {
+    background: linear-gradient(135deg, #8fb3e8, #5e6ad2);
+  }
+  .plan .day .th.c {
+    background: linear-gradient(135deg, #9fd3b4, #2f8f5a);
+  }
+  .plan .day b {
+    display: block;
+    font-size: 13px;
+  }
+  .plan .day span {
+    font-size: 11px;
+    color: var(--ok);
+  }
+  .plan .day .bx {
+    margin-left: auto;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 1.5px solid var(--line);
+    display: grid;
+    place-items: center;
+    color: var(--ok);
+  }
+  .plan .day .bx.on {
+    border-color: var(--ok);
+    background: var(--ok-soft);
+  }
+  .stages {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .stages .chip.cur {
+    background: var(--ink);
+    color: #fff;
+  }
+  .pp {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  .pp .th {
+    height: 84px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f2b45a, #d9536f);
+  }
+  .pp .btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .pp .btns div {
+    height: 34px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--line);
+  }
+  .pp .btns .p {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .fold {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .fold div {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .fold div small {
+    display: block;
+    font-weight: 400;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .fold div::before {
+    content: '';
+    display: block;
+    width: 26px;
+    height: 20px;
+    border-radius: 5px 5px 4px 4px;
+    background: var(--accent-soft);
+    margin-bottom: 8px;
+  }
+  .pdf {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-size: 12px;
+  }
+  .pdf .ic {
+    width: 36px;
+    height: 44px;
+    border-radius: 5px;
+    background: #f3d7dc;
+    border: 1px solid #e9b8c1;
+    position: relative;
+    flex: none;
+  }
+  .pdf .ic::after {
+    content: 'PDF';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 4px;
+    text-align: center;
+    font: 600 8px var(--mono);
+    color: #8a2f44;
+  }
+  .pdf .ic.x {
+    background: #dfeee5;
+    border-color: #b6d6c3;
+  }
+  .pdf .ic.x::after {
+    content: 'XLS';
+    color: #1f5a3a;
+  }
+  .pdf b {
+    display: block;
+    font-size: 13px;
+  }
+  .pdf span {
+    color: var(--muted);
+  }
+  .pdf .chip {
+    margin-left: auto;
+  }
+  .mail {
+    font-size: 12.5px;
+  }
+  .mail .fr {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .mail h4 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-family: var(--display);
+    font-weight: 700;
+  }
+  .mail ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 6px;
+    text-align: left;
+  }
+  .mail li {
+    display: flex;
+    gap: 8px;
+  }
+  .mail li i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-top: 7px;
+    flex: none;
+  }
+  .mail .q {
+    margin-top: 10px;
+    background: var(--wash);
+    border-left: 3px solid var(--accent);
+    padding: 8px 10px;
+    border-radius: 0 8px 8px 0;
+    color: var(--muted);
+  }
+  .mail .q b {
+    color: var(--ink);
+  }
+  .mail .go {
+    margin-top: 10px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-weight: 600;
+    font-size: 12px;
+  }
 
-/* signup band */
-.band{background:var(--ink);color:#fff;padding-block:64px}
-.band h2{font-size:clamp(32px,4.4vw,52px);line-height:1.04}
-.band p{margin:12px auto 0;color:#b8b8c6;font-size:16px;max-width:40ch}
-.band form{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:560px;margin:28px auto 0}
-.band input{flex:1;min-width:220px;height:46px;border-radius:12px;border:1px solid #3a3a48;background:#1f1f29;color:#fff;padding:0 16px;font:500 15px var(--sans)}
-.band input::placeholder{color:#8a8a9a}
-.band .btn{background:#fff;color:var(--ink);border-color:#fff}
-.band small{display:block;margin-top:12px;color:#8a8a9a;font-size:13px}
+  /* signup band */
+  .band {
+    background: var(--ink);
+    color: #fff;
+    padding-block: 64px;
+  }
+  .band h2 {
+    font-size: clamp(32px, 4.4vw, 52px);
+    line-height: 1.04;
+  }
+  .band p {
+    margin: 12px auto 0;
+    color: #b8b8c6;
+    font-size: 16px;
+    max-width: 40ch;
+  }
+  .band form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 560px;
+    margin: 28px auto 0;
+  }
+  .band input {
+    flex: 1;
+    min-width: 220px;
+    height: 46px;
+    border-radius: 12px;
+    border: 1px solid #3a3a48;
+    background: #1f1f29;
+    color: #fff;
+    padding: 0 16px;
+    font: 500 15px var(--sans);
+  }
+  .band input::placeholder {
+    color: #8a8a9a;
+  }
+  .band .btn {
+    background: #fff;
+    color: var(--ink);
+    border-color: #fff;
+  }
+  .band small {
+    display: block;
+    margin-top: 12px;
+    color: #8a8a9a;
+    font-size: 13px;
+  }
 
-/* benefits stack */
-.stack{display:grid;gap:18px;max-width:880px;margin:0 auto}
-.sb{position:sticky;top:calc(84px + env(safe-area-inset-top,0px));background:var(--bg);border:1px solid var(--line);border-radius:28px;padding:40px 32px 32px;display:grid;gap:26px;box-shadow:var(--shadow)}
-.sb:nth-child(2){top:calc(100px + env(safe-area-inset-top,0px))}
-.sb:nth-child(3){top:calc(116px + env(safe-area-inset-top,0px))}
-.sb:nth-child(4){top:calc(132px + env(safe-area-inset-top,0px))}
-.sb .no{font:500 12px var(--mono);color:var(--muted);letter-spacing:.08em}
-.sb h3{font-family:var(--display);font-size:clamp(30px,4vw,44px);line-height:1.06;letter-spacing:-.03em;font-weight:700;margin-top:10px}
-.sb p{margin:12px auto 0;font-size:17px;color:var(--ink-2);max-width:44ch}
-.sb .vis{border-radius:20px;min-height:200px;display:grid;place-items:center;padding:24px;text-align:left}
-.sb:nth-child(1) .vis{background:var(--t3)}.sb:nth-child(2) .vis{background:var(--t1)}.sb:nth-child(3) .vis{background:var(--t2)}.sb:nth-child(4) .vis{background:var(--t5)}
-.rec{background:#fff;border-radius:16px;padding:16px 18px;width:min(100%,340px);box-shadow:var(--shadow);font-size:13px}
-.rec .chip{font-size:12px;padding:6px 11px}
-.rec dl{margin:12px 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
-.rec dt{color:var(--muted)}.rec dd{margin:0;font-weight:500}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:min(100%,420px)}
-.two .ph2{background:#fff;border-radius:16px;padding:12px;box-shadow:var(--shadow);font-size:12px}
-.two .ph2 b{display:block;font-size:12px;margin-bottom:8px}
-.two .li{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
-.two .li i{width:24px;height:24px;border-radius:50%;flex:none}
-.ws{display:grid;gap:8px;width:min(100%,340px)}
-.ws div{background:#fff;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
-.ws div i{width:30px;height:30px;border-radius:9px;flex:none}
-.ws div span{margin-left:auto;font:500 11px var(--mono);color:var(--muted)}
-.clockv{background:#fff;border-radius:16px;padding:16px 18px;width:min(100%,340px);box-shadow:var(--shadow);font-size:13px}
-.clockv .t{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
-.clockv .t b{font-family:var(--mono);font-weight:500}
-.clockv .t span{color:var(--muted)}
-.clockv .t.off span{color:#c8c8d4}
-@media (max-width:800px){.sb{padding:26px 20px 20px}}
+  /* benefits stack */
+  .stack {
+    display: grid;
+    gap: 18px;
+    max-width: 880px;
+    margin: 0 auto;
+  }
+  .sb {
+    position: sticky;
+    top: calc(84px + env(safe-area-inset-top, 0px));
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 28px;
+    padding: 40px 32px 32px;
+    display: grid;
+    gap: 26px;
+    box-shadow: var(--shadow);
+  }
+  .sb:nth-child(2) {
+    top: calc(100px + env(safe-area-inset-top, 0px));
+  }
+  .sb:nth-child(3) {
+    top: calc(116px + env(safe-area-inset-top, 0px));
+  }
+  .sb:nth-child(4) {
+    top: calc(132px + env(safe-area-inset-top, 0px));
+  }
+  .sb .no {
+    font: 500 12px var(--mono);
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+  .sb h3 {
+    font-family: var(--display);
+    font-size: clamp(30px, 4vw, 44px);
+    line-height: 1.06;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+    margin-top: 10px;
+  }
+  .sb p {
+    margin: 12px auto 0;
+    font-size: 17px;
+    color: var(--ink-2);
+    max-width: 44ch;
+  }
+  .sb .vis {
+    border-radius: 20px;
+    min-height: 200px;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    text-align: left;
+  }
+  .sb:nth-child(1) .vis {
+    background: var(--t3);
+  }
+  .sb:nth-child(2) .vis {
+    background: var(--t1);
+  }
+  .sb:nth-child(3) .vis {
+    background: var(--t2);
+  }
+  .sb:nth-child(4) .vis {
+    background: var(--t5);
+  }
+  .rec {
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px 18px;
+    width: min(100%, 340px);
+    box-shadow: var(--shadow);
+    font-size: 13px;
+  }
+  .rec .chip {
+    font-size: 12px;
+    padding: 6px 11px;
+  }
+  .rec dl {
+    margin: 12px 0 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    font-size: 13px;
+  }
+  .rec dt {
+    color: var(--muted);
+  }
+  .rec dd {
+    margin: 0;
+    font-weight: 500;
+  }
+  .two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    width: min(100%, 420px);
+  }
+  .two .ph2 {
+    background: #fff;
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: var(--shadow);
+    font-size: 12px;
+  }
+  .two .ph2 b {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  .two .li {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .two .li i {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .ws {
+    display: grid;
+    gap: 8px;
+    width: min(100%, 340px);
+  }
+  .ws div {
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px 14px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .ws div i {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    flex: none;
+  }
+  .ws div span {
+    margin-left: auto;
+    font: 500 11px var(--mono);
+    color: var(--muted);
+  }
+  .clockv {
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px 18px;
+    width: min(100%, 340px);
+    box-shadow: var(--shadow);
+    font-size: 13px;
+  }
+  .clockv .t {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .clockv .t b {
+    font-family: var(--mono);
+    font-weight: 500;
+  }
+  .clockv .t span {
+    color: var(--muted);
+  }
+  .clockv .t.off span {
+    color: #c8c8d4;
+  }
+  @media (max-width: 800px) {
+    .sb {
+      padding: 26px 20px 20px;
+    }
+  }
 
-/* closing + footer */
-.close{padding-block:96px 88px}
-.close h2{font-size:clamp(38px,6vw,76px);line-height:.98}
-.close h2 em{font-style:normal;color:var(--accent)}
-.close .cta{margin-top:28px}
-footer{border-top:1px solid var(--line);padding-block:28px;font-size:13px;color:var(--muted);text-align:left}
-footer .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px}
-footer .logo{font-size:22px;color:var(--ink)}
-footer ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 18px}
-footer a{text-decoration:none;color:var(--muted)}
-footer a:hover{color:var(--ink)}
-footer .cp{margin-left:auto}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  /* closing + footer */
+  .close {
+    padding-block: 96px 88px;
+  }
+  .close h2 {
+    font-size: clamp(38px, 6vw, 76px);
+    line-height: 0.98;
+  }
+  .close h2 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .close .cta {
+    margin-top: 28px;
+  }
+  footer {
+    border-top: 1px solid var(--line);
+    padding-block: 28px;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: left;
+  }
+  footer .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 24px;
+  }
+  footer .logo {
+    font-size: 22px;
+    color: var(--ink);
+  }
+  footer ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+  }
+  footer a {
+    text-decoration: none;
+    color: var(--muted);
+  }
+  footer a:hover {
+    color: var(--ink);
+  }
+  footer .cp {
+    margin-left: auto;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
 </style>
 
 <header class="top" id="top">
@@ -255,13 +1423,24 @@ footer .cp{margin-left:auto}
     <a class="logo" href="#top" aria-label="srtd home">srtd<b>.</b></a>
     <span class="sp"></span>
     <a class="btn sm" href="#signup">Sign up</a>
-    <button class="icon-btn" id="menuBtn" type="button" aria-label="Open menu" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button
+      class="icon-btn"
+      id="menuBtn"
+      type="button"
+      aria-label="Open menu"
+      aria-expanded="false"
+    >
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+    </button>
   </div>
 </header>
 <div class="menu" id="menu" role="dialog" aria-label="Menu">
   <div class="panel">
-    <button class="icon-btn close" id="menuClose" type="button" aria-label="Close menu"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-    <a href="#features">Product</a><a href="#why">Why Sorted</a><a href="#demo">Book a demo</a><a href="#signin">Sign in</a>
+    <button class="icon-btn close" id="menuClose" type="button" aria-label="Close menu">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+    </button>
+    <a href="#features">Product</a><a href="#why">Why Sorted</a><a href="#demo">Book a demo</a
+    ><a href="#signin">Sign in</a>
     <div class="foot"><a class="btn" href="#signup">Sign up for free</a></div>
   </div>
 </div>
@@ -269,145 +1448,368 @@ footer .cp{margin-left:auto}
 <section class="hero" id="signup">
   <div class="wrap">
     <h1 class="d">Chat. Plan. <em>Approve.</em></h1>
-    <p>One work chat per client. Posts arrive as cards, feedback stays on the post, and every approval is on record. Your WhatsApp goes back to being WhatsApp.</p>
-    <div class="cta"><a class="btn" href="#signup">Sign up for free</a><a class="btn" href="#demo" id="demo">Book a demo</a></div>
+    <p>
+      One work chat per client. Posts arrive as cards, feedback stays on the post, and every
+      approval is on record. Your WhatsApp goes back to being WhatsApp.
+    </p>
+    <div class="cta">
+      <a class="btn" href="#signup">Sign up for free</a
+      ><a class="btn" href="#demo" id="demo">Book a demo</a>
+    </div>
     <div class="note">15 days free. No card. Clients join at no cost.</div>
   </div>
 </section>
 
-<section class="film" id="problem" aria-label="A 28 second film showing client work interrupting personal WhatsApp">
+<section
+  class="film"
+  id="problem"
+  aria-label="A 28 second film showing client work interrupting personal WhatsApp"
+>
   <div class="wrap">
-    <div class="phone-wrap" id="phWrap"><div class="phone" id="phone"><div class="scr">
-      <div class="prog" id="prog"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
-      <div class="scn" id="s1">
-        <div class="wah">Chats</div>
-        <div class="rows" id="rows"></div>
+    <div class="phone-wrap" id="phWrap">
+      <div class="phone" id="phone">
+        <div class="scr">
+          <div class="prog" id="prog">
+            <i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i>
+          </div>
+          <div class="scn" id="s1">
+            <div class="wah">Chats</div>
+            <div class="rows" id="rows"></div>
+          </div>
+          <div class="scn" id="s2" hidden>
+            <div class="wah">
+              <span class="bk">‹</span>
+              <div>Kite &amp; Co<span class="sub">Riya, Arjun, Meera, Dev, you</span></div>
+            </div>
+            <div class="pinbar" id="pinbar">
+              📌 <span>Pinned: <b>the second one</b></span>
+            </div>
+            <div class="thr" id="thr"></div>
+            <div class="comp">
+              <div class="in">Message</div>
+              <div class="mic"></div>
+            </div>
+          </div>
+          <div class="scn srch" id="s3" hidden>
+            <div class="bar">
+              <span>🔍</span><span class="q" id="q"></span><span style="color: #889">Cancel</span>
+            </div>
+            <div class="cnt" id="cnt"></div>
+            <div id="res"></div>
+          </div>
+          <div class="scn" id="s4" hidden>
+            <div class="wah">
+              <span class="bk">‹</span>
+              <div>Mom<span class="sub">last seen 9:12 pm</span></div>
+            </div>
+            <div class="thr" id="thr2"></div>
+            <div class="comp">
+              <div class="in" id="typ"></div>
+              <div class="mic"></div>
+            </div>
+            <div class="noti" id="noti">
+              <div class="pa"></div>
+              <div><b>Kite &amp; Co</b><span>Riya: so is it approved or not?</span></div>
+            </div>
+          </div>
+          <div class="scn end" id="s5" hidden>
+            <div>
+              <div class="ck">
+                <svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg>
+              </div>
+              <div class="l">Work chat belongs<br />in a <em>work</em> app.</div>
+              <div class="s">Your WhatsApp goes back to being WhatsApp.</div>
+              <div class="lg">srtd<b>.</b></div>
+            </div>
+          </div>
+          <div class="ov" id="ov">
+            <div class="l" id="capL"></div>
+            <div class="s" id="capS"></div>
+          </div>
+        </div>
       </div>
-      <div class="scn" id="s2" hidden>
-        <div class="wah"><span class="bk">‹</span><div>Kite &amp; Co<span class="sub">Riya, Arjun, Meera, Dev, you</span></div></div>
-        <div class="pinbar" id="pinbar">📌 <span>Pinned: <b>the second one</b></span></div>
-        <div class="thr" id="thr"></div>
-        <div class="comp"><div class="in">Message</div><div class="mic"></div></div>
-      </div>
-      <div class="scn srch" id="s3" hidden>
-        <div class="bar"><span>🔍</span><span class="q" id="q"></span><span style="color:#889">Cancel</span></div>
-        <div class="cnt" id="cnt"></div>
-        <div id="res"></div>
-      </div>
-      <div class="scn" id="s4" hidden>
-        <div class="wah"><span class="bk">‹</span><div>Mom<span class="sub">last seen 9:12 pm</span></div></div>
-        <div class="thr" id="thr2"></div>
-        <div class="comp"><div class="in" id="typ"></div><div class="mic"></div></div>
-        <div class="noti" id="noti"><div class="pa"></div><div><b>Kite &amp; Co</b><span>Riya: so is it approved or not?</span></div></div>
-      </div>
-      <div class="scn end" id="s5" hidden><div>
-        <div class="ck"><svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9"/></svg></div>
-        <div class="l">Work chat belongs<br>in a <em>work</em> app.</div>
-        <div class="s">Your WhatsApp goes back to being WhatsApp.</div>
-        <div class="lg">srtd<b>.</b></div>
-      </div></div>
-      <div class="ov" id="ov"><div class="l" id="capL"></div><div class="s" id="capS"></div></div>
-    </div></div></div>
+    </div>
   </div>
 </section>
 
 <section class="sec" id="features">
   <div class="wrap">
     <div class="head">
-      <h2 class="d">Five things, one app.</h2><p>Each one replaces a habit you have on WhatsApp today.</p>
+      <h2 class="d">Five things, one app.</h2>
+      <p>Each one replaces a habit you have on WhatsApp today.</p>
     </div>
   </div>
-  <div class="wrap"><div class="rail" id="rail">
+  <div class="wrap">
+    <div class="rail" id="rail">
+      <article class="card c1">
+        <div class="k">Chat</div>
+        <h3>Work chat that does work.</h3>
+        <p>
+          DMs and groups, unlimited. Your team, your client, or both in one room. Tasks with an
+          owner, a due time and a priority. Reminders, scheduled sends. Every change announced in
+          the thread.
+        </p>
+        <div class="mock">
+          <div class="hd">
+            <div class="sq">K&amp;</div>
+            <div><b>Kite &amp; Co</b><span>Agency, Client · 5 people</span></div>
+          </div>
+          <div class="bl">Can we lock the festive captions today?</div>
+          <div class="bl o">Adding it to the list</div>
+          <div class="tsk">
+            <span class="n">1</span>
+            <div><b>Final captions</b><span>Agency · Today 6 pm</span></div>
+            <span class="chip">P1</span>
+          </div>
+          <div class="tsk">
+            <span class="n">2</span>
+            <div><b>Product shots</b><span>Client · Tomorrow 11 am</span></div>
+            <span class="chip g">P2</span>
+          </div>
+          <div class="sysl"><b>Riya</b> moved Product shots to <b>P0</b></div>
+        </div>
+      </article>
 
-    <article class="card c1">
-      <div class="k">Chat</div>
-      <h3>Work chat that does work.</h3>
-      <p>DMs and groups, unlimited. Your team, your client, or both in one room. Tasks with an owner, a due time and a priority. Reminders, scheduled sends. Every change announced in the thread.</p>
-      <div class="mock">
-        <div class="hd"><div class="sq">K&amp;</div><div><b>Kite &amp; Co</b><span>Agency, Client · 5 people</span></div></div>
-        <div class="bl">Can we lock the festive captions today?</div>
-        <div class="bl o">Adding it to the list</div>
-        <div class="tsk"><span class="n">1</span><div><b>Final captions</b><span>Agency · Today 6 pm</span></div><span class="chip">P1</span></div>
-        <div class="tsk"><span class="n">2</span><div><b>Product shots</b><span>Client · Tomorrow 11 am</span></div><span class="chip g">P2</span></div>
-        <div class="sysl"><b>Riya</b> moved Product shots to <b>P0</b></div>
-      </div>
-    </article>
+      <article class="card c2">
+        <div class="k">Plan</div>
+        <h3>The week, agreed in writing.</h3>
+        <p>
+          Build the week's plan, share it in the chat, and let the client tick each day. Dates stay
+          in sync with the posts.
+        </p>
+        <div class="mock plan">
+          <div class="hd">
+            <div class="sq" style="background: #b57a1f">W</div>
+            <div><b>Week of 13 Oct</b><span>3 of 5 approved</span></div>
+          </div>
+          <div class="day">
+            <span class="dt">Mon 13</span>
+            <div class="th"></div>
+            <div><b>Diwali drop · carousel</b><span>Approved by Riya</span></div>
+            <div class="bx on">
+              <svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg>
+            </div>
+          </div>
+          <div class="day">
+            <span class="dt">Wed 15</span>
+            <div class="th b"></div>
+            <div><b>Festive reel</b><span>Approved by Riya</span></div>
+            <div class="bx on">
+              <svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg>
+            </div>
+          </div>
+          <div class="day">
+            <span class="dt">Fri 17</span>
+            <div class="th c"></div>
+            <div><b>Gifting concept</b><span style="color: var(--muted)">Waiting</span></div>
+            <div class="bx"></div>
+          </div>
+        </div>
+      </article>
 
-    <article class="card c2">
-      <div class="k">Plan</div>
-      <h3>The week, agreed in writing.</h3>
-      <p>Build the week's plan, share it in the chat, and let the client tick each day. Dates stay in sync with the posts.</p>
-      <div class="mock plan">
-        <div class="hd"><div class="sq" style="background:#b57a1f">W</div><div><b>Week of 13 Oct</b><span>3 of 5 approved</span></div></div>
-        <div class="day"><span class="dt">Mon 13</span><div class="th"></div><div><b>Diwali drop · carousel</b><span>Approved by Riya</span></div><div class="bx on"><svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9"/></svg></div></div>
-        <div class="day"><span class="dt">Wed 15</span><div class="th b"></div><div><b>Festive reel</b><span>Approved by Riya</span></div><div class="bx on"><svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9"/></svg></div></div>
-        <div class="day"><span class="dt">Fri 17</span><div class="th c"></div><div><b>Gifting concept</b><span style="color:var(--muted)">Waiting</span></div><div class="bx"></div></div>
-      </div>
-    </article>
+      <article class="card c3">
+        <div class="k">Pipeline</div>
+        <h3>Draft. Review. Approved.</h3>
+        <p>
+          Every post has a stage. Comments sit on the post, not in a thread. The client approves it
+          there, one at a time, with a confirm step.
+        </p>
+        <div class="mock">
+          <div class="stages">
+            <span class="chip g">Draft 4</span><span class="chip cur">Review 2</span
+            ><span class="chip g">Approved 11</span><span class="chip g">Parked 1</span>
+          </div>
+          <div class="pp">
+            <div class="th"></div>
+            <div>
+              <b style="font-size: 13px">Diwali drop · carousel 1 of 4</b>
+              <div class="cmt" style="margin-top: 8px">
+                <i class="av">R</i>
+                <div>Make the lamp warmer.</div>
+              </div>
+              <div class="cmt" style="margin-top: 6px">
+                <i class="av ag">A</i>
+                <div>Fixed in v2. <span class="ok">Ready</span></div>
+              </div>
+              <div class="btns">
+                <div>Comment</div>
+                <div class="p">Approve</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
 
-    <article class="card c3">
-      <div class="k">Pipeline</div>
-      <h3>Draft. Review. Approved.</h3>
-      <p>Every post has a stage. Comments sit on the post, not in a thread. The client approves it there, one at a time, with a confirm step.</p>
-      <div class="mock">
-        <div class="stages"><span class="chip g">Draft 4</span><span class="chip cur">Review 2</span><span class="chip g">Approved 11</span><span class="chip g">Parked 1</span></div>
-        <div class="pp"><div class="th"></div><div>
-          <b style="font-size:13px">Diwali drop · carousel 1 of 4</b>
-          <div class="cmt" style="margin-top:8px"><i class="av">R</i><div>Make the lamp warmer.</div></div>
-          <div class="cmt" style="margin-top:6px"><i class="av ag">A</i><div>Fixed in v2. <span class="ok">Ready</span></div></div>
-          <div class="btns"><div>Comment</div><div class="p">Approve</div></div>
-        </div></div>
-      </div>
-    </article>
+      <article class="card c4">
+        <div class="k">Assets</div>
+        <h3>The right file, the first time.</h3>
+        <p>
+          Folders per client. Versions kept. PDFs, decks and sheets open inside Sorted, scanned
+          before anyone can tap them.
+        </p>
+        <div class="mock">
+          <div class="fold">
+            <div>Brand<small>14 files</small></div>
+            <div>Diwali<small>22 files</small></div>
+            <div>Reels<small>6 files</small></div>
+          </div>
+          <div class="pdf">
+            <div class="ic"></div>
+            <div><b>Festive_brief.pdf</b><span>v3 · Meera · opens in app</span></div>
+            <span class="chip ok"
+              ><svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg>Safe</span
+            >
+          </div>
+          <div class="pdf" style="margin-top: 8px">
+            <div class="ic x"></div>
+            <div><b>Price_list.xlsx</b><span>v1 · Dev · opens in app</span></div>
+            <span class="chip ok"
+              ><svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg>Safe</span
+            >
+          </div>
+        </div>
+      </article>
 
-    <article class="card c4">
-      <div class="k">Assets</div>
-      <h3>The right file, the first time.</h3>
-      <p>Folders per client. Versions kept. PDFs, decks and sheets open inside Sorted, scanned before anyone can tap them.</p>
-      <div class="mock">
-        <div class="fold"><div>Brand<small>14 files</small></div><div>Diwali<small>22 files</small></div><div>Reels<small>6 files</small></div></div>
-        <div class="pdf"><div class="ic"></div><div><b>Festive_brief.pdf</b><span>v3 · Meera · opens in app</span></div><span class="chip ok"><svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9"/></svg>Safe</span></div>
-        <div class="pdf" style="margin-top:8px"><div class="ic x"></div><div><b>Price_list.xlsx</b><span>v1 · Dev · opens in app</span></div><span class="chip ok"><svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9"/></svg>Safe</span></div>
-      </div>
-    </article>
-
-    <article class="card c5">
-      <div class="k">Catch-up</div>
-      <h3>Find out at 10:30 and 3:30.</h3>
-      <p>Two emails a day on weekdays, only if something moved. Reviews, briefs, comments, missed chats. Tap anything to land on it.</p>
-      <div class="mock mail">
-        <div class="fr"><span>Sorted · 3:30 pm</span><span>to Riya</span></div>
-        <h4>Since 10:30 am in Kite &amp; Co</h4>
-        <ul><li><i></i>2 posts sent for your review</li><li><i></i>4 new comments on Diwali drop</li><li><i></i>1 new brief: Festive reel</li></ul>
-        <div class="q"><b>Arjun</b> · Done, v2 is up. Can you look before 6?</div>
-        <div class="go">Open in Sorted</div>
-      </div>
-    </article>
-
-  </div></div>
+      <article class="card c5">
+        <div class="k">Catch-up</div>
+        <h3>Find out at 10:30 and 3:30.</h3>
+        <p>
+          Two emails a day on weekdays, only if something moved. Reviews, briefs, comments, missed
+          chats. Tap anything to land on it.
+        </p>
+        <div class="mock mail">
+          <div class="fr"><span>Sorted · 3:30 pm</span><span>to Riya</span></div>
+          <h4>Since 10:30 am in Kite &amp; Co</h4>
+          <ul>
+            <li><i></i>2 posts sent for your review</li>
+            <li><i></i>4 new comments on Diwali drop</li>
+            <li><i></i>1 new brief: Festive reel</li>
+          </ul>
+          <div class="q"><b>Arjun</b> · Done, v2 is up. Can you look before 6?</div>
+          <div class="go">Open in Sorted</div>
+        </div>
+      </article>
+    </div>
+  </div>
 </section>
 
 <section class="band" id="signup-mid">
   <div class="wrap">
     <h2 class="d">Start free. Fifteen days. No card.</h2>
     <p>Set up a client in two minutes. Invite them with a link.</p>
-    <form id="f1"><input id="email1" type="email" placeholder="Work email" aria-label="Work email" required><button class="btn" type="submit">Sign up for free</button></form>
-    <small id="f1m">Or <a href="#demo" style="color:#fff">book a demo</a> and we will set it up with you.</small>
+    <form id="f1">
+      <input
+        id="email1"
+        type="email"
+        placeholder="Work email"
+        aria-label="Work email"
+        required
+      /><button class="btn" type="submit">Sign up for free</button>
+    </form>
+    <small id="f1m"
+      >Or <a href="#demo" style="color: #fff">book a demo</a> and we will set it up with you.</small
+    >
   </div>
 </section>
 
 <section class="sec" id="why">
   <div class="wrap">
-    <div class="head"><h2 class="d">What you get back.</h2><p>Four things that change once client work moves out of WhatsApp.</p></div>
+    <div class="head">
+      <h2 class="d">What you get back.</h2>
+      <p>Four things that change once client work moves out of WhatsApp.</p>
+    </div>
     <div class="stack">
-      <div class="sb"><div><div class="no">01</div><h3>Every approval, on record.</h3><p>Who said yes, to which version, at what time. When a client asks "did we approve that?", the answer is one tap, not a scroll.</p></div>
-        <div class="vis"><div class="rec"><span class="chip ok"><svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9"/></svg>Approved</span><dl><dt>By</dt><dd>Riya Menon</dd><dt>Version</dt><dd>v2</dd><dt>When</dt><dd>Thu 16 Oct, 4:12 pm</dd><dt>Post</dt><dd>Diwali drop · 1 of 4</dd></dl></div></div></div>
-      <div class="sb"><div><div class="no">02</div><h3>Your evenings are yours.</h3><p>Work stays in Sorted. Your phone stops buzzing with "is it final?" during dinner. Clients get a calmer channel too.</p></div>
-        <div class="vis"><div class="two"><div class="ph2"><b>WhatsApp</b><div class="li"><i style="background:#f2b45a"></i>Mom</div><div class="li"><i style="background:#8fb3e8"></i>Cousins</div><div class="li"><i style="background:#9fd3b4"></i>Priya</div></div><div class="ph2"><b>Sorted</b><div class="li"><i style="background:var(--accent)"></i>Kite &amp; Co</div><div class="li"><i style="background:#b57a1f"></i>Mehta Sweets</div><div class="li"><i style="background:#2f8f5a"></i>Tara Jewels</div></div></div></div></div>
-      <div class="sb"><div><div class="no">03</div><h3>One place per client.</h3><p>One workspace, one client, one chat. Briefs, posts, files and the plan live there. Nobody asks "which group was that in?"</p></div>
-        <div class="vis"><div class="ws"><div><i style="background:var(--accent)"></i>Kite &amp; Co<span>2 in review</span></div><div><i style="background:#b57a1f"></i>Mehta Sweets<span>plan shared</span></div><div><i style="background:#2f8f5a"></i>Tara Jewels<span>1 brief</span></div></div></div></div>
-      <div class="sb"><div><div class="no">04</div><h3>Nothing waits on you.</h3><p>A catch-up at 10:30 and 3:30, weekdays, only when something moved. You can stop checking, because it checks for you.</p></div>
-        <div class="vis"><div class="clockv"><div class="t"><b>10:30</b><span>2 reviews, 1 brief</span></div><div class="t"><b>15:30</b><span>4 comments, 1 missed chat</span></div><div class="t off"><b>Sat</b><span>Nothing sent</span></div><div class="t off"><b>Sun</b><span>Nothing sent</span></div></div></div></div>
+      <div class="sb">
+        <div>
+          <div class="no">01</div>
+          <h3>Every approval, on record.</h3>
+          <p>
+            Who said yes, to which version, at what time. When a client asks "did we approve that?",
+            the answer is one tap, not a scroll.
+          </p>
+        </div>
+        <div class="vis">
+          <div class="rec">
+            <span class="chip ok"
+              ><svg class="tick" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" /></svg
+              >Approved</span
+            >
+            <dl>
+              <dt>By</dt>
+              <dd>Riya Menon</dd>
+              <dt>Version</dt>
+              <dd>v2</dd>
+              <dt>When</dt>
+              <dd>Thu 16 Oct, 4:12 pm</dd>
+              <dt>Post</dt>
+              <dd>Diwali drop · 1 of 4</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+      <div class="sb">
+        <div>
+          <div class="no">02</div>
+          <h3>Your evenings are yours.</h3>
+          <p>
+            Work stays in Sorted. Your phone stops buzzing with "is it final?" during dinner.
+            Clients get a calmer channel too.
+          </p>
+        </div>
+        <div class="vis">
+          <div class="two">
+            <div class="ph2">
+              <b>WhatsApp</b>
+              <div class="li"><i style="background: #f2b45a"></i>Mom</div>
+              <div class="li"><i style="background: #8fb3e8"></i>Cousins</div>
+              <div class="li"><i style="background: #9fd3b4"></i>Priya</div>
+            </div>
+            <div class="ph2">
+              <b>Sorted</b>
+              <div class="li"><i style="background: var(--accent)"></i>Kite &amp; Co</div>
+              <div class="li"><i style="background: #b57a1f"></i>Mehta Sweets</div>
+              <div class="li"><i style="background: #2f8f5a"></i>Tara Jewels</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sb">
+        <div>
+          <div class="no">03</div>
+          <h3>One place per client.</h3>
+          <p>
+            One workspace, one client, one chat. Briefs, posts, files and the plan live there.
+            Nobody asks "which group was that in?"
+          </p>
+        </div>
+        <div class="vis">
+          <div class="ws">
+            <div>
+              <i style="background: var(--accent)"></i>Kite &amp; Co<span>2 in review</span>
+            </div>
+            <div><i style="background: #b57a1f"></i>Mehta Sweets<span>plan shared</span></div>
+            <div><i style="background: #2f8f5a"></i>Tara Jewels<span>1 brief</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="sb">
+        <div>
+          <div class="no">04</div>
+          <h3>Nothing waits on you.</h3>
+          <p>
+            A catch-up at 10:30 and 3:30, weekdays, only when something moved. You can stop
+            checking, because it checks for you.
+          </p>
+        </div>
+        <div class="vis">
+          <div class="clockv">
+            <div class="t"><b>10:30</b><span>2 reviews, 1 brief</span></div>
+            <div class="t"><b>15:30</b><span>4 comments, 1 missed chat</span></div>
+            <div class="t off"><b>Sat</b><span>Nothing sent</span></div>
+            <div class="t off"><b>Sun</b><span>Nothing sent</span></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -415,7 +1817,9 @@ footer .cp{margin-left:auto}
 <section class="close">
   <div class="wrap">
     <h2 class="d">Get your client work <em>sorted.</em></h2>
-    <div class="cta"><a class="btn" href="#signup">Sign up for free</a><a class="btn" href="#demo">Book a demo</a></div>
+    <div class="cta">
+      <a class="btn" href="#signup">Sign up for free</a><a class="btn" href="#demo">Book a demo</a>
+    </div>
     <div class="note">15 days free. No card. Clients join at no cost.</div>
   </div>
 </section>
@@ -423,78 +1827,248 @@ footer .cp{margin-left:auto}
 <footer>
   <div class="wrap">
     <a class="logo" href="#top">srtd<b>.</b></a>
-    <ul><li><a href="#features">Product</a></li><li><a href="#demo">Book a demo</a></li><li><a href="#contact">Contact</a></li><li><a href="#privacy">Privacy</a></li><li><a href="#terms">Terms</a></li></ul>
+    <ul>
+      <li><a href="#features">Product</a></li>
+      <li><a href="#demo">Book a demo</a></li>
+      <li><a href="#contact">Contact</a></li>
+      <li><a href="#privacy">Privacy</a></li>
+      <li><a href="#terms">Terms</a></li>
+    </ul>
     <span class="cp">© 2026 Sorted · Made in Mumbai</span>
   </div>
 </footer>
 
 <script>
-(function(){
-const $=id=>document.getElementById(id);
-const top=$('top');addEventListener('scroll',()=>top.classList.toggle('on',scrollY>8),{passive:true});
-const menu=$('menu'),mb=$('menuBtn');
-const setMenu=o=>{menu.classList.toggle('open',o);mb.setAttribute('aria-expanded',o?'true':'false');};
-mb.addEventListener('click',()=>setMenu(true));$('menuClose').addEventListener('click',()=>setMenu(false));
-menu.addEventListener('click',e=>{if(e.target===menu||e.target.tagName==='A')setMenu(false);});
-$('f1').addEventListener('submit',e=>{e.preventDefault();$('f1m').textContent='Prototype only. Nothing was sent.';});
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const top = $('top');
+    addEventListener('scroll', () => top.classList.toggle('on', scrollY > 8), { passive: true });
+    const menu = $('menu'),
+      mb = $('menuBtn');
+    const setMenu = (o) => {
+      menu.classList.toggle('open', o);
+      mb.setAttribute('aria-expanded', o ? 'true' : 'false');
+    };
+    mb.addEventListener('click', () => setMenu(true));
+    $('menuClose').addEventListener('click', () => setMenu(false));
+    menu.addEventListener('click', (e) => {
+      if (e.target === menu || e.target.tagName === 'A') setMenu(false);
+    });
+    $('f1').addEventListener('submit', (e) => {
+      e.preventDefault();
+      $('f1m').textContent = 'Prototype only. Nothing was sent.';
+    });
 
-/* ---------- film, 28 s loop, all copy inside the phone ---------- */
-const cl=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
-const p=(t,a,b)=>cl((t-a)/(b-a));
-const eo=x=>1-Math.pow(1-x,3);
-const S=[[0,6.5],[6.5,14],[14,20],[20,26],[26,29]];
-const CAP=[['Work keeps cutting in.','Four unread from a client, between your mother and your cousins.'],
- ['You pin it. It still gets buried.','Three files, two "which one?", one pin nobody scrolls up to.'],
- ['You search. You get 23.','Across four chats. None of them is the answer.'],
- ['The people who matter wait.','Mom asked at 8:40. It is 9:14.'],
- ['','']];
-const chats=[
- {id:'mom',n:'Mom',c:'#f2b45a',m:'Dinner at 9?',t:'8:40 pm'},
- {id:'cou',n:'Cousins',c:'#8fb3e8',m:'Who is getting the sweets 😂',t:'8:38 pm'},
- {id:'pri',n:'Priya',c:'#9fd3b4',m:'Call you after 10',t:'8:31 pm'},
- {id:'kite',n:'Kite & Co',c:'#25d366',m:'ok sending the files',t:'7:55 pm'},
- {id:'bank',n:'Bank alerts',c:'#8d8d9c',m:'Your OTP is 4471',t:'7:10 pm'}];
-const rows=$('rows');
-chats.forEach(c=>{const d=document.createElement('div');d.className='row';d.id='r-'+c.id;
- d.innerHTML=`<div class="pa" style="background:${c.c}">${c.n[0]}</div><div class="tx"><b>${c.n}<small>${c.t}</small></b><span>${c.m}</span></div><div class="bd" hidden></div>`;rows.appendChild(d);});
-const EV=[[1.4,'kite','is the diwali post approved?',1],[2.6,'kite','final_FINAL_v3.jpg',2],[3.6,'mom','?',0],[4.6,'kite','or the v2 one?',3],[5.4,'kite','??',4]];
-function scene1(t){
- const o=chats.map(c=>c.id);const txt={},bd={};
- for(const[at,id,m,b]of EV){if(t>=at){o.splice(o.indexOf(id),1);o.unshift(id);txt[id]=m;bd[id]=b;}}
- o.forEach((id,i)=>{const r=$('r-'+id);r.style.transition=t<.1?'none':'transform .45s cubic-bezier(.2,.8,.2,1)';r.style.transform=`translateY(${i*74}px)`;
-  const sp=r.querySelector('span'),b=r.querySelector('.bd');sp.textContent=txt[id]||chats.find(c=>c.id===id).m;
-  if(bd[id]){b.hidden=false;b.textContent=bd[id];}else b.hidden=true;});
-}
-const TH=[[6.6,'in','Arjun','<div class="f"><i></i>final_v2.jpg</div>','7:52'],[7.2,'in','Arjun','<div class="f"><i style="background:#5e6ad2"></i>final_FINAL_v3.jpg</div>','7:53'],
- [7.9,'in','Riya','which one is approved?','7:58'],[8.6,'out','','the second one','8:01'],[9.3,'in','Meera','second of which? 😅','8:03'],[9.9,'in','Dev','👍','8:04'],
- [12.4,'in','Riya','sorry which caption are we going with','8:52'],[13.2,'in','Arjun','<div class="f"><i></i>final_v4_real.jpg</div>','8:58']];
-const thr=$('thr');TH.forEach((m,i)=>{const d=document.createElement('div');d.className='m'+(m[1]==='out'?' o':'');d.id='th'+i;
- d.innerHTML=(m[2]?`<span class="n">${m[2]}</span>`:'')+m[3]+`<div class="tm">${m[4]}</div>`;thr.appendChild(d);});
-function scene2(t){TH.forEach((m,i)=>{const d=$('th'+i);const q=eo(p(t,m[0],m[0]+.35));d.style.display=t>=m[0]?'':'none';d.style.opacity=q;d.style.transform=`translateY(${12*(1-q)}px)`;
- d.classList.toggle('pinned',i===3&&t>=10.6&&t<11.6);});
- const pb=eo(p(t,11.4,11.8));$('pinbar').style.transform=`translateY(${-100*(1-pb)}%)`;}
-const Q='approved';const RES=[['Kite & Co','#25d366','Riya: is the diwali post <mark>approved</mark>?'],['Kite & Co','#25d366','you: <mark>approved</mark>, go ahead'],['Mehta Sweets','#b57a1f','Sam: not <mark>approved</mark> yet pls hold'],['Tara Jewels','#2f8f5a','you: which one did you <mark>approve</mark>?'],['Kite & Co','#25d366','Meera: wait was that <mark>approved</mark>'],['Mehta Sweets','#b57a1f','you: <mark>approved</mark> 👍']];
-const res=$('res');RES.forEach((r,i)=>{const d=document.createElement('div');d.className='r';d.id='rs'+i;d.innerHTML=`<div class="pa" style="background:${r[1]}">${r[0][0]}</div><div><b>${r[0]}</b><span>${r[2]}</span></div>`;res.appendChild(d);});
-function scene3(t){const n=Math.floor(p(t,14.3,15.6)*Q.length);$('q').textContent=Q.slice(0,n);$('cnt').textContent=t>15.7?'23 results in 4 chats':'';
- RES.forEach((r,i)=>{const q=eo(p(t,15.8+i*.22,16.1+i*.22));const d=$('rs'+i);d.style.opacity=q;d.style.transform=`translateY(${10*(1-q)}px)`;});}
-const T2=[[20,'Dinner at 9?','8:40 pm'],[20.6,'?','8:55 pm'],[21.1,'hello','9:02 pm'],[21.6,'beta are you coming','9:11 pm']];
-const thr2=$('thr2');T2.forEach((m,i)=>{const d=document.createElement('div');d.className='m';d.id='t2'+i;d.innerHTML=m[1]+`<div class="tm">${m[2]}</div>`;thr2.appendChild(d);});
-const TY='coming in 10 mi';
-function scene4(t){T2.forEach((m,i)=>{const d=$('t2'+i);const q=eo(p(t,m[0],m[0]+.35));d.style.display=t>=m[0]?'':'none';d.style.opacity=q;});
- const n=Math.floor(p(t,22.2,23.8)*TY.length);const ty=$('typ');ty.textContent=n?TY.slice(0,n):'Message';ty.style.color=n?'#111':'#889';
- const ni=eo(p(t,24,24.4));$('noti').style.transform=`translateY(${-130*(1-ni)}%)`;}
-const scn=['s1','s2','s3','s4','s5'].map($);const bars=[...document.querySelectorAll('#prog b')];const ov=$('ov');
-let t=0,last=null,cur=-1;const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
-function draw(){let si=S.findIndex(([a,b])=>t>=a&&t<b);if(si<0)si=0;
- scn.forEach((s,i)=>s.hidden=i!==si);
- if(si!==cur){cur=si;$('capL').textContent=CAP[si][0];$('capS').textContent=CAP[si][1];}
- const[a0]=S[si];const ovq=si===4?0:eo(p(t,a0+.5,a0+1));ov.style.opacity=ovq;ov.style.transform=`translateY(${10*(1-ovq)}px)`;
- $('prog').style.opacity=si===4?0:1;
- bars.forEach((b,i)=>{const[a,c]=S[i];b.style.width=(p(t,a,c)*100)+'%';});
- const f=[scene1,scene2,scene3,scene4][si];if(f)f(t);}
-function loop(ts){if(last!==null){t+=(ts-last)/1000;if(t>=29)t=0;}last=ts;draw();requestAnimationFrame(loop);}
-function fit(){$('phone').style.transform=`scale(${$('phWrap').clientWidth/340})`;}
-fit();addEventListener('resize',fit);
-if(reduce){t=5.5;draw();}else requestAnimationFrame(loop);
-})();
+    /* ---------- film, 28 s loop, all copy inside the phone ---------- */
+    const cl = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+    const p = (t, a, b) => cl((t - a) / (b - a));
+    const eo = (x) => 1 - Math.pow(1 - x, 3);
+    const S = [
+      [0, 6.5],
+      [6.5, 14],
+      [14, 20],
+      [20, 26],
+      [26, 29],
+    ];
+    const CAP = [
+      [
+        'Work keeps cutting in.',
+        'Four unread from a client, between your mother and your cousins.',
+      ],
+      [
+        'You pin it. It still gets buried.',
+        'Three files, two "which one?", one pin nobody scrolls up to.',
+      ],
+      ['You search. You get 23.', 'Across four chats. None of them is the answer.'],
+      ['The people who matter wait.', 'Mom asked at 8:40. It is 9:14.'],
+      ['', ''],
+    ];
+    const chats = [
+      { id: 'mom', n: 'Mom', c: '#f2b45a', m: 'Dinner at 9?', t: '8:40 pm' },
+      { id: 'cou', n: 'Cousins', c: '#8fb3e8', m: 'Who is getting the sweets 😂', t: '8:38 pm' },
+      { id: 'pri', n: 'Priya', c: '#9fd3b4', m: 'Call you after 10', t: '8:31 pm' },
+      { id: 'kite', n: 'Kite & Co', c: '#25d366', m: 'ok sending the files', t: '7:55 pm' },
+      { id: 'bank', n: 'Bank alerts', c: '#8d8d9c', m: 'Your OTP is 4471', t: '7:10 pm' },
+    ];
+    const rows = $('rows');
+    chats.forEach((c) => {
+      const d = document.createElement('div');
+      d.className = 'row';
+      d.id = 'r-' + c.id;
+      d.innerHTML = `<div class="pa" style="background:${c.c}">${c.n[0]}</div><div class="tx"><b>${c.n}<small>${c.t}</small></b><span>${c.m}</span></div><div class="bd" hidden></div>`;
+      rows.appendChild(d);
+    });
+    const EV = [
+      [1.4, 'kite', 'is the diwali post approved?', 1],
+      [2.6, 'kite', 'final_FINAL_v3.jpg', 2],
+      [3.6, 'mom', '?', 0],
+      [4.6, 'kite', 'or the v2 one?', 3],
+      [5.4, 'kite', '??', 4],
+    ];
+    function scene1(t) {
+      const o = chats.map((c) => c.id);
+      const txt = {},
+        bd = {};
+      for (const [at, id, m, b] of EV) {
+        if (t >= at) {
+          o.splice(o.indexOf(id), 1);
+          o.unshift(id);
+          txt[id] = m;
+          bd[id] = b;
+        }
+      }
+      o.forEach((id, i) => {
+        const r = $('r-' + id);
+        r.style.transition = t < 0.1 ? 'none' : 'transform .45s cubic-bezier(.2,.8,.2,1)';
+        r.style.transform = `translateY(${i * 74}px)`;
+        const sp = r.querySelector('span'),
+          b = r.querySelector('.bd');
+        sp.textContent = txt[id] || chats.find((c) => c.id === id).m;
+        if (bd[id]) {
+          b.hidden = false;
+          b.textContent = bd[id];
+        } else b.hidden = true;
+      });
+    }
+    const TH = [
+      [6.6, 'in', 'Arjun', '<div class="f"><i></i>final_v2.jpg</div>', '7:52'],
+      [
+        7.2,
+        'in',
+        'Arjun',
+        '<div class="f"><i style="background:#5e6ad2"></i>final_FINAL_v3.jpg</div>',
+        '7:53',
+      ],
+      [7.9, 'in', 'Riya', 'which one is approved?', '7:58'],
+      [8.6, 'out', '', 'the second one', '8:01'],
+      [9.3, 'in', 'Meera', 'second of which? 😅', '8:03'],
+      [9.9, 'in', 'Dev', '👍', '8:04'],
+      [12.4, 'in', 'Riya', 'sorry which caption are we going with', '8:52'],
+      [13.2, 'in', 'Arjun', '<div class="f"><i></i>final_v4_real.jpg</div>', '8:58'],
+    ];
+    const thr = $('thr');
+    TH.forEach((m, i) => {
+      const d = document.createElement('div');
+      d.className = 'm' + (m[1] === 'out' ? ' o' : '');
+      d.id = 'th' + i;
+      d.innerHTML =
+        (m[2] ? `<span class="n">${m[2]}</span>` : '') + m[3] + `<div class="tm">${m[4]}</div>`;
+      thr.appendChild(d);
+    });
+    function scene2(t) {
+      TH.forEach((m, i) => {
+        const d = $('th' + i);
+        const q = eo(p(t, m[0], m[0] + 0.35));
+        d.style.display = t >= m[0] ? '' : 'none';
+        d.style.opacity = q;
+        d.style.transform = `translateY(${12 * (1 - q)}px)`;
+        d.classList.toggle('pinned', i === 3 && t >= 10.6 && t < 11.6);
+      });
+      const pb = eo(p(t, 11.4, 11.8));
+      $('pinbar').style.transform = `translateY(${-100 * (1 - pb)}%)`;
+    }
+    const Q = 'approved';
+    const RES = [
+      ['Kite & Co', '#25d366', 'Riya: is the diwali post <mark>approved</mark>?'],
+      ['Kite & Co', '#25d366', 'you: <mark>approved</mark>, go ahead'],
+      ['Mehta Sweets', '#b57a1f', 'Sam: not <mark>approved</mark> yet pls hold'],
+      ['Tara Jewels', '#2f8f5a', 'you: which one did you <mark>approve</mark>?'],
+      ['Kite & Co', '#25d366', 'Meera: wait was that <mark>approved</mark>'],
+      ['Mehta Sweets', '#b57a1f', 'you: <mark>approved</mark> 👍'],
+    ];
+    const res = $('res');
+    RES.forEach((r, i) => {
+      const d = document.createElement('div');
+      d.className = 'r';
+      d.id = 'rs' + i;
+      d.innerHTML = `<div class="pa" style="background:${r[1]}">${r[0][0]}</div><div><b>${r[0]}</b><span>${r[2]}</span></div>`;
+      res.appendChild(d);
+    });
+    function scene3(t) {
+      const n = Math.floor(p(t, 14.3, 15.6) * Q.length);
+      $('q').textContent = Q.slice(0, n);
+      $('cnt').textContent = t > 15.7 ? '23 results in 4 chats' : '';
+      RES.forEach((r, i) => {
+        const q = eo(p(t, 15.8 + i * 0.22, 16.1 + i * 0.22));
+        const d = $('rs' + i);
+        d.style.opacity = q;
+        d.style.transform = `translateY(${10 * (1 - q)}px)`;
+      });
+    }
+    const T2 = [
+      [20, 'Dinner at 9?', '8:40 pm'],
+      [20.6, '?', '8:55 pm'],
+      [21.1, 'hello', '9:02 pm'],
+      [21.6, 'beta are you coming', '9:11 pm'],
+    ];
+    const thr2 = $('thr2');
+    T2.forEach((m, i) => {
+      const d = document.createElement('div');
+      d.className = 'm';
+      d.id = 't2' + i;
+      d.innerHTML = m[1] + `<div class="tm">${m[2]}</div>`;
+      thr2.appendChild(d);
+    });
+    const TY = 'coming in 10 mi';
+    function scene4(t) {
+      T2.forEach((m, i) => {
+        const d = $('t2' + i);
+        const q = eo(p(t, m[0], m[0] + 0.35));
+        d.style.display = t >= m[0] ? '' : 'none';
+        d.style.opacity = q;
+      });
+      const n = Math.floor(p(t, 22.2, 23.8) * TY.length);
+      const ty = $('typ');
+      ty.textContent = n ? TY.slice(0, n) : 'Message';
+      ty.style.color = n ? '#111' : '#889';
+      const ni = eo(p(t, 24, 24.4));
+      $('noti').style.transform = `translateY(${-130 * (1 - ni)}%)`;
+    }
+    const scn = ['s1', 's2', 's3', 's4', 's5'].map($);
+    const bars = [...document.querySelectorAll('#prog b')];
+    const ov = $('ov');
+    let t = 0,
+      last = null,
+      cur = -1;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function draw() {
+      let si = S.findIndex(([a, b]) => t >= a && t < b);
+      if (si < 0) si = 0;
+      scn.forEach((s, i) => (s.hidden = i !== si));
+      if (si !== cur) {
+        cur = si;
+        $('capL').textContent = CAP[si][0];
+        $('capS').textContent = CAP[si][1];
+      }
+      const [a0] = S[si];
+      const ovq = si === 4 ? 0 : eo(p(t, a0 + 0.5, a0 + 1));
+      ov.style.opacity = ovq;
+      ov.style.transform = `translateY(${10 * (1 - ovq)}px)`;
+      $('prog').style.opacity = si === 4 ? 0 : 1;
+      bars.forEach((b, i) => {
+        const [a, c] = S[i];
+        b.style.width = p(t, a, c) * 100 + '%';
+      });
+      const f = [scene1, scene2, scene3, scene4][si];
+      if (f) f(t);
+    }
+    function loop(ts) {
+      if (last !== null) {
+        t += (ts - last) / 1000;
+        if (t >= 29) t = 0;
+      }
+      last = ts;
+      draw();
+      requestAnimationFrame(loop);
+    }
+    function fit() {
+      $('phone').style.transform = `scale(${$('phWrap').clientWidth / 340})`;
+    }
+    fit();
+    addEventListener('resize', fit);
+    if (reduce) {
+      t = 5.5;
+      draw();
+    } else requestAnimationFrame(loop);
+  })();
 </script>
