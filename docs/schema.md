@@ -307,6 +307,9 @@ All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_tra
 
 - is_agency_side_member(p_workspace_id): true when the caller is an active owner, admin or agency member.
 - plan_create(p_workspace_id, p_title, p_starts_on, p_ends_on, p_audience, p_trace_id) returns uuid: create a plan; a client plan is shared at once.
+- plan_create_with_items(p_workspace_id, p_title, p_starts_on, p_ends_on, p_concepts jsonb, p_posts jsonb, p_trace_id) returns uuid (13 Oct, 20261013170000_plan_create_with_items): one transaction.
+  Creates a Draft (team) plan, adds concepts in order, adds posts grouped by day (moves posts.target_date to noon in the workspace zone), and "No date" posts get posts.target_date cleared.
+  Any failure saves nothing.
 - plan_update(p_plan_id, p_title, p_starts_on, p_ends_on, p_trace_id): rename or move dates.
 - plan_share_with_client(p_plan_id, p_trace_id): one-way team to client; drafts inside do not block it (20261011011500_plan_drafts_in_client_plans). Notifies plan_opened via _plan_notify; an already client plan is a no-op.
 - plan_delete(p_plan_id, p_trace_id): soft-delete the plan. Only the plan's creator or an active workspace owner/admin (any other agency-side member raises forbidden_role; 20261012162000_plan_delete_open_rules). Notifies plan_deleted via _plan_notify.
