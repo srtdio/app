@@ -199,6 +199,32 @@ export function seedTasks(world: ChatWorld, now: number = Date.now()): void {
   }
 }
 
+export const DUE_SOON_ID = '0190e100-0000-7000-8000-000000000012';
+export const DUE_SOON_TITLE = 'Reel cover';
+
+/** One more open Agency item (12) in the group chat, due at `dueMs` (after seedTasks). */
+export function seedDueSoon(world: ChatWorld, dueMs: number): void {
+  const at = iso(dueMs - 3_600_000);
+  (world.tables.chat_tasks ??= []).push({
+    id: DUE_SOON_ID,
+    channel_id: TASK_CHANNEL,
+    workspace_id: WORKSPACE_ID,
+    number: 12,
+    title: DUE_SOON_TITLE,
+    note: null,
+    side: 'agency',
+    status: 'todo',
+    priority: 1,
+    due_at: iso(dueMs),
+    due_set_by: ME,
+    due_set_at: at,
+    due_passed_at: null,
+    created_by: ME,
+    created_at: at,
+    updated_at: at,
+  });
+}
+
 export const OLDER_LINE_TITLE = 'Moodboard refs';
 
 /**

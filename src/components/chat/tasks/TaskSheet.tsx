@@ -4,16 +4,20 @@
 // row (Enter adds and keeps focus, so a list types in one go). One row at a
 // time expands in place; the others dim (opacity only) and the order holds
 // until it collapses. The footer names the last change. The shared bottom
-// Sheet opens and closes it (translateY only). Tokens only.
+// Sheet opens and closes it (translateY only). Share opens the forward picker
+// and runs through the thread's send and forward (useTaskShare); a confirmed
+// share closes both sheets. Tokens only.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
+import { ForwardPicker } from '@/components/chat/ForwardPicker';
 import { IconCheck, IconForward } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { NotSaved, PriorityTag, TaskRow } from '@/components/chat/tasks/TaskRow';
 import { TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
 import type { UseChatTasks } from '@/components/chat/tasks/useChatTasks';
+import { useTaskShare, type TaskShareWiring } from '@/components/chat/tasks/useTaskShare';
 import { cn } from '@/lib/cn';
 import {
   groupTasks,
@@ -109,8 +113,8 @@ export interface TaskSheetProps {
   timeZone: string;
   /** Opened for one item (a thread line, a bell row): that row starts expanded. */
   focusTaskId: string | null;
-  /** Share the list; absent hides Share. */
-  onShare?: () => void;
+  /** Share through the thread's send and forward; absent hides Share. */
+  share?: TaskShareWiring;
 }
 
 export function TaskSheet(props: TaskSheetProps): ReactElement {
@@ -120,6 +124,9 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
   const [frozen, setFrozen] = useState<Record<GroupKey, string[]> | null>(null);
   const [showDone, setShowDone] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const taskShare = useTaskShare(props.share ?? null);
+  const resetShare = taskShare.reset;
 
   const groups = useMemo(
     () => groupTasks(tasks.tasks, nowMs, timeZone),
@@ -177,6 +184,11 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
     // Only an open (or a new focus) resets the sheet, never a data change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open, focusTaskId]);
+
+  // The picker goes with the sheet.
+  useEffect(() => {
+    if (!props.open) setShareOpen(false);
+  }, [props.open]);
 
   // The labels follow the clock while it stays open.
   useEffect(() => {
@@ -266,77 +278,95 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
     </section>
   );
 
+  const onClose = props.onClose;
   return (
-    <Sheet
-      open={props.open}
-      onClose={props.onClose}
-      title={TASK_SHEET_TITLE}
-      footer={
-        <p
-          data-task-footer=""
-          className="-my-0.5 h-4 min-w-0 flex-1 truncate text-[13px] leading-4 text-fg-2"
-        >
-          {footer ?? 'No changes yet'}
-        </p>
-      }
-    >
-      <div
-        ref={bodyRef}
-        data-task-sheet=""
-        className="-mx-[18px] -my-4 flex flex-col pb-2"
-        onPointerDown={(event) => {
-          if (expanded === null) return;
-          const target = event.target;
-          if (!(target instanceof Element)) return;
-          if (target.closest(`[data-task-row-id="${expanded}"]`) !== null) return;
-          expand(null);
-        }}
-      >
-        <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border pl-4 pr-2">
-          <span
-            aria-hidden="true"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-accent text-accent-fg"
+    <>
+      <Sheet
+        open={props.open}
+        onClose={props.onClose}
+        title={TASK_SHEET_TITLE}
+        footer={
+          <p
+            data-task-footer=""
+            className="-my-0.5 h-4 min-w-0 flex-1 truncate text-[13px] leading-4 text-fg-2"
           >
-            <IconCheck size={16} />
-          </span>
-          <p data-task-counts="" className="min-w-0 flex-1 truncate text-[13px] text-fg-2">
-            <span className="font-mono text-accent">{groups.agency.length}</span> agency ·{' '}
-            <span className="font-mono text-accent">{groups.client.length}</span> client ·{' '}
-            <span className="font-mono">{groups.done.length}</span> done
+            {footer ?? 'No changes yet'}
           </p>
-          {props.onShare !== undefined ? (
+        }
+      >
+        <div
+          ref={bodyRef}
+          data-task-sheet=""
+          className="-mx-[18px] -my-4 flex flex-col pb-2"
+          onPointerDown={(event) => {
+            if (expanded === null) return;
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (target.closest(`[data-task-row-id="${expanded}"]`) !== null) return;
+            expand(null);
+          }}
+        >
+          <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border pl-4 pr-2">
+            <span
+              aria-hidden="true"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-accent text-accent-fg"
+            >
+              <IconCheck size={16} />
+            </span>
+            <p data-task-counts="" className="min-w-0 flex-1 truncate text-[13px] text-fg-2">
+              <span className="font-mono text-accent">{groups.agency.length}</span> agency ·{' '}
+              <span className="font-mono text-accent">{groups.client.length}</span> client ·{' '}
+              <span className="font-mono">{groups.done.length}</span> done
+            </p>
+            {props.share !== undefined ? (
+              <button
+                type="button"
+                aria-label={SHARE_TASKS_LABEL}
+                data-task-share=""
+                onClick={() => {
+                  resetShare();
+                  setShareOpen(true);
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+                className={cn(
+                  'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  NO_TOUCH_SELECT,
+                )}
+              >
+                <IconForward size={20} />
+              </button>
+            ) : null}
+          </div>
+          {section('agency')}
+          {section('client')}
+          <section data-task-group="done" className="flex flex-col">
             <button
               type="button"
-              aria-label={SHARE_TASKS_LABEL}
-              data-task-share=""
-              onClick={props.onShare}
+              aria-expanded={showDone}
+              data-task-done-toggle=""
+              onClick={() => setShowDone((v) => !v)}
               onContextMenu={(e) => e.preventDefault()}
-              className={cn(
-                'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                NO_TOUCH_SELECT,
-              )}
+              className={cn('flex min-h-[44px] items-center justify-between px-4', NO_TOUCH_SELECT)}
             >
-              <IconForward size={20} />
+              <GroupTitle group="done" label="Done today" count={groups.done.length} />
+              <span className="text-[13px] text-accent">{showDone ? 'Hide' : 'Show'}</span>
             </button>
-          ) : null}
+            {showDone ? <ul className="flex flex-col">{renderRows('done')}</ul> : null}
+          </section>
         </div>
-        {section('agency')}
-        {section('client')}
-        <section data-task-group="done" className="flex flex-col">
-          <button
-            type="button"
-            aria-expanded={showDone}
-            data-task-done-toggle=""
-            onClick={() => setShowDone((v) => !v)}
-            onContextMenu={(e) => e.preventDefault()}
-            className={cn('flex min-h-[44px] items-center justify-between px-4', NO_TOUCH_SELECT)}
-          >
-            <GroupTitle group="done" label="Done today" count={groups.done.length} />
-            <span className="text-[13px] text-accent">{showDone ? 'Hide' : 'Show'}</span>
-          </button>
-          {showDone ? <ul className="flex flex-col">{renderRows('done')}</ul> : null}
-        </section>
-      </div>
-    </Sheet>
+      </Sheet>
+      {props.share !== undefined ? (
+        <ForwardPicker
+          open={props.open && shareOpen}
+          onClose={() => setShareOpen(false)}
+          channels={props.share.channels}
+          onSend={taskShare.share}
+          onSent={() => {
+            setShareOpen(false);
+            onClose();
+          }}
+        />
+      ) : null}
+    </>
   );
 }
