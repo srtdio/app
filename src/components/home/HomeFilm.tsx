@@ -377,7 +377,7 @@ export function HomeFilm() {
                   <div className="wah">
                     <span className="bk">‹</span>
                     <div>
-                      Mom<span className="sub">last seen 9:12 pm</span>
+                      Mom<span className="sub">Family</span>
                     </div>
                   </div>
                   <div className="thr">
