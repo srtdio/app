@@ -38,10 +38,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -155,8 +151,6 @@ test('create a concept with one uploaded file and one library file', async ({ pa
   await expect(save).toHaveText('Uploading...');
   await save.click();
   await expect(concept).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, 'upload-01-save-waits');
   held.release();
   await expect(concept).toBeHidden();
   await expect(compose.locator('[data-plan-draft-concept]')).toHaveCount(1);
@@ -172,8 +166,6 @@ test('create a concept with one uploaded file and one library file', async ({ pa
     LIB_IMAGE_VERSION,
     '0190f100-0000-7000-8000-000000000001',
   ]);
-  await page.waitForTimeout(300);
-  await shot(page, 'upload-02-shared');
   expectClean(network);
 });
 
@@ -193,16 +185,12 @@ test('edit while the files read is slow: skeleton, then the list', async ({ page
   await expect(sheet.locator('[data-plan-concept-files-loading]')).toBeVisible();
   await expect(sheet.locator('[data-plan-concept-files]')).toHaveCount(0);
   await expect(sheet.locator('[data-plan-concept-upload-pick]')).toHaveCount(0);
-  await page.waitForTimeout(400);
-  await shot(page, 'upload-03-files-loading');
 
   for (const held of holds) held.release();
   await expect(sheet.locator('[data-plan-concept-files-loading]')).toHaveCount(0);
   await expect(sheet.locator('[data-plan-concept-file]')).toHaveCount(1);
   await expect(sheet.locator('[data-plan-concept-files]')).toBeVisible();
   await expect(sheet.locator('[data-plan-concept-upload-pick]')).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, 'upload-04-files-loaded');
   await sheet.getByRole('button', { name: 'Cancel' }).click();
   await expect(sheet).toBeHidden();
   expectClean(network);
@@ -225,8 +213,6 @@ test('failed files read: Retry, and Save keeps the files', async ({ page }) => {
   expectMinTouchTarget(await retry.boundingBox());
   await expect(sheet.locator('[data-plan-concept-files]')).toHaveCount(0);
   await expect(sheet.locator('[data-plan-concept-upload-pick]')).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'upload-05-files-failed');
 
   // Save with the files unknown: files go as null; the link stays.
   await sheet.locator('[data-plan-concept-title]').fill('Lamp lighting reel v2');
@@ -248,8 +234,6 @@ test('failed files read: Retry, and Save keeps the files', async ({ page }) => {
   await sheet.locator('[data-plan-concept-files-retry]').click();
   await expect(sheet.locator('[data-plan-concept-file]')).toHaveCount(1);
   await expect(sheet.locator('[data-plan-concept-upload-pick]')).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, 'upload-06-files-retried');
   await sheet.getByRole('button', { name: 'Cancel' }).click();
   expectClean(network);
 });

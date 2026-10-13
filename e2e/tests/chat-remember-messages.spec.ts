@@ -333,7 +333,6 @@ async function runFirstFrame(page: Page): Promise<void> {
   expect(jumpsSince(log, tap)).toEqual([]);
   // The background revalidation reads (forward, by ids, cursors) never the latest page first.
   expect(reads() - before).toBeGreaterThanOrEqual(1);
-  await page.screenshot({ path: test.info().outputPath('reopen-first-frame.png') });
   expectClean(network);
 }
 
@@ -370,7 +369,6 @@ async function runLiveWhileClosed(page: Page): Promise<void> {
   expect(jumpsSince(log, tap)).toEqual([]);
   // The revalidation found nothing new: the same rows, still in place.
   expect(frames[frames.length - 1]?.last).toBe(changed.sent);
-  await page.screenshot({ path: test.info().outputPath('live-while-closed.png') });
   expectClean(network);
 }
 
@@ -409,7 +407,6 @@ async function runCatchUp(page: Page): Promise<void> {
   expect(first?.last).not.toBe(changed.sent);
   expect(frames[frames.length - 1]?.last).toBe(changed.sent);
   expect(jumpsSince(log, tap)).toEqual([]);
-  await page.screenshot({ path: test.info().outputPath('catch-up.png') });
   expectClean(network);
 }
 
@@ -472,7 +469,6 @@ async function runScrolledUp(page: Page): Promise<void> {
   const after = await topOf();
   report('scrolled up', { anchorId, before, after });
   expect(after, 'the reader holds position').toBe(before);
-  await page.screenshot({ path: test.info().outputPath('scrolled-up.png') });
   expectClean(network);
 }
 
@@ -531,7 +527,6 @@ async function runUnreadDivider(page: Page): Promise<void> {
   }, firstNew);
   report('unread divider', placed);
   expect(placed).toEqual({ aboveFirst: true, belowPrev: true });
-  await page.screenshot({ path: test.info().outputPath('unread-divider.png') });
   expectClean(network);
 }
 
@@ -668,7 +663,6 @@ async function runSignOut(page: Page): Promise<void> {
   await page.locator('[data-msg-id]').first().waitFor({ timeout: 10_000 });
   // A first open for this user: the latest page is read, nothing came from memory.
   expect(reads() - before).toBeGreaterThanOrEqual(1);
-  await page.screenshot({ path: test.info().outputPath('other-user.png') });
   expectClean(network);
 }
 

@@ -875,6 +875,31 @@ export function seedDatedPlan(
   );
 }
 
+/** Over 120 characters, no break in the first line's reach: the row must truncate it. */
+export const LONG_CONCEPT_TITLE =
+  'Lantern workshop with the whole extended family on the terrace at golden hour, shot handheld, then cut into a vertical reel with captions';
+export const LONG_POST_TITLE =
+  'Opening offer carousel for the festive weekend: twelve frames, each with the price card, the store map and the booking link in the caption';
+
+/**
+ * After seedDatedPlan: give one concept (Lantern workshop) and one post
+ * (Opening offer) titles longer than 120 characters.
+ */
+export function lengthenDatedTitles(world: ChatWorld): { concept: string; post: string } {
+  const t = world.tables;
+  const concept = DATED_PLAN_ITEMS.find((i) => i.title === 'Lantern workshop');
+  const post = DATED_PLAN_ITEMS.find((i) => i.title === 'Opening offer');
+  if (concept === undefined || post === undefined) throw new Error('fixture: dated items');
+  for (const row of t.plan_items ?? []) {
+    if (row.id === concept.id) row.title = LONG_CONCEPT_TITLE;
+  }
+  const postId = (t.plan_items ?? []).find((r) => r.id === post.id)?.post_id;
+  for (const row of t.posts ?? []) {
+    if (row.id === postId) row.title = LONG_POST_TITLE;
+  }
+  return { concept: concept.id, post: post.id };
+}
+
 // ---------------------------------------------------------------------------
 // "Share a plan" (the Plan tile): upcoming plans, an ended one, and drafts
 // ---------------------------------------------------------------------------

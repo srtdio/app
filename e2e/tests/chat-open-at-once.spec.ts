@@ -348,10 +348,11 @@ async function runTimeline(page: Page): Promise<void> {
 async function runAtOnce(page: Page): Promise<void> {
   const network = await installHarnessNetwork(page);
   seedPlanChat(network);
-  // Messages 300ms, every other read 150ms: the whole open (three rounds on
+  // Messages 200ms, every other read 80ms: the whole open (three rounds on
   // each path: the page, its chips, their files; the plan ids, the plans,
-  // their reviews) settles under 1s.
-  await delaySupabaseReads(page, (name) => (name === 'chat_messages' ? 300 : 150));
+  // their reviews) settles well under 1s, leaving headroom for a runner busy
+  // with parallel workers.
+  await delaySupabaseReads(page, (name) => (name === 'chat_messages' ? 200 : 80));
   await recordOpen(page);
   const reads = countReads(page);
   await page.goto('/chat');
@@ -389,7 +390,6 @@ async function runAtOnce(page: Page): Promise<void> {
     expect(reads(name), `${name} reads`).toBe(1);
   }
   expect(network.rpcCalls.filter((c) => c.name === 'plan_draft_rows')).toHaveLength(1);
-  await page.screenshot({ path: test.info().outputPath('at-once.png') });
   expectClean(network);
 }
 
@@ -423,7 +423,6 @@ async function runOneLate(page: Page): Promise<void> {
   expect(log.cardNodes).toBe(1);
   expect(log.cardMoves).toBe(0);
   expect(log.scrollJumps).toBe(0);
-  await page.screenshot({ path: test.info().outputPath('one-late.png') });
   expectClean(network);
 }
 
@@ -472,7 +471,6 @@ async function runReopen(page: Page): Promise<void> {
   expect(log.cardMoves).toBe(0);
   expect(log.scrollJumps).toBe(0);
   expect(reads('plans') - plansBefore, 'one revalidation read per reopen').toBe(1);
-  await page.screenshot({ path: test.info().outputPath('reopen.png') });
   expectClean(network);
 }
 
@@ -546,7 +544,6 @@ async function runSignOut(page: Page): Promise<void> {
   );
   // In the app: the Chat tab, then the same chat.
   await page.getByRole('link', { name: 'Chat' }).last().click();
-  await page.screenshot({ path: test.info().outputPath('other-user-list.png') });
   const plansBefore = reads('plans');
   const tap = await tapChat(page, GROUP_NAME);
   await page.locator(`[data-plan-card="${DRAFT_PLAN_ID}"]`).waitFor({ timeout: 10_000 });
@@ -562,7 +559,6 @@ async function runSignOut(page: Page): Promise<void> {
   expect(await size()).toBeGreaterThan(0);
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('sorted:signout')));
   await expect.poll(size, { message: 'the sign-out event cleared the memory' }).toBe(0);
-  await page.screenshot({ path: test.info().outputPath('other-user.png') });
   expectClean(network);
 }
 

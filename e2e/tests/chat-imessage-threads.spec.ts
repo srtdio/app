@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { MAYA_NAME, REFUSED_SEND, THREAD_GROUP_NAME, THREAD_IDS } from '../fixtures/chat-data';
@@ -18,15 +18,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await target.waitFor({ state: 'visible' });
   await target.click();
   await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
-}
-
-/** Centre a row on screen, let it settle, and keep a screenshot of it. */
-async function snap(page: Page, info: TestInfo, key: string, name: string): Promise<void> {
-  await row(page, key).evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await page.waitForTimeout(400);
-  const path = info.outputPath(`${name}.png`);
-  await page.screenshot({ path });
-  await info.attach(name, { path, contentType: 'image/png' });
 }
 
 /** Every rendered row's look: its class and which rail pieces it draws. */
@@ -69,52 +60,51 @@ test('DM: the first paint is final once history is released', async ({ page }) =
   expectClean(network);
 });
 
-test('DM: runs, chips, the left root card and the deleted root', async ({ page }, info) => {
-  const network = await installHarnessNetwork(page);
-  await openChat(page, MAYA_NAME);
+test(
+  'DM: runs, chips, the left root card and the deleted root',
+  { tag: '@theme' },
+  async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    await openChat(page, MAYA_NAME);
 
-  // i1: an own root card heads its run; members show no quote; "4 replies" on its side.
-  await expect(row(page, 'r1').locator('[data-rail="elbow"]')).toHaveCount(1);
-  for (const key of ['r1a', 'r1b', 'r1c']) {
-    await expect(row(page, key).locator('[data-rail="tick"]')).toHaveCount(1);
-    await expect(row(page, key)).not.toContainText('Shared post');
-  }
-  await expect(row(page, 'r1a')).toHaveClass(/pl-\[30px\]/);
-  await expect(row(page, 'r1b')).not.toHaveClass(/pl-\[30px\]/);
-  const replies = page.locator('[data-thread-open="replies"]', { hasText: '4 replies' });
-  await expect(replies).toHaveCount(1);
-  await expect(replies).toHaveCSS('font-size', '13px');
-  expectMinTouchTarget(await replies.boundingBox(), { dimension: 'height' });
-  await snap(page, info, 'r1b', 'dm-i1-own-root');
+    // i1: an own root card heads its run; members show no quote; "4 replies" on its side.
+    await expect(row(page, 'r1').locator('[data-rail="elbow"]')).toHaveCount(1);
+    for (const key of ['r1a', 'r1b', 'r1c']) {
+      await expect(row(page, key).locator('[data-rail="tick"]')).toHaveCount(1);
+      await expect(row(page, key)).not.toContainText('Shared post');
+    }
+    await expect(row(page, 'r1a')).toHaveClass(/pl-\[30px\]/);
+    await expect(row(page, 'r1b')).not.toHaveClass(/pl-\[30px\]/);
+    const replies = page.locator('[data-thread-open="replies"]', { hasText: '4 replies' });
+    await expect(replies).toHaveCount(1);
+    await expect(replies).toHaveCSS('font-size', '13px');
+    expectMinTouchTarget(await replies.boundingBox(), { dimension: 'height' });
 
-  // A plain row breaks the run; the next member starts a chip-headed run.
-  await expect(row(page, 'p2').locator('[data-rail]')).toHaveCount(0);
-  await expect(row(page, 'r1d').locator('[data-rail="tick"]')).toHaveCount(1);
-  await snap(page, info, 'r1d', 'dm-break-chip');
+    // A plain row breaks the run; the next member starts a chip-headed run.
+    await expect(row(page, 'p2').locator('[data-rail]')).toHaveCount(0);
+    await expect(row(page, 'r1d').locator('[data-rail="tick"]')).toHaveCount(1);
 
-  // A peer's (left) root card shifts with its run.
-  await expect(row(page, 'r2')).toHaveClass(/pl-\[30px\]/);
-  await expect(row(page, 'r2').locator('[data-rail="elbow"]')).toHaveCount(1);
-  await snap(page, info, 'r2a', 'dm-left-root');
+    // A peer's (left) root card shifts with its run.
+    await expect(row(page, 'r2')).toHaveClass(/pl-\[30px\]/);
+    await expect(row(page, 'r2').locator('[data-rail="elbow"]')).toHaveCount(1);
 
-  // i3: the root is beyond the first page; the chip names it with the record's count.
-  const chip = page.locator('[data-thread-chip]', { hasText: 'Product teaser' });
-  await expect(chip).toContainText('· 4 replies');
-  expectMinTouchTarget(await chip.locator('button').boundingBox(), { dimension: 'height' });
-  await snap(page, info, 'i3b', 'dm-i3-chip');
+    // i3: the root is beyond the first page; the chip names it with the record's count.
+    const chip = page.locator('[data-thread-chip]', { hasText: 'Product teaser' });
+    await expect(chip).toContainText('· 4 replies');
+    expectMinTouchTarget(await chip.locator('button').boundingBox(), { dimension: 'height' });
 
-  // A deleted root card: its reply falls back to the plain quote, no rail.
-  await expect(row(page, 'rda').locator('[data-rail]')).toHaveCount(0);
-  await expect(row(page, 'rda')).toContainText('This message was deleted');
-  await expect(row(page, 'pq')).toContainText('Next up: the teaser captions.');
-  await expect(row(page, 'pq').locator('[data-rail]')).toHaveCount(0);
-  await snap(page, info, 'rda', 'dm-deleted-root');
-  expectClean(network);
-});
+    // A deleted root card: its reply falls back to the plain quote, no rail.
+    await expect(row(page, 'rda').locator('[data-rail]')).toHaveCount(0);
+    await expect(row(page, 'rda')).toContainText('This message was deleted');
+    await expect(row(page, 'pq')).toContainText('Next up: the teaser captions.');
+    await expect(row(page, 'pq').locator('[data-rail]')).toHaveCount(0);
+    expectClean(network);
+  },
+);
 
 test('DM: the thread view opens, sends "Reply in thread", and shows a refused reply', async ({
   page,
-}, info) => {
+}) => {
   const network = await installHarnessNetwork(page);
   await openChat(page, MAYA_NAME);
   await page.locator('[data-thread-open="replies"]', { hasText: '4 replies' }).click();
@@ -128,10 +118,6 @@ test('DM: the thread view opens, sends "Reply in thread", and shows a refused re
   await expect(view).toHaveCSS('opacity', '1');
   const input = view.getByPlaceholder('Reply in thread');
   await expect(input).toBeVisible();
-  await page.waitForTimeout(300);
-  let path = info.outputPath('view-open.png');
-  await page.screenshot({ path });
-  await info.attach('view-open', { path, contentType: 'image/png' });
 
   await input.fill('Reply in thread');
   await view.getByRole('button', { name: 'Send' }).click();
@@ -140,9 +126,6 @@ test('DM: the thread view opens, sends "Reply in thread", and shows a refused re
   await expect(
     view.locator('li[data-msg-id]', { hasText: 'Reply in thread' }).locator('[data-rail="tick"]'),
   ).toHaveCount(1);
-  path = info.outputPath('view-sent.png');
-  await page.screenshot({ path });
-  await info.attach('view-sent', { path, contentType: 'image/png' });
 
   // A refused reply on the rail: its alert sits on the page fill, the tick under it.
   await input.fill(REFUSED_SEND);
@@ -151,9 +134,6 @@ test('DM: the thread view opens, sends "Reply in thread", and shows a refused re
   await expect(failed.locator('[data-failed-retry]')).toBeVisible({ timeout: 8000 });
   await expect(failed.locator('[data-failed-retry]')).toHaveClass(/bg-bg/);
   await expect(failed.locator('[data-rail="tick"]')).toHaveCount(1);
-  path = info.outputPath('view-failed-reply.png');
-  await page.screenshot({ path });
-  await info.attach('view-failed-reply', { path, contentType: 'image/png' });
 
   await close.click();
   await expect(view).toHaveCount(0);
@@ -164,10 +144,6 @@ test('DM: the thread view opens, sends "Reply in thread", and shows a refused re
   await expect(page.locator('[data-thread-open="replies"]', { hasText: '5 replies' })).toHaveCount(
     1,
   );
-  await page.waitForTimeout(300);
-  path = info.outputPath('dm-after-view.png');
-  await page.screenshot({ path });
-  await info.attach('dm-after-view', { path, contentType: 'image/png' });
 
   // The chip opens the view too; Escape closes it.
   await page.locator('[data-thread-chip] button', { hasText: 'Product teaser' }).click();
@@ -178,7 +154,7 @@ test('DM: the thread view opens, sends "Reply in thread", and shows a refused re
   expectClean(network);
 });
 
-test('group (i4-group-b): photos and the gutter shift on the rail only', async ({ page }, info) => {
+test('group (i4-group-b): photos and the gutter shift on the rail only', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   await openChat(page, THREAD_GROUP_NAME);
   await expect(row(page, 'gr').locator('[data-rail="elbow"]')).toHaveCount(1);
@@ -197,7 +173,6 @@ test('group (i4-group-b): photos and the gutter shift on the rail only', async (
   await expect(row(page, 'ge').locator('[data-rail]')).toHaveCount(0);
   const plainPhoto = await row(page, 'ge').locator(':scope > *').first().boundingBox();
   expect(Math.round(plainPhoto?.x ?? 0)).toBe(16);
-  await snap(page, info, 'gc', 'group-i4-run');
 
   // The thread view keeps the group rows: photo, name line and the 14px shift.
   await page.locator('[data-thread-open="replies"]', { hasText: '4 replies' }).click();
@@ -206,10 +181,6 @@ test('group (i4-group-b): photos and the gutter shift on the rail only', async (
   await expect(view.locator('li[data-msg-id]', { hasText: 'Love the colours.' })).toContainText(
     'Ana Silva',
   );
-  await page.waitForTimeout(300);
-  const path = info.outputPath('group-view.png');
-  await page.screenshot({ path });
-  await info.attach('group-view', { path, contentType: 'image/png' });
   expectClean(network);
 });
 
@@ -232,9 +203,6 @@ test('laptop: the hover smiley on an own rail row sits on the page fill', async 
   await expect(smiley).toHaveCSS('opacity', '1');
   await expect(smiley).toHaveClass(/bg-bg/);
   await expect(own.locator('[data-rail="tick"]')).toHaveCount(1);
-  const path = info.outputPath('laptop-hover-smiley.png');
-  await page.screenshot({ path });
-  await info.attach('laptop-hover-smiley', { path, contentType: 'image/png' });
   expectClean(network);
   await context.close();
 });

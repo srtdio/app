@@ -55,7 +55,7 @@ async function composerBox(page: Page): Promise<{ top: number; bottom: number }>
 
 test('composer sits on the keyboard bar with no gap, and returns to the bottom after', async ({
   page,
-}, testInfo) => {
+}) => {
   await fakeVisualViewport(page);
   await installHarnessNetwork(page);
   await page.goto('/chat');
@@ -75,7 +75,6 @@ test('composer sits on the keyboard bar with no gap, and returns to the bottom a
   await expect
     .poll(() => page.evaluate(() => document.documentElement.dataset.keyboard))
     .toBe('open');
-  await page.screenshot({ path: testInfo.outputPath('keyboard-open.png') });
 
   const open = await composerBox(page);
   // Flush with the visible bottom: no band between composer and the keyboard bar.
@@ -94,5 +93,4 @@ test('composer sits on the keyboard bar with no gap, and returns to the bottom a
     .toBe('closed');
   const after = await composerBox(page);
   expect(Math.abs(after.bottom - layoutHeight)).toBeLessThanOrEqual(2);
-  await page.screenshot({ path: testInfo.outputPath('keyboard-closed.png') });
 });

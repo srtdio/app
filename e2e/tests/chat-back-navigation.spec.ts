@@ -18,12 +18,6 @@ import {
 // one. The real app tree runs against fixture data in both colour schemes;
 // Linux WebKit approximates iOS WebKit, it is not iOS.
 
-async function shot(page: Page, name: string): Promise<void> {
-  const path = test.info().outputPath(`${name}.png`);
-  await page.screenshot({ path });
-  await test.info().attach(name, { path, contentType: 'image/png' });
-}
-
 function expectClean(network: HarnessNetwork, allowed: readonly string[] = []): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   const unmatched = [...new Set(network.unmatched)].filter((r) => !allowed.includes(r));
@@ -48,22 +42,22 @@ function header(page: Page, name: string): ReturnType<Page['locator']> {
   return page.locator('[data-contact-open], [data-group-info-open]', { hasText: name }).first();
 }
 
-test('1: Pipeline -> Chat tab -> open chat; back = list (/chat), back again = Pipeline', async ({
-  page,
-}) => {
-  await installHarnessNetwork(page);
-  await page.goto('/pipeline');
-  await page.getByRole('link', { name: 'Chat' }).first().click();
-  await expect(page).toHaveURL(/\/chat$/);
-  await openFromList(page, PEER_NAME);
-  await shot(page, 'back-1-chat');
-  await page.goBack();
-  await expect(page).toHaveURL(/\/chat$/);
-  await expectList(page);
-  await shot(page, 'back-1-list');
-  await page.goBack();
-  await expect(page).toHaveURL(/\/pipeline$/);
-});
+test(
+  '1: Pipeline -> Chat tab -> open chat; back = list (/chat), back again = Pipeline',
+  { tag: '@theme' },
+  async ({ page }) => {
+    await installHarnessNetwork(page);
+    await page.goto('/pipeline');
+    await page.getByRole('link', { name: 'Chat' }).first().click();
+    await expect(page).toHaveURL(/\/chat$/);
+    await openFromList(page, PEER_NAME);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/chat$/);
+    await expectList(page);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/pipeline$/);
+  },
+);
 
 test('2: a layer is one step: thread view, contact sheet, Starred close on back and stay in the chat', async ({
   page,
@@ -107,12 +101,10 @@ test('2b: the thread view closes on back (its fade) and stays in the chat', asyn
   await page.locator('[data-thread-open="replies"]', { hasText: '4 replies' }).click();
   const view = page.locator('[data-thread-view]');
   await expect(view).toHaveCSS('opacity', '1');
-  await shot(page, 'back-2-thread-view');
   await page.goBack();
   await expect(view).toHaveCount(0);
   expect(page.url()).toBe(chatUrl);
   await expect(page.locator('[data-msg-id]').first()).toBeVisible();
-  await shot(page, 'back-2-thread-closed');
   await page.goBack();
   await expectList(page);
   expectClean(network);
@@ -157,7 +149,6 @@ test('4: Chat home -> bell -> mention row -> back = chat home with the bell open
   await page.goBack();
   await expect(page).toHaveURL(/\/chat$/);
   await expect(bell).toBeVisible();
-  await shot(page, 'back-4-bell-restored');
   await page.goBack();
   await expect(bell).toBeHidden();
   await expectList(page);
@@ -234,7 +225,6 @@ test.describe('6: laptop', () => {
     await page.goBack();
     expect(page.url()).toBe(aUrl);
     await expect(header(page, PEER_NAME)).toBeVisible();
-    await shot(page, 'back-6-laptop-chat-a');
     // Back once more: the chat closes on a laptop too.
     await page.goBack();
     await expect(page).toHaveURL(/\/chat$/);
@@ -263,7 +253,6 @@ test('8: a draft typed in a chat survives back and reopen', async ({ page }) => 
   await expectList(page);
   await openFromList(page, PEER_NAME);
   await expect(page.locator('form textarea').first()).toHaveValue(draft);
-  await shot(page, 'back-8-draft-kept');
   expectClean(network);
 });
 
@@ -301,7 +290,6 @@ test('F2: Pipeline -> Chat tab -> group -> Leave group: list at once, back = Pip
   await page.getByRole('button', { name: 'Leave', exact: true }).click();
   await expect(page).toHaveURL(/\/chat$/);
   await expectList(page);
-  await shot(page, 'back-f2-left-group');
   // No duplicate list entry: one back leaves Chat.
   await page.goBack();
   await expect(page).toHaveURL(/\/pipeline$/);

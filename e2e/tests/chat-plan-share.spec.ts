@@ -37,10 +37,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -97,8 +93,6 @@ test('agency: Plans lists upcoming plans; a row opens the plan, never sends; sen
   await expect(picker.locator('[data-plan-pick-new]')).toHaveText(/New plan/);
   expectMinTouchTarget(await teamRow.boundingBox());
   expectMinTouchTarget(await picker.locator('[data-plan-pick-new]').boundingBox());
-  await page.waitForTimeout(300);
-  await shot(page, 'share-01-plans-sheet');
 
   // A row opens that plan's screen; nothing is sent.
   await picker.locator(`[data-plan-pick="${UPCOMING_CLIENT_PLAN_ID}"]`).click();
@@ -131,8 +125,6 @@ test('agency: Plans lists upcoming plans; a row opens the plan, never sends; sen
     'Open the plan for client to send it here.',
   );
   await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'share-02-draft-held-back');
 
   // Open for client, then send: two separate writes.
   await plan.locator('[data-plan-open-client]').click();
@@ -166,8 +158,6 @@ test('agency: Plans lists upcoming plans; a row opens the plan, never sends; sen
   const tickerPlan = page.locator('[data-loops-strip="open"] [data-status-item="plan"]');
   await expect(tickerPlan).toBeVisible();
   await expect(tickerPlan).toHaveAttribute('aria-label', 'Plan 0 of 2 approved by client');
-  await page.waitForTimeout(400);
-  await shot(page, 'share-03-sent');
   expectClean(network);
 });
 
@@ -187,8 +177,6 @@ test('agency: Forward a Draft plan into a client chat sends nothing', async ({ p
   await expect(
     forward.locator(`[data-plan-forward-target="${GROUP_CHANNEL}"] [data-plan-has-client]`),
   ).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'share-04-forward');
   const from = network.rpcCalls.length;
   await target.click();
   await expect(page.getByText('Open the plan for client first.')).toBeVisible();
@@ -235,7 +223,6 @@ test('client: a draft post in a client plan shows by name only and does nothing'
   await row.click({ force: true });
   await page.waitForTimeout(400);
   await expect(page.locator('[data-plan-page="item"]')).toHaveCount(0);
-  await shot(page, 'share-05-client-draft');
   expectClean(network);
 });
 
@@ -247,8 +234,6 @@ test('agency: no upcoming plans shows the empty line and New plan', async ({ pag
   await expect(picker.locator('[data-plan-picker-empty]')).toContainText('No upcoming plans');
   await expect(picker.getByText("Plans that have ended don't show here.")).toBeVisible();
   await expect(picker.locator('[data-plan-pick]')).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'share-06-empty');
   await picker.locator('[data-plan-pick-new]').click();
   await expect(page.locator('[data-plan-page="compose"]')).toBeVisible();
   expectClean(network);

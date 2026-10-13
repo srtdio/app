@@ -192,9 +192,17 @@ async function run(page: Page, scenario: Scenario): Promise<void> {
   await row.waitFor({ state: 'visible' });
   const gate = scenario.slowMs !== undefined ? network.holdTable('plans') : null;
   await row.click();
+  // The hold is timed from the held request, not from the thread's paint: on a
+  // loaded runner the two can be seconds apart, and the read's own 5s timeout
+  // (a retry, so a second read) must never be what this scenario measures.
+  let askedAt = 0;
+  if (gate !== null) {
+    await expect.poll(planReads).toBe(1);
+    askedAt = Date.now();
+  }
   await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
   if (gate !== null) {
-    await page.waitForTimeout(scenario.slowMs ?? 0);
+    await page.waitForTimeout(Math.max(0, (scenario.slowMs ?? 0) - (Date.now() - askedAt)));
     // The skeleton holds while the read is slow.
     expect(await paintsOf(page)).toEqual(
       expect.arrayContaining([expect.stringMatching(/^skeleton/)]),
@@ -227,7 +235,6 @@ async function run(page: Page, scenario: Scenario): Promise<void> {
   await expect(card.locator('[data-plan-chip]')).toHaveText(scenario.chips);
   await expect(card.locator('[data-plan-progress]')).toHaveText(scenario.progress);
   await expect(card.locator('[data-plan-forward]')).toHaveCount(scenario.forward ? 1 : 0);
-  await page.screenshot({ path: test.info().outputPath('settled.png') });
   expectClean(network);
 }
 
@@ -539,7 +546,6 @@ async function runTickerFill(page: Page): Promise<void> {
   expect(log.scrollJumps, `the thread never jumps: ${JSON.stringify(sequence)}`).toBe(0);
   // The paint log is opt-in: nothing of it without ?paintlog=1.
   await expect(page.locator('[data-paint-log]')).toHaveCount(0);
-  await page.screenshot({ path: test.info().outputPath('ticker-filled.png') });
   expectClean(network);
 }
 
@@ -563,7 +569,6 @@ async function runPaintLog(page: Page): Promise<void> {
   const box = await copy.boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-  await page.screenshot({ path: test.info().outputPath('paint-log.png') });
   expectClean(network);
 }
 

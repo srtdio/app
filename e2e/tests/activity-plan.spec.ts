@@ -32,10 +32,6 @@ import {
 const FILE_VERSION = '0190e100-0000-7000-8000-0000000000c1';
 const POST_TITLE = 'Monday carousel';
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -81,7 +77,6 @@ test('agency: a plan_comment row is a bell row (not Activity) and opens the item
   await page.waitForTimeout(1500);
   await expect(card(page, PLAN_CONCEPT_TITLE)).toHaveCount(0);
   await expect(page.locator('[data-activity-plan-icon]')).toHaveCount(0);
-  await shot(page, 'activity-plan-01-activity-no-plan-row');
 
   await openBell(page);
   const row = page.locator('[data-bell-row="plan"]');
@@ -89,8 +84,6 @@ test('agency: a plan_comment row is a bell row (not Activity) and opens the item
   await expect(page.locator('[data-bell-section="plans"]')).toBeVisible();
   await expect(row).toContainText(`${PEER_NAME} commented on a plan item`);
   expectMinTouchTarget(await row.locator('[data-bell-open]').boundingBox());
-  await page.waitForTimeout(300);
-  await shot(page, 'activity-plan-02-bell-row');
 
   // The tap: marked read, then the standalone page with the item open.
   await row.locator('[data-bell-open]').click();
@@ -100,8 +93,6 @@ test('agency: a plan_comment row is a bell row (not Activity) and opens the item
   await expect(item.getByRole('heading', { name: PLAN_CONCEPT_TITLE })).toBeVisible();
   await expect(item.getByText(ACTIVITY_PLAN_COMMENT_BODY)).toBeVisible();
   expectMinTouchTarget(await item.getByRole('button', { name: 'Back', exact: true }).boundingBox());
-  await page.waitForTimeout(300);
-  await shot(page, 'activity-plan-03-agency-item');
   expectClean(network);
 });
 
@@ -128,16 +119,12 @@ test('client: a plan_review row is a bell row and opens the post item', async ({
   await openBell(page);
   const row = page.locator('[data-bell-row="plan"]');
   await expect(row).toContainText('Maya Chen approved a plan item');
-  await page.waitForTimeout(300);
-  await shot(page, 'activity-plan-04-client-bell-row');
 
   await row.locator('[data-bell-open]').click();
   await expect(page).toHaveURL(new RegExp(`/plans/${PLAN_ID}\\?item=${PLAN_POST_ITEM}$`));
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByRole('heading', { name: POST_TITLE })).toBeVisible();
-  await page.waitForTimeout(300);
-  await shot(page, 'activity-plan-05-client-item');
   expectClean(network);
 });
 
@@ -150,8 +137,6 @@ test('an unreadable plan shows "Plan not available"; a cold deep link Back lands
   await expect(plan).toBeVisible({ timeout: 15_000 });
   await expect(plan.getByText('Plan not available').first()).toBeVisible();
   await expect(planPage(page, 'item')).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'activity-plan-06-not-available');
 
   await plan.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page).toHaveURL(/\/activity$/);

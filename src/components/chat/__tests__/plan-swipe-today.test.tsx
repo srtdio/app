@@ -159,6 +159,96 @@ describe('swipe to remove: rendering', () => {
   });
 });
 
+describe('swipe rows: long titles stay inside the column', () => {
+  const LONG_CONCEPT =
+    'Lantern workshop with the whole extended family on the terrace at golden hour, shot handheld, then cut into a vertical reel with captions';
+  const LONG_POST =
+    'Opening offer carousel for the festive weekend: twelve frames, each with the price card, the store map and the booking link in the caption';
+  const longBundle = (): PlanBundle => {
+    const b = bundle();
+    return {
+      ...b,
+      items: [
+        item({ id: 'c1', target_date: '2026-10-13', position: 0, title: LONG_CONCEPT }),
+        item({ id: 'p1', kind: 'post', title: null, post_id: 'post-1', position: 1 }),
+      ],
+      postInfo: { 'post-1': { title: LONG_POST, target_date: '2026-10-15T12:00:00Z' } },
+    };
+  };
+  const paintLong = (rowSwipe?: PlanRowSwipe): string =>
+    renderToStaticMarkup(
+      <MemoryRouter>
+        <PlanBody
+          bundle={longBundle()}
+          groups={planListGroups(longBundle(), 'UTC', 'agency')}
+          side="agency"
+          timeZone="UTC"
+          thumbs={{}}
+          drag={null}
+          onOpenItem={() => undefined}
+          onToggleSlot={() => undefined}
+          {...(rowSwipe !== undefined ? { swipe: rowSwipe } : {})}
+        />
+      </MemoryRouter>,
+    );
+  const tag = (html: string, attr: string): string =>
+    html.match(new RegExp(`<[a-z]+[^>]*${attr}[^>]*>`))?.[0] ?? '';
+
+  it('the fixtures are over 120 characters', () => {
+    expect(LONG_CONCEPT.length).toBeGreaterThan(120);
+    expect(LONG_POST.length).toBeGreaterThan(120);
+  });
+
+  it('the grid track is minmax(0, 1fr) and every wrapper down to the content is min-w-0', () => {
+    for (const id of ['c1', 'p1']) {
+      const html = paintLong(swipe());
+      const item = tag(html, `data-plan-row-item="${id}"`);
+      expect(item).toContain('grid-cols-[minmax(0,1fr)]');
+      expect(item).toContain('min-w-0');
+      const clip = html.match(
+        new RegExp(`data-plan-row-item="${id}"[^>]*>\\s*<div class="([^"]*)"`),
+      )?.[1];
+      expect(clip).toContain('min-w-0');
+      const content = tag(html, `data-plan-row-swipe="${id}"`);
+      expect(content).toContain('min-w-0');
+      expect(content).toContain('touch-pan-y');
+      expect(tag(html, `data-plan-row="${id}"`)).toContain('min-w-0');
+    }
+  });
+
+  it('both long titles render in full text and truncate (ellipsis), swipe or not', () => {
+    for (const html of [paintLong(swipe()), paintLong()]) {
+      for (const title of [LONG_CONCEPT, LONG_POST]) {
+        expect(html).toMatch(
+          new RegExp(
+            `data-plan-row-title=""[^>]*class="[^"]*\\btruncate\\b[^"]*"[^>]*>${title.slice(0, 40)}`,
+          ),
+        );
+      }
+    }
+    // The plain row (no swipe) keeps the pre-swipe wrapper, min-w-0 added.
+    expect(tag(paintLong(), 'data-plan-row-wrap="c1"')).toContain(
+      'flex w-full min-w-0 items-start gap-1',
+    );
+  });
+
+  it('the action container always clips; the red action is invisible at rest', () => {
+    const rest = paintLong(swipe());
+    for (const id of ['c1', 'p1']) {
+      const clip = rest.match(
+        new RegExp(`data-plan-row-item="${id}"[^>]*>\\s*<div class="([^"]*)"`),
+      )?.[1];
+      expect(clip).toContain('overflow-hidden');
+      expect(tag(rest, `data-plan-row-remove="${id}"`)).toContain('invisible');
+    }
+    const open = paintLong(swipe({ openId: 'c1' }));
+    expect(tag(open, 'data-plan-row-remove="c1"')).not.toContain('invisible');
+    expect(tag(open, 'data-plan-row-remove="p1"')).toContain('invisible');
+    const peek = paintLong(swipe({ peek: { id: 'p1', offset: -72 } }));
+    expect(tag(peek, 'data-plan-row-remove="p1"')).not.toContain('invisible');
+  });
+});
+
 describe('open at today', () => {
   const plan = { starts_on: '2026-10-12', ends_on: '2026-10-25' };
   it('inside the range: today', () => {

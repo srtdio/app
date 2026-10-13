@@ -33,10 +33,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -85,8 +81,6 @@ test.describe('phone', () => {
     await expect(card.locator('[data-plan-progress]')).toHaveText(
       `Client ${c.client} of ${c.total}`,
     );
-    await page.waitForTimeout(300);
-    await shot(page, 'dates-01-card-agency');
 
     await card.locator('[data-plan-open]').click();
     const plan = page_(page, 'plan');
@@ -125,13 +119,10 @@ test.describe('phone', () => {
       'none',
     ]);
     await expect(days.last().locator('[data-plan-day-col]')).toHaveText(/No date/i);
-    await page.waitForTimeout(300);
-    await shot(page, 'dates-02-list-sorted');
     await plan
       .locator('[data-plan-row]')
       .nth(total - 1)
       .scrollIntoViewIfNeeded();
-    await shot(page, 'dates-03-list-no-date-last');
 
     // "Concept i of n" follows the date order.
     await plan.locator('[data-plan-row]').first().scrollIntoViewIfNeeded();
@@ -165,8 +156,6 @@ test.describe('phone', () => {
     await plan.locator(`[data-plan-row="${target.id}"]`).click();
     await expect(item).toBeVisible();
     await expect(item.locator('[data-plan-item-date]')).toHaveText('No date');
-    await page.waitForTimeout(300);
-    await shot(page, 'dates-05-item-no-date');
     await item.locator('[data-plan-edit-date]').click();
     const sheet = page.getByRole('dialog', { name: 'Edit concept' });
     await expect(sheet).toBeVisible();
@@ -176,8 +165,6 @@ test.describe('phone', () => {
     const clear = sheet.locator('[data-plan-concept-date-clear]');
     const box = await clear.boundingBox();
     expectMinTouchTarget(box);
-    await page.waitForTimeout(300);
-    await shot(page, 'dates-06-edit-sheet');
     await sheet.locator('[data-plan-concept-save]').click();
     await expect(sheet).toBeHidden();
     await expect(item.locator('[data-plan-item-date]')).toHaveText('11 Oct');
@@ -186,8 +173,6 @@ test.describe('phone', () => {
     // Files went as null: the one link is untouched (not re-attached).
     expect(linksOf()).toEqual([link]);
     await expect(item.getByText(`Concept 1 of ${conceptCount}`)).toBeVisible();
-    await page.waitForTimeout(300);
-    await shot(page, 'dates-07-item-dated');
     await page.goBack();
     await expect(item).toBeHidden();
     await expect.poll(async () => (await rowTitles(page))[0]).toBe(target.title);
@@ -210,8 +195,6 @@ test.describe('phone', () => {
     await page.goBack();
     await expect(item).toBeHidden();
     await expect.poll(() => rowTitles(page)).toEqual(expectedTitles());
-    await page.waitForTimeout(300);
-    await shot(page, 'dates-08-cleared');
     expectClean(network);
   });
 
@@ -231,8 +214,6 @@ test.describe('phone', () => {
       `Client ${c.client} of ${c.total}`,
     );
     await expect(card.getByText(/Agency \d/)).toHaveCount(0);
-    await page.waitForTimeout(300);
-    await shot(page, 'dates-09-card-client');
     await card.locator('[data-plan-open]').click();
     const plan = page_(page, 'plan');
     await expect(plan.locator('[data-plan-screen-progress]')).toHaveText(
@@ -241,8 +222,6 @@ test.describe('phone', () => {
     expect(await rowTitles(page)).toEqual(expectedTitles());
     await expect(plan.locator('[data-plan-pill="team"]')).toHaveCount(0);
     await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
-    await page.waitForTimeout(300);
-    await shot(page, 'dates-10-plan-client');
     expectClean(network);
   });
 });

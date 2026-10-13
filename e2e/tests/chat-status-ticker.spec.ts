@@ -193,10 +193,6 @@ async function openDm(page: Page): Promise<Locator> {
   return bar;
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 /** A finger drag: pointerdown, moves in steps, pointerup (all on one element). */
 async function drag(page: Page, target: Locator, dy: number, ms = 400): Promise<void> {
   const box = await target.boundingBox();
@@ -241,7 +237,6 @@ test.describe('chat status ticker', () => {
     expect(keys).toEqual(['plan', 'posts', 'briefs', 'commitments', 'decisions', 'pending']);
     const barBox = await bar.boundingBox();
     expect(barBox?.height).toBe(36);
-    await shot(page, 'ticker-bar');
 
     await bar.locator('[data-status-item="pending"]').click();
     await drawerOpen(page);
@@ -257,7 +252,6 @@ test.describe('chat status ticker', () => {
       (listBox?.height ?? 0) - 40,
     );
     await expect(page.locator('[data-status-chevron]')).toHaveAttribute('aria-expanded', 'true');
-    await shot(page, 'drawer-pending');
 
     await bar.click({ position: { x: 300, y: 18 } });
     await drawerClosed(page);
@@ -270,7 +264,6 @@ test.describe('chat status ticker', () => {
     await drag(page, bar, 320);
     await drawerOpen(page);
     expect(await page.locator('[data-status-list]').evaluate((el) => el.scrollTop)).toBe(0);
-    await shot(page, 'drawer-dragged');
   });
 
   test('close by dragging the handle up', async ({ page }) => {
@@ -313,7 +306,6 @@ test.describe('chat status ticker', () => {
     expect((chevronBox?.x ?? 0) + (chevronBox?.width ?? 0)).toBeLessThanOrEqual(360);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scroll).toBeLessThanOrEqual(360);
-    await shot(page, 'ticker-compact-360');
   });
 
   test('a long-press on the bar selects no text and shows no callout', async ({ page }) => {
@@ -349,7 +341,6 @@ test.describe('chat status ticker', () => {
     await drawerOpen(page);
     await page.locator('[data-status-post]').first().click();
     await expect(page.locator('[data-sheet-title]')).toBeVisible();
-    await shot(page, 'post-sheet');
   });
 
   test('a post still loading shows its row busy, then opens', async ({ page }) => {
@@ -407,7 +398,6 @@ test.describe('chat status ticker', () => {
     await page.goBack();
     await expect(page.locator('[data-status-drawer="open"]')).toHaveCount(1, { timeout: 8000 });
     await expect(page.locator('[data-status-section="briefs"]')).toBeVisible();
-    await shot(page, 'drawer-restored');
   });
 
   test('brief tap, another tab, then Chat again: the drawer starts closed', async ({ page }) => {
@@ -483,7 +473,6 @@ test.describe('chat status ticker', () => {
       expect(calls[0]?.args.p_message_id).toBe(messageId);
       expect(calls[0]?.args.p_channel_id).toBe(DM_CHANNEL);
       expect(network.rpcCalls.filter((c) => c.name === 'chat_mark_reopen')).toHaveLength(0);
-      await shot(page, `stamp-${s.type}-done`);
     });
 
     test(`${s.type} stamp refused: "Could not update" and the row stays`, async ({ page }) => {

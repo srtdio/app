@@ -38,10 +38,6 @@ async function openChat(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
-}
-
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
@@ -127,8 +123,6 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   expectMinTouchTarget(await box.boundingBox());
   await expectRowLayout(page, PLAN_POST_ITEM);
   await box.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-01-client-week-list');
 
   // Tick: optimistic, the count moves, the toast offers Undo.
   await box.click();
@@ -153,8 +147,6 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   const post = (network.world.tables.posts ?? []).find((p) => p.id === POST_IDS[0]);
   const stage = post?.stage;
   expect(stage).not.toBe('approved');
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-02-client-ticked-toast');
 
   // Undo: back to waiting, the count back, a withdrawal registered.
   await undo.click();
@@ -168,8 +160,6 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   );
   expect(withdrawals.length).toBeGreaterThan(0);
   expect(post?.stage).toBe(stage);
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-03-client-undone');
 
   // Tick again, then the post item's header reads "Slot approved".
   await box.click();
@@ -188,8 +178,6 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   await expect(sheet.getByRole('button', { name: /Send to chat/ })).toBeVisible();
   await expect(sheet.getByRole('button', { name: /Copy link/ })).toBeVisible();
   await expect(sheet.getByRole('button', { name: /Delete post/ })).toHaveCount(0);
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-04-client-item-overflow');
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
@@ -240,8 +228,6 @@ test('agency on an Open plan: read-only client checkbox, header subtitle, long t
   expect(network.rpcCalls.filter((c) => c.name === 'plan_item_review')).toEqual([]);
   // The subtitle, the same for every viewer.
   await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with client$/);
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-06-agency-read-only');
 
   // The post item: client side on a client plan reads pending.
   await row.click();
@@ -259,15 +245,11 @@ test('agency on an Open plan: read-only client checkbox, header subtitle, long t
   for (const name of [/Open in pipeline/, /Send to chat/, /Copy link/, /Delete post/]) {
     await expect(sheet.getByRole('button', { name })).toBeVisible();
   }
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-07-agency-overflow');
   await sheet.getByRole('button', { name: /Delete post/ }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete post', exact: true });
   await expect(confirm.locator('[data-post-delete-text]')).toHaveText(
     `Delete this post? This cannot be undone. It's in ${long} and will leave that plan.`,
   );
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-08-agency-delete-confirm');
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await page.keyboard.press('Escape');
   expectClean(network);
@@ -296,8 +278,6 @@ test('client: a long plan shows week headers, 44px empty days, and a draft with 
   // Today's weekday is in the accent.
   const today = plan.locator('[data-plan-today] [data-plan-day-weekday]');
   if ((await today.count()) > 0) await expect(today).toHaveClass(/text-accent/);
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-09-client-long-plan-draft');
   expectClean(network);
 });
 
@@ -330,7 +310,5 @@ test('client: Undo after ticking a concept with changes asked restores changes',
   await expect(plan.locator(`[data-plan-row="${concept.id}"] [data-plan-row-status]`)).toHaveCount(
     0,
   );
-  await page.waitForTimeout(300);
-  await shot(page, 'slots-10-client-undo-restores-changes');
   expectClean(network);
 });
