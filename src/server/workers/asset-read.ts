@@ -659,7 +659,7 @@ async function handlePost(
 
   if (parsed.value.mode === 'thumbnail') {
     const result = await authorizeAndSignRendition(
-      { store, signer, renditions: createSupabaseRenditionStore(env) },
+      { store, signer, renditions: createSupabaseRenditionStore(env, traceId) },
       target,
     );
     if (!result.ok) {

@@ -35,6 +35,7 @@ import { VoiceNote } from '@/components/chat/VoiceNote';
 import { UploadRing } from '@/components/chat/UploadRing';
 import { FileBubble } from '@/components/chat/FileBubble';
 import { cn } from '@/lib/cn';
+import { middleTruncate } from '@/lib/files/display-name';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   classifyAttachment,
@@ -519,8 +520,8 @@ export function AttachmentsFallback(props: {
               <IconFile size={18} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium text-fg" title={name}>
-                {name}
+              <span className="text-sm font-medium text-fg [overflow-wrap:anywhere]" title={name}>
+                {middleTruncate(name)}
               </span>
               <span className="text-xs text-fg-3">{ATTACHMENT_FALLBACK}</span>
             </span>

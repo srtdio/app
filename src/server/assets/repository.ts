@@ -9,6 +9,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@srtdio/schemas';
+import { TRACE_ID_HEADER } from '../trace';
 import {
   err,
   ok,
@@ -1116,11 +1117,18 @@ export interface RenditionStore {
 }
 
 /** Service-role rendition store (SELECT and INSERT are its only grants). */
-export function createSupabaseRenditionStore(env: SupabaseAssetEnv): RenditionStore {
+export function createSupabaseRenditionStore(
+  env: SupabaseAssetEnv,
+  traceId?: string,
+): RenditionStore {
+  // The request's trace rides every rendition read and write as X-Trace-Id.
   const client: SupabaseClient<Database> = createClient<Database>(
     env.SUPABASE_URL,
     env.SUPABASE_SECRET_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } },
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      ...(traceId !== undefined ? { global: { headers: { [TRACE_ID_HEADER]: traceId } } } : {}),
+    },
   );
   return {
     async findRendition(assetVersionId, role) {

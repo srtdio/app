@@ -193,17 +193,19 @@ export async function downloadFile(source: FileViewerSource, name: string): Prom
 const BAR_BUTTON =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
   'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
-  'focus-visible:ring-overlay-fg/70 disabled:opacity-40';
+  'focus-visible:ring-overlay-fg disabled:opacity-40';
 const TEXT_BUTTON =
   'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-4 text-sm font-medium ' +
   'text-overlay-fg bg-overlay-surface hover:bg-overlay-line focus-visible:outline-none ' +
-  'focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
+  'focus-visible:ring-2 focus-visible:ring-overlay-fg';
 /** No selection or iOS callout on the viewer's controls. */
 const NO_SELECT = 'select-none [-webkit-touch-callout:none] [-webkit-user-select:none]';
 
 function focusable(root: HTMLElement): HTMLElement[] {
   return Array.from(
-    root.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], video[controls]'),
+    root.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], video[controls], [data-pdf-scroller]',
+    ),
   );
 }
 
@@ -237,6 +239,7 @@ function ViewerError(props: {
 function Spinner(): ReactElement {
   return (
     <div
+      role="status"
       aria-label="Loading"
       className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg"
     />
@@ -354,6 +357,8 @@ function PdfPage(props: {
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const { doc, pdfjs, pageNumber, aspect, live, cssWidth } = props;
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -389,14 +394,20 @@ function PdfPage(props: {
         });
         return task.promise;
       })
-      .catch(() => undefined);
+      .then(() => {
+        if (!cancelled) setFailed(false);
+      })
+      .catch(() => {
+        // A cancelled render (scrolled away, closed) is not a failure.
+        if (!cancelled) setFailed(true);
+      });
     return () => {
       cancelled = true;
       task?.cancel();
       cleanupPage?.();
       releaseCanvas(canvas);
     };
-  }, [doc, pdfjs, pageNumber, live, cssWidth]);
+  }, [doc, pdfjs, pageNumber, live, cssWidth, attempt]);
 
   return (
     <div
@@ -410,6 +421,16 @@ function PdfPage(props: {
           aria-label={`Page ${pageNumber}`}
           className="absolute inset-0 h-full w-full object-contain"
         />
+      ) : null}
+      {live && failed ? (
+        <button
+          type="button"
+          data-pdf-page-error=""
+          onClick={() => setAttempt((n) => n + 1)}
+          className="absolute inset-0 flex min-h-[44px] items-center justify-center bg-overlay text-sm text-overlay-fg"
+        >
+          {VIEWER_ERROR}
+        </button>
       ) : null}
     </div>
   );
@@ -607,6 +628,9 @@ function PdfRenderer(props: RendererProps): ReactElement {
     <div
       ref={scrollerRef}
       data-pdf-scroller=""
+      // Focusable so arrows, Space and Page Down scroll the pages on Safari.
+      tabIndex={0}
+      aria-label="Pages"
       onScroll={onScroll}
       className="absolute inset-0 overflow-auto overscroll-contain [touch-action:pan-x_pan-y]"
     >

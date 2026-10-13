@@ -325,14 +325,15 @@ interface ThumbnailBody {
 async function existingThumbnail(
   env: AssetUploadEnv,
   summary: AssetSummary,
+  traceId: string,
 ): Promise<ThumbnailBody | null> {
   const mime = summary.mimeType.toLowerCase();
   if (mime !== 'application/pdf' && !mime.startsWith('video/')) return null;
   try {
-    const found = await createSupabaseRenditionStore({
-      SUPABASE_URL: env.SUPABASE_URL,
-      SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY,
-    }).findRendition(summary.versionId, 'thumbnail');
+    const found = await createSupabaseRenditionStore(
+      { SUPABASE_URL: env.SUPABASE_URL, SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY },
+      traceId,
+    ).findRendition(summary.versionId, 'thumbnail');
     if (found === null || found.width === null || found.height === null) return null;
     return { width: found.width, height: found.height };
   } catch (error) {
@@ -359,7 +360,7 @@ async function attachThumbnail(
 ): Promise<ThumbnailBody | null> {
   const { part } = input;
   if (part === null) {
-    return input.summary.reused ? existingThumbnail(env, input.summary) : null;
+    return input.summary.reused ? existingThumbnail(env, input.summary, input.traceId) : null;
   }
   if (!(part instanceof Blob)) {
     logger.warn('asset upload thumbnail ignored', { reason: 'not_a_file' });
@@ -375,10 +376,10 @@ async function attachThumbnail(
       {
         storage: buildStorage(env),
         repository: buildRepository(env),
-        renditions: createSupabaseRenditionStore({
-          SUPABASE_URL: env.SUPABASE_URL,
-          SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY,
-        }),
+        renditions: createSupabaseRenditionStore(
+          { SUPABASE_URL: env.SUPABASE_URL, SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY },
+          input.traceId,
+        ),
       },
       {
         summary: input.summary,
