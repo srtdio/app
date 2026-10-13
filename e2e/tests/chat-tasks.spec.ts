@@ -3,7 +3,10 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { DM_CHANNEL, GROUP_NAME, PEER_NAME } from '../fixtures/chat-data';
 import {
+  DUE_SOON_ID,
+  DUE_SOON_TITLE,
   OLDER_LINE_TITLE,
+  seedDueSoon,
   seedOlderTaskHistory,
   seedTasks,
   TASK_CHANNEL,
@@ -14,7 +17,7 @@ import {
 
 // The chat task list: the composer button, the sheet (groups, rows, add,
 // expand and edit), the change lines in the thread, the bell's task rows,
-// Share as a plain-text message and numbered list continuation. The real app
+// Share through Forward, the due-time ring and numbered list continuation. The real app
 // tree runs against fixture data; Linux WebKit approximates iOS WebKit.
 
 function expectClean(network: HarnessNetwork): void {
@@ -193,7 +196,9 @@ test('bell: a missed due time opens the chat on that item; Back closes the sheet
   expectClean(network);
 });
 
-test('Share: the snapshot lands as a text message in the picked chat', async ({ page }) => {
+test('Share: the snapshot lands here and, Forwarded, in the picked chat and its preview', async ({
+  page,
+}) => {
   const network = await installHarnessNetwork(page);
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
@@ -205,24 +210,64 @@ test('Share: the snapshot lands as a text message in the picked chat', async ({ 
   await picker.getByRole('button', { name: PEER_NAME }).click();
   await picker.getByRole('button', { name: 'Send to 1 chat' }).click();
   await expect(picker).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Tasks' })).toHaveCount(0);
 
-  const sends = network.rpcCalls.filter(
-    (c) => c.name === 'chat_message_send' && c.args.p_channel_id === DM_CHANNEL,
-  );
-  expect(sends).toHaveLength(1);
-  const body = String(sends[0]?.args.p_body);
+  // This chat: the normal send, then the thread's forward of that message.
+  const here = page.locator('[data-bubble]', { hasText: `Task list · ${GROUP_NAME} · ` });
+  await expect(here).toBeVisible();
+  await expect(here.locator('[data-forwarded]')).toHaveCount(0);
+  const sends = network.rpcCalls.filter((c) => c.name === 'chat_message_send');
+  const own = sends.filter((c) => c.args.p_channel_id === TASK_CHANNEL);
+  const copy = sends.filter((c) => c.args.p_channel_id === DM_CHANNEL);
+  expect(own).toHaveLength(1);
+  expect(copy).toHaveLength(1);
+  const body = String(own[0]?.args.p_body);
   expect(body.startsWith(`Task list · ${GROUP_NAME} · `)).toBe(true);
   expect(body).toContain('\nAgency\n8. Hook options · P1\n9. Shot list · P2 · today');
   expect(body).toContain(`\nClient\n10. ${TASK_DUE_TITLE} · P0 · today`);
   expect(body).toContain('(missed)');
-  expect(sends[0]?.args.p_forwarded_from_message_id).toBeUndefined();
+  expect(copy[0]?.args.p_body).toBe(body);
+  expect(copy[0]?.args.p_forwarded_from_message_id).toBe(own[0]?.args.p_id);
 
-  await page.getByRole('button', { name: 'Close' }).last().click();
-  await page.goto(`/chat?channel=${encodeURIComponent(DM_CHANNEL)}`);
-  await expect(page.locator('[data-bubble]', { hasText: `Task list · ${GROUP_NAME}` })).toBeVisible(
-    {
-      timeout: 8000,
-    },
+  // The list: the DM's preview is the snapshot's first line.
+  await page.getByRole('button', { name: /back/i }).first().click();
+  const firstLine = body.split('\n')[0] ?? '';
+  const dmRow = page.getByRole('button', { name: new RegExp(PEER_NAME) }).first();
+  await expect(dmRow).toContainText(firstLine);
+  await dmRow.click();
+  const there = page.locator('[data-bubble]', { hasText: firstLine });
+  await expect(there).toBeVisible({ timeout: 8000 });
+  await expect(there.locator('[data-forwarded]')).toHaveText('Forwarded');
+  expectClean(network);
+});
+
+test('a due time comes up while the app is open: toast, tap opens the item', async ({ page }) => {
+  const start = new Date();
+  start.setSeconds(0, 0);
+  await page.clock.install({ time: start });
+  const network = await installHarnessNetwork(page);
+  seedTasks(network.world, start.getTime());
+  seedDueSoon(network.world, start.getTime() + 60_000);
+
+  const dues = page.waitForResponse(
+    (r) => r.url().includes('/rest/v1/chat_tasks') && r.url().includes('due_passed_at'),
+  );
+  await page.goto('/chat');
+  // Every first read is in (the jump never times one out), then the minute passes.
+  await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+  await expect(page.locator('[data-bell-badge]')).toBeVisible();
+  await dues;
+  await page.clock.fastForward(60_000);
+
+  const toast = page.getByText(`Due now: 12 ${DUE_SOON_TITLE}`);
+  await expect(toast).toBeVisible();
+  await toast.click();
+  const sheet = page.getByRole('dialog', { name: 'Tasks' });
+  await expect(sheet).toBeVisible({ timeout: 8000 });
+  await expect(page).toHaveURL(new RegExp(`channel=${encodeURIComponent(TASK_CHANNEL)}`));
+  await expect(sheet.locator(`[data-task-row-id="${DUE_SOON_ID}"]`)).toHaveAttribute(
+    'data-task-expanded',
+    '',
   );
   expectClean(network);
 });

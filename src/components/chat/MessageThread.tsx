@@ -204,8 +204,7 @@ import { ForwardPicker, type ForwardSendResult } from '@/components/chat/Forward
 import { TaskButton, readTasksSeen, writeTasksSeen } from '@/components/chat/tasks/TaskButton';
 import { TaskEventLine, type TaskLineContext } from '@/components/chat/tasks/TaskEventLine';
 import { TaskSheet } from '@/components/chat/tasks/TaskSheet';
-import { shareTextToChats } from '@/components/chat/tasks/share';
-import { useChatOptional, useChatTasks } from '@/components/chat/tasks/useChatTasks';
+import { useChatTasks } from '@/components/chat/tasks/useChatTasks';
 import {
   collapseTaskRun,
   eventsInWindow,
@@ -4590,12 +4589,10 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     profiles: props.profiles,
     timeZone: props.timeZone,
   });
-  const liveChat = useChatOptional();
   const [taskSheet, setTaskSheet] = useState<{ open: boolean; focus: string | null }>({
     open: false,
     focus: null,
   });
-  const [taskShareOpen, setTaskShareOpen] = useState(false);
   const seenKey = taskChannel !== null ? tasksSeenKey(taskChannel) : null;
   const [seenMs, setSeenMs] = useState<{ key: string | null; ms: number | null }>(() => ({
     key: seenKey,
@@ -4620,7 +4617,6 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
   // Leaving the chat closes its sheet.
   useEffect(() => {
     setTaskSheet({ open: false, focus: null });
-    setTaskShareOpen(false);
   }, [taskChannel]);
   // One layer, one back step: back from the sheet is the thread.
   useHistoryStep(taskSheet.open, 'chatTasks', () =>
@@ -5987,31 +5983,27 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           tasks={chatTasks}
           timeZone={props.timeZone}
           focusTaskId={taskSheet.focus}
-          {...(forwardChannels !== undefined ? { onShare: () => setTaskShareOpen(true) } : {})}
-        />
-      ) : null}
-      {taskChannel !== null && forwardChannels !== undefined ? (
-        <ForwardPicker
-          open={taskShareOpen}
-          onClose={() => setTaskShareOpen(false)}
-          channels={forwardChannels}
-          onSend={(targets) =>
-            shareTextToChats({
-              text: shareSnapshot({
-                chatName: props.title,
-                tasks: chatTasks.tasks,
-                nowMs: Date.now(),
-                timeZone: props.timeZone,
-              }),
-              targets,
-              openChannelId: taskChannel,
-              // The plain composer send (outbox): never the about quote.
-              sendHere: (text) => props.onSend(text, [], [], null, []),
-              db: supabase,
-              connection: liveChat?.client ?? null,
-            })
-          }
-          onSent={() => setTaskShareOpen(false)}
+          {...(onForward !== undefined && forwardChannels !== undefined
+            ? {
+                share: {
+                  channels: forwardChannels,
+                  openChannelId: taskChannel,
+                  messages: props.messages,
+                  // The plain composer send (outbox): never the about quote.
+                  send: (text: string) => props.onSend(text, [], [], null, []),
+                  // The long-press Forward's own function.
+                  forward: onForward,
+                  snapshot: () =>
+                    shareSnapshot({
+                      chatName: props.title,
+                      tasks: chatTasks.tasks,
+                      nowMs: Date.now(),
+                      timeZone: props.timeZone,
+                    }),
+                  onShared: jumpTo,
+                },
+              }
+            : {})}
         />
       ) : null}
       <PrioritySheet

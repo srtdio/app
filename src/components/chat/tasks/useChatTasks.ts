@@ -45,6 +45,7 @@ import {
   type TaskField,
   type TaskSide,
 } from '@/lib/chat/tasks';
+import { announceTaskDueChanged } from '@/lib/chat/task-ring';
 import {
   enqueue,
   markSending,
@@ -448,6 +449,8 @@ export function useChatTasks(params: {
         return;
       }
       signal(forChannel, task.id, traceId);
+      // The due ring (BellRing) re-arms for this device's new due time.
+      if (field === 'due' || field === 'status') announceTaskDueChanged();
       await refreshOne(task.id);
     },
     [db, apply, currentUserId, signal, refreshOne],
