@@ -4550,6 +4550,7 @@ export type Database = {
           channel_id: string
           last_read_at: string
           last_read_message_id: string
+          read_at: string | null
           updated_at: string
           user_id: string
           workspace_id: string
@@ -4558,6 +4559,7 @@ export type Database = {
           channel_id: string
           last_read_at: string
           last_read_message_id: string
+          read_at?: string | null
           updated_at?: string
           user_id: string
           workspace_id: string
@@ -4566,6 +4568,7 @@ export type Database = {
           channel_id?: string
           last_read_at?: string
           last_read_message_id?: string
+          read_at?: string | null
           updated_at?: string
           user_id?: string
           workspace_id?: string
