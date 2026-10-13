@@ -217,17 +217,22 @@ export function FileTile(props: FileTileProps): ReactElement {
   const near = useNearViewport(ref);
   const wantsThumb = presignEnabled && versionId !== '' && thumbnailKind(mime) !== null;
   const stored = useStoredThumbnail(versionId, cache, wantsThumb && near);
-  const [imageFailed, setImageFailed] = useState(false);
+  // A thumbnail already cached paints on first render, before the tile is
+  // known to be near (a peek is no request).
+  const cached = wantsThumb ? (cache.peekThumbnail(versionId)?.url ?? null) : null;
+  // A broken image hides only that version's thumbnail, never a newer one's.
+  const [failedVersion, setFailedVersion] = useState<string | null>(null);
+  const imageFailed = failedVersion === versionId;
   const meta = storedThumbnailMeta(versionId, mime);
   return (
     <span ref={ref} className={cn('block w-full', props.layout !== 'card' && 'h-full')}>
       <FileTileBody
         layout={props.layout}
         kind={kind}
-        thumbUrl={wantsThumb && !imageFailed ? stored.url : null}
+        thumbUrl={wantsThumb && !imageFailed ? (stored.url ?? cached) : null}
         name={props.name}
         meta={fileTileMeta(mime, meta?.pageCount, props.size)}
-        onImageError={() => setImageFailed(true)}
+        onImageError={() => setFailedVersion(versionId)}
       />
     </span>
   );

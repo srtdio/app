@@ -54,6 +54,7 @@ function className(el: ReactElement): string {
 // resolve only need to exist.
 const cache = {
   peek: () => null,
+  peekThumbnail: () => null,
   resolve: () => new Promise<never>(() => {}),
 } as unknown as PresignCache;
 

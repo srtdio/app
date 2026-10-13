@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -128,14 +130,32 @@ describe('FileTile', () => {
     };
   }
 
-  it('asks for nothing before the tile is near the viewport (first paint: the icon card)', () => {
+  it('a warm cache paints the thumbnail on first render without a request', () => {
     const { cache, thumbnail, peekThumbnail } = stubCache();
+    const html = renderToStaticMarkup(
+      <FileTile kind="pdf" mime={PDF} name="a.pdf" versionId="v1" cache={cache} presignEnabled />,
+    );
+    // Regression: a cached thumbnail painted the icon card first. A cache hit
+    // paints at once; nothing is requested before the tile is near.
+    expect(peekThumbnail).toHaveBeenCalledWith('v1');
+    expect(html).toContain('src="https://signed/t"');
+    expect(thumbnail).not.toHaveBeenCalled();
+  });
+
+  it('a cold cache shows the icon card on first paint and requests nothing', () => {
+    const { cache, thumbnail, peekThumbnail } = stubCache();
+    peekThumbnail.mockReturnValue(null as never);
     const html = renderToStaticMarkup(
       <FileTile kind="pdf" mime={PDF} name="a.pdf" versionId="v1" cache={cache} presignEnabled />,
     );
     expect(html).toContain('data-file-tile-icon');
     expect(thumbnail).not.toHaveBeenCalled();
-    expect(peekThumbnail).not.toHaveBeenCalled();
+  });
+
+  // Regression: a failed image flag outlived its version.
+  it('keys a failed thumbnail to its version', () => {
+    const source = readFileSync(fileURLToPath(new URL('./FileTile.tsx', import.meta.url)), 'utf8');
+    expect(source).toMatch(/const imageFailed = failedVersion === versionId;/);
   });
 
   it('Office and other files never ask for a thumbnail', () => {

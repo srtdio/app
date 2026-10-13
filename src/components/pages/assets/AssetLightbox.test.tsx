@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AssetLightbox,
   assetViewerKind,
+  opensOnArrival,
   viewerName,
 } from '@/components/pages/assets/AssetLightbox';
 import { PresignCache } from '@/lib/asset-presign';
@@ -104,36 +105,34 @@ describe('assetViewerKind', () => {
 });
 
 describe('AssetLightbox opens files in the FileViewer', () => {
-  it.each([
-    [PDF_MIME, 'pdf'],
-    [DOCX_MIME, 'office'],
-    ['application/zip', 'file'],
-  ])('a tapped %s asset opens straight in the FileViewer as %s', (mime, kind) => {
-    const html = mount([asset(0, 'image/png', { kind: 'image' }), asset(1, mime)], 1);
-    expect(html).toContain(`data-test-file-viewer="${kind}"`);
-    expect(html).toContain('data-test-name="asset-1"');
-  });
+  // The viewer opens in a layout effect right after the lightbox locks the
+  // page (never in its first commit), so the arrival rule is tested directly
+  // and the first paint never holds a viewer.
+  it.each([PDF_MIME, DOCX_MIME, 'application/zip'])(
+    'a tapped %s asset opens straight in the FileViewer',
+    (mime) => {
+      expect(opensOnArrival(asset(1, mime), false, true)).toBe(true);
+    },
+  );
 
   it('a tapped image or video opens no FileViewer', () => {
-    expect(mount([asset(0, 'image/png', { kind: 'image' })])).not.toContain(
-      'data-test-file-viewer',
-    );
-    expect(mount([asset(0, 'video/mp4')])).not.toContain('data-test-file-viewer');
+    expect(opensOnArrival(asset(0, 'image/png', { kind: 'image' }), false, true)).toBe(false);
+    expect(opensOnArrival(asset(0, 'video/mp4'), false, true)).toBe(false);
   });
 
   it('reached from the long-press Info, it opens on the details, not the viewer', () => {
-    expect(mount([asset(0, PDF_MIME)], 0, { initialInfoOpen: true })).not.toContain(
-      'data-test-file-viewer',
-    );
+    expect(opensOnArrival(asset(0, PDF_MIME), true, true)).toBe(false);
   });
 
   it('opens no FileViewer without presign or a stored version', () => {
-    expect(mount([asset(0, PDF_MIME)], 0, { presignEnabled: false })).not.toContain(
-      'data-test-file-viewer',
-    );
-    expect(mount([asset(0, PDF_MIME, { currentVersionId: null })])).not.toContain(
-      'data-test-file-viewer',
-    );
+    expect(opensOnArrival(asset(0, PDF_MIME), false, false)).toBe(false);
+    expect(opensOnArrival(asset(0, PDF_MIME, { currentVersionId: null }), false, true)).toBe(false);
+  });
+
+  // Regression: the viewer mounted with the lightbox and saved the page's
+  // scroll value before the lightbox locked it (overflow: hidden left behind).
+  it('the first paint holds no viewer: it opens after the lightbox has locked the page', () => {
+    expect(mount([asset(0, PDF_MIME)])).not.toContain('data-test-file-viewer');
   });
 
   it('the file card offers Open, never "Download to view"', () => {

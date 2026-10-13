@@ -204,6 +204,7 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   await expect(page.getByText('Preview unavailable.')).toHaveCount(0);
 
   // Assets: the card opens the viewer over the lightbox.
+  const thumbsBefore = thumbs.length;
   await page.goto('/assets');
   const card = page.getByRole('button', { name: `View ${PDF_NAME}` }).first();
   await card.waitFor({ state: 'visible', timeout: 15_000 });
@@ -226,8 +227,9 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   await page.getByRole('button', { name: 'Close viewer' }).click();
   await expect(page.getByRole('dialog', { name: `Viewing ${PDF_NAME}` })).toHaveCount(0);
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
-  // One thumbnail request per version for the session (cached after).
-  expect(thumbs.filter((id) => id === PDF_VERSION).length).toBe(1);
+  // One thumbnail request per version for this page load (cached after: the
+  // lightbox and viewer round trip asked for none).
+  expect(thumbs.slice(thumbsBefore)).toEqual([PDF_VERSION]);
 
   // Nothing left the tab, and no request escaped the fixtures.
   expect(popups).toEqual([]);
@@ -271,9 +273,11 @@ test('a 50-file Assets page asks for thumbnails only near the viewport, once eac
   expect(atLoad).toBeLessThan(50);
   expect(new Set(thumbs).size).toBe(thumbs.length);
   // Scrolling through the grid asks for the rest, once each.
-  const last = page.locator('[data-file-tile="pdf"]').last();
-  await last.scrollIntoViewIfNeeded();
-  await expect(last.locator('[data-file-tile-thumb]')).toBeVisible({ timeout: 15_000 });
+  const tiles = page.locator('[data-file-tile="pdf"]');
+  for (let n = 0; n < 50; n += 2) {
+    await tiles.nth(n).scrollIntoViewIfNeeded();
+  }
+  await expect(tiles.last().locator('[data-file-tile-thumb]')).toBeVisible({ timeout: 15_000 });
   await page.waitForLoadState('networkidle');
   expect(new Set(thumbs)).toEqual(new Set(ids));
   expect(thumbs.length).toBe(50);

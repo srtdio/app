@@ -68,6 +68,24 @@ export function assetViewerKind(
   return classifyFileKind(item.mimeType ?? '');
 }
 
+/**
+ * Whether the asset the lightbox opened on goes straight to the FileViewer: a
+ * stored pdf, office or other file, unless reached from the long-press Info.
+ * Pure.
+ */
+export function opensOnArrival(
+  item: AssetListItem,
+  initialInfoOpen: boolean,
+  presignEnabled: boolean,
+): boolean {
+  return (
+    !initialInfoOpen &&
+    presignEnabled &&
+    item.currentVersionId !== null &&
+    assetViewerKind(item) !== null
+  );
+}
+
 /** An asset open in the FileViewer, with the source made for this open. */
 interface Viewing {
   asset: AssetListItem;
@@ -141,12 +159,9 @@ export function AssetLightbox({
   const touchStartX = useRef<number | null>(null);
   // The file open in the FileViewer. Reached from the long-press sheet's Info,
   // the lightbox opens on the details instead.
-  const [viewing, setViewing] = useState<Viewing | null>(() => {
-    const first = items[index];
-    return first !== undefined && !initialInfoOpen
-      ? viewingFor(first, cache, presignEnabled)
-      : null;
-  });
+  // Opened right after this lightbox has locked the page (see below), never in
+  // the same commit, so the viewer's own lock always saves 'hidden'.
+  const [viewing, setViewing] = useState<Viewing | null>(null);
   const [openFailed, setOpenFailed] = useState(false);
   const viewingRef = useRef(false);
   viewingRef.current = viewing !== null;
@@ -222,16 +237,32 @@ export function AssetLightbox({
     if (!infoOpen) setEditingName(false);
   }, [infoOpen]);
 
-  // Lock body scroll while open. A layout effect, so it runs before the
-  // FileViewer's own lock when both mount together (a tapped file opens
-  // straight away): the viewer then saves and restores 'hidden', and this
-  // restores the page's own value last.
+  // Lock body scroll while open, in a layout effect so it is in place before
+  // the viewer mounts. When both close together (back, a route change) the
+  // viewer restores its saved 'hidden' after this cleanup, so the page's own
+  // value is put back once more right after.
   useBrowserLayoutEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previousOverflow;
+      if (viewingRef.current) {
+        setTimeout(() => {
+          document.body.style.overflow = previousOverflow;
+        }, 0);
+      }
     };
+  }, []);
+
+  // The file tapped in the grid opens straight away (not when reached from
+  // the long-press sheet's Info, which opens on the details).
+  useBrowserLayoutEffect(() => {
+    const first = items[index];
+    if (first !== undefined && opensOnArrival(first, initialInfoOpen, presignEnabled)) {
+      setViewing(viewingFor(first, cache, presignEnabled));
+    }
+    // Once, on open: later navigation never opens the viewer by itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Esc closes; arrows navigate.
