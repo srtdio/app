@@ -136,6 +136,7 @@ import { PlanAddSheet } from '@/components/chat/PlanAddSheet';
 import { PlanKeepApprovalSheet, type MoveDay } from '@/components/chat/PlanMoveSheet';
 import { ConceptSheet, EMPTY_CONCEPT, type ConceptForm } from '@/components/chat/ConceptSheet';
 import { PostPicker } from '@/components/chat/PostPicker';
+import { PlanDayPickerSheet, dayPickerSubline } from '@/components/chat/PlanDayPickerSheet';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import {
   applyMove,
@@ -170,7 +171,10 @@ import {
   dispatchPlanChanged,
   planChangedId,
   conceptAddArgs,
+  groupPostsByDay,
   planItemDayInZone,
+  skippedOutsideNote,
+  splitPickedByRange,
   readPlanScreen,
   refusedForClient,
   runSlotWrite,
@@ -191,6 +195,7 @@ import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
 import {
+  civilDayOf,
   civilDaysBetween,
   civilToday,
   civilWeekdayShort,
@@ -723,6 +728,14 @@ export function PlanScreen(props: {
   const [conceptBusy, setConceptBusy] = useState(false);
   const [pickFor, setPickFor] = useState<{ day: string | null } | null>(null);
   const [picked, setPicked] = useState<PostCardFields[]>([]);
+  // Header "+" picks dated outside the plan: one day sheet per post, in turn.
+  const [outside, setOutside] = useState<{
+    posts: OutsidePost[];
+    at: number;
+    choices: Array<{ postId: string; day: string }>;
+  } | null>(null);
+  // "{title} was not added" lines for posts whose day sheet was closed.
+  const [skippedNotes, setSkippedNotes] = useState<string[]>([]);
   // The header menu, the inline rename, the delete and open-for-client confirms.
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -1299,6 +1312,7 @@ export function PlanScreen(props: {
     addFor !== null ||
     conceptFor !== null ||
     pickFor !== null ||
+    outside !== null ||
     deleteOpen ||
     openConfirm ||
     keepAsk !== null ||
@@ -1400,13 +1414,8 @@ export function PlanScreen(props: {
     toast.show({ title: addedToast('concept', dayHeaderOf(date)) });
     dispatchPlanChanged(window, planId);
   };
-  const closePicker = async (): Promise<void> => {
-    if (pickFor === null) return;
-    const day = pickFor.day;
-    const ids = picked.map((p) => p.id);
-    setPickFor(null);
-    setPicked([]);
-    if (ids.length === 0) return;
+  // One plan_posts_add; `day` puts every post on that plan day. False on failure (toasted).
+  const addPosts = async (ids: string[], day: string | null): Promise<boolean> => {
     const traceId = generateTraceId();
     const result = await planPostsAdd(supabase, {
       p_plan_id: planId,
@@ -1421,11 +1430,89 @@ export function PlanScreen(props: {
         error: result.error.message,
       });
       toast.show({ title: planWriteErrorCopy(result.error.message, ADD_FAILED) });
+      return false;
+    }
+    return true;
+  };
+  const planRange = {
+    startsOn: bundle?.plan.starts_on ?? '',
+    endsOn: bundle?.plan.ends_on ?? '',
+  };
+  const closePicker = async (): Promise<void> => {
+    if (pickFor === null) return;
+    const day = pickFor.day;
+    const posts = picked;
+    setPickFor(null);
+    setPicked([]);
+    setSkippedNotes([]);
+    if (posts.length === 0) return;
+    if (day !== null) {
+      // A day's Add row: every post goes on that day.
+      if (
+        !(await addPosts(
+          posts.map((p) => p.id),
+          day,
+        ))
+      )
+        return;
+      toast.show({ title: addedToast('post', dayHeaderOf(day)) });
+      dispatchPlanChanged(window, planId);
       return;
     }
-    toast.show({ title: addedToast('post', dayHeaderOf(day)) });
+    // Header "+": a post dated outside the plan never goes without a day.
+    const split = splitPickedByRange(
+      posts as Array<PostCardFields & { target_date?: string | null }>,
+      planRange,
+      timeZone,
+    );
+    if (split.outside.length > 0) {
+      setOutside({
+        posts: split.outside.map((p) => ({
+          id: p.id,
+          title: p.title,
+          orig: civilDayOf(p.target_date ?? null, timeZone),
+        })),
+        at: 0,
+        choices: [],
+      });
+    }
+    if (split.now.length === 0) return;
+    if (!(await addPosts(split.now, null))) return;
+    toast.show({ title: addedToast('post', null) });
     dispatchPlanChanged(window, planId);
   };
+  // The outside posts' day sheet: a pick or a close moves to the next post;
+  // after the last, one plan_posts_add per chosen day.
+  const outsideNext = (choice: string | null): void => {
+    if (outside === null) return;
+    const post = outside.posts[outside.at];
+    if (post === undefined) return;
+    const choices =
+      choice !== null ? [...outside.choices, { postId: post.id, day: choice }] : outside.choices;
+    if (choice === null) setSkippedNotes((prev) => [...prev, skippedOutsideNote(post.title)]);
+    if (outside.at + 1 < outside.posts.length) {
+      setOutside({ ...outside, at: outside.at + 1, choices });
+      return;
+    }
+    setOutside(null);
+    void addOnDays(choices);
+  };
+  const addOnDays = async (choices: Array<{ postId: string; day: string }>): Promise<void> => {
+    const groups = groupPostsByDay(choices);
+    let added = 0;
+    for (const group of groups) {
+      if (!(await addPosts(group.postIds, group.day))) break;
+      added += 1;
+    }
+    if (added === 0) return;
+    const only = groups.length === 1 ? groups[0] : undefined;
+    toast.show({ title: addedToast('post', only !== undefined ? dayHeaderOf(only.day) : null) });
+    dispatchPlanChanged(window, planId);
+  };
+  const outsidePost = outside?.posts[outside.at] ?? null;
+  const lastOutside = useRef<OutsidePost | null>(null);
+  if (outsidePost !== null) lastOutside.current = outsidePost;
+  const shownOutside = outsidePost ?? lastOutside.current;
   const inPlan = useMemo(
     () => new Set((bundle?.items ?? []).flatMap((i) => (i.post_id !== null ? [i.post_id] : []))),
     [bundle],
@@ -1515,6 +1602,27 @@ export function PlanScreen(props: {
             }
           : {})}
       >
+        {skippedNotes.length > 0 ? (
+          <div
+            role="status"
+            data-plan-skipped-notes=""
+            className="mx-3 mt-3 flex items-start gap-2 rounded-xl bg-warn-soft py-1 pl-3 pr-1 text-[13px] leading-[18px] text-warn"
+          >
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-2">
+              {skippedNotes.map((note, at) => (
+                <p key={at}>{note}</p>
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-label="Dismiss"
+              onClick={() => setSkippedNotes([])}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <IconX size={16} />
+            </button>
+          </div>
+        ) : null}
         {read.status === 'loading' ? (
           <ScreenSkeleton />
         ) : read.status === 'error' ? (
@@ -1642,6 +1750,9 @@ export function PlanScreen(props: {
               if (!conceptBusy) setConceptFor(null);
             }}
             busy={conceptBusy}
+            {...(bundle !== null
+              ? { range: planRange, today: civilToday(new Date(), timeZone) }
+              : {})}
             {...(canAttach ? { uploadFile } : {})}
           />
           <PostPicker
@@ -1661,10 +1772,35 @@ export function PlanScreen(props: {
             channelHasClient={false}
             excludePostIds={inPlan}
           />
+          <PlanDayPickerSheet
+            open={props.open && outsidePost !== null}
+            title={shownOutside?.title ?? ''}
+            subline={
+              shownOutside !== null
+                ? dayPickerSubline({ kind: 'post', orig: shownOutside.orig }, planRange)
+                : ''
+            }
+            range={planRange}
+            selected={null}
+            today={civilToday(new Date(), timeZone)}
+            pipelineDay={shownOutside?.orig ?? null}
+            hideNoDate
+            onPick={(day) => {
+              if (day !== 'none') outsideNext(day);
+            }}
+            onClose={() => outsideNext(null)}
+          />
         </>
       ) : null}
     </>
   );
+}
+
+/** A header "+" pick dated outside the plan, waiting for a day. */
+interface OutsidePost {
+  id: string;
+  title: string;
+  orig: string | null;
 }
 
 /** The name an approver reads as when their name did not load. */

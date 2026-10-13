@@ -21,6 +21,7 @@ import { AssetPicker } from '@/components/chat/AssetPicker';
 import { PendingChip } from '@/components/comments/CommentComposer';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { ConceptDateField } from '@/components/chat/PlanScreen';
+import { PlanDayTiles } from '@/components/chat/PlanDayPickerSheet';
 import { CONCEPT_FILES_MAX, PLAN_TITLE_MAX } from '@/components/chat/plan-card';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import type { AttachmentUploader } from '@/lib/chat/attachments';
@@ -32,6 +33,9 @@ import {
   type ConceptFilesReadState,
   type ConceptUpload,
   type ConceptUploads,
+  type ComposeDay,
+  type ComposeRange,
+  wordCounterLabel,
 } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
 
@@ -112,6 +116,16 @@ export function useConceptFilesRead(
   return { state, retry };
 }
 
+/** The description's placeholder. */
+export const CONCEPT_DESCRIPTION_PLACEHOLDER =
+  'What is the concept? The idea, the hook, what the client will see.';
+
+/** The tiles' selection for a form date: '' is No date; a day outside the plan selects none. Pure. */
+export function conceptTileDay(date: string, range: ComposeRange): ComposeDay {
+  if (date === '') return 'none';
+  return date >= range.startsOn && date <= range.endsOn ? date : null;
+}
+
 /** Whether the form can be submitted: a title of 1 to 200 characters. Pure. */
 export function conceptFormValid(form: Pick<ConceptForm, 'title'>): boolean {
   const t = form.title.trim();
@@ -134,8 +148,18 @@ export function ConceptSheet(props: {
   onRetryFiles?: () => void;
   /** Upload one file, library origin (the comments' path); no Upload when absent. */
   uploadFile?: AttachmentUploader;
+  /**
+   * The plan's days: the date is picked from its day tiles plus No date.
+   * Absent: the native date field (a caller without the plan's range).
+   */
+  range?: ComposeRange;
+  /** Today in the workspace zone (the tiles' accent weekday). */
+  today?: string;
+  /** Items per day for the tiles. */
+  dayCounts?: Readonly<Record<string, number>>;
 }): ReactElement {
   const { form, onChange } = props;
+  const words = wordCounterLabel(form.description);
   const busy = props.busy === true;
   const filesState = props.filesState ?? 'ready';
   const showToast = useToast().show;
@@ -255,26 +279,41 @@ export function ConceptSheet(props: {
               className={FIELD}
             />
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[13px] text-fg-3">Description</span>
-            <textarea
-              data-plan-concept-description=""
-              value={form.description}
-              maxLength={CONCEPT_DESCRIPTION_MAX}
-              rows={3}
+          <div className="flex flex-col gap-1">
+            <label className="flex flex-col gap-1">
+              <span className="text-[13px] text-fg-3">Description</span>
+              <textarea
+                data-plan-concept-description=""
+                value={form.description}
+                maxLength={CONCEPT_DESCRIPTION_MAX}
+                rows={4}
+                disabled={busy}
+                placeholder={CONCEPT_DESCRIPTION_PLACEHOLDER}
+                onChange={(e) => {
+                  const description = e.target.value;
+                  onChange((f) => ({ ...f, description }));
+                }}
+                className={cn(FIELD, 'min-h-[104px] py-2.5 leading-[1.45]')}
+              />
+            </label>
+            <p
+              data-plan-concept-words={words.over ? 'over' : 'ok'}
+              aria-live="polite"
+              className={cn(
+                'text-right font-mono text-[11.5px] tabular-nums',
+                words.over ? 'text-warn' : 'text-fg-3',
+              )}
+            >
+              {words.label}
+            </p>
+          </div>
+          {props.range === undefined ? (
+            <ConceptDateField
+              value={form.date}
               disabled={busy}
-              onChange={(e) => {
-                const description = e.target.value;
-                onChange((f) => ({ ...f, description }));
-              }}
-              className={cn(FIELD, 'py-2.5')}
+              onChange={(date) => onChange((f) => ({ ...f, date }))}
             />
-          </label>
-          <ConceptDateField
-            value={form.date}
-            disabled={busy}
-            onChange={(date) => onChange((f) => ({ ...f, date }))}
-          />
+          ) : null}
           {filesState === 'loading' ? (
             <div
               data-plan-concept-files-loading=""
@@ -414,6 +453,19 @@ export function ConceptSheet(props: {
               ) : null}
             </>
           )}
+          {props.range !== undefined ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-[13px] text-fg-3">Day</span>
+              <PlanDayTiles
+                range={props.range}
+                selected={conceptTileDay(form.date, props.range)}
+                today={props.today ?? ''}
+                disabled={busy}
+                onPick={(day) => onChange((f) => ({ ...f, date: day === 'none' ? '' : day }))}
+                {...(props.dayCounts !== undefined ? { counts: props.dayCounts } : {})}
+              />
+            </div>
+          ) : null}
         </div>
       </Sheet>
 

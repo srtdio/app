@@ -18,7 +18,7 @@ import {
 // Concept files: a fresh upload beside the library picker, and the Edit
 // concept sheet's files read. Create: one uploaded file (library origin, held
 // in flight so Save reads "Uploading..." and waits) and one library file land
-// in plan_concept_add. Edit: a slow files read shows the skeleton row with no
+// in plan_create_with_items' concept. Edit: a slow files read shows the skeleton row with no
 // Add or Upload, then the list; a failed read shows "Couldn't load files."
 // with Retry, and Save sends files as null so the links stay. Runs in both
 // colour schemes (the dark and light projects) on the iPhone viewport.
@@ -153,16 +153,17 @@ test('create a concept with one uploaded file and one library file', async ({ pa
   await expect(concept).toBeVisible();
   held.release();
   await expect(concept).toBeHidden();
-  await expect(compose.locator('[data-plan-draft-concept]')).toHaveCount(1);
-  await expect(compose.getByText('2 files')).toBeVisible();
+  await expect(compose.locator('[data-plan-compose-item="concept"]')).toHaveCount(1);
   expect(network.uploads).toEqual(['storyboard.png']);
   expect(origins).toEqual(['library']);
 
   await compose.locator('[data-plan-create]').click();
   await expect(compose).toBeHidden();
-  const adds = network.rpcCalls.filter((c) => c.name === 'plan_concept_add');
-  expect(adds).toHaveLength(1);
-  expect(adds[0]?.args.p_attachment_version_ids).toEqual([
+  const creates = network.rpcCalls.filter((c) => c.name === 'plan_create_with_items');
+  expect(creates).toHaveLength(1);
+  const concepts = creates[0]?.args.p_concepts as Array<Record<string, unknown>> | undefined;
+  expect(concepts).toHaveLength(1);
+  expect(concepts?.[0]?.attachment_version_ids).toEqual([
     LIB_IMAGE_VERSION,
     '0190f100-0000-7000-8000-000000000001',
   ]);

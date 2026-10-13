@@ -179,6 +179,53 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     });
     return id;
   },
+  // One transaction: a Draft plan, its concepts in order, then its posts (each
+  // post's target_date: a plan day, or null to clear it). Everything is checked
+  // before any write, so a refusal saves nothing.
+  plan_create_with_items: (args, tables) => {
+    if (roleOf(tables, ME) === 'client') throw new HarnessRpcError('forbidden_role');
+    const concepts = Array.isArray(args.p_concepts) ? (args.p_concepts as Row[]) : [];
+    const posts = Array.isArray(args.p_posts) ? (args.p_posts as Row[]) : [];
+    if (concepts.length > 50 || posts.length > 50) throw new HarnessRpcError('invalid_payload');
+    const range = { starts_on: args.p_starts_on, ends_on: args.p_ends_on } as Row;
+    const seen = new Set<unknown>();
+    for (const p of posts) {
+      if (seen.has(p.post_id)) throw new HarnessRpcError('invalid_payload');
+      seen.add(p.post_id);
+      if (!(tables.posts ?? []).some((x) => x.id === p.post_id)) {
+        throw new HarnessRpcError('invalid_payload');
+      }
+      if (typeof p.target_date === 'string' && !inPlan(range, p.target_date)) {
+        throw new HarnessRpcError('date_outside_plan');
+      }
+    }
+    for (const c of concepts) {
+      if (typeof c.target_date === 'string' && !inPlan(range, c.target_date)) {
+        throw new HarnessRpcError('date_outside_plan');
+      }
+    }
+    const planId = PLAN_RPC.plan_create?.({ ...args, p_audience: 'team' }, tables);
+    for (const c of concepts) {
+      PLAN_RPC.plan_concept_add?.(
+        {
+          p_plan_id: planId,
+          p_title: c.title,
+          p_description: c.description,
+          p_attachment_version_ids: c.attachment_version_ids,
+          p_target_date: c.target_date ?? null,
+        },
+        tables,
+      );
+    }
+    for (const p of posts) {
+      PLAN_RPC.plan_posts_add?.({ p_plan_id: planId, p_post_ids: [p.post_id] }, tables);
+      const post = (tables.posts ?? []).find((x) => x.id === p.post_id);
+      if (post !== undefined) {
+        post.target_date = typeof p.target_date === 'string' ? `${p.target_date}T12:00:00Z` : null;
+      }
+    }
+    return planId;
+  },
   plan_update: (args, tables) => {
     const plan = (tables.plans ?? []).find((p) => p.id === args.p_plan_id);
     if (plan !== undefined) {

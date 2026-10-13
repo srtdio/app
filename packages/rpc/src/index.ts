@@ -12,7 +12,7 @@
 // client-facing wrapper for it.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@srtdio/schemas';
+import type { Database, Json } from '@srtdio/schemas';
 
 type Functions = Database['public']['Functions'];
 type FunctionName = keyof Functions;
@@ -328,6 +328,45 @@ export function planCreate(
   args: PlanCreateArgs,
 ): Promise<Result<ProcReturns<'plan_create'>>> {
   return callProc(client, 'plan_create', args);
+}
+
+/** One concept for plan_create_with_items, in screen order. */
+export interface PlanCreateConcept {
+  title: string;
+  description: string;
+  attachment_version_ids: string[];
+  /** 'YYYY-MM-DD', or null for no date. */
+  target_date: string | null;
+}
+
+/** One post for plan_create_with_items; null target_date clears its Pipeline date. */
+export interface PlanCreatePost {
+  post_id: string;
+  target_date: string | null;
+}
+
+/**
+ * plan_create_with_items: the plan, its concepts and its posts in one
+ * transaction (any failure saves nothing). The generated Args type the two
+ * lists as Json; this wrapper types them.
+ */
+export type PlanCreateWithItemsArgs = Omit<
+  ProcArgs<'plan_create_with_items'>,
+  'p_concepts' | 'p_posts'
+> & {
+  p_concepts: PlanCreateConcept[];
+  p_posts: PlanCreatePost[];
+};
+export function planCreateWithItems(
+  client: Client,
+  args: PlanCreateWithItemsArgs,
+): Promise<Result<ProcReturns<'plan_create_with_items'>>> {
+  const { p_concepts, p_posts, ...rest } = args;
+  return callProc(client, 'plan_create_with_items', {
+    ...rest,
+    p_concepts: p_concepts as unknown as Json,
+    p_posts: p_posts as unknown as Json,
+  });
 }
 
 export type PlanUpdateArgs = ProcArgs<'plan_update'>;

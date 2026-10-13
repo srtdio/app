@@ -29,7 +29,7 @@ export function PlanAddSheet(props: {
         <ActionRow
           icon={<IconPipeline size={18} />}
           label="Pick a post"
-          sub="Any post. Its own date stays as it is."
+          sub="Its own date stays, if it is inside this plan."
           onClick={props.onPickPost}
         />
       </div>

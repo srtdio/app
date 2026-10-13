@@ -604,9 +604,53 @@ export const SWIPE_REMOVE_LABEL = 'Remove';
 /** The reduced-motion stand-in for the one-time swipe peek. */
 export const SWIPE_TIP_TOAST = 'Tip: swipe left on a slot to remove it';
 
-/** A failed add or move's copy: the day refusal, else `fallback`. Pure. */
-export function planWriteErrorCopy(message: string, fallback: string): string {
-  return message.includes('date_outside_plan') ? DATE_OUTSIDE_PLAN : fallback;
+/** Per-cause copy for a failed plan write; a cause left out falls to the fallback. */
+export interface PlanWriteErrorTable {
+  network?: string;
+  date_outside_plan?: string;
+  invalid_payload?: string;
+  forbidden?: string;
+}
+
+/** The copy add and move use: only the day refusal has its own line. */
+export const PLAN_WRITE_ERROR_COPY: PlanWriteErrorTable = { date_outside_plan: DATE_OUTSIDE_PLAN };
+
+/** New plan's Create (one transaction: a failure always saved nothing). */
+export const PLAN_CREATE_ERROR_COPY: PlanWriteErrorTable = {
+  network:
+    "Couldn't reach Sorted. Nothing was saved. Check your connection and tap Create plan again.",
+  date_outside_plan:
+    "A post's date changed and is now outside this plan. Nothing was saved. Check the orange items.",
+  invalid_payload:
+    'Something in this plan is no longer available, such as a deleted post. Nothing was saved.',
+  forbidden: 'Only the agency team can create plans.',
+};
+
+/** New plan's Create, any other failure. */
+export const PLAN_CREATE_FAILED_COPY =
+  "Couldn't create the plan. Nothing was saved. Tap Create plan again.";
+
+/** Whether a raw error reads as the request never reaching the server. Pure. */
+export function isNetworkFailure(message: string): boolean {
+  return /failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(
+    message,
+  );
+}
+
+/** A failed plan write's copy by cause (day refusal, payload, role, network), else `fallback`. Pure. */
+export function planWriteErrorCopy(
+  message: string,
+  fallback: string,
+  table: PlanWriteErrorTable = PLAN_WRITE_ERROR_COPY,
+): string {
+  const pick = (copy: string | undefined): string => copy ?? fallback;
+  if (message.includes('date_outside_plan')) return pick(table.date_outside_plan);
+  if (message.includes('invalid_payload')) return pick(table.invalid_payload);
+  if (message.includes('forbidden_role') || message.includes('workspace_member_only')) {
+    return pick(table.forbidden);
+  }
+  if (isNetworkFailure(message)) return pick(table.network);
+  return fallback;
 }
 
 /**
