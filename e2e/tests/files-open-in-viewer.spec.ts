@@ -108,6 +108,46 @@ async function closeViewer(page: Page): Promise<void> {
   await expect(page.locator('[data-file-viewer]')).toHaveCount(0);
 }
 
+const ASSET_READ = /^https:\/\/asset-read\.harness\.test\/?$/;
+
+/**
+ * Serve a stored thumbnail for every PDF version (the harness answers
+ * renditions only for chat files) and record each thumbnail request.
+ */
+async function serveThumbnails(page: Page): Promise<string[]> {
+  const asked: string[] = [];
+  await page.route(ASSET_READ, async (route) => {
+    const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+    if (body.rendition !== 'thumbnail') {
+      await route.fallback();
+      return;
+    }
+    const id = String(body.asset_version_id ?? '');
+    asked.push(id);
+    await route.fulfill({
+      status: 200,
+      headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        url: `https://asset-read.harness.test/blob/image/${id}`,
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      }),
+    });
+  });
+  return asked;
+}
+
+/** A PDF file tile with its stored thumbnail painted, its name and kind. */
+async function expectPdfTile(page: Page): Promise<void> {
+  const tile = page.locator('[data-file-tile="pdf"]').first();
+  await expect(tile).toBeVisible({ timeout: 15_000 });
+  const thumb = tile.locator('[data-file-tile-thumb]');
+  await expect(thumb).toBeVisible();
+  await expect(thumb).toHaveJSProperty('complete', true);
+  expect(await thumb.evaluate((img) => (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await expect(tile.locator('[data-file-name]')).toHaveText(PDF_NAME);
+  await expect(tile.locator('[data-file-meta]')).toContainText('PDF');
+}
+
 /** The app's theme follows the emulated colour scheme in each project. */
 async function expectTheme(page: Page, dark: boolean): Promise<void> {
   await expect
@@ -122,6 +162,7 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   const dark = testInfo.project.use.colorScheme !== 'light';
   const network = await installHarnessNetwork(page);
   seedPdf(network);
+  const thumbs = await serveThumbnails(page);
   const popups: string[] = [];
   context.on('page', (p) => popups.push(p.url()));
 
@@ -129,6 +170,7 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   await page.goto(`/briefs/${BRIEF_ID}`);
   await expect(page.getByText('Launch the Q3 range.')).toBeVisible({ timeout: 15_000 });
   await expectTheme(page, dark);
+  await expectPdfTile(page);
   await page.getByRole('button', { name: 'View image 1' }).first().click();
   await expectPdfOpen(page);
   await closeViewer(page);
@@ -139,6 +181,8 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   await expect(briefOpen).toBeFocused();
   expectMinTouchTarget(await briefOpen.boundingBox());
   await expect(page.getByText('Preview unavailable.')).toHaveCount(0);
+  // A double-tap on the file slide zooms nothing, so Open still answers.
+  await page.locator('[data-file-slide]').dblclick({ position: { x: 4, y: 4 } });
   await briefOpen.click();
   await expectPdfOpen(page);
   await closeViewer(page);
@@ -149,6 +193,7 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   const postTile = page.getByRole('button', { name: 'View image 1' }).first();
   await postTile.waitFor({ state: 'visible', timeout: 15_000 });
   await expectTheme(page, dark);
+  await expectPdfTile(page);
   await postTile.click();
   await expectPdfOpen(page);
   await closeViewer(page);
@@ -163,6 +208,7 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   const card = page.getByRole('button', { name: `View ${PDF_NAME}` }).first();
   await card.waitFor({ state: 'visible', timeout: 15_000 });
   await expectTheme(page, dark);
+  await expectPdfTile(page);
   await card.click();
   await expectPdfOpen(page);
   await closeViewer(page);
@@ -176,8 +222,69 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   await expectPdfOpen(page);
   await closeViewer(page);
   await expect(page.getByRole('dialog', { name: `Viewing ${PDF_NAME}` })).toBeVisible();
+  // Closing the lightbox gives the page its scroll back (no lock left behind).
+  await page.getByRole('button', { name: 'Close viewer' }).click();
+  await expect(page.getByRole('dialog', { name: `Viewing ${PDF_NAME}` })).toHaveCount(0);
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+  // One thumbnail request per version for the session (cached after).
+  expect(thumbs.filter((id) => id === PDF_VERSION).length).toBe(1);
 
   // Nothing left the tab, and no request escaped the fixtures.
   expect(popups).toEqual([]);
   expect(network.blocked).toEqual([]);
 });
+
+test('a 50-file Assets page asks for thumbnails only near the viewport, once each', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  const t = network.world.tables;
+  const ids: string[] = [];
+  for (let n = 0; n < 50; n += 1) {
+    const suffix = String(n).padStart(12, '0');
+    const asset = `0190e600-0000-7000-8000-${suffix}`;
+    const version = `0190e700-0000-7000-8000-${suffix}`;
+    ids.push(version);
+    (t.assets ??= []).push({
+      id: asset,
+      workspace_id: WORKSPACE_ID,
+      filename: `Brief ${n}.pdf`,
+      display_name: null,
+      folder_path: '/',
+      folder_id: null,
+      tags: [],
+      // Newest first: n = 0 is at the top.
+      uploaded_at: new Date(Date.parse(AT) - n * 60_000).toISOString(),
+      current_version_id: version,
+      current_version: { ...VERSION, id: version, asset_id: asset },
+      deleted_at: null,
+    });
+  }
+  const thumbs = await serveThumbnails(page);
+  await page.goto('/assets');
+  await expect(page.locator('[data-file-tile="pdf"]').first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-file-tile-thumb]').first()).toBeVisible();
+  // Let any further requests land, then count: only tiles near the viewport asked.
+  await page.waitForLoadState('networkidle');
+  const atLoad = thumbs.length;
+  expect(atLoad).toBeGreaterThan(0);
+  expect(atLoad).toBeLessThan(50);
+  expect(new Set(thumbs).size).toBe(thumbs.length);
+  // Scrolling through the grid asks for the rest, once each.
+  const last = page.locator('[data-file-tile="pdf"]').last();
+  await last.scrollIntoViewIfNeeded();
+  await expect(last.locator('[data-file-tile-thumb]')).toBeVisible({ timeout: 15_000 });
+  await page.waitForLoadState('networkidle');
+  expect(new Set(thumbs)).toEqual(new Set(ids));
+  expect(thumbs.length).toBe(50);
+  testInfoLog(
+    `thumbnail requests for 50 PDFs: ${atLoad} at load, ${thumbs.length} after a full scroll`,
+  );
+  expect(network.blocked).toEqual([]);
+});
+
+/** Surface a number in the run output (the PR reports it). */
+function testInfoLog(line: string): void {
+  test.info().annotations.push({ type: 'count', description: line });
+  process.stdout.write(`${line}\n`);
+}

@@ -180,6 +180,30 @@ describe('viewer wiring regressions', () => {
   });
 });
 
+describe('audit pass 2 regressions', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('./AssetLightbox.tsx', import.meta.url)),
+    'utf8',
+  );
+
+  // The viewer locked the body before the lightbox did, so closing both left
+  // overflow: hidden behind. The lightbox now locks in a layout effect.
+  it('takes its body scroll lock in a layout effect, ahead of the viewer', () => {
+    expect(source).toMatch(
+      /useBrowserLayoutEffect\(\(\) => \{\s*const previousOverflow = document\.body\.style\.overflow;/,
+    );
+  });
+
+  // The image or video failure card keeps its old wording.
+  it('a failed image keeps "Download to view"; a file without a version says Download', () => {
+    const image = mount([asset(0, 'image/png', { kind: 'image' })], 0, { presignEnabled: false });
+    expect(image).toContain('Download to view');
+    const file = mount([asset(0, PDF_MIME, { currentVersionId: null })]);
+    expect(file).not.toContain('Download to view');
+    expect(file).toMatch(/<\/svg>Download<\/button>/);
+  });
+});
+
 describe('a broken file never blanks the Assets page', () => {
   it('mounts the boundary-wrapped FileViewer, never the bare sheet', () => {
     const source = readFileSync(

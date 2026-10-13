@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
@@ -28,6 +28,9 @@ const CARD_BUTTON =
   'inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md bg-accent px-4 ' +
   'text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50 ' +
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+
+/** Layout effect in the browser; a plain effect where there is no DOM (server render, tests). */
+const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
 const SWIPE_THRESHOLD = 48;
@@ -219,7 +222,19 @@ export function AssetLightbox({
     if (!infoOpen) setEditingName(false);
   }, [infoOpen]);
 
-  // Esc closes; arrows navigate. Lock body scroll while open.
+  // Lock body scroll while open. A layout effect, so it runs before the
+  // FileViewer's own lock when both mount together (a tapped file opens
+  // straight away): the viewer then saves and restores 'hidden', and this
+  // restores the page's own value last.
+  useBrowserLayoutEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  // Esc closes; arrows navigate.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       // The FileViewer owns the keys while it is open.
@@ -229,11 +244,8 @@ export function AssetLightbox({
       else if (event.key === 'ArrowRight') go(1);
     };
     window.addEventListener('keydown', onKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
     };
   }, [go, onClose]);
 
@@ -410,7 +422,7 @@ export function AssetLightbox({
                 className={CARD_BUTTON}
               >
                 <IconDownload size={16} />
-                Download
+                {isInlineRenderable(kind) ? 'Download to view' : 'Download'}
               </button>
             )}
           </div>

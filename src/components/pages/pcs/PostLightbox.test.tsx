@@ -793,6 +793,31 @@ describe('viewer wiring regressions', () => {
   });
 });
 
+describe('audit pass 2 regressions', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('./PostLightbox.tsx', import.meta.url)),
+    'utf8',
+  );
+
+  // A version attached twice failed on both slides.
+  it('keys a failed open by attachment, not version', () => {
+    expect(source).toMatch(/openFailed\[it\.assetAttachmentId\]/);
+    expect(source).not.toMatch(/openFailed\[it\.assetVersionId\]/);
+  });
+
+  // A slide removed while open left the viewer on a stale item.
+  it('closes the viewer when its slide leaves the gallery', () => {
+    expect(source).toMatch(
+      /!items\.some\(\(it\) => it\.assetAttachmentId === id\)\) setViewing\(null\)/,
+    );
+  });
+
+  // A double-tap on a file slide set a phantom zoom that swallowed Open.
+  it('only an image slide zooms', () => {
+    expect(source).toMatch(/if \(slide === undefined \|\| !isImage\(slide\)\) return;/);
+  });
+});
+
 describe('a broken file never blanks the post or brief', () => {
   it('mounts the boundary-wrapped FileViewer, never the bare sheet', () => {
     const source = readFileSync(

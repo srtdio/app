@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import {
   PIN_ARM_PRESS_MS,
+  galleryFileKind,
   galleryView,
   intrinsicSize,
   nearestTileIndex,
@@ -15,6 +16,8 @@ import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
 import { createLongPressController } from '@/components/ui/useLongPress';
 import type { PresignCache } from '@/lib/asset-presign';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { rememberThumbnail } from '@/lib/chat/attachments';
 import type { GalleryItem } from '@srtdio/posts';
 
 // The unit environment is node (no DOM renderer), so these specs walk the JSX
@@ -566,5 +569,61 @@ describe('nearestTileIndex', () => {
     expect(nearestTileIndex(-40, [0, 300])).toBe(0);
     // An exact tie keeps the earlier tile.
     expect(nearestTileIndex(150, [0, 300])).toBe(0);
+  });
+});
+
+describe('file tiles (T8)', () => {
+  function fileItem(n: number, mimeType: string | null, kind = 'file'): GalleryItem {
+    return { ...nullDimItem(n), filename: `deck-${n}.pdf`, mimeType, kind };
+  }
+
+  it('picks the tile kind from the stored kind and mime, never the name; images get none', () => {
+    expect(galleryFileKind(fileItem(0, 'application/pdf'))).toBe('pdf');
+    expect(galleryFileKind(fileItem(0, null, 'video'))).toBe('video');
+    expect(galleryFileKind(fileItem(0, 'video/mp4'))).toBe('video');
+    expect(
+      galleryFileKind(
+        fileItem(0, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+      ),
+    ).toBe('office');
+    expect(galleryFileKind(fileItem(0, null))).toBe('file');
+    expect(galleryFileKind(item(0))).toBeNull();
+  });
+
+  it.each([2, 4])('a PDF tile renders the file tile in the %s-column gallery', (columns) => {
+    const html = renderToStaticMarkup(
+      galleryView({
+        items: [fileItem(0, 'application/pdf'), item(1)],
+        cache,
+        presignEnabled: true,
+        onOpen: () => {},
+        columns,
+        aspect: '3/2',
+      }),
+    );
+    expect(html).toContain('data-file-tile="pdf"');
+    expect(html).toContain('deck-0.pdf');
+    expect(html).toMatch(/data-file-meta[^>]*><span><span>PDF</);
+  });
+
+  it('a tapped file tile opens its slide (which opens the FileViewer)', () => {
+    const onOpen = vi.fn();
+    const tree = galleryView({
+      items: [fileItem(0, 'application/pdf')],
+      cache,
+      presignEnabled: true,
+      onOpen,
+      columns: 2,
+    });
+    const tile = elements(tree).find((el) => label(el) === 'View image 1');
+    (tile?.props as { onClick: () => void }).onClick();
+    expect(onOpen).toHaveBeenCalledWith(0);
+  });
+
+  it('the ribbon reserves a file tile from its stored thumbnail size, else the fixed 4/5 box', () => {
+    const pdf = fileItem(7, 'application/pdf');
+    expect(resolveRibbonTileStyle(pdf, {})).toEqual(ribbonTileStyle(null, null));
+    rememberThumbnail(pdf.assetVersionId, { width: 600, height: 800, pageCount: 2 });
+    expect(resolveRibbonTileStyle(pdf, {})).toEqual(ribbonTileStyle(600, 800));
   });
 });

@@ -698,15 +698,15 @@ interface Viewing {
 }
 
 /**
- * Mark a version's open as failed. Returns the same object when it already is,
+ * Mark a slide's open as failed (keyed by attachment). Returns the same object when it already is,
  * so a repeated report never re-renders (the FileViewer reports again whenever
  * its callback changes, and a new object every time would loop). Pure.
  */
 export function markOpenFailed(
   prev: Record<string, boolean>,
-  versionId: string,
+  key: string,
 ): Record<string, boolean> {
-  return prev[versionId] === true ? prev : { ...prev, [versionId]: true };
+  return prev[key] === true ? prev : { ...prev, [key]: true };
 }
 
 /** The FileViewer open for a pdf, office or other slide; null for images and video. */
@@ -783,13 +783,21 @@ export function PostLightbox({
   const viewingRef = useRef(false);
   viewingRef.current = viewing !== null;
   // Stable callbacks, so the viewer never re-attaches its listeners or re-reports.
-  const viewedId = viewing?.item.assetVersionId ?? null;
+  const viewedId = viewing?.item.assetAttachmentId ?? null;
   const closeViewer = useCallback(() => setViewing(null), []);
   const onViewerError = useCallback(() => {
     if (viewedId !== null) setOpenFailed((prev) => markOpenFailed(prev, viewedId));
   }, [viewedId]);
 
   const trackRef = useRef<HTMLDivElement>(null);
+
+  // A slide removed while its file is open (another tab, or the gallery
+  // emptied) closes the viewer: it never shows, or reopens on, a stale item.
+  useEffect(() => {
+    if (viewing === null) return;
+    const id = viewing.item.assetAttachmentId;
+    if (!items.some((it) => it.assetAttachmentId === id)) setViewing(null);
+  }, [items, viewing]);
 
   // The tile that opened the viewer is gone (this viewer replaced the ribbon),
   // so on close focus lands on the slide's Open instead of the page body.
@@ -923,8 +931,14 @@ export function PostLightbox({
     return { x: clamp(x, -maxX, maxX), y: clamp(y, -maxY, maxY) };
   }, []);
 
+  // Only an image slide zooms: a file or video slide has nothing to zoom, and
+  // a phantom zoom there would capture the pointer and swallow Open.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const applyZoomAt = useCallback(
     (nextScale: number, clientX: number, clientY: number, rect: RectLike): void => {
+      const slide = itemsRef.current[indexRef.current];
+      if (slide === undefined || !isImage(slide)) return;
       setZoom((z) => {
         const scale = clamp(nextScale, ZOOM_MIN, ZOOM_MAX);
         if (scale <= 1) return { scale: 1, x: 0, y: 0 };
@@ -1060,7 +1074,7 @@ export function PostLightbox({
     const next = presignEnabled ? viewingFor(it, cache) : null;
     if (next === null) return;
     setOpenFailed((prev) =>
-      prev[it.assetVersionId] === true ? { ...prev, [it.assetVersionId]: false } : prev,
+      prev[it.assetAttachmentId] === true ? { ...prev, [it.assetAttachmentId]: false } : prev,
     );
     setViewing(next);
   };
@@ -1161,7 +1175,7 @@ export function PostLightbox({
     pinOverlay,
     dragY,
     onOpenFile: openFile,
-    openFailedFor: (it) => openFailed[it.assetVersionId] === true,
+    openFailedFor: (it) => openFailed[it.assetAttachmentId] === true,
   });
 
   if (viewing === null) return view;

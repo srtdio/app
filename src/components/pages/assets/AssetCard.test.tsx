@@ -84,11 +84,30 @@ describe('AssetCard thumbnail', () => {
     expect(out).not.toContain('<img');
   });
 
-  it('renders the file extension fallback for a doc asset', () => {
+  // Was: 'renders the file extension fallback for a doc asset'. File assets now
+  // show the shared file tile, whose kind comes from the server mime, never the name.
+  it('renders the file tile for a file asset, its kind from the mime, never the extension', () => {
     const { cache } = makeCache(null);
-    const out = render(makeAsset({ filename: 'spec.PDF' }), cache, true);
-    expect(out).toContain('PDF');
-    expect(out).not.toContain('<img');
+    const pdf = render(
+      makeAsset({ filename: 'spec.docx', mimeType: 'application/pdf' }),
+      cache,
+      true,
+    );
+    expect(pdf).toContain('data-file-tile="pdf"');
+    expect(pdf).toMatch(/data-file-meta[^>]*><span><span>PDF</);
+    // First paint, before the tile nears the viewport: the icon card, no request.
+    expect(pdf).toContain('data-file-tile-icon');
+    expect(pdf).not.toContain('<img');
+    const unknown = render(makeAsset({ filename: 'spec.PDF', mimeType: null }), cache, true);
+    expect(unknown).toContain('data-file-tile="file"');
+    expect(unknown).toMatch(/data-file-meta[^>]*><span><span>File</);
+  });
+
+  it('a file card keeps a fixed height: a 4/3 thumbnail box and two name lines', () => {
+    const { cache } = makeCache(null);
+    const out = render(makeAsset({ mimeType: 'video/mp4' }), cache, true);
+    expect(out).toContain('aspect-[4/3]');
+    expect(out).toContain('h-8');
   });
 
   it('shows the fallback and never touches the cache when presign is disabled', () => {
