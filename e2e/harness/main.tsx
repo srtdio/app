@@ -28,25 +28,15 @@ if (window.location.pathname === '/') {
     import('@/lib/trace-context'),
     import('@/lib/theme'),
     import('@/lib/viewport-lock'),
-    import('@/lib/keyboard-viewport'),
-  ]).then(
-    ([
-      { default: App },
-      { TraceProvider },
-      { initTheme },
-      { initViewportLock },
-      { initKeyboardViewport },
-    ]) => {
-      initTheme();
-      initViewportLock();
-      initKeyboardViewport();
-      root.render(
-        <StrictMode>
-          <TraceProvider>
-            <App />
-          </TraceProvider>
-        </StrictMode>,
-      );
-    },
-  );
+  ]).then(([{ default: App }, { TraceProvider }, { initTheme }, { initViewportLock }]) => {
+    initTheme();
+    initViewportLock();
+    root.render(
+      <StrictMode>
+        <TraceProvider>
+          <App />
+        </TraceProvider>
+      </StrictMode>,
+    );
+  });
 }
