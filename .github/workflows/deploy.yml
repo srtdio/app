@@ -32,6 +32,7 @@ jobs:
           VITE_AVATAR_UPLOAD_URL: ${{ vars.VITE_AVATAR_UPLOAD_URL }}
           VITE_CHAT_TOKEN_URL: ${{ vars.VITE_CHAT_TOKEN_URL }}
           VITE_CHAT_TRANSCRIBE_URL: ${{ vars.VITE_CHAT_TRANSCRIBE_URL }}
+          VITE_SITE_MEDIA_URL: ${{ vars.VITE_SITE_MEDIA_URL }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           CI: true
       - name: Print wrangler version

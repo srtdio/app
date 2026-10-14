@@ -2,6 +2,44 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Guest homepage canvas: "/" for a guest is light only, so paint it white
+         before the dark-mode canvas below can show. This logic mirrors
+         isGuestHome in src/components/home/guest-path.ts and must stay in sync.
+         Every other case keeps the canvas from the <style> below. -->
+    <script>
+      (function () {
+        var hasSession = false;
+        try {
+          for (var i = 0; i < localStorage.length; i++) {
+            if (/^sb-.+-auth-token$/.test(localStorage.key(i) || '')) hasSession = true;
+          }
+        } catch (e) {
+          hasSession = false;
+        }
+        var callback = /(?:^|[?&#])(?:code|type)=|access_token|refresh_token|error_description/;
+        if (
+          location.pathname !== '/' ||
+          hasSession ||
+          callback.test(location.search) ||
+          callback.test(location.hash)
+        ) {
+          return;
+        }
+        var white = '#ffffff'; /* homepage background, src/components/home/home.css */
+        document.documentElement.style.backgroundColor = white;
+        // First theme-color meta in tree order wins, so this one beats the
+        // media-split tags parsed below; those are synced once parsed.
+        var meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        meta.content = white;
+        document.head.appendChild(meta);
+        document.addEventListener('DOMContentLoaded', function () {
+          document.querySelectorAll('meta[name="theme-color"]').forEach(function (el) {
+            el.setAttribute('content', white);
+          });
+        });
+      })();
+    </script>
     <!-- Critical paint: set the html canvas before the built stylesheet loads to
          kill the pre-CSS white flash on iOS Safari. Hex mirrors the --bg token in
          src/index.css; once loaded, that sheet's html { background: var(--bg) }

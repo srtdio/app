@@ -30,6 +30,11 @@ export const envSchema = z.object({
   // fetches the audio and returns { transcript }. Optional - when unset, the
   // Transcribe action is hidden.
   VITE_CHAT_TRANSCRIBE_URL: optionalUrl,
+  // Public homepage media base (videos, posters, images), no trailing slash.
+  // Production: https://cdn.srtd.io/site/home/v1. Optional - when unset the
+  // homepage renders text and buttons only. The guest homepage reads it
+  // directly (src/components/home/media.ts) so it never loads this module.
+  VITE_SITE_MEDIA_URL: optionalUrl,
   VITE_SENTRY_DSN_FRONTEND: z.string().url().optional(),
   VITE_SENTRY_ENVIRONMENT: z.enum(['development', 'production']).default('development'),
   VITE_SENTRY_RELEASE: z.string().optional(),
