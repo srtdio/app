@@ -44,19 +44,27 @@
       })();
     </script>
     <!-- Critical paint: set the html canvas before the built stylesheet loads to
-         kill the pre-CSS white flash on iOS Safari. Hex mirrors the --bg token in
-         src/index.css; once loaded, that sheet's html { background: var(--bg) }
+         kill the pre-CSS flash on iOS Safari. Light for everyone; dark only when
+         the person picked it (localStorage sorted-theme, src/lib/theme.ts). Hex
+         mirrors --bg in src/index.css; once loaded, html { background: var(--bg) }
          takes over. -->
     <style>
       html {
         background-color: #f7f8f9; /* --bg light, src/index.css :root */
       }
-      @media (prefers-color-scheme: dark) {
-        html {
-          background-color: #0c0d10; /* --bg dark, src/index.css .dark */
-        }
+      html.pre-dark {
+        background-color: #0c0d10; /* --bg dark, src/index.css .dark */
       }
     </style>
+    <script>
+      try {
+        if (localStorage.getItem('sorted-theme') === 'dark') {
+          document.documentElement.classList.add('pre-dark');
+        }
+      } catch (e) {
+        /* storage blocked: stay light */
+      }
+    </script>
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
@@ -64,10 +72,8 @@
     <!-- Tint the Safari toolbar to match the canvas so a collapsing toolbar never
          exposes a mismatched band. Hex mirrors --bg in src/index.css; manual theme
          toggles override this via src/lib/theme.ts. -->
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f8f9" />
-    <!-- content = --bg light, src/index.css :root -->
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c0d10" />
-    <!-- content = --bg dark, src/index.css .dark -->
+    <meta name="theme-color" content="#f7f8f9" />
+    <!-- content = --bg light, src/index.css :root; a dark choice is synced by src/lib/theme.ts -->
     <title>Sorted</title>
   </head>
   <body>

@@ -152,6 +152,8 @@ interface ChannelListProps {
    * carry its name. Absent: no tile.
    */
   notes?: ChannelSummary;
+  /** Rendered at the top of the home list (hidden while searching), e.g. the getting-started card. */
+  lead?: ReactNode;
 }
 
 interface ChannelListBodyProps extends Omit<ChannelListProps, 'status' | 'onRetry'> {
@@ -1020,6 +1022,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {props.lead !== undefined && !searching ? props.lead : null}
         {props.notes !== undefined && !searching
           ? notesTile({
               notes: props.notes,

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
 import type { Client } from '@srtdio/rpc';
-import { performSignUp } from '@/components/auth/SignUpPage';
+import { performSignUp, POLICY_CONSENT_MESSAGE } from '@/components/auth/SignUpPage';
 import type { SignUpAuthClient } from '@/components/auth/SignUpPage';
 import { bootstrapWorkspaces } from '@/lib/workspace-context';
 import type { WorkspaceRow } from '@/lib/workspace-context';
@@ -44,8 +44,6 @@ describe('performSignUp', () => {
     const result = await performSignUp(client, {
       email: 'dana@example.com',
       password: 'pw',
-      displayName: 'Dana',
-      workspaceName: 'Acme',
       timezone: 'UTC',
       policyConsent: true,
     });
@@ -55,8 +53,6 @@ describe('performSignUp', () => {
       expect.objectContaining({
         options: {
           data: {
-            display_name: 'Dana',
-            workspace_name: 'Acme',
             timezone: 'UTC',
           },
         },
@@ -72,15 +68,13 @@ describe('performSignUp', () => {
     const result = await performSignUp(client, {
       email: 'dana@example.com',
       password: 'pw',
-      displayName: 'Dana',
-      workspaceName: 'Acme',
       timezone: 'UTC',
       policyConsent: false,
     });
 
     expect(result).toEqual({
       status: 'error',
-      message: 'You must agree to the Privacy Policy and Terms & Conditions to create an account.',
+      message: POLICY_CONSENT_MESSAGE,
     });
     expect(signUp).not.toHaveBeenCalled();
   });
@@ -92,8 +86,6 @@ describe('performSignUp', () => {
     const result = await performSignUp(client, {
       email: 'dana@example.com',
       password: 'pw',
-      displayName: 'Dana',
-      workspaceName: 'Acme',
       timezone: 'UTC',
       policyConsent: true,
     });

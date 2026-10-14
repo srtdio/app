@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
 import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useWorkspace } from '@/lib/workspace-context';
+import { GettingStartedCard } from '@/components/onboarding/GettingStartedCard';
 import {
   listGroupMemberIds,
   readMentionProfiles,
@@ -1923,6 +1924,13 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             onOpenSearchHit={openSearchHit}
             onOpenStarred={openStarredMessage}
             notes={notesChat}
+            lead={
+              <GettingStartedCard
+                workspaceId={workspaceId}
+                workspaceName={workspace?.name ?? ''}
+                userId={currentUserId}
+              />
+            }
           />
         </div>
       ) : null}

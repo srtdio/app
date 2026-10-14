@@ -631,9 +631,50 @@ const PLAN_RPC: Record<string, RpcHandler> = {
   },
 };
 
+/** Onboarding procs (20261014140000): just enough world for the onboarding spec. */
+const ONBOARDING_RPC: Record<string, RpcHandler> = {
+  username_available: (args, tables) => {
+    const name = String(args.p_username ?? '');
+    return !(tables.users ?? []).some((u) => u.username === name && u.id !== ME);
+  },
+  user_onboarding_save: (args, tables) => {
+    const payload = (args.p_payload ?? {}) as Record<string, unknown>;
+    const me = (tables.users ?? []).find((u) => u.id === ME);
+    if (me === undefined) throw new HarnessRpcError('invalid_payload');
+    me.display_name = String(payload.display_name ?? '');
+    me.username = String(payload.username ?? '');
+    me.designation = payload.designation ?? null;
+    me.profile_completed_at = new Date().toISOString();
+    return ME;
+  },
+  workspace_create: (args, tables) => {
+    const payload = (args.p_payload ?? {}) as Record<string, unknown>;
+    const id = crypto.randomUUID();
+    (tables.workspaces ??= []).push({
+      id,
+      name: String(payload.name ?? ''),
+      timezone: String(payload.timezone ?? 'UTC'),
+      owner_user_id: ME,
+      key: 'KC',
+      created_at: new Date().toISOString(),
+    });
+    (tables.workspace_members ??= []).push({
+      id: crypto.randomUUID(),
+      workspace_id: id,
+      user_id: ME,
+      role: 'owner',
+      active: true,
+      accepted_at: new Date().toISOString(),
+      removed_at: null,
+    });
+    return id;
+  },
+};
+
 const RPC: Record<string, RpcHandler> = {
   ...PLAN_RPC,
   ...TASK_RPC,
+  ...ONBOARDING_RPC,
   chat_unread_counts: (_args, tables) => {
     const cursors = tables.chat_read_cursors ?? [];
     const channels = tables.chat_channels ?? [];

@@ -316,6 +316,31 @@ export function userProfileUpdate(
   return callProc(client, 'user_profile_update', args);
 }
 
+// Onboarding (migration 20261014140000_onboarding_username_default_group).
+export type UserOnboardingSaveArgs = ProcArgs<'user_onboarding_save'>;
+export function userOnboardingSave(
+  client: Client,
+  args: UserOnboardingSaveArgs,
+): Promise<Result<ProcReturns<'user_onboarding_save'>>> {
+  return callProc(client, 'user_onboarding_save', args);
+}
+
+export type UsernameAvailableArgs = ProcArgs<'username_available'>;
+export function usernameAvailable(
+  client: Client,
+  args: UsernameAvailableArgs,
+): Promise<Result<ProcReturns<'username_available'>>> {
+  return callProc(client, 'username_available', args);
+}
+
+export type MemberJoinGroupSetArgs = ProcArgs<'member_join_group_set'>;
+export function memberJoinGroupSet(
+  client: Client,
+  args: MemberJoinGroupSetArgs,
+): Promise<Result<ProcReturns<'member_join_group_set'>>> {
+  return callProc(client, 'member_join_group_set', args);
+}
+
 // Plans in chat (migrations 20261009110000_plans_core, 20261009163000_chat_plan_share,
 // 20261009205500_plan_item_comments, 20261011011500_plan_drafts_in_client_plans).
 // Every write proc takes p_trace_id; plan_draft_rows is a read-only, batched

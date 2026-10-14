@@ -39,6 +39,17 @@ if (window.location.pathname === '/') {
     import('@/lib/theme'),
     import('@/lib/viewport-lock'),
   ]).then(([{ default: App }, { TraceProvider }, { initTheme }, { initViewportLock }]) => {
+    // The app starts everyone in light and goes dark only by choice
+    // (localStorage sorted-theme). The dark project stands in for a person who
+    // chose dark, so seed that choice from the emulated colour scheme.
+    try {
+      localStorage.setItem(
+        'sorted-theme',
+        window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+      );
+    } catch {
+      // Storage blocked: the harness renders light.
+    }
     initTheme();
     initViewportLock();
     root.render(

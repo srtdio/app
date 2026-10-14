@@ -33,6 +33,7 @@ export interface CurrentProfile {
   avatar_url: string | null;
   email_opt_in: boolean;
   profile_completed_at: string | null;
+  username: string | null;
 }
 
 export interface UseCurrentProfile {
@@ -68,7 +69,7 @@ function readProfile(userId: string): Promise<{ data: CurrentProfile | null; fai
   return Promise.resolve(
     supabase
       .from('users')
-      .select('display_name, designation, avatar_url, email_opt_in, profile_completed_at')
+      .select('display_name, designation, avatar_url, email_opt_in, profile_completed_at, username')
       .eq('id', userId)
       .maybeSingle(),
   ).then(

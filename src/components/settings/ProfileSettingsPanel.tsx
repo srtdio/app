@@ -1,7 +1,5 @@
-// Settings -> Profile editor. Unlike onboarding, the photo is OPTIONAL here: the
-// user can rename or re-title without re-uploading. So this panel does NOT reuse
-// submit-profile-setup (which hard-requires a file); it orchestrates its own
-// upload-then-save, only uploading when the cropper actually holds a new photo and
+// Settings -> Profile editor. The photo is optional: the user can rename or
+// re-title without re-uploading. It orchestrates its own upload-then-save, only uploading when the cropper actually holds a new photo and
 // otherwise sending NULL for the photo (the proc keeps the current one). The email
 // preference is passed through unchanged because there is no toggle on this screen.
 //

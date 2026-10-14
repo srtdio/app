@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { BottomTabs } from '@/components/shell/BottomTabs';
 import { Topbar } from '@/components/shell/Topbar';
@@ -12,7 +12,7 @@ import { ChatTabSignals } from '@/components/chat/ChatTabSignals';
 import { InboxStoreProvider } from '@/components/shell/InboxStoreProvider';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
-import { OnboardingProfileForm } from '@/components/onboarding/OnboardingProfileForm';
+import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useCurrentProfile } from '@/lib/use-current-profile';
 import { logger } from '@/lib/logger';
@@ -46,7 +46,16 @@ export function shellChrome(threadOpen: boolean): {
 }
 
 export function AppLayout() {
-  const { workspaceName, workspaces, loading, workspaceId, setActiveWorkspaceId } = useWorkspace();
+  const {
+    workspaceName,
+    workspaces,
+    loading,
+    workspaceId,
+    setActiveWorkspaceId,
+    refreshWorkspaces,
+    error: workspaceError,
+  } = useWorkspace();
+  const navigate = useNavigate();
   const {
     profile,
     loading: profileLoading,
@@ -89,6 +98,48 @@ export function AppLayout() {
     workspaces.some((x) => x.id === wParam) &&
     wParam !== workspaceId;
 
+  const onboardingNeeded =
+    !profileLoading &&
+    !loading &&
+    !profileError &&
+    // A failed list also comes back empty: never read that as "no workspace".
+    workspaceError === null &&
+    profile !== null &&
+    (profile.profile_completed_at === null || workspaces.length === 0);
+  const [flow, setFlow] = useState<{
+    workspaceId: string | null;
+    workspaceName: string | null;
+    finishing: string | null;
+    finishError: string | null;
+  } | null>(null);
+  // Close the flow once the finish refetch has landed, then open its destination.
+  useEffect(() => {
+    if (flow === null || flow.finishing === null) return;
+    if (loading || profileLoading) return;
+    // The refetch failed: hand the flow its buttons back with a message.
+    if (workspaceError !== null || profileError || profile === null) {
+      setFlow({
+        ...flow,
+        finishing: null,
+        finishError: "We couldn't open your workspace. Check your connection and try again.",
+      });
+      return;
+    }
+    if (profile.profile_completed_at === null || workspaces.length === 0) return;
+    const to = flow.finishing;
+    setFlow(null);
+    navigate(to, { replace: true });
+  }, [
+    flow,
+    loading,
+    profileLoading,
+    profile,
+    profileError,
+    workspaceError,
+    workspaces.length,
+    navigate,
+  ]);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -102,24 +153,39 @@ export function AppLayout() {
     };
   }, []);
 
-  // Onboarding gate. Runs before the workspace checks and escapes the chrome with
-  // an early return, exactly like the zero-workspace EmptyState below. The form is
-  // workspace-independent, so we never read useWorkspace from it.
-  if (profileLoading) {
-    // Reuse the shell's minimal centered loading state (RouteGuards' SessionLoading).
+  // Onboarding gate: an unfinished profile or no workspace opens OnboardingFlow
+  // full screen, before any chrome. It is opened in render (no shell frame first)
+  // and its workspace context is frozen at open, then it stays mounted until the
+  // finish refetch shows a complete profile and a workspace, so the flow never
+  // remounts mid-way or flashes the shell.
+  if (flow === null && (profileLoading || loading)) {
     return (
       <div className="min-h-full w-full grid place-items-center bg-bg">
         <span className="text-sm text-fg-3">Loading</span>
       </div>
     );
   }
-  if (!profileError && profile !== null && profile.profile_completed_at === null) {
+  if (onboardingNeeded && flow === null) {
+    setFlow({
+      workspaceId: workspaces.length > 0 ? workspaceId : null,
+      workspaceName: workspaces.length > 0 ? workspaceName : null,
+      finishing: null,
+      finishError: null,
+    });
+    return null;
+  }
+  if (flow !== null) {
     return (
-      <OnboardingProfileForm
-        initialDisplayName={profile.display_name}
-        initialDesignation={profile.designation}
-        initialEmailOptIn={profile.email_opt_in}
-        onComplete={refetchProfile}
+      <OnboardingFlow
+        profile={profile}
+        workspaceId={flow.workspaceId}
+        workspaceName={flow.workspaceName}
+        finishError={flow.finishError}
+        onFinish={(to) => {
+          setFlow({ ...flow, finishing: to, finishError: null });
+          void refreshWorkspaces();
+          refetchProfile();
+        }}
       />
     );
   }
