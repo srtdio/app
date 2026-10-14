@@ -29,11 +29,23 @@ export const HOME_MEDIA_BASE = siteMediaBase(rawMediaBase);
 export interface Clip {
   src: string;
   poster: string;
+  /** Seconds into the clip of its first real (non-blank) frame. Omitted means 0. */
+  startAt?: number;
 }
 
-/** <name>.mp4 with its <name>.webp poster. */
+// First real frame per clip, measured with ffmpeg signalstats on the v1 files:
+// the first frame whose mean luma moves at least 2 (of 255) away from the flat
+// opening frame. Clips not listed already open on a real frame.
+const CLIP_START_AT: Readonly<Record<string, number>> = {
+  'problems-m': 0.167,
+  'problems-d': 0.167,
+};
+
+/** <name>.mp4 with its <name>.webp poster and its first real frame. */
 export function clipFor(base: string | null, name: string): Clip | null {
   const src = mediaUrl(base, `${name}.mp4`);
   const poster = mediaUrl(base, `${name}.webp`);
-  return src && poster ? { src, poster } : null;
+  if (!src || !poster) return null;
+  const startAt = CLIP_START_AT[name];
+  return startAt ? { src, poster, startAt } : { src, poster };
 }

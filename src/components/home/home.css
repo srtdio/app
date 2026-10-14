@@ -427,7 +427,8 @@ html:has(.home) body {
   box-shadow:
     0 24px 60px rgba(22, 22, 40, 0.14),
     0 2px 8px rgba(22, 22, 40, 0.06);
-  background: #ece8e0;
+  /* Static fill under the clip until its first real frame is decoded. */
+  background: var(--t2);
 }
 .home .prob video {
   display: block;
@@ -557,11 +558,30 @@ html:has(.home) body {
 .home .clipbox {
   position: relative;
   width: min(100%, 280px);
+  /* Static fill and frame shadow under the clip until its first real frame is
+     decoded; the clip itself stays transparent until then. */
+  border-radius: 22px;
+  background: var(--wash);
+  box-shadow:
+    0 16px 40px rgba(22, 22, 40, 0.14),
+    0 2px 6px rgba(22, 22, 40, 0.06);
 }
 .home .clip {
   width: 100%;
   aspect-ratio: 390 / 720;
   object-fit: cover;
+}
+.home .clipbox .clip {
+  box-shadow: none;
+}
+
+/* Never paint an undecoded video: hidden until a real frame is ready. */
+.home video[data-clip] {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.home video[data-clip='ready'] {
+  opacity: 1;
 }
 .home .c1 {
   background: var(--t1);

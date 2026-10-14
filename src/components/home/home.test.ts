@@ -92,7 +92,13 @@ describe('media URLs', () => {
     expect(clipFor(base, 'problems-m')).toEqual({
       src: `${BASE}/problems-m.mp4`,
       poster: `${BASE}/problems-m.webp`,
+      startAt: 0.167,
     });
+  });
+
+  it('starts clips that open on a real frame at 0', () => {
+    const clip = clipFor(siteMediaBase(BASE), 'chat');
+    expect(clip?.startAt ?? 0).toBe(0);
   });
 
   it('drops a trailing slash', () => {
