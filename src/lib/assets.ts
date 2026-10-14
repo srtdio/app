@@ -10,30 +10,75 @@
 
 import type { Client, Result } from '@srtdio/rpc';
 
-/** The three buckets the library groups assets into for display and filtering. */
-export type AssetKind = 'image' | 'link' | 'file';
+/**
+ * The version kinds the server records (asset_versions.kind CHECK, live). A
+ * version whose kind is not one of these (or an asset with no current version)
+ * has kind null and shows under All only.
+ */
+export const ASSET_KINDS = [
+  'image',
+  'video',
+  'audio',
+  'pdf',
+  'document',
+  'spreadsheet',
+  'presentation',
+  'link',
+] as const;
 
-/** Kinds in chip order, paired with their display label. Counts come from data. */
-export const KIND_LABELS: Record<AssetKind, string> = {
-  image: 'Images',
-  link: 'Links',
-  file: 'Docs',
+export type AssetKind = (typeof ASSET_KINDS)[number];
+
+/** The Assets tabs, in display order. `all` shows every asset. */
+export type AssetTab = 'all' | 'media' | 'pdf' | 'docs' | 'sheets' | 'links';
+
+export const ASSET_TABS: readonly AssetTab[] = ['all', 'media', 'pdf', 'docs', 'sheets', 'links'];
+
+export const ASSET_TAB_DEFAULT: AssetTab = 'all';
+
+/** The one mapping from a version kind to its (non-All) tab. */
+export const KIND_TAB: Record<AssetKind, Exclude<AssetTab, 'all'>> = {
+  image: 'media',
+  video: 'media',
+  audio: 'media',
+  pdf: 'pdf',
+  document: 'docs',
+  presentation: 'docs',
+  spreadsheet: 'sheets',
+  link: 'links',
 };
 
-const KIND_ORDER: AssetKind[] = ['image', 'link', 'file'];
+export const TAB_LABELS: Record<AssetTab, string> = {
+  all: 'All',
+  media: 'Media',
+  pdf: 'PDF',
+  docs: 'Docs',
+  sheets: 'Sheets',
+  links: 'Links',
+};
 
-/** A filter selection: a concrete kind, or `all` for no kind restriction. */
-export type KindFilter = AssetKind | 'all';
+/** What an empty tab says. All keeps the page's own empty states. */
+export const TAB_EMPTY: Record<Exclude<AssetTab, 'all'>, string> = {
+  media: 'No media yet.',
+  pdf: 'No PDFs yet.',
+  docs: 'No docs yet.',
+  sheets: 'No sheets yet.',
+  links: 'No links yet.',
+};
 
-/**
- * Derive the display kind from a version's raw `kind` string. Anything that is
- * not an image or a link is treated as a generic file/doc, so a new server-side
- * kind never breaks the UI; it just falls into Docs.
- */
-export function deriveKind(rawKind: string | null): AssetKind {
-  if (rawKind === 'image') return 'image';
-  if (rawKind === 'link') return 'link';
-  return 'file';
+/** The version's raw kind, or null when it is missing or not a known kind. */
+export function toAssetKind(rawKind: string | null): AssetKind | null {
+  return ASSET_KINDS.find((kind) => kind === rawKind) ?? null;
+}
+
+/** The tab named by a ?type= value; anything else (missing, unknown) is All. */
+export function parseAssetTab(value: string | null): AssetTab {
+  return ASSET_TABS.find((tab) => tab === value) ?? ASSET_TAB_DEFAULT;
+}
+
+/** Whether an asset shows under a tab. */
+export function inTab(item: Pick<AssetListItem, 'kind'>, tab: AssetTab): boolean {
+  if (tab === 'all') return true;
+  return item.kind !== null && KIND_TAB[item.kind] === tab;
 }
 
 /** One asset, flattened with the fields of its current version for the grid. */
@@ -48,8 +93,8 @@ export interface AssetListItem {
   tags: string[];
   uploadedAt: string;
   currentVersionId: string | null;
-  rawKind: string | null;
-  kind: AssetKind;
+  /** The current version's kind; null when there is none or it is unknown. */
+  kind: AssetKind | null;
   mimeType: string | null;
   sizeBytes: number | null;
   width: number | null;
@@ -102,8 +147,8 @@ const ASSET_SELECT =
 /**
  * Flatten raw asset rows + a per-asset attachment-count map into the display
  * shape. Pure: tests drive this directly with fixture rows. An asset whose
- * current_version is missing (mid-upload, or hidden by RLS) still renders, as a
- * file with null version fields.
+ * current_version is missing (mid-upload, or hidden by RLS) still renders, with
+ * a null kind and null version fields.
  */
 export function shapeAssets(
   rows: RawAssetRow[],
@@ -120,8 +165,7 @@ export function shapeAssets(
       tags: row.tags,
       uploadedAt: row.uploaded_at,
       currentVersionId: row.current_version_id,
-      rawKind: v?.kind ?? null,
-      kind: deriveKind(v?.kind ?? null),
+      kind: toAssetKind(v?.kind ?? null),
       mimeType: v?.mime_type ?? null,
       sizeBytes: v?.size_bytes ?? null,
       width: v?.width ?? null,
@@ -281,32 +325,36 @@ export async function deleteAssetsBatch(
   return outcome;
 }
 
-/** Per-kind counts plus the `all` total, built generically from the items. */
-export function buildKindCounts(items: AssetListItem[]): Record<KindFilter, number> {
-  const counts: Record<KindFilter, number> = { all: items.length, image: 0, link: 0, file: 0 };
-  for (const item of items) counts[item.kind] += 1;
+/** Per-tab counts over the given items: All is the total, each kind counts once. */
+export function buildTabCounts(items: AssetListItem[]): Record<AssetTab, number> {
+  const counts: Record<AssetTab, number> = {
+    all: items.length,
+    media: 0,
+    pdf: 0,
+    docs: 0,
+    sheets: 0,
+    links: 0,
+  };
+  for (const item of items) {
+    if (item.kind !== null) counts[KIND_TAB[item.kind]] += 1;
+  }
   return counts;
 }
 
-/** Kinds that have at least one asset, in chip order. Zero-count kinds are hidden. */
-export function visibleKinds(counts: Record<KindFilter, number>): AssetKind[] {
-  return KIND_ORDER.filter((kind) => counts[kind] > 0);
-}
-
 /**
- * Apply the kind chip and the client-side name search. Search matches the
- * display label (display_name ?? filename) and ignores the folder so a query
- * reaches the whole library; folder scoping is applied by the caller only when
- * the search box is empty.
+ * Apply the tab and the client-side name search. Search matches the display
+ * label (display_name ?? filename) and ignores the folder so a query reaches
+ * the whole library; folder scoping is applied by the caller only when the
+ * search box is empty.
  */
 export function filterAssets(
   items: AssetListItem[],
-  kind: KindFilter,
+  tab: AssetTab,
   search: string,
 ): AssetListItem[] {
   const query = search.trim().toLowerCase();
   return items.filter((item) => {
-    if (kind !== 'all' && item.kind !== kind) return false;
+    if (!inTab(item, tab)) return false;
     if (query !== '' && !displayLabel(item).toLowerCase().includes(query)) return false;
     return true;
   });
@@ -324,13 +372,18 @@ export const ASSET_SORT_OPTIONS: { value: AssetSort; label: string }[] = [
   { value: 'type', label: 'Type' },
 ];
 
+/** Sort rank for Type: the item's tab position; an unknown kind sorts last. */
+function typeRank(item: AssetListItem): number {
+  return item.kind === null ? ASSET_TABS.length : ASSET_TABS.indexOf(KIND_TAB[item.kind]);
+}
+
 function compareName(a: AssetListItem, b: AssetListItem): number {
   return displayLabel(a).localeCompare(displayLabel(b), undefined, { sensitivity: 'base' });
 }
 
 /**
  * Order the list by the chosen sort. Recent = uploaded_at desc; Name = label
- * caseless; Size = size_bytes desc; Type = kind (chip order) then name. Pure and
+ * caseless; Size = size_bytes desc; Type = tab order then name. Pure and
  * non-mutating; the whole library is in memory (listAssets is unpaginated), so a
  * client sort is correct here.
  */
@@ -343,7 +396,7 @@ export function sortAssets(items: AssetListItem[], sort: AssetSort): AssetListIt
       return copy.sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0));
     case 'type':
       return copy.sort((a, b) => {
-        const byKind = KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind);
+        const byKind = typeRank(a) - typeRank(b);
         return byKind !== 0 ? byKind : compareName(a, b);
       });
     case 'recent':

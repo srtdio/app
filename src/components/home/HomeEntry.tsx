@@ -1,9 +1,12 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import DemoPage from './DemoPage';
 import HomePage from './HomePage';
+import PricingPage from './PricingPage';
 import { reportError } from './sentry-lazy';
 
-// Guest-path root for "/" (see src/main.tsx). Imports only React and the
-// homepage: no router, Supabase, session context, app CSS or eager Sentry.
+// Home-bundle root (see src/main.tsx): "/" for a guest, and /pricing and /demo
+// for everyone. Imports only React and these pages: no router, Supabase,
+// session context, app CSS or eager Sentry.
 
 export { scheduleSentry } from './sentry-lazy';
 
@@ -35,10 +38,20 @@ class HomeErrorBoundary extends Component<{ children: ReactNode }, BoundaryState
   }
 }
 
+/** The page for a path: /pricing, /demo, else the homepage. Pure. */
+export function homePageFor(pathname: string): 'pricing' | 'demo' | 'home' {
+  if (pathname === '/pricing') return 'pricing';
+  if (pathname === '/demo') return 'demo';
+  return 'home';
+}
+
+const PAGES = { home: HomePage, pricing: PricingPage, demo: DemoPage };
+
 export function HomeEntry() {
+  const Page = PAGES[homePageFor(window.location.pathname)];
   return (
     <HomeErrorBoundary>
-      <HomePage />
+      <Page />
     </HomeErrorBoundary>
   );
 }

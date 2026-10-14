@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionHeader } from '@/components/shell/SectionHeader';
@@ -12,6 +11,7 @@ import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
 import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { AddLinkSheet } from '@/components/pages/assets/AddLinkSheet';
+import { ASSET_TABPANEL_ID, AssetTabs, assetTabId } from '@/components/pages/assets/AssetTabs';
 import { FolderCard } from '@/components/pages/assets/FolderCard';
 import { FolderActionSheet } from '@/components/pages/assets/FolderActionSheet';
 import { FolderRenameSheet } from '@/components/pages/assets/FolderRenameSheet';
@@ -50,7 +50,8 @@ import {
   ASSET_SORT_DEFAULT,
   ASSET_SORT_OPTIONS,
   BULK_DELETE_MAX,
-  buildKindCounts,
+  ASSET_TAB_DEFAULT,
+  buildTabCounts,
   canBulkDelete,
   childFolders,
   displayLabel,
@@ -59,16 +60,16 @@ import {
   filterAssets,
   folderBreadcrumb,
   folderChildCount,
-  KIND_LABELS,
   listAssets,
+  parseAssetTab,
   removeAssetsById,
   renameAssetInList,
   sortAssets,
-  visibleKinds,
+  TAB_EMPTY,
   type AssetListItem,
   type AssetSort,
+  type AssetTab,
   type FolderItem,
-  type KindFilter,
 } from '@/lib/assets';
 
 const SKELETON_COUNT = 12;
@@ -90,7 +91,6 @@ export function AssetsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [kind, setKind] = useState<KindFilter>('all');
   const [search, setSearch] = useState('');
   const [folderId, setFolderId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<ViewerState | null>(null);
@@ -110,6 +110,24 @@ export function AssetsPage() {
   const { toasts, push, dismiss } = useToasts();
   const [searchParams, setSearchParams] = useSearchParams();
   const openedAssetParam = useRef<string | null>(null);
+
+  // The tab lives in ?type= (default All, unknown is All), so it survives Back
+  // and refresh. Switching only filters the loaded list: no read, instant.
+  const tab = parseAssetTab(searchParams.get('type'));
+  const setTab = useCallback(
+    (next: AssetTab): void => {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next === ASSET_TAB_DEFAULT) params.delete('type');
+          else params.set('type', next);
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   // One presign cache for the whole page: bounds concurrency and caches URLs so
   // the viewer never re-fetches a still-valid link. Rebuilt only if the endpoint
@@ -193,25 +211,18 @@ export function AssetsPage() {
 
   const searching = search.trim() !== '';
 
-  // Chip counts reflect what the grid shows: the whole library while searching,
-  // otherwise just the open folder's assets.
+  // Tab counts reflect what the grid shows: the whole library while searching,
+  // otherwise just the open folder's assets. Same loaded list, no extra read.
   const counts = useMemo(
-    () => buildKindCounts(searching ? items : items.filter((item) => item.folderId === folderId)),
+    () => buildTabCounts(searching ? items : items.filter((item) => item.folderId === folderId)),
     [items, searching, folderId],
   );
-  const kinds = useMemo(() => visibleKinds(counts), [counts]);
-
-  // If the active kind chip drops to zero (workspace switch, deletion), fall back
-  // to All so the grid never silently shows nothing for a hidden chip.
-  useEffect(() => {
-    if (kind !== 'all' && counts[kind] === 0) setKind('all');
-  }, [kind, counts]);
 
   const visible = useMemo(() => {
-    const byKind = filterAssets(items, kind, search);
-    const scoped = searching ? byKind : byKind.filter((item) => item.folderId === folderId);
+    const byTab = filterAssets(items, tab, search);
+    const scoped = searching ? byTab : byTab.filter((item) => item.folderId === folderId);
     return sortAssets(scoped, sort);
-  }, [items, kind, search, folderId, searching, sort]);
+  }, [items, tab, search, folderId, searching, sort]);
 
   // The viewer iterates the currently visible list with links excluded; links
   // open their external URL directly and never enter the lightbox.
@@ -630,7 +641,7 @@ export function AssetsPage() {
         </div>
       ) : null}
 
-      {/* Search + sort + add, then the kind chips: shared page-header chrome. */}
+      {/* Search + sort + add, then the type tabs: shared page-header chrome. */}
       <SectionHeader<AssetSort>
         search={{ value: search, onChange: setSearch, placeholder: 'Search files' }}
         sort={{ options: ASSET_SORT_OPTIONS, value: sort, onChange: setSort }}
@@ -686,23 +697,7 @@ export function AssetsPage() {
             </span>
           </div>
         ) : (
-          <>
-            <Chip
-              label={`All ${counts.all}`}
-              selected={kind === 'all'}
-              size="tap"
-              onClick={() => setKind('all')}
-            />
-            {kinds.map((k) => (
-              <Chip
-                key={k}
-                label={`${KIND_LABELS[k]} ${counts[k]}`}
-                selected={kind === k}
-                size="tap"
-                onClick={() => setKind(k)}
-              />
-            ))}
-          </>
+          <AssetTabs value={tab} counts={counts} onChange={setTab} />
         )}
       </SectionHeader>
 
@@ -722,62 +717,72 @@ export function AssetsPage() {
         </div>
       ) : null}
 
-      {error !== null ? (
-        <div className="px-4 md:px-6 mt-4">
-          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
-            Could not load assets. {error}
-          </div>
-          <div className="mt-3">
-            <Button onClick={() => void loadAssets()}>Retry</Button>
-          </div>
-        </div>
-      ) : listLoading ? (
-        <div className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
-          {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl border border-border bg-panel overflow-hidden animate-pulse"
-            >
-              <div className="aspect-[4/3] w-full bg-panel-2" />
-              <div className="h-9 border-t border-border" />
+      <div
+        role={selectMode ? undefined : 'tabpanel'}
+        id={ASSET_TABPANEL_ID}
+        aria-labelledby={selectMode ? undefined : assetTabId(tab)}
+      >
+        {error !== null ? (
+          <div className="px-4 md:px-6 mt-4">
+            <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
+              Could not load assets. {error}
             </div>
-          ))}
-        </div>
-      ) : items.length === 0 && folders.length === 0 ? (
-        <EmptyState
-          icon={<IconAssets size={24} />}
-          title="No assets yet"
-          description="Files and links used in posts and briefs will show up here."
-          action={
-            <Button variant="primary" onClick={() => setUploadOpen(true)}>
-              <IconUpload size={16} />
-              Upload
-            </Button>
-          }
-        />
-      ) : visible.length === 0 ? (
-        searching ? (
-          <div className="px-4 md:px-6 py-12 text-center">
-            <p className="text-sm text-fg-2">No assets match &quot;{search.trim()}&quot;</p>
-            <p className="mt-1 text-xs text-fg-3">Try a different name or clear the search.</p>
+            <div className="mt-3">
+              <Button onClick={() => void loadAssets()}>Retry</Button>
+            </div>
           </div>
-        ) : currentFolders.length === 0 ? (
-          <div className="px-4 md:px-6 py-10 text-sm text-fg-3">This folder is empty.</div>
-        ) : null
-      ) : (
-        <div className="px-4 md:px-6 py-4">
-          <AssetGrid
-            items={visible}
-            presignEnabled={presignEnabled}
-            cache={cache}
-            onOpen={(item) => openAsset(item)}
-            onLongPress={setActionItem}
-            selectMode={selectMode}
-            selectedIds={selected}
-            onToggleSelect={toggleSelect}
+        ) : listLoading ? (
+          <div className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
+            {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-border bg-panel overflow-hidden animate-pulse"
+              >
+                <div className="aspect-[4/3] w-full bg-panel-2" />
+                <div className="h-9 border-t border-border" />
+              </div>
+            ))}
+          </div>
+        ) : tab === 'all' && items.length === 0 && folders.length === 0 ? (
+          <EmptyState
+            icon={<IconAssets size={24} />}
+            title="No assets yet"
+            description="Files and links used in posts and briefs will show up here."
+            action={
+              <Button variant="primary" onClick={() => setUploadOpen(true)}>
+                <IconUpload size={16} />
+                Upload
+              </Button>
+            }
           />
-        </div>
-      )}
+        ) : visible.length === 0 ? (
+          searching ? (
+            <div className="px-4 md:px-6 py-12 text-center">
+              <p className="text-sm text-fg-2">No assets match &quot;{search.trim()}&quot;</p>
+              <p className="mt-1 text-xs text-fg-3">Try a different name or clear the search.</p>
+            </div>
+          ) : tab !== 'all' ? (
+            <div data-asset-tab-empty={tab} className="px-4 md:px-6 py-10 text-sm text-fg-3">
+              {TAB_EMPTY[tab]}
+            </div>
+          ) : currentFolders.length === 0 ? (
+            <div className="px-4 md:px-6 py-10 text-sm text-fg-3">This folder is empty.</div>
+          ) : null
+        ) : (
+          <div className="px-4 md:px-6 py-4">
+            <AssetGrid
+              items={visible}
+              presignEnabled={presignEnabled}
+              cache={cache}
+              onOpen={(item) => openAsset(item)}
+              onLongPress={setActionItem}
+              selectMode={selectMode}
+              selectedIds={selected}
+              onToggleSelect={toggleSelect}
+            />
+          </div>
+        )}
+      </div>
 
       {viewer !== null && viewerItem !== undefined ? (
         <AssetLightbox

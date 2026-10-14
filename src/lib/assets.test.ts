@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import {
   BULK_DELETE_MAX,
-  buildKindCounts,
+  ASSET_KINDS,
+  ASSET_TABS,
+  buildTabCounts,
   canBulkDelete,
   childFolders,
   countAttachments,
   deleteAssetsBatch,
-  deriveKind,
   displayLabel,
   fetchFolders,
   fileExtension,
@@ -18,14 +19,17 @@ import {
   formatDimensions,
   humanizeSize,
   imageTileState,
+  inTab,
+  KIND_TAB,
   linkDomain,
   listAssets,
   mimeBadge,
+  parseAssetTab,
   removeAssetsById,
   renameAssetInList,
   shapeAssets,
   sortAssets,
-  visibleKinds,
+  toAssetKind,
   type AssetListItem,
   type FolderItem,
 } from '@/lib/assets';
@@ -83,12 +87,44 @@ function assetRow(id: string, kind: string, over: Record<string, unknown> = {}) 
   };
 }
 
-describe('deriveKind', () => {
-  it('maps image and link, everything else to file', () => {
-    expect(deriveKind('image')).toBe('image');
-    expect(deriveKind('link')).toBe('link');
-    expect(deriveKind('video')).toBe('file');
-    expect(deriveKind(null)).toBe('file');
+describe('kind to tab mapping', () => {
+  it('maps every server kind to exactly one non-All tab', () => {
+    for (const kind of ASSET_KINDS) {
+      const tabs = ASSET_TABS.filter((tab) => tab !== 'all' && inTab({ kind }, tab));
+      expect(tabs).toEqual([KIND_TAB[kind]]);
+    }
+    expect(Object.keys(KIND_TAB).sort()).toEqual([...ASSET_KINDS].sort());
+  });
+
+  it('groups kinds as Media, PDF, Docs, Sheets and Links', () => {
+    expect(KIND_TAB).toEqual({
+      image: 'media',
+      video: 'media',
+      audio: 'media',
+      pdf: 'pdf',
+      document: 'docs',
+      presentation: 'docs',
+      spreadsheet: 'sheets',
+      link: 'links',
+    });
+  });
+
+  it('keeps known kinds and nulls an unknown or missing one (All only)', () => {
+    expect(toAssetKind('spreadsheet')).toBe('spreadsheet');
+    expect(toAssetKind('hologram')).toBeNull();
+    expect(toAssetKind(null)).toBeNull();
+    expect(inTab({ kind: null }, 'all')).toBe(true);
+    expect(ASSET_TABS.filter((tab) => tab !== 'all' && inTab({ kind: null }, tab))).toEqual([]);
+  });
+});
+
+describe('parseAssetTab (?type=)', () => {
+  it('round-trips every tab and sends anything else to All', () => {
+    for (const tab of ASSET_TABS) expect(parseAssetTab(tab)).toBe(tab);
+    expect(parseAssetTab(null)).toBe('all');
+    expect(parseAssetTab('')).toBe('all');
+    expect(parseAssetTab('images')).toBe('all');
+    expect(parseAssetTab('PDF')).toBe('all');
   });
 });
 
@@ -116,7 +152,7 @@ describe('listAssets states', () => {
   it('shapes rows with kind and live attachment counts', async () => {
     const client = makeClient({
       assets: {
-        data: [assetRow('a', 'image'), assetRow('b', 'link'), assetRow('c', 'application/pdf')],
+        data: [assetRow('a', 'image'), assetRow('b', 'link'), assetRow('c', 'pdf')],
         error: null,
       },
       attachments: { data: [{ asset_id: 'a' }, { asset_id: 'a' }, { asset_id: 'c' }], error: null },
@@ -131,7 +167,7 @@ describe('listAssets states', () => {
     };
     expect(pick('a').kind).toBe('image');
     expect(pick('b').kind).toBe('link');
-    expect(pick('c').kind).toBe('file');
+    expect(pick('c').kind).toBe('pdf');
     expect(pick('a').attachmentCount).toBe(2);
     expect(pick('b').attachmentCount).toBe(0);
     expect(pick('c').attachmentCount).toBe(1);
@@ -139,7 +175,7 @@ describe('listAssets states', () => {
 });
 
 describe('shapeAssets', () => {
-  it('tolerates a missing current version (renders as a file)', () => {
+  it('tolerates a missing current version (null kind, All only)', () => {
     const items = shapeAssets(
       [{ ...assetRow('x', 'image'), current_version: null, current_version_id: null }],
       new Map(),
@@ -147,7 +183,7 @@ describe('shapeAssets', () => {
     const item = items[0];
     expect(item).toBeDefined();
     if (item === undefined) return;
-    expect(item.kind).toBe('file');
+    expect(item.kind).toBeNull();
     expect(item.versionNumber).toBeNull();
     expect(item.currentVersionId).toBeNull();
   });
@@ -185,13 +221,6 @@ describe('displayLabel', () => {
   });
 });
 
-describe('visibleKinds', () => {
-  it('lists kinds with assets in chip order and hides zero-count kinds', () => {
-    expect(visibleKinds({ all: 3, image: 2, link: 0, file: 1 })).toEqual(['image', 'file']);
-    expect(visibleKinds({ all: 0, image: 0, link: 0, file: 0 })).toEqual([]);
-  });
-});
-
 describe('sortAssets', () => {
   const items: AssetListItem[] = [
     {
@@ -212,7 +241,7 @@ describe('sortAssets', () => {
     },
     {
       ...base('c'),
-      kind: 'file',
+      kind: 'pdf',
       displayName: null,
       filename: 'middle.pdf',
       sizeBytes: 100,
@@ -233,9 +262,9 @@ describe('sortAssets', () => {
     expect(sortAssets(items, 'size').map((i) => i.id)).toEqual(['b', 'c', 'a']);
   });
 
-  it('type = kind (chip order) then name', () => {
-    // image (b), link (a), file (c)
-    expect(sortAssets(items, 'type').map((i) => i.id)).toEqual(['b', 'a', 'c']);
+  it('type = tab order then name', () => {
+    // media (b), pdf (c), links (a)
+    expect(sortAssets(items, 'type').map((i) => i.id)).toEqual(['b', 'c', 'a']);
   });
 
   it('does not mutate the input', () => {
@@ -271,26 +300,47 @@ describe('imageTileState', () => {
   });
 });
 
-describe('kind filtering and counts', () => {
+describe('tab filtering and counts', () => {
   const items: AssetListItem[] = [
     { ...base('1'), kind: 'image', filename: 'logo.png' },
-    { ...base('2'), kind: 'image', filename: 'hero.jpg' },
+    { ...base('2'), kind: 'video', filename: 'hero.mp4' },
     { ...base('3'), kind: 'link', filename: 'drive folder' },
-    { ...base('4'), kind: 'file', filename: 'brief.pdf' },
+    { ...base('4'), kind: 'pdf', filename: 'brief.pdf' },
+    { ...base('5'), kind: 'presentation', filename: 'deck.pptx' },
+    { ...base('6'), kind: 'document', filename: 'notes.docx' },
+    { ...base('7'), kind: null, filename: 'mid-upload' },
   ];
 
-  it('counts each kind generically plus the all total', () => {
-    expect(buildKindCounts(items)).toEqual({ all: 4, image: 2, link: 1, file: 1 });
+  it('counts every tab from the one list, zero tabs included', () => {
+    expect(buildTabCounts(items)).toEqual({
+      all: 7,
+      media: 2,
+      pdf: 1,
+      docs: 2,
+      sheets: 0,
+      links: 1,
+    });
+    expect(buildTabCounts([])).toEqual({
+      all: 0,
+      media: 0,
+      pdf: 0,
+      docs: 0,
+      sheets: 0,
+      links: 0,
+    });
   });
 
-  it('filters by kind', () => {
-    expect(filterAssets(items, 'image', '').map((i) => i.id)).toEqual(['1', '2']);
-    expect(filterAssets(items, 'link', '').map((i) => i.id)).toEqual(['3']);
+  it('filters by tab', () => {
+    expect(filterAssets(items, 'media', '').map((i) => i.id)).toEqual(['1', '2']);
+    expect(filterAssets(items, 'docs', '').map((i) => i.id)).toEqual(['5', '6']);
+    expect(filterAssets(items, 'links', '').map((i) => i.id)).toEqual(['3']);
+    expect(filterAssets(items, 'sheets', '')).toEqual([]);
+    expect(filterAssets(items, 'all', '')).toHaveLength(7);
   });
 
-  it('filters by filename search case-insensitively, ignoring kind=all', () => {
+  it('filters by filename search case-insensitively, ignoring tab=all', () => {
     expect(filterAssets(items, 'all', 'HERO').map((i) => i.id)).toEqual(['2']);
-    expect(filterAssets(items, 'image', 'pdf')).toEqual([]);
+    expect(filterAssets(items, 'media', 'pdf')).toEqual([]);
   });
 
   it('matches the display name when present, not just the filename', () => {
@@ -465,7 +515,6 @@ function base(id: string): AssetListItem {
     tags: [],
     uploadedAt: '2026-06-01T00:00:00Z',
     currentVersionId: `v-${id}`,
-    rawKind: 'image',
     kind: 'image',
     mimeType: 'image/png',
     sizeBytes: 1024,

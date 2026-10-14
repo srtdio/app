@@ -17,10 +17,22 @@
 // Every open asks for fresh bytes or a fresh link (PDF, docx and xlsx bytes
 // come through the asset-read Worker's stream mode, never storage CORS). A load failure shows "Couldn't open.
 // Try again." with Download, never a blank sheet; a render crash is caught by
-// the viewer's own ErrorBoundary. Colours come from the theme-independent
-// overlay tokens, the same dark backdrop in light and dark mode.
+// the viewer's own ErrorBoundary. A PDF sits on a theme surface (panel tokens,
+// light in light mode, dark in dark mode) and paints from its first frame: the
+// first-page preview when there is one, else a page-shaped card with the file
+// name, in the same box the real page then draws into. No spinner, no black
+// frame. Video and the rest keep the theme-independent dark overlay.
 
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from 'react';
 import type { MutableRefObject, ReactElement, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -34,6 +46,7 @@ import {
   loadPdfJs,
   openPdf,
   releaseCanvas,
+  sharedThumbnail,
   type PdfDocumentLike,
   type PdfJsLike,
   type PdfLoadingTaskLike,
@@ -79,6 +92,8 @@ const TAP_SLOP_PX = 10;
  */
 const MAX_CANVAS_PIXELS = 4_000_000;
 const PAGE_GAP_PX = 8;
+/** Page height / width until the preview or the PDF says otherwise (US Letter). */
+export const DEFAULT_PAGE_ASPECT = 1.294;
 
 /** Layout effect in the browser; a plain effect where there is no DOM (server render, tests). */
 const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -158,6 +173,10 @@ export interface FileViewerSource {
   videoLink(): Promise<HeldLink>;
   /** A link that saves the file (Content-Disposition: attachment), fresh on every call. */
   downloadLink(): Promise<HeldLink>;
+  /** The PDF's first-page preview when it is already at hand (sync, for the first frame), else null. */
+  previewNow(): string | null;
+  /** The PDF's first-page preview; null when there is none. Never rejects. */
+  preview(): Promise<HeldLink | null>;
 }
 
 const NOOP = (): void => undefined;
@@ -232,6 +251,14 @@ export function remoteFileSource(cache: PresignCache, versionId: string): FileVi
       return { url: (await cache.freshUrl(versionId, 'inline')).url, release: NOOP };
     },
     downloadLink: attachmentLink(cache, versionId),
+    previewNow() {
+      return cache.peekThumbnail(versionId)?.url ?? null;
+    },
+    async preview() {
+      // The stored thumbnail rendition: page 1 drawn at upload.
+      const presigned = await cache.thumbnail(versionId).catch(() => null);
+      return presigned === null ? null : { url: presigned.url, release: NOOP };
+    },
   };
 }
 
@@ -252,6 +279,14 @@ export function localFileSource(file: File): FileViewerSource {
     },
     videoLink: blobLink,
     downloadLink: blobLink,
+    previewNow: () => null,
+    async preview() {
+      // The same page-1 thumbnail the sending bubble and the upload share.
+      const made = await sharedThumbnail(file).catch(() => null);
+      if (made === null || !made.ok) return null;
+      const url = URL.createObjectURL(made.blob);
+      return { url, release: () => URL.revokeObjectURL(url) };
+    },
   };
 }
 
@@ -267,15 +302,59 @@ export function downloadFile(source: FileViewerSource, name: string): Promise<bo
 // Shared chrome
 // ---------------------------------------------------------------------------
 
-/** 44x44 icon buttons on the overlay backdrop. */
-const BAR_BUTTON =
-  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
-  'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
-  'focus-visible:ring-overlay-fg disabled:opacity-40';
-const TEXT_BUTTON =
-  'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-4 text-sm font-medium ' +
-  'text-overlay-fg bg-overlay-surface hover:bg-overlay-line focus-visible:outline-none ' +
-  'focus-visible:ring-2 focus-visible:ring-overlay-fg';
+/**
+ * The sheet's colours. 'overlay' is the theme-independent dark backdrop
+ * (video, office, other files); 'surface' is the theme's own panel (PDF).
+ */
+export type ViewerTone = 'overlay' | 'surface';
+
+interface ToneClasses {
+  backdrop: string;
+  fg: string;
+  fgDim: string;
+  chip: string;
+  /** 44x44 icon buttons. */
+  bar: string;
+  text: string;
+}
+
+const TONES: Record<ViewerTone, ToneClasses> = {
+  overlay: {
+    backdrop: 'bg-overlay',
+    fg: 'text-overlay-fg',
+    fgDim: 'text-overlay-fg-dim',
+    chip: 'bg-overlay-surface text-overlay-fg',
+    bar:
+      'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
+      'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
+      'focus-visible:ring-overlay-fg disabled:opacity-40',
+    text:
+      'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-4 text-sm font-medium ' +
+      'text-overlay-fg bg-overlay-surface hover:bg-overlay-line focus-visible:outline-none ' +
+      'focus-visible:ring-2 focus-visible:ring-overlay-fg',
+  },
+  surface: {
+    backdrop: 'bg-panel-2',
+    fg: 'text-fg',
+    fgDim: 'text-fg-2',
+    chip: 'bg-panel text-fg border border-border',
+    bar:
+      'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-fg ' +
+      'hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 ' +
+      'focus-visible:ring-accent disabled:opacity-40',
+    text:
+      'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-4 text-sm font-medium ' +
+      'text-fg bg-panel border border-border hover:bg-panel-3 focus-visible:outline-none ' +
+      'focus-visible:ring-2 focus-visible:ring-accent',
+  },
+};
+
+/** The tone a kind's sheet uses: PDF on the theme surface, the rest on the overlay. Pure. */
+export function viewerTone(kind: ViewerKind): ViewerTone {
+  return kind === 'pdf' ? 'surface' : 'overlay';
+}
+
+const OVERLAY = TONES.overlay;
 /** No selection or iOS callout on the viewer's controls. */
 const NO_SELECT = 'select-none [-webkit-touch-callout:none] [-webkit-user-select:none]';
 
@@ -287,25 +366,27 @@ function focusable(root: HTMLElement): HTMLElement[] {
   );
 }
 
-/** The centred message with Try again and Download: a failed load is never blank. */
+/** The centred message with Retry and Download: a failed load is never blank. */
 function ViewerError(props: {
   onRetry?: (() => void) | undefined;
   onDownload: () => void;
+  tone?: ViewerTone;
 }): ReactElement {
+  const tone = TONES[props.tone ?? 'overlay'];
   return (
     <div
       data-viewer-error=""
       role="alert"
       className={cn('flex flex-col items-center gap-3 px-6 text-center', NO_SELECT)}
     >
-      <p className="text-sm text-overlay-fg">{VIEWER_ERROR}</p>
+      <p className={cn('text-sm', tone.fg)}>{VIEWER_ERROR}</p>
       <div className="flex flex-wrap items-center justify-center gap-2">
         {props.onRetry !== undefined ? (
-          <button type="button" onClick={props.onRetry} className={TEXT_BUTTON}>
-            Try again
+          <button type="button" onClick={props.onRetry} className={tone.text}>
+            Retry
           </button>
         ) : null}
-        <button type="button" onClick={props.onDownload} className={TEXT_BUTTON}>
+        <button type="button" onClick={props.onDownload} className={tone.text}>
           <IconDownload size={18} />
           Download
         </button>
@@ -363,7 +444,7 @@ function UnavailableRenderer(props: RendererProps): ReactElement {
           </>
         ) : null}
       </p>
-      <button type="button" onClick={props.onDownload} className={TEXT_BUTTON}>
+      <button type="button" onClick={props.onDownload} className={OVERLAY.text}>
         <IconDownload size={18} />
         Download
       </button>
@@ -424,23 +505,47 @@ function VideoRenderer(props: RendererProps): ReactElement {
   );
 }
 
-/** One PDF page: a fixed-aspect box; a canvas only while the page is live. */
+/**
+ * One PDF page: a fixed-aspect, page-shaped box on the theme surface. Page 1
+ * shows the preview (or the file name) from the first frame; the canvas draws
+ * over it in the same box once the document is open and the page is live.
+ */
 function PdfPage(props: {
-  doc: PdfDocumentLike;
-  pdfjs: PdfJsLike;
+  /** The open document; null while it is still opening. */
+  doc: PdfDocumentLike | null;
+  pdfjs: PdfJsLike | null;
   pageNumber: number;
   aspect: number;
   live: boolean;
   cssWidth: number;
+  /** Page 1 only: the first-page preview URL. */
+  preview?: string | null;
+  /** Page 1 only: the file name shown until a preview or the page draws. */
+  name?: string;
+  onPreviewAspect?: (aspect: number) => void;
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { doc, pdfjs, pageNumber, aspect, live, cssWidth } = props;
+  const previewRef = useRef<HTMLImageElement | null>(null);
+  const { doc, pdfjs, pageNumber, aspect, live, cssWidth, preview, name, onPreviewAspect } = props;
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
+  // A preview already decoded (cached from the file tile) sizes the box before
+  // the first paint; a fresh one sizes it on load.
+  const reportAspect = useCallback(
+    (img: HTMLImageElement | null) => {
+      if (img === null || !img.complete || img.naturalWidth <= 0) return;
+      onPreviewAspect?.(img.naturalHeight / img.naturalWidth);
+    },
+    [onPreviewAspect],
+  );
+  useBrowserLayoutEffect(() => reportAspect(previewRef.current), [preview, reportAspect]);
+  const onPreviewLoad = (event: SyntheticEvent<HTMLImageElement>): void =>
+    reportAspect(event.currentTarget);
+
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!live || canvas === null || cssWidth <= 0) return;
+    if (doc === null || pdfjs === null || !live || canvas === null || cssWidth <= 0) return;
     let task: PdfRenderTaskLike | null = null;
     let cleanupPage: (() => void) | null = null;
     let cancelled = false;
@@ -488,27 +593,54 @@ function PdfPage(props: {
     };
   }, [doc, pdfjs, pageNumber, live, cssWidth, attempt]);
 
+  const drawing = doc !== null && live;
   return (
     <div
       data-pdf-page={pageNumber}
-      className="relative w-full bg-overlay-fg"
+      className="relative w-full overflow-hidden rounded-sm border border-border bg-panel"
       style={{ aspectRatio: `1 / ${aspect}` }}
     >
-      {live ? (
+      {preview !== undefined && preview !== null ? (
+        <img
+          ref={previewRef}
+          data-pdf-preview=""
+          src={preview}
+          alt=""
+          aria-hidden="true"
+          onLoad={onPreviewLoad}
+          className="absolute inset-0 h-full w-full object-contain object-top"
+        />
+      ) : name !== undefined ? (
+        <div
+          data-pdf-placeholder=""
+          className={cn(
+            'absolute inset-0 flex items-center justify-center px-6 text-center',
+            NO_SELECT,
+          )}
+        >
+          <span className="flex flex-col items-center gap-3 text-fg-2">
+            <IconFileText size={30} />
+            <span className="max-w-full text-sm font-medium [overflow-wrap:anywhere]">
+              {middleTruncate(name)}
+            </span>
+          </span>
+        </div>
+      ) : null}
+      {drawing ? (
         <canvas
           ref={canvasRef}
           aria-label={`Page ${pageNumber}`}
           className="absolute inset-0 h-full w-full object-contain"
         />
       ) : null}
-      {live && failed ? (
+      {drawing && failed ? (
         <button
           type="button"
           data-pdf-page-error=""
           onClick={() => setAttempt((n) => n + 1)}
           className={cn(
-            'absolute inset-0 flex min-h-[44px] items-center justify-center bg-overlay text-sm text-overlay-fg',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-overlay-fg',
+            'absolute inset-0 flex min-h-[44px] items-center justify-center bg-panel text-sm text-fg',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
             NO_SELECT,
           )}
         >
@@ -519,15 +651,22 @@ function PdfPage(props: {
   );
 }
 
+/** 'preview': the first page box shows the preview or the name while the PDF opens. */
 type PdfState =
-  | { kind: 'loading' }
+  | { kind: 'preview' }
   | { kind: 'error' }
   | { kind: 'ready'; pdfjs: PdfJsLike; doc: PdfDocumentLike; aspect: number };
 
-/** pdf.js pages in a vertical scroller with lazy canvases, pinch and double-tap zoom. */
+/**
+ * pdf.js pages in a vertical scroller with lazy canvases, pinch and double-tap
+ * zoom. The scroller and page 1's box are there from the first frame; page 1
+ * stays the same element when the document opens, so nothing jumps.
+ */
 function PdfRenderer(props: RendererProps): ReactElement {
   const { source, onPages, onZoom, scrollerRef } = props;
-  const [state, setState] = useState<PdfState>({ kind: 'loading' });
+  const [state, setState] = useState<PdfState>({ kind: 'preview' });
+  const [preview, setPreview] = useState<string | null>(() => source.previewNow());
+  const [previewAspect, setPreviewAspect] = useState<number | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
@@ -535,10 +674,30 @@ function PdfRenderer(props: RendererProps): ReactElement {
   const [renderZoom, setRenderZoom] = useState(1);
   const [width, setWidth] = useState(0);
 
+  // The preview arrives on its own clock; the real pages replace it when ready.
+  useEffect(() => {
+    let live = true;
+    let held: HeldLink | null = null;
+    setPreview(source.previewNow());
+    void source.preview().then((link) => {
+      if (link === null) return;
+      if (!live) {
+        link.release();
+        return;
+      }
+      held = link;
+      setPreview(link.url);
+    });
+    return () => {
+      live = false;
+      held?.release();
+    };
+  }, [source]);
+
   useEffect(() => {
     const controller = new AbortController();
     let task: PdfLoadingTaskLike | null = null;
-    setState({ kind: 'loading' });
+    setState({ kind: 'preview' });
     void (async () => {
       try {
         const [pdfjs, bytes] = await Promise.all([loadPdfJs(), source.pdfBytes(controller.signal)]);
@@ -568,7 +727,7 @@ function PdfRenderer(props: RendererProps): ReactElement {
   }, [state.kind, onFailed]);
 
   const total = state.kind === 'ready' ? state.doc.numPages : 0;
-  const aspect = state.kind === 'ready' ? state.aspect : 1.294;
+  const aspect = state.kind === 'ready' ? state.aspect : (previewAspect ?? DEFAULT_PAGE_ASPECT);
 
   // The scroller's width sets every page's box; it follows rotation and resize.
   useBrowserLayoutEffect(() => {
@@ -704,41 +863,45 @@ function PdfRenderer(props: RendererProps): ReactElement {
   }, [scrollerRef, state.kind, applyZoom]);
 
   if (state.kind === 'error') {
-    return <ViewerError onRetry={() => setAttempt((n) => n + 1)} onDownload={props.onDownload} />;
+    return (
+      <ViewerError
+        tone="surface"
+        onRetry={() => setAttempt((n) => n + 1)}
+        onDownload={props.onDownload}
+      />
+    );
   }
 
+  const doc = state.kind === 'ready' ? state.doc : null;
+  const pdfjs = state.kind === 'ready' ? state.pdfjs : null;
   return (
     <div
       ref={scrollerRef}
       data-pdf-scroller=""
+      data-pdf-state={state.kind}
       // Focusable so arrows, Space and Page Down scroll the pages on Safari.
       tabIndex={0}
       aria-label="Pages"
       onScroll={onScroll}
       className="absolute inset-0 overflow-auto overscroll-contain [touch-action:pan-x_pan-y]"
     >
-      {state.kind === 'loading' ? (
-        <div className="flex h-full items-center justify-center">
-          <Spinner />
-        </div>
-      ) : (
-        <div
-          className="mx-auto flex flex-col px-2 py-2"
-          style={{ width: `${pageWidth + 16}px`, gap: `${PAGE_GAP_PX}px` }}
-        >
-          {Array.from({ length: total }, (_, i) => (
-            <PdfPage
-              key={i + 1}
-              doc={state.doc}
-              pdfjs={state.pdfjs}
-              pageNumber={i + 1}
-              aspect={state.aspect}
-              live={isLivePage(i + 1, page)}
-              cssWidth={(Math.max(width - 16, 0) * renderZoom) | 0}
-            />
-          ))}
-        </div>
-      )}
+      <div
+        className="mx-auto flex flex-col px-2 py-2"
+        style={{ width: `${pageWidth + 16}px`, gap: `${PAGE_GAP_PX}px` }}
+      >
+        {Array.from({ length: Math.max(total, 1) }, (_, i) => (
+          <PdfPage
+            key={i + 1}
+            doc={doc}
+            pdfjs={pdfjs}
+            pageNumber={i + 1}
+            aspect={aspect}
+            live={isLivePage(i + 1, page)}
+            cssWidth={(Math.max(width - 16, 0) * renderZoom) | 0}
+            {...(i === 0 ? { preview, name: props.name, onPreviewAspect: setPreviewAspect } : {})}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -856,10 +1019,12 @@ function useBodyScrollLock(): void {
 
 function TopBar(props: {
   name: string;
+  tone: ToneClasses;
   onClose: () => void;
   onDownload: () => void;
   closeRef: RefObject<HTMLButtonElement>;
 }): ReactElement {
+  const { tone } = props;
   return (
     <div
       data-viewer-bar=""
@@ -873,17 +1038,17 @@ function TopBar(props: {
         type="button"
         aria-label="Close"
         onClick={props.onClose}
-        className={BAR_BUTTON}
+        className={tone.bar}
       >
         <IconX size={22} />
       </button>
       <p
         title={props.name}
-        className="min-w-0 flex-1 truncate text-center text-sm font-medium text-overlay-fg"
+        className={cn('min-w-0 flex-1 truncate text-center text-sm font-medium', tone.fg)}
       >
         {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
       </p>
-      <button type="button" aria-label="Download" onClick={props.onDownload} className={BAR_BUTTON}>
+      <button type="button" aria-label="Download" onClick={props.onDownload} className={tone.bar}>
         <IconDownload size={20} />
       </button>
     </div>
@@ -1037,6 +1202,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
   const onFailed = useCallback(() => onLoadError?.(), [onLoadError]);
 
   const Renderer = RENDERERS[kind];
+  const tone = TONES[viewerTone(kind)];
   const backdrop = Math.max(0.3, 1 - dragY / 400);
 
   return (
@@ -1046,11 +1212,13 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
       aria-modal="true"
       aria-label={name}
       data-file-viewer={kind}
+      data-viewer-tone={viewerTone(kind)}
       className="fixed inset-0 z-[80] flex flex-col overflow-hidden"
     >
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-overlay"
+        data-viewer-backdrop=""
+        className={cn('absolute inset-0', tone.backdrop)}
         style={{ opacity: backdrop }}
       />
       <div
@@ -1062,7 +1230,13 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
         style={{ transform: `translateY(${dragY}px)` }}
         onTransitionEnd={() => setSettling(false)}
       >
-        <TopBar name={name} onClose={onClose} onDownload={onDownload} closeRef={closeRef} />
+        <TopBar
+          name={name}
+          tone={tone}
+          onClose={onClose}
+          onDownload={onDownload}
+          closeRef={closeRef}
+        />
         <div className="relative flex min-h-0 flex-1 items-center justify-center">
           <Renderer
             name={name}
@@ -1079,10 +1253,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           <div className="pointer-events-none absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] flex justify-center">
             <span
               data-page-counter=""
-              className={cn(
-                'rounded-full bg-overlay-surface px-3 py-1 font-mono text-xs text-overlay-fg',
-                NO_SELECT,
-              )}
+              className={cn('rounded-full px-3 py-1 font-mono text-xs', tone.chip, NO_SELECT)}
             >
               {pageCounter(pages.page, pages.total)}
             </span>
@@ -1091,7 +1262,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
         {downloadFailed ? (
           <p
             role="status"
-            className="absolute inset-x-0 bottom-14 text-center text-sm text-overlay-fg"
+            className={cn('absolute inset-x-0 bottom-14 text-center text-sm', tone.fg)}
           >
             {VIEWER_ERROR}
           </p>
@@ -1104,9 +1275,12 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
 /** The viewer's crash fallback: still closable, still downloadable. */
 export function FileViewerFallback(props: {
   name: string;
+  kind: ViewerKind;
   source: FileViewerSource;
   onClose: () => void;
 }): ReactElement {
+  const toneName = viewerTone(props.kind);
+  const tone = TONES[toneName];
   const closeRef = useRef<HTMLButtonElement>(null);
   const { onClose } = props;
   // Still keyboard-closable: Esc closes, focus starts on Close.
@@ -1127,7 +1301,7 @@ export function FileViewerFallback(props: {
       aria-modal="true"
       aria-label={props.name}
       data-file-viewer-fallback=""
-      className={cn('fixed inset-0 z-[80] flex flex-col bg-overlay', NO_SELECT)}
+      className={cn('fixed inset-0 z-[80] flex flex-col', tone.backdrop, NO_SELECT)}
     >
       <div className="flex shrink-0 items-center px-1 pt-[max(env(safe-area-inset-top),4px)]">
         <button
@@ -1135,13 +1309,16 @@ export function FileViewerFallback(props: {
           type="button"
           aria-label="Close"
           onClick={props.onClose}
-          className={BAR_BUTTON}
+          className={tone.bar}
         >
           <IconX size={22} />
         </button>
       </div>
       <div className="flex flex-1 items-center justify-center">
-        <ViewerError onDownload={() => void downloadFile(props.source, props.name)} />
+        <ViewerError
+          tone={toneName}
+          onDownload={() => void downloadFile(props.source, props.name)}
+        />
       </div>
     </div>
   );
@@ -1176,7 +1353,12 @@ export function FileViewer(props: FileViewerProps): ReactElement | null {
         name="file-viewer"
         context={{ kind: props.kind }}
         fallback={
-          <FileViewerFallback name={props.name} source={props.source} onClose={props.onClose} />
+          <FileViewerFallback
+            name={props.name}
+            kind={props.kind}
+            source={props.source}
+            onClose={props.onClose}
+          />
         }
       >
         <FileViewerSheet {...props} />

@@ -17,11 +17,14 @@
           hasSession = false;
         }
         var callback = /(?:^|[?&#])(?:code|type)=|access_token|refresh_token|error_description/;
+        // isHomeBundlePath: /pricing and /demo are light for everyone.
+        var homeBundlePath = location.pathname === '/pricing' || location.pathname === '/demo';
         if (
-          location.pathname !== '/' ||
-          hasSession ||
-          callback.test(location.search) ||
-          callback.test(location.hash)
+          !homeBundlePath &&
+          (location.pathname !== '/' ||
+            hasSession ||
+            callback.test(location.search) ||
+            callback.test(location.hash))
         ) {
           return;
         }

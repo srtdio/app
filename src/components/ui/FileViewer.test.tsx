@@ -43,6 +43,8 @@ const source: FileViewerSource = {
   officeBytes: async () => ({ bytes: new Uint8Array([1]), mime: DOCX_MIME }),
   videoLink: async () => ({ url: 'https://signed/v', release: () => {} }),
   downloadLink: async () => ({ url: 'https://signed/d', release: () => {} }),
+  previewNow: () => null,
+  preview: async () => null,
 };
 
 function sheet(kind: 'pdf' | 'video' | 'office' | 'file', theme: 'light' | 'dark'): string {
@@ -111,10 +113,17 @@ describe('the sheet by kind', () => {
     expect(html).toContain('data-viewer-unavailable=""');
   });
 
-  it('pdf, video and office start on a spinner, never blank', () => {
-    expect(sheet('pdf', 'light')).toContain('aria-label="Loading"');
+  it('video and office start on a spinner, never blank', () => {
     expect(sheet('video', 'light')).toContain('aria-label="Loading"');
     expect(sheet('office', 'light')).toContain('aria-label="Loading"');
+  });
+
+  it('pdf starts on its page-shaped placeholder: no spinner, never blank', () => {
+    const html = sheet('pdf', 'light');
+    expect(html).not.toContain('aria-label="Loading"');
+    expect(html).not.toContain('animate-spin');
+    expect(html).toContain('data-pdf-placeholder=""');
+    expect(html).toContain('data-pdf-page="1"');
   });
 
   it('top bar: close X, the name, Download; 44px buttons, no selection on chrome', () => {
@@ -145,7 +154,7 @@ describe('the sheet by kind', () => {
 
   it('the crash fallback can still close and download', () => {
     const html = renderToStaticMarkup(
-      <FileViewerFallback name="x.pdf" source={source} onClose={() => {}} />,
+      <FileViewerFallback name="x.pdf" kind="pdf" source={source} onClose={() => {}} />,
     );
     expect(html).toContain('aria-label="Close"');
     expect(html).toContain(VIEWER_ERROR.replace("'", '&#x27;'));
