@@ -55,6 +55,8 @@ export interface AssetListItem {
   width: number | null;
   height: number | null;
   durationMs: number | null;
+  /** PDF page count (asset_versions.page_count); null when unknown. */
+  pageCount: number | null;
   externalUrl: string | null;
   r2Key: string | null;
   versionNumber: number | null;
@@ -70,6 +72,7 @@ interface RawVersion {
   width: number | null;
   height: number | null;
   duration_ms: number | null;
+  page_count: number | null;
   external_url: string | null;
   r2_key: string | null;
   version_number: number;
@@ -94,7 +97,7 @@ interface RawAssetRow {
 const ASSET_SELECT =
   'id, filename, display_name, folder_path, folder_id, tags, uploaded_at, current_version_id, ' +
   'current_version:asset_versions!assets_current_version_id_fkey(' +
-  'id, kind, mime_type, size_bytes, width, height, duration_ms, external_url, r2_key, version_number)';
+  'id, kind, mime_type, size_bytes, width, height, duration_ms, page_count, external_url, r2_key, version_number)';
 
 /**
  * Flatten raw asset rows + a per-asset attachment-count map into the display
@@ -124,6 +127,7 @@ export function shapeAssets(
       width: v?.width ?? null,
       height: v?.height ?? null,
       durationMs: v?.duration_ms ?? null,
+      pageCount: v?.page_count ?? null,
       externalUrl: v?.external_url ?? null,
       r2Key: v?.r2_key ?? null,
       versionNumber: v?.version_number ?? null,

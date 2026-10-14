@@ -672,3 +672,53 @@ describe('storeThumbnailRendition', () => {
     expect(outcome).toEqual({ stored: false, reason: 'conflict' });
   });
 });
+
+describe('storeThumbnailRendition page count', () => {
+  async function seeded(kind: 'pdf' | 'video', pageCount: number | null = null) {
+    const d = thumbDeps();
+    await d.repository.insertVersion({
+      id: VERSION,
+      assetId: ASSET,
+      workspaceId: WORKSPACE,
+      versionNumber: 1,
+      kind,
+      r2Key: `${kind}/${ASSET}/v1-a`,
+      mimeType: kind === 'pdf' ? 'application/pdf' : 'video/mp4',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 10,
+      uploadedBy: USER,
+    });
+    const row = d.repository.versions[0];
+    if (row !== undefined) row.page_count = pageCount;
+    return d;
+  }
+
+  it('writes page_count on a pdf version', async () => {
+    const d = await seeded('pdf');
+    await storeThumbnailRendition(d, thumbInput());
+    expect(d.repository.versions[0]?.page_count).toBe(12);
+  });
+
+  it('never writes page_count for a non-pdf version', async () => {
+    const d = await seeded('video');
+    const video = summary({ mimeType: 'video/mp4', r2Key: `videos/${ASSET}/v1-a.mp4` });
+    await storeThumbnailRendition(d, thumbInput({ summary: video, pageCountField: '7' }));
+    expect(d.repository.versions[0]?.page_count).toBeNull();
+  });
+
+  it('a dedup fills a null page_count once and never overwrites it', async () => {
+    const d = await seeded('pdf');
+    const reused = summary({ reused: true });
+    await storeThumbnailRendition(d, thumbInput({ summary: reused, pageCountField: '5' }));
+    expect(d.repository.versions[0]?.page_count).toBe(5);
+    await storeThumbnailRendition(d, thumbInput({ summary: reused, pageCountField: '9' }));
+    expect(d.repository.versions[0]?.page_count).toBe(5);
+  });
+
+  it('a page count fault never fails the thumbnail', async () => {
+    const d = await seeded('pdf');
+    d.repository.setVersionPageCount = () => Promise.reject(new Error('db down'));
+    const outcome = await storeThumbnailRendition(d, thumbInput());
+    expect(outcome).toEqual({ stored: true, width: 400, height: 566, pageCount: 12 });
+  });
+});

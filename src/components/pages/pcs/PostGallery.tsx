@@ -134,6 +134,7 @@ function GalleryThumb({
         mime={item.mimeType ?? ''}
         name={item.filename}
         versionId={versionId}
+        pageCount={item.pageCount}
         cache={cache}
         presignEnabled={presignEnabled}
       />

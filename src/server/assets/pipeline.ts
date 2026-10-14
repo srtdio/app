@@ -640,6 +640,41 @@ export async function storeThumbnailRendition(
 ): Promise<ThumbnailOutcome> {
   const checked = checkThumbnail(input);
   if (!checked.ok) return { stored: false, reason: checked.reason };
+  // A pdf's page count is saved on its version once (never overwritten), in
+  // parallel with the rendition; a failure is logged and never fails the upload.
+  const pageWrite =
+    checked.pageCount === null
+      ? Promise.resolve()
+      : savePageCount(deps.repository, input.summary.versionId, checked.pageCount, input.traceId);
+  try {
+    return await storeCheckedThumbnail(deps, input, checked);
+  } finally {
+    await pageWrite;
+  }
+}
+
+async function savePageCount(
+  repository: AssetRepository,
+  versionId: string,
+  pageCount: number,
+  traceId: string,
+): Promise<void> {
+  try {
+    await repository.setVersionPageCount(versionId, pageCount);
+  } catch (err) {
+    logger.warn('asset page count save failed', {
+      trace_id: traceId,
+      version_id: versionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function storeCheckedThumbnail(
+  deps: ThumbnailDeps,
+  input: ThumbnailInput,
+  checked: { width: number; height: number; pageCount: number | null },
+): Promise<ThumbnailOutcome> {
   const pageCount = checked.pageCount !== null ? { pageCount: checked.pageCount } : {};
   const { summary } = input;
 

@@ -60,6 +60,7 @@ function version(over: Partial<{ kind: string }> = {}) {
     width: 100,
     height: 50,
     duration_ms: null,
+    page_count: null as number | null,
     external_url: null,
     r2_key: 'images/a/v1.png',
     version_number: 1,
@@ -157,6 +158,19 @@ describe('shapeAssets', () => {
       new Map(),
     );
     expect(items.map((i) => i.folderId)).toEqual(['f-1', null]);
+  });
+
+  it('maps page_count to pageCount, null when unknown or no version', () => {
+    const pdf = { ...version({ kind: 'pdf' }), page_count: 12 };
+    const items = shapeAssets(
+      [
+        assetRow('a', 'pdf', { current_version: pdf }),
+        assetRow('b', 'pdf'),
+        { ...assetRow('c', 'pdf'), current_version: null },
+      ],
+      new Map(),
+    );
+    expect(items.map((i) => i.pageCount)).toEqual([12, null, null]);
   });
 });
 
@@ -458,6 +472,7 @@ function base(id: string): AssetListItem {
     width: 10,
     height: 10,
     durationMs: null,
+    pageCount: null,
     externalUrl: null,
     r2Key: `images/${id}.png`,
     versionNumber: 1,

@@ -77,6 +77,19 @@ describe('getPostGallery', () => {
     expect(result.ok && result.data.map((i) => i.assetAttachmentId)).toEqual(['a', 'b']);
   });
 
+  it('maps asset_versions.page_count to pageCount, null when unknown', async () => {
+    const pdf = row({ id: 'p', position: 0, filename: 'brief.pdf' });
+    if (pdf.asset_versions !== null) {
+      Object.assign(pdf.asset_versions, { kind: 'pdf', page_count: 12 });
+    }
+    const { client } = makeClient({
+      data: [pdf, row({ id: 'i', position: 1, filename: 'a.png' })],
+      error: null,
+    });
+    const result = await getPostGallery(client, POST);
+    expect(result.ok && result.data.map((i) => i.pageCount)).toEqual([12, null]);
+  });
+
   it('applies the deleted_at IS NULL soft-delete filter', async () => {
     const { client, calls } = makeClient({ data: [], error: null });
     await getPostGallery(client, POST);

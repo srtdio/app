@@ -192,4 +192,45 @@ describe('FileTile', () => {
     expect(html).toContain('3 pages');
     expect(html).toContain('2 KB');
   });
+
+  it('shows the stored page count from the item first, in light and dark', () => {
+    const { cache } = stubCache();
+    rememberThumbnail('ver-tile-3', { width: 100, height: 130, pageCount: 3 });
+    for (const theme of ['light', 'dark'] as const) {
+      const html = renderToStaticMarkup(
+        <div className={theme === 'dark' ? 'dark' : undefined}>
+          <FileTile
+            kind="pdf"
+            mime={PDF}
+            name="a.pdf"
+            versionId="ver-tile-3"
+            pageCount={12}
+            cache={cache}
+            presignEnabled
+          />
+        </div>,
+      );
+      const meta = /data-file-meta=""[^>]*class="([^"]*)"/.exec(html);
+      expect(meta?.[1]).toContain('text-fg-3');
+      expect(html).toContain('12 pages');
+      expect(html).not.toContain('3 pages');
+    }
+  });
+
+  it('a null item page count falls back to the session meta', () => {
+    const { cache } = stubCache();
+    rememberThumbnail('ver-tile-4', { width: 100, height: 130, pageCount: 1 });
+    const html = renderToStaticMarkup(
+      <FileTile
+        kind="pdf"
+        mime={PDF}
+        name="a.pdf"
+        versionId="ver-tile-4"
+        pageCount={null}
+        cache={cache}
+        presignEnabled
+      />,
+    );
+    expect(html).toContain('1 page');
+  });
 });

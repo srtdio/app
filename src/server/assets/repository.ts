@@ -238,6 +238,11 @@ export interface AssetRepository {
    * number of rows updated. */
   moveAssetsToFolder(input: MoveAssetsInput): Promise<number>;
   writeAudit(entry: AuditEntry): Promise<void>;
+  /**
+   * Set a pdf version's page count once: UPDATE ... WHERE kind = 'pdf' AND
+   * page_count IS NULL. True when this call wrote it; never overwrites.
+   */
+  setVersionPageCount(versionId: string, pageCount: number): Promise<boolean>;
 }
 
 /**
@@ -575,6 +580,20 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
       }
     },
 
+    async setVersionPageCount(versionId, pageCount) {
+      const { data, error } = await client
+        .from('asset_versions')
+        .update({ page_count: pageCount })
+        .eq('id', versionId)
+        .eq('kind', 'pdf')
+        .is('page_count', null)
+        .select('id');
+      if (error) {
+        throw error;
+      }
+      return (data ?? []).length > 0;
+    },
+
     async setCurrentVersion(assetId, versionId) {
       const { error } = await client
         .from('assets')
@@ -880,6 +899,15 @@ export class InMemoryAssetRepository implements AssetRepository {
       ...versionShapeColumns(version),
     });
     return Promise.resolve();
+  }
+
+  setVersionPageCount(versionId: string, pageCount: number): Promise<boolean> {
+    const row = this.versions.find((v) => v.id === versionId);
+    if (row === undefined || row.kind !== 'pdf' || row.page_count !== null) {
+      return Promise.resolve(false);
+    }
+    row.page_count = pageCount;
+    return Promise.resolve(true);
   }
 
   setCurrentVersion(assetId: string, versionId: string): Promise<void> {

@@ -26,6 +26,8 @@ export interface BriefGalleryItem {
   width: number | null;
   height: number | null;
   durationMs: number | null;
+  /** PDF page count (asset_versions.page_count); null when unknown. */
+  pageCount: number | null;
   r2Key: string | null;
   externalUrl: string | null;
 }
@@ -53,6 +55,7 @@ interface GalleryRow {
     width: number | null;
     height: number | null;
     duration_ms: number | null;
+    page_count: number | null;
     r2_key: string | null;
     external_url: string | null;
   } | null;
@@ -96,6 +99,7 @@ export async function getBriefGallery(
         width: version?.width ?? null,
         height: version?.height ?? null,
         durationMs: version?.duration_ms ?? null,
+        pageCount: version?.page_count ?? null,
         r2Key: version?.r2_key ?? null,
         externalUrl: version?.external_url ?? null,
       };

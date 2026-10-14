@@ -222,6 +222,7 @@ function item(i: number, over: Partial<GalleryItem> = {}): GalleryItem {
     width: 1080,
     height: 1350,
     durationMs: null,
+    pageCount: null,
     r2Key: null,
     externalUrl: null,
     ...over,

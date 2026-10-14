@@ -47,6 +47,7 @@ function asset(
     width: null,
     height: null,
     durationMs: null,
+    pageCount: null,
     externalUrl: null,
     r2Key: `r2/${n}`,
     versionNumber: 1,

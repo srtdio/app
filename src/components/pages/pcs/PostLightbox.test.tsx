@@ -98,6 +98,7 @@ function item(n: number, width: number | null = 1080, height: number | null = 13
     width,
     height,
     durationMs: null,
+    pageCount: null,
     r2Key: `r2/${n}`,
     externalUrl: null,
   };

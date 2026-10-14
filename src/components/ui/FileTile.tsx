@@ -200,6 +200,8 @@ export interface FileTileProps {
   /** The stored version; null or '' shows the icon card. */
   versionId: string | null;
   size?: number | null | undefined;
+  /** The stored page count (PDF); null or absent falls back to this session's upload meta. */
+  pageCount?: number | null | undefined;
   cache: PresignCache;
   presignEnabled: boolean;
   layout?: 'fill' | 'card' | undefined;
@@ -231,7 +233,7 @@ export function FileTile(props: FileTileProps): ReactElement {
         kind={kind}
         thumbUrl={wantsThumb && !imageFailed ? (stored.url ?? cached) : null}
         name={props.name}
-        meta={fileTileMeta(mime, meta?.pageCount, props.size)}
+        meta={fileTileMeta(mime, props.pageCount ?? meta?.pageCount, props.size)}
         onImageError={() => setFailedVersion(versionId)}
       />
     </span>

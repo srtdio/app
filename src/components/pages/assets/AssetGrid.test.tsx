@@ -26,6 +26,7 @@ function makeAsset(id: string, filename: string): AssetListItem {
     width: null,
     height: null,
     durationMs: null,
+    pageCount: null,
     externalUrl: null,
     r2Key: null,
     versionNumber: 1,
