@@ -89,10 +89,7 @@ describe('media URLs', () => {
     const base = siteMediaBase(BASE);
     expect(base).toBe(BASE);
     expect(mediaUrl(base, 'why-approvals.webp')).toBe(`${BASE}/why-approvals.webp`);
-    expect(clipFor(base, 'problems-m')).toEqual({
-      src: `${BASE}/problems-m.mp4`,
-      poster: `${BASE}/problems-m.webp`,
-    });
+    expect(clipFor(base, 'problems-m')).toEqual({ src: `${BASE}/problems-m.mp4` });
   });
 
   it('drops a trailing slash', () => {

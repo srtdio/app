@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
 // A video plays only while at least this share of it is on screen.
 const VISIBLE_RATIO = 0.4;
@@ -7,14 +7,106 @@ const VISIBLE_RATIO = 0.4;
 // (for example iOS Low Power Mode) for every clip on the page.
 const GESTURES = ['pointerdown', 'touchstart', 'keydown'] as const;
 
+// HAVE_CURRENT_DATA: a frame at the current position is decoded and paintable.
+const HAVE_CURRENT_DATA = 2;
+
+export type ClipPreload = 'auto' | 'metadata';
+
+/**
+ * The active card and its immediate neighbours load fully so the next card
+ * already has a decoded frame when it comes forward; every other card loads
+ * metadata only.
+ */
+export function preloadFor(index: number, active: readonly number[]): ClipPreload {
+  return active.some((a) => Math.abs(a - index) <= 1) ? 'auto' : 'metadata';
+}
+
+interface StackMember {
+  index: number;
+  visible: boolean;
+  setPreload: (preload: ClipPreload) => void;
+}
+
+interface Stack {
+  members: Set<StackMember>;
+  // Last cards seen active; kept while none is visible so the stack stays
+  // warm around where the visitor left it. Starts on the first card.
+  active: number[];
+}
+
+const stacks = new WeakMap<Element, Stack>();
+
+function refreshStack(stack: Stack): void {
+  const visible = [...stack.members].filter((m) => m.visible).map((m) => m.index);
+  if (visible.length > 0) stack.active = visible;
+  for (const member of stack.members) member.setPreload(preloadFor(member.index, stack.active));
+}
+
+/**
+ * Joins the card stack the video sits in (its `.card` and that card's
+ * siblings). A clip outside a card stack is its own stack: fully loaded while
+ * on screen at all, metadata only otherwise, so a clip hidden by a breakpoint
+ * never downloads.
+ */
+function joinStack(
+  video: HTMLVideoElement,
+  setPreload: (preload: ClipPreload) => void,
+): { setVisible: (visible: boolean, onScreen: boolean) => void; leave: () => void } {
+  const card = video.closest('.card');
+  const parent = card?.parentElement;
+  if (!card || !parent) {
+    return {
+      setVisible: (_visible, onScreen) => setPreload(onScreen ? 'auto' : 'metadata'),
+      leave: () => undefined,
+    };
+  }
+  let stack = stacks.get(parent);
+  if (!stack) {
+    stack = { members: new Set(), active: [0] };
+    stacks.set(parent, stack);
+  }
+  const own = stack;
+  const member: StackMember = {
+    index: Array.prototype.indexOf.call(parent.children, card),
+    visible: false,
+    setPreload,
+  };
+  own.members.add(member);
+  refreshStack(own);
+  return {
+    setVisible: (visible) => {
+      if (member.visible === visible) return;
+      member.visible = visible;
+      refreshStack(own);
+    },
+    leave: () => {
+      own.members.delete(member);
+      if (own.members.size === 0) stacks.delete(parent);
+    },
+  };
+}
+
+export interface ClipPlayer {
+  videoRef: RefObject<HTMLVideoElement>;
+  /** True once a frame is decoded; the video stays hidden until then. */
+  ready: boolean;
+  preload: ClipPreload;
+}
+
 /**
  * One hook for every homepage video: muted loops that play on their own while
  * at least 40% visible, with no controls, so they read as animation. Off-screen
- * clips pause to save data and battery. If the browser refuses to autoplay,
- * the clip starts on the visitor's first tap, click or key press.
+ * clips pause in place to save data and battery, and resume from the same
+ * frame. If the browser refuses to autoplay, the clip starts on the visitor's
+ * first tap, click or key press.
+ *
+ * The video is revealed only once it has a decoded frame, so an undecoded
+ * (blank) video box is never shown.
  */
-export function useClipPlayer(): RefObject<HTMLVideoElement> {
+export function useClipPlayer(): ClipPlayer {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [ready, setReady] = useState(false);
+  const [preload, setPreload] = useState<ClipPreload>('metadata');
 
   useEffect(() => {
     const video = videoRef.current;
@@ -26,8 +118,16 @@ export function useClipPlayer(): RefObject<HTMLVideoElement> {
     video.setAttribute('muted', '');
     video.setAttribute('playsinline', '');
 
-    let visible = typeof IntersectionObserver === 'undefined';
+    const hasIO = typeof IntersectionObserver !== 'undefined';
+    let visible = !hasIO;
     let waitingForGesture = false;
+
+    const reveal = (): void => {
+      if (video.readyState >= HAVE_CURRENT_DATA) setReady(true);
+    };
+    const media = ['loadeddata', 'canplay'] as const;
+    for (const type of media) video.addEventListener(type, reveal);
+    reveal();
 
     const onGesture = (): void => {
       stopWaiting();
@@ -50,14 +150,25 @@ export function useClipPlayer(): RefObject<HTMLVideoElement> {
       });
     }
 
-    if (visible) {
+    const stack = joinStack(video, setPreload);
+    const cleanup = (): void => {
+      for (const type of media) video.removeEventListener(type, reveal);
+      stack.leave();
+      stopWaiting();
+      // Pause in place: currentTime is left alone so the frame stays put.
+      video.pause();
+    };
+
+    if (!hasIO) {
+      stack.setVisible(true, true);
       play();
-      return stopWaiting;
+      return cleanup;
     }
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           visible = entry.isIntersecting && entry.intersectionRatio >= VISIBLE_RATIO;
+          stack.setVisible(visible, entry.isIntersecting);
           if (visible) play();
           else video.pause();
         }
@@ -67,10 +178,9 @@ export function useClipPlayer(): RefObject<HTMLVideoElement> {
     observer.observe(video);
     return () => {
       observer.disconnect();
-      stopWaiting();
-      video.pause();
+      cleanup();
     };
   }, []);
 
-  return videoRef;
+  return { videoRef, ready, preload };
 }

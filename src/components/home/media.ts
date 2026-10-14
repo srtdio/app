@@ -1,4 +1,4 @@
-// Homepage media (videos, posters, images) is served from the site CDN. The
+// Homepage media (videos and images) is served from the site CDN. The
 // base comes from VITE_SITE_MEDIA_URL (production: https://cdn.srtd.io/site/home/v1).
 // When it is unset or invalid the homepage renders text and buttons only.
 
@@ -28,12 +28,10 @@ export const HOME_MEDIA_BASE = siteMediaBase(rawMediaBase);
 
 export interface Clip {
   src: string;
-  poster: string;
 }
 
-/** <name>.mp4 with its <name>.webp poster. */
+/** <name>.mp4 on the media base. No poster: ClipVideo shows only decoded frames. */
 export function clipFor(base: string | null, name: string): Clip | null {
   const src = mediaUrl(base, `${name}.mp4`);
-  const poster = mediaUrl(base, `${name}.webp`);
-  return src && poster ? { src, poster } : null;
+  return src ? { src } : null;
 }
