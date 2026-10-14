@@ -66,6 +66,8 @@ interface OnboardingFlowProps {
    * stays mounted (busy) until both have landed, so nothing flickers.
    */
   onFinish: (to: string) => void;
+  /** Set when the finish refetch failed: the flow re-enables and shows it. */
+  finishError: string | null;
 }
 
 type Side = 'client' | 'team';
@@ -90,6 +92,7 @@ export function OnboardingFlow({
   workspaceId: joinedWorkspaceId,
   workspaceName: joinedWorkspaceName,
   onFinish,
+  finishError,
 }: OnboardingFlowProps): ReactElement {
   const newTrace = useNewTrace();
   const { session } = useSession();
@@ -120,6 +123,9 @@ export function OnboardingFlow({
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const cropperRef = useRef<AvatarCropperHandle>(null);
+  // The cropped photo, taken when the person leaves the name screen (the
+  // cropper unmounts after that), uploaded with the profile save.
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [role, setRole] = useState('');
   const [roleOther, setRoleOther] = useState('');
   const [age, setAge] = useState('');
@@ -131,6 +137,8 @@ export function OnboardingFlow({
   const [createdWorkspaceId, setCreatedWorkspaceId] = useState<string | null>(null);
   const [postOpen, setPostOpen] = useState(false);
   const [postSent, setPostSent] = useState(false);
+  // A first post that saved as a draft but did not reach review: retry the move, never re-create.
+  const [draftPostId, setDraftPostId] = useState<string | null>(null);
   const [invites, setInvites] = useState<InviteRow[]>([
     { email: '', side: 'client' },
     { email: '', side: 'team' },
@@ -208,6 +216,12 @@ export function OnboardingFlow({
     };
   }, [step, joinedWorkspaceId, userId]);
 
+  useEffect(() => {
+    if (finishError === null) return;
+    setBusy(false);
+    setError(finishError);
+  }, [finishError]);
+
   const progress = progressSteps(steps);
   const progressAt = progress.indexOf(step);
 
@@ -243,23 +257,19 @@ export function OnboardingFlow({
     setBusy(true);
     setError(null);
     let avatarUrl: string | null = null;
-    const cropper = cropperRef.current;
-    if (cropper !== null && cropper.hasPhoto() && env.VITE_AVATAR_UPLOAD_URL !== undefined) {
-      const file = await cropper.exportPng();
-      if (file !== null) {
-        const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
-        const up = await uploadAvatarFile(file, {
-          endpoint: env.VITE_AVATAR_UPLOAD_URL,
-          token,
-          fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
-        });
-        if (!up.ok) {
-          setBusy(false);
-          setError("Your photo didn't upload. Try again, or remove it and add one later.");
-          return;
-        }
-        avatarUrl = up.data.avatarUrl;
+    if (photoFile !== null && env.VITE_AVATAR_UPLOAD_URL !== undefined) {
+      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      const up = await uploadAvatarFile(photoFile, {
+        endpoint: env.VITE_AVATAR_UPLOAD_URL,
+        token,
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+      });
+      if (!up.ok) {
+        setBusy(false);
+        setError("Your photo didn't upload. Try again, or add one later in Settings.");
+        return;
       }
+      avatarUrl = up.data.avatarUrl;
     }
     const payload: Record<string, Json> = {
       display_name: name.trim(),
@@ -285,6 +295,18 @@ export function OnboardingFlow({
       logger.error('onboarding save failed', { error: saved.error.message });
       setError("We couldn't save that. Try again.");
       return;
+    }
+    next();
+  }
+
+  /** Keep the cropped photo before the name screen (and its cropper) goes away. */
+  async function leaveNameStep(): Promise<void> {
+    const cropper = cropperRef.current;
+    if (cropper !== null && cropper.hasPhoto()) {
+      setBusy(true);
+      const file = await cropper.exportPng();
+      setBusy(false);
+      if (file !== null) setPhotoFile(file);
     }
     next();
   }
@@ -317,6 +339,9 @@ export function OnboardingFlow({
 
   async function onPostCreated(postId: string): Promise<void> {
     setPostOpen(false);
+    setDraftPostId(postId);
+    setBusy(true);
+    setError(null);
     const moved = await stageTransition(supabase, {
       p_post_id: postId,
       p_to_stage: 'review',
@@ -324,10 +349,13 @@ export function OnboardingFlow({
     });
     if (!moved.ok) {
       // The post exists as a draft; the checklist still offers sending it.
+      setBusy(false);
       logger.error('onboarding first post to review failed', { error: moved.error.message });
-      setError('Your post is saved as a draft. Send it for review from Pipeline.');
+      setError("Your post is saved, but it didn't reach review. Try sending it again.");
       return;
     }
+    setBusy(false);
+    setDraftPostId(null);
     setPostSent(true);
   }
 
@@ -337,6 +365,7 @@ export function OnboardingFlow({
     setBusy(true);
     setError(null);
     const failed: string[] = [];
+    const stillInGroup: string[] = [];
     for (const row of rows) {
       const traceId = newTrace();
       const { data, error: err } = await supabase.functions.invoke<{ invite_id?: string }>(
@@ -360,14 +389,27 @@ export function OnboardingFlow({
           p_join: false,
           p_trace_id: newTrace(),
         });
-        if (!off.ok) logger.error('join group opt-out failed', { error: off.error.message });
+        if (!off.ok) {
+          logger.error('join group opt-out failed', { error: off.error.message });
+          stillInGroup.push(row.email.trim());
+        }
       }
     }
     setBusy(false);
-    if (failed.length > 0) {
-      setError(
-        `We couldn't invite ${failed.join(', ')}. Check the address, or invite them later from Settings.`,
-      );
+    if (failed.length > 0 || stillInGroup.length > 0) {
+      const parts: string[] = [];
+      if (failed.length > 0) {
+        parts.push(
+          `We couldn't invite ${failed.join(', ')}. Check the address, or invite them later from Settings.`,
+        );
+      }
+      if (stillInGroup.length > 0) {
+        parts.push(
+          `${stillInGroup.join(', ')} will join the chat group when they accept. Remove them from Group info if needed.`,
+        );
+      }
+      setError(parts.join(' '));
+      // Only the addresses that failed stay on screen to fix; sent ones are done.
       setInvites((prev) => prev.filter((row) => failed.includes(row.email.trim())));
       return;
     }
@@ -454,7 +496,7 @@ export function OnboardingFlow({
           ) : (
             <Avatar name={name || 'You'} size="xl" />
           )}
-          <Button size="lg" onClick={() => setPhotoOpen((open) => !open)}>
+          <Button size="lg" onClick={() => setPhotoOpen(true)}>
             {photoPreview !== null ? 'Change photo' : 'Add a photo'}
           </Button>
         </div>
@@ -462,7 +504,10 @@ export function OnboardingFlow({
           <div className="rounded-lg border border-border bg-panel p-4">
             <AvatarCropper
               ref={cropperRef}
-              onPhotoChange={(info) => setPhotoPreview(info.hasPhoto ? info.previewUrl : null)}
+              onPhotoChange={(info) => {
+                // A fresh cropper (after Back) starts empty: keep the photo already taken.
+                if (info.hasPhoto) setPhotoPreview(info.previewUrl);
+              }}
             />
             <p className="mt-2 text-[11px] text-fg-3">
               Optional. You can add one later in Settings.
@@ -508,7 +553,7 @@ export function OnboardingFlow({
     primary = (
       <Primary
         disabled={busy || name.trim().length === 0 || format !== 'ok' || nameCheck !== 'free'}
-        onClick={next}
+        onClick={() => void leaveNameStep()}
       >
         Continue
       </Primary>
@@ -632,15 +677,24 @@ export function OnboardingFlow({
           title="What needs approval first?"
           lead="Add one post now. It will be waiting in review when your client joins."
         />
-        {postSent ? (
+        {postSent || draftPostId !== null ? (
           <div className="flex items-center gap-3 rounded-lg border border-border bg-panel p-4">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-good-soft text-good">
+            <span
+              className={cn(
+                'grid h-9 w-9 place-items-center rounded-full',
+                postSent ? 'bg-good-soft text-good' : 'bg-warn-soft text-warn',
+              )}
+            >
               <CheckGlyph />
             </span>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-fg">Your first post is in review</p>
+              <p className="text-sm font-semibold text-fg">
+                {postSent ? 'Your first post is in review' : 'Your first post is saved'}
+              </p>
               <p className="text-xs text-fg-2">
-                It sits in the {defaultGroupName(activeWorkspaceName)} group too.
+                {postSent
+                  ? 'Your client sees it as soon as they join.'
+                  : 'It still needs to go to review.'}
               </p>
             </div>
           </div>
@@ -657,12 +711,17 @@ export function OnboardingFlow({
         )}
       </>
     );
-    skip = postSent ? null : next;
-    primary = (
-      <Primary disabled={busy || !postSent} onClick={next}>
-        Continue
-      </Primary>
-    );
+    skip = postSent || draftPostId !== null ? null : next;
+    primary =
+      draftPostId !== null && !postSent ? (
+        <Primary disabled={busy} onClick={() => void onPostCreated(draftPostId)}>
+          {busy ? 'Sending' : 'Send for review again'}
+        </Primary>
+      ) : (
+        <Primary disabled={busy || !postSent} onClick={next}>
+          Continue
+        </Primary>
+      );
     preview = <WorkspacePreview name={activeWorkspaceName} postSent={postSent} />;
   } else if (step === 'invite') {
     body = (
@@ -814,7 +873,7 @@ export function OnboardingFlow({
                 type="button"
                 onClick={skip}
                 disabled={busy}
-                className="min-h-[44px] px-1 text-sm font-medium text-fg-2 hover:text-fg"
+                className="min-h-[44px] min-w-[44px] px-1 text-sm font-medium text-fg-2 hover:text-fg"
               >
                 Skip
               </button>
@@ -1178,7 +1237,9 @@ function WorkspacePreview({
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-fg">{group}</p>
             <p className="text-xs text-fg-3">
-              {postSent ? 'Your post is in review' : 'You. More join as you invite them.'}
+              {postSent
+                ? 'You. Your first post is in review.'
+                : 'You. More join as you invite them.'}
             </p>
           </div>
         </div>

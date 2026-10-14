@@ -53,6 +53,7 @@ export function AppLayout() {
     workspaceId,
     setActiveWorkspaceId,
     refreshWorkspaces,
+    error: workspaceError,
   } = useWorkspace();
   const navigate = useNavigate();
   const {
@@ -101,22 +102,43 @@ export function AppLayout() {
     !profileLoading &&
     !loading &&
     !profileError &&
+    // A failed list also comes back empty: never read that as "no workspace".
+    workspaceError === null &&
     profile !== null &&
     (profile.profile_completed_at === null || workspaces.length === 0);
   const [flow, setFlow] = useState<{
     workspaceId: string | null;
     workspaceName: string | null;
     finishing: string | null;
+    finishError: string | null;
   } | null>(null);
   // Close the flow once the finish refetch has landed, then open its destination.
   useEffect(() => {
     if (flow === null || flow.finishing === null) return;
-    if (loading || profileLoading || profile === null) return;
+    if (loading || profileLoading) return;
+    // The refetch failed: hand the flow its buttons back with a message.
+    if (workspaceError !== null || profileError || profile === null) {
+      setFlow({
+        ...flow,
+        finishing: null,
+        finishError: "We couldn't open your workspace. Check your connection and try again.",
+      });
+      return;
+    }
     if (profile.profile_completed_at === null || workspaces.length === 0) return;
     const to = flow.finishing;
     setFlow(null);
     navigate(to, { replace: true });
-  }, [flow, loading, profileLoading, profile, workspaces.length, navigate]);
+  }, [
+    flow,
+    loading,
+    profileLoading,
+    profile,
+    profileError,
+    workspaceError,
+    workspaces.length,
+    navigate,
+  ]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -148,6 +170,7 @@ export function AppLayout() {
       workspaceId: workspaces.length > 0 ? workspaceId : null,
       workspaceName: workspaces.length > 0 ? workspaceName : null,
       finishing: null,
+      finishError: null,
     });
     return null;
   }
@@ -157,8 +180,9 @@ export function AppLayout() {
         profile={profile}
         workspaceId={flow.workspaceId}
         workspaceName={flow.workspaceName}
+        finishError={flow.finishError}
         onFinish={(to) => {
-          setFlow({ ...flow, finishing: to });
+          setFlow({ ...flow, finishing: to, finishError: null });
           void refreshWorkspaces();
           refetchProfile();
         }}

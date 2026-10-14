@@ -31,7 +31,7 @@ function render(props: {
 }): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <OnboardingFlow {...props} onFinish={() => undefined} />
+      <OnboardingFlow {...props} onFinish={() => undefined} finishError={null} />
     </MemoryRouter>,
   );
 }
