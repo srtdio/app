@@ -448,7 +448,9 @@ describe('checkpoint state + feed controls', () => {
   });
 
   it('seeds the reply composer with the pushback prompt only on a "Not done"', () => {
-    const candidates: MentionCandidate[] = [{ id: UUID_A, name: 'Ada', role: '', avatarUrl: null }];
+    const candidates: MentionCandidate[] = [
+      { id: UUID_A, name: 'Ada', role: '', avatarUrl: null, username: null },
+    ];
     const checkpoint = row({ id: 'c', author_user_id: UUID_A, ledger_seq: 1 });
     // Pushing back opens the composer pre-filled so the client must say why.
     expect(checkpointReplySeed(true, checkpoint, UUID_B, candidates)).toBe(PUSHBACK_SEED);
@@ -574,7 +576,9 @@ describe('legacy author display (migrated v1 comments)', () => {
 describe('replySeed (reply pre-tags the root author)', () => {
   // Mirror how the reply CommentComposer derives its initialBody: the author is
   // tagged only when they resolve to a mention candidate and are not the viewer.
-  const candidates: MentionCandidate[] = [{ id: UUID_A, name: 'Ada', role: '', avatarUrl: null }];
+  const candidates: MentionCandidate[] = [
+    { id: UUID_A, name: 'Ada', role: '', avatarUrl: null, username: null },
+  ];
 
   it('seeds @[author] when the root author resolves and differs from the current user', () => {
     const comment = row({ id: 'c', author_user_id: UUID_A });

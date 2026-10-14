@@ -2,7 +2,7 @@
 // inline panel exactly: the same anchor (absolute, full composer width, above
 // the input), the same bordered panel capped at 45vh, no motion, and the same
 // dismissal (Escape, or the caret leaving the @ run). Rows are 44px min: avatar,
-// display name, role line. A press never takes focus from the textarea (so the
+// display name, then @username and role. A press never takes focus from the textarea (so the
 // keyboard stays up on touch); the keyboard is driven by the composer, which
 // owns the active row. In a group the first row can be "@all" ("Everyone in
 // this group"), drawn with the same row grammar. Tokens only, so light and
@@ -77,8 +77,14 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
                 />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm font-medium text-fg">{member.displayName}</span>
-                  {member.role !== null ? (
-                    <span className="truncate text-xs text-fg-3">{roleLabel(member.role)}</span>
+                  {member.username || member.role !== null ? (
+                    <span className="truncate text-xs text-fg-3">
+                      {member.username ? (
+                        <span className="font-mono text-fg-2">@{member.username}</span>
+                      ) : null}
+                      {member.username && member.role !== null ? ' · ' : null}
+                      {member.role !== null ? roleLabel(member.role) : null}
+                    </span>
                   ) : null}
                 </span>
               </>

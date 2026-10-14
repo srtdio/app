@@ -333,6 +333,14 @@ export function usernameAvailable(
   return callProc(client, 'username_available', args);
 }
 
+export type UsernameSetArgs = ProcArgs<'username_set'>;
+export function usernameSet(
+  client: Client,
+  args: UsernameSetArgs,
+): Promise<Result<ProcReturns<'username_set'>>> {
+  return callProc(client, 'username_set', args);
+}
+
 export type MemberJoinGroupSetArgs = ProcArgs<'member_join_group_set'>;
 export function memberJoinGroupSet(
   client: Client,

@@ -110,6 +110,7 @@ export async function loadChannelMembersResult(
       userId: m.userId,
       displayName: m.displayName,
       avatarUrl: m.avatarUrl,
+      username: m.username ?? null,
       role: m.role,
     })),
   };

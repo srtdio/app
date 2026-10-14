@@ -99,6 +99,8 @@ import {
   mentionPickerRows,
   mentionQuery,
   rememberMentionNames,
+  linkTypedUsernames,
+  mentionHandle,
   resolveMentionText,
   serializedCaret,
   serializeMentions,
@@ -1029,6 +1031,10 @@ export function Composer(props: ComposerProps): ReactElement {
   // Until this chat's names are in, a body with tokens stays held (verbatim).
   const { workspaceId, workspaceKey } = useWorkspace();
   const nameOf = mentionNameOf(props.mentions, workspaceId);
+  // The body a send or edit stores: picked mentions become tokens, and so does
+  // any "@username" of this chat's members typed without the picker.
+  const sendBody = (value: string): string =>
+    linkTypedUsernames(serializeMentions(value, picks), props.mentions?.members ?? []);
   const namesReady = props.mentions?.ready !== false;
   const gone = props.mentions?.gone;
   const [restored] = useState(() => composerBodyFor(initial, namesReady, nameOf, gone));
@@ -1350,7 +1356,7 @@ export function Composer(props: ComposerProps): ReactElement {
 
   function submitEdit(draft: EditingDraft): void {
     // The saved body carries its tokens; the edit flow sends its full mention list.
-    const body = serializeMentions(text, picks);
+    const body = sendBody(text);
     const decision = editSendDecision({
       text: body,
       initialText: draft.initialText,
@@ -1390,7 +1396,7 @@ export function Composer(props: ComposerProps): ReactElement {
       if (schedulable) void scheduleDraft(scheduleAt);
       return;
     }
-    const body = serializeMentions(text, picks);
+    const body = sendBody(text);
     const draft: LinkCardDraft = {
       text: body,
       sharedPostIds: sharedPosts.map((post) => post.id),
@@ -1503,7 +1509,7 @@ export function Composer(props: ComposerProps): ReactElement {
         prev,
       ),
     );
-    const body = serializeMentions(text, picks);
+    const body = sendBody(text);
     const base: LinkCardDraft = {
       text: body,
       sharedPostIds: sharedPosts.map((post) => post.id),
@@ -1701,12 +1707,13 @@ export function Composer(props: ComposerProps): ReactElement {
       : [];
   const activeRow = Math.min(mentionActive, Math.max(mentionRows.length - 1, 0));
 
-  // A pick swaps the "@query" run for "@Name " and keeps the mention in the map.
+  // A pick swaps the "@query" run for "@username " and keeps the mention in the map.
   function pickMention(member: MentionMember | undefined): void {
     if (member === undefined) return;
-    const next = insertMention(text, caret, member.displayName);
+    const handle = mentionHandle(member);
+    const next = insertMention(text, caret, handle);
     rememberMentionNames(workspaceId, [member]);
-    setPicks((prev) => addPick(prev, { userId: member.userId, name: member.displayName }));
+    setPicks((prev) => addPick(prev, { userId: member.userId, name: handle }));
     setText(next.text);
     setCaret(next.caret);
     setMentionActive(0);

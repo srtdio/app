@@ -8,6 +8,7 @@
 // through onSubmit, and the panel mints one trace per action and writes through
 // the SECURITY DEFINER createComment wrapper.
 
+import { linkTypedUsernames } from '@/lib/chat/mentions';
 import { useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -145,7 +146,12 @@ export function CommentComposer({
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
-    const result = await onSubmit(body, {
+    // A typed "@username" of a current member becomes a real mention too.
+    const linked = linkTypedUsernames(
+      body,
+      members.map((m) => ({ userId: m.id, username: m.username })),
+    );
+    const result = await onSubmit(linked, {
       attachmentVersionIds: doneVersionIds(pending),
     });
     if (result.ok) {

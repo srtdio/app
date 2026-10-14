@@ -317,7 +317,7 @@ describe('readProfiles', () => {
     const { client, from } = makeClient({
       users: {
         data: [
-          { id: PEER1, display_name: 'Ada', avatar_url: null },
+          { id: PEER1, display_name: 'Ada', avatar_url: null, username: 'ada' },
           { id: PEER2, display_name: 'Bay', avatar_url: 'http://x/b.png' },
         ],
         error: null,
@@ -326,8 +326,8 @@ describe('readProfiles', () => {
     const result = await readProfiles(client, [PEER1, PEER2, PEER1]);
     expect(from.mock.calls.filter(([t]) => t === 'users')).toHaveLength(1);
     expect(result.ok && result.data).toEqual([
-      { userId: PEER1, displayName: 'Ada', avatarUrl: null },
-      { userId: PEER2, displayName: 'Bay', avatarUrl: 'http://x/b.png' },
+      { userId: PEER1, displayName: 'Ada', avatarUrl: null, username: 'ada' },
+      { userId: PEER2, displayName: 'Bay', avatarUrl: 'http://x/b.png', username: null },
     ]);
   });
 

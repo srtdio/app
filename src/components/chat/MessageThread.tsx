@@ -22,6 +22,7 @@ import {
   isFormerMember,
   isUnconfirmedMember,
   knownMentionName,
+  mentionHandle,
   mentionIds,
   mentionLabel,
   mentionsAll,
@@ -1651,6 +1652,11 @@ const MENTION_HIT =
  * and is inert; so does one whose membership read failed (unconfirmed), the
  * failed-read behaviour, until a read confirms them.
  */
+/** A loaded profile's mention handle (@username, else name); undefined when not loaded. */
+function mentionHandleOf(profile: ChatProfile | undefined): string | undefined {
+  return profile === undefined ? undefined : mentionHandle(profile);
+}
+
 export function profileNameOf(
   profiles: Map<string, ChatProfile>,
   workspaceId: string | null,
@@ -1658,7 +1664,7 @@ export function profileNameOf(
   return (userId) =>
     isFormerMember(workspaceId, userId) || isUnconfirmedMember(workspaceId, userId)
       ? undefined
-      : (profiles.get(userId)?.displayName ?? knownMentionName(workspaceId, userId));
+      : (mentionHandleOf(profiles.get(userId)) ?? knownMentionName(workspaceId, userId));
 }
 
 /**

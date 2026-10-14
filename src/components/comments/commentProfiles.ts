@@ -14,6 +14,8 @@ import type { Client } from '@srtdio/comments';
 export interface CommentProfile {
   displayName: string;
   avatarUrl: string | null;
+  /** The @username a mention reads as; null when the person has none. */
+  username?: string | null;
 }
 
 /** Shown for any author or @mention id that no longer resolves to a member. */
@@ -35,12 +37,16 @@ export async function fetchCommentProfiles(
 
   const { data, error } = await client
     .from('users')
-    .select('id, display_name, avatar_url')
+    .select('id, display_name, avatar_url, username')
     .in('id', ids);
   if (error || data === null) return profiles;
 
   for (const row of data) {
-    profiles.set(row.id, { displayName: row.display_name, avatarUrl: row.avatar_url });
+    profiles.set(row.id, {
+      displayName: row.display_name,
+      avatarUrl: row.avatar_url,
+      username: row.username ?? null,
+    });
   }
   return profiles;
 }
@@ -51,4 +57,16 @@ export function resolveName(
   userId: string,
 ): string | null {
   return profiles.get(userId)?.displayName ?? null;
+}
+
+/** What a mention of this id reads as after the "@": @username, else the name; null when gone. */
+export function resolveMentionHandle(
+  profiles: ReadonlyMap<string, CommentProfile>,
+  userId: string,
+): string | null {
+  const profile = profiles.get(userId);
+  if (profile === undefined) return null;
+  return profile.username !== undefined && profile.username !== null && profile.username !== ''
+    ? profile.username
+    : profile.displayName;
 }

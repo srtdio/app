@@ -22,6 +22,7 @@ import { userProfileUpdate } from '@srtdio/rpc';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { UsernameField } from '@/components/settings/UsernameField';
 import { Field } from '@/components/ui/Field';
 import { IconCamera } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
@@ -544,6 +545,8 @@ export function ProfileSettingsPanel(): React.ReactElement {
           }}
         />
       </Field>
+
+      <UsernameField current={profile?.username ?? null} onSaved={refetch} />
 
       <Field label="Designation" htmlFor="settings-designation">
         <Input

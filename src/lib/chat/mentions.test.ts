@@ -23,6 +23,8 @@ import {
   mentionsAfterRefusal,
   splitAllMentions,
   resolveMentionPreview,
+  linkTypedUsernames,
+  mentionHandle,
 } from '@/lib/chat/mentions';
 
 const ANA = '11111111-1111-4111-8111-111111111111';
@@ -222,5 +224,76 @@ describe('@all', () => {
       { text: ' ship it, @allison', all: false },
     ]);
     expect(splitAllMentions('@all ship it')).toEqual([{ text: '@all ship it', all: false }]);
+  });
+});
+
+describe('usernames in mentions (14 Oct 2026)', () => {
+  const RIYA = '11111111-1111-4111-8111-111111111111';
+  const ROHAN = '22222222-2222-4222-8222-222222222222';
+  const members = [
+    { userId: RIYA, username: 'riya.menon' },
+    { userId: ROHAN, username: 'rohan_d' },
+  ];
+
+  it('reads a mention as @username, else the name', () => {
+    expect(mentionHandle({ displayName: 'Riya Menon', username: 'riya.menon' })).toBe('riya.menon');
+    expect(mentionHandle({ displayName: 'Riya Menon', username: null })).toBe('Riya Menon');
+    expect(mentionHandle({ displayName: 'Riya Menon' })).toBe('Riya Menon');
+  });
+
+  it('turns a typed @username of a member into a token', () => {
+    expect(linkTypedUsernames('hi @riya.menon please check', members)).toBe(
+      `hi @[${RIYA}] please check`,
+    );
+    expect(linkTypedUsernames('@Rohan_D, see this', members)).toBe(`@[${ROHAN}], see this`);
+  });
+
+  it('keeps a trailing full stop as punctuation', () => {
+    expect(linkTypedUsernames('thanks @riya.menon.', members)).toBe(`thanks @[${RIYA}].`);
+  });
+
+  it('leaves unknown names, emails and partial names alone', () => {
+    expect(linkTypedUsernames('ask @someone', members)).toBe('ask @someone');
+    expect(linkTypedUsernames('mail riya@riya.menon', members)).toBe('mail riya@riya.menon');
+    expect(linkTypedUsernames('@riya.menonx', members)).toBe('@riya.menonx');
+  });
+
+  it('matches the picker query against username or name', () => {
+    const rows = filterMentionMembers(
+      [
+        {
+          userId: RIYA,
+          displayName: 'Riya Menon',
+          avatarUrl: null,
+          username: 'riya.menon',
+          role: null,
+        },
+        {
+          userId: ROHAN,
+          displayName: 'Rohan Desai',
+          avatarUrl: null,
+          username: 'rohan_d',
+          role: null,
+        },
+      ],
+      'menon',
+      null,
+    );
+    expect(rows.map((r) => r.userId)).toEqual([RIYA]);
+    expect(
+      filterMentionMembers(
+        [
+          {
+            userId: ROHAN,
+            displayName: 'Rohan Desai',
+            avatarUrl: null,
+            username: 'rohan_d',
+            role: null,
+          },
+        ],
+        'rohan_',
+        null,
+      ),
+    ).toHaveLength(1);
   });
 });

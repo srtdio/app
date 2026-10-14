@@ -130,7 +130,9 @@ function mentionId(node: unknown): string | undefined {
 }
 
 describe('buildInitialContent (reply seed)', () => {
-  const members: MentionCandidate[] = [{ id: ID, name: 'Ann', role: '', avatarUrl: null }];
+  const members: MentionCandidate[] = [
+    { id: ID, name: 'Ann', role: '', avatarUrl: null, username: null },
+  ];
 
   it('builds one mention chip for a seeded token and serializes back to the token', () => {
     const nodes = buildInitialContent(`@[${ID}] `, members, fakeFactory());

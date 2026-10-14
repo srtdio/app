@@ -26,6 +26,8 @@ export interface ChatProfile {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
+  /** The @username mentions show; absent or null for a profile read without it. */
+  username?: string | null;
 }
 
 /** One conversation in the channel list, with display info already resolved. */
@@ -333,6 +335,7 @@ export async function readProfiles(
       userId: u.id,
       displayName: u.display_name,
       avatarUrl: u.avatar_url,
+      username: u.username ?? null,
     })),
   };
 }
@@ -442,7 +445,13 @@ export async function readChatMembers(
   for (const u of usersRes.data) {
     const role = roleOf.get(u.id);
     if (role === undefined) continue;
-    members.push({ userId: u.id, displayName: u.display_name, avatarUrl: u.avatar_url, role });
+    members.push({
+      userId: u.id,
+      displayName: u.display_name,
+      avatarUrl: u.avatar_url,
+      username: u.username ?? null,
+      role,
+    });
   }
   return { ok: true, data: members };
 }
@@ -576,7 +585,7 @@ async function readUsers(
 ): Promise<Result<UserRow[]>> {
   if (ids.length === 0) return { ok: true, data: [] };
   const res = await abortable(
-    client.from('users').select('id, display_name, avatar_url').in('id', ids),
+    client.from('users').select('id, display_name, avatar_url, username').in('id', ids),
     signal,
   );
   if (res.error) return fail(`readProfiles users: ${res.error.message}`);

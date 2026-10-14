@@ -237,13 +237,59 @@ export interface MentionMember {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
+  /** Their @username; absent or null when not read. */
+  username?: string | null;
   /** Raw workspace role; labelled at render. Null when unknown. */
   role: string | null;
 }
 
 /**
- * The picker rows for a query: every member but me whose display name contains
- * the query (case-insensitive), names starting with it first, then by name.
+ * What a mention of this person reads as after the "@": their username, or
+ * their display name for a profile that has none (14 Oct 2026: mentions show
+ * @username). The token in the body still carries the user id, so a rename
+ * never breaks an old mention.
+ */
+export function mentionHandle(person: { displayName: string; username?: string | null }): string {
+  return person.username !== undefined && person.username !== null && person.username !== ''
+    ? person.username
+    : person.displayName;
+}
+
+/** Usernames are lowercase letters, digits, dots and underscores (users_username_format). */
+const TYPED_USERNAME = /(^|\s)@([a-z0-9._]{3,20})(?![\p{L}\p{N}_.])/giu;
+
+/**
+ * Turn every "@username" typed without the picker into a real mention token,
+ * when it names one of `members` (case-insensitive; a trailing full stop is
+ * punctuation, not part of the name). Anything else stays plain text. Pure.
+ */
+export function linkTypedUsernames(
+  text: string,
+  members: ReadonlyArray<{ userId: string; username?: string | null }>,
+): string {
+  const byName = new Map<string, string>();
+  for (const m of members) {
+    if (m.username !== undefined && m.username !== null && m.username !== '') {
+      byName.set(m.username.toLowerCase(), m.userId);
+    }
+  }
+  if (byName.size === 0) return text;
+  return text.replace(TYPED_USERNAME, (match, lead: string, raw: string) => {
+    let name = raw.toLowerCase();
+    let tail = '';
+    while (name.endsWith('.') && !byName.has(name)) {
+      name = name.slice(0, -1);
+      tail = `.${tail}`;
+    }
+    const id = byName.get(name);
+    return id === undefined ? match : `${lead}@[${id}]${tail}`;
+  });
+}
+
+/**
+ * The picker rows for a query: every member but me whose username or display
+ * name contains the query (case-insensitive); usernames starting with it first,
+ * then names starting with it, then the rest, each by name.
  */
 export function filterMentionMembers(
   members: readonly MentionMember[],
@@ -251,9 +297,12 @@ export function filterMentionMembers(
   selfId: string | null,
 ): MentionMember[] {
   const q = query.trim().toLowerCase();
-  const rank = (m: MentionMember): number => (m.displayName.toLowerCase().startsWith(q) ? 0 : 1);
+  const user = (m: MentionMember): string => (m.username ?? '').toLowerCase();
+  const name = (m: MentionMember): string => m.displayName.toLowerCase();
+  const rank = (m: MentionMember): number =>
+    user(m).startsWith(q) ? 0 : name(m).startsWith(q) ? 1 : 2;
   return members
-    .filter((m) => m.userId !== selfId && m.displayName.toLowerCase().includes(q))
+    .filter((m) => m.userId !== selfId && (user(m).includes(q) || name(m).includes(q)))
     .sort((a, b) => rank(a) - rank(b) || a.displayName.localeCompare(b.displayName));
 }
 
@@ -384,17 +433,18 @@ function registryFor(workspaceId: string): MentionRegistry {
   return registry;
 }
 
-/** Remember current members' display names in one workspace (a member read, or a pick). */
+/** Remember current members' mention handles in one workspace (a member read, or a pick). */
 export function rememberMentionNames(
   workspaceId: string | null,
-  entries: Iterable<{ userId: string; displayName: string }>,
+  entries: Iterable<{ userId: string; displayName: string; username?: string | null }>,
 ): void {
   if (workspaceId === null) return;
   const registry = registryFor(workspaceId);
   for (const entry of entries) {
-    if (entry.displayName !== '' && entry.userId !== ALL_MENTION) {
+    const handle = mentionHandle(entry);
+    if (handle !== '' && entry.userId !== ALL_MENTION) {
       const id = entry.userId.toLowerCase();
-      registry.names.set(id, entry.displayName);
+      registry.names.set(id, handle);
       registry.former.delete(id);
       registry.unconfirmed.delete(id);
     }
@@ -409,7 +459,12 @@ export function rememberMentionNames(
  */
 export function rememberMentionProfiles(
   workspaceId: string | null,
-  entries: Iterable<{ userId: string; displayName: string; member: boolean | null }>,
+  entries: Iterable<{
+    userId: string;
+    displayName: string;
+    username?: string | null;
+    member: boolean | null;
+  }>,
 ): void {
   if (workspaceId === null) return;
   const registry = registryFor(workspaceId);
