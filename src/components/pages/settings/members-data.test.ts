@@ -22,6 +22,7 @@ function row(overrides: Partial<WorkspaceMemberRow>): WorkspaceMemberRow {
     id: 'm-0',
     invited_at: '2026-01-01T00:00:00Z',
     invited_by: null,
+    join_default_group: true,
     rejoined_at: null,
     removed_at: null,
     role: 'agency',

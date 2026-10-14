@@ -5371,6 +5371,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           id: string
+          is_default: boolean
           name: string
           workspace_id: string
         }
@@ -5380,6 +5381,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           id?: string
+          is_default?: boolean
           name: string
           workspace_id: string
         }
@@ -5389,6 +5391,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           id?: string
+          is_default?: boolean
           name?: string
           workspace_id?: string
         }
@@ -8110,6 +8113,35 @@ export type Database = {
         }
         Relationships: []
       }
+      user_private: {
+        Row: {
+          age_range: string | null
+          heard_from: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          age_range?: string | null
+          heard_from?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          age_range?: string | null
+          heard_from?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_private_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           avatar_url: string | null
@@ -8122,6 +8154,7 @@ export type Database = {
           profile_completed_at: string | null
           timezone: string | null
           updated_at: string
+          username: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -8134,6 +8167,7 @@ export type Database = {
           profile_completed_at?: string | null
           timezone?: string | null
           updated_at?: string
+          username?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -8146,6 +8180,7 @@ export type Database = {
           profile_completed_at?: string | null
           timezone?: string | null
           updated_at?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -8302,6 +8337,7 @@ export type Database = {
           id: string
           invited_at: string
           invited_by: string | null
+          join_default_group: boolean
           rejoined_at: string | null
           removed_at: string | null
           role: string
@@ -8314,6 +8350,7 @@ export type Database = {
           id?: string
           invited_at?: string
           invited_by?: string | null
+          join_default_group?: boolean
           rejoined_at?: string | null
           removed_at?: string | null
           role: string
@@ -8326,6 +8363,7 @@ export type Database = {
           id?: string
           invited_at?: string
           invited_by?: string | null
+          join_default_group?: boolean
           rejoined_at?: string | null
           removed_at?: string | null
           role?: string
@@ -9272,6 +9310,10 @@ export type Database = {
         }
         Returns: string
       }
+      member_join_group_set: {
+        Args: { p_join: boolean; p_member_id: string; p_trace_id: string }
+        Returns: string
+      }
       member_remove: {
         Args: { p_member_id: string; p_trace_id: string }
         Returns: string
@@ -9454,6 +9496,10 @@ export type Database = {
         Args: { p_post_id: string; p_to_stage: string; p_trace_id: string }
         Returns: string
       }
+      user_onboarding_save: {
+        Args: { p_payload: Json; p_trace_id: string }
+        Returns: string
+      }
       user_profile_update: {
         Args: {
           p_avatar_url: string
@@ -9463,6 +9509,10 @@ export type Database = {
           p_trace_id: string
         }
         Returns: string
+      }
+      username_available: {
+        Args: { p_trace_id: string; p_username: string }
+        Returns: boolean
       }
       uuidv7: { Args: never; Returns: string }
       workspace_create: {
