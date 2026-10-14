@@ -9514,6 +9514,10 @@ export type Database = {
         Args: { p_trace_id: string; p_username: string }
         Returns: boolean
       }
+      username_set: {
+        Args: { p_trace_id: string; p_username: string }
+        Returns: string
+      }
       uuidv7: { Args: never; Returns: string }
       workspace_create: {
         Args: { p_payload: Json; p_trace_id: string }
