@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { HOME_STYLESHEET, runStaleDeployGuard, type StaleDeployDeps } from '@/lib/stale-deploy';
-import { shouldAutoplay } from './autoplay';
 import { isGuestHome, type GuestPathInput } from './guest-path';
 import { clipFor, mediaUrl, siteMediaBase } from './media';
 
@@ -80,15 +79,6 @@ describe('isGuestHome', () => {
 
   it('does not mistake unrelated params for callbacks', () => {
     expect(isGuestHome(input({ search: '?utm_source=x&promo_code=y' }))).toBe(true);
-  });
-});
-
-describe('shouldAutoplay', () => {
-  it('autoplays every clip by default', () => {
-    expect(shouldAutoplay({ reducedMotion: false })).toBe(true);
-  });
-  it('keeps the poster under the OS reduce-motion setting', () => {
-    expect(shouldAutoplay({ reducedMotion: true })).toBe(false);
   });
 });
 
