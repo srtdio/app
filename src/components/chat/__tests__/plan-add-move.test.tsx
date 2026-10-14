@@ -183,8 +183,13 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
   it('agency only: Add rows, "+", drag; Move and Remove rows', () => {
     const src = read('PlanScreen.tsx');
     expect(src).toMatch(
-      /\{\.\.\.\(agency\s*\?\s*\{\s*onAdd: openAdd,\s*onDragStart: startDrag,\s*swipe:/,
+      /:\s*agency\s*\?\s*\{\s*onAdd: openAdd,\s*onDragStart: startDrag,\s*swipe:/,
     );
+    // Laptop agency: the same Add and drag, the desk controls instead of swipe.
+    expect(src).toMatch(
+      /\{\.\.\.\(deskAgency\s*\?\s*\{\s*onAdd: openAdd,\s*onDragStart: startDrag,\s*desk:/,
+    );
+    expect(src).toContain('const deskAgency = desktop && agency;');
     expect(src).toContain("const agency = side === 'agency' && bundle !== null;");
     expect(src).toMatch(/\{agency \? \(\s*<>\s*<PlanConfirmSheet[\s\S]*<PlanAddSheet/);
     const item = read('PlanItemScreen.tsx');

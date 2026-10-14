@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useWorkspace } from '@/lib/workspace-context';
 import {
@@ -1884,6 +1885,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   };
 
   const isGroup = selected?.channelType === 'group';
+  const planPanelOpen =
+    isDesktop &&
+    selected !== null &&
+    ((openPlan !== null && planShown) || (planComposeOpen && !notesOpen));
   const infoGroupId = isGroup ? (selected?.groupId ?? null) : null;
 
   const surface = (
@@ -1915,7 +1920,14 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
         </div>
       ) : null}
       {showThread ? (
-        <div className="relative h-full min-w-0 flex-1">
+        <div
+          className={cn(
+            'relative h-full min-w-0 flex-1',
+            // The docked plan panel (440px) takes the right; from 1180px the
+            // thread narrows so it covers nothing (below, it overlays).
+            planPanelOpen && 'min-[1180px]:mr-[440px]',
+          )}
+        >
           {opening !== null ? (
             threadOpeningSkeleton(layout, isDesktop ? undefined : onBackFromOpening)
           ) : selected !== null ? (

@@ -235,6 +235,8 @@ export function PlanItemScreen(props: {
   /** A comment to scroll to and briefly highlight once listed; none when absent. */
   highlightCommentId?: string;
   onClose: () => void;
+  /** Laptop: the panel's X closes the whole plan panel (Back steps to the list). */
+  onDismiss?: () => void;
   /** After Remove from plan: back to the list. Defaults to onClose. */
   onRemoved?: () => void;
   /** The client approver's name (the keep sheet's title on an Open plan). */
@@ -600,6 +602,9 @@ export function PlanItemScreen(props: {
         subtitle={itemSlotSubtitle(bundle, item, side) ?? bundle.plan.title}
         backLabel={props.backLabel ?? 'Back to plan'}
         onBack={props.onClose}
+        desktopBack
+        closeLabel="Close plan"
+        {...(props.onDismiss !== undefined ? { onDismiss: props.onDismiss } : {})}
         onEntered={() => setRested(true)}
         {...(item.kind === 'concept' && planActions
           ? {

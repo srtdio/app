@@ -29,8 +29,12 @@ export const PICKER_EMPTY = 'No upcoming plans';
 export const PICKER_EMPTY_SUB = "Plans that have ended don't show here.";
 export const NEW_PLAN_LABEL = 'New plan';
 
-/** The list's fixed height in every state (loading, list, empty, error). */
-const BODY_BOX = 'flex h-[min(420px,56vh)] flex-col overflow-y-auto overscroll-contain';
+/**
+ * The list's fixed height in every state (loading, list, empty, error); at sm+
+ * it fills the sheet's fixed box instead.
+ */
+const BODY_BOX =
+  'flex h-[min(420px,56vh)] flex-col overflow-y-auto overscroll-contain sm:h-auto sm:min-h-0 sm:flex-1';
 
 /** Skeleton rows while the list loads: enough to fill the fixed body. */
 const SKELETON_ROWS = 5;
@@ -80,8 +84,11 @@ export function PlanPickerSheet(props: {
   const inChat = useMemo(() => new Set(props.inChatPlanIds), [props.inChatPlanIds]);
 
   return (
-    <Sheet open={props.open} onClose={props.onClose} title={PICKER_TITLE}>
-      <div data-plan-picker="" className={cn('-mx-[18px] -my-4', NO_TOUCH_SELECT)}>
+    <Sheet open={props.open} onClose={props.onClose} title={PICKER_TITLE} fixedHeight>
+      <div
+        data-plan-picker=""
+        className={cn('-mx-[18px] -my-4 sm:flex sm:min-h-0 sm:flex-1 sm:flex-col', NO_TOUCH_SELECT)}
+      >
         <p className="px-[18px] pb-1 pt-3 text-xs leading-4 text-fg-3">
           Upcoming plans in {props.workspaceName}
         </p>

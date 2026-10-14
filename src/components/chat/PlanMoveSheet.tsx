@@ -68,7 +68,7 @@ export function PlanMoveSheet(props: {
   onClose: () => void;
 }): ReactElement {
   return (
-    <Sheet open={props.open} onClose={props.onClose} title="Move to">
+    <Sheet open={props.open} onClose={props.onClose} title="Move to" fixedHeight>
       <ul data-plan-move-sheet="" className="flex flex-col">
         {props.days.map((d) => {
           const current = d.day === props.current;

@@ -40,6 +40,11 @@ export default defineConfig({
       grep: /@theme/,
       use: { ...devices['iPhone 13'], colorScheme: 'light' },
     },
+    {
+      name: 'desktop-webkit',
+      grep: /@desktop/,
+      use: { ...devices['Desktop Safari'], viewport: { width: 1280, height: 800 } },
+    },
   ],
   webServer: {
     command: `pnpm exec vite --config e2e/harness/vite.config.ts --port ${port} --strictPort`,

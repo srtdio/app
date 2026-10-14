@@ -6,14 +6,17 @@
 // /activity (a cold deep link never strands the viewer). An unreadable plan
 // (RLS empty, deleted, another workspace, a malformed id) shows the Plan
 // screen's own "Plan not available" state, never a blank page. ?comment=
-// scrolls to and highlights that comment once the item lists it.
+// scrolls to and highlights that comment once the item lists it. On a laptop
+// (md and up) the plan is the same docked panel as in a chat, with Activity
+// beside it (narrowed by the panel's width from 1180px, overlaid below).
 
 import { useCallback } from 'react';
 import type { ReactElement } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { IconPlan } from '@/components/ui/icons';
 import { PLAN_NOT_AVAILABLE } from '@/components/chat/plan-card';
-import { PlanScreen, PlanPage as PlanFrame } from '@/components/chat/PlanScreen';
+import { ActivityPage } from '@/components/pages/ActivityPage';
+import { PlanScreen, PlanPage as PlanFrame, usePlanDesktop } from '@/components/chat/PlanScreen';
 import { hasPreviousEntry } from '@/lib/chat/use-history-step';
 import { useWorkspace } from '@/lib/workspace-context';
 
@@ -36,32 +39,52 @@ export function PlanPage(): ReactElement {
   const { workspaceId } = useWorkspace();
   const itemId = params.get('item');
   const commentId = params.get('comment');
+  const desktop = usePlanDesktop();
 
   const close = useCallback(() => {
     if (planPageBack(window.history.state).kind === 'pop') navigate(-1);
     else navigate('/activity', { replace: true });
   }, [navigate]);
 
+  const beside = desktop ? (
+    <div data-plan-page-beside="" className="min-[1180px]:mr-[440px]">
+      <ActivityPage />
+    </div>
+  ) : null;
+
   if (!isPlanId(planId)) {
     return (
-      <PlanFrame open testId="plan" title={PLAN_NOT_AVAILABLE} backLabel="Back" onBack={close}>
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-fg-2">
-          <IconPlan size={22} />
-          <p className="text-sm">{PLAN_NOT_AVAILABLE}</p>
-        </div>
-      </PlanFrame>
+      <>
+        {beside}
+        <PlanFrame
+          open
+          testId="plan"
+          title={PLAN_NOT_AVAILABLE}
+          backLabel="Back"
+          closeLabel="Close plan"
+          onBack={close}
+        >
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-fg-2">
+            <IconPlan size={22} />
+            <p className="text-sm">{PLAN_NOT_AVAILABLE}</p>
+          </div>
+        </PlanFrame>
+      </>
     );
   }
 
   return (
-    <PlanScreen
-      key={`${planId}:${itemId ?? ''}`}
-      open
-      planId={planId}
-      {...(isPlanId(itemId) ? { initialItemId: itemId } : {})}
-      {...(isPlanId(itemId) && isPlanId(commentId) ? { highlightCommentId: commentId } : {})}
-      {...(workspaceId !== null ? { onlyWorkspaceId: workspaceId } : {})}
-      onClose={close}
-    />
+    <>
+      {beside}
+      <PlanScreen
+        key={`${planId}:${itemId ?? ''}`}
+        open
+        planId={planId}
+        {...(isPlanId(itemId) ? { initialItemId: itemId } : {})}
+        {...(isPlanId(itemId) && isPlanId(commentId) ? { highlightCommentId: commentId } : {})}
+        {...(workspaceId !== null ? { onlyWorkspaceId: workspaceId } : {})}
+        onClose={close}
+      />
+    </>
   );
 }

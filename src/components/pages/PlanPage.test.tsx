@@ -6,7 +6,13 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 // The Plan screen and its frame portal into document.body (no DOM in the unit
 // env): stub both to markers that print the props the page hands over, so the
 // assertion is exactly what the route maps ?item= / ?comment= to.
+// Laptop or phone, as the test sets it; Activity is a marker (its reads stay out).
+const view = vi.hoisted(() => ({ desktop: false }));
+vi.mock('@/components/pages/ActivityPage', () => ({
+  ActivityPage: () => <div>activity-beside</div>,
+}));
 vi.mock('@/components/chat/PlanScreen', () => ({
+  usePlanDesktop: () => view.desktop,
   PlanScreen: (props: {
     planId: string;
     initialItemId?: string;
@@ -78,6 +84,23 @@ describe('PlanPage', () => {
     expect(isPlanId('')).toBe(false);
     expect(isPlanId(null)).toBe(false);
     expect(isPlanId(undefined)).toBe(false);
+  });
+
+  it('laptop: Activity stays visible beside the docked panel, narrowed by 440px from 1180px', () => {
+    view.desktop = true;
+    try {
+      const html = render(`/plans/${PLAN}?item=${ITEM}`);
+      expect(html).toContain('activity-beside');
+      expect(html).toContain('min-[1180px]:mr-[440px]');
+      expect(html).toContain(`screen plan=${PLAN} item=${ITEM}`);
+      expect(render('/plans/not-a-plan')).toContain('activity-beside');
+    } finally {
+      view.desktop = false;
+    }
+  });
+
+  it('phone: the plan alone, no Activity under it', () => {
+    expect(render(`/plans/${PLAN}`)).not.toContain('activity-beside');
   });
 
   it('Back pops to the entry below when there is one, else goes to Activity (cold deep link)', () => {
