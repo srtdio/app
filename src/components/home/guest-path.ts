@@ -1,5 +1,6 @@
 // Guest-path decision for src/main.tsx. Runs synchronously before anything
-// heavy is imported, so this module must import nothing.
+// heavy is imported, so this module must import nothing. The inline script in
+// index.html mirrors isGuestHome to paint the light canvas; keep them in sync.
 
 /** Supabase's default localStorage key: sb-<project-ref>-auth-token. */
 export const AUTH_TOKEN_KEY = /^sb-.+-auth-token$/;
@@ -39,13 +40,4 @@ export function localStorageKeys(): string[] {
     if (key !== null) keys.push(key);
   }
   return keys;
-}
-
-// The homepage is light only. index.html paints a dark canvas under a dark OS
-// theme until a stylesheet loads; repaint it white right away on the guest path.
-export function paintGuestCanvas(): void {
-  document.documentElement.style.backgroundColor = '#ffffff';
-  document.querySelectorAll('meta[name="theme-color"]').forEach((el) => {
-    el.setAttribute('content', '#ffffff');
-  });
 }

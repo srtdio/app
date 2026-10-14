@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { isGuestHome, localStorageKeys, paintGuestCanvas } from '@/components/home/guest-path';
+import { isGuestHome, localStorageKeys } from '@/components/home/guest-path';
 import {
   APP_STYLESHEET,
   HOME_STYLESHEET,
@@ -92,7 +92,6 @@ async function bootApp(root: HTMLElement): Promise<void> {
 }
 
 async function bootHome(root: HTMLElement): Promise<void> {
-  paintGuestCanvas();
   const { HomeEntry, scheduleSentry } = await import('@/components/home/HomeEntry');
   const shouldRender = await runStaleDeployGuard(browserStaleDeployDeps(HOME_STYLESHEET, lazyWarn));
   if (!shouldRender) return;

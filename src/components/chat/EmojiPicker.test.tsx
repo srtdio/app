@@ -235,7 +235,8 @@ describe('F3: EmojiPicker and emoji-data are not in the main chunk', () => {
   }
 
   it('the app entry reaches the menu statically but never the picker body or its data', () => {
-    const graph = staticGraph(join(root, 'main.tsx'));
+    // App.tsx is the root of the app chunk since main.tsx loads it dynamically (homepage fast guest path).
+    const graph = staticGraph(join(root, 'App.tsx'));
     expect(graph.has(join(root, 'components/chat/MessageActionMenu.tsx'))).toBe(true);
     expect(graph.has(join(root, 'components/chat/EmojiPicker.tsx'))).toBe(false);
     expect(graph.has(join(root, 'components/chat/emoji-data.ts'))).toBe(false);
