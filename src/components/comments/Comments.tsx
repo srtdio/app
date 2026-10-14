@@ -43,6 +43,7 @@ import { flashNode } from '@/components/comments/flash-node';
 import {
   EX_MEMBER_LABEL,
   fetchCommentProfiles,
+  resolveMentionHandle,
   resolveName,
   type CommentProfile,
 } from '@/components/comments/commentProfiles';
@@ -969,6 +970,11 @@ export function Comments({
   }, [noteForId, noteEntered]);
 
   const nameOf = useCallback((id: string): string | null => resolveName(profiles, id), [profiles]);
+  // Mentions inside a body read as @username; author lines keep the full name.
+  const handleOf = useCallback(
+    (id: string): string | null => resolveMentionHandle(profiles, id),
+    [profiles],
+  );
   // Author avatar URL from the SAME profiles map the card already holds; no new
   // query. Absent member -> null, so the card keeps its initials fallback.
   const avatarOf = useCallback(
@@ -1092,7 +1098,7 @@ export function Comments({
   }
 
   async function handleCopy(comment: CommentRow): Promise<void> {
-    const ok = await writeClipboard(commentCopyText(comment.body, nameOf));
+    const ok = await writeClipboard(commentCopyText(comment.body, handleOf));
     if (!ok) return;
     setCopiedId(comment.id);
     window.setTimeout(() => {
@@ -1330,7 +1336,7 @@ export function Comments({
           <>
             {comment.body.trim() !== '' ? (
               <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
-                {renderCommentBody(comment.body, nameOf)}
+                {renderCommentBody(comment.body, handleOf)}
               </p>
             ) : null}
             {attachments.length > 0 ? (
@@ -1561,7 +1567,7 @@ export function Comments({
                               state === 'confirmed' ? 'text-fg-2' : 'text-fg',
                             )}
                           >
-                            {renderCommentBody(comment.body, nameOf)}
+                            {renderCommentBody(comment.body, handleOf)}
                             {editedMarker !== null ? (
                               <span className="ml-1.5 text-[11px] text-fg-3">{editedMarker}</span>
                             ) : null}

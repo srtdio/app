@@ -117,7 +117,7 @@ export function buildInitialContent(
       chip.setAttribute('contenteditable', 'false');
       chip.dataset.mentionId = candidate.id;
       chip.className = 'rounded px-1 font-medium text-accent bg-accent-soft';
-      chip.textContent = `@${candidate.name}`;
+      chip.textContent = `@${candidate.username ?? candidate.name}`;
       nodes.push(chip);
     } else {
       nodes.push(factory.createTextNode(match[0]));
@@ -331,7 +331,10 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   const matches = useMemo(() => {
     if (query === null) return [];
     const needle = query.toLowerCase();
-    return members.filter((m) => m.name.toLowerCase().includes(needle));
+    return members.filter(
+      (m) =>
+        m.name.toLowerCase().includes(needle) || (m.username ?? '').toLowerCase().includes(needle),
+    );
   }, [members, query]);
 
   const open = query !== null && matches.length > 0;
@@ -364,7 +367,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
     chip.setAttribute('contenteditable', 'false');
     chip.dataset.mentionId = member.id;
     chip.className = 'rounded px-1 font-medium text-accent bg-accent-soft';
-    chip.textContent = `@${member.name}`;
+    chip.textContent = `@${member.username ?? member.name}`;
     const space = document.createTextNode(' ');
 
     range.insertNode(space);
@@ -452,8 +455,11 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
                   size="md"
                   {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
                 />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
-                  {member.name}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium text-fg">{member.name}</span>
+                  {member.username !== null ? (
+                    <span className="truncate font-mono text-xs text-fg-2">@{member.username}</span>
+                  ) : null}
                 </span>
                 {member.role !== '' ? (
                   <span className="shrink-0 text-xs text-fg-3">{member.role}</span>

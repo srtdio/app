@@ -15,7 +15,7 @@ import { entityUrlPath, formatEntityRef } from '@/lib/entityRef';
 import { onBehalfSuffix } from '@/components/pages/pcs/roles';
 import { logger } from '@/lib/logger';
 import { EX_MEMBER_LABEL } from '@/components/comments/commentProfiles';
-import { resolveMentionPreview } from '@/lib/chat/mentions';
+import { mentionHandle, resolveMentionPreview } from '@/lib/chat/mentions';
 import { chatMessageHref, withoutBellEntries } from '@/lib/inbox/bell-types';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
@@ -1142,6 +1142,8 @@ export async function fetchActivityEntries(
     ),
   ]);
   const userNames = new Map<string, string>();
+  // What mentions inside a body read as (@username, else the name).
+  const userHandles = new Map<string, string>();
   const userAvatars = new Map<string, string>();
   const groupIds = unique(
     [...chatRes.channels.values()].flatMap((c) => (c.groupId !== null ? [c.groupId] : [])),
@@ -1163,6 +1165,7 @@ export async function fetchActivityEntries(
   if (profiles !== null && profiles.ok) {
     for (const p of profiles.data) {
       userNames.set(p.userId, p.displayName);
+      userHandles.set(p.userId, mentionHandle(p));
       if (p.avatarUrl !== null) userAvatars.set(p.userId, p.avatarUrl);
     }
   }
@@ -1183,7 +1186,7 @@ export async function fetchActivityEntries(
       item.title = channel?.groupId != null ? (groupNames.get(channel.groupId) ?? null) : null;
       const body = item.messageId !== null ? (chatRes.bodies.get(item.messageId) ?? null) : null;
       item.body = chatMentionPreview(body, (id) =>
-        activeMentioned === null || activeMentioned.has(id) ? userNames.get(id) : undefined,
+        activeMentioned === null || activeMentioned.has(id) ? userHandles.get(id) : undefined,
       );
     } else if (COMMENT_EVENTS.includes(item.eventType)) {
       actorUserId = item.commentId !== null ? (commentAuthors.get(item.commentId) ?? null) : null;
@@ -1229,7 +1232,7 @@ export async function fetchActivityEntries(
           : undefined;
       item.body =
         comment !== undefined
-          ? resolveBodyMentions(comment.body, (id) => userNames.get(id) ?? null)
+          ? resolveBodyMentions(comment.body, (id) => userHandles.get(id) ?? null)
           : null;
       item.format = null;
       item.caption = null;
@@ -1251,7 +1254,7 @@ export async function fetchActivityEntries(
           ? (batchBodies.get(item.batchId) ?? null)
           : null;
     item.body =
-      rawBody !== null ? resolveBodyMentions(rawBody, (id) => userNames.get(id) ?? null) : null;
+      rawBody !== null ? resolveBodyMentions(rawBody, (id) => userHandles.get(id) ?? null) : null;
 
     if (item.entityType === 'post') {
       // A deleted post is gone from the posts read: its payload carries the
