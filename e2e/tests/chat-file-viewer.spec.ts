@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { FIXTURE_PDF_PAGES, installHarnessNetwork } from '../fixtures/harness-routes';
-import { PEER_NAME } from '../fixtures/chat-data';
+import { FIXTURE_PDF_PAGES, fixturePdf, installHarnessNetwork } from '../fixtures/harness-routes';
+import { ME, PEER_NAME } from '../fixtures/chat-data';
 
 // Files open inside chat: a PDF message opens the in-app viewer (pdf.js page 1
 // and "1 / N"), a swipe down closes it, and a pptx shows "Preview not
@@ -122,5 +122,83 @@ test('chat files open in the in-app viewer @theme', async ({ page, context }) =>
 
   // Nothing left the tab, and no request escaped the fixtures.
   expect(popups).toEqual([]);
+  expect(harness.blocked).toEqual([]);
+});
+
+// Width rule (#523 T9): a sent file bubble is the text bubble's max, never
+// wider than the message column or the screen, whatever its thumbnail or name.
+const SENT_PDF = '0190f200-0000-7000-8000-000000000003';
+const SENT_VIDEO = '0190f200-0000-7000-8000-000000000004';
+const LONG = (ext: string): string =>
+  `${'Quarterly campaign review deck '.repeat(3).slice(0, 76)}.${ext}`;
+
+/** Every file bubble sits inside the viewport and its message column, at the column's max. */
+async function bubblesFit(page: Page, count: number): Promise<void> {
+  const boxes = await page.locator('[data-file-bubble]').evaluateAll((els) =>
+    els.map((el) => {
+      const bubble = el.closest('[data-bubble]');
+      const column = bubble?.parentElement;
+      if (bubble == null || column == null) throw new Error('file bubble outside a message');
+      const b = el.getBoundingClientRect();
+      const c = column.getBoundingClientRect();
+      const m = bubble.getBoundingClientRect();
+      return { bl: b.left, br: b.right, cl: c.left, cr: c.right, mw: m.width, vw: innerWidth };
+    }),
+  );
+  expect(boxes.length).toBeGreaterThanOrEqual(count);
+  for (const { bl, br, cl, cr, mw, vw } of boxes) {
+    expect(bl).toBeGreaterThanOrEqual(Math.max(0, cl) - 0.5);
+    expect(br).toBeLessThanOrEqual(Math.min(vw, cr) + 0.5);
+    // The text bubble max: the message bubble fills its column, whatever the name.
+    expect(mw).toBeGreaterThanOrEqual(cr - cl - 1);
+  }
+}
+
+test('sent file bubbles fit the screen and the message column @theme', async ({ page }) => {
+  const harness = await installHarnessNetwork(page);
+  const dm = harness.world.dmMessages;
+  const rows = [dm[dm.length - 2], dm[dm.length - 1]];
+  const metas = [
+    [
+      SENT_PDF,
+      { mime: 'application/pdf', name: LONG('pdf'), size: 240_000, thumb_w: 580, thumb_h: 751 },
+    ],
+    [
+      SENT_VIDEO,
+      { mime: 'video/mp4', name: LONG('mp4'), size: 3_400_000, thumb_w: 580, thumb_h: 326 },
+    ],
+  ] as const;
+  rows.forEach((row, i) => {
+    const [id, meta] = metas[i] ?? metas[0];
+    if (row === undefined) throw new Error('fixture DM too short');
+    Object.assign(row, {
+      sender_user_id: ME,
+      body: null,
+      attachment_asset_ids: [id],
+      attachment_meta: { [id]: meta },
+    });
+  });
+
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/chat');
+    await page.getByText(PEER_NAME, { exact: true }).first().click();
+    const video = page.locator('[data-file-bubble="video"]').first();
+    await video.scrollIntoViewIfNeeded();
+    await expect(video.locator('img')).toHaveJSProperty('complete', true);
+    await bubblesFit(page, 2);
+  }
+
+  // Sending: a picked PDF and video reserve their thumbnail box and still fit.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const input = page.locator('form:has(textarea)').first().locator('input[type="file"]').nth(1);
+  test.skip((await input.count()) === 0, 'no upload endpoint in this env: attaching is off');
+  await input.setInputFiles([
+    { name: LONG('pdf'), mimeType: 'application/pdf', buffer: fixturePdf(2) },
+    { name: LONG('mp4'), mimeType: 'video/mp4', buffer: Buffer.alloc(2048) },
+  ]);
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('[data-file-bubble]')).toHaveCount(4);
+  await bubblesFit(page, 4);
   expect(harness.blocked).toEqual([]);
 });

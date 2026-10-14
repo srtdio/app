@@ -91,6 +91,7 @@ export function AssetCard({
           name={name}
           versionId={item.currentVersionId}
           size={item.sizeBytes}
+          pageCount={item.pageCount}
           cache={cache}
           presignEnabled={presignEnabled}
         />

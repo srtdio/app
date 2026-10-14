@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  BUBBLE_FILL,
   FileBubble,
   FileBubbleCard,
   SENDING_RATIO,
@@ -57,7 +58,7 @@ describe('FileBubble width: the text bubble max, never the name', () => {
     expect(LONG.length).toBeGreaterThanOrEqual(80);
     const long = bubble({ ...PDF, name: LONG });
     const short = bubble({ ...PDF, name: 'a.pdf' });
-    expect(rootTag(long)).toContain('class="w-[100vw] max-w-full"');
+    expect(rootTag(long)).toContain(`class="${BUBBLE_FILL}"`);
     expect(rootTag(long).replace(/data-file-state="[a-z]+"/, '')).toBe(
       rootTag(short).replace(/data-file-state="[a-z]+"/, ''),
     );
@@ -66,6 +67,14 @@ describe('FileBubble width: the text bubble max, never the name', () => {
     const shown = /data-file-name="" title="[^"]*" class="[^"]*">([^<]*)</.exec(long)?.[1] ?? '';
     expect(shown).toContain(NAME_ELLIPSIS);
     expect(shown.endsWith('proved.pdf')).toBe(true);
+  });
+
+  // Regression: w-[100vw] made a viewport the bubble's minimum width, so a
+  // sent bubble in its shrink-to-fit column overflowed the screen's left edge.
+  it('asks for a viewport of width but needs none: never wider than its column', () => {
+    expect(BUBBLE_FILL).toBe('grid grid-cols-[minmax(0,100vw)]');
+    const markup = bubble({ ...PDF, name: LONG });
+    expect(markup).not.toMatch(/w-\[100vw\]|min-w-\[/);
   });
 });
 

@@ -70,6 +70,7 @@ function item(n: number): GalleryItem {
     width: 800,
     height: 1000,
     durationMs: null,
+    pageCount: null,
     r2Key: `r2/${n}`,
     externalUrl: null,
   };

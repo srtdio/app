@@ -76,6 +76,7 @@ function item(partial: Partial<BriefGalleryItem> & { kind: string }): BriefGalle
     width: null,
     height: null,
     durationMs: null,
+    pageCount: null,
     r2Key: 'key/one.png',
     externalUrl: null,
     ...partial,
