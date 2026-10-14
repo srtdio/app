@@ -1,4 +1,4 @@
-// Homepage media (videos, posters, images) is served from the site CDN. The
+// Homepage media (videos and images) is served from the site CDN. The
 // base comes from VITE_SITE_MEDIA_URL (production: https://cdn.srtd.io/site/home/v1).
 // When it is unset or invalid the homepage renders text and buttons only.
 
@@ -28,24 +28,10 @@ export const HOME_MEDIA_BASE = siteMediaBase(rawMediaBase);
 
 export interface Clip {
   src: string;
-  poster: string;
-  /** Seconds into the clip of its first real (non-blank) frame. Omitted means 0. */
-  startAt?: number;
 }
 
-// First real frame per clip, measured with ffmpeg signalstats on the v1 files:
-// the first frame whose mean luma moves at least 2 (of 255) away from the flat
-// opening frame. Clips not listed already open on a real frame.
-const CLIP_START_AT: Readonly<Record<string, number>> = {
-  'problems-m': 0.167,
-  'problems-d': 0.167,
-};
-
-/** <name>.mp4 with its <name>.webp poster and its first real frame. */
+/** <name>.mp4 on the media base. No poster: ClipVideo shows only decoded frames. */
 export function clipFor(base: string | null, name: string): Clip | null {
   const src = mediaUrl(base, `${name}.mp4`);
-  const poster = mediaUrl(base, `${name}.webp`);
-  if (!src || !poster) return null;
-  const startAt = CLIP_START_AT[name];
-  return startAt ? { src, poster, startAt } : { src, poster };
+  return src ? { src } : null;
 }

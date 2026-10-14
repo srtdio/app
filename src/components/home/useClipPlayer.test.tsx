@@ -14,11 +14,10 @@ declare global {
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-// jsdom has no media pipeline: give each video a scriptable readyState,
-// seeking flag and currentTime, and record every currentTime write.
+// jsdom has no media pipeline: give each video a scriptable readyState and
+// currentTime, and record every currentTime write.
 interface FakeMedia {
   readyState: number;
-  seeking: boolean;
   currentTime: number;
   seeks: number[];
 }
@@ -26,7 +25,7 @@ const media = new WeakMap<HTMLMediaElement, FakeMedia>();
 function fake(el: HTMLMediaElement): FakeMedia {
   let state = media.get(el);
   if (!state) {
-    state = { readyState: 0, seeking: false, currentTime: 0, seeks: [] };
+    state = { readyState: 0, currentTime: 0, seeks: [] };
     media.set(el, state);
   }
   return state;
@@ -70,9 +69,6 @@ beforeEach(() => {
   vi.spyOn(proto, 'readyState', 'get').mockImplementation(function (this: HTMLMediaElement) {
     return fake(this).readyState;
   });
-  vi.spyOn(proto, 'seeking', 'get').mockImplementation(function (this: HTMLMediaElement) {
-    return fake(this).seeking;
-  });
   vi.spyOn(proto, 'currentTime', 'get').mockImplementation(function (this: HTMLMediaElement) {
     return fake(this).currentTime;
   });
@@ -94,13 +90,11 @@ afterEach(() => {
   container.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
-const clip = (startAt?: number): Clip => ({
-  src: 'https://cdn.test/c.mp4',
-  poster: 'https://cdn.test/c.webp',
-  ...(startAt === undefined ? {} : { startAt }),
-});
+const clip: Clip = { src: 'https://cdn.test/c.mp4' };
+const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'home.css'), 'utf8');
 
 function renderOne(c: Clip): HTMLVideoElement {
   act(() => root.render(<ClipVideo clip={c} label="clip" />));
@@ -117,7 +111,7 @@ function fire(video: HTMLVideoElement, type: string): void {
 
 describe('ClipVideo reveal', () => {
   it('stays hidden until loadeddata fires', () => {
-    const video = renderOne(clip());
+    const video = renderOne(clip);
     expect(video.dataset.clip).toBe('pending');
     fake(video).readyState = 1;
     fire(video, 'loadedmetadata');
@@ -128,52 +122,25 @@ describe('ClipVideo reveal', () => {
   });
 
   it('hides pending clips in CSS and shows only ready ones', () => {
-    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'home.css'), 'utf8');
     expect(css).toMatch(/\.home video\[data-clip\]\s*{\s*opacity:\s*0;/);
     expect(css).toMatch(/\.home video\[data-clip='ready'\]\s*{\s*opacity:\s*1;/);
   });
 
   it('renders no poster, so only decoded frames can paint', () => {
-    expect(renderOne(clip()).hasAttribute('poster')).toBe(false);
+    expect(renderOne(clip).hasAttribute('poster')).toBe(false);
   });
 
-  it('seeks to startAt before revealing', () => {
-    const video = renderOne(clip(0.167));
-    const state = fake(video);
-    state.readyState = 1;
-    fire(video, 'loadedmetadata');
-    expect(state.seeks).toEqual([0.167]);
-    // Frame 0 decoded but the seek has not landed: still hidden.
-    state.readyState = 2;
-    state.seeking = true;
-    fire(video, 'loadeddata');
-    expect(video.dataset.clip).toBe('pending');
-    state.seeking = false;
-    fire(video, 'seeked');
-    expect(video.dataset.clip).toBe('ready');
-  });
-
-  it('loops back to startAt, not 0', () => {
-    const video = renderOne(clip(0.167));
-    expect(video.loop).toBe(false);
-    fake(video).seeks.length = 0;
-    fire(video, 'ended');
-    expect(fake(video).seeks).toEqual([0.167]);
-  });
-
-  it('keeps native loop for clips that start on frame 0', () => {
-    expect(renderOne(clip()).loop).toBe(true);
+  it('loops natively', () => {
+    expect(renderOne(clip).loop).toBe(true);
   });
 });
 
 describe('ClipVideo pause', () => {
   it('pauses in place without resetting currentTime', () => {
-    const video = renderOne(clip(0.167));
+    const video = renderOne(clip);
     const state = fake(video);
-    state.readyState = 1;
-    fire(video, 'loadedmetadata');
     state.readyState = 2;
-    fire(video, 'seeked');
+    fire(video, 'loadeddata');
     setVisible(video, 1);
     expect(play).toHaveBeenCalled();
     state.currentTime = 4.2;
@@ -189,7 +156,7 @@ describe('ClipVideo pause', () => {
   });
 
   it('keeps the #530 autoplay attributes', () => {
-    const video = renderOne(clip());
+    const video = renderOne(clip);
     expect(video.muted).toBe(true);
     expect(video.defaultMuted).toBe(true);
     expect(video.hasAttribute('muted')).toBe(true);
@@ -197,7 +164,7 @@ describe('ClipVideo pause', () => {
   });
 
   it('cleans up its observer on unmount', () => {
-    renderOne(clip());
+    renderOne(clip);
     act(() => root.render(<></>));
     expect(observers.every((o) => o.disconnected)).toBe(true);
   });
@@ -228,7 +195,7 @@ describe('preload', () => {
           {Array.from({ length: count }, (_, i) => (
             <article key={i} className="card">
               <div className="mock">
-                <ClipVideo clip={clip()} label={`clip ${i}`} />
+                <ClipVideo clip={clip} label={`clip ${i}`} />
               </div>
             </article>
           ))}
@@ -264,9 +231,30 @@ describe('preload', () => {
   });
 
   it('loads a clip outside a card stack only while it is on screen', () => {
-    const video = renderOne(clip());
+    const video = renderOne(clip);
     expect(video.preload).toBe('metadata');
     setVisible(video, 0.1);
     expect(video.preload).toBe('auto');
+  });
+});
+
+describe('mockup box', () => {
+  it('reserves the clip aspect ratio before the video loads', async () => {
+    vi.stubEnv('VITE_SITE_MEDIA_URL', 'https://cdn.test/home');
+    vi.resetModules();
+    const { default: HomePage } = await import('./HomePage');
+    act(() => root.render(<HomePage />));
+    const boxes = [...container.querySelectorAll('.rail .clipbox')];
+    expect(boxes).toHaveLength(5);
+    for (const box of boxes) {
+      const video = box.querySelector('video');
+      expect(video?.dataset.clip).toBe('pending');
+    }
+    // The box gets its size from the row height and this ratio, never from the
+    // video, so nothing moves when the video or fonts load.
+    const rule = /\.home \.clipbox\s*{([^}]*)}/.exec(css)?.[1] ?? '';
+    expect(rule).toMatch(/aspect-ratio:\s*390\s*\/\s*720;/);
+    expect(rule).toMatch(/height:\s*100%;/);
+    expect(rule).toMatch(/max-height:\s*var\(--mock-max-h\);/);
   });
 });

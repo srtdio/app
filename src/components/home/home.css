@@ -63,6 +63,8 @@ html:has(.home) body {
   --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, Menlo, monospace;
   --g: clamp(16px, 4vw, 64px);
+  /* Sticky header height; the feature cards size themselves against it. */
+  --top-h: 68px;
   color-scheme: light;
   min-height: 100%;
   background: var(--bg);
@@ -217,7 +219,7 @@ html:has(.home) body {
   border-bottom-color: var(--line);
 }
 .home .top .wrap {
-  height: 68px;
+  height: var(--top-h);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -427,7 +429,7 @@ html:has(.home) body {
   box-shadow:
     0 24px 60px rgba(22, 22, 40, 0.14),
     0 2px 8px rgba(22, 22, 40, 0.06);
-  /* Static fill under the clip until its first real frame is decoded. */
+  /* Static fill under the clip until a frame is decoded. */
   background: var(--t2);
 }
 .home .prob video {
@@ -500,16 +502,45 @@ html:has(.home) body {
   display: none;
 }
 .home .card {
+  --card-pad: 26px;
+  /* Mockup width cap: the design's 280px, or the card's inner width if less. */
+  --mock-w: min(280px, min(430px, 84vw) - 2 * var(--card-pad));
+  --mock-max-h: calc(var(--mock-w) * 720 / 390);
+  /* Smallest mockup worth showing: 40% of the full-size mockup. Below that the
+     recording reads as a grey block, so the page scrolls instead. */
+  --mock-min-h: calc(var(--mock-max-h) * 0.4);
+  --fit-gap: 16px;
   flex: 0 0 min(430px, 84vw);
   scroll-snap-align: start;
   border-radius: 24px;
-  padding: 26px;
-  display: flex;
-  flex-direction: column;
+  padding: var(--card-pad);
+  display: grid;
+  /* label, heading, body, mockup: the mockup row takes what the text leaves */
+  grid-template-rows: auto auto auto minmax(var(--mock-min-h), var(--mock-max-h));
   gap: 14px;
+  align-content: start;
+}
+/* One whole card fits below the sticky header with the browser toolbar
+   showing (svh; vh where svh is unsupported). Shorter screens (landscape
+   phones, small phones with toolbars), where text plus the smallest mockup
+   cannot fit, keep the natural size and scroll the page. */
+@media (min-height: 640px) {
+  .home .card {
+    max-height: calc(100vh - var(--top-h) - 2 * var(--fit-gap));
+    max-height: calc(100svh - var(--top-h) - 2 * var(--fit-gap));
+  }
+}
+@media (min-height: 640px) and (max-height: 760px) {
+  .home .card {
+    --card-pad: 20px;
+    gap: 10px;
+  }
+  .home .card .mock {
+    padding-top: 0;
+  }
 }
 .home .card .k {
-  align-self: flex-start;
+  justify-self: start;
   font-family: var(--display);
   font-weight: 800;
   font-size: 14px;
@@ -536,9 +567,10 @@ html:has(.home) body {
   max-width: 38ch;
 }
 .home .card .mock {
-  margin-top: auto;
   display: flex;
   justify-content: center;
+  align-items: flex-end;
+  min-height: 0;
   padding-top: 10px;
 }
 .home .shot {
@@ -557,9 +589,14 @@ html:has(.home) body {
 }
 .home .clipbox {
   position: relative;
-  width: min(100%, 280px);
-  /* Static fill and frame shadow under the clip until its first real frame is
-     decoded; the clip itself stays transparent until then. */
+  /* Height follows the mockup row; width follows the clip's aspect ratio, so
+     the box is reserved before the video or fonts load and is never cropped
+     or stretched. */
+  height: 100%;
+  max-height: var(--mock-max-h);
+  aspect-ratio: 390 / 720;
+  /* Static fill and frame shadow under the clip until a frame is decoded; the
+     clip itself stays transparent until then. */
   border-radius: 22px;
   background: var(--wash);
   box-shadow:
@@ -572,10 +609,11 @@ html:has(.home) body {
   object-fit: cover;
 }
 .home .clipbox .clip {
+  height: 100%;
   box-shadow: none;
 }
 
-/* Never paint an undecoded video: hidden until a real frame is ready. */
+/* Never paint an undecoded video: hidden until a frame is decoded. */
 .home video[data-clip] {
   opacity: 0;
   transition: opacity 0.2s ease;

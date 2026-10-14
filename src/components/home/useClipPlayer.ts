@@ -9,8 +9,6 @@ const GESTURES = ['pointerdown', 'touchstart', 'keydown'] as const;
 
 // HAVE_CURRENT_DATA: a frame at the current position is decoded and paintable.
 const HAVE_CURRENT_DATA = 2;
-// HAVE_METADATA: duration is known, so currentTime can be set.
-const HAVE_METADATA = 1;
 
 export type ClipPreload = 'auto' | 'metadata';
 
@@ -90,7 +88,7 @@ function joinStack(
 
 export interface ClipPlayer {
   videoRef: RefObject<HTMLVideoElement>;
-  /** True once a real frame at startAt is decoded; the video stays hidden until then. */
+  /** True once a frame is decoded; the video stays hidden until then. */
   ready: boolean;
   preload: ClipPreload;
 }
@@ -102,10 +100,10 @@ export interface ClipPlayer {
  * frame. If the browser refuses to autoplay, the clip starts on the visitor's
  * first tap, click or key press.
  *
- * The video is revealed only once it has a decoded frame at `startAt`, so a
- * blank or undecoded frame is never shown; looping returns to `startAt`.
+ * The video is revealed only once it has a decoded frame, so an undecoded
+ * (blank) video box is never shown.
  */
-export function useClipPlayer(startAt = 0): ClipPlayer {
+export function useClipPlayer(): ClipPlayer {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
   const [preload, setPreload] = useState<ClipPreload>('metadata');
@@ -124,39 +122,12 @@ export function useClipPlayer(startAt = 0): ClipPlayer {
     let visible = !hasIO;
     let waitingForGesture = false;
 
-    // Start on a real frame: seek to startAt once metadata is in, reveal once
-    // that frame is decoded.
-    let atStart = startAt <= 0;
-    let seekIssued = false;
     const reveal = (): void => {
-      if (atStart && !video.seeking && video.readyState >= HAVE_CURRENT_DATA) setReady(true);
+      if (video.readyState >= HAVE_CURRENT_DATA) setReady(true);
     };
-    const onMetadata = (): void => {
-      if (!atStart && !seekIssued) {
-        seekIssued = true;
-        video.currentTime = startAt;
-        return;
-      }
-      reveal();
-    };
-    const onSeeked = (): void => {
-      if (seekIssued) atStart = true;
-      reveal();
-    };
-    // Loop back to the first real frame, not to 0.
-    const onEnded = (): void => {
-      video.currentTime = startAt;
-      if (visible) play();
-    };
-    const media: [string, () => void][] = [
-      ['loadedmetadata', onMetadata],
-      ['loadeddata', reveal],
-      ['canplay', reveal],
-      ['seeked', onSeeked],
-      ['ended', onEnded],
-    ];
-    for (const [type, fn] of media) video.addEventListener(type, fn);
-    if (video.readyState >= HAVE_METADATA) onMetadata();
+    const media = ['loadeddata', 'canplay'] as const;
+    for (const type of media) video.addEventListener(type, reveal);
+    reveal();
 
     const onGesture = (): void => {
       stopWaiting();
@@ -181,7 +152,7 @@ export function useClipPlayer(startAt = 0): ClipPlayer {
 
     const stack = joinStack(video, setPreload);
     const cleanup = (): void => {
-      for (const [type, fn] of media) video.removeEventListener(type, fn);
+      for (const type of media) video.removeEventListener(type, reveal);
       stack.leave();
       stopWaiting();
       // Pause in place: currentTime is left alone so the frame stays put.
@@ -209,7 +180,7 @@ export function useClipPlayer(startAt = 0): ClipPlayer {
       observer.disconnect();
       cleanup();
     };
-  }, [startAt]);
+  }, []);
 
   return { videoRef, ready, preload };
 }
