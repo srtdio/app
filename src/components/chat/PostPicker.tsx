@@ -517,13 +517,16 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       open={props.open}
       onClose={props.onClose}
       title={PICKER_TITLES[sheetMode]}
+      // At sm+ one fixed box from the first paint: loading, empty, results
+      // and filters all fill it, so the sheet never grows or shrinks.
+      fixedHeight
       footer={
         <Button variant="primary" size="lg" className="ml-auto" onClick={props.onClose}>
           {count > 0 ? `Done (${count})` : 'Done'}
         </Button>
       }
     >
-      <div className="flex flex-col gap-3" data-picker-mode={sheetMode}>
+      <div className="flex flex-col gap-3 sm:min-h-0 sm:flex-1" data-picker-mode={sheetMode}>
         <Field label="Search">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
@@ -602,7 +605,8 @@ export interface PostRowContext {
   excludePostIds?: ReadonlySet<string> | undefined;
 }
 
-const LIST_CLASS = '-mx-[18px] flex max-h-[50vh] flex-col overflow-y-auto border-t border-border';
+const LIST_CLASS =
+  '-mx-[18px] flex max-h-[50vh] flex-col overflow-y-auto border-t border-border sm:max-h-none sm:min-h-0 sm:flex-1';
 
 /** Loading state: three static placeholder rows (no motion). */
 export function PickerSkeleton(): ReactElement {
@@ -813,7 +817,7 @@ function BriefPickerList(props: {
     );
   }
   return (
-    <ul className="-mx-[18px] flex max-h-[50vh] flex-col overflow-y-auto border-t border-border">
+    <ul className={LIST_CLASS}>
       {props.briefs.map((brief) => {
         const active = isBriefSelected(props.selected, brief.id);
         const target = brief.targetDate !== null ? formatShortDateOnly(brief.targetDate) : '';

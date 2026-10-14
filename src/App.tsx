@@ -5,12 +5,11 @@ import { PostDetailPage } from '@/components/pages/PostDetailPage';
 import { BriefsPage } from '@/components/pages/BriefsPage';
 import { BriefDetailPage } from '@/components/pages/BriefDetailPage';
 import { ChatPage } from '@/components/pages/ChatPage';
-import { ActivityPage } from '@/components/pages/ActivityPage';
 import { AssetsPage } from '@/components/pages/AssetsPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
 import { HelpPage } from '@/components/pages/HelpPage';
 import { DeletedPage } from '@/components/pages/DeletedPage';
-import { PlanPage } from '@/components/pages/PlanPage';
+import { ActivityPlanLayout, PlanPage } from '@/components/pages/PlanPage';
 import { SignInPage } from '@/components/auth/SignInPage';
 import { AuthCallbackPage } from '@/components/auth/AuthCallbackPage';
 import { LegalPolicyPage } from '@/components/auth/LegalPolicyPage';
@@ -64,12 +63,15 @@ export default function App() {
               <Route path="/briefs/:briefId" element={<BriefDetailPage />} />
               <Route path="/b/:ref" element={<BriefRefResolver />} />
               <Route path="/chat" element={<ChatPage />} />
-              <Route path="/activity" element={<ActivityPage />} />
+              {/* Activity and a plan beside it share one layout: Activity never remounts. */}
+              <Route element={<ActivityPlanLayout />}>
+                <Route path="/activity" />
+                <Route path="/plans/:planId" element={<PlanPage />} />
+              </Route>
               <Route path="/assets" element={<AssetsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/help" element={<HelpPage />} />
               <Route path="/deleted" element={<DeletedPage />} />
-              <Route path="/plans/:planId" element={<PlanPage />} />
               <Route path="*" element={<Navigate to="/pipeline" replace />} />
             </Route>
           </Route>

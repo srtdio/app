@@ -195,7 +195,17 @@ test('agency: long-press drag moves a Thu item to Wed and resets its ticks', asy
     if (first === null) throw new Error('target');
     return first.y + 4;
   });
-  await expect(page.getByText('Moved to Wed 14 Oct. Its ticks were reset.')).toBeVisible();
+  const reset = page.getByText(
+    'Moved to Wed 14 Oct. Pipeline date updated. Its ticks were reset.',
+    { exact: true },
+  );
+  await expect(reset).toBeVisible();
+  // A reset has no Undo.
+  await expect(
+    reset
+      .locator('xpath=ancestor::div[.//button[@aria-label="Dismiss notification"]][1]')
+      .locator('[data-toast-action]'),
+  ).toHaveCount(0);
   await expect
     .poll(() => titlesOn(plan, '2026-10-14'))
     .toEqual(['Sweets flatlay', 'Lantern workshop']);

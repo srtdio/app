@@ -807,3 +807,17 @@ export function IconFileText(props: IconProps) {
     </Svg>
   );
 }
+
+/** Six dots: the Plan list's drag handle (laptop). */
+export function IconGrip(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx={9} cy={6} r={1} />
+      <circle cx={15} cy={6} r={1} />
+      <circle cx={9} cy={12} r={1} />
+      <circle cx={15} cy={12} r={1} />
+      <circle cx={9} cy={18} r={1} />
+      <circle cx={15} cy={18} r={1} />
+    </Svg>
+  );
+}

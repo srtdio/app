@@ -183,8 +183,13 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
   it('agency only: Add rows, "+", drag; Move and Remove rows', () => {
     const src = read('PlanScreen.tsx');
     expect(src).toMatch(
-      /\{\.\.\.\(agency\s*\?\s*\{\s*onAdd: openAdd,\s*onDragStart: startDrag,\s*swipe:/,
+      /:\s*agency\s*\?\s*\{\s*onAdd: openAdd,\s*onDragStart: startDrag,\s*swipe:/,
     );
+    // Laptop agency: the same Add and drag, the desk controls instead of swipe.
+    expect(src).toMatch(
+      /\{\.\.\.\(deskAgency\s*\?\s*\{\s*onAdd: openAdd,\s*onDragStart: startDrag,\s*desk:/,
+    );
+    expect(src).toContain('const deskAgency = desktop && agency;');
     expect(src).toContain("const agency = side === 'agency' && bundle !== null;");
     expect(src).toMatch(/\{agency \? \(\s*<>\s*<PlanConfirmSheet[\s\S]*<PlanAddSheet/);
     const item = read('PlanItemScreen.tsx');
@@ -208,7 +213,10 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     }
     expect(hook).toContain('cancelAnimationFrame(frame)');
     expect(hook).toContain('clearTimeout(snapTimer)');
-    expect(hook).toContain("if (event.key === 'Escape') cancel();");
+    // Escape cancels while the pointer is down; once released the drop commits.
+    expect(hook).toContain(
+      "if (event.key === 'Escape' && stateRef.current?.snapTop === null) cancel();",
+    );
     expect(hook).toContain('useEffect(() => end, [end]);');
     // A cancel never calls onDrop.
     const cancel = hook.slice(hook.indexOf('const cancel = (): void => end();'));

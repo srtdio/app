@@ -247,7 +247,7 @@ describe('post item header (W7, W8)', () => {
   it('PlanPage renders the action after a flex-1 min-w-0 title column with truncation', () => {
     const src = read('PlanScreen.tsx');
     const header = src.slice(src.indexOf('<header'), src.indexOf('</header>'));
-    expect(header).toMatch(/className="flex min-w-0 flex-1 flex-col"/);
+    expect(header).toMatch(/className="flex min-w-0 flex-1 flex-col[^"]*"/);
     expect(header).toContain('<h2 className="truncate');
     expect(header.indexOf('{props.action}')).toBeGreaterThan(header.indexOf('</h2>'));
     const item = read('PlanItemScreen.tsx');

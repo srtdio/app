@@ -38,6 +38,7 @@ import {
   RemoveFromPlanButton,
 } from '@/components/chat/PlanMoveSheet';
 import { flattenOrder, hasTicks, moveToEnd } from '@/lib/chat/plan-drag';
+import { dayMoveToast } from '@/lib/chat/plan-keyboard-move';
 import {
   ConceptSheet,
   EMPTY_CONCEPT,
@@ -50,6 +51,8 @@ import {
   MOVE_FAILED,
   REMOVED_TOAST,
   REMOVE_FAILED,
+  SLOT_UNDO,
+  SLOT_UNDO_MS,
   STATUS_LABELS,
   TEAM_APPROVE_CONFIRM,
   TEAM_ONLY_LABEL,
@@ -62,8 +65,6 @@ import {
   keepApprovalBody,
   keepApprovalTitle,
   moveAsksKeep,
-  movedKeptToast,
-  movedToast,
   planWriteErrorCopy,
   reviewStatus,
   stageLabel,
@@ -235,6 +236,8 @@ export function PlanItemScreen(props: {
   /** A comment to scroll to and briefly highlight once listed; none when absent. */
   highlightCommentId?: string;
   onClose: () => void;
+  /** Laptop: the panel's X closes the whole plan panel (Back steps to the list). */
+  onDismiss?: () => void;
   /** After Remove from plan: back to the list. Defaults to onClose. */
   onRemoved?: () => void;
   /** The client approver's name (the keep sheet's title on an Open plan). */
@@ -503,9 +506,16 @@ export function PlanItemScreen(props: {
     }
     void moveItemTo(day, false);
   };
-  const moveItemTo = async (day: string | null, keep: boolean): Promise<void> => {
+  const moveItemTo = async (
+    day: string | null,
+    keep: boolean,
+    /** An Undo's move back: this order, and no toast of its own. */
+    back?: string[],
+  ): Promise<void> => {
     if (!planActions || planBusy) return;
-    const order = flattenOrder(moveToEnd(planDayIds(groups), item.id, day));
+    const before = flattenOrder(planDayIds(groups));
+    const from = currentDay ?? null;
+    const order = back ?? flattenOrder(moveToEnd(planDayIds(groups), item.id, day));
     const hadTicks = hasTicks(bundle, item.id);
     setPlanBusy(true);
     const traceId = generateTraceId();
@@ -527,11 +537,25 @@ export function PlanItemScreen(props: {
       return;
     }
     setMoveOpen(false);
-    toast.show({
-      title: keep ? movedKeptToast(dayHeaderOf(day)) : movedToast(dayHeaderOf(day), hadTicks),
-    });
     dispatchPlanChanged(window, bundle.plan.id);
+    if (back !== undefined) return;
+    // Undo only when nothing was reset (a client's tick cannot be put back).
+    const spec = dayMoveToast(dayHeaderOf(day), item.kind === 'post', !keep && hadTicks);
+    toast.show({
+      title: spec.title,
+      ...(spec.undo
+        ? {
+            durationMs: SLOT_UNDO_MS,
+            action: {
+              label: SLOT_UNDO,
+              onPress: () => void moveBack.current(from, keep, before),
+            },
+          }
+        : {}),
+    });
   };
+  const moveBack = useRef(moveItemTo);
+  moveBack.current = moveItemTo;
   const removeFromPlan = async (): Promise<void> => {
     if (!planActions || planBusy) return;
     setPlanBusy(true);
@@ -600,6 +624,9 @@ export function PlanItemScreen(props: {
         subtitle={itemSlotSubtitle(bundle, item, side) ?? bundle.plan.title}
         backLabel={props.backLabel ?? 'Back to plan'}
         onBack={props.onClose}
+        desktopBack
+        closeLabel="Close plan"
+        {...(props.onDismiss !== undefined ? { onDismiss: props.onDismiss } : {})}
         onEntered={() => setRested(true)}
         {...(item.kind === 'concept' && planActions
           ? {

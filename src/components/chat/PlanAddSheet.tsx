@@ -18,7 +18,12 @@ export function PlanAddSheet(props: {
   onClose: () => void;
 }): ReactElement {
   return (
-    <Sheet open={props.open} onClose={props.onClose} title={addSheetTitle(props.dayHeader)}>
+    <Sheet
+      open={props.open}
+      onClose={props.onClose}
+      title={addSheetTitle(props.dayHeader)}
+      fixedHeight
+    >
       <div data-plan-add-sheet="" className="flex flex-col gap-1">
         <ActionRow
           icon={<IconPlus size={18} />}

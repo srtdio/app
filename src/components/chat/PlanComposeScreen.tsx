@@ -429,6 +429,7 @@ export function PlanComposeScreen(props: {
         backLabel="Close"
         backIcon={<IconX size={22} />}
         onBack={props.onClose}
+        closeLabel="Close"
         footer={footer}
       >
         <div className="flex flex-col gap-3.5 p-3">

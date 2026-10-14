@@ -3,7 +3,8 @@ import type { ReactElement } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { cn } from '@/lib/cn';
+import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useWorkspace } from '@/lib/workspace-context';
 import {
   listGroupMemberIds,
@@ -134,8 +135,6 @@ interface ChatConnectedProps {
   workspaceId: string;
   currentUserId: string;
 }
-
-const DESKTOP_QUERY = '(min-width: 768px)';
 
 const NO_MESSAGES: ThreadMessage[] = [];
 const NO_PLAN_IDS: readonly string[] = [];
@@ -574,7 +573,7 @@ export function autoCloseAction(historyState: unknown): 'pop' | 'replace' {
 
 export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const { client, status, workspaceId, currentUserId } = props;
-  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const isDesktop = useMediaQuery(LAPTOP_QUERY);
   const { workspaces } = useWorkspace();
   // The workspace civil clock every timestamp renders on; the browser's own zone
   // only when the workspace has none.
@@ -1884,12 +1883,25 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   };
 
   const isGroup = selected?.channelType === 'group';
+  const planPanelOpen =
+    isDesktop &&
+    selected !== null &&
+    ((openPlan !== null && planShown) || (planComposeOpen && !notesOpen));
   const infoGroupId = isGroup ? (selected?.groupId ?? null) : null;
 
   const surface = (
-    <div className="flex h-full min-h-0">
+    <div className="relative flex h-full min-h-0">
       {showList ? (
-        <div className="h-full w-full border-border md:w-72 md:border-r">
+        <div
+          className={cn(
+            'h-full w-full border-border md:w-72 md:border-r',
+            // 768 to 891px: the open plan panel takes the list's room; the
+            // list is set aside in place (not unmounted), so it returns on
+            // close with its scroll.
+            planPanelOpen &&
+              'max-[891px]:pointer-events-none max-[891px]:invisible max-[891px]:absolute max-[891px]:inset-y-0 max-[891px]:left-0',
+          )}
+        >
           <ChannelList
             channels={roster}
             status={loadStatus}
@@ -1915,7 +1927,14 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
         </div>
       ) : null}
       {showThread ? (
-        <div className="relative h-full min-w-0 flex-1">
+        <div
+          className={cn(
+            'relative h-full min-w-0 flex-1',
+            // The docked plan panel (440px) takes the right; from 1180px the
+            // thread narrows so it covers nothing (below, it overlays).
+            planPanelOpen && 'min-[1180px]:mr-[440px]',
+          )}
+        >
           {opening !== null ? (
             threadOpeningSkeleton(layout, isDesktop ? undefined : onBackFromOpening)
           ) : selected !== null ? (
