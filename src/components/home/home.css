@@ -66,8 +66,9 @@ html:has(.home) body {
   --g: clamp(16px, 4vw, 64px);
   /* Sticky header height; the feature cards size themselves against it. */
   --top-h: 68px;
-  /* One screen below the sticky header (svh: the toolbar-shown height). */
-  --screen: calc(100vh - var(--top-h));
+  /* One screen below the sticky header and its 1px bottom border (svh: the
+     toolbar-shown height). Used by the desktop layout only. */
+  --screen: calc(100vh - var(--top-h) - 1px);
   color-scheme: light;
   min-height: 100%;
   background: var(--bg);
@@ -83,7 +84,7 @@ html:has(.home) body {
 
 @supports (height: 100svh) {
   .home {
-    --screen: calc(100svh - var(--top-h));
+    --screen: calc(100svh - var(--top-h) - 1px);
   }
 }
 
@@ -470,13 +471,6 @@ html:has(.home) body {
   max-width: 46ch;
   margin: 22px auto 0;
 }
-.home .hero .top-line {
-  margin: 0 auto 18px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: var(--accent-ink);
-}
 .home .hero .cta {
   margin-top: 30px;
 }
@@ -486,9 +480,6 @@ html:has(.home) body {
   }
   .home .hero p {
     font-size: 17px;
-  }
-  .home .hero .top-line {
-    font-size: 14px;
   }
 }
 
@@ -1346,6 +1337,14 @@ html:has(.home) body {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
+}
+/* Under 360px seven 44px days (308px) are wider than the content box: drop
+   the gap and let the grid use the page gutter, never shrink the day. */
+@media (max-width: 359.98px) {
+  .home .cal-grid {
+    gap: 0;
+    margin-inline: calc(6px - var(--g));
+  }
 }
 .home .cal-wd {
   padding: 4px 0;

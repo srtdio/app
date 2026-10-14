@@ -53,10 +53,10 @@ describe('homepage copy', () => {
   const html = renderToStaticMarkup(<HomePage />);
 
   it('the new hero and features lines are present, the old ones gone', () => {
-    expect(html).toContain('WhatsApp goes back to being WhatsApp.');
+    expect(html).not.toContain('top-line');
     expect(html).toContain('Social media agencies <em>hate WhatsApp.</em>');
     expect(html).toContain(
-      'Approvals, feedback and files get buried in group chats that never switch off. Sorted gives each client one workspace where every approval stays on record.',
+      'Approvals, feedback and files get buried in group chats that never switch off. Sorted gives each client one workspace, so WhatsApp goes back to being WhatsApp.',
     );
     expect(html).toContain('The three jobs WhatsApp was never built to do.');
     expect(html).not.toContain('block <em>your clients');

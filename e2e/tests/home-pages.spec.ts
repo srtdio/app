@@ -70,13 +70,13 @@ test.describe('phone', () => {
     await serveHome(page);
     await page.goto('/');
     const hero = page.locator('.home .hero');
-    await expect(hero.getByText('WhatsApp goes back to being WhatsApp.')).toBeVisible();
+    await expect(hero.locator('p')).toHaveCount(1);
     await expect(hero.getByRole('heading', { level: 1 })).toHaveText(
       'Social media agencies hate WhatsApp.',
     );
     await expect(
       hero.getByText(
-        'Approvals, feedback and files get buried in group chats that never switch off. Sorted gives each client one workspace where every approval stays on record.',
+        'Approvals, feedback and files get buried in group chats that never switch off. Sorted gives each client one workspace, so WhatsApp goes back to being WhatsApp.',
       ),
     ).toBeVisible();
     await expect(page.getByText('The three jobs WhatsApp was never built to do.')).toBeVisible();
@@ -208,6 +208,37 @@ test.describe('phone', () => {
   });
 });
 
+test.describe('320px phone', () => {
+  test.use({ viewport: { width: 320, height: 640 } });
+  test.skip(({ isMobile }) => !isMobile, 'phone flows');
+
+  test('demo: every day, slot and arrow is 44x44 with no sideways scroll', async ({ page }) => {
+    await page.goto('/demo');
+    const days = page.locator('.cal-day');
+    await expect(days.first()).toBeVisible();
+    const boxes = await days.evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { width: r.width, height: r.height, left: r.left, right: r.right };
+      }),
+    );
+    expect(boxes.length).toBeGreaterThanOrEqual(28);
+    for (const box of boxes) {
+      expectMinTouchTarget(box);
+      expect(box.left).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(320);
+    }
+    for (const name of ['Previous month', 'Next month']) {
+      expectMinTouchTarget(await page.getByRole('button', { name }).boundingBox());
+    }
+    await page.locator('.cal-day:not(:disabled)').first().click();
+    for (const slot of await page.locator('.slot').all()) {
+      expectMinTouchTarget(await slot.boundingBox());
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  });
+});
+
 test.describe('desktop: one thing per screen @desktop', () => {
   for (const viewport of [
     { width: 1280, height: 800 },
@@ -231,7 +262,7 @@ test.describe('desktop: one thing per screen @desktop', () => {
             ? parseFloat(getComputedStyle(document.querySelector('.home .hero .wrap')!).paddingLeft)
             : 0;
           const content = (wrap?.width ?? 0) - 2 * pad;
-          const heroParts = ['.top-line', 'h1', '.lede', '.cta', '.note'].map((s) =>
+          const heroParts = ['h1', '.lede', '.cta', '.note'].map((s) =>
             rect(document.querySelector(`.home .hero ${s}`)),
           );
           const heroTop = Math.min(...heroParts.map((r) => r?.top ?? 0));
@@ -255,8 +286,14 @@ test.describe('desktop: one thing per screen @desktop', () => {
           };
         });
         expect(m.scrollWidth).toBe(m.vw);
+        // The feature arrows (desktop only) are 44x44.
+        for (const name of ['Previous feature', 'Next feature']) {
+          const arrow = page.getByRole('button', { name });
+          await expect(arrow).toBeVisible();
+          expectMinTouchTarget(await arrow.boundingBox());
+        }
         expect(m.hero).toBeLessThanOrEqual(m.screen);
-        expect(m.heroSection).toBeLessThanOrEqual(m.screen + 1);
+        expect(m.heroSection).toBeLessThanOrEqual(m.screen);
         expect(m.cards).toHaveLength(5);
         for (const card of m.cards) {
           expect(card.h).toBeLessThanOrEqual(m.screen);

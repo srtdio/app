@@ -64,8 +64,13 @@ function recordFrames(): void {
     if (performance.now() - start < 450) requestAnimationFrame(loop);
     else start = -1;
   };
+  // One recording per viewer element: later DOM changes in the same viewer
+  // (the canvas, the counter) never restart it.
+  const seen = new WeakSet<Element>();
   new MutationObserver(() => {
-    if (start >= 0 || document.querySelector('[data-file-viewer="pdf"]') === null) return;
+    const viewer = document.querySelector('[data-file-viewer="pdf"]');
+    if (start >= 0 || viewer === null || seen.has(viewer)) return;
+    seen.add(viewer);
     w.__pdfFrames = [];
     start = performance.now();
     sample();
@@ -136,6 +141,8 @@ async function closeViewer(page: Page): Promise<void> {
 test('a PDF opens with no spinner and no black frame in assets, posts and chat @theme', async ({
   page,
 }) => {
+  // Three flows (assets, a post, chat), each on a cold route in the dev server.
+  test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
   const t = network.world.tables;
   const version = {
@@ -210,7 +217,8 @@ test('a PDF opens with no spinner and no black frame in assets, posts and chat @
   // A post.
   await page.goto(`/posts/${POST_IDS[0]}`);
   const slide = page.getByRole('button', { name: 'View image 1' }).first();
-  await slide.waitFor({ state: 'visible', timeout: 15_000 });
+  // A cold dev server compiles the post route on first visit: allow for it.
+  await slide.waitFor({ state: 'visible', timeout: 30_000 });
   await slide.click();
   await expectNoSpinnerNoBlack(page);
   await closeViewer(page);

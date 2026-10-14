@@ -215,13 +215,12 @@ export default function HomePage() {
     <SiteShell surface="home">
       <section className="hero">
         <div className="wrap in">
-          <p className="top-line">WhatsApp goes back to being WhatsApp.</p>
           <h1 className="d">
             Social media agencies <em>hate WhatsApp.</em>
           </h1>
           <p className="lede">
             Approvals, feedback and files get buried in group chats that never switch off. Sorted
-            gives each client one workspace where every approval stays on record.
+            gives each client one workspace, so WhatsApp goes back to being WhatsApp.
           </p>
           <Cta />
           <div className="note">{NOTE}</div>
