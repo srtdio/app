@@ -126,6 +126,21 @@ describe('FileBubble height is final before the image loads', () => {
     expect(
       reservedRatio({ ...sending, mime: 'video/mp4', local: { ...sending.local!, file: video } }),
     ).toBe(SENDING_RATIO.video);
+    // A sending docx or xlsx reserves the page box; a pptx reserves none.
+    for (const mime of [
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ]) {
+      const file = new File(['x'], 'f', { type: mime });
+      expect(reservedRatio({ ...sending, mime, local: { ...sending.local!, file } })).toBe(
+        SENDING_RATIO.pdf,
+      );
+    }
+    const pptx = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    const deck = new File(['x'], 'd.pptx', { type: pptx });
+    expect(
+      reservedRatio({ ...sending, mime: pptx, local: { ...sending.local!, file: deck } }),
+    ).toBeNull();
   });
 });
 

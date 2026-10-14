@@ -11,6 +11,11 @@ import {
   type PdfLoadingTaskLike,
   type ThumbnailDeps,
 } from '@/lib/files/thumbnail';
+import { handleOfficeRequest } from '@/lib/files/office/handle';
+import type { OfficeWorkerLike } from '@/lib/files/office/run';
+import { docx, encryptedOffice, p, pptx, row, xlsx } from '@/lib/files/office/test-fixtures';
+import { officeThumbnailCanvas } from '@/lib/files/office/thumbnail-draw';
+import { DOCX_MIME, OFFICE_MAX_BYTES, PPTX_MIME, XLSX_MIME } from '@/lib/files/office/types';
 
 // The PDF path runs the real pdf.js legacy build (the one the app ships) on
 // PDFs generated here. Node has no canvas, so pages render into a recording
@@ -76,6 +81,12 @@ function fakeCanvas(): FakeCanvas {
       if (prop in target) return target[prop];
       if (prop === 'canvas') return box;
       if (prop === 'getTransform') return () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+      if (prop === 'measureText') {
+        return (text: string) => {
+          calls.push('measureText');
+          return { width: String(text).length * 9 };
+        };
+      }
       return () => {
         calls.push(String(prop));
         return undefined;
@@ -114,9 +125,47 @@ function deps(over: Partial<ThumbnailDeps> = {}): {
         throw new Error('no video here');
       },
       readBytes: async (file) => new Uint8Array(await file.arrayBuffer()),
+      // The real office drawer; its Worker answers inline (node has no Worker).
+      officeFrame: (file, signal, held) =>
+        officeThumbnailCanvas(
+          file,
+          signal,
+          4000,
+          {
+            createCanvas: () => {
+              const c = fakeCanvas();
+              canvases.push(c);
+              return c.canvas;
+            },
+            readBytes: async (f) => new Uint8Array(await f.arrayBuffer()),
+            createWorker: inlineWorker,
+          },
+          held,
+        ),
       ...over,
     },
   };
+}
+
+/** A Worker stand-in that runs the office handler in-process; counts terminations. */
+const terminations = { count: 0 };
+function inlineWorker(): OfficeWorkerLike {
+  const worker: OfficeWorkerLike = {
+    onmessage: null,
+    onerror: null,
+    postMessage(message) {
+      const response = handleOfficeRequest(message);
+      queueMicrotask(() => worker.onmessage?.({ data: response } as MessageEvent));
+    },
+    terminate() {
+      terminations.count++;
+    },
+  };
+  return worker;
+}
+
+function officeFile(bytes: Uint8Array, name: string, type: string): File {
+  return new File([bytes.slice().buffer as ArrayBuffer], name, { type });
 }
 
 describe('thumbnailBox: width <= 580 (never up), height <= 1160 (crop top)', () => {
@@ -132,13 +181,88 @@ describe('thumbnailBox: width <= 580 (never up), height <= 1160 (crop top)', () 
 });
 
 describe('thumbnailKind', () => {
-  it('pdf and video only', () => {
+  it('pdf, video, docx and xlsx; never pptx or images', () => {
     expect(thumbnailKind('application/pdf')).toBe('pdf');
     expect(thumbnailKind('video/mp4')).toBe('video');
+    expect(thumbnailKind(DOCX_MIME)).toBe('docx');
+    expect(thumbnailKind(XLSX_MIME)).toBe('xlsx');
+    expect(thumbnailKind(PPTX_MIME)).toBeNull();
     expect(thumbnailKind('image/png')).toBeNull();
-    expect(
-      thumbnailKind('application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
-    ).toBe(null);
+  });
+});
+
+describe('makeThumbnail: docx and xlsx (decision 154)', () => {
+  const ALLOWED = new Set(['fillRect', 'fillText', 'measureText']);
+
+  it('a docx draws a white page of text: <= 580 wide, <= 300 KiB, drawing calls only', async () => {
+    const { deps: d, canvases } = deps();
+    const file = officeFile(
+      docx({ body: p('Diwali campaign brief', 'Title') + p('Drive festive gifting orders.') }),
+      'brief.docx',
+      DOCX_MIME,
+    );
+    const before = terminations.count;
+    const result = await makeThumbnail(file, new AbortController().signal, d);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.width).toBe(580);
+    expect(result.height).toBeLessThanOrEqual(1160);
+    expect(result.blob.size).toBeLessThanOrEqual(THUMBNAIL_MAX_BYTES);
+    expect(result.pageCount).toBeUndefined();
+    const calls = canvases[0]?.calls ?? [];
+    expect(calls).toContain('fillText');
+    expect(calls.every((c) => ALLOWED.has(c))).toBe(true);
+    expect(terminations.count).toBe(before + 1);
+    // Released in the finally.
+    expect(canvases[0]?.canvas.width).toBe(0);
+  });
+
+  it('an xlsx draws its top-left grid: <= 580 wide, <= 300 KiB', async () => {
+    const { deps: d, canvases } = deps();
+    const file = officeFile(
+      xlsx([
+        { name: 'Calendar', xml: `<sheetData>${row(1, ['A', 'Date'], ['B', 5000])}</sheetData>` },
+      ]),
+      'calendar.xlsx',
+      XLSX_MIME,
+    );
+    const result = await makeThumbnail(file, new AbortController().signal, d);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.width).toBe(580);
+    expect(result.height).toBe(754);
+    expect(result.blob.size).toBeLessThanOrEqual(THUMBNAIL_MAX_BYTES);
+    expect((canvases[0]?.calls ?? []).every((c) => ALLOWED.has(c))).toBe(true);
+  });
+
+  it('pptx has no thumbnail; a pptx package posing as docx is NoThumbnail too', async () => {
+    const { deps: d } = deps();
+    const asPptx = officeFile(pptx(), 'deck.pptx', PPTX_MIME);
+    expect(await makeThumbnail(asPptx, new AbortController().signal, d)).toEqual({
+      ok: false,
+      reason: 'unsupported',
+    });
+    const posing = officeFile(pptx(), 'deck.docx', DOCX_MIME);
+    expect(await makeThumbnail(posing, new AbortController().signal, d)).toEqual({
+      ok: false,
+      reason: 'failed',
+    });
+  });
+
+  it('over 20 MiB, corrupt or password-protected: NoThumbnail', async () => {
+    const { deps: d } = deps();
+    const big = officeFile(new Uint8Array(OFFICE_MAX_BYTES + 1), 'big.docx', DOCX_MIME);
+    expect(await makeThumbnail(big, new AbortController().signal, d)).toEqual({
+      ok: false,
+      reason: 'too_large',
+    });
+    const corrupt = officeFile(new TextEncoder().encode('garbage'), 'bad.xlsx', XLSX_MIME);
+    expect((await makeThumbnail(corrupt, new AbortController().signal, d)).ok).toBe(false);
+    const locked = officeFile(encryptedOffice(), 'locked.docx', DOCX_MIME);
+    expect(await makeThumbnail(locked, new AbortController().signal, d)).toEqual({
+      ok: false,
+      reason: 'failed',
+    });
   });
 });
 
@@ -195,13 +319,13 @@ describe('makeThumbnail', () => {
 
   it('any other kind is no thumbnail', async () => {
     const { deps: d } = deps();
-    const docx = new File(['x'], 'a.docx', {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
-    expect(await makeThumbnail(docx, new AbortController().signal, d)).toEqual({
-      ok: false,
-      reason: 'unsupported',
-    });
+    for (const type of [PPTX_MIME, 'image/png', 'text/plain']) {
+      const other = new File(['x'], 'a.bin', { type });
+      expect(await makeThumbnail(other, new AbortController().signal, d)).toEqual({
+        ok: false,
+        reason: 'unsupported',
+      });
+    }
   });
 
   it('a broken PDF is no thumbnail (never throws)', async () => {

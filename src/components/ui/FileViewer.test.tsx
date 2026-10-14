@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -7,6 +10,7 @@ import {
   FileViewerFallback,
   FileViewerSheet,
   LIVE_PAGE_WINDOW,
+  OfficeTooLargeError,
   PREVIEW_UNAVAILABLE,
   VIEWER_ERROR,
   clampZoom,
@@ -14,6 +18,7 @@ import {
   downloadFile,
   isLivePage,
   localFileSource,
+  officeState,
   pageCounter,
   remoteFileSource,
   renderWidthPx,
@@ -21,9 +26,21 @@ import {
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
+import { runOffice } from '@/lib/files/office/run';
+import {
+  DOCX_MIME,
+  OFFICE_MAX_BYTES,
+  XLSX_MIME,
+  type OfficeResponse,
+} from '@/lib/files/office/types';
+
+// The office runner is replaced: jsdom has no Worker (its own tests cover it).
+vi.mock('@/lib/files/office/run', () => ({ runOffice: vi.fn() }));
+const mockedRun = vi.mocked(runOffice);
 
 const source: FileViewerSource = {
   pdfBytes: async () => new Uint8Array(),
+  officeBytes: async () => ({ bytes: new Uint8Array([1]), mime: DOCX_MIME }),
   videoLink: async () => ({ url: 'https://signed/v', release: () => {} }),
   downloadLink: async () => ({ url: 'https://signed/d', release: () => {} }),
 };
@@ -85,8 +102,8 @@ describe('pure helpers', () => {
 });
 
 describe('the sheet by kind', () => {
-  it('office: "Preview not available yet", name, size and Download', () => {
-    const html = sheet('office', 'light');
+  it('any other file: "Preview not available yet", name, size and Download', () => {
+    const html = sheet('file', 'light');
     expect(html).toContain(PREVIEW_UNAVAILABLE);
     expect(html).toContain('Brief for the Q3 launch.docx');
     expect(html).toContain('<span class="font-mono">47 KB</span>');
@@ -94,13 +111,10 @@ describe('the sheet by kind', () => {
     expect(html).toContain('data-viewer-unavailable=""');
   });
 
-  it('any other file gets the same slot as office', () => {
-    expect(sheet('file', 'light')).toContain(PREVIEW_UNAVAILABLE);
-  });
-
-  it('pdf and video start on a spinner, never blank', () => {
+  it('pdf, video and office start on a spinner, never blank', () => {
     expect(sheet('pdf', 'light')).toContain('aria-label="Loading"');
     expect(sheet('video', 'light')).toContain('aria-label="Loading"');
+    expect(sheet('office', 'light')).toContain('aria-label="Loading"');
   });
 
   it('top bar: close X, the name, Download; 44px buttons, no selection on chrome', () => {
@@ -114,8 +128,10 @@ describe('the sheet by kind', () => {
 
   it('motion is translateY only (no X, no rotate)', () => {
     expect(sheet('pdf', 'light')).toContain('transform:translateY(0px)');
-    const src = readFileSync(fileURLToPath(new URL('./FileViewer.tsx', import.meta.url)), 'utf8');
-    expect(src).not.toMatch(/translateX|translate3d|rotate\(|backdrop-filter|backdrop-blur/);
+    for (const file of ['FileViewer.tsx', 'viewers/WordViewer.tsx', 'viewers/SheetViewer.tsx']) {
+      const src = readFileSync(join(process.cwd(), 'src/components/ui', file), 'utf8');
+      expect(src).not.toMatch(/translateX|translate3d|rotate\(|backdrop-filter|backdrop-blur/);
+    }
   });
 
   it('light and dark: the same overlay-token markup, no hex, no dark: variants', () => {
@@ -144,7 +160,11 @@ describe('sources: a fresh read on every open', () => {
   } {
     const fetcher = vi.fn<PresignDeps['fetcher']>(async (_input, init) => {
       const body = JSON.parse(String(init?.body)) as { stream?: boolean };
-      if (body.stream === true) return new Response(new Uint8Array([37, 80, 68, 70]));
+      if (body.stream === true) {
+        return new Response(new Uint8Array([37, 80, 68, 70]), {
+          headers: { 'Content-Type': 'application/pdf' },
+        });
+      }
       return new Response(
         JSON.stringify({ url: 'https://signed/x', expires_at: '2999-01-01T00:00:00Z' }),
       );
@@ -219,5 +239,192 @@ describe('sources: a fresh read on every open', () => {
       },
     };
     expect(await downloadFile(failing, 'deck.pdf')).toBe(false);
+  });
+});
+
+describe('office: docx and xlsx open in place, pptx keeps the fallback', () => {
+  const DOC: OfficeResponse = {
+    ok: true,
+    op: 'view',
+    result: {
+      kind: 'docx',
+      pages: ['<p>Hello page one</p>'],
+      pageCount: null,
+      aspect: 1.29,
+      margins: [0.1, 0.1, 0.1, 0.1],
+    },
+  };
+  const BOOK: OfficeResponse = {
+    ok: true,
+    op: 'view',
+    result: {
+      kind: 'xlsx',
+      totalSheets: 1,
+      sheets: [
+        {
+          name: 'Calendar',
+          totalRows: 1,
+          shownRows: 1,
+          shownCols: 1,
+          totalCols: 1,
+          colWidths: [64],
+          merges: [],
+          cells: [{ r: 0, c: 0, text: 'Reel', kind: 's' }],
+        },
+      ],
+    },
+  };
+
+  it('officeState routes each Worker answer', () => {
+    expect(officeState(DOC).kind).toBe('docx');
+    expect(officeState(BOOK).kind).toBe('xlsx');
+    expect(officeState({ ok: true, op: 'view', result: { kind: 'unsupported' } })).toEqual({
+      kind: 'unavailable',
+    });
+    for (const reason of ['too_large', 'locked', 'corrupt', 'timeout', 'failed'] as const) {
+      expect(officeState({ ok: false, reason })).toEqual({ kind: 'error' });
+    }
+  });
+
+  async function mount(
+    officeSource: FileViewerSource,
+  ): Promise<{ root: HTMLElement; unmount: () => void }> {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <FileViewerSheet name="file.docx" kind="office" source={officeSource} onClose={() => {}} />,
+      );
+    });
+    // Let the lazy viewer chunk resolve and render.
+    for (
+      let i = 0;
+      i < 20 &&
+      host.querySelector(
+        '[data-word-frame], [data-sheet-viewer], [data-viewer-error], [data-viewer-unavailable]',
+      ) === null;
+      i++
+    ) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 10));
+      });
+    }
+    return {
+      root: host,
+      unmount: () => {
+        act(() => root.unmount());
+        host.remove();
+      },
+    };
+  }
+
+  it('docx routes to the Word viewer: sandbox="" iframe with the CSP in srcdoc', async () => {
+    mockedRun.mockResolvedValueOnce(DOC);
+    const { root, unmount } = await mount(source);
+    const frame = root.querySelector('iframe');
+    expect(frame).not.toBeNull();
+    expect(frame?.getAttribute('sandbox')).toBe('');
+    expect(frame?.getAttribute('srcdoc')).toContain('Content-Security-Policy');
+    expect(frame?.getAttribute('srcdoc')).toContain('Hello page one');
+    expect(mockedRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({ op: 'view', mime: DOCX_MIME, timeoutMs: 10_000 }),
+    );
+    // Closing aborts the parse (the runner terminates its Worker on abort).
+    const signal = mockedRun.mock.lastCall?.[0].signal;
+    unmount();
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('xlsx routes to the Sheet viewer', async () => {
+    mockedRun.mockResolvedValueOnce(BOOK);
+    const { root, unmount } = await mount({
+      ...source,
+      officeBytes: async () => ({ bytes: new Uint8Array([1]), mime: XLSX_MIME }),
+    });
+    expect(root.querySelector('[data-sheet-viewer]')).not.toBeNull();
+    expect(root.textContent).toContain('Reel');
+    expect(root.querySelector('[data-word-frame]')).toBeNull();
+    unmount();
+  });
+
+  it('pptx (no preview from the server) still shows "Preview not available yet" and Download', async () => {
+    mockedRun.mockClear();
+    const { root, unmount } = await mount({ ...source, officeBytes: async () => null });
+    expect(root.textContent).toContain(PREVIEW_UNAVAILABLE);
+    expect(root.querySelector('[data-viewer-unavailable] button')?.textContent).toContain(
+      'Download',
+    );
+    expect(mockedRun).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('a timeout, a locked or corrupt file, or a byte failure is the error card with Download', async () => {
+    mockedRun.mockResolvedValueOnce({ ok: false, reason: 'timeout' });
+    const first = await mount(source);
+    expect(first.root.querySelector('[data-viewer-error]')?.textContent).toContain(VIEWER_ERROR);
+    expect(first.root.textContent).toContain('Download');
+    first.unmount();
+    const second = await mount({
+      ...source,
+      officeBytes: async () => {
+        throw new OfficeTooLargeError();
+      },
+    });
+    expect(second.root.querySelector('[data-viewer-error]')).not.toBeNull();
+    second.unmount();
+  });
+
+  it('remote: a fresh stream read per open; 400 (pptx) is no preview; over 20 MiB is refused', async () => {
+    const statuses: Array<{ status: number; type?: string; length?: number }> = [
+      { status: 200, type: DOCX_MIME },
+      { status: 200, type: XLSX_MIME },
+      { status: 400 },
+      { status: 200, type: DOCX_MIME, length: OFFICE_MAX_BYTES + 1 },
+    ];
+    const fetcher = vi.fn<PresignDeps['fetcher']>(async () => {
+      const next = statuses.shift();
+      if (next === undefined || next.status !== 200)
+        return new Response('{}', { status: next?.status ?? 500 });
+      const headers: Record<string, string> = { 'Content-Type': next.type ?? '' };
+      if (next.length !== undefined) headers['Content-Length'] = String(next.length);
+      return new Response(new Uint8Array([80, 75, 3, 4]), { headers });
+    });
+    const remote = remoteFileSource(
+      new PresignCache({
+        endpoint: 'https://asset-read',
+        getAccessToken: async () => 'tok',
+        fetcher,
+      }),
+      'v9',
+    );
+    const signal = new AbortController().signal;
+    expect(await remote.officeBytes(signal)).toEqual({
+      bytes: new Uint8Array([80, 75, 3, 4]),
+      mime: DOCX_MIME,
+    });
+    expect((await remote.officeBytes(signal))?.mime).toBe(XLSX_MIME);
+    expect(await remote.officeBytes(signal)).toBeNull();
+    await expect(remote.officeBytes(signal)).rejects.toBeInstanceOf(OfficeTooLargeError);
+    const bodies = fetcher.mock.calls.map((c) => JSON.parse(String(c[1]?.body)) as unknown);
+    expect(bodies).toEqual(
+      Array.from({ length: 4 }, () => ({ asset_version_id: 'v9', stream: true })),
+    );
+  });
+
+  it("local: the sender's own file, refused over 20 MiB before reading", async () => {
+    const small = localFileSource(
+      new File([new Uint8Array([1, 2])], 'a.docx', { type: DOCX_MIME }),
+    );
+    expect(await small.officeBytes(new AbortController().signal)).toEqual({
+      bytes: new Uint8Array([1, 2]),
+      mime: null,
+    });
+    const big = localFileSource(
+      new File([new Uint8Array(OFFICE_MAX_BYTES + 1)], 'b.docx', { type: DOCX_MIME }),
+    );
+    await expect(big.officeBytes(new AbortController().signal)).rejects.toBeInstanceOf(
+      OfficeTooLargeError,
+    );
   });
 });

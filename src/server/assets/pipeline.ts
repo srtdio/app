@@ -583,7 +583,7 @@ export function parsePageCount(field: string | null): number | null | 'invalid' 
 
 /**
  * Validate a thumbnail part against the server's own reading of it: the
- * parent version must be a pdf or video, the bytes a JPEG (FF D8 FF) of at
+ * parent version must be a pdf, video, docx or xlsx (never pptx), the bytes a JPEG (FF D8 FF) of at
  * most 300 KiB whose SOF frame (parsed here) is at most 580 x 1160, and the
  * page count absent or 1..10000. Pure; the reason names the first miss.
  */
@@ -593,7 +593,15 @@ export function checkThumbnail(
   | { ok: true; width: number; height: number; pageCount: number | null }
   | { ok: false; reason: string } {
   const parent = normalizeMime(input.summary.mimeType);
-  const kind = parent === 'application/pdf' ? 'pdf' : parent.startsWith('video/') ? 'video' : null;
+  const kind =
+    parent === 'application/pdf'
+      ? 'pdf'
+      : parent.startsWith('video/')
+        ? 'video'
+        : parent === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+            parent === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          ? 'office'
+          : null;
   if (kind === null) return { ok: false, reason: 'parent_not_pdf_or_video' };
   const { bytes } = input;
   if (bytes.byteLength === 0 || bytes.byteLength > THUMBNAIL_MAX_BYTES) {
