@@ -22,13 +22,14 @@
 // Swipe to remove (agency, use-row-swipe.ts): a row swiped left shows a red
 // Remove; the write waits for the Undo toast. A one-time peek teaches it. A
 // plan whose range holds today opens with today's group at the top.
-// Laptop (md and up): the screens dock as a 440px full-height panel beside
-// the chat (translateX in); agency rows get a grip (mouse or touch, 4px lifts),
-// calendar and dustbin buttons, a right-click day menu and the keyboard move
-// (plan-keyboard-move.ts); swipe and its peek are off; every day change toasts
-// with Undo. Touch keeps the long-press drag at every width.
-// Motion: drag on translateY and scale only (no scale on a laptop); the page, menu and sheets on
-// translateY; plan rows alone also move on translateX (the swipe and its
+// Laptop (md and up): the screens dock as a full-height panel beside the chat
+// (440px from 972px, 360px below; translateX in); agency rows get a grip
+// (mouse or touch, 4px lifts), calendar and dustbin buttons, a right-click day
+// menu and the keyboard move (plan-keyboard-move.ts); swipe and its peek are
+// off. Every day change toasts; Undo only when no tick was reset. Touch keeps
+// the long-press drag at every width.
+// Motion: drag on translateY and scale only (no scale on a laptop); the page,
+// menu and sheets on translateY; plan rows alone also move on translateX (the swipe and its
 // peek), and a removed row collapses on height. Tokens only.
 
 import {
@@ -123,8 +124,6 @@ import {
   keepApprovalBody,
   keepApprovalTitle,
   moveAsksKeep,
-  movedKeptToast,
-  movedToast,
   planHeaderSubtitle,
   planProgressView,
   planSendAction,
@@ -173,7 +172,7 @@ import {
   DROPPED,
   MOVE_CANCELLED,
   PICKED_UP,
-  movedPipelineToast,
+  dayMoveToast,
   othersIn,
   previewGroups,
   rowKeyIntent,
@@ -220,6 +219,7 @@ import { workspaceTimeZone } from '@/lib/chat/time-format';
 import { HISTORY_STEP_KEYS, useHistoryStep } from '@/lib/chat/use-history-step';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
+import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { logger } from '@/lib/logger';
 import { DUR_BASE_MS, DUR_SLOW_MS } from '@/lib/motion';
@@ -242,60 +242,52 @@ import {
 // Shared pieces
 // ---------------------------------------------------------------------------
 
-/** The app's laptop breakpoint (Tailwind md). */
-export const PLAN_DESKTOP_QUERY = '(min-width: 768px)';
+/**
+ * The laptop panel's width: 440px from 972px, 360px below (768 to 971px), so
+ * the chat's channel list stays clear down to 892px. CSS only, so the width is
+ * right on the first frame and a resize across 972px changes it with no
+ * motion.
+ */
+export const PLAN_PANEL_WIDTH = 'w-[360px] min-[972px]:w-[440px]';
 
 /**
- * Whether the plan surfaces take their laptop form (md and up): read before
- * the first paint, so the panel's first frame is already its final box. False
- * where there is no window (the unit env renders the phone form).
+ * Anything other than a plan panel that owns an Escape pressed on the page
+ * itself (focus on body): a dialog or sheet, a menu, an expanded control
+ * (the status drawer), chat selection, a drag. Pure over the document.
  */
-export function usePlanDesktop(): boolean {
-  const [matches, setMatches] = useState<boolean>(
-    () => typeof window !== 'undefined' && window.matchMedia(PLAN_DESKTOP_QUERY).matches,
-  );
-  useEffect(() => {
-    const list = window.matchMedia(PLAN_DESKTOP_QUERY);
-    const onChange = (): void => setMatches(list.matches);
-    onChange();
-    list.addEventListener('change', onChange);
-    return () => list.removeEventListener('change', onChange);
-  }, []);
-  return matches;
-}
-
-/** The plan panel's fixed laptop width (px). */
-export const PLAN_PANEL_PX = 440;
+export const OTHER_ESCAPE_OWNERS =
+  '[role="dialog"], [role="menu"], [aria-modal="true"], [aria-expanded="true"], [data-selection-cancel], [data-selecting-text], [data-plan-drag-card]';
 
 /**
- * What an Escape must close first, so the panel itself stays open: a field
- * being edited, a drag, a keyboard pick-up, a menu or popover, a sheet. Pure
- * over the document.
+ * In-flow viewers inside a panel that close on a window-level Escape (the
+ * embedded post's image viewer): the panel hands them the key on window only,
+ * so it still never reaches the chat's document listeners.
  */
-export function planEscapeTaken(doc: Document, target: EventTarget | null): boolean {
+export const IN_PANEL_ESCAPE_OWNERS = '[aria-label="Image viewer"]';
+
+/** Whether a keydown target is a text field (Escape there leaves the field). Pure. */
+export function isTextField(target: EventTarget | null): boolean {
   const el = target as Partial<HTMLElement> | null;
-  if (
-    el?.isContentEditable === true ||
-    ['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName ?? '')
-  ) {
-    return true;
-  }
   return (
-    doc.querySelector(
-      '[data-plan-drag-card], [data-plan-row-picked], [role="menu"], [role="dialog"][aria-modal="true"]',
-    ) !== null
+    el?.isContentEditable === true || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName ?? '')
   );
 }
 
 /**
  * A plan surface. Phone (below md): a full page over the chat that slides up
  * on translateY, header with a 44px back (or close) button. Laptop (md and
- * up): a right-docked panel, 440px wide and full height from its first frame,
- * border-left, no scrim, not modal (role complementary), entering on
- * translateX 24px to 0 with opacity (reduced motion: none), a close X in the
- * header, and Escape closes the topmost panel unless something inside takes
- * it first. Both: a scrolling body and an optional footer, rendered into the
- * body so no ancestor clips it; sheets (z-50) stack above it.
+ * up): a right-docked panel, full height and at its final width from its
+ * first frame (PLAN_PANEL_WIDTH), border-left, a left-edge shadow while it
+ * overlays (below 1180px), no scrim, not modal (role complementary), entering
+ * on translateX 24px to 0 with opacity (reduced motion: none), a close X in
+ * the header. Opening focuses its heading; closing hands focus back to what
+ * opened it. Escape: a key inside the panel is the panel's alone (it never
+ * reaches the chat): an in-flow viewer inside it first (handed the key on
+ * window only), then the screen's own layer (`onEscape`), a text field next
+ * (it is left), else Back. On the page itself (focus on body) it closes
+ * the topmost panel only when no other surface is open. Both: a scrolling
+ * body and an optional footer, rendered into the body so no ancestor clips
+ * it; sheets (z-50) stack above it.
  */
 export function PlanPage(props: {
   open: boolean;
@@ -310,6 +302,8 @@ export function PlanPage(props: {
   onDismiss?: () => void;
   /** Laptop: the header X's label. */
   closeLabel?: string;
+  /** Laptop: Escape for an inner layer (drag, pick-up, popover, menu, rename); true when taken. */
+  onEscape?: () => boolean;
   /** The slide in has ended (at once when there is no slide, as under reduced motion). */
   onEntered?: () => void;
   footer?: ReactNode;
@@ -326,28 +320,72 @@ export function PlanPage(props: {
 }): ReactElement | null {
   const [rendered, setRendered] = useState(props.open);
   const [entered, setEntered] = useState(false);
-  const desktop = usePlanDesktop();
+  const desktop = useMediaQuery(LAPTOP_QUERY);
   const pageRef = useRef<HTMLDivElement>(null);
   const onEnteredRef = useRef(props.onEntered);
   onEnteredRef.current = props.onEntered;
   const onBackRef = useRef(props.onBack);
   onBackRef.current = props.onBack;
-  // Laptop: Escape closes the topmost open panel (the Item screen steps back
-  // to the list) unless a field, drag, pick-up, menu or sheet takes it first.
-  // Capture phase, so this reads the page before any of those closes.
+  const onEscapeRef = useRef(props.onEscape);
+  onEscapeRef.current = props.onEscape;
+  // Laptop Escape. Inside the panel: the panel's alone (stopped at its edge,
+  // so no chat handler sees it), unless a modal opened from it holds the key
+  // (it has its own handler). On the page (focus on body): the topmost panel,
+  // only while nothing else that takes Escape is open.
   useEffect(() => {
-    if (!desktop || !props.open) return;
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      const el = pageRef.current;
-      const panels = document.querySelectorAll('[data-plan-panel]');
-      if (el === null || panels[panels.length - 1] !== el) return;
-      if (planEscapeTaken(document, event.target)) return;
+    const el = pageRef.current;
+    if (!desktop || !props.open || el === null) return;
+    const escape = (): void => {
+      if (onEscapeRef.current?.() === true) return;
       onBackRef.current();
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [desktop, props.open]);
+    const inside = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || document.querySelector('[aria-modal="true"]') !== null) return;
+      event.stopPropagation();
+      event.preventDefault();
+      if (el.querySelector(IN_PANEL_ESCAPE_OWNERS) !== null) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        return;
+      }
+      if (onEscapeRef.current?.() === true) return;
+      if (isTextField(event.target)) {
+        (event.target as HTMLElement).blur();
+        el.querySelector<HTMLElement>('[data-plan-heading]')?.focus({ preventScroll: true });
+        return;
+      }
+      onBackRef.current();
+    };
+    const onPage = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.target !== document.body) return;
+      const panels = document.querySelectorAll('[data-plan-panel]');
+      if (panels[panels.length - 1] !== el) return;
+      if (document.querySelector(OTHER_ESCAPE_OWNERS) !== null) return;
+      escape();
+    };
+    el.addEventListener('keydown', inside);
+    document.addEventListener('keydown', onPage);
+    return () => {
+      el.removeEventListener('keydown', inside);
+      document.removeEventListener('keydown', onPage);
+    };
+  }, [desktop, props.open, rendered]);
+  // Laptop focus: the heading on open (the chat never scrolls), and back to
+  // whatever opened the panel on close, when focus is still in the panel or
+  // nowhere, and that element is not inside a panel that is closing too.
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!desktop || !props.open || el === null) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    el.querySelector<HTMLElement>('[data-plan-heading]')?.focus({ preventScroll: true });
+    return () => {
+      const now = document.activeElement;
+      if (opener === null || !opener.isConnected) return;
+      if (now !== null && now !== document.body && !el.contains(now)) return;
+      const host = opener.closest('[data-plan-page]');
+      if (host !== null && !host.hasAttribute('data-plan-panel')) return;
+      opener.focus({ preventScroll: true });
+    };
+  }, [desktop, props.open, rendered]);
   useEffect(() => {
     const el = pageRef.current;
     if (!entered || el === null) return;
@@ -388,7 +426,10 @@ export function PlanPage(props: {
       className={cn(
         desktop
           ? // Laptop: the box is final on its first frame; axis: translateX only.
-            'fixed inset-y-0 right-0 z-40 flex flex-col border-l border-border bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-xl transition-[transform,opacity] duration-base motion-reduce:transition-none min-[1180px]:shadow-none'
+            cn(
+              'fixed inset-y-0 right-0 z-40 flex flex-col border-l border-border bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] [box-shadow:var(--shadow-panel-left)] transition-[transform,opacity] duration-base motion-reduce:transition-none min-[1180px]:[box-shadow:none]',
+              PLAN_PANEL_WIDTH,
+            )
           : 'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] transition-transform duration-slow ease-enter motion-reduce:transition-none',
         desktop
           ? entered
@@ -398,7 +439,6 @@ export function PlanPage(props: {
             ? 'translate-y-0'
             : 'translate-y-full',
       )}
-      {...(desktop ? { style: { width: PLAN_PANEL_PX } } : {})}
     >
       <header
         className={cn(
@@ -416,7 +456,11 @@ export function PlanPage(props: {
             {props.backIcon ?? <IconChevronLeft size={22} />}
           </button>
         ) : null}
-        <div data-plan-page-titles="" className="flex min-w-0 flex-1 flex-col">
+        <div
+          data-plan-page-titles=""
+          {...(desktop ? { 'data-plan-heading': '', tabIndex: -1 } : {})}
+          className="flex min-w-0 flex-1 flex-col rounded-md focus:outline-none"
+        >
           {props.titleSlot ?? (
             <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">
               {props.title}
@@ -1020,7 +1064,7 @@ export function PlanScreen(props: {
   const agency = side === 'agency' && bundle !== null;
   // Laptop (md and up): the docked panel, the grip, row buttons, the day
   // popover and the keyboard move replace swipe and its peek (agency only).
-  const desktop = usePlanDesktop();
+  const desktop = useMediaQuery(LAPTOP_QUERY);
   const deskAgency = desktop && agency;
   // Delete is for the plan's creator or a workspace owner/admin: one role read
   // per open, agency side only.
@@ -1293,25 +1337,26 @@ export function PlanScreen(props: {
       toast.show({ title: planWriteErrorCopy(result.error.message, MOVE_FAILED) });
       return;
     }
-    if (dayChanged && !quiet && desktop) {
-      // Laptop: every day change offers Undo (one plan_item_move back to the
-      // exact day and index it left).
-      const post = bundle.items.find((i) => i.id === moved)?.kind === 'post';
+    if (dayChanged && !quiet) {
+      // Every day change toasts. Undo (one plan_item_move back to the exact
+      // day and index it left) only when nothing was reset: a client's tick
+      // cannot be put back by the agency.
+      const spec = dayMoveToast(
+        dayHeaderOf(toDay),
+        bundle.items.find((i) => i.id === moved)?.kind === 'post',
+        !keep && hadTicks,
+      );
       toast.show({
-        title: post
-          ? movedPipelineToast(dayHeaderOf(toDay))
-          : keep
-            ? movedKeptToast(dayHeaderOf(toDay))
-            : movedToast(dayHeaderOf(toDay), hadTicks),
-        durationMs: SLOT_UNDO_MS,
-        action: {
-          label: SLOT_UNDO,
-          onPress: () => void commitMoveRef.current(moved, from.day, from.index, keep, true),
-        },
-      });
-    } else if (dayChanged && !quiet) {
-      toast.show({
-        title: keep ? movedKeptToast(dayHeaderOf(toDay)) : movedToast(dayHeaderOf(toDay), hadTicks),
+        title: spec.title,
+        ...(spec.undo
+          ? {
+              durationMs: SLOT_UNDO_MS,
+              action: {
+                label: SLOT_UNDO,
+                onPress: () => void commitMoveRef.current(moved, from.day, from.index, keep, true),
+              },
+            }
+          : {}),
       });
     }
     dispatchPlanChanged(window, planId);
@@ -1388,6 +1433,10 @@ export function PlanScreen(props: {
       },
     }),
   );
+  const desktopRef = useRef(desktop);
+  desktopRef.current = desktop;
+  // What a refocus aims at next render (a CSS selector inside the list).
+  const refocus = useRef<string | null>(null);
   const removeRow = (id: string): void => {
     if (!agency || gone.has(id) || collapsing.has(id)) return;
     setOpenSwipe(null);
@@ -1414,6 +1463,8 @@ export function PlanScreen(props: {
         onPress: () => {
           if (remover.pending() === id && remover.undo()) {
             removePlan.current.delete(id);
+            // Laptop: focus returns to the restored row.
+            if (desktopRef.current) refocus.current = `button[data-plan-row="${id}"]`;
             unhide(id);
           }
         },
@@ -1452,29 +1503,82 @@ export function PlanScreen(props: {
     withRemove: boolean;
   } | null>(null);
   const [pick, setPick] = useState<{ itemId: string; from: DayIndex; at: DayIndex } | null>(null);
+  const pickRef = useRef(pick);
+  pickRef.current = pick;
   const [announce, setAnnounce] = useState('');
-  const refocus = useRef<string | null>(null);
   useEffect(() => {
     if (deskAgency) return;
     setPopover(null);
     setPick(null);
   }, [deskAgency]);
+  // A pick-up never outlives its row's focus: nothing unsaved stays on screen.
+  const cancelPick = useCallback((): void => {
+    if (pickRef.current === null) return;
+    pickRef.current = null;
+    setPick(null);
+    setAnnounce(MOVE_CANCELLED);
+  }, []);
+  const pickedId = pick?.itemId ?? null;
+  useEffect(() => {
+    if (pickedId === null) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    // A step re-renders the row and focus is put back before this check runs.
+    const onFocusOut = (): void => {
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const now = document.activeElement;
+        if (!(now instanceof HTMLElement && now.matches(`button[data-plan-row="${pickedId}"]`))) {
+          cancelPick();
+        }
+      }, 0);
+    };
+    document.addEventListener('focusout', onFocusOut, true);
+    return () => {
+      document.removeEventListener('focusout', onFocusOut, true);
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, [pickedId, cancelPick]);
   // The list as shown: a pick-up previews its slot (nothing is written yet).
   const viewGroups = useMemo(
     () => (pick !== null ? previewGroups(groups, pick.itemId, pick.at) : groups),
     [groups, pick],
   );
-  // A pick-up step or a removal re-renders rows: focus follows the row.
+  // A pick-up step, a removal or an Undo re-renders rows: focus follows.
   useLayoutEffect(() => {
-    const id = refocus.current;
+    const target = refocus.current;
     const body = bodyRef.current;
-    if (id === null || body === null) return;
-    const el = body.querySelector<HTMLElement>(`button[data-plan-row="${id}"]`);
+    if (target === null || body === null) return;
+    const el = body.querySelector<HTMLElement>(target);
     if (el === null) return;
     refocus.current = null;
     if (document.activeElement !== el) el.focus({ preventScroll: true });
     el.scrollIntoView({ block: 'nearest' });
   });
+  // Laptop removal: focus goes to the next row, the previous one when it was
+  // last, or the day's Add when the day is now empty; never to the page.
+  const removeWithFocus = (id: string): void => {
+    const body = bodyRef.current;
+    const rows = rowButtons().filter((el) => el.closest('[data-plan-row-collapsing]') === null);
+    const row = body?.querySelector<HTMLElement>(`button[data-plan-row="${id}"]`) ?? null;
+    const at = row !== null ? rows.indexOf(row) : -1;
+    const day = row?.closest('[data-plan-day]');
+    const dayRows = rows.filter((el) => el.closest('[data-plan-day]') === day);
+    const add = day?.querySelector<HTMLElement>('[data-plan-add]') ?? null;
+    const next = rows[at + 1] ?? rows[at - 1] ?? null;
+    refocus.current =
+      dayRows.length === 1 && add !== null
+        ? `[data-plan-day="${day?.getAttribute('data-plan-day') ?? ''}"] [data-plan-add]`
+        : next !== null
+          ? `button[data-plan-row="${next.getAttribute('data-plan-row') ?? ''}"]`
+          : null;
+    if (refocus.current === null) {
+      body
+        ?.closest('[data-plan-page]')
+        ?.querySelector<HTMLElement>('[data-plan-heading]')
+        ?.focus({ preventScroll: true });
+    }
+    removeRow(id);
+  };
   const dayLabelOf = (day: string | null): string => dayHeaderOf(day) ?? NO_DATE_LABEL;
   const isDroppable = (day: string | null): boolean =>
     day === null || (bundle !== null && day >= bundle.plan.starts_on && day <= bundle.plan.ends_on);
@@ -1485,6 +1589,7 @@ export function PlanScreen(props: {
     moveTo(id, day, othersIn(days, id, day));
   };
   const openPopover = (id: string, anchor: PopoverAnchor, withRemove: boolean): void => {
+    if (drag.state !== null) return;
     remover.flush();
     setPopover((prev) =>
       prev !== null && prev.itemId === id && !withRemove && !prev.withRemove
@@ -1518,7 +1623,7 @@ export function PlanScreen(props: {
       if (pick !== null && picking) {
         const next = stepSlot(days, id, pick.at, dir, isDroppable);
         if (next === null) return;
-        refocus.current = id;
+        refocus.current = `button[data-plan-row="${id}"]`;
         setPick({ ...pick, at: next });
         setAnnounce(slotAnnouncement(dayLabelOf(next.day), next.index));
         return;
@@ -1528,36 +1633,63 @@ export function PlanScreen(props: {
       return;
     }
     if (intent === 'pick') {
+      // Space on another row while one is up puts that one back first.
+      if (pick !== null) {
+        cancelPick();
+        return;
+      }
       const from = findItem(days, id);
       if (from === null || !isDroppable(from.day)) return;
       remover.flush();
       setPopover(null);
-      refocus.current = id;
+      refocus.current = `button[data-plan-row="${id}"]`;
       setPick({ itemId: id, from, at: from });
       setAnnounce(PICKED_UP);
       return;
     }
-    if (intent === 'cancel' && pick !== null) {
-      refocus.current = id;
-      setPick(null);
-      setAnnounce(MOVE_CANCELLED);
+    if (intent === 'cancel') {
+      refocus.current = `button[data-plan-row="${id}"]`;
+      cancelPick();
       return;
     }
     if (intent === 'drop' && pick !== null) {
       const to = pick.at;
-      refocus.current = id;
+      refocus.current = `button[data-plan-row="${id}"]`;
+      pickRef.current = null;
       setPick(null);
       setAnnounce(DROPPED);
       if (!isNoop(days, id, to)) moveTo(id, to.day, to.index);
       return;
     }
     if (intent === 'remove') {
-      setPick(null);
-      const rows = rowButtons();
-      const at = rows.indexOf(row);
-      refocus.current = (rows[at + 1] ?? rows[at - 1])?.getAttribute('data-plan-row') ?? null;
-      removeRow(id);
+      cancelPick();
+      removeWithFocus(id);
     }
+  };
+  // Laptop Escape inside the panel: the innermost layer first; true when taken.
+  const onPanelEscape = (): boolean => {
+    if (drag.state !== null) {
+      drag.cancel();
+      return true;
+    }
+    if (pickRef.current !== null) {
+      refocus.current = `button[data-plan-row="${pickRef.current.itemId}"]`;
+      cancelPick();
+      return true;
+    }
+    if (popover !== null) {
+      setPopover(null);
+      return true;
+    }
+    if (menuOpen) {
+      setMenuOpen(false);
+      return true;
+    }
+    if (renaming !== null) {
+      setRenaming(null);
+      return true;
+    }
+    return false;
   };
   // Space must never also click the row (that opens the item).
   const onRowKeyUp = (event: ReactKeyboardEvent<HTMLElement>): void => {
@@ -1843,6 +1975,7 @@ export function PlanScreen(props: {
         backLabel="Back"
         onBack={props.onClose}
         closeLabel="Close plan"
+        onEscape={onPanelEscape}
         bodyRef={bodyRef}
         footer={footer}
         {...(agency
@@ -1953,23 +2086,14 @@ export function PlanScreen(props: {
                     collapsing,
                     pickedId: pick?.itemId ?? null,
                     popoverId: popover !== null && !popover.withRemove ? popover.itemId : null,
-                    onCalendar: (id: string, el: HTMLElement) => {
-                      const r = el.getBoundingClientRect();
-                      openPopover(
-                        id,
-                        {
-                          kind: 'rect',
-                          left: r.left,
-                          right: r.right,
-                          top: r.top,
-                          bottom: r.bottom,
-                        },
-                        false,
-                      );
+                    dragging: drag.state !== null,
+                    onCalendar: (id: string, el: HTMLElement) =>
+                      openPopover(id, { el, point: null }, false),
+                    onMenu: (id: string, row: HTMLElement, x: number, y: number) => {
+                      const r = row.getBoundingClientRect();
+                      openPopover(id, { el: row, point: { dx: x - r.left, dy: y - r.top } }, true);
                     },
-                    onMenu: (id: string, x: number, y: number) =>
-                      openPopover(id, { kind: 'point', x, y }, true),
-                    onRemove: removeRow,
+                    onRemove: removeWithFocus,
                     onKeyDown: onRowKey,
                     onKeyUp: onRowKeyUp,
                   },
@@ -1996,19 +2120,20 @@ export function PlanScreen(props: {
       {deskAgency && popover !== null && props.open ? (
         <PlanDayPopover
           anchor={popover.anchor}
+          bounds={bodyRef.current}
           days={popoverDays}
           current={findItem(planDayIds(groups), popover.itemId)?.day ?? null}
           withRemove={popover.withRemove}
           onPick={(day) => {
             const id = popover.itemId;
             setPopover(null);
-            refocus.current = id;
+            refocus.current = `button[data-plan-row="${id}"]`;
             moveToDay(id, day);
           }}
           onRemove={() => {
             const id = popover.itemId;
             setPopover(null);
-            removeRow(id);
+            removeWithFocus(id);
           }}
           onClose={() => setPopover(null)}
         />
@@ -2434,6 +2559,8 @@ function usePlanDrag(opts: {
 }): {
   state: DragState | null;
   start: (itemId: string, row: HTMLElement, clientY: number) => void;
+  /** Escape: puts the row back while the pointer is down; once released the drop commits. */
+  cancel: () => void;
 } {
   const [state, setState] = useState<DragState | null>(null);
   const stateRef = useRef<DragState | null>(null);
@@ -2489,7 +2616,7 @@ function usePlanDrag(opts: {
     const onTouchMove = (event: TouchEvent): void => event.preventDefault();
     const cancel = (): void => end();
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') cancel();
+      if (event.key === 'Escape' && stateRef.current?.snapTop === null) cancel();
     };
     const onUp = (): void => {
       const current = stateRef.current;
@@ -2556,7 +2683,10 @@ function usePlanDrag(opts: {
     });
   };
 
-  return { state, start };
+  const cancel = (): void => {
+    if (stateRef.current !== null && stateRef.current.snapTop === null) end();
+  };
+  return { state, start, cancel };
 }
 
 /**
@@ -2692,9 +2822,11 @@ export interface PlanRowDesk {
   pickedId: string | null;
   /** The row whose calendar popover is open, or null. */
   popoverId: string | null;
+  /** A drag is running: no menu opens. */
+  dragging: boolean;
   onCalendar: (id: string, anchor: HTMLElement) => void;
-  /** Right-click: the day popover with Remove, at the pointer. */
-  onMenu: (id: string, x: number, y: number) => void;
+  /** Right-click: the day popover with Remove, at the pointer (kept on the row). */
+  onMenu: (id: string, row: HTMLElement, x: number, y: number) => void;
   onRemove: (id: string) => void;
   /** The list's key handlers (rows are the targets). */
   onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void;
@@ -3108,6 +3240,7 @@ function PlanRow(props: {
   const id = props.item.id;
   const wrapRef = useRef<HTMLDivElement>(null);
   const pointerY = useRef(0);
+  const lastPointer = useRef('');
   const hold = useLongPress(() => {
     // A lift ends any swipe of this press.
     rowSwipe.cancel();
@@ -3326,9 +3459,16 @@ function PlanRow(props: {
             ref={wrapRef}
             data-plan-row-wrap={id}
             {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
+            onPointerDownCapture={(event) => {
+              lastPointer.current = event.pointerType;
+            }}
             onContextMenu={(event) => {
               event.preventDefault();
-              desk.onMenu(id, event.clientX, event.clientY);
+              // A touch long-press lifts the row; it never opens the menu.
+              const native = event.nativeEvent as Partial<PointerEvent>;
+              if (native.pointerType === 'touch' || lastPointer.current === 'touch') return;
+              if (desk.dragging || wrapRef.current === null) return;
+              desk.onMenu(id, wrapRef.current, event.clientX, event.clientY);
             }}
             className={cn(
               'group flex w-full min-w-0 items-start gap-1',

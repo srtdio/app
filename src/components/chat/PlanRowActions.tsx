@@ -22,7 +22,9 @@ export const GRIP_LIFT_PX = 4;
 
 /**
  * The 28x44 drag handle. Shown on row hover and on keyboard focus within the
- * row (the row wrapper is the `group`); always laid out, so nothing shifts.
+ * row (the row wrapper is the `group`); where nothing hovers (a touch laptop,
+ * an iPad in landscape) it always shows, muted. Always laid out, so nothing
+ * shifts.
  * Not a tab stop: the keyboard moves a row with Space on the row itself.
  */
 export function PlanGrip(props: { onLift: (clientY: number) => void }): ReactElement {
@@ -63,7 +65,7 @@ export function PlanGrip(props: { onLift: (clientY: number) => void }): ReactEle
       onPointerDown={onPointerDown}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'flex h-11 w-7 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-md text-fg-3 opacity-0 transition-opacity duration-fast hover:bg-panel-2 group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none',
+        'flex h-11 w-7 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-md text-fg-3 opacity-0 transition-opacity duration-fast hover:bg-panel-2 group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-60',
         NO_TOUCH_SELECT,
       )}
     >

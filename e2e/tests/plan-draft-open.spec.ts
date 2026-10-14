@@ -230,7 +230,14 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
   await dragToDay(page, plan, row, '2026-10-14');
   await expect(keep).toBeVisible();
   await keep.locator('[data-plan-keep-yes]').click();
-  await expect(page.getByText(/^Moved to Wed 14 Oct\.$/)).toBeVisible();
+  // Kept: nothing reset, so the toast offers Undo (a post names the Pipeline date).
+  const kept = page.getByText('Moved to Wed 14 Oct. Pipeline date updated.', { exact: true });
+  await expect(kept).toBeVisible();
+  await expect(
+    kept
+      .locator('xpath=ancestor::div[.//button[@aria-label="Dismiss notification"]][1]')
+      .locator('[data-toast-action]'),
+  ).toHaveText('Undo');
   expect(moves().map((c) => c.args.p_keep_reviews)).toEqual([true]);
   await expect(dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
     1,
@@ -243,7 +250,17 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
   await dragToDay(page, plan, row, '2026-10-15');
   await expect(keep).toBeVisible();
   await keep.locator('[data-plan-keep-no]').click();
-  await expect(page.getByText('Moved to Thu 15 Oct. Its ticks were reset.')).toBeVisible();
+  // Reset: the toast says so and has no Undo (a client's tick cannot be put back).
+  const reset = page.getByText(
+    'Moved to Thu 15 Oct. Pipeline date updated. Its ticks were reset.',
+    { exact: true },
+  );
+  await expect(reset).toBeVisible();
+  await expect(
+    reset
+      .locator('xpath=ancestor::div[.//button[@aria-label="Dismiss notification"]][1]')
+      .locator('[data-toast-action]'),
+  ).toHaveCount(0);
   expect(moves().map((c) => c.args.p_keep_reviews)).toEqual([true, false]);
   await expect(
     plan.locator(`[data-plan-row-wrap="${offer.id}"] [data-plan-slot="client"]`),

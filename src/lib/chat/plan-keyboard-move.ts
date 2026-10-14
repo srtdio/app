@@ -2,7 +2,7 @@
 // picks a row up, Up/Down steps it through every slot of every droppable day
 // (within a day first, then into the next or previous day), Space or Enter
 // drops it (one plan_item_move), Escape puts it back. Also the key map, the
-// live-region lines and the laptop's day-change toast. No React, no reads.
+// live-region lines and the day-change toast. No React, no reads.
 
 import { findItem, moveItem, type DayIds, type DayIndex } from '@/lib/chat/plan-drag';
 import type { PlanWeekGroup } from '@/lib/plan-week';
@@ -19,9 +19,21 @@ export const DROP_HERE = 'Drop here';
 export const KEY_HINTS =
   'Drag handle to move · Space pick up, arrows move, Space drop · Del remove';
 
-/** The laptop toast after a post changes day: "Moved to Wed 14 Oct. Pipeline date updated." Pure. */
-export function movedPipelineToast(dayHeader: string | null): string {
-  return `Moved to ${dayHeader ?? 'No date'}. Pipeline date updated.`;
+/**
+ * The toast after an item changes day, phone and laptop alike: "Moved to Wed
+ * 14 Oct." (a post adds " Pipeline date updated."), and when the move reset
+ * its ticks " Its ticks were reset." with no Undo (the agency cannot put a
+ * client's tick back); a move that reset nothing offers Undo. Pure.
+ */
+export function dayMoveToast(
+  dayHeader: string | null,
+  post: boolean,
+  ticksReset: boolean,
+): { title: string; undo: boolean } {
+  const moved = `Moved to ${dayHeader ?? 'No date'}.${post ? ' Pipeline date updated.' : ''}`;
+  return ticksReset
+    ? { title: `${moved} Its ticks were reset.`, undo: false }
+    : { title: moved, undo: true };
 }
 
 /** The live-region line for a slot: "Wed 14 Oct, position 2". Pure. */

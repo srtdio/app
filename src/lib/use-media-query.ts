@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 
+/** The app's laptop breakpoint (Tailwind md, 768px): the one query every laptop layout reads. */
+export const LAPTOP_QUERY = '(min-width: 768px)';
+
 /**
  * Reactively track a CSS media query. Used where presentation must branch in JS
  * rather than CSS, e.g. a popover that becomes a bottom Sheet (which portals out

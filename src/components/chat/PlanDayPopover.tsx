@@ -3,7 +3,9 @@
 // day marked) anchored under the button, and the right-click menu (the same
 // list plus "Remove from plan" in the danger colour) at the pointer. Placed
 // before paint (no jump), clamped inside the viewport, fixed width; no motion.
-// Escape, Tab or a press outside closes it; Up/Down move between its items.
+// It follows its row on list scroll and window resize, and closes once the row
+// leaves the list's view. Escape (kept from the chat), Tab or a press outside
+// closes it; Up/Down move between its items.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
@@ -13,10 +15,32 @@ import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { MOVE_TO_HEADING, REMOVE_LABEL } from '@/lib/chat/plan-keyboard-move';
 import { cn } from '@/lib/cn';
 
-/** Where the popover opens: under a button (right-aligned to it) or at a point. */
-export type PopoverAnchor =
+/** Where the popover opens, as placed: under a button (right-aligned to it) or at a point. */
+export type PopoverPlace =
   | { kind: 'rect'; left: number; right: number; top: number; bottom: number }
   | { kind: 'point'; x: number; y: number };
+
+/** What it follows: under `el`, or at `point` (offset from el's top-left, the right-click). */
+export interface PopoverAnchor {
+  el: HTMLElement;
+  point: { dx: number; dy: number } | null;
+}
+
+/** The anchor's place now. */
+function placeOf(anchor: PopoverAnchor): PopoverPlace {
+  const r = anchor.el.getBoundingClientRect();
+  return anchor.point === null
+    ? { kind: 'rect', left: r.left, right: r.right, top: r.top, bottom: r.bottom }
+    : { kind: 'point', x: r.left + anchor.point.dx, y: r.top + anchor.point.dy };
+}
+
+/** Whether a row's box has left the list's visible box (either edge). Pure. */
+export function outOfView(
+  row: { top: number; bottom: number },
+  view: { top: number; bottom: number },
+): boolean {
+  return row.bottom <= view.top || row.top >= view.bottom;
+}
 
 /** One day the popover offers. */
 export interface PopoverDay {
@@ -29,24 +53,37 @@ export interface PopoverDay {
 export const POPOVER_WIDTH = 240;
 const EDGE = 8;
 
-/** The popover's top-left for its size and anchor, kept inside the viewport. Pure. */
+/**
+ * The popover's top-left for its size and anchor, kept inside the viewport.
+ * Under a button it never covers the button: below when it fits, else above,
+ * else on the roomier side with its height capped there (it scrolls). Pure.
+ */
 export function placePopover(
-  anchor: PopoverAnchor,
+  anchor: PopoverPlace,
   size: { width: number; height: number },
   viewport: { width: number; height: number },
-): { left: number; top: number } {
+): { left: number; top: number; maxHeight: number | null } {
   const clampX = (x: number): number =>
     Math.max(EDGE, Math.min(x, viewport.width - size.width - EDGE));
   const clampY = (y: number): number =>
     Math.max(EDGE, Math.min(y, viewport.height - size.height - EDGE));
-  if (anchor.kind === 'point') return { left: clampX(anchor.x), top: clampY(anchor.y) };
-  const below = anchor.bottom + 4;
-  const top = below + size.height <= viewport.height - EDGE ? below : anchor.top - 4 - size.height;
-  return { left: clampX(anchor.right - size.width), top: clampY(top) };
+  if (anchor.kind === 'point') {
+    return { left: clampX(anchor.x), top: clampY(anchor.y), maxHeight: null };
+  }
+  const left = clampX(anchor.right - size.width);
+  const below = viewport.height - EDGE - (anchor.bottom + 4);
+  const above = anchor.top - 4 - EDGE;
+  if (size.height <= below) return { left, top: anchor.bottom + 4, maxHeight: null };
+  if (size.height <= above) return { left, top: anchor.top - 4 - size.height, maxHeight: null };
+  return below >= above
+    ? { left, top: anchor.bottom + 4, maxHeight: below }
+    : { left, top: EDGE, maxHeight: above };
 }
 
 export function PlanDayPopover(props: {
   anchor: PopoverAnchor;
+  /** The list's scroll box: the row leaving it closes the popover. */
+  bounds: HTMLElement | null;
   days: readonly PopoverDay[];
   current: string | null;
   /** The right-click menu: adds "Remove from plan". */
@@ -56,24 +93,44 @@ export function PlanDayPopover(props: {
   onClose: () => void;
 }): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number | null } | null>(
+    null,
+  );
   const onClose = useRef(props.onClose);
   onClose.current = props.onClose;
-  const { anchor } = props;
+  const { anchor, bounds } = props;
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (el === null) return;
-    const box = el.getBoundingClientRect();
-    setPos(
-      placePopover(
-        anchor,
-        { width: box.width, height: box.height },
-        { width: window.innerWidth, height: window.innerHeight },
-      ),
-    );
-  }, [anchor]);
+    const place = (): void => {
+      const el = ref.current;
+      if (el === null) return;
+      const row = anchor.el.closest<HTMLElement>('[data-plan-row-wrap]') ?? anchor.el;
+      if (
+        !anchor.el.isConnected ||
+        (bounds !== null && outOfView(row.getBoundingClientRect(), bounds.getBoundingClientRect()))
+      ) {
+        onClose.current();
+        return;
+      }
+      // The full content height (a cap set before must not hide it).
+      setPos(
+        placePopover(
+          placeOf(anchor),
+          { width: el.offsetWidth, height: el.scrollHeight },
+          { width: window.innerWidth, height: window.innerHeight },
+        ),
+      );
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [anchor, bounds]);
   useEffect(() => {
-    // Escape hands focus back to where it was (the calendar button, the row).
+    // Escape hands focus back to where it was (the calendar button, the row),
+    // and stops at the popover's edge so no chat surface also closes.
     const returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const el = ref.current;
     const current = el?.querySelector<HTMLElement>('[aria-current="true"]');
@@ -82,6 +139,8 @@ export function PlanDayPopover(props: {
     });
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      event.preventDefault();
       onClose.current();
       if (returnTo?.isConnected === true) returnTo.focus({ preventScroll: true });
     };
@@ -91,10 +150,10 @@ export function PlanDayPopover(props: {
       if (target instanceof Element && target.closest('[data-plan-row-calendar]') !== null) return;
       onClose.current();
     };
-    document.addEventListener('keydown', onKey);
+    el?.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onDown, true);
     return () => {
-      document.removeEventListener('keydown', onKey);
+      el?.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerdown', onDown, true);
     };
   }, []);
@@ -125,7 +184,12 @@ export function PlanDayPopover(props: {
         pos === null && 'invisible',
         NO_TOUCH_SELECT,
       )}
-      style={{ width: POPOVER_WIDTH, left: pos?.left ?? 0, top: pos?.top ?? 0 }}
+      style={{
+        width: POPOVER_WIDTH,
+        left: pos?.left ?? 0,
+        top: pos?.top ?? 0,
+        ...(pos?.maxHeight != null ? { maxHeight: pos.maxHeight } : {}),
+      }}
     >
       <p className="px-2.5 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-[.06em] text-fg-3">
         {MOVE_TO_HEADING}

@@ -14,12 +14,14 @@ vi.mock('agora-chat', () => ({
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import {
+  OTHER_ESCAPE_OWNERS,
+  PLAN_PANEL_WIDTH,
   PlanBody,
-  planEscapeTaken,
+  isTextField,
   planListGroups,
   type PlanRowDesk,
 } from '@/components/chat/PlanScreen';
-import { placePopover } from '@/components/chat/PlanDayPopover';
+import { outOfView, placePopover } from '@/components/chat/PlanDayPopover';
 import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
 
 const dir = fileURLToPath(new URL('..', import.meta.url));
@@ -65,6 +67,7 @@ const desk = (over: Partial<PlanRowDesk> = {}): PlanRowDesk => ({
   collapsing: new Set(),
   pickedId: null,
   popoverId: null,
+  dragging: false,
   onCalendar: () => undefined,
   onMenu: () => undefined,
   onRemove: () => undefined,
@@ -120,6 +123,16 @@ describe('laptop rows (agency)', () => {
       /data-plan-row-calendar=""[^>]*class="[^"]*h-11 w-9[^"]*text-fg-3[^"]*hover:bg-panel-2/,
     );
     expect(html).toContain('select-none');
+    // No hover (touch laptop, iPad landscape): always shown, muted.
+    expect(html).toMatch(/data-plan-grip=""[^>]*class="[^"]*\[@media\(hover:none\)\]:opacity-60/);
+  });
+
+  it('a touch long-press never opens the day menu; nor does a running drag', () => {
+    const src = read('PlanScreen.tsx');
+    expect(src).toContain(
+      "if (native.pointerType === 'touch' || lastPointer.current === 'touch') return;",
+    );
+    expect(src).toContain('if (desk.dragging || wrapRef.current === null) return;');
   });
 
   it('a picked-up row carries the accent outline and its marker', () => {
@@ -147,44 +160,97 @@ describe('laptop client view', () => {
 });
 
 describe('the docked panel', () => {
-  it('440px, full height, border-left, bg-panel, translateX only, not modal', () => {
+  it('440px from 972px, 360px below (CSS, final on the first frame); full height, not modal', () => {
+    expect(PLAN_PANEL_WIDTH).toBe('w-[360px] min-[972px]:w-[440px]');
     const src = read('PlanScreen.tsx');
-    expect(src).toContain('export const PLAN_PANEL_PX = 440;');
+    expect(src).not.toContain('PLAN_PANEL_PX');
     expect(src).toContain(
       "'fixed inset-y-0 right-0 z-40 flex flex-col border-l border-border bg-panel",
     );
     expect(src).toContain("'translate-x-6 opacity-0 ease-exit'");
     expect(src).toContain("'translate-x-0 opacity-100 ease-enter'");
     expect(src).toContain("{ role: 'complementary' }");
-    expect(src).toContain('min-[1180px]:shadow-none');
+    // Left-edge shadow token while it overlays; none from 1180px.
+    expect(src).toContain('[box-shadow:var(--shadow-panel-left)]');
+    expect(src).toContain('min-[1180px]:[box-shadow:none]');
+    const css = readFileSync(fileURLToPath(new URL('../../../index.css', import.meta.url)), 'utf8');
+    expect(css.match(/--shadow-panel-left:/g)).toHaveLength(2);
+    // One laptop query for every laptop layout.
+    expect(src).toContain('useMediaQuery(LAPTOP_QUERY)');
+    expect(src).not.toContain('usePlanDesktop');
     // The phone page is unchanged.
     expect(src).toContain(
       "'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] transition-transform duration-slow ease-enter motion-reduce:transition-none'",
     );
   });
 
-  it('the chat thread narrows by 440px from 1180px only while the panel is open', () => {
+  it('the chat thread narrows by 440px from 1180px; the list steps aside at 768 to 891px', () => {
     const chat = read('ChatConnected.tsx');
     expect(chat).toContain("planPanelOpen && 'min-[1180px]:mr-[440px]'");
+    expect(chat).toContain('max-[891px]:invisible max-[891px]:absolute');
+    expect(chat).toContain('useMediaQuery(LAPTOP_QUERY)');
   });
 
-  it('Escape is taken first by a field, drag, pick-up, menu or sheet', () => {
-    const doc = (hit: boolean) =>
-      ({ querySelector: () => (hit ? {} : null) }) as unknown as Document;
-    expect(planEscapeTaken(doc(false), null)).toBe(false);
-    expect(planEscapeTaken(doc(true), null)).toBe(true);
+  it('Escape: inside the panel it stops at the panel; on the page only when nothing else owns it', () => {
+    const src = read('PlanScreen.tsx');
+    expect(src).toContain("el.addEventListener('keydown', inside);");
+    expect(src).toMatch(/const inside = [\s\S]*?event\.stopPropagation\(\);/);
+    expect(src).toContain("if (event.key !== 'Escape' || event.target !== document.body) return;");
+    for (const owner of [
+      '[role="dialog"]',
+      '[role="menu"]',
+      '[aria-expanded="true"]',
+      '[data-selection-cancel]',
+    ]) {
+      expect(OTHER_ESCAPE_OWNERS).toContain(owner);
+    }
+    expect(isTextField({ tagName: 'INPUT' } as unknown as EventTarget)).toBe(true);
+    expect(isTextField({ tagName: 'BUTTON' } as unknown as EventTarget)).toBe(false);
+  });
+
+  it('a drop commits once released: Escape cancels only while the pointer is down', () => {
+    const src = read('PlanScreen.tsx');
+    expect(src).toContain(
+      "if (event.key === 'Escape' && stateRef.current?.snapTop === null) cancel();",
+    );
   });
 });
 
 describe('the day popover', () => {
   const vp = { width: 1280, height: 800 };
-  it('under its button, right-aligned; flips above near the bottom; clamps inside', () => {
+  it('under its button, right-aligned; flips above near the bottom; never covers its button', () => {
     const rect = { kind: 'rect' as const, left: 1100, right: 1136, top: 100, bottom: 144 };
-    expect(placePopover(rect, { width: 240, height: 400 }, vp)).toEqual({ left: 896, top: 148 });
+    expect(placePopover(rect, { width: 240, height: 400 }, vp)).toEqual({
+      left: 896,
+      top: 148,
+      maxHeight: null,
+    });
     const low = { ...rect, top: 700, bottom: 744 };
-    expect(placePopover(low, { width: 240, height: 400 }, vp)).toEqual({ left: 896, top: 296 });
+    expect(placePopover(low, { width: 240, height: 400 }, vp)).toEqual({
+      left: 896,
+      top: 296,
+      maxHeight: null,
+    });
+    // Neither side fits: the roomier side, capped there.
+    const mid = { ...rect, top: 340, bottom: 384 };
+    expect(placePopover(mid, { width: 240, height: 500 }, vp)).toEqual({
+      left: 896,
+      top: 388,
+      maxHeight: 404,
+    });
     const point = { kind: 'point' as const, x: 1270, y: 790 };
-    expect(placePopover(point, { width: 240, height: 400 }, vp)).toEqual({ left: 1032, top: 392 });
+    expect(placePopover(point, { width: 240, height: 400 }, vp)).toEqual({
+      left: 1032,
+      top: 392,
+      maxHeight: null,
+    });
+  });
+
+  it('closes once its row leaves the list view', () => {
+    const view = { top: 60, bottom: 700 };
+    expect(outOfView({ top: 100, bottom: 160 }, view)).toBe(false);
+    expect(outOfView({ top: 10, bottom: 60 }, view)).toBe(true);
+    expect(outOfView({ top: 700, bottom: 760 }, view)).toBe(true);
   });
 });
 
@@ -196,10 +262,13 @@ describe('Sheet: the fixed-height box is additive', () => {
     expect(src).toContain('sm:max-h-[84vh]');
   });
 
-  it('every plan sheet that loads or filters a list uses it', () => {
+  it('every plan sheet that loads or filters a list uses it; the Day picker keeps content height', () => {
     expect(read('PlanAddSheet.tsx')).toContain('fixedHeight');
     expect(read('PlanPickerSheet.tsx')).toContain('title={PICKER_TITLE} fixedHeight');
     expect(read('PlanMoveSheet.tsx')).toContain('title="Move to" fixedHeight');
-    expect(read('PlanDayPickerSheet.tsx')).toContain('title={props.title} fixedHeight');
+    expect(read('PostPicker.tsx')).toMatch(
+      /title=\{PICKER_TITLES\[sheetMode\]\}[\s\S]*?fixedHeight/,
+    );
+    expect(read('PlanDayPickerSheet.tsx')).not.toContain('fixedHeight');
   });
 });

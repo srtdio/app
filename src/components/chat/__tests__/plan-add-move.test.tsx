@@ -213,7 +213,10 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     }
     expect(hook).toContain('cancelAnimationFrame(frame)');
     expect(hook).toContain('clearTimeout(snapTimer)');
-    expect(hook).toContain("if (event.key === 'Escape') cancel();");
+    // Escape cancels while the pointer is down; once released the drop commits.
+    expect(hook).toContain(
+      "if (event.key === 'Escape' && stateRef.current?.snapTop === null) cancel();",
+    );
     expect(hook).toContain('useEffect(() => end, [end]);');
     // A cancel never calls onDrop.
     const cancel = hook.slice(hook.indexOf('const cancel = (): void => end();'));

@@ -68,6 +68,8 @@
   --dur-slow: 200ms;
   --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  /* The docked plan panel over the chat (laptop): a shadow on its left edge only. */
+  --shadow-panel-left: -12px 0 24px -12px rgba(20, 22, 30, 0.18);
 }
 .dark {
   --bg: #0c0d10;
@@ -111,6 +113,7 @@
   --overlay-surface: rgba(244, 245, 246, 0.12);
   --overlay-line: rgba(244, 245, 246, 0.14);
   --overlay-dot: rgba(244, 245, 246, 0.4);
+  --shadow-panel-left: -12px 0 24px -12px rgba(0, 0, 0, 0.55);
 }
 @layer base {
   html,

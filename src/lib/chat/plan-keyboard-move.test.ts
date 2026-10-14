@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DayIds } from '@/lib/chat/plan-drag';
 import {
   KEY_HINTS,
-  movedPipelineToast,
+  dayMoveToast,
   othersIn,
   previewGroups,
   rowKeyIntent,
@@ -113,12 +113,29 @@ describe('keys on a focused row', () => {
 describe('copy', () => {
   it('announcements, toast and hints; no em-dashes', () => {
     expect(slotAnnouncement('Wed 14 Oct', 1)).toBe('Wed 14 Oct, position 2');
-    expect(movedPipelineToast('Thu 15 Oct')).toBe('Moved to Thu 15 Oct. Pipeline date updated.');
-    expect(movedPipelineToast(null)).toBe('Moved to No date. Pipeline date updated.');
+    // D2: posts name the Pipeline date; concepts do not. Both keep Undo.
+    expect(dayMoveToast('Thu 15 Oct', true, false)).toEqual({
+      title: 'Moved to Thu 15 Oct. Pipeline date updated.',
+      undo: true,
+    });
+    expect(dayMoveToast('Thu 15 Oct', false, false)).toEqual({
+      title: 'Moved to Thu 15 Oct.',
+      undo: true,
+    });
+    expect(dayMoveToast(null, false, false).title).toBe('Moved to No date.');
+    // F4: a reset says so and has no Undo.
+    expect(dayMoveToast('Wed 14 Oct', true, true)).toEqual({
+      title: 'Moved to Wed 14 Oct. Pipeline date updated. Its ticks were reset.',
+      undo: false,
+    });
+    expect(dayMoveToast('Wed 14 Oct', false, true)).toEqual({
+      title: 'Moved to Wed 14 Oct. Its ticks were reset.',
+      undo: false,
+    });
     expect(KEY_HINTS).toBe(
       'Drag handle to move · Space pick up, arrows move, Space drop · Del remove',
     );
-    for (const s of [KEY_HINTS, movedPipelineToast('x'), slotAnnouncement('x', 0)]) {
+    for (const s of [KEY_HINTS, dayMoveToast('x', true, true).title, slotAnnouncement('x', 0)]) {
       expect(s).not.toContain(String.fromCharCode(0x2014));
     }
   });

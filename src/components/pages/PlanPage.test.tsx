@@ -11,8 +11,11 @@ const view = vi.hoisted(() => ({ desktop: false }));
 vi.mock('@/components/pages/ActivityPage', () => ({
   ActivityPage: () => <div>activity-beside</div>,
 }));
+vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
+  useMediaQuery: () => view.desktop,
+}));
 vi.mock('@/components/chat/PlanScreen', () => ({
-  usePlanDesktop: () => view.desktop,
   PlanScreen: (props: {
     planId: string;
     initialItemId?: string;
@@ -34,17 +37,27 @@ vi.mock('@/components/chat/PlanScreen', () => ({
 }));
 vi.mock('@/lib/workspace-context', () => ({ useWorkspace: () => ({ workspaceId: 'ws-1' }) }));
 
-import { PlanPage, isPlanId, planPageBack } from '@/components/pages/PlanPage';
+import {
+  ActivityPlanLayout,
+  PlanPage,
+  isPlanId,
+  planPageBack,
+  replacesPlanEntry,
+} from '@/components/pages/PlanPage';
 
 const PLAN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const ITEM = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const COMMENT = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 
+// The app's route shape: /activity and /plans/:planId under one layout.
 function render(path: string): string {
   return renderToStaticMarkup(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/plans/:planId" element={<PlanPage />} />
+        <Route element={<ActivityPlanLayout />}>
+          <Route path="/activity" />
+          <Route path="/plans/:planId" element={<PlanPage />} />
+        </Route>
       </Routes>
     </MemoryRouter>,
   );
@@ -99,8 +112,34 @@ describe('PlanPage', () => {
     }
   });
 
-  it('phone: the plan alone, no Activity under it', () => {
+  it('phone: the plan alone, no Activity under it; /activity is Activity', () => {
     expect(render(`/plans/${PLAN}`)).not.toContain('activity-beside');
+    expect(render('/activity')).toContain('activity-beside');
+    expect(render('/activity')).not.toContain('screen plan=');
+  });
+
+  it('laptop: Activity sits in the same place on /activity and /plans/:id (no remount)', () => {
+    view.desktop = true;
+    try {
+      const a = render('/activity');
+      const p = render(`/plans/${PLAN}`);
+      // The same first node, Activity, before the plan.
+      expect(a.indexOf('activity-beside')).toBeGreaterThan(-1);
+      expect(p.indexOf('activity-beside')).toBeLessThan(p.indexOf('screen plan='));
+      expect(a).not.toContain('min-[1180px]:mr-[440px]');
+    } finally {
+      view.desktop = false;
+    }
+  });
+
+  it('laptop: a plan pushed over a plan replaces its entry (Close is one step to Activity)', () => {
+    const base = { desktop: true, navType: 'PUSH' as const, prev: '/plans/a', here: '/plans/b' };
+    expect(replacesPlanEntry(base)).toBe(true);
+    expect(replacesPlanEntry({ ...base, prev: '/activity' })).toBe(false);
+    expect(replacesPlanEntry({ ...base, navType: 'POP' })).toBe(false);
+    expect(replacesPlanEntry({ ...base, navType: 'REPLACE' })).toBe(false);
+    expect(replacesPlanEntry({ ...base, desktop: false })).toBe(false);
+    expect(replacesPlanEntry({ ...base, here: '/plans/a' })).toBe(false);
   });
 
   it('Back pops to the entry below when there is one, else goes to Activity (cold deep link)', () => {

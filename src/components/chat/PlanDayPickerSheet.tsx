@@ -180,7 +180,7 @@ export function PlanDayPickerSheet(props: {
 }): ReactElement {
   const hide = props.hideNoDate === true;
   return (
-    <Sheet open={props.open} onClose={props.onClose} title={props.title} fixedHeight>
+    <Sheet open={props.open} onClose={props.onClose} title={props.title}>
       <div data-plan-day-picker="" className="flex flex-col gap-3">
         <p className="-mt-1 text-[13px] leading-[18px] text-fg-3">{props.subline}</p>
         <PlanDayTiles
