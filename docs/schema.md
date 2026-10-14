@@ -38,9 +38,18 @@ App-level profile. id mirrors auth.users.id (FK).
 | timezone | text | nullable, IANA tz; null falls back to workspaces.timezone for catch-up scheduling |
 | profile_completed_at | timestamptz | nullable, onboarding gate; stamped once an avatar exists |
 | email_opt_in | boolean | not null, default true; catch-up email opt-out |
+| username | text | nullable, ^[a-z0-9._]{3,20}$, unique across Sorted (users_username_unique, partial where not null); used for @mentions. Existing users backfilled from display_name on 14 Oct 2026 |
 | created_at / updated_at | timestamptz | default now() |
 
 user_profile_update(p_display_name, p_designation, p_avatar_url, p_email_opt_in, p_trace_id) SECURITY DEFINER (search_path='', EXECUTE to authenticated only): the only write path to a user's own profile. Acts on auth.uid(); a null or blank display_name raises invalid_payload. designation / avatar_url / email_opt_in are coalesced (null leaves the existing value). profile_completed_at is stamped now() the first time an avatar exists and never overwritten. Writes a success audit row.
+
+user_onboarding_save(p_payload jsonb, p_trace_id) SECURITY DEFINER (EXECUTE to authenticated only): the onboarding write path. Payload keys display_name (required), username (required, format above, reserved names admin/support/sorted/srtd/help/team/everyone rejected), designation, avatar_url (optional, photo no longer required), email_opt_in, age_range, heard_from. Stamps profile_completed_at once. Duplicate username raises username_taken. Upserts user_private.
+
+username_available(p_username, p_trace_id) SECURITY DEFINER STABLE (EXECUTE to authenticated only): true when the name is well-formed, not reserved, and not held by another user.
+
+### user_private
+
+Onboarding answers only the person can read. PK/FK user_id -> users.id ON DELETE CASCADE. age_range in 18-24/25-34/35-44/45-54/55+, heard_from in friend/instagram/linkedin/google/client/other, both nullable; updated_at. RLS: SELECT own row only (user_private_select_self). INSERT/UPDATE/DELETE/TRUNCATE revoked from authenticated and anon; written only by user_onboarding_save. Kept off users because users is readable by workspace co-members.
 
 ### workspaces
 
@@ -75,8 +84,11 @@ One workspace = one end-client = one platform.
 | invited_by | uuid | nullable, FK users.id |
 | invited_at | timestamptz | default now() |
 | accepted_at / removed_at / rejoined_at | timestamptz | nullable |
+| join_default_group | boolean | not null, default true; on member_accept the invitee joins the workspace's default chat group. Set off with member_join_group_set(p_member_id, p_join, p_trace_id) (manage_members capability, pending invites only) |
 
 Unique: one active membership per (workspace_id, user_id).
+
+workspace_create also creates the workspace's default chat group (groups.is_default) named after the workspace, owner as the only member. Group names allow letters, digits, spaces and hyphens only, so "&" becomes "and" and other characters are dropped (40 chars max, fallback "Team").
 
 ### workspace_role_permissions
 
@@ -411,6 +423,8 @@ RLS enabled (not forced). One policy only: folders_select_member (SELECT, role P
 ### groups
 
 PK id. Fields: workspace_id FK, name ^[A-Za-z0-9 -]{1,40}$, created_by FK, created_at, deleted_at nullable. Unique (workspace_id, lower(name)) where not deleted.
+
+is_default boolean not null default false: the workspace's default chat group, created by workspace_create. At most one per workspace among non-deleted groups (groups_one_default_per_workspace).
 
 avatar_url text nullable, check avatar_url IS NULL OR ~ '^https?://' (groups_avatar_url_check); set via group_avatar_set (permission = creator or workspace owner/admin, same as group_rename); NULL clears.
 

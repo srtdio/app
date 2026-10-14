@@ -23,6 +23,8 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'chat_message_search',
   // Read-only STABLE invoker list (20261004050000): writes nothing, so nothing to log.
   'chat_message_starred_list',
+  // Read-only STABLE username check during onboarding (20261014140000): writes nothing.
+  'username_available',
 ]);
 
 /** Public functions whose arguments include p_trace_id but whose body never mentions it. */
