@@ -45,6 +45,8 @@ user_profile_update(p_display_name, p_designation, p_avatar_url, p_email_opt_in,
 
 user_onboarding_save(p_payload jsonb, p_trace_id) SECURITY DEFINER (EXECUTE to authenticated only): the onboarding write path. Payload keys display_name (required), username (required, format above, reserved names admin/support/sorted/srtd/help/team/everyone rejected), designation, avatar_url (optional, photo no longer required), email_opt_in, age_range, heard_from. Stamps profile_completed_at once. Duplicate username raises username_taken. Upserts user_private.
 
+username_set(p_username, p_trace_id) SECURITY DEFINER (EXECUTE to authenticated only): changes the caller's own username (Settings > Profile), same format and reserved rules; a clash raises username_taken.
+
 username_available(p_username, p_trace_id) SECURITY DEFINER STABLE (EXECUTE to authenticated only): true when the name is well-formed, not reserved, and not held by another user.
 
 ### user_private
