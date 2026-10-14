@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { logger } from '@/lib/logger';
 import {
+  APP_STYLESHEET,
+  HOME_STYLESHEET,
   RELOAD_PARAM,
   STALE_RELOAD_KEY,
   runStaleDeployGuard,
@@ -26,18 +27,20 @@ const throwingStorage = (): never => {
 function makeDeps(overrides: Partial<StaleDeployDeps> = {}): StaleDeployDeps & {
   reload: ReturnType<typeof vi.fn<(url: string) => void>>;
   replaceUrl: ReturnType<typeof vi.fn<(url: string) => void>>;
+  warn: ReturnType<typeof vi.fn<StaleDeployDeps['warn']>>;
 } {
   const storage = memoryStorage();
   return {
     stylesheet: null,
     isDocumentComplete: () => true,
-    readBgToken: () => '#f7f8f9',
+    readToken: () => '#f7f8f9',
     getHref: () => 'https://v2.srtd.io/pipeline?x=1#top',
     storage: () => storage,
     now: () => 1700000000000,
     ...overrides,
     reload: vi.fn<(url: string) => void>(),
     replaceUrl: vi.fn<(url: string) => void>(),
+    warn: vi.fn<StaleDeployDeps['warn']>(),
   };
 }
 
@@ -56,7 +59,7 @@ describe('runStaleDeployGuard', () => {
 
   it('reloads exactly once with a cache-busting param when --bg is missing', async () => {
     const storage = memoryStorage();
-    const deps = makeDeps({ readBgToken: () => '', storage: () => storage });
+    const deps = makeDeps({ readToken: () => '', storage: () => storage });
     await expect(runStaleDeployGuard(deps)).resolves.toBe(false);
     expect(deps.reload).toHaveBeenCalledTimes(1);
     const url = new URL(deps.reload.mock.calls[0]![0]);
@@ -68,30 +71,29 @@ describe('runStaleDeployGuard', () => {
   });
 
   it('does not reload again when the guard is already set', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const storage = memoryStorage();
     storage.setItem(STALE_RELOAD_KEY, '1');
-    const deps = makeDeps({ readBgToken: () => '', storage: () => storage });
+    const deps = makeDeps({ readToken: () => '', storage: () => storage });
     await expect(runStaleDeployGuard(deps)).resolves.toBe(true);
     expect(deps.reload).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(deps.warn).toHaveBeenCalledTimes(1);
   });
 
   it('never loops when storage throws: the _r param bounds it to one reload', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
-    const first = makeDeps({ readBgToken: () => '', storage: throwingStorage });
+    const first = makeDeps({ readToken: () => '', storage: throwingStorage });
     await expect(runStaleDeployGuard(first)).resolves.toBe(false);
     expect(first.reload).toHaveBeenCalledTimes(1);
 
     const reloadedHref = first.reload.mock.calls[0]![0];
     const second = makeDeps({
-      readBgToken: () => '',
+      readToken: () => '',
       storage: throwingStorage,
       getHref: () => reloadedHref,
     });
     await expect(runStaleDeployGuard(second)).resolves.toBe(true);
     expect(second.reload).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(first.warn).not.toHaveBeenCalled();
+    expect(second.warn).toHaveBeenCalledTimes(1);
   });
 
   it('removes the _r param and clears the guard after a styled load', async () => {
@@ -113,7 +115,7 @@ describe('runStaleDeployGuard', () => {
     const deps = makeDeps({
       stylesheet: link,
       isDocumentComplete: () => false,
-      readBgToken: () => bg,
+      readToken: () => bg,
     });
     const result = runStaleDeployGuard(deps);
     bg = '#f7f8f9';
@@ -128,11 +130,39 @@ describe('runStaleDeployGuard', () => {
     const deps = makeDeps({
       stylesheet: link,
       isDocumentComplete: () => false,
-      readBgToken: () => '',
+      readToken: () => '',
     });
     const result = runStaleDeployGuard(deps);
     await vi.advanceTimersByTimeAsync(3000);
     await expect(result).resolves.toBe(false);
     expect(deps.reload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('stylesheet targets', () => {
+  it('keeps the app guard on the --bg token from src/index.css', () => {
+    expect(APP_STYLESHEET).toEqual({
+      selector: 'link[rel="stylesheet"][href*="/assets/"]',
+      token: '--bg',
+    });
+  });
+
+  it('checks the homepage stylesheet by its own token', () => {
+    expect(HOME_STYLESHEET.token).toBe('--srtd-home');
+    expect(HOME_STYLESHEET.token).not.toBe(APP_STYLESHEET.token);
+  });
+
+  it.each([
+    ['app', APP_STYLESHEET],
+    ['home', HOME_STYLESHEET],
+  ])('runs the same guard for the %s stylesheet', async (_name, target) => {
+    const tokens: Record<string, string> = { [target.token]: '1' };
+    const styled = makeDeps({ readToken: () => tokens[target.token] ?? '' });
+    await expect(runStaleDeployGuard(styled)).resolves.toBe(true);
+    expect(styled.reload).not.toHaveBeenCalled();
+
+    const unstyled = makeDeps({ readToken: () => '' });
+    await expect(runStaleDeployGuard(unstyled)).resolves.toBe(false);
+    expect(unstyled.reload).toHaveBeenCalledTimes(1);
   });
 });

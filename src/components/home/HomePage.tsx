@@ -1,30 +1,131 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import '@fontsource-variable/bricolage-grotesque/opsz.css';
-import '@fontsource-variable/fraunces/full-italic.css';
-import { initTheme } from '@/lib/theme';
-import { HomeFilm } from './HomeFilm';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-600.css';
+import '@fontsource/inter/latin-700.css';
+import { ClipVideo } from './ClipVideo';
+import { HOME_MEDIA_BASE, clipFor, mediaUrl } from './media';
+import { Wordmark } from './Wordmark';
 import './home.css';
 
-/**
- * Public homepage at / for signed-out visitors. Light only by decision
- * (13 Oct 2026): a deliberate exception to light/dark parity for this route.
- * Copy and layout are the approved prototype. Fictional names only.
- */
+// Public homepage (/), v19 prototype approved 14 Oct 2026. Light only. Rendered
+// on the guest path without a router (src/main.tsx -> HomeEntry) and by
+// HomeGate inside the app, so every link is a plain anchor (full navigation).
 
 const DEMO_MAILTO = 'mailto:support@srtd.io?subject=Sorted%20demo';
+const NOTE = '15 days free. No card. Clients join at no cost.';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Pin light while the homepage is mounted; restore the stored theme after. */
-function useForceLight(): void {
-  useEffect(() => {
-    const root = document.documentElement;
-    const wasDark = root.classList.contains('dark');
-    if (wasDark) root.classList.remove('dark');
-    return () => {
-      if (wasDark) initTheme();
-    };
-  }, []);
+const PROBLEMS_LABEL =
+  'Approvals lost in WhatsApp, a tracker nobody updates, I never approved that, send me the final-final logo. Sorted fixes all four.';
+
+interface Feature {
+  key: string;
+  tone: string;
+  clip: string;
+  title: string;
+  body: string;
+  label: string;
 }
+
+const FEATURES: Feature[] = [
+  {
+    key: 'Chat',
+    tone: 'c1',
+    clip: 'chat',
+    title: '“Who’s doing what?” It’s in the top bar.',
+    body: 'The top bar keeps count of everything open in the chat: the plan, posts in review, briefs, commitments. Plus reminders, tasks, voice notes as text, and scheduled sends.',
+    label: 'Walkthrough of Sorted chat',
+  },
+  {
+    key: 'Plan',
+    tone: 'c2',
+    clip: 'plan',
+    title: '“Did they see the plan?” They ticked it.',
+    body: "Share the plan into the chat. Your client ticks each post and idea, and the chat's top bar keeps the count.",
+    label: 'Walkthrough of a Sorted plan',
+  },
+  {
+    key: 'Pipeline',
+    tone: 'c3',
+    clip: 'pipeline',
+    title: '“Which one is final?” The one with the green tick.',
+    body: 'Pin a comment right on the photo, numbered. Your client approves the post from the chat with a confirm step. One post at a time, never in bulk.',
+    label: 'Walkthrough of the Sorted pipeline',
+  },
+  {
+    key: 'Assets',
+    tone: 'c4',
+    clip: 'assets',
+    title: '“Can you send the logo again?” It never left.',
+    body: 'Every photo, lookbook and campaign deck for the client in one place. Photos and PDFs open right inside Sorted.',
+    label: 'Walkthrough of Sorted assets',
+  },
+  {
+    key: 'Briefs',
+    tone: 'c5',
+    clip: 'briefs',
+    title: '“Where’s the brief?” Pinned, with pictures.',
+    body: 'Your client writes the brief in Sorted, photos and all. It stays exactly as written: Open while you work on it, Closed when it’s done.',
+    label: 'Walkthrough of Sorted briefs',
+  },
+];
+
+interface Reason {
+  kick: string;
+  title: string;
+  body: string;
+  proof: string;
+  image: string;
+  alt: string;
+}
+
+const REASONS: Reason[] = [
+  {
+    kick: 'Approvals',
+    title: '“When did I approve this?” Tuesday, 4:12 pm.',
+    body: 'Every social media post in Sorted carries its own approval: who said yes, to what, and when. No scrolling up a group to prove it. No screenshots as evidence.',
+    proof: 'Logged the moment your client taps Approve.',
+    image: 'why-approvals.webp',
+    alt: 'A client approving a post in a Sorted chat, with who approved it and when',
+  },
+  {
+    kick: 'Evenings',
+    title: '“Is this final?” Not at 11 pm.',
+    body: "Client feedback, files and “is this final?” live in Sorted. Not between dinner plans and your bank's OTPs. Your phone is yours again after work.",
+    proof: 'Groups and DMs with your team and your client.',
+    image: 'why-evenings.webp',
+    alt: 'The Sorted chat tab with client groups and people',
+  },
+  {
+    kick: 'Clients',
+    title: '“Which group was that?” None. It’s a workspace.',
+    body: 'Each client gets a workspace for their social media posts, briefs, files and chat. Switching clients is one tap, not a scroll through forty groups.',
+    proof: 'SRTD on Instagram is one workspace. SRTD on LinkedIn is another.',
+    image: 'why-clients.webp',
+    alt: 'Switching between client workspaces in Sorted',
+  },
+  {
+    kick: 'Catch-up',
+    title: 'Stop checking. Sorted checks for you.',
+    body: 'At 10:30 and 3:30 on weekdays, one email tells you what moved while you were away: approvals, comments, briefs, chats. Every line opens the right screen. Nothing new, no email.',
+    proof: 'Weekdays, 10:30 am and 3:30 pm.',
+    image: 'why-catchup.webp',
+    alt: 'A Sorted catch-up email',
+  },
+];
+
+// Real pixel size of the why-*.webp files (CDN, 14 Oct 2026).
+const REASON_IMAGE_WIDTH = 780;
+const REASON_IMAGE_HEIGHT = 1240;
+
+const PRODUCT_TILES = [
+  { tone: 'c1', name: 'Chat', sub: 'Work chat per client' },
+  { tone: 'c2', name: 'Plan', sub: 'The week, agreed' },
+  { tone: 'c3', name: 'Pipeline', sub: 'Draft to approved' },
+  { tone: 'c4', name: 'Assets', sub: 'Files, versioned' },
+  { tone: 'c5 wide', name: 'Briefs', sub: 'Written by the client, photos and all' },
+];
 
 function Tick() {
   return (
@@ -34,359 +135,124 @@ function Tick() {
   );
 }
 
-function Wordmark({ to = '/' }: { to?: string }) {
-  return (
-    <Link className="logo" to={to} aria-label="srtd home">
-      srtd<b>.</b>
-    </Link>
-  );
-}
-
-function Header() {
-  const [scrolled, setScrolled] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    const onScroll = (): void => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const close = (): void => setOpen(false);
-
-  return (
-    <>
-      <header className={`top${scrolled ? ' on' : ''}`}>
-        <div className="wrap">
-          <Wordmark />
-          <span className="sp" />
-          <Link className="btn sm" to="/signup">
-            Sign up
-          </Link>
-          <button
-            className="icon-btn"
-            type="button"
-            aria-label="Open menu"
-            aria-expanded={open}
-            onClick={() => setOpen(true)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </button>
-        </div>
-      </header>
-      {open && (
-        <div
-          className="menu"
-          role="dialog"
-          aria-label="Menu"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) close();
-          }}
-        >
-          <div className="panel">
-            <button
-              className="icon-btn close"
-              type="button"
-              aria-label="Close menu"
-              onClick={close}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-            <a className="item" href="#features" onClick={close}>
-              Product
-            </a>
-            <a className="item" href="#why" onClick={close}>
-              Why Sorted
-            </a>
-            <a className="item" href={DEMO_MAILTO} onClick={close}>
-              Book a demo
-            </a>
-            <Link className="item" to="/signin" onClick={close}>
-              Sign in
-            </Link>
-            <div className="foot">
-              <Link className="btn" to="/signup" onClick={close}>
-                Sign up for free
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function CtaPair() {
+function Cta() {
   return (
     <div className="cta">
-      <Link className="btn" to="/signup">
+      <a className="btn" href="#signup-mid">
         Sign up for free
-      </Link>
-      <a className="btn" href={DEMO_MAILTO}>
+      </a>
+      <a className="btn line" href={DEMO_MAILTO}>
         Book a demo
       </a>
     </div>
   );
 }
 
-const TRIAL_NOTE = '15 days free. No card. Clients join at no cost.';
+function Menu({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
 
-function Hero() {
+  useEffect(() => {
+    if (!open) return undefined;
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, onClose]);
+
   return (
-    <section className="hero">
-      <div className="wrap">
-        <h1 className="d">
-          Chat. Plan. <em>Approve.</em>
-        </h1>
-        <p>
-          One work chat per client. Posts arrive as cards, feedback stays on the post, and every
-          approval is on record. Your WhatsApp goes back to being WhatsApp.
-        </p>
-        <CtaPair />
-        <div className="note">{TRIAL_NOTE}</div>
-      </div>
-    </section>
-  );
-}
-
-function FeatureRail() {
-  return (
-    <section className="sec" id="features">
-      <div className="wrap">
-        <div className="head">
-          <h2 className="d">Five things, one app.</h2>
-          <p>Each one replaces a habit you have on WhatsApp today.</p>
+    <div
+      className={open ? 'menu open' : 'menu'}
+      id="home-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menu"
+      aria-hidden={!open}
+      onClick={(e) => {
+        if (e.target === e.currentTarget || (e.target as Element).closest('a')) onClose();
+      }}
+    >
+      <nav className="panel">
+        <div className="ph">
+          <a className="logo" href="#top" aria-label="srtd home">
+            <Wordmark />
+          </a>
+          <button
+            ref={closeRef}
+            className="icon-btn"
+            type="button"
+            aria-label="Close menu"
+            onClick={onClose}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </div>
-        <div className="rail">
-          <article className="card c1">
-            <div className="k">Chat</div>
-            <h3>Work chat that does work.</h3>
-            <p>
-              DMs and groups, unlimited. Your team, your client, or both in one room. Tasks with an
-              owner, a due time and a priority. Reminders, scheduled sends. Every change announced
-              in the thread.
-            </p>
-            <div className="mock">
-              <div className="hd">
-                <div className="sq">K&amp;</div>
-                <div>
-                  <b>Kite &amp; Co</b>
-                  <span>Agency, Client · 5 people</span>
-                </div>
-              </div>
-              <div className="bl">Can we lock the festive captions today?</div>
-              <div className="bl o">Adding it to the list</div>
-              <div className="tsk">
-                <span className="n">1</span>
-                <div>
-                  <b>Final captions</b>
-                  <span>Agency · Today 6 pm</span>
-                </div>
-                <span className="chip">P1</span>
-              </div>
-              <div className="tsk">
-                <span className="n">2</span>
-                <div>
-                  <b>Product shots</b>
-                  <span>Client · Tomorrow 11 am</span>
-                </div>
-                <span className="chip g">P2</span>
-              </div>
-              <div className="sysl">
-                <b>Riya</b> moved Product shots to <b>P0</b>
-              </div>
-            </div>
-          </article>
 
-          <article className="card c2">
-            <div className="k">Plan</div>
-            <h3>The week, agreed in writing.</h3>
-            <p>
-              Build the week&apos;s plan, share it in the chat, and let the client tick each day.
-              Dates stay in sync with the posts.
-            </p>
-            <div className="mock plan">
-              <div className="hd">
-                <div className="sq amber">W</div>
-                <div>
-                  <b>Week of 13 Oct</b>
-                  <span>3 of 5 approved</span>
-                </div>
-              </div>
-              <div className="day">
-                <span className="dt">Mon 13</span>
-                <div className="th" />
-                <div>
-                  <b>Diwali drop · carousel</b>
-                  <span>Approved by Riya</span>
-                </div>
-                <div className="bx on">
-                  <Tick />
-                </div>
-              </div>
-              <div className="day">
-                <span className="dt">Wed 15</span>
-                <div className="th b" />
-                <div>
-                  <b>Festive reel</b>
-                  <span>Approved by Riya</span>
-                </div>
-                <div className="bx on">
-                  <Tick />
-                </div>
-              </div>
-              <div className="day">
-                <span className="dt">Fri 17</span>
-                <div className="th c" />
-                <div>
-                  <b>Gifting concept</b>
-                  <span className="wait">Waiting</span>
-                </div>
-                <div className="bx" />
-              </div>
-            </div>
-          </article>
-
-          <article className="card c3">
-            <div className="k">Pipeline</div>
-            <h3>Draft. Review. Approved.</h3>
-            <p>
-              Every post has a stage. Comments sit on the post, not in a thread. The client approves
-              it there, one at a time, with a confirm step.
-            </p>
-            <div className="mock">
-              <div className="stages">
-                <span className="chip g">Draft 4</span>
-                <span className="chip cur">Review 2</span>
-                <span className="chip g">Approved 11</span>
-                <span className="chip g">Parked 1</span>
-              </div>
-              <div className="pp">
-                <div className="th" />
-                <div>
-                  <b className="pt">Diwali drop · carousel 1 of 4</b>
-                  <div className="cmt mt8">
-                    <i className="av">R</i>
-                    <div>Make the lamp warmer.</div>
-                  </div>
-                  <div className="cmt mt6">
-                    <i className="av ag">A</i>
-                    <div>
-                      Fixed in v2. <span className="ok">Ready</span>
-                    </div>
-                  </div>
-                  <div className="btns">
-                    <div>Comment</div>
-                    <div className="p">Approve</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </article>
-
-          <article className="card c4">
-            <div className="k">Assets</div>
-            <h3>The right file, the first time.</h3>
-            <p>
-              Folders per client. Versions kept. PDFs, decks and sheets open inside Sorted, scanned
-              before anyone can tap them.
-            </p>
-            <div className="mock">
-              <div className="fold">
-                <div>
-                  Brand<small>14 files</small>
-                </div>
-                <div>
-                  Diwali<small>22 files</small>
-                </div>
-                <div>
-                  Reels<small>6 files</small>
-                </div>
-              </div>
-              <div className="pdf">
-                <div className="ic" />
-                <div>
-                  <b>Festive_brief.pdf</b>
-                  <span>v3 · Meera · opens in app</span>
-                </div>
-                <span className="chip ok">
-                  <Tick />
-                  Safe
-                </span>
-              </div>
-              <div className="pdf mt8">
-                <div className="ic x" />
-                <div>
-                  <b>Price_list.xlsx</b>
-                  <span>v1 · Dev · opens in app</span>
-                </div>
-                <span className="chip ok">
-                  <Tick />
-                  Safe
-                </span>
-              </div>
-            </div>
-          </article>
-
-          <article className="card c5">
-            <div className="k">Catch-up</div>
-            <h3>Find out at 10:30 and 3:30.</h3>
-            <p>
-              Two emails a day on weekdays, only if something moved. Reviews, briefs, comments,
-              missed chats. Tap anything to land on it.
-            </p>
-            <div className="mock mail">
-              <div className="fr">
-                <span>Sorted · 3:30 pm</span>
-                <span>to Riya</span>
-              </div>
-              <h4>Since 10:30 am in Kite &amp; Co</h4>
-              <ul>
-                <li>
-                  <i />2 posts sent for your review
-                </li>
-                <li>
-                  <i />4 new comments on Diwali drop
-                </li>
-                <li>
-                  <i />1 new brief: Festive reel
-                </li>
-              </ul>
-              <div className="q">
-                <b>Arjun</b> · Done, v2 is up. Can you look before 6?
-              </div>
-              <div className="go">Open in Sorted</div>
-            </div>
-          </article>
+        <div className="lbl first">Product</div>
+        <div className="nav-feat">
+          {PRODUCT_TILES.map((tile) => (
+            <a key={tile.name} className={tile.tone} href="#features">
+              {tile.name}
+              <small>{tile.sub}</small>
+            </a>
+          ))}
         </div>
-      </div>
-    </section>
+
+        <div className="lbl">Company</div>
+        <div className="nav-main">
+          <a href="#why">Why Sorted</a>
+          <a href={DEMO_MAILTO}>
+            Book a demo <span>30 min</span>
+          </a>
+        </div>
+
+        <div className="foot">
+          <a className="btn ghost" href="/signin">
+            Sign in
+          </a>
+          <a className="btn" href="/signup">
+            Sign up free
+          </a>
+          <div className="note">{NOTE}</div>
+        </div>
+      </nav>
+    </div>
   );
 }
 
 function SignupBand() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
+  const [message, setMessage] = useState(NOTE);
+
   const onSubmit = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
-    navigate(`/signup?email=${encodeURIComponent(email.trim())}`);
+    const value = email.trim();
+    if (!EMAIL_RE.test(value)) {
+      setMessage('Enter your work email, like you@agency.com.');
+      return;
+    }
+    window.location.assign(`/signup?email=${encodeURIComponent(value)}`);
   };
+
   return (
-    <section className="band">
+    <section className="band" id="signup-mid">
       <div className="wrap">
         <h2 className="d">Start free. Fifteen days. No card.</h2>
         <p>Set up a client in two minutes. Invite them with a link.</p>
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} noValidate>
           <input
-            id="home-signup-email"
             type="email"
             placeholder="Work email"
             aria-label="Work email"
+            aria-describedby="home-signup-note"
             autoComplete="email"
             required
             value={email}
@@ -396,218 +262,202 @@ function SignupBand() {
             Sign up for free
           </button>
         </form>
-        <small>
-          Or <a href={DEMO_MAILTO}>book a demo</a> and we will set it up with you.
+        <div className="alt">
+          <a className="btn line" href={DEMO_MAILTO}>
+            Book a demo
+          </a>
+        </div>
+        <small id="home-signup-note" aria-live="polite">
+          {message}
         </small>
       </div>
     </section>
   );
 }
 
-function BenefitStack() {
-  return (
-    <section className="sec" id="why">
-      <div className="wrap">
-        <div className="head">
-          <h2 className="d">What you get back.</h2>
-          <p>Four things that change once client work moves out of WhatsApp.</p>
-        </div>
-        <div className="stack">
-          <div className="sb">
-            <div>
-              <div className="no">01</div>
-              <h3>Every approval, on record.</h3>
-              <p>
-                Who said yes, to which version, at what time. When a client asks &quot;did we
-                approve that?&quot;, the answer is one tap, not a scroll.
-              </p>
-            </div>
-            <div className="vis">
-              <div className="rec">
-                <span className="chip ok">
-                  <Tick />
-                  Approved
-                </span>
-                <dl>
-                  <dt>By</dt>
-                  <dd>Riya Menon</dd>
-                  <dt>Version</dt>
-                  <dd>v2</dd>
-                  <dt>When</dt>
-                  <dd>Thu 16 Oct, 4:12 pm</dd>
-                  <dt>Post</dt>
-                  <dd>Diwali drop · 1 of 4</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
+export default function HomePage() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
-          <div className="sb">
-            <div>
-              <div className="no">02</div>
-              <h3>Your evenings are yours.</h3>
-              <p>
-                Work stays in Sorted. Your phone stops buzzing with &quot;is it final?&quot; during
-                dinner. Clients get a calmer channel too.
-              </p>
-            </div>
-            <div className="vis">
-              <div className="two">
-                <div className="ph2">
-                  <b>WhatsApp</b>
-                  <div className="li">
-                    <i className="dot peach" />
-                    Mom
-                  </div>
-                  <div className="li">
-                    <i className="dot sky" />
-                    Cousins
-                  </div>
-                  <div className="li">
-                    <i className="dot mint" />
-                    Priya
-                  </div>
-                </div>
-                <div className="ph2">
-                  <b>Sorted</b>
-                  <div className="li">
-                    <i className="dot acc" />
-                    Kite &amp; Co
-                  </div>
-                  <div className="li">
-                    <i className="dot amber" />
-                    Mehta Sweets
-                  </div>
-                  <div className="li">
-                    <i className="dot green" />
-                    Tara Jewels
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+  useEffect(() => {
+    const onScroll = (): void => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
-          <div className="sb">
-            <div>
-              <div className="no">03</div>
-              <h3>One place per client.</h3>
-              <p>
-                One workspace, one client, one chat. Briefs, posts, files and the plan live there.
-                Nobody asks &quot;which group was that in?&quot;
-              </p>
-            </div>
-            <div className="vis">
-              <div className="ws">
-                <div>
-                  <i className="dot acc" />
-                  Kite &amp; Co<span>2 in review</span>
-                </div>
-                <div>
-                  <i className="dot amber" />
-                  Mehta Sweets<span>plan shared</span>
-                </div>
-                <div>
-                  <i className="dot green" />
-                  Tara Jewels<span>1 brief</span>
-                </div>
-              </div>
-            </div>
-          </div>
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+    menuBtnRef.current?.focus();
+  }, []);
 
-          <div className="sb">
-            <div>
-              <div className="no">04</div>
-              <h3>Nothing waits on you.</h3>
-              <p>
-                A catch-up at 10:30 and 3:30, weekdays, only when something moved. You can stop
-                checking, because it checks for you.
-              </p>
-            </div>
-            <div className="vis">
-              <div className="clockv">
-                <div className="t">
-                  <b>10:30</b>
-                  <span>2 reviews, 1 brief</span>
-                </div>
-                <div className="t">
-                  <b>15:30</b>
-                  <span>4 comments, 1 missed chat</span>
-                </div>
-                <div className="t off">
-                  <b>Sat</b>
-                  <span>Nothing sent</span>
-                </div>
-                <div className="t off">
-                  <b>Sun</b>
-                  <span>Nothing sent</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
+  const problemsMobile = clipFor(HOME_MEDIA_BASE, 'problems-m');
+  const problemsDesktop = clipFor(HOME_MEDIA_BASE, 'problems-d');
 
-function Close() {
-  return (
-    <section className="close">
-      <div className="wrap">
-        <h2 className="d">
-          Get your client work <em>sorted.</em>
-        </h2>
-        <CtaPair />
-        <div className="note">{TRIAL_NOTE}</div>
-      </div>
-    </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer>
-      <div className="wrap">
-        <Wordmark />
-        <ul>
-          <li>
-            <a href="#features">Product</a>
-          </li>
-          <li>
-            <a href={DEMO_MAILTO}>Book a demo</a>
-          </li>
-          <li>
-            <a href="mailto:support@srtd.io">Contact</a>
-          </li>
-          <li>
-            <Link to="/legal/privacy-policy">Privacy</Link>
-          </li>
-          <li>
-            <Link to="/legal/terms-and-conditions">Terms</Link>
-          </li>
-        </ul>
-        <span className="cp">© 2026 Sorted · Made in Mumbai</span>
-      </div>
-    </footer>
-  );
-}
-
-export function HomePage() {
-  useForceLight();
   return (
     <div className="home">
-      <Header />
+      <header className={scrolled ? 'top on' : 'top'} id="top">
+        <div className="wrap">
+          <a className="logo" href="#top" aria-label="srtd home">
+            <Wordmark />
+          </a>
+          <span className="sp" />
+          <a className="btn sm ghost" href="/signin">
+            Sign in
+          </a>
+          <a className="btn sm" href="/signup">
+            Sign up
+          </a>
+          <button
+            ref={menuBtnRef}
+            className="icon-btn"
+            type="button"
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            aria-controls="home-menu"
+            onClick={() => setMenuOpen(true)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <Menu open={menuOpen} onClose={closeMenu} />
+
       <main>
-        <Hero />
-        <HomeFilm />
-        <FeatureRail />
+        <section className="hero">
+          <div className="wrap in">
+            <h1 className="d">
+              You can&apos;t block <em>your clients.</em>
+            </h1>
+            <p>
+              So we built Sorted. Your social media posts arrive as cards, feedback stays on the
+              post, and every approval is on record.
+            </p>
+            <Cta />
+            <div className="note">{NOTE}</div>
+          </div>
+        </section>
+
+        {problemsMobile && problemsDesktop ? (
+          <section className="prob" aria-label="Why agencies need Sorted">
+            <div className="wrap">
+              <div className="box mb">
+                <ClipVideo clip={problemsMobile} label={PROBLEMS_LABEL} />
+              </div>
+              <div className="box dk">
+                <ClipVideo clip={problemsDesktop} label={PROBLEMS_LABEL} />
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="sec" id="features">
+          <div className="wrap">
+            <div className="head">
+              <h2 className="d">Chat. Plan. Approve.</h2>
+              <p>Each one replaces a habit you have on WhatsApp today.</p>
+            </div>
+          </div>
+          <div className="rail">
+            {FEATURES.map((feature) => {
+              const clip = clipFor(HOME_MEDIA_BASE, feature.clip);
+              return (
+                <article key={feature.key} className={`card ${feature.tone}`}>
+                  <div className="k">{feature.key}</div>
+                  <h3>{feature.title}</h3>
+                  <p>{feature.body}</p>
+                  {clip ? (
+                    <div className="mock">
+                      <div className="clipbox">
+                        <ClipVideo clip={clip} label={feature.label} className="shot clip" />
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
         <SignupBand />
-        <BenefitStack />
-        <Close />
+
+        <section className="sec" id="why">
+          <div className="wrap">
+            <div className="head">
+              <h2 className="d">What Sorted sorts.</h2>
+              <p>Four arguments you’ll never have again.</p>
+            </div>
+            <div className="stack">
+              {REASONS.map((reason) => {
+                const src = mediaUrl(HOME_MEDIA_BASE, reason.image);
+                return (
+                  <div key={reason.kick} className={src ? 'sb' : 'sb text-only'}>
+                    <div className="tx">
+                      <div className="kick">{reason.kick}</div>
+                      <h3>{reason.title}</h3>
+                      <p>{reason.body}</p>
+                      <div className="proof">
+                        <Tick />
+                        {reason.proof}
+                      </div>
+                    </div>
+                    {src ? (
+                      <div className="vis">
+                        <img
+                          className="shot"
+                          src={src}
+                          alt={reason.alt}
+                          width={REASON_IMAGE_WIDTH}
+                          height={REASON_IMAGE_HEIGHT}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="close">
+          <div className="wrap">
+            <h2 className="d">
+              Get your social media work <em>sorted.</em>
+            </h2>
+            <Cta />
+            <div className="note">{NOTE}</div>
+          </div>
+        </section>
       </main>
-      <Footer />
+
+      <footer>
+        <div className="wrap">
+          <a className="logo" href="#top" aria-label="srtd home">
+            <Wordmark />
+          </a>
+          <ul>
+            <li>
+              <a href="#features">Product</a>
+            </li>
+            <li>
+              <a href={DEMO_MAILTO}>Book a demo</a>
+            </li>
+            <li>
+              <a href="/legal/privacy-policy">Privacy</a>
+            </li>
+            <li>
+              <a href="/legal/terms-and-conditions">Terms</a>
+            </li>
+          </ul>
+          <span className="cp">© 2026 Sorted · Made in Mumbai</span>
+        </div>
+      </footer>
     </div>
   );
 }
-
-export default HomePage;
