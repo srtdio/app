@@ -7,9 +7,9 @@ import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { supabase } from '@/lib/supabase';
 
-const MIN_PASSWORD_LENGTH = 6;
+export const MIN_PASSWORD_LENGTH = 8;
 
-/** Runtime-detected IANA timezone; shown prefilled and editable. */
+/** Runtime-detected IANA timezone, stored for the workspace step. */
 function detectTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -35,8 +35,6 @@ export interface SignUpAuthClient {
 export interface SignUpInput {
   email: string;
   password: string;
-  displayName: string;
-  workspaceName: string;
   timezone: string;
   policyConsent: boolean;
 }
@@ -46,35 +44,23 @@ export type SignUpResult =
   | { status: 'authenticated' }
   | { status: 'confirm-email' };
 
+export const POLICY_CONSENT_MESSAGE = 'Tick the box to agree to the Terms and Privacy Policy.';
+
 /**
- * Sign the user up, stashing the workspace details as user_metadata. Workspace
- * creation is intentionally NOT performed here: with email confirmation ON,
- * signUp returns no session, so an RPC fired now would run unauthenticated and
- * silently create nothing. Creation is deferred to the first authenticated load
- * (WorkspaceProvider bootstrap), giving one creation path that works whether
- * confirmation is ON (session null -> confirm-email) or OFF (session present).
+ * Create the account with email and password only. Name, username, role and the
+ * workspace come one question at a time in onboarding (OnboardingFlow), which the
+ * app shell shows to anyone whose profile is unfinished or who has no workspace.
  */
 export async function performSignUp(
   client: SignUpAuthClient,
   input: SignUpInput,
 ): Promise<SignUpResult> {
-  if (!input.policyConsent) {
-    return {
-      status: 'error',
-      message: 'You must agree to the Privacy Policy and Terms & Conditions to create an account.',
-    };
-  }
+  if (!input.policyConsent) return { status: 'error', message: POLICY_CONSENT_MESSAGE };
 
   const { data, error } = await client.auth.signUp({
-    email: input.email,
+    email: input.email.trim(),
     password: input.password,
-    options: {
-      data: {
-        display_name: input.displayName,
-        workspace_name: input.workspaceName,
-        timezone: input.timezone,
-      },
-    },
+    options: { data: { timezone: input.timezone } },
   });
   if (error) return { status: 'error', message: error.message };
   if (data.session === null) return { status: 'confirm-email' };
@@ -83,32 +69,31 @@ export async function performSignUp(
 
 export function SignUpPage() {
   const navigate = useNavigate();
-  // The homepage signup band hands off ?email=; prefill it, still editable.
+  // The homepage signup band and the sign-in screen hand off ?email=; prefilled, still editable.
   const [searchParams] = useSearchParams();
-  const [name, setName] = useState('');
   const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [workspaceName, setWorkspaceName] = useState('');
-  const [timezone, setTimezone] = useState(detectTimezone);
   const [policyConsent, setPolicyConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [awaitingConfirm, setAwaitingConfirm] = useState(false);
 
+  const canSubmit =
+    email.trim().length > 0 &&
+    password.length >= MIN_PASSWORD_LENGTH &&
+    policyConsent &&
+    !submitting;
+
   async function handleSignUp(): Promise<void> {
     setError(null);
     setSubmitting(true);
-
     const result = await performSignUp(supabase as unknown as SignUpAuthClient, {
       email,
       password,
-      displayName: name,
-      workspaceName,
-      timezone,
+      timezone: detectTimezone(),
       policyConsent,
     });
-
     if (result.status === 'error') {
       setError(result.message);
       setSubmitting(false);
@@ -119,7 +104,7 @@ export function SignUpPage() {
       setSubmitting(false);
       return;
     }
-    navigate('/pipeline', { replace: true });
+    navigate('/chat', { replace: true });
   }
 
   if (awaitingConfirm) {
@@ -136,64 +121,49 @@ export function SignUpPage() {
           </Link>
         }
       >
-        <div className="flex flex-col gap-4">
-          <p className="text-sm text-fg-2">
-            Check your email to confirm your account. We sent a confirmation link to{' '}
-            <span className="font-medium text-fg">{email}</span>. Once confirmed, sign in and your
-            workspace will be ready.
-          </p>
-          <Link
-            to="/signin"
-            className="inline-flex min-h-[44px] min-w-[44px] w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover"
-          >
-            Go to sign in
-          </Link>
-        </div>
+        <p className="text-sm text-fg-2 [text-wrap:pretty]">
+          We sent a confirmation link to <span className="font-medium text-fg">{email}</span>. Open
+          it, then sign in to set up your workspace.
+        </p>
       </AuthShell>
     );
   }
 
   return (
     <AuthShell
-      title="Create your account"
-      subtitle="Set up your workspace on Sorted."
+      title="Start your 15-day free trial"
+      subtitle="No card needed. Takes about a minute."
       footer={
-        <Link
-          to="/signin"
-          className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline"
-        >
-          Sign in
-        </Link>
+        <span className="inline-flex flex-wrap items-center justify-center gap-x-1">
+          <span>Already have an account?</span>
+          <Link
+            to="/signin"
+            className="inline-flex min-h-[44px] items-center justify-center font-medium text-accent hover:underline"
+          >
+            Sign in
+          </Link>
+        </span>
       }
     >
       <form
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          void handleSignUp();
+          if (canSubmit) void handleSignUp();
         }}
       >
-        <Field label="Name" htmlFor="signup-name">
-          <Input
-            id="signup-name"
-            type="text"
-            autoComplete="name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </Field>
-
-        <Field label="Email" htmlFor="signup-email">
+        <Field label="Work email" htmlFor="signup-email">
           <Input
             id="signup-email"
             type="email"
             autoComplete="email"
+            placeholder="you@agency.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
         </Field>
 
-        <Field label="Password" htmlFor="signup-password" required>
+        <Field label="Password" htmlFor="signup-password" hint="At least 8 characters.">
           <div className="relative">
             <Input
               id="signup-password"
@@ -201,9 +171,7 @@ export function SignUpPage() {
               autoComplete="new-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              required
               minLength={MIN_PASSWORD_LENGTH}
-              aria-describedby="signup-password-hint"
               className="pr-16"
             />
             <button
@@ -216,32 +184,6 @@ export function SignUpPage() {
               {passwordVisible ? 'Hide' : 'Show'}
             </button>
           </div>
-          <p id="signup-password-hint" className="mt-1.5 text-[11px] text-fg-3">
-            Use at least {MIN_PASSWORD_LENGTH} characters that contains letters, numbers and
-            symbols.
-          </p>
-        </Field>
-
-        <Field label="Workspace name" htmlFor="signup-workspace">
-          <Input
-            id="signup-workspace"
-            type="text"
-            value={workspaceName}
-            onChange={(event) => setWorkspaceName(event.target.value)}
-          />
-        </Field>
-
-        <Field
-          label="Workspace timezone"
-          htmlFor="signup-timezone"
-          hint="Detected automatically. Edit if it looks wrong."
-        >
-          <Input
-            id="signup-timezone"
-            type="text"
-            value={timezone}
-            onChange={(event) => setTimezone(event.target.value)}
-          />
         </Field>
 
         <div className="flex items-start gap-1.5 text-sm text-fg-2">
@@ -252,15 +194,23 @@ export function SignUpPage() {
             <input
               id="signup-policy-consent"
               type="checkbox"
-              required
               checked={policyConsent}
               onChange={(event) => setPolicyConsent(event.target.checked)}
-              aria-label="Agree to the Privacy Policy and Terms & Conditions"
+              aria-label="Agree to the Terms and Privacy Policy"
               className="h-4 w-4 accent-accent"
             />
           </label>
           <span className="flex flex-wrap items-center gap-x-1 leading-6">
-            <span className="flex min-h-11 items-center">I have read and agree to the</span>
+            <span className="flex min-h-11 items-center">I agree to the</span>
+            <Link
+              to="/legal/terms-and-conditions"
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-h-11 items-center text-accent underline underline-offset-2"
+            >
+              Terms
+            </Link>
+            <span className="flex min-h-11 items-center">and</span>
             <Link
               to="/legal/privacy-policy"
               target="_blank"
@@ -268,15 +218,6 @@ export function SignUpPage() {
               className="flex min-h-11 items-center text-accent underline underline-offset-2"
             >
               Privacy Policy
-            </Link>
-            ,
-            <Link
-              to="/legal/terms-and-conditions"
-              target="_blank"
-              rel="noreferrer"
-              className="flex min-h-11 items-center text-accent underline underline-offset-2"
-            >
-              Terms &amp; Conditions
             </Link>
           </span>
         </div>
@@ -286,9 +227,9 @@ export function SignUpPage() {
         <Button
           variant="primary"
           size="lg"
-          className="w-full"
+          className="w-full bg-fg text-bg hover:bg-fg hover:opacity-90"
           type="submit"
-          disabled={submitting || !policyConsent}
+          disabled={!canSubmit}
         >
           {submitting ? 'Creating account' : 'Create account'}
         </Button>

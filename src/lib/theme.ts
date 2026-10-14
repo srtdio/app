@@ -2,18 +2,20 @@ export type Theme = 'light' | 'dark';
 
 const STORAGE_KEY = 'sorted-theme';
 
+/**
+ * Light unless the person picked dark themselves (Settings or the theme toggle).
+ * The phone's own dark setting is not followed: everyone starts in light.
+ */
 export function getTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === 'light' || stored === 'dark') {
-    return stored;
+  try {
+    return localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
   }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-// A manual toggle can pin a theme against the OS setting, which the
-// media-split <meta name="theme-color"> tags cannot follow. Read the now-painted
-// html canvas (var(--bg), token-only) and mirror it onto every theme-color meta
-// so the Safari toolbar tracks the pinned theme, not the system one.
+// Read the now-painted html canvas (var(--bg), token-only) and mirror it onto
+// every theme-color meta so the Safari toolbar tracks the chosen theme.
 function syncThemeColorMeta(): void {
   const color = getComputedStyle(document.documentElement).backgroundColor;
   if (!color) return;
@@ -22,9 +24,16 @@ function syncThemeColorMeta(): void {
   });
 }
 
+// index.html paints a dark canvas (html.pre-dark) before the stylesheet loads for
+// people who chose dark; once the app owns the theme that hint is dropped.
+function applyTheme(theme: Theme): void {
+  document.documentElement.classList.remove('pre-dark');
+  document.documentElement.classList.toggle('dark', theme === 'dark');
+}
+
 function setTheme(theme: Theme): void {
   localStorage.setItem(STORAGE_KEY, theme);
-  document.documentElement.classList.toggle('dark', theme === 'dark');
+  applyTheme(theme);
   syncThemeColorMeta();
 }
 
@@ -35,5 +44,6 @@ export function toggleTheme(): Theme {
 }
 
 export function initTheme(): void {
-  document.documentElement.classList.toggle('dark', getTheme() === 'dark');
+  applyTheme(getTheme());
+  syncThemeColorMeta();
 }

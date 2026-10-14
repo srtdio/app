@@ -45,6 +45,7 @@ import {
 } from '@/lib/post-versions';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { canDeletePost, isAgencySide, isClient } from '@/components/pages/pcs/roles';
+import { FirstReviewTip } from '@/components/onboarding/FirstReviewTip';
 import {
   AGENCY_REVIEW_HELPER,
   ON_BEHALF_CONFIRM_LINE,
@@ -1174,6 +1175,7 @@ export function PostDetailPage({
     <section className="rounded-xl border border-border bg-panel-2 p-4">
       {currentStage === 'review' && clientRole ? (
         <>
+          <FirstReviewTip />
           <p className="mb-3 text-sm text-fg-2">
             Commenting keeps the post in review. Approval is deliberate, one post at a time.
           </p>

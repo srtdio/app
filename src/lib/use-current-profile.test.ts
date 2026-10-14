@@ -49,6 +49,7 @@ function row(name: string, avatar: string | null = null): CurrentProfile {
     avatar_url: avatar,
     email_opt_in: true,
     profile_completed_at: '2026-09-01T00:00:00Z',
+    username: null,
   };
 }
 

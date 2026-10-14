@@ -29,7 +29,8 @@ interface CreatePostSheetProps {
   /** Seeds the target date when the sheet opens ('YYYY-MM-DD'); default blank. */
   initialTargetDate?: string;
   onClose: () => void;
-  onCreated: () => void;
+  /** Called with the new post's id once it (and its attachments) saved. */
+  onCreated: (postId: string) => void;
 }
 
 /** Title-case a snake_case enum value for display (e.g. single_image -> Single Image). */
@@ -352,7 +353,7 @@ export function CreatePostSheet({
       setSubmitError(result.message);
       return;
     }
-    onCreated();
+    onCreated(result.postId);
   }
 
   function gridError(key: string): ReactElement | null {
