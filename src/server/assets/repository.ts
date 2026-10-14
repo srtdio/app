@@ -876,6 +876,7 @@ export class InMemoryAssetRepository implements AssetRepository {
       kind: version.kind,
       uploaded_by: version.uploadedBy,
       uploaded_at: new Date().toISOString(),
+      page_count: null,
       ...versionShapeColumns(version),
     });
     return Promise.resolve();
