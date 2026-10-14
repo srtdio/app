@@ -342,6 +342,8 @@ folder_id and folder_path coexist for now: folder_id is the new structured folde
 
 PK id. Fields: asset_id FK, workspace_id FK, version_number, r2_key unique, mime_type, sha256 ^[a-f0-9]{64}$, size_bytes > 0, width/height/duration_ms nullable > 0, uploaded_by FK, uploaded_at. Unique (asset_id, version_number).
 
+page_count: pdf only, 1-10000, set by asset-upload from the client count; null for older files (no backfill, decision 149).
+
 RLS (20260930160000_assets_origin_chat_private.sql):
 
 - assets_select_member (SELECT to authenticated): deleted_at IS NULL AND origin = 'library' AND an active workspace_members row for (assets.workspace_id, auth.uid()).

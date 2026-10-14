@@ -153,6 +153,7 @@ export type Database = {
           id: string
           kind: string
           mime_type: string | null
+          page_count: number | null
           r2_key: string | null
           sha256: string | null
           size_bytes: number | null
@@ -170,6 +171,7 @@ export type Database = {
           id?: string
           kind: string
           mime_type?: string | null
+          page_count?: number | null
           r2_key?: string | null
           sha256?: string | null
           size_bytes?: number | null
@@ -187,6 +189,7 @@ export type Database = {
           id?: string
           kind?: string
           mime_type?: string | null
+          page_count?: number | null
           r2_key?: string | null
           sha256?: string | null
           size_bytes?: number | null
