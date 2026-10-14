@@ -84,20 +84,11 @@ describe('isGuestHome', () => {
 });
 
 describe('shouldAutoplay', () => {
-  const normal = { reducedMotion: false, saveData: false, effectiveType: '4g' };
-
-  it('autoplays on a normal connection', () => {
-    expect(shouldAutoplay(normal)).toBe(true);
-    expect(shouldAutoplay({ ...normal, effectiveType: undefined })).toBe(true);
+  it('autoplays every clip by default', () => {
+    expect(shouldAutoplay({ reducedMotion: false })).toBe(true);
   });
-  it('holds under reduced motion', () => {
-    expect(shouldAutoplay({ ...normal, reducedMotion: true })).toBe(false);
-  });
-  it('holds under Save-Data', () => {
-    expect(shouldAutoplay({ ...normal, saveData: true })).toBe(false);
-  });
-  it.each(['slow-2g', '2g', '3g'])('holds on %s', (effectiveType) => {
-    expect(shouldAutoplay({ ...normal, effectiveType })).toBe(false);
+  it('keeps the poster under the OS reduce-motion setting', () => {
+    expect(shouldAutoplay({ reducedMotion: true })).toBe(false);
   });
 });
 

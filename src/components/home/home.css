@@ -435,10 +435,6 @@ html:has(.home) body {
   aspect-ratio: 9 / 16;
   object-fit: cover;
 }
-.home .prob .clip-btn {
-  right: 12px;
-  bottom: 12px;
-}
 .home .prob .dk {
   display: none;
 }
@@ -566,46 +562,6 @@ html:has(.home) body {
   width: 100%;
   aspect-ratio: 390 / 720;
   object-fit: cover;
-}
-.home .clip-btn {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border-radius: 50%;
-  border: 0;
-  background: rgba(22, 22, 29, 0.55);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  opacity: 0.85;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
-.home .clip-btn:hover {
-  opacity: 1;
-}
-.home .clip-btn svg {
-  width: 16px;
-  height: 16px;
-  stroke: #fff;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  fill: none;
-}
-.home .clip-btn .pl {
-  display: none;
-  fill: #fff;
-  stroke: none;
-}
-.home .clip-btn.paused .pl {
-  display: block;
-}
-.home .clip-btn.paused .ps {
-  display: none;
 }
 .home .c1 {
   background: var(--t1);
