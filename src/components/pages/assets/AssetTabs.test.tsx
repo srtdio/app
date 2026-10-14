@@ -21,7 +21,7 @@ describe('AssetTabs', () => {
     ]);
     expect(html.match(/role="tab"/g)).toHaveLength(6);
     for (const label of ['All', 'Media', 'PDF', 'Docs', 'Sheets', 'Links']) {
-      expect(html).toContain(`>${label}<`);
+      expect(html).toContain(`>${label} <span`);
     }
     expect(html).toContain('<span class="tabular-nums">0</span>');
     expect(html).toContain('min-h-[44px] min-w-[44px]');
