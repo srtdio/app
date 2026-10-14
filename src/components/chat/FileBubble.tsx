@@ -1,8 +1,9 @@
 // The chat file bubble: one PDF, video, Office or other file in a message.
 //
 // Width is the text bubble's maximum on this device, never the name's: the
-// card asks for a full viewport of width and is capped at its container, so
-// the message column grows to its own max (76% touch, 65% laptop) and stops.
+// card asks for a full viewport of width (max-content) but needs none
+// (min-content 0), so the message column grows to its own max (76% touch, 65%
+// laptop) and the card fills it, never wider (BUBBLE_FILL).
 // A thumbnail (page 1 of a PDF, a video frame) sits on top; its box takes the
 // stored thumbnail's aspect from the message meta, so the height is final on
 // first paint and nothing moves when the image arrives. The sender's own file
@@ -37,6 +38,14 @@ import {
 } from '@/lib/chat/attachments';
 import { BUBBLE_NAME_BUDGET, fileKindLabel, middleTruncate } from '@/lib/files/display-name';
 import { sharedThumbnail, thumbnailKind } from '@/lib/files/thumbnail';
+
+/**
+ * The bubble's width rule as one grid track, minmax(0, 100vw): it asks for a
+ * viewport of width, so a shrink-to-fit message column grows to its max, but
+ * needs none, so it never pushes the column (or the screen) wider. A plain
+ * w-[100vw] made 100vw the minimum too: the sent bubble overflowed the left edge.
+ */
+export const BUBBLE_FILL = 'grid grid-cols-[minmax(0,100vw)]';
 
 /** Thumbnail box height / width bounds: a tall page is cropped from the top, a wide frame letterboxed. */
 export const THUMB_RATIO_MIN = 0.5;
@@ -271,7 +280,7 @@ export function FileBubble({ attachment, cache, presignEnabled }: FileBubbleProp
     <div
       data-file-bubble={kind}
       data-file-state={fileBubbleState(progress !== null, openFailed)}
-      className="w-[100vw] max-w-full"
+      className={BUBBLE_FILL}
     >
       <FileBubbleCard
         kind={kind}

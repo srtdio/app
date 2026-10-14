@@ -6,11 +6,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import {
   AlbumGrid,
+  AttachmentsFallback,
   MessageAttachments,
   albumGridClass,
   albumTiles,
   attachmentView,
 } from '@/components/chat/MessageAttachments';
+import { BUBBLE_FILL } from '@/components/chat/FileBubble';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 
 // Realistic asset_versions.id fixtures: the render layer must presign the VERSION
@@ -631,5 +633,19 @@ describe('T6: the old thin upload bar no longer exists', () => {
     );
     expect(source).not.toContain(OLD);
     expect(source).not.toContain('role="progressbar"');
+  });
+});
+
+describe('AttachmentsFallback width', () => {
+  it('shares the file bubble width rule: never wider than its column', () => {
+    const html = renderToStaticMarkup(
+      <AttachmentsFallback
+        attachments={[{ assetId: 'a1', name: 'deck.pdf', mime: 'application/pdf' }]}
+        cache={spiedCache().cache}
+        presignEnabled={false}
+      />,
+    );
+    expect(html).toContain(BUBBLE_FILL);
+    expect(html).not.toContain('w-[100vw]');
   });
 });

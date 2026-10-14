@@ -33,7 +33,7 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
 import { VoiceNote } from '@/components/chat/VoiceNote';
 import { UploadRing } from '@/components/chat/UploadRing';
-import { FileBubble } from '@/components/chat/FileBubble';
+import { BUBBLE_FILL, FileBubble } from '@/components/chat/FileBubble';
 import { cn } from '@/lib/cn';
 import { middleTruncate } from '@/lib/files/display-name';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -507,14 +507,14 @@ export function AttachmentsFallback(props: {
   presignEnabled: boolean;
 }): ReactElement {
   return (
-    <div data-attachments-fallback="" className="mt-1.5 flex flex-col gap-1.5">
+    <div data-attachments-fallback="" className={cn('mt-1.5 gap-1.5', BUBBLE_FILL)}>
       {props.attachments.map((attachment, index) => {
         const name = attachment.name.trim() !== '' ? attachment.name : 'Attachment';
         const canDownload = props.presignEnabled && attachment.assetId !== '';
         return (
           <div
             key={`${attachment.assetId}-${index}`}
-            className="flex w-[100vw] max-w-full items-center gap-2.5 rounded-xl border border-border bg-panel px-3 py-2"
+            className="flex min-w-0 items-center gap-2.5 rounded-xl border border-border bg-panel px-3 py-2"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
               <IconFile size={18} />
