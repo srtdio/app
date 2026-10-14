@@ -19,8 +19,7 @@ function makeAsset(overrides: Partial<AssetListItem>): AssetListItem {
     tags: [],
     uploadedAt: '2026-01-01T00:00:00Z',
     currentVersionId: 'av1',
-    rawKind: 'file',
-    kind: 'file',
+    kind: 'pdf',
     mimeType: null,
     sizeBytes: 2048,
     width: null,
@@ -63,7 +62,7 @@ describe('AssetCard thumbnail', () => {
   it('renders the presigned image for an image asset', () => {
     const { cache, peek } = makeCache('https://cdn.example/photo.jpg');
     const out = render(
-      makeAsset({ kind: 'image', rawKind: 'image', filename: 'photo.png', mimeType: 'image/png' }),
+      makeAsset({ kind: 'image', filename: 'photo.png', mimeType: 'image/png' }),
       cache,
       true,
     );
@@ -78,7 +77,6 @@ describe('AssetCard thumbnail', () => {
     const out = render(
       makeAsset({
         kind: 'link',
-        rawKind: 'link',
         currentVersionId: 'av1',
         externalUrl: 'https://www.example.com/path',
       }),
@@ -117,11 +115,7 @@ describe('AssetCard thumbnail', () => {
 
   it('shows the fallback and never touches the cache when presign is disabled', () => {
     const { cache, peek, resolve } = makeCache('https://cdn.example/photo.jpg');
-    const out = render(
-      makeAsset({ kind: 'image', rawKind: 'image', filename: 'photo.png' }),
-      cache,
-      false,
-    );
+    const out = render(makeAsset({ kind: 'image', filename: 'photo.png' }), cache, false);
     expect(peek).not.toHaveBeenCalled();
     expect(resolve).not.toHaveBeenCalled();
     expect(out).not.toContain('<img');

@@ -1,6 +1,7 @@
 // Guest-path decision for src/main.tsx. Runs synchronously before anything
 // heavy is imported, so this module must import nothing. The inline script in
-// index.html mirrors isGuestHome to paint the light canvas; keep them in sync.
+// index.html mirrors isGuestHome and isHomeBundlePath to paint the light
+// canvas; keep them in sync.
 
 /** Supabase's default localStorage key: sb-<project-ref>-auth-token. */
 export const AUTH_TOKEN_KEY = /^sb-.+-auth-token$/;
@@ -30,6 +31,14 @@ export function isGuestHome(input: GuestPathInput): boolean {
   if (input.pathname !== '/') return false;
   if (AUTH_CALLBACK.test(input.search) || AUTH_CALLBACK.test(input.hash)) return false;
   return !hasStoredSession(input.storageKeys);
+}
+
+/** Pages the home bundle serves to everyone, signed in or not (no redirect). */
+const HOME_BUNDLE_PATHS: readonly string[] = ['/pricing', '/demo'];
+
+/** True for /pricing and /demo: the home bundle renders them for guests and members. */
+export function isHomeBundlePath(pathname: string): boolean {
+  return HOME_BUNDLE_PATHS.includes(pathname);
 }
 
 export function localStorageKeys(): string[] {

@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { isGuestHome, localStorageKeys } from '@/components/home/guest-path';
+import { isGuestHome, isHomeBundlePath, localStorageKeys } from '@/components/home/guest-path';
 import {
   APP_STYLESHEET,
   HOME_STYLESHEET,
@@ -111,7 +111,7 @@ const guest = isGuestHome({
   storageKeys: localStorageKeys,
 });
 
-if (guest) {
+if (guest || isHomeBundlePath(window.location.pathname)) {
   bootHome(rootElement).catch((err: unknown) => recoverFromFailedBoot(HOME_STYLESHEET, err));
 } else {
   bootApp(rootElement).catch((err: unknown) => recoverFromFailedBoot(APP_STYLESHEET, err));

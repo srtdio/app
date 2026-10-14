@@ -81,7 +81,7 @@ export function AssetCard({
         </span>
       ) : null}
 
-      {item.kind === 'file' ? (
+      {item.kind !== 'image' && item.kind !== 'link' ? (
         // PDF, video, Office and other files: the stored thumbnail (PDF and
         // video) or the icon card, the name on two lines and kind, pages, size.
         <FileTile

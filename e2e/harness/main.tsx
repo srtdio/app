@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@/index.css';
+import { isHomeBundlePath } from '@/components/home/guest-path';
 
 // '/' is the smoke page. Every other path mounts the real app (App.tsx, the same
 // provider and route tree as src/main.tsx) against fixture data that Playwright
@@ -22,6 +23,15 @@ if (window.location.pathname === '/') {
       <div className="min-h-screen bg-panel p-4 font-sans text-fg">harness ok</div>
     </StrictMode>,
   );
+} else if (isHomeBundlePath(window.location.pathname)) {
+  // /pricing and /demo: the home bundle's own root, as src/main.tsx boots it.
+  void import('@/components/home/HomeEntry').then(({ HomeEntry }) => {
+    root.render(
+      <StrictMode>
+        <HomeEntry />
+      </StrictMode>,
+    );
+  });
 } else {
   void Promise.all([
     import('@/App'),

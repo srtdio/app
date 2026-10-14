@@ -58,6 +58,7 @@ html:has(.home) body {
   --band-2: #1f1f29;
   --band-line: #3a3a48;
   --band-muted: #a9a9b8;
+  --bad: #b42318;
   --shadow: 0 14px 40px rgba(22, 22, 40, 0.1), 0 2px 6px rgba(22, 22, 40, 0.06);
   --display: 'Bricolage Grotesque Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -65,6 +66,8 @@ html:has(.home) body {
   --g: clamp(16px, 4vw, 64px);
   /* Sticky header height; the feature cards size themselves against it. */
   --top-h: 68px;
+  /* One screen below the sticky header (svh: the toolbar-shown height). */
+  --screen: calc(100vh - var(--top-h));
   color-scheme: light;
   min-height: 100%;
   background: var(--bg);
@@ -76,6 +79,12 @@ html:has(.home) body {
   font-size: 16px;
   text-align: center;
   overflow-x: clip;
+}
+
+@supports (height: 100svh) {
+  .home {
+    --screen: calc(100svh - var(--top-h));
+  }
 }
 
 .home *,
@@ -379,6 +388,63 @@ html:has(.home) body {
   margin-top: 4px;
 }
 
+/* sidebar stories: coming soon, display only */
+.home .stories {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.home .story {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.home .story .badge {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font: 800 15px var(--display);
+}
+.home .story .st {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.home .story .tag {
+  font: 500 11px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.home .story .title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.home .story .soon {
+  justify-self: start;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--wash);
+  color: var(--muted);
+}
+
 /* hero */
 .home .hero {
   position: relative;
@@ -404,6 +470,13 @@ html:has(.home) body {
   max-width: 46ch;
   margin: 22px auto 0;
 }
+.home .hero .top-line {
+  margin: 0 auto 18px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--accent-ink);
+}
 .home .hero .cta {
   margin-top: 30px;
 }
@@ -413,6 +486,9 @@ html:has(.home) body {
   }
   .home .hero p {
     font-size: 17px;
+  }
+  .home .hero .top-line {
+    font-size: 14px;
   }
 }
 
@@ -512,6 +588,8 @@ html:has(.home) body {
   --fit-gap: 16px;
   flex: 0 0 min(430px, 84vw);
   scroll-snap-align: start;
+  /* A sidebar tile lands the card just below the sticky header. */
+  scroll-margin-top: calc(var(--top-h) + var(--fit-gap) + env(safe-area-inset-top, 0px));
   border-radius: 24px;
   padding: var(--card-pad);
   display: grid;
@@ -611,6 +689,15 @@ html:has(.home) body {
 .home .clipbox .clip {
   height: 100%;
   box-shadow: none;
+}
+
+/* rail arrows: desktop only, where one card fills the screen */
+.home .rail-nav {
+  display: none;
+}
+.home .icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* Never paint an undecoded video: hidden until a frame is decoded. */
@@ -929,6 +1016,441 @@ html:has(.home) body {
 }
 .home footer .cp {
   margin-left: auto;
+}
+
+/* Desktop: one thing per screen. Each section or card fits the screen below
+   the sticky header (--screen, svh-based) and visual blocks use the full
+   content width; running text keeps its max line length. Phones and tablets
+   (under 960px) keep the layout above unchanged. */
+@media (min-width: 960px) and (min-height: 640px) {
+  .home .hero {
+    min-height: var(--screen);
+    display: flex;
+    align-items: center;
+    padding-block: 48px;
+  }
+  .home .prob {
+    min-height: var(--screen);
+    display: flex;
+    align-items: center;
+    padding-block: 24px;
+  }
+  /* The film scales to the screen's height, never cropped (16:9 box). */
+  .home .prob .box.dk {
+    width: min(100%, calc((var(--screen) - 48px) * 16 / 9));
+  }
+  .home .rail-nav {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 var(--g) 8px;
+  }
+  .home .rail-nav svg {
+    stroke-linejoin: round;
+  }
+  .home .card {
+    --card-pad: clamp(32px, 4vw, 64px);
+    flex: 0 0 100%;
+    height: calc(var(--screen) - 2 * var(--fit-gap));
+    max-height: none;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 1fr auto auto auto 1fr;
+    column-gap: clamp(32px, 5vw, 96px);
+    row-gap: 18px;
+    align-content: stretch;
+  }
+  .home .card .k {
+    grid-area: 2 / 1;
+  }
+  .home .card h3 {
+    grid-area: 3 / 1;
+    font-size: clamp(34px, 3.6vw, 60px);
+    max-width: 18ch;
+  }
+  .home .card p {
+    grid-area: 4 / 1;
+    font-size: 18px;
+    max-width: 42ch;
+  }
+  /* The mockup takes the card's full height and scales with it. */
+  .home .card .mock {
+    grid-area: 1 / 2 / -1 / 3;
+    height: 100%;
+    padding-top: 0;
+    align-items: center;
+  }
+  .home .card .clipbox {
+    max-height: none;
+  }
+  /* Sticky stack: the last card sits 144px down, so each card is at most the
+     rest of the screen. */
+  .home .sb .vis {
+    height: min(calc(100vh - 200px), 860px);
+    height: min(calc(100svh - 200px), 860px);
+  }
+}
+
+/* /pricing and /demo */
+.home .page {
+  padding-block: 24px 72px;
+  text-align: left;
+}
+.home .back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding-right: 10px;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.home .back:hover {
+  color: var(--ink);
+}
+.home .back svg,
+.home .rail-nav svg,
+.home .cal-head svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.home .cal-head svg {
+  stroke: var(--ink);
+}
+.home .page-head {
+  text-align: center;
+  margin: 20px auto 40px;
+}
+.home .page-head h1 {
+  font-size: clamp(38px, 5.6vw, 76px);
+  line-height: 1;
+}
+.home .page-head p {
+  margin: 16px auto 0;
+  max-width: 52ch;
+  font-size: 18px;
+  color: var(--ink-2);
+}
+.home .plans {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+@media (min-width: 640px) {
+  .home .plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  .home .plans {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.home .plan {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+.home .plan h2 {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.home .plan .aud {
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+.home .plan .price {
+  margin: 8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.home .plan .amt {
+  font-family: var(--display);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.home .plan .unit {
+  font-size: 14px;
+  color: var(--muted);
+}
+.home .plan .incl {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.home .plan .incl li,
+.home .points li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.home .plan .incl .tick,
+.home .points .tick {
+  margin-top: 4px;
+  color: var(--accent);
+}
+/* Equal heights per row: the button sits at the bottom of every card. */
+.home .plan .btn {
+  margin-top: auto;
+  width: 100%;
+  min-width: 0;
+}
+.home .plans-note {
+  margin: 24px auto 0;
+  max-width: 60ch;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+.home .page-close {
+  border-top: 1px solid var(--line);
+  padding-block: 72px 88px;
+}
+.home .page-close h2 {
+  font-size: clamp(32px, 4.4vw, 56px);
+}
+.home .page-close .sub {
+  margin: 14px auto 0;
+  max-width: 52ch;
+  font-size: 17px;
+  color: var(--ink-2);
+}
+.home .page-close .cta {
+  margin-top: 26px;
+}
+
+.home .demo-grid {
+  display: grid;
+  gap: 32px;
+  margin-top: 16px;
+}
+.home .demo-intro h1 {
+  font-size: clamp(38px, 5vw, 72px);
+  line-height: 1;
+}
+.home .demo-intro p {
+  margin: 18px 0 0;
+  max-width: 46ch;
+  font-size: 18px;
+  color: var(--ink-2);
+}
+.home .points {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.home .demo-form {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+.home .field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.home .field label,
+.home .slot-label {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.home .demo-form input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  padding: 0 14px;
+  font: 500 16px var(--sans);
+}
+.home .demo-form input[aria-invalid='true'],
+.home .tel:has(input[aria-invalid='true']) {
+  border-color: var(--bad);
+}
+.home .tel {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.home .tel:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.home .tel input {
+  border: 0;
+  border-radius: 0;
+}
+.home .tel input:focus-visible {
+  outline: none;
+}
+.home .cc {
+  display: grid;
+  place-items: center;
+  padding: 0 12px;
+  background: var(--wash);
+  border-right: 1px solid var(--line);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.home .err {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bad);
+}
+.home .cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.home .cal-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.home .cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.home .cal-wd {
+  padding: 4px 0;
+  text-align: center;
+  font: 500 11px var(--mono);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.home .cal-day {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--wash);
+  color: var(--ink);
+  font: 600 15px var(--sans);
+  cursor: pointer;
+}
+.home .cal-day:disabled {
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: default;
+}
+.home .cal-day[aria-current='date'] {
+  border-color: var(--accent);
+  opacity: 1;
+}
+.home .cal-day[aria-pressed='true'],
+.home .slot[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.home .slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.home .slot {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 600 15px var(--sans);
+  cursor: pointer;
+}
+.home .hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.home .summary {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+.home .demo-form .btn {
+  width: 100%;
+  height: 52px;
+}
+.home .notice {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+@media (min-width: 640px) {
+  .home .demo-form {
+    padding: clamp(20px, 3vw, 36px);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    background: var(--bg);
+    box-shadow: var(--shadow);
+  }
+}
+@media (min-width: 960px) {
+  .home .demo-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: clamp(40px, 6vw, 120px);
+    align-items: start;
+  }
+  .home .demo-intro {
+    position: sticky;
+    top: calc(var(--top-h) + 32px);
+  }
+}
+/* Wide screens: name and email share a row so the form fits one screen. */
+@media (min-width: 1100px) {
+  .home .demo-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .home .demo-form > * {
+    grid-column: 1 / -1;
+  }
+  .home .demo-form > .field:nth-child(-n + 2) {
+    grid-column: auto;
+  }
 }
 
 .home.home-failed {
