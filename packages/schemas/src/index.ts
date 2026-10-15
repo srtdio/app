@@ -42,6 +42,7 @@ export * from './zod/users';
 export * from './zod/webhook_events';
 export * from './zod/webhook_processing_attempts';
 export * from './zod/workspace_buckets';
+export * from './zod/workspace_client_domains';
 export * from './zod/workspace_members';
 export * from './zod/workspace_onboarding';
 export * from './zod/workspace_role_permissions';

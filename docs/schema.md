@@ -9,7 +9,7 @@ All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` un
 
 ## Index
 
-1. Identity and access: users, user_private, brand_agency_requests, workspaces, workspace_members, workspace_role_permissions, workspace_settings, workspace_onboarding, session_devices, platform_operators
+1. Identity and access: users, user_private, brand_agency_requests, workspaces, workspace_members, workspace_client_domains, workspace_role_permissions, workspace_settings, workspace_onboarding, session_devices, platform_operators
 2. Content: workspace_buckets, posts, post_versions, post_annotations
 3. Discussion: comments, comment_reactions
 4. Briefs: briefs
@@ -98,7 +98,7 @@ One workspace = one end-client = one platform.
 | asset_bucket | text | permanent R2 bucket name, set on insert by trigger, immutable thereafter. Unique among active (deleted_at null) workspaces. |
 | key | text | short workspace key used in entity numbers |
 | platform | text | not null: instagram / x / threads / linkedin / facebook / tiktok / youtube_shorts. Existing rows backfilled to linkedin |
-| client_domain | text | nullable, ^[a-z0-9.-]+\.[a-z]{2,}$. Recorded by member_invite from the first client invite; later client invites must use it or a subdomain of it |
+| client_domain | text | nullable, ^[a-z0-9.-]+\.[a-z]{2,}$. Recorded by member_invite from the first client invite; later client invites must pass the approver email rule (see workspace_client_domains) |
 | logo_url | text | nullable, must start with https:// |
 | row_version | bigint | default 1 |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
@@ -122,8 +122,31 @@ Unique: one active membership per (workspace_id, user_id).
 workspace_create also creates the workspace's default chat group (groups.is_default) named "<client> - <Platform label>" (for example "Kite and Co - LinkedIn"), owner as the only member. Group names allow letters, digits, spaces and hyphens only, so "&" becomes "and" and other characters are dropped (40 chars max including the label, client fallback "Team").
 
 - workspace_create(p_payload, p_trace_id) SECURITY DEFINER (authenticated): creates the workspace with payload platform (default linkedin; any other value outside the 7 platforms is invalid_payload), the owner membership, the default group and a welcome inbox entry for the creator.
-- member_invite(p_workspace_id, p_email, p_role, p_trace_id) SECURITY DEFINER (authenticated with workspace.manage_members): for role client, refuses free mail domains (free_mail_client) and, once client_domain is set, any other domain that is not a subdomain of it (client_domain_mismatch); the first client invite of a workspace with no client sets client_domain. Inviting a user as client marks their open brand_agency_requests fulfilled.
+- member_invite(p_workspace_id, p_email, p_role, p_trace_id) SECURITY DEFINER (active member; workspace_member_only otherwise): a client may invite only role client (forbidden_role otherwise); owner/admin and any other role need workspace.manage_members and may invite any role. For role client it applies the approver email rule (free_mail_client, client_domain_mismatch; see workspace_client_domains); the first client invite of a workspace with no client sets client_domain. Inviting a user as client marks their open brand_agency_requests fulfilled. Current body recorded in 20261015037000_workspace_client_domains.sql.
 - member_accept(p_invite_id, p_trace_id) SECURITY DEFINER (the invitee only): activates the membership, joins the default group when join_default_group, and writes a welcome inbox entry for the invitee.
+
+### workspace_client_domains
+
+Owner-approved extra client email domains (20261015037000_workspace_client_domains.sql).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| workspace_id | uuid | FK workspaces.id ON DELETE CASCADE |
+| domain | text | ^[a-z0-9.-]+\.[a-z]{2,}$ |
+| approved_by | uuid | FK users.id |
+| created_at | timestamptz | default now() |
+| removed_at | timestamptz | nullable; soft removal |
+| removed_by | uuid | nullable, FK users.id |
+
+Unique (workspace_id, domain). RLS: SELECT for active workspace members (workspace_client_domains_select_member, authenticated). INSERT/UPDATE/DELETE/TRUNCATE revoked from authenticated and anon; SELECT granted to authenticated only.
+
+Approver email rule (member_invite, role client): free-mail domains (is_free_mail_domain) are always refused (free_mail_client). Otherwise the invitee passes when the brand word of workspaces.client_domain (domain_brand_word: the label before the ending, co.in style endings handled) appears in full in the invitee's brand word, with brand words under 4 letters needing an exact match; OR the invitee domain equals or is a subdomain of an active (removed_at null) owner-approved workspace_client_domains row. Anything else is client_domain_mismatch. Removal is soft (removed_at); re-adding clears it. Only the workspace owner may add or remove. A client may invite only clients; owner/admin may invite any role.
+
+- is_free_mail_domain(p_domain) SQL IMMUTABLE: true for the 20 listed free-mail domains (gmail.com, outlook.com, yahoo.co.in and others).
+- domain_brand_word(p_domain) plpgsql IMMUTABLE: the label before the ending (hinglish.co.in -> hinglish, mail.hinglish.in -> hinglish); null for fewer than 2 labels.
+- workspace_client_domain_add(p_workspace_id, p_domain, p_trace_id) SECURITY DEFINER (EXECUTE to authenticated only; owner only, forbidden_role otherwise): adds or re-activates a domain; invalid_payload for a malformed domain, free_mail_client for free mail. Audited.
+- workspace_client_domain_remove(p_workspace_id, p_domain, p_trace_id) SECURITY DEFINER (EXECUTE to authenticated only; owner only, forbidden_role otherwise): soft-removes the active row; not_found when none is active. Audited.
 
 ### workspace_role_permissions
 

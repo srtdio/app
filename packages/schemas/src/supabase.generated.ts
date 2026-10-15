@@ -8354,6 +8354,58 @@ export type Database = {
           },
         ]
       }
+      workspace_client_domains: {
+        Row: {
+          approved_by: string
+          created_at: string
+          domain: string
+          id: string
+          removed_at: string | null
+          removed_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          approved_by: string
+          created_at?: string
+          domain: string
+          id?: string
+          removed_at?: string | null
+          removed_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          approved_by?: string
+          created_at?: string
+          domain?: string
+          id?: string
+          removed_at?: string | null
+          removed_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_client_domains_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_client_domains_removed_by_fkey"
+            columns: ["removed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_client_domains_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_counters: {
         Row: {
           next_entity_number: number
@@ -9260,6 +9312,7 @@ export type Database = {
         }
         Returns: string
       }
+      domain_brand_word: { Args: { p_domain: string }; Returns: string }
       ensure_future_partitions: {
         Args: { p_months?: number }
         Returns: undefined
@@ -9366,6 +9419,7 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: boolean
       }
+      is_free_mail_domain: { Args: { p_domain: string }; Returns: boolean }
       is_group_member: { Args: { p_group_id: string }; Returns: boolean }
       member_accept: {
         Args: { p_invite_id: string; p_trace_id: string }
@@ -9589,6 +9643,14 @@ export type Database = {
         Returns: string
       }
       uuidv7: { Args: never; Returns: string }
+      workspace_client_domain_add: {
+        Args: { p_domain: string; p_trace_id: string; p_workspace_id: string }
+        Returns: string
+      }
+      workspace_client_domain_remove: {
+        Args: { p_domain: string; p_trace_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
       workspace_create: {
         Args: { p_payload: Json; p_trace_id: string }
         Returns: string

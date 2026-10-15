@@ -1,7 +1,7 @@
 // Induction schema (20261015030000..20261015036000), recorded from live.
 // member_invite client email rules: free mail refused (free_mail_client), a set
-// client_domain admits only itself and its subdomains (client_domain_mismatch),
-// and a workspace that already has clients but no client_domain is unaffected.
+// client_domain admits its brand word and subdomains (client_domain_mismatch
+// otherwise; full approver rule in client-domains.test.ts), and a workspace that already has clients but no client_domain is unaffected.
 // post_create takes the platform from the workspace and refuses formats that
 // platform does not offer (invalid_format). brand_agency_request caps an open
 // request at 5 sends and is fulfilled when its sender is invited as a client.
