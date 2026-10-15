@@ -91,6 +91,7 @@ import {
   seedMember,
   seedScaffold,
   seedUser,
+  seedOperator,
   seedWorkspace,
   visibleRowCount,
   type Ctx,
@@ -279,6 +280,9 @@ describe.runIf(RLS_SUITE)('chat record: channel-membership RLS and procs', () =>
     userB = await seedUser(env, admin);
     userC = await seedUser(env, admin);
     outsider = await seedUser(env, admin);
+    // Fixture owner of several workspaces: exempt from the one-workspace-per-owner
+    // trigger (20261016000000_workspace_owner_limit.sql) as an active platform operator.
+    await seedOperator(asGeneric(admin), outsider);
     wsA = await seedWorkspace(admin, owner, `Chat A ${owner.email}`);
     wsOther = await seedWorkspace(admin, outsider, `Chat O ${outsider.email}`);
     ctx = await seedScaffold(admin, wsA);

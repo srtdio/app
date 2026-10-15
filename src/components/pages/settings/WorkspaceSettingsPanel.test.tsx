@@ -3,11 +3,12 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { state, mockRpc, mockShow, mockPatch } = vi.hoisted(() => ({
+const { state, mockRpc, mockShow, mockPatch, mockFetch } = vi.hoisted(() => ({
   state: { canEdit: false as boolean | null, userId: 'user-member' },
   mockRpc: vi.fn(),
   mockShow: vi.fn(),
   mockPatch: vi.fn(),
+  mockFetch: vi.fn(),
 }));
 
 const ROW = {
@@ -43,13 +44,25 @@ vi.mock('@/lib/supabase', () => {
     is: () => query,
     order: async () => ({ data: [{ domain: 'acmegroup.com' }], error: null }),
   };
-  return { supabase: { from: () => query, rpc: mockRpc } };
+  return {
+    supabase: {
+      from: () => query,
+      rpc: mockRpc,
+      auth: { getSession: async () => ({ data: { session: { access_token: 'tok' } } }) },
+    },
+  };
 });
+vi.mock('@/lib/env', () => ({ env: { VITE_ASSET_UPLOAD_URL: 'https://upload.test/' } }));
+vi.mock('@/lib/fetch', () => ({ fetchWithTrace: mockFetch }));
 
 import {
   CLIENT_NAME_FIXED_LINE,
+  parseStorageUsage,
   PLATFORM_FIXED_LINE,
+  readWarningDismissed,
+  storageWarningCopy,
   WorkspaceSettingsPanel,
+  writeWarningDismissed,
 } from './WorkspaceSettingsPanel';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -68,6 +81,8 @@ afterEach(() => {
   root = null;
   document.body.innerHTML = '';
   mockRpc.mockReset();
+  mockFetch.mockReset();
+  localStorage.clear();
   mockShow.mockReset();
   mockPatch.mockReset();
 });
@@ -182,5 +197,87 @@ describe('WorkspaceSettingsPanel', () => {
     );
     expect(mockRpc).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('Remove acmegroup.com?');
+  });
+});
+
+describe('storage warning', () => {
+  const MB = 1024 * 1024;
+
+  async function settle(): Promise<void> {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  function usageResponse(usedBytes: number, warn: boolean): Response {
+    return Response.json({ usedBytes, warnAtBytes: 800 * MB, warn, exempt: false });
+  }
+
+  it('words the one warning in whole MB of the 1 GB', () => {
+    expect(storageWarningCopy(820 * MB + 12345)).toBe(
+      'This workspace has used 820 MB of its 1 GB.',
+    );
+  });
+
+  it('accepts only a well-formed usage body', () => {
+    expect(parseStorageUsage({ usedBytes: 1, warnAtBytes: 2, warn: false, exempt: true })).toEqual({
+      usedBytes: 1,
+      warnAtBytes: 2,
+      warn: false,
+      exempt: true,
+    });
+    expect(parseStorageUsage({ error: { code: 'usage_unavailable' } })).toBeNull();
+  });
+
+  it('keeps dismissal per viewer and survives blocked storage', () => {
+    writeWarningDismissed('ws-1', 'user-owner');
+    expect(readWarningDismissed('ws-1', 'user-owner')).toBe(true);
+    expect(readWarningDismissed('ws-1', 'user-admin')).toBe(false);
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    expect(readWarningDismissed('ws-1', 'user-owner')).toBe(false);
+    spy.mockRestore();
+  });
+
+  it('shows a dismissible banner to an owner or admin at 800 MB', async () => {
+    state.canEdit = true;
+    state.userId = 'user-owner';
+    mockFetch.mockImplementation(async () => usageResponse(820 * MB, true));
+    await render();
+    await settle();
+    expect(mockFetch.mock.calls[0]![0]).toBe('https://upload.test/usage?workspace_id=ws-1');
+    const banner = document.querySelector('[role="status"]');
+    expect(banner?.textContent).toContain('This workspace has used 820 MB of its 1 GB.');
+    const close = banner!.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!;
+    expect(close.className).toContain('h-11 w-11');
+    await act(async () => close.click());
+    expect(document.querySelector('[role="status"]')).toBeNull();
+    expect(readWarningDismissed('ws-1', 'user-owner')).toBe(true);
+  });
+
+  it('shows nothing under 800 MB or when usage is unavailable', async () => {
+    state.canEdit = true;
+    state.userId = 'user-owner';
+    mockFetch.mockImplementation(async () => usageResponse(100 * MB, false));
+    await render();
+    await settle();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[role="status"]')).toBeNull();
+    act(() => root?.unmount());
+    document.body.innerHTML = '';
+    mockFetch.mockImplementation(async () => new Response('{}', { status: 503 }));
+    await render();
+    await settle();
+    expect(document.querySelector('[role="status"]')).toBeNull();
+  });
+
+  it('never reads usage for a creator or approver', async () => {
+    state.canEdit = false;
+    state.userId = 'user-member';
+    await render();
+    await settle();
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="status"]')).toBeNull();
   });
 });

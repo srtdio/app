@@ -18,6 +18,7 @@ import {
   randomSuffix,
   seedMember,
   seedUser,
+  seedOperator,
   seedWorkspace,
   type GenericClient,
   type RlsEnv,
@@ -117,6 +118,9 @@ describe.runIf(RLS_SUITE)('approver email rule and workspace_client_domains', ()
     admin = createAdminClient(env);
     g = asGeneric(admin);
     owner = await seedUser(env, admin);
+    // Fixture owner of several workspaces: exempt from the one-workspace-per-owner
+    // trigger (20261016000000_workspace_owner_limit.sql) as an active platform operator.
+    await seedOperator(asGeneric(admin), owner);
     users.push(owner);
   });
 

@@ -18,6 +18,7 @@ import {
   loadRlsEnv,
   nextEntityNumber,
   randomSha256,
+  seedOperator,
   seedScaffold,
   seedUser,
   seedWorkspace,
@@ -145,6 +146,9 @@ describe.runIf(COMMENTS_SUITE)('comment_batch_create (feedback ledger)', () => {
     admin = createAdminClient(env);
 
     owner = await seedUser(env, admin);
+    // Fixture owner of several workspaces: exempt from the one-workspace-per-owner
+    // trigger (20261016000000_workspace_owner_limit.sql) as an active platform operator.
+    await seedOperator(asGeneric(admin), owner);
     wsA = await seedWorkspace(admin, owner, `Ledger A ${owner.email}`);
     ctxA = await seedScaffold(admin, wsA);
     ownerClient = clientFor(owner.id);

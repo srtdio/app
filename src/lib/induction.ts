@@ -420,6 +420,11 @@ export interface InductionAvailability {
   postId: string | null;
   /** The default group's chat channel id, for the group steps. */
   groupChannelId: string | null;
+  /**
+   * Whether the viewer holds brief.create. false drops the New brief step (its
+   * "+" is not rendered); null or absent while unknown keeps it.
+   */
+  canCreateBrief?: boolean | null;
 }
 
 /** Whether the data already finished a step (a setup or gate, or the team invite). */
@@ -455,6 +460,7 @@ function available(
   if (step.place === 'post') return path === 'creator' || where.postId !== null;
   // workspace_create makes the default group, so before a workspace it still counts.
   if (step.place === 'group') return where.groupChannelId !== null || !where.hasWorkspace;
+  if (step.targets.includes(K.briefsNew)) return where.canCreateBrief !== false;
   return true;
 }
 

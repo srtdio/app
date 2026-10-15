@@ -1107,6 +1107,17 @@ export async function installHarnessNetwork(
           await route.fulfill({ status: 204, headers: CORS });
           return;
         }
+        // The create form's exemption read (own row under RLS): the harness user is an
+        // active platform operator, so the create-workspace flows stay open. The
+        // non-exempt path is covered by the WorkspaceSwitcher unit tests.
+        if (table === 'platform_operators') {
+          await route.fulfill({
+            status: 200,
+            headers: { ...CORS, 'content-type': 'application/json' },
+            body: JSON.stringify([{ user_id: ME }]),
+          });
+          return;
+        }
         if (!(table in world.tables)) unmatched.push(`table ${table}`);
         if (table === 'chat_messages' && historyGate) await historyGate;
         const tableGate = tableGates.get(table);
@@ -1286,6 +1297,20 @@ export async function installHarnessNetwork(
             versionId: `0190f100-0000-7000-8000-${n}`,
             reused: false,
           },
+        }),
+      });
+      return;
+    }
+    if (url.hostname === ASSET_UPLOAD_HOST && method === 'GET' && url.pathname === '/usage') {
+      // The asset-upload Worker's storage reading: a fresh workspace, no warning.
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          usedBytes: 0,
+          warnAtBytes: 800 * 1024 * 1024,
+          warn: false,
+          exempt: false,
         }),
       });
       return;

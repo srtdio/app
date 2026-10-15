@@ -58,11 +58,14 @@ export function InductionProvider({
   data,
   workspaceId,
   workspaceLabel,
+  canCreateBrief = null,
   children,
 }: {
   data: InductionData;
   workspaceId: string | null;
   workspaceLabel: string;
+  /** brief.create for the viewer; false drops the New brief step. null while unknown. */
+  canCreateBrief?: boolean | null;
   children: ReactNode;
 }) {
   const { state } = data;
@@ -81,9 +84,13 @@ export function InductionProvider({
   const resolution = useMemo(
     () =>
       data.status === 'ready' && placesKnown
-        ? resolveStep({ path, state, where: { hasWorkspace, postId, groupChannelId } })
+        ? resolveStep({
+            path,
+            state,
+            where: { hasWorkspace, postId, groupChannelId, canCreateBrief },
+          })
         : ({ kind: 'off' } as const),
-    [data.status, placesKnown, path, state, hasWorkspace, postId, groupChannelId],
+    [data.status, placesKnown, path, state, hasWorkspace, postId, groupChannelId, canCreateBrief],
   );
 
   const { setPolling, setStep, finish } = data;

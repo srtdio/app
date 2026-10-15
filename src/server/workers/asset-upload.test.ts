@@ -53,6 +53,26 @@ vi.mock('./asset-upload-activity', async (importOriginal) => {
   };
 });
 
+// GET /usage: the service-role store and the Cloudflare read are per-test
+// stand-ins; the threshold and exemption logic stays real.
+const usageState = vi.hoisted(() => ({
+  bytes: 0 as number | null,
+  exempt: false,
+  bucket: 'assets-ws' as string | null,
+}));
+vi.mock('./asset-upload-usage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./asset-upload-usage')>();
+  return {
+    ...actual,
+    defaultUsageCache: () => null,
+    createSupabaseUsageStore: () => ({
+      workspace: () => Promise.resolve({ bucket: usageState.bucket, ownerUserId: 'owner' }),
+      isExemptOwner: () => Promise.resolve(usageState.exempt),
+    }),
+    fetchR2BucketBytes: () => Promise.resolve(usageState.bytes),
+  };
+});
+
 // Every R2 client the worker builds is the per-test in-memory multipart store.
 vi.mock('@srtdio/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@srtdio/storage')>();
@@ -1629,5 +1649,78 @@ describe('resumable (multipart) upload routes', () => {
     );
     expect(res.status).toBe(200);
     expect(state.r2.uploads.size).toBe(0);
+  });
+});
+
+describe('asset-upload GET /usage', () => {
+  const MB = 1024 * 1024;
+
+  function usageRequest(token: string | null, workspaceId: string): Request {
+    const headers = new Headers();
+    if (token !== null) headers.set('Authorization', `Bearer ${token}`);
+    return new Request(`https://worker.test/usage?workspace_id=${workspaceId}`, {
+      method: 'GET',
+      headers,
+    });
+  }
+
+  beforeEach(() => {
+    usageState.bytes = 0;
+    usageState.exempt = false;
+    usageState.bucket = 'assets-ws';
+  });
+
+  it('requires a verified caller', async () => {
+    const res = await worker.fetch(usageRequest(null, WORKSPACE), env);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a malformed workspace id', async () => {
+    const token = await mintToken(USER);
+    const res = await worker.fetch(usageRequest(token, 'nope'), env);
+    expect(res.status).toBe(400);
+  });
+
+  it('refuses a caller who is not an active member', async () => {
+    const token = await mintToken(USER);
+    const res = await worker.fetch(usageRequest(token, WORKSPACE), env);
+    expect(res.status).toBe(403);
+  });
+
+  it('returns usage with warn at 800 MB for a member', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    usageState.bytes = 800 * MB;
+    const token = await mintToken(USER);
+    const res = await worker.fetch(usageRequest(token, WORKSPACE), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      usedBytes: 800 * MB,
+      warnAtBytes: 800 * MB,
+      warn: true,
+      exempt: false,
+    });
+  });
+
+  it('never warns when the owner is exempt', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    usageState.bytes = 900 * MB;
+    usageState.exempt = true;
+    const token = await mintToken(USER);
+    const body = (await (await worker.fetch(usageRequest(token, WORKSPACE), env)).json()) as {
+      warn: boolean;
+      exempt: boolean;
+    };
+    expect(body).toMatchObject({ warn: false, exempt: true });
+  });
+
+  it('answers 503 usage_unavailable when Cloudflare cannot be read', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    usageState.bytes = null;
+    const token = await mintToken(USER);
+    const res = await worker.fetch(usageRequest(token, WORKSPACE), env);
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { error: { code: string }; usedBytes?: unknown };
+    expect(body.error.code).toBe('usage_unavailable');
+    expect(body.usedBytes).toBeUndefined();
   });
 });

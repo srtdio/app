@@ -74,7 +74,8 @@ export function AppLayout() {
   const chrome = shellChrome(isThreadRoute(pathname, searchParams));
   const [paletteOpen, setPaletteOpen] = useState(false);
   // New brief is a client action: shown only where the role holds brief.create.
-  const canCreateBrief = useWorkspaceCapability('brief.create') === true;
+  const briefCreate = useWorkspaceCapability('brief.create');
+  const canCreateBrief = briefCreate === true;
   const [avatarOpen, setAvatarOpen] = useState(false);
 
   // Email deep-link: ?w={workspaceId} sets the active workspace before the entity
@@ -260,6 +261,7 @@ export function AppLayout() {
         data={induction}
         workspaceId={workspaceId}
         workspaceLabel={workspaceDisplayName ?? ''}
+        canCreateBrief={briefCreate}
       >
         <ChatStoreProvider>
           <ChatTabSignals />

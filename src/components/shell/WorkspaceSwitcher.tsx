@@ -13,7 +13,12 @@ import { PlatformMark } from '@/components/ui/PlatformMark';
 import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
-import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
+import {
+  useWorkspace,
+  workspaceCreateErrorMessage,
+  workspaceDisplayName,
+  WORKSPACE_LIMIT_MESSAGE,
+} from '@/lib/workspace-context';
 import { cn } from '@/lib/cn';
 
 const NAME_MIN = 1;
@@ -48,8 +53,15 @@ export function workspaceCreatePayload(input: {
  * Active-workspace state stays in React only (no localStorage/URL persistence).
  */
 export function WorkspaceSwitcher() {
-  const { workspaceId, workspaces, loading, error, setActiveWorkspaceId, refreshWorkspaces } =
-    useWorkspace();
+  const {
+    workspaceId,
+    workspaces,
+    loading,
+    error,
+    setActiveWorkspaceId,
+    refreshWorkspaces,
+    createBlocked,
+  } = useWorkspace();
   const newTrace = useNewTrace();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('list');
@@ -126,7 +138,7 @@ export function WorkspaceSwitcher() {
       const payload = workspaceCreatePayload({ name: trimmedName, platform, timezone });
       const res = await workspaceCreate(supabase, { p_payload: payload, p_trace_id: newTrace() });
       if (!res.ok) {
-        setFormError(res.error.message);
+        setFormError(workspaceCreateErrorMessage(res.error.message));
         return;
       }
       await refreshWorkspaces();
@@ -201,17 +213,24 @@ export function WorkspaceSwitcher() {
             <div className="my-1 h-px bg-border" />
             <button
               type="button"
+              disabled={createBlocked}
+              aria-describedby={createBlocked ? 'workspace-limit-note' : undefined}
               onClick={() => {
                 setFormError(null);
                 setName('');
                 setPlatform(null);
                 setMode('create');
               }}
-              className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-fg-2"
             >
               <IconPlus size={18} className="shrink-0 text-fg-3" />
               <span>Create workspace</span>
             </button>
+            {createBlocked ? (
+              <p id="workspace-limit-note" className="px-3 pb-2 text-[13px] leading-snug text-fg-3">
+                {WORKSPACE_LIMIT_MESSAGE}
+              </p>
+            ) : null}
           </div>
         ) : mode === 'create' ? (
           <form onSubmit={submitDetails} className="flex flex-col gap-4 overflow-y-auto p-[18px]">

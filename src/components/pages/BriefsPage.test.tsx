@@ -50,12 +50,16 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
   return all.filter(predicate);
 }
 
-function header(onFilterChange: (filter: BriefFilter) => void = () => {}): ReactElement {
+function header(
+  onFilterChange: (filter: BriefFilter) => void = () => {},
+  canCreate = true,
+): ReactElement {
   return briefsHeader({
     search: '',
     onSearchChange: () => {},
     filter: 'all',
     onFilterChange,
+    canCreate,
   });
 }
 
@@ -74,6 +78,20 @@ describe('briefsHeader', () => {
     expect(button).toHaveLength(1);
     (button[0]!.props as { onClick: () => void }).onClick();
     expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-brief');
+  });
+
+  it('hides the "+" (and its induction target) without brief.create', () => {
+    const tree = header(() => {}, false);
+    const button = findAll(
+      tree,
+      (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Create brief',
+    );
+    expect(button).toHaveLength(0);
+    const target = findAll(
+      tree,
+      (el) => (el.props as { 'data-induction'?: string })['data-induction'] === 'briefs-new',
+    );
+    expect(target).toHaveLength(0);
   });
 
   it('renders the All / Open / Closed filter chips and wires them', () => {
