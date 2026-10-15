@@ -260,6 +260,22 @@ describe('avatar-upload worker.fetch', () => {
     expect(res.headers.get('Access-Control-Max-Age')).toBe('86400');
   });
 
+  it('reflects a PR preview origin and falls back to the primary origin otherwise', async () => {
+    const preflight = (origin: string) =>
+      worker.fetch(
+        new Request('https://worker.test/', { method: 'OPTIONS', headers: { Origin: origin } }),
+        env,
+      );
+    const preview = await preflight('https://pr-546.srtdio-app.pages.dev');
+    expect(preview.headers.get('Access-Control-Allow-Origin')).toBe(
+      'https://pr-546.srtdio-app.pages.dev',
+    );
+    const other = await preflight('https://pr-546.srtdio-app.pages.dev.evil.com');
+    expect(other.headers.get('Access-Control-Allow-Origin')).not.toBe(
+      'https://pr-546.srtdio-app.pages.dev.evil.com',
+    );
+  });
+
   it('returns 405 for an unsupported verb', async () => {
     const res = await worker.fetch(new Request('https://worker.test/', { method: 'PUT' }), env);
     expect(res.status).toBe(405);

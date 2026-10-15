@@ -33,6 +33,7 @@ import { err, ok, type Result } from '@/server/assets/types';
 // service-role workspace_members read.
 import { createSupabaseAssetReadStore, getSupabaseJwks, verifyCaller } from './asset-read';
 import { toAgoraUsername } from './agora-identity';
+import { isPreviewOrigin } from '@/server/preview-origin';
 
 /** Token lifetime: 24 hours, Agora Chat's default and maximum. */
 const TOKEN_TTL_SECONDS = 86_400;
@@ -131,7 +132,7 @@ function resolveAllowedOrigin(request: Request, env: ChatTokenEnv): string | nul
   if (origin === null) {
     return null;
   }
-  return allowedOrigins(env).includes(origin) ? origin : null;
+  return allowedOrigins(env).includes(origin) || isPreviewOrigin(origin) ? origin : null;
 }
 
 /** Attach the reflected origin (and Vary) when one is allowed. */
