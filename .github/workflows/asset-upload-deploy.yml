@@ -22,6 +22,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Deploy first, then sync secrets. Test-site preview uploads (see
+      # preview-deploy.yml) leave an undeployed latest version, and Cloudflare
+      # rejects secret edits until the latest version is the deployed one.
       - name: Deploy
         uses: cloudflare/wrangler-action@v3.14.1
         with:
@@ -30,6 +33,15 @@ jobs:
           workingDirectory: workers/asset-upload
           wranglerVersion: '3.114.17'
           packageManager: pnpm
+      - name: Sync secrets
+        uses: cloudflare/wrangler-action@v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/asset-upload
+          wranglerVersion: '3.114.17'
+          packageManager: pnpm
+          command: deployments status
           secrets: |
             CLOUDFLARE_ACCOUNT_ID
             CLOUDFLARE_R2_ACCESS_KEY_ID

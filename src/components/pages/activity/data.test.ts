@@ -14,6 +14,7 @@ import {
   groupDigest,
   isChatMention,
   isSnoozed,
+  isWelcome,
   mapEntry,
   payloadNum,
   payloadStr,
@@ -22,6 +23,8 @@ import {
   segmentSelfMentions,
   shortLine,
   unreadCount,
+  welcomeTitle,
+  WELCOME_BODY,
   type ActivityItem,
 } from '@/components/pages/activity/data';
 import { EX_MEMBER_LABEL } from '@/components/comments/commentProfiles';
@@ -1597,5 +1600,42 @@ describe('plan comments and approvals', () => {
     expect(res.data[0]?.title).toBeNull();
     expect(res.data[0]?.body).toBeNull();
     expect(res.data[0] && cardTitle(res.data[0])).toBe('Plan item');
+  });
+});
+
+describe('the system welcome row', () => {
+  const welcomeRow = row({
+    event_type: 'system',
+    entity_type: 'workspace',
+    entity_id: 'w1',
+    payload: { kind: 'welcome', workspace_name: 'Kite', platform: 'linkedin' },
+  });
+
+  it('maps payload kind welcome to its workspace and platform', () => {
+    expect(mapEntry(welcomeRow).welcome).toEqual({ workspaceName: 'Kite', platform: 'linkedin' });
+  });
+
+  it('reads one sentence through the workspace display formatter', () => {
+    const mapped = mapEntry(welcomeRow);
+    expect(isWelcome(mapped)).toBe(true);
+    expect(welcomeTitle(mapped)).toBe('Kite - LinkedIn is ready.');
+    expect(activityLine(mapped)).toBe(
+      'Kite - LinkedIn is ready. Comments, approvals and briefs land here.',
+    );
+    expect(cardTitle(mapped)).toBe('Kite - LinkedIn is ready.');
+    expect(cardBodyLine(mapped)).toBe(WELCOME_BODY);
+  });
+
+  it('falls back to the brand alone on an unknown platform', () => {
+    const mapped = mapEntry(
+      row({ event_type: 'system', payload: { kind: 'welcome', workspace_name: 'Kite' } }),
+    );
+    expect(welcomeTitle(mapped)).toBe('Kite is ready.');
+  });
+
+  it('leaves other system kinds to the generic row', () => {
+    const mapped = mapEntry(row({ event_type: 'system', payload: { kind: 'notice' } }));
+    expect(mapped.welcome).toBeNull();
+    expect(isWelcome(mapped)).toBe(false);
   });
 });

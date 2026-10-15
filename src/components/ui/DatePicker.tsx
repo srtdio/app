@@ -4,9 +4,13 @@
 // popover (prev/next month, day cells, a today marker, the selected day on
 // accent). Controlled by an ISO yyyy-mm-dd string (empty = no selection). The
 // date math and the day cells are pure helpers so they unit-test without a DOM.
+// The popover renders in a layer on the body, placed from the trigger's live
+// rect, so a sheet's scroll area never clips it: below the trigger when there is
+// room, above it otherwise.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
@@ -182,9 +186,24 @@ export function DatePicker({
     setOpen(false);
   }
 
+  // Re-place the open popover when the page scrolls or resizes under it.
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!open) return;
+    const bump = (): void => setTick((t) => t + 1);
+    window.addEventListener('resize', bump);
+    document.addEventListener('scroll', bump, true);
+    return () => {
+      window.removeEventListener('resize', bump);
+      document.removeEventListener('scroll', bump, true);
+    };
+  }, [open]);
+
   return (
     <div className="relative min-w-0">
       <button
+        ref={triggerRef}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -203,42 +222,83 @@ export function DatePicker({
         </span>
       </button>
 
-      {open ? (
-        <>
-          <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
-          <div
-            role="dialog"
-            aria-label="Choose a date"
-            className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-0 rounded-xl border border-border-strong bg-panel p-2 shadow-2xl"
-          >
-            <div className="mb-1 flex items-center justify-between">
-              <IconButton
-                label="Previous month"
-                onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, -1))}
+      {open && triggerRef.current !== null
+        ? createPortal(
+            <>
+              <div
+                className="fixed inset-0 z-[56]"
+                aria-hidden="true"
+                onClick={() => setOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-label="Choose a date"
+                className="fixed z-[57] rounded-xl border border-border-strong bg-panel p-2 shadow-2xl"
+                style={popoverPlacement(triggerRef.current.getBoundingClientRect(), {
+                  width: window.innerWidth,
+                  height: window.innerHeight,
+                })}
               >
-                <IconChevronLeft size={16} />
-              </IconButton>
-              <span className="text-sm font-medium text-fg">
-                {MONTHS[view.monthIndex]} {view.year}
-              </span>
-              <IconButton
-                label="Next month"
-                onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, 1))}
-              >
-                <IconChevronRight size={16} />
-              </IconButton>
-            </div>
-            <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] text-fg-3">
-              {WEEKDAYS.map((weekday, index) => (
-                <span key={`${weekday}-${index}`}>{weekday}</span>
-              ))}
-            </div>
-            <div className="mt-1 grid grid-cols-7 place-items-center gap-0.5">
-              {dayCells(view.year, view.monthIndex, value, todayISO, pick)}
-            </div>
-          </div>
-        </>
-      ) : null}
+                <div className="mb-1 flex items-center justify-between">
+                  <IconButton
+                    label="Previous month"
+                    onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, -1))}
+                  >
+                    <IconChevronLeft size={16} />
+                  </IconButton>
+                  <span className="text-sm font-medium text-fg">
+                    {MONTHS[view.monthIndex]} {view.year}
+                  </span>
+                  <IconButton
+                    label="Next month"
+                    onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, 1))}
+                  >
+                    <IconChevronRight size={16} />
+                  </IconButton>
+                </div>
+                <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] text-fg-3">
+                  {WEEKDAYS.map((weekday, index) => (
+                    <span key={`${weekday}-${index}`}>{weekday}</span>
+                  ))}
+                </div>
+                <div className="mt-1 grid grid-cols-7 place-items-center gap-0.5">
+                  {dayCells(view.year, view.monthIndex, value, todayISO, pick)}
+                </div>
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
     </div>
   );
+}
+
+/** The calendar's own size: wide enough for the 7-column grid, tall enough for 6 weeks. */
+const POPOVER_MIN_WIDTH = 288;
+const POPOVER_HEIGHT = 330;
+const POPOVER_GAP = 6;
+const VIEWPORT_EDGE = 8;
+
+/**
+ * Where the popover sits for a trigger rect: under it when the calendar fits
+ * below, else above it; never wider than the screen and never past its edges.
+ * Pure so it unit-tests without a DOM.
+ */
+export function popoverPlacement(
+  trigger: { top: number; bottom: number; left: number; width: number },
+  viewport: { width: number; height: number },
+): { top?: number; bottom?: number; left: number; width: number } {
+  const width = Math.min(
+    Math.max(trigger.width, POPOVER_MIN_WIDTH),
+    viewport.width - VIEWPORT_EDGE * 2,
+  );
+  const left = Math.min(
+    Math.max(trigger.left, VIEWPORT_EDGE),
+    viewport.width - VIEWPORT_EDGE - width,
+  );
+  const roomBelow = viewport.height - trigger.bottom - POPOVER_GAP - VIEWPORT_EDGE;
+  if (roomBelow >= POPOVER_HEIGHT || trigger.top < POPOVER_HEIGHT + POPOVER_GAP) {
+    return { top: trigger.bottom + POPOVER_GAP, left, width };
+  }
+  return { bottom: viewport.height - trigger.top + POPOVER_GAP, left, width };
 }

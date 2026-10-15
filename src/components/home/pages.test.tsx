@@ -68,6 +68,13 @@ describe('homepage copy', () => {
     expect(html).not.toContain('&amp;pos;');
   });
 
+  it('hero, signup band and closing section each carry their own line; no 15-day line', () => {
+    expect(html).toContain('Work chat that stays out of the WhatsApp group.');
+    expect(html).toContain('Free. Faster than finding that one voice note.');
+    expect(html).toContain('Made for people who’ve typed “any update?” too many times.');
+    expect(html).not.toContain('15 days free');
+  });
+
   it('every Book a demo goes to /demo; no mailto is left', () => {
     expect(html).not.toContain('mailto:');
     expect(html).toContain('href="/demo"');

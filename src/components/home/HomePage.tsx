@@ -4,11 +4,16 @@ import '@fontsource/inter/latin-500.css';
 import '@fontsource/inter/latin-600.css';
 import '@fontsource/inter/latin-700.css';
 import { ClipVideo } from './ClipVideo';
-import { NOTE, SiteShell, Tick } from './Chrome';
+import { SiteShell, Tick } from './Chrome';
 import { DEMO_HREF } from './config';
 import { FEATURES, featureFromHash, featureId, showFeature } from './features';
 import { HOME_MEDIA_BASE, clipFor, mediaUrl } from './media';
 import './home.css';
+
+// Small lines under the hero buttons, the signup email box and the closing buttons.
+const HERO_NOTE = 'Work chat that stays out of the WhatsApp group.';
+const SIGNUP_NOTE = 'Free. Faster than finding that one voice note.';
+const CLOSE_NOTE = 'Made for people who’ve typed “any update?” too many times.';
 
 // Public homepage (/), v19 prototype approved 14 Oct 2026. Light only. Rendered
 // on the guest path without a router (src/main.tsx -> HomeEntry) and by
@@ -82,7 +87,7 @@ function Cta() {
 
 function SignupBand() {
   const [email, setEmail] = useState('');
-  const [message, setMessage] = useState(NOTE);
+  const [message, setMessage] = useState(SIGNUP_NOTE);
 
   const onSubmit = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
@@ -218,7 +223,7 @@ export default function HomePage() {
             gives each client one workspace, so WhatsApp goes back to being WhatsApp.
           </p>
           <Cta />
-          <div className="note">{NOTE}</div>
+          <div className="note">{HERO_NOTE}</div>
         </div>
       </section>
 
@@ -293,7 +298,7 @@ export default function HomePage() {
             Get your social media work <em>sorted.</em>
           </h2>
           <Cta />
-          <div className="note">{NOTE}</div>
+          <div className="note">{CLOSE_NOTE}</div>
         </div>
       </section>
     </SiteShell>

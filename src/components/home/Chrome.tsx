@@ -171,7 +171,6 @@ function Menu({
           <a className="btn" href="/signup">
             Sign up free
           </a>
-          <div className="note">{NOTE}</div>
         </div>
       </nav>
     </div>

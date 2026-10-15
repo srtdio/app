@@ -13,6 +13,7 @@ import {
   type QueueItem,
   type UploadOutcome,
 } from '@/lib/asset-upload';
+import { dispatchInductionRefresh } from '@/lib/induction';
 
 /** One queued file with an optional image preview. Names are derived per mode. */
 export interface PendingUpload {
@@ -287,6 +288,8 @@ export function AssetUploadSheet({
         const done = new Set(result.succeeded);
         setUploads((prev) => prev.filter((item) => !done.has(item.id)));
       }
+
+      if (result.succeeded.length > 0) dispatchInductionRefresh();
 
       if (result.failed.length === 0) {
         if (result.succeeded.length > 1) {

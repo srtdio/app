@@ -29,7 +29,10 @@ vi.mock('react', async (importOriginal) => {
 });
 
 // The card reads the workspace key (for KEY-N) from the workspace context.
-vi.mock('@/lib/workspace-context', () => ({
+vi.mock('@/lib/workspace-context', async (importOriginal) => ({
+  // The real display formatter, so the welcome row reads "<Brand> - <Platform>".
+  workspaceDisplayName: (await importOriginal<typeof import('@/lib/workspace-context')>())
+    .workspaceDisplayName,
   useWorkspace: () => ({ workspaceKey: 'gbl' }),
 }));
 
@@ -508,5 +511,26 @@ describe('ActivityCard actor rows', () => {
     expect(team).toContain('Changes asked on a plan item (team review)');
     expect(team).toContain('Someone');
     expect(team).toContain('Plan item');
+  });
+});
+
+describe('ActivityCard: the system welcome row', () => {
+  const welcome = item({
+    eventType: 'system',
+    entityType: 'workspace',
+    entityId: 'w1',
+    welcome: { workspaceName: 'Kite', platform: 'instagram' },
+  });
+
+  it('reads "<Brand> - <Platform> is ready." with what lands here below it', () => {
+    const html = renderCard([welcome]);
+    expect(html).toContain('Kite - Instagram is ready.');
+    expect(html).toContain('Comments, approvals and briefs land here.');
+    expect(html).toContain('Welcome');
+  });
+
+  it('renders any other system kind as the generic row', () => {
+    const html = renderCard([item({ eventType: 'system', entityType: null, entityId: null })]);
+    expect(html).not.toContain('is ready.');
   });
 });

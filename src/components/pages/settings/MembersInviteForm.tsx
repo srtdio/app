@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
 import { FREE_MAIL_APPROVER_MESSAGE } from './members-data';
+import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 
 export type InviteRole = 'admin' | 'agency' | 'client';
 
@@ -258,6 +259,7 @@ export function MembersInviteForm({
         setSingleSentTo(target);
         setSingleSubmitting(false);
         onInvited?.();
+        dispatchInductionRefresh();
       },
       onError: (detail, code) => {
         if (code === 'client_domain_mismatch') {
@@ -346,12 +348,15 @@ export function MembersInviteForm({
     setInvitees(failed.map(({ invitee }) => invitee));
     setSentCount(results.length - failed.length);
     setGroupSubmitting(false);
-    if (failed.length < results.length) onInvited?.();
+    if (failed.length < results.length) {
+      onInvited?.();
+      dispatchInductionRefresh();
+    }
   }
 
   return (
     <div className="flex max-w-[520px] flex-col gap-8">
-      <section className="flex flex-col gap-4">
+      <section data-induction={INDUCTION_KEYS.membersInvite} className="flex flex-col gap-4">
         <h3 className="text-base font-semibold">Invite member</h3>
         <form className="flex flex-col gap-4" onSubmit={handleSingleSubmit}>
           <Field label="Email" htmlFor="invite-email" required>

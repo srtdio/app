@@ -17,6 +17,8 @@ import { logger } from '@/lib/logger';
 import { EX_MEMBER_LABEL } from '@/components/comments/commentProfiles';
 import { mentionHandle, resolveMentionPreview } from '@/lib/chat/mentions';
 import { chatMessageHref, withoutBellEntries } from '@/lib/inbox/bell-types';
+import { isPostPlatform } from '@srtdio/posts';
+import { workspaceDisplayName } from '@/lib/workspace-context';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -174,6 +176,42 @@ export interface ActivityItem {
   reviewWithdrawn?: boolean;
   /** plan_review withdrawal only: the status withdrawn (payload.previous). */
   reviewPrevious?: string | null;
+  /** A 'system' welcome row only (payload.kind 'welcome'): the workspace it opens. */
+  welcome?: WelcomeInfo | null;
+}
+
+/** The workspace a welcome row names: payload.workspace_name and payload.platform. */
+export interface WelcomeInfo {
+  workspaceName: string;
+  platform: string;
+}
+
+/** The welcome row's second sentence, shown as its body. */
+export const WELCOME_BODY = 'Comments, approvals and briefs land here.';
+
+function welcomeOf(eventType: string, payload: unknown): WelcomeInfo | null {
+  if (eventType !== 'system' || payloadStr(payload, 'kind') !== 'welcome') return null;
+  const workspaceName = payloadStr(payload, 'workspace_name');
+  if (workspaceName === null) return null;
+  return { workspaceName, platform: payloadStr(payload, 'platform') ?? '' };
+}
+
+/** Whether a row is the welcome workspace_create / member_accept writes. */
+export function isWelcome(item: Pick<ActivityItem, 'welcome'>): boolean {
+  return item.welcome != null;
+}
+
+/**
+ * The welcome row's title: "<Brand> - <Platform> is ready." through the one
+ * workspace display formatter; the brand alone when the platform is unknown.
+ */
+export function welcomeTitle(item: Pick<ActivityItem, 'welcome'>): string {
+  const info = item.welcome;
+  if (info == null) return '';
+  const label = isPostPlatform(info.platform)
+    ? workspaceDisplayName({ name: info.workspaceName, platform: info.platform })
+    : info.workspaceName;
+  return `${label} is ready.`;
 }
 
 /**
@@ -291,6 +329,7 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     reviewStatus: review ? payloadStr(payload, 'status') : null,
     reviewWithdrawn: review && payloadFlag(payload, 'withdrawn'),
     reviewPrevious: review ? payloadStr(payload, 'previous') : null,
+    welcome: welcomeOf(row.event_type, payload),
   };
 }
 
@@ -443,6 +482,7 @@ export function activityLine(
   const who = item.actorName;
   const target = entityTarget(item);
   if (isChatMention(item)) return chatMentionLine(item);
+  if (isWelcome(item)) return `${welcomeTitle(item)} ${WELCOME_BODY}`;
   const actorRow = actorRowLine(item, workspaceKey, brand);
   if (actorRow !== null) return actorRow;
   const planLine = planEventLine(item);
@@ -492,6 +532,7 @@ export function activityLine(
  * a non-entity entry, e.g. an invite, still reads as a sentence). Null-safe.
  */
 export function cardTitle(item: ActivityItem): string {
+  if (isWelcome(item)) return welcomeTitle(item);
   if (item.title !== null) return item.title;
   if (item.entityType === 'post') return 'Untitled post';
   if (item.entityType === 'brief') return 'Untitled brief';
@@ -511,6 +552,7 @@ export function shortLine(
   workspaceKey: string | null = null,
   brand: string | null = null,
 ): string {
+  if (isWelcome(item)) return WELCOME_BODY;
   const actorRow = actorRowLine(item, workspaceKey, brand);
   if (actorRow !== null) return actorRow;
   const planLine = planEventLine(item);
