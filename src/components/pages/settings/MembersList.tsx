@@ -1,4 +1,4 @@
-// Presentational members list: two groups by side (Approvers / Team), each
+// Presentational members list: two groups by side (Approvers / Creators), each
 // with its pending invites inline. Pure and prop-driven so it renders statically in tests
 // (a client-role viewer sees no kebab; the owner row shows the lock). All colour
 // comes from theme tokens for light+dark parity; every control is >=44px.
@@ -178,7 +178,7 @@ function Group({
 
 interface MembersListProps {
   derived: DerivedMembers;
-  /** The client name (workspaces.name), shown under the Approvers heading. */
+  /** The brand name (workspaces.name), shown under the Approvers heading. */
   clientName: string | null;
   canManage: boolean;
   cancellingId: string | null;
@@ -187,8 +187,8 @@ interface MembersListProps {
 }
 
 /**
- * The roster grouped by side: "Approvers" (role client) under the client's
- * name, then "Team" (owner, admin, agency). Pending invites sit inline at the
+ * The roster grouped by side: "Approvers" (role client) under the brand
+ * name, then "Creators" (owner, admin, agency). Pending invites sit inline at the
  * end of their side's group with their Cancel action.
  */
 export function MembersList({
@@ -233,7 +233,11 @@ export function MembersList({
         {pendingApprovers.map(renderPending)}
       </Group>
 
-      <Group title="Team" count={agency.length + pendingTeam.length} emptyText="No team members">
+      <Group
+        title="Creators"
+        count={agency.length + pendingTeam.length}
+        emptyText="No creators yet"
+      >
         {agency.map(renderActive)}
         {pendingTeam.map(renderPending)}
       </Group>

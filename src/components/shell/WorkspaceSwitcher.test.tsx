@@ -81,7 +81,7 @@ describe('WorkspaceSwitcher', () => {
     await act(async () => button('Create workspace').click());
     expect(dialogTitle()).toBe('Create workspace');
     expect(document.querySelector('label[for="workspace-name"]')?.textContent).toContain(
-      'Client name',
+      'Brand name',
     );
 
     // Seven 44px tiles, none picked; Continue waits for both fields.

@@ -1,4 +1,4 @@
-// Settings > Workspace: the client name and platform (read-only for everyone,
+// Settings > Workspace: the brand name and platform (read-only for everyone,
 // final after creation), the timezone (owner/admin edit via workspace_update;
 // everyone else reads), and for the owner only the approved approver addresses.
 // No workspace logo in v2.0. Every colour is a theme token for light/dark
@@ -72,7 +72,7 @@ export function WorkspaceSettingsPanel() {
 
   return (
     <div className="flex max-w-[520px] flex-col gap-6">
-      <Field label="Client name" hint={CLIENT_NAME_FIXED_LINE}>
+      <Field label="Brand name" hint={CLIENT_NAME_FIXED_LINE}>
         <ReadOnlyValue>{row.name}</ReadOnlyValue>
       </Field>
 

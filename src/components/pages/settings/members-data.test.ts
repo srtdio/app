@@ -172,6 +172,7 @@ describe('roleLabel / memberRemoveErrorMessage / formatJoined', () => {
     expect(roleLabel('owner')).toBe('Owner');
     // The role value stays client; people read it as the approver.
     expect(roleLabel('client')).toBe('Approver');
+    expect(roleLabel('agency')).toBe('Creator');
     expect(roleLabel('mystery')).toBe('mystery');
   });
 
@@ -216,10 +217,10 @@ describe('client domain copy', () => {
 
   it('words the one-client toast', () => {
     expect(clientDomainMismatchMessage('brand.com')).toBe(
-      'One client per workspace. Everyone here needs a brand.com address.',
+      'One brand per workspace. Every approver needs a brand.com address.',
     );
     expect(clientDomainMismatchMessage('')).toBe(
-      'One client per workspace. Everyone here needs the same company address.',
+      'One brand per workspace. Every approver needs the same company address.',
     );
   });
 });

@@ -64,11 +64,11 @@ describe('invite role options', () => {
     expect(getInviteRoleOptions(true)).toEqual([{ value: 'client', label: 'Approver' }]);
   });
 
-  it('keeps all existing role options for owners and admins', () => {
-    expect(getInviteRoleOptions(false).map(({ value }) => value)).toEqual([
-      'admin',
-      'agency',
-      'client',
+  it('keeps all existing role options for owners and admins, named by side', () => {
+    expect(getInviteRoleOptions(false)).toEqual([
+      { value: 'admin', label: 'Creator, can manage members' },
+      { value: 'agency', label: 'Creator' },
+      { value: 'client', label: 'Approver' },
     ]);
   });
 });
@@ -100,8 +100,8 @@ describe('MembersInviteForm render', () => {
     const out = renderToStaticMarkup(<MembersInviteForm clientOnly />);
     expect(out).toContain('Invite group members');
     expect(out.match(/>Approver</g)).toHaveLength(1);
-    expect(out).not.toContain('Agency (team member)');
-    expect(out).not.toContain('>Admin<');
+    expect(out).not.toContain('>Creator<');
+    expect(out).not.toContain('Creator, can manage members');
   });
 });
 

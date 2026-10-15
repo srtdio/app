@@ -24,8 +24,8 @@ import { primeWorkspacePlatforms } from '@/lib/workspace-context-platform';
 export type WorkspaceRow = Database['public']['Tables']['workspaces']['Row'];
 
 /**
- * The one display form of a workspace: "<Client> - <Platform>". workspaces.name
- * holds the client name only and the platform is fixed at creation, so the
+ * The one display form of a workspace: "<Brand> - <Platform>". workspaces.name
+ * holds the brand name only and the platform is fixed at creation, so the
  * suffix is composed here and never stored. Every surface that shows a
  * workspace name goes through this. Throws on an unknown platform.
  */
@@ -97,9 +97,9 @@ export async function bootstrapWorkspaces(
  */
 interface WorkspaceContextValue {
   workspaceId: string | null;
-  /** The active workspace's client name (workspaces.name), unsuffixed. */
+  /** The active workspace's brand name (workspaces.name), unsuffixed. */
   workspaceName: string | null;
-  /** The active workspace as shown everywhere: "<Client> - <Platform>". */
+  /** The active workspace as shown everywhere: "<Brand> - <Platform>". */
   workspaceDisplayName: string | null;
   /** The active workspace's short key (e.g. "GBL"), or null before it resolves. */
   workspaceKey: string | null;

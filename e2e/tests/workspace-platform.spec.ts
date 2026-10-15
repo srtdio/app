@@ -3,7 +3,7 @@ import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // One workspace = one client = one platform. Creating a workspace asks for the
-// client name and a platform, confirms that both are final, and sends it
+// brand name and a platform, confirms that both are final, and sends it
 // to workspace_create; the shell then names the workspace "<Client> - <Platform>"
 // and New post offers only that platform's formats. Tagged @theme (phone, light
 // and dark) and @desktop (laptop). The viewer is the fixture owner, a maker
@@ -52,7 +52,7 @@ test('create a workspace with a platform, then post in its formats @theme @deskt
 
   const cont = dialog.getByRole('button', { name: 'Continue' });
   await expect(cont).toBeDisabled();
-  await dialog.getByLabel('Client name').fill('Kite');
+  await dialog.getByLabel('Brand name').fill('Kite');
   await expect(cont).toBeDisabled();
   await dialog.getByRole('radio', { name: /Instagram/ }).click();
   await expect(dialog).toContainText(

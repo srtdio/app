@@ -65,7 +65,7 @@ describe('MembersList', () => {
     expect(out).toContain('Actions for Cara Client');
   });
 
-  it('groups approvers (under the client name) before the team, pending inline', () => {
+  it('groups approvers (under the brand name) before the creators, pending inline', () => {
     const out = renderToStaticMarkup(
       <MembersList
         derived={{
@@ -83,10 +83,10 @@ describe('MembersList', () => {
       />,
     );
     const approvers = out.indexOf('>Approvers<');
-    const team = out.indexOf('>Team<');
+    const team = out.indexOf('>Creators<');
     expect(approvers).toBeGreaterThan(-1);
     expect(team).toBeGreaterThan(approvers);
-    // The client name is the Approvers subheading.
+    // The brand name is the Approvers subheading.
     expect(out.indexOf('>Acme<')).toBeGreaterThan(approvers);
     expect(out.indexOf('>Acme<')).toBeLessThan(team);
     // Each side holds its own active rows then its pending invites.

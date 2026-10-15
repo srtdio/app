@@ -14,8 +14,9 @@ export type WorkspaceMemberRow = Database['public']['Tables']['workspace_members
 const ROLE_LABEL: Record<string, string> = {
   owner: 'Owner',
   admin: 'Admin',
-  agency: 'Agency',
-  // The role value stays `client`; people read it as the approver.
+  // Owner, admin and agency are the Creator side ("we make the posts").
+  agency: 'Creator',
+  // The role value stays `client`; people read it as the Approver side.
   client: 'Approver',
 };
 
@@ -23,7 +24,7 @@ export function roleLabel(role: string): string {
   return ROLE_LABEL[role] ?? role;
 }
 
-// The "Team" group holds the internal roles; "Approvers" is client-only.
+// The "Creators" group holds the internal roles; "Approvers" is client-only.
 const AGENCY_ROLES = new Set(['owner', 'admin', 'agency']);
 
 /** Active member: on the roster and not removed. */
@@ -206,6 +207,6 @@ export const FREE_MAIL_APPROVER_MESSAGE =
 /** Toast copy when an approver invite is outside the workspace's client domain. */
 export function clientDomainMismatchMessage(domainLabel: string): string {
   return domainLabel === ''
-    ? 'One client per workspace. Everyone here needs the same company address.'
-    : `One client per workspace. Everyone here needs a ${domainLabel} address.`;
+    ? 'One brand per workspace. Every approver needs the same company address.'
+    : `One brand per workspace. Every approver needs a ${domainLabel} address.`;
 }

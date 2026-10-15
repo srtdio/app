@@ -251,7 +251,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
     >
       <div className="flex flex-col gap-4 overflow-x-hidden">
         <p className="text-xs text-fg-3">
-          Briefs are written by clients and are read-only once created.
+          Briefs are written by approvers and are read-only once created.
         </p>
 
         <Field label="Title" htmlFor="brief-title" required>
@@ -310,7 +310,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             id="brief-initial-comment"
             value={form.initialComment}
             onChange={(event) => patch({ initialComment: event.target.value })}
-            placeholder="Add an opening note for the agency"
+            placeholder="Add an opening note for the creators"
           />
         </Field>
 

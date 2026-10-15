@@ -157,7 +157,7 @@ export function SignUpPage() {
             id="signup-email"
             type="email"
             autoComplete="email"
-            placeholder="you@agency.com"
+            placeholder="you@company.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />

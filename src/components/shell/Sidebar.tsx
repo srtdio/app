@@ -10,9 +10,9 @@ import { CountBadge } from '@/components/ui/CountBadge';
 import { cn } from '@/lib/cn';
 
 interface SidebarProps {
-  /** The active workspace's display name ("<Client> - <Platform>"). */
+  /** The active workspace's display name ("<Brand> - <Platform>"). */
   workspaceName: string | null;
-  /** The client name alone, for the avatar's initials. */
+  /** The brand name alone, for the avatar's initials. */
   clientName?: string | null;
 }
 
@@ -36,7 +36,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
           {workspaceName === null ? (
             <span className="flex-1 h-4 rounded bg-panel-3 animate-pulse" aria-hidden />
           ) : (
-            // "<Client> - <Platform>": wrap (up to three lines) rather than clip the platform.
+            // "<Brand> - <Platform>": wrap (up to three lines) rather than clip the platform.
             <span className="flex-1 min-w-0 font-semibold text-sm leading-tight line-clamp-3 break-words">
               {workspaceName}
             </span>

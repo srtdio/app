@@ -29,7 +29,7 @@ export function switcherTitle(mode: Mode): string {
 }
 
 /**
- * The workspace_create payload: client name, the browser's timezone and the
+ * The workspace_create payload: brand name, the browser's timezone and the
  * platform picked on the create step. Pure so the payload is unit-tested.
  */
 export function workspaceCreatePayload(input: {
@@ -105,12 +105,12 @@ export function WorkspaceSwitcher() {
       ? workspaceDisplayName({ name: trimmedName, platform })
       : null;
 
-  // Step 1 -> 2: both the client name and a platform are required.
+  // Step 1 -> 2: both the brand name and a platform are required.
   function submitDetails(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     if (platform === null) return;
     if (trimmedName.length < NAME_MIN || trimmedName.length > NAME_MAX) {
-      setFormError(`Client name must be ${NAME_MIN} to ${NAME_MAX} characters.`);
+      setFormError(`Brand name must be ${NAME_MIN} to ${NAME_MAX} characters.`);
       return;
     }
     setFormError(null);
@@ -215,7 +215,7 @@ export function WorkspaceSwitcher() {
           </div>
         ) : mode === 'create' ? (
           <form onSubmit={submitDetails} className="flex flex-col gap-4 overflow-y-auto p-[18px]">
-            <Field label="Client name" htmlFor="workspace-name" required>
+            <Field label="Brand name" htmlFor="workspace-name" required>
               <Input
                 id="workspace-name"
                 value={name}

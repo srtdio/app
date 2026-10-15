@@ -184,8 +184,8 @@ export async function sendInvite(deps: {
 // The role value stays `client`; people read it as the approver.
 const APPROVER_ROLE_OPTION: SelectOption = { value: 'client', label: 'Approver' };
 const ROLE_OPTIONS: SelectOption[] = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'agency', label: 'Agency (team member)' },
+  { value: 'admin', label: 'Creator, can manage members' },
+  { value: 'agency', label: 'Creator' },
   APPROVER_ROLE_OPTION,
 ];
 

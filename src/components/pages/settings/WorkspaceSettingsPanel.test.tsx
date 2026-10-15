@@ -82,7 +82,8 @@ describe('WorkspaceSettingsPanel', () => {
     state.userId = 'user-member';
     await render();
     const text = document.body.textContent ?? '';
-    expect(text).toContain('Client name');
+    expect(text).toContain('Brand name');
+    expect(text).not.toContain('Client name');
     expect(text).toContain('Acme');
     expect(text).toContain('Instagram');
     expect(text).toContain(CLIENT_NAME_FIXED_LINE);
@@ -105,7 +106,7 @@ describe('WorkspaceSettingsPanel', () => {
     expect(document.body.textContent).not.toContain('Approved approver addresses');
   });
 
-  it('keeps the client name read-only for an admin too, and never sends it', async () => {
+  it('keeps the brand name read-only for an admin too, and never sends it', async () => {
     state.canEdit = true;
     state.userId = 'user-admin';
     mockRpc.mockResolvedValue({ data: null, error: null });
