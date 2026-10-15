@@ -344,6 +344,8 @@ export async function seedWorkspace(
     owner_user_id: owner.id,
     timezone: 'UTC',
     key: randomWorkspaceKey(),
+    // NOT NULL since 20261015030000; linkedin matches the backfill default.
+    platform: 'linkedin',
   });
   const id = String(ws.id);
   await insertRow(generic, 'workspace_members', {

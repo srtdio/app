@@ -9,7 +9,7 @@ All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` un
 
 ## Index
 
-1. Identity and access: users, workspaces, workspace_members, workspace_role_permissions, workspace_settings, workspace_onboarding, session_devices, platform_operators
+1. Identity and access: users, user_private, brand_agency_requests, workspaces, workspace_members, workspace_role_permissions, workspace_settings, workspace_onboarding, session_devices, platform_operators
 2. Content: workspace_buckets, posts, post_versions, post_annotations
 3. Discussion: comments, comment_reactions
 4. Briefs: briefs
@@ -51,7 +51,32 @@ username_available(p_username, p_trace_id) SECURITY DEFINER STABLE (EXECUTE to a
 
 ### user_private
 
-Onboarding answers only the person can read. PK/FK user_id -> users.id ON DELETE CASCADE. age_range in 18-24/25-34/35-44/45-54/55+, heard_from in friend/instagram/linkedin/google/client/other, both nullable; updated_at. RLS: SELECT own row only (user_private_select_self). INSERT/UPDATE/DELETE/TRUNCATE revoked from authenticated and anon; written only by user_onboarding_save. Kept off users because users is readable by workspace co-members.
+Onboarding answers and induction progress only the person can read. PK/FK user_id -> users.id ON DELETE CASCADE. age_range in 18-24/25-34/35-44/45-54/55+, heard_from in friend/ad/instagram/linkedin/google/client/other (ad added 15 Oct 2026), both nullable; updated_at. induction_step text nullable, ^[a-z0-9_]{1,40}$ (user_private_induction_step_format): the last induction step reached. induction_done_at timestamptz nullable: set once when the person finishes induction; backfilled to the migration time for every user whose profile_completed_at was already set. RLS: SELECT own row only (user_private_select_self). INSERT/UPDATE/DELETE/TRUNCATE revoked from authenticated and anon; written only by user_onboarding_save, induction_step_set and induction_finish. Kept off users because users is readable by workspace co-members. Live note (15 Oct 2026): authenticated holds no table SELECT grant on user_private on movnexawfhsyuluspxoc, while a database built from migrations has it.
+
+Induction procs (20261015035000_induction_progress.sql; EXECUTE to authenticated only):
+
+- induction_step_set(p_step, p_trace_id) SECURITY DEFINER: saves the caller's current induction step; invalid_payload unless it matches ^[a-z0-9_]{1,40}$. Audited.
+- induction_finish(p_trace_id) SECURITY DEFINER: stamps the caller's induction_done_at (first finish wins). Audited.
+- induction_state(p_workspace_id, p_trace_id) SQL STABLE invoker, read-only: jsonb of the caller's step, done_at and role in the workspace, the first non-draft post they created there, and whether a client (client_invited) or an admin/agency member (team_invited) has been invited.
+
+### brand_agency_requests
+
+A brand user with no agency asks an agency to join Sorted (20261015036000_brand_agency_requests.sql).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | uuid | PK |
+| requested_by | uuid | FK users.id ON DELETE CASCADE |
+| agency_email | text | case-insensitive ^[^@\s]+@[^@\s]+\.[a-z]{2,}$ |
+| brand_name | text | nullable, 1 to 80 |
+| send_count | smallint | 1 to 5, default 1 |
+| last_sent_at | timestamptz | default now() |
+| fulfilled_at | timestamptz | nullable; set when member_invite invites requested_by as a client |
+| created_at | timestamptz | default now() |
+
+Unique (requested_by) where fulfilled_at is null (brand_agency_requests_one_open): one open request per user. RLS: SELECT own rows only (brand_agency_requests_select_own, authenticated). INSERT/UPDATE/DELETE/TRUNCATE revoked from authenticated and anon; SELECT granted to authenticated only.
+
+- brand_agency_request(p_agency_email, p_brand_name, p_trace_id) SECURITY DEFINER (EXECUTE to authenticated only): creates the caller's open request or resends it (updates email, keeps brand_name unless a new one is given, send_count + 1); too_many_requests after 5 sends; invalid_payload for a malformed email. Audits the agency domain only.
 
 ### workspaces
 
@@ -71,6 +96,10 @@ One workspace = one end-client = one platform.
 | digest_default_time | time | default 09:00 |
 | target_distributions | jsonb | nullable |
 | asset_bucket | text | permanent R2 bucket name, set on insert by trigger, immutable thereafter. Unique among active (deleted_at null) workspaces. |
+| key | text | short workspace key used in entity numbers |
+| platform | text | not null: instagram / x / threads / linkedin / facebook / tiktok / youtube_shorts. Existing rows backfilled to linkedin |
+| client_domain | text | nullable, ^[a-z0-9.-]+\.[a-z]{2,}$. Recorded by member_invite from the first client invite; later client invites must use it or a subdomain of it |
+| logo_url | text | nullable, must start with https:// |
 | row_version | bigint | default 1 |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
 
@@ -90,7 +119,11 @@ One workspace = one end-client = one platform.
 
 Unique: one active membership per (workspace_id, user_id).
 
-workspace_create also creates the workspace's default chat group (groups.is_default) named after the workspace, owner as the only member. Group names allow letters, digits, spaces and hyphens only, so "&" becomes "and" and other characters are dropped (40 chars max, fallback "Team").
+workspace_create also creates the workspace's default chat group (groups.is_default) named "<client> - <Platform label>" (for example "Kite and Co - LinkedIn"), owner as the only member. Group names allow letters, digits, spaces and hyphens only, so "&" becomes "and" and other characters are dropped (40 chars max including the label, client fallback "Team").
+
+- workspace_create(p_payload, p_trace_id) SECURITY DEFINER (authenticated): creates the workspace with payload platform (default linkedin; any other value outside the 7 platforms is invalid_payload), the owner membership, the default group and a welcome inbox entry for the creator.
+- member_invite(p_workspace_id, p_email, p_role, p_trace_id) SECURITY DEFINER (authenticated with workspace.manage_members): for role client, refuses free mail domains (free_mail_client) and, once client_domain is set, any other domain that is not a subdomain of it (client_domain_mismatch); the first client invite of a workspace with no client sets client_domain. Inviting a user as client marks their open brand_agency_requests fulfilled.
+- member_accept(p_invite_id, p_trace_id) SECURITY DEFINER (the invitee only): activates the membership, joins the default group when join_default_group, and writes a welcome inbox entry for the invitee.
 
 ### workspace_role_permissions
 
@@ -130,8 +163,8 @@ The approval unit. stage is the only workflow state. No publish_status.
 | caption | text | nullable |
 | bucket_id | uuid | FK workspace_buckets.id |
 | owner_user_id | uuid | FK users.id, SET NULL |
-| platform | text | linkedin / x / instagram / facebook / threads |
-| format | text | text / single_image / carousel / video / link |
+| platform | text | instagram / x / threads / linkedin / facebook / tiktok / youtube_shorts; always the workspace platform (post_create sets it, existing rows aligned 15 Oct 2026) |
+| format | text | text / single_image / carousel / video / link / reel / story / thread / short |
 | stage | text | draft / review / approved / parked / rejected, default draft |
 | stage_entered_at | timestamptz | not null with a default, reset by stage_transition on every stage change |
 | approved_by | uuid | nullable, FK auth.users.id, SET NULL. Set to the actor on entering approved, cleared on leaving it |
@@ -145,6 +178,8 @@ The approval unit. stage is the only workflow state. No publish_status.
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
 
 Stage CHECK: draft, review, approved, parked, rejected. No publish/schedule/platform columns. Indexes: (workspace_id, stage, created_at desc), (workspace_id, target_date) where target_date not null, brief_id partial, owner partial. All where deleted_at null.
+
+post_create(p_workspace_id, p_payload, p_trace_id) SECURITY DEFINER (active member with post.create): takes platform from the workspace (payload platform ignored) and raises invalid_format when the format is not offered for that platform: instagram reel/story/carousel/single_image; x text/single_image/video/thread; threads text/single_image/carousel/video; linkedin text/single_image/carousel/video/link; facebook text/single_image/carousel/video/reel/story/link; tiktok video; youtube_shorts short. Format defaults to text.
 
 posts_select_member: active member, not deleted; drafts only for owner/admin/agency. comments and asset_attachments on posts inherit this via EXISTS on posts.
 
@@ -228,7 +263,7 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 | workspace_id | uuid | FK workspaces.id |
 | title | text | 1 to 200 |
 | objective | text | 1 to 5000 |
-| format_requested | text | nullable: text / single_image / carousel / video / link |
+| format_requested | text | nullable: text / single_image / carousel / video / link / reel / story / thread / short |
 | brand_requirements | text | nullable |
 | target_date | date | nullable, indicative only |
 | reference_links | jsonb | nullable |
@@ -242,7 +277,7 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 
 Indexes: (workspace_id, status, created_at desc), target_date partial, created_by, FTS on title+objective.
 
-brief_create(p_workspace_id, p_payload, p_trace_id) SECURITY DEFINER: client-only create gated on an active member with the brief.create capability. The payload also accepts an optional field attachment_asset_version_ids (an ordered array of asset_version ids, any kind: image / video / pdf / Office-doc / link). Because briefs are read-only after creation, creation is the only attach point: each id is written as an asset_attachments row with entity_type='brief', entity_id = the new brief id, and position = array order. A non-array value, a non-uuid element, or an id whose asset_version is missing or in another workspace raises invalid_payload and writes no brief and no attachments.
+brief_create(p_workspace_id, p_payload, p_trace_id) SECURITY DEFINER: client-only create gated on an active member with the brief.create capability. The payload also accepts an optional field attachment_asset_version_ids (an ordered array of asset_version ids, any kind: image / video / pdf / Office-doc / link). Because briefs are read-only after creation, creation is the only attach point: each id is written as an asset_attachments row with entity_type='brief', entity_id = the new brief id, and position = array order. A non-array value, a non-uuid element, or an id whose asset_version is missing or in another workspace raises invalid_payload and writes no brief and no attachments. It writes one brief_created inbox entry (scope briefs, tier active) for every active owner, admin and agency member except the actor.
 
 ## 4a. plans / plan_items / plan_item_reviews
 
@@ -601,6 +636,8 @@ PK (id, created_at). Partitions: 2026_05, 2026_06, 2026_07. actor_user_id is set
 
 inbox_mark_read_events(p_workspace_id uuid, p_event_types text[], p_trace_id uuid) RETURNS void, SECURITY DEFINER (search_path=''; EXECUTE to authenticated only): requires is_active_workspace_member ('workspace_member_only') and p_trace_id; marks the caller's unread, non-deleted entries in the workspace whose event_type is in p_event_types read; no-op for an empty list; audits inbox_mark_read_events with the count when any row changed. Recorded in 20261003130000_chat_scheduled_send.sql.
 
+System and welcome writers: workspace_create (for the creator) and member_accept (for the invitee) each write one event_type system row via inbox_entry_create: entity_type workspace, entity_id = workspace id, scope everything, tier ambient, payload {kind: welcome, workspace_name, platform}. brief_create writes brief_created rows (see Briefs).
+
 Where inbox entries are shown:
 
 - Chat bell only, never Activity: mention with entity_type chat_channel, scheduled_sent, scheduled_failed, reminder.
@@ -657,8 +694,9 @@ PK id. Fields: operator_user_id FK, flow_type (billing_override / sentry_inspect
 
 - post.stage: draft, review, approved, parked, rejected
 - post.origin: manual, brief
-- post.platform / asset platform values: linkedin, x, instagram, facebook, threads
-- post.format: text, single_image, carousel, video, link
+- workspace.platform / post.platform: instagram, x, threads, linkedin, facebook, tiktok, youtube_shorts
+- post.format / brief.format_requested: text, single_image, carousel, video, link, reel, story, thread, short
+- user_private.heard_from: friend, ad, instagram, linkedin, google, client, other
 - workspace_members.role: owner, admin, agency, client
 - workspace.plan_tier: solo, studio, agency, enterprise
 - workspace.subscription_state: trial, active, read_only, grace, soft_pause, full_pause, soft_delete
