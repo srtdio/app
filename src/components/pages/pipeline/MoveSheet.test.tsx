@@ -37,6 +37,7 @@ function makePost(stage: Stage): PipelinePost {
     updated_at: '2026-01-01',
     stage_entered_at: '2026-01-01',
     approved_by: null,
+    approved_on_behalf_of: null,
     approved_at: null,
     thumbnailAssetVersionId: null,
   };
