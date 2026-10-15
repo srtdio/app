@@ -576,7 +576,7 @@ export function OnboardingFlow({
           <Input
             id="ob-brand"
             maxLength={80}
-            placeholder="Your brand"
+            placeholder="Ramy Group"
             value={brandName}
             onChange={(event) => setBrandName(event.target.value)}
           />

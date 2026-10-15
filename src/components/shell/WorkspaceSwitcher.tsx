@@ -221,7 +221,7 @@ export function WorkspaceSwitcher() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={NAME_MAX}
-                placeholder="Acme"
+                placeholder="Ramy Group"
                 autoFocus
               />
             </Field>
