@@ -131,6 +131,20 @@ interface UploadConfigBase {
    * one (one attempt per File, also shown on the sending bubble).
    */
   makeThumbnail?: ThumbnailMaker;
+  /**
+   * The upload run this file belongs to (sent as batch_id / batch_size). The
+   * worker writes one Activity entry per batch for library uploads. When
+   * absent, a file sent inside {@link runUploads} joins that run's batch.
+   */
+  batch?: UploadBatch;
+  /** Waits between part retries; tests inject an instant one. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/** One upload run: a client-minted id and how many files it holds. */
+export interface UploadBatch {
+  id: string;
+  size: number;
 }
 
 /**
@@ -182,6 +196,17 @@ export function xhrPost(
   body: FormData,
   transport: XhrTransport,
 ): Promise<UploadResponse> {
+  return xhrSend('POST', endpoint, headers, body, transport);
+}
+
+/** {@link xhrPost} for any method and body; status is kept for retry decisions. */
+function xhrSend(
+  method: string,
+  endpoint: string,
+  headers: Record<string, string>,
+  body: XMLHttpRequestBodyInit | null,
+  transport: XhrTransport,
+): Promise<UploadResponse & { status: number }> {
   return new Promise((resolve, reject) => {
     const signal = transport.signal;
     // Cancelled before it started: no request at all.
@@ -193,7 +218,7 @@ export function xhrPost(
     const onAbort = (): void => request.abort();
     signal?.addEventListener('abort', onAbort, { once: true });
     const release = (): void => signal?.removeEventListener('abort', onAbort);
-    request.open('POST', endpoint);
+    request.open(method, endpoint);
     for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value);
     request.setRequestHeader(TRACE_ID_HEADER, transport.traceId);
     const onProgress = transport.onProgress;
@@ -208,6 +233,7 @@ export function xhrPost(
       release();
       resolve({
         ok: request.status >= 200 && request.status < 300,
+        status: request.status,
         body: parseXhrBody(request.responseText),
       });
     };
@@ -242,8 +268,9 @@ async function postUpload(
  * asset id and whether the content was deduped (reused).
  */
 export async function uploadAssetFile(file: File, config: UploadConfig): Promise<UploadOutcome> {
+  const resumable = file.size > RESUMABLE_PART_SIZE;
   const form = new FormData();
-  form.append('file', file, config.filename);
+  if (!resumable) form.append('file', file, config.filename);
   form.append('workspace_id', config.workspaceId);
   form.append('origin', config.origin);
   if (config.displayName != null && config.displayName.trim() !== '') {
@@ -251,6 +278,11 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   }
   if (config.folderId != null) {
     form.append('folder_id', config.folderId);
+  }
+  const batch = config.batch ?? activeBatch;
+  if (config.origin === 'library' && batch !== null) {
+    form.append('batch_id', batch.id);
+    form.append('batch_size', String(batch.size));
   }
   if (thumbnailKind(file.type) !== null) {
     const thumbnail = await boundedThumbnail(file, config.makeThumbnail ?? sharedThumbnail);
@@ -263,15 +295,21 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   }
 
   let response: UploadResponse;
-  try {
-    response = await postUpload(
-      config.endpoint,
-      { Authorization: `Bearer ${config.token}` },
-      form,
-      config,
-    );
-  } catch {
-    return { ok: false, message: uploadErrorMessage('network') };
+  if (resumable) {
+    const sent = await uploadResumable(file, form, config);
+    if (!sent.ok) return sent;
+    response = sent.response;
+  } else {
+    try {
+      response = await postUpload(
+        config.endpoint,
+        { Authorization: `Bearer ${config.token}` },
+        form,
+        config,
+      );
+    } catch {
+      return { ok: false, message: uploadErrorMessage('network') };
+    }
   }
 
   if (!response.ok) {
@@ -848,12 +886,256 @@ export async function runUploads(
   hooks?: RunHooks,
 ): Promise<RunResult> {
   const result: RunResult = { succeeded: [], failed: [] };
-  for (const item of items) {
-    hooks?.onStart?.(item.id);
-    const outcome = await uploadOne(item);
-    hooks?.onResult?.(item.id, outcome);
-    if (outcome.ok) result.succeeded.push(item.id);
-    else result.failed.push({ id: item.id, message: outcome.message });
+  // Every file this run sends is one batch, so the worker writes one Activity
+  // entry for the run rather than one per file.
+  const previous = activeBatch;
+  activeBatch = { id: newBatchId(), size: items.length };
+  try {
+    for (const item of items) {
+      hooks?.onStart?.(item.id);
+      const outcome = await uploadOne(item);
+      hooks?.onResult?.(item.id, outcome);
+      if (outcome.ok) result.succeeded.push(item.id);
+      else result.failed.push({ id: item.id, message: outcome.message });
+    }
+  } finally {
+    activeBatch = previous;
   }
   return result;
+}
+
+/** The batch of the {@link runUploads} run in progress, if any. */
+let activeBatch: UploadBatch | null = null;
+
+function newBatchId(): string {
+  return crypto.randomUUID();
+}
+
+// ---------------------------------------------------------------------------
+// Resumable uploads. A file over one part (8 MB) goes up as an R2 multipart
+// upload through the same worker: create, one PUT per 8 MB part, complete (the
+// same form as the direct POST, minus the file). When a part fails, the client
+// waits for the device to come back online, asks the worker which parts R2
+// already holds, and carries on from the last finished one. Each part gets up
+// to 3 retries; after that the upload is aborted and fails with a plain reason.
+// ---------------------------------------------------------------------------
+
+/** Part size for resumable uploads; must match the worker (MULTIPART_PART_SIZE). */
+export const RESUMABLE_PART_SIZE = 8 * 1024 * 1024;
+
+/** Retries per part (and per create / complete call) before the upload fails. */
+export const PART_RETRIES = 3;
+
+/** Shown when a resumable upload runs out of retries. No connection wording. */
+export const RESUME_FAILED_MESSAGE =
+  "Couldn't finish uploading this file. It stopped partway too many times. Try again.";
+
+/** A worker reply as the resumable path reads it. */
+type Reply = { ok: boolean; status: number; body: unknown };
+
+/** Thrown by the resumable path to end the upload with this message. */
+class ResumeFailure extends Error {}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Resolve once the device reports it is online (at once when it already is or cannot say). */
+function waitForOnline(signal?: AbortSignal): Promise<void> {
+  if (typeof navigator === 'undefined' || navigator.onLine !== false) return Promise.resolve();
+  if (typeof window === 'undefined') return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = (): void => {
+      window.removeEventListener('online', done);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    window.addEventListener('online', done);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+}
+
+/** Send one request over the config's transport. Rejects on a transport failure. */
+async function send(
+  config: UploadConfig,
+  method: string,
+  url: string,
+  body: XMLHttpRequestBodyInit | null,
+  contentType: string | null,
+): Promise<Reply> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${config.token}` };
+  if (contentType !== null) headers['content-type'] = contentType;
+  if (config.xhr !== undefined) {
+    // Progress is reported by the part loop, not per request.
+    const { traceId, signal, createRequest } = config.xhr;
+    return xhrSend(method, url, headers, body, {
+      traceId,
+      ...(signal !== undefined ? { signal } : {}),
+      ...(createRequest !== undefined ? { createRequest } : {}),
+    });
+  }
+  const response = await config.fetcher(url, {
+    method,
+    headers,
+    ...(body !== null ? { body: body as BodyInit } : {}),
+  });
+  return { ok: response.ok, status: response.status, body: await readJson(response) };
+}
+
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
+/** Retry worth trying: no reply at all, or a 5xx / 429. */
+function retryable(reply: Reply | null): boolean {
+  return reply === null || reply.status >= 500 || reply.status === 429;
+}
+
+/**
+ * Run one call with up to {@link PART_RETRIES} retries. Between attempts it
+ * waits for the device to be online, backs off, and runs `beforeRetry` (the
+ * part loop uses it to re-read the stored parts). A non-retryable reply is
+ * returned as is; running out of retries throws ResumeFailure.
+ */
+async function withRetries(
+  config: UploadConfig,
+  call: () => Promise<Reply>,
+  beforeRetry?: () => Promise<boolean>,
+): Promise<Reply> {
+  const sleep = config.sleep ?? defaultSleep;
+  const signal = config.xhr?.signal;
+  for (let attempt = 0; ; attempt += 1) {
+    if (isAborted(signal)) throw new ResumeFailure(uploadErrorMessage('network'));
+    let reply: Reply | null = null;
+    try {
+      reply = await call();
+    } catch {
+      reply = null;
+    }
+    if (!retryable(reply)) return reply as Reply;
+    if (isAborted(signal)) throw new ResumeFailure(uploadErrorMessage('network'));
+    if (attempt >= PART_RETRIES) throw new ResumeFailure(RESUME_FAILED_MESSAGE);
+    await waitForOnline(signal);
+    await sleep(1000 * 2 ** attempt);
+    // The call may have landed even though its reply was lost.
+    if (beforeRetry !== undefined && (await beforeRetry().catch(() => false))) {
+      return { ok: true, status: 200, body: null };
+    }
+  }
+}
+
+/** Read {key, upload_id} off a create reply; null when malformed. */
+function createdField(body: unknown): { key: string; uploadId: string } | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const b = body as { key?: unknown; upload_id?: unknown };
+  return typeof b.key === 'string' && typeof b.upload_id === 'string'
+    ? { key: b.key, uploadId: b.upload_id }
+    : null;
+}
+
+/** Part numbers and sizes R2 already holds, from a parts reply. */
+function partsField(body: unknown): Map<number, number> {
+  const stored = new Map<number, number>();
+  if (typeof body !== 'object' || body === null) return stored;
+  const parts = (body as { parts?: unknown }).parts;
+  if (!Array.isArray(parts)) return stored;
+  for (const part of parts) {
+    if (typeof part !== 'object' || part === null) continue;
+    const p = part as { part_number?: unknown; size?: unknown };
+    if (typeof p.part_number === 'number' && typeof p.size === 'number') {
+      stored.set(p.part_number, p.size);
+    }
+  }
+  return stored;
+}
+
+/**
+ * Upload a file over 8 MB as a resumable multipart upload, then send the
+ * complete form (fields + thumbnail, no file part). Never throws: returns the
+ * complete reply on success or the failure outcome.
+ */
+async function uploadResumable(
+  file: File,
+  form: FormData,
+  config: UploadConfig,
+): Promise<{ ok: true; response: UploadResponse } | { ok: false; message: string }> {
+  const route = (path: string): string => workerRoute(config.endpoint, path);
+  const onProgress = config.xhr?.onProgress;
+  let upload: { key: string; uploadId: string } | null = null;
+  const target = (): string => {
+    const query = new URLSearchParams({
+      workspace_id: config.workspaceId,
+      key: upload?.key ?? '',
+      upload_id: upload?.uploadId ?? '',
+    });
+    return query.toString();
+  };
+  const storedParts = async (): Promise<Map<number, number>> => {
+    const reply = await send(config, 'GET', route(`/multipart/parts?${target()}`), null, null);
+    return reply.ok ? partsField(reply.body) : new Map();
+  };
+  try {
+    const created = await withRetries(config, () =>
+      send(
+        config,
+        'POST',
+        route('/multipart/create'),
+        JSON.stringify({
+          workspace_id: config.workspaceId,
+          size: file.size,
+          content_type: file.type,
+        }),
+        'application/json',
+      ),
+    );
+    if (!created.ok) return { ok: false, message: uploadErrorMessage(errorCode(created.body)) };
+    upload = createdField(created.body);
+    if (upload === null) return { ok: false, message: uploadErrorMessage('network') };
+
+    const total = Math.ceil(file.size / RESUMABLE_PART_SIZE);
+    let done = 0;
+    for (let part = 1; part <= total; part += 1) {
+      const start = (part - 1) * RESUMABLE_PART_SIZE;
+      const chunk = file.slice(start, Math.min(start + RESUMABLE_PART_SIZE, file.size));
+      const reply = await withRetries(
+        config,
+        () =>
+          send(
+            config,
+            'PUT',
+            route(`/multipart/part?${target()}&part_number=${part}`),
+            chunk,
+            'application/octet-stream',
+          ),
+        async () => (await storedParts()).get(part) === chunk.size,
+      );
+      if (!reply.ok) return { ok: false, message: uploadErrorMessage(errorCode(reply.body)) };
+      done += chunk.size;
+      onProgress?.(Math.min(done / file.size, 1));
+    }
+
+    form.append('key', upload.key);
+    form.append('upload_id', upload.uploadId);
+    form.append('filename', config.filename);
+    form.append('content_type', file.type);
+    const completed = await withRetries(config, () =>
+      send(config, 'POST', route('/multipart/complete'), form, null),
+    );
+    return { ok: true, response: { ok: completed.ok, body: completed.body } };
+  } catch (error) {
+    if (upload !== null) {
+      const { key, uploadId } = upload;
+      void send(
+        config,
+        'POST',
+        route('/multipart/abort'),
+        JSON.stringify({ workspace_id: config.workspaceId, key, upload_id: uploadId }),
+        'application/json',
+      ).catch(() => undefined);
+    }
+    return {
+      ok: false,
+      message: error instanceof ResumeFailure ? error.message : uploadErrorMessage('network'),
+    };
+  }
 }

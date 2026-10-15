@@ -24,7 +24,47 @@ const state = vi.hoisted(() => ({
   /** Per-test storage and rendition store the (real) thumbnail step writes to. */
   thumbStorage: null as unknown as InMemoryStorageClient,
   renditions: null as unknown as InMemoryRenditionStore,
+  /** Activity rows the (in-memory) store received, and the members it reports. */
+  activityRows: [] as Record<string, unknown>[],
+  activityMembers: [] as string[],
+  /** Stands in for every R2StorageClient the worker builds. */
+  r2: null as unknown as InMemoryMultipartStorage,
 }));
+
+// The Activity store writes through the service-role client; swap it for an
+// in-memory one so no test reaches the network.
+vi.mock('./asset-upload-activity', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./asset-upload-activity')>();
+  return {
+    ...actual,
+    createSupabaseActivityStore: () => ({
+      activeMemberIds: () => Promise.resolve(state.activityMembers),
+      batchRecorded: (_ws: string, batchId: string) =>
+        Promise.resolve(
+          state.activityRows.some(
+            (row) => (row.payload as { batch_id: string }).batch_id === batchId,
+          ),
+        ),
+      insertEntries: (rows: Record<string, unknown>[]) => {
+        state.activityRows.push(...rows);
+        return Promise.resolve();
+      },
+    }),
+  };
+});
+
+// Every R2 client the worker builds is the per-test in-memory multipart store.
+vi.mock('@srtdio/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@srtdio/storage')>();
+  return {
+    ...actual,
+    R2StorageClient: class {
+      constructor() {
+        return state.r2;
+      }
+    },
+  };
+});
 
 // Substitute the service-role membership store with an in-memory set; keep the
 // real verifyCaller / getSupabaseJwks (which use the mocked JWKS).
@@ -98,7 +138,7 @@ import {
   type ThumbnailInput,
   type UploadInput,
 } from '@/server/assets';
-import { InMemoryStorageClient } from '@srtdio/storage';
+import { InMemoryMultipartStorage, InMemoryStorageClient } from '@srtdio/storage';
 import {
   MIME,
   buildZip,
@@ -147,6 +187,9 @@ beforeEach(() => {
   state.realPipeline = false;
   state.thumbStorage = new InMemoryStorageClient();
   state.renditions = new InMemoryRenditionStore();
+  state.activityRows = [];
+  state.activityMembers = [];
+  state.r2 = new InMemoryMultipartStorage();
 });
 
 async function mintToken(sub: string, expSecondsFromNow = 3600): Promise<string> {
@@ -1335,5 +1378,256 @@ describe('asset-upload thumbnail part', () => {
     expect(body).not.toHaveProperty('thumbnail');
     expect(body).toHaveProperty('asset');
     expect(state.renditions.rows).toHaveLength(0);
+  });
+});
+
+describe('upload Activity (asset_uploaded per batch)', () => {
+  const BATCH = '99999999-9999-7999-8999-999999999999';
+
+  it('writes one ambient entry per other active member, actor and payload set', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.activityMembers = [USER, OTHER_USER, '12121212-1212-7212-8212-121212121212'];
+    const token = await mintToken(USER);
+    const res = await worker.fetch(
+      uploadRequest(token, { workspace_id: WORKSPACE, batch_id: BATCH, batch_size: '3' }),
+      env,
+    );
+    expect(res.status).toBe(201);
+    expect(state.activityRows).toHaveLength(2);
+    expect(state.activityRows.map((row) => row.user_id)).not.toContain(USER);
+    expect(state.activityRows[0]).toMatchObject({
+      workspace_id: WORKSPACE,
+      event_type: 'asset_uploaded',
+      tier: 'ambient',
+      actor_user_id: USER,
+      payload: { batch_id: BATCH, file_count: 3, filename: 'doc.pdf', asset_id: 'aaaa' },
+    });
+  });
+
+  it('writes nothing more for the second file of the same batch', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.activityMembers = [USER, OTHER_USER];
+    const token = await mintToken(USER);
+    for (let i = 0; i < 2; i += 1) {
+      const res = await worker.fetch(
+        uploadRequest(token, { workspace_id: WORKSPACE, batch_id: BATCH, batch_size: '2' }),
+        env,
+      );
+      expect(res.status).toBe(201);
+    }
+    expect(state.activityRows).toHaveLength(1);
+  });
+
+  it('writes no entry for a chat upload', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.activityMembers = [USER, OTHER_USER];
+    const token = await mintToken(USER);
+    const res = await worker.fetch(
+      uploadRequest(token, { workspace_id: WORKSPACE, origin: 'chat' }),
+      env,
+    );
+    expect(res.status).toBe(201);
+    expect(state.activityRows).toHaveLength(0);
+  });
+
+  it('treats an upload without a batch as a batch of one', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.activityMembers = [USER, OTHER_USER];
+    const token = await mintToken(USER);
+    await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+    await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+    expect(state.activityRows).toHaveLength(2);
+    expect(state.activityRows[0]).toMatchObject({ payload: { file_count: 1 } });
+  });
+});
+
+describe('resumable (multipart) upload routes', () => {
+  const PART = 8 * 1024 * 1024;
+
+  function partRequest(token: string, query: Record<string, string>, body: Uint8Array): Request {
+    const url = new URL('https://worker.test/multipart/part');
+    for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+    return new Request(url, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` },
+      body: new Blob([body as Uint8Array<ArrayBuffer>]),
+    });
+  }
+
+  async function create(token: string, size: number): Promise<{ key: string; upload_id: string }> {
+    const res = await worker.fetch(
+      jsonPost('/multipart/create', token, {
+        workspace_id: WORKSPACE,
+        size,
+        content_type: 'application/pdf',
+      }),
+      env,
+    );
+    expect(res.status).toBe(201);
+    return (await res.json()) as { key: string; upload_id: string };
+  }
+
+  it('creates an upload under the caller staging prefix with 8 MB parts', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const token = await mintToken(USER);
+    const res = await worker.fetch(
+      jsonPost('/multipart/create', token, {
+        workspace_id: WORKSPACE,
+        size: PART * 2 + 5,
+        content_type: 'application/pdf',
+      }),
+      env,
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { key: string; part_size: number; part_count: number };
+    expect(body.key.startsWith(`_uploads/${USER}/`)).toBe(true);
+    expect(body.part_size).toBe(PART);
+    expect(body.part_count).toBe(3);
+  });
+
+  it('keeps the 100 MB cap and the type allowlist at create', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const token = await mintToken(USER);
+    const big = await worker.fetch(
+      jsonPost('/multipart/create', token, {
+        workspace_id: WORKSPACE,
+        size: 100 * 1024 * 1024 + 1,
+        content_type: 'application/pdf',
+      }),
+      env,
+    );
+    expect(big.status).toBe(413);
+    const exe = await worker.fetch(
+      jsonPost('/multipart/create', token, {
+        workspace_id: WORKSPACE,
+        size: 10,
+        content_type: 'application/x-msdownload',
+      }),
+      env,
+    );
+    expect(exe.status).toBe(415);
+  });
+
+  it('refuses a non-member', async () => {
+    const token = await mintToken(USER);
+    const res = await worker.fetch(
+      jsonPost('/multipart/create', token, {
+        workspace_id: WORKSPACE,
+        size: 10,
+        content_type: 'application/pdf',
+      }),
+      env,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("refuses another user's staging key", async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.members.add(`${OTHER_USER}:${WORKSPACE}`);
+    const created = await create(await mintToken(USER), 10);
+    const res = await worker.fetch(
+      partRequest(
+        await mintToken(OTHER_USER),
+        {
+          workspace_id: WORKSPACE,
+          key: created.key,
+          upload_id: created.upload_id,
+          part_number: '1',
+        },
+        new Uint8Array(10),
+      ),
+      env,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('lists finished parts, completes through the pipeline, and drops the staging object', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const token = await mintToken(USER);
+    const created = await create(token, PART + 4);
+    const query = { workspace_id: WORKSPACE, key: created.key, upload_id: created.upload_id };
+    const first = await worker.fetch(
+      partRequest(token, { ...query, part_number: '1' }, new Uint8Array(PART)),
+      env,
+    );
+    expect(first.status).toBe(200);
+
+    const listUrl = new URL('https://worker.test/multipart/parts');
+    for (const [key, value] of Object.entries(query)) listUrl.searchParams.set(key, value);
+    const listed = await worker.fetch(
+      new Request(listUrl, { headers: { Authorization: `Bearer ${token}` } }),
+      env,
+    );
+    expect(((await listed.json()) as { parts: unknown[] }).parts).toEqual([
+      { part_number: 1, size: PART },
+    ]);
+
+    await worker.fetch(
+      partRequest(token, { ...query, part_number: '2' }, new Uint8Array([1, 2, 3, 4])),
+      env,
+    );
+    const form = new FormData();
+    form.set('workspace_id', WORKSPACE);
+    form.set('key', created.key);
+    form.set('upload_id', created.upload_id);
+    form.set('filename', 'big.pdf');
+    form.set('content_type', 'application/pdf');
+    const done = await worker.fetch(
+      new Request('https://worker.test/multipart/complete', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      }),
+      env,
+    );
+    expect(done.status).toBe(201);
+    expect(state.capturedInput).toMatchObject({
+      filename: 'big.pdf',
+      contentType: 'application/pdf',
+      uploadedBy: USER,
+    });
+    expect((state.capturedInput?.bytes as Uint8Array).byteLength).toBe(PART + 4);
+    expect(state.r2.objects.size).toBe(0);
+  });
+
+  it('refuses a complete with a short middle part', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const token = await mintToken(USER);
+    const created = await create(token, PART * 2);
+    const query = { workspace_id: WORKSPACE, key: created.key, upload_id: created.upload_id };
+    await worker.fetch(partRequest(token, { ...query, part_number: '1' }, new Uint8Array(10)), env);
+    await worker.fetch(partRequest(token, { ...query, part_number: '2' }, new Uint8Array(10)), env);
+    const form = new FormData();
+    form.set('workspace_id', WORKSPACE);
+    form.set('key', created.key);
+    form.set('upload_id', created.upload_id);
+    form.set('filename', 'big.pdf');
+    form.set('content_type', 'application/pdf');
+    const res = await worker.fetch(
+      new Request('https://worker.test/multipart/complete', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      }),
+      env,
+    );
+    expect(res.status).toBe(400);
+    expect(state.capturedInput).toBeNull();
+  });
+
+  it('aborts an upload', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const token = await mintToken(USER);
+    const created = await create(token, 10);
+    const res = await worker.fetch(
+      jsonPost('/multipart/abort', token, {
+        workspace_id: WORKSPACE,
+        key: created.key,
+        upload_id: created.upload_id,
+      }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(state.r2.uploads.size).toBe(0);
   });
 });
