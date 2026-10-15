@@ -29,6 +29,9 @@ test('a Creator walks side, name with photo, role and age, then makes the worksp
   await expect(page.getByRole('heading', { name: 'Who are you here as?' })).toBeVisible({
     timeout: 15_000,
   });
+  // The shell's first reads can still be landing when the screen paints; a late
+  // one re-mounts the flow and drops a side picked in between. Let them finish.
+  await page.waitForLoadState('networkidle');
   const cont = page.getByRole('button', { name: 'Continue', exact: true });
   await expect(cont).toBeDisabled();
   await page.getByRole('radio', { name: /Creator/ }).click();
