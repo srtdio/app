@@ -25,7 +25,7 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'chat_message_starred_list',
   // Read-only STABLE username check during onboarding (20261014140000): writes nothing.
   'username_available',
-  // Read-only STABLE invoker induction progress (20261015035000): writes nothing.
+  // Read-only STABLE induction progress (20261015035000, definer since 20261015039000): writes nothing.
   'induction_state',
 ]);
 

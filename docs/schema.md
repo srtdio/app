@@ -57,7 +57,7 @@ Induction procs (20261015035000_induction_progress.sql; EXECUTE to authenticated
 
 - induction_step_set(p_step, p_trace_id) SECURITY DEFINER: saves the caller's current induction step; invalid_payload unless it matches ^[a-z0-9_]{1,40}$. Audited.
 - induction_finish(p_trace_id) SECURITY DEFINER: stamps the caller's induction_done_at (first finish wins). Audited.
-- induction_state(p_workspace_id, p_trace_id) SQL STABLE invoker, read-only: jsonb of the caller's step, done_at and role in the workspace, the first non-draft post they created there, and whether a client (client_invited) or an admin/agency member (team_invited) has been invited.
+- induction_state(p_workspace_id, p_trace_id) SQL STABLE SECURITY DEFINER (search_path='', EXECUTE to authenticated only), read-only: jsonb of the caller's step and done_at, and, only when the caller is an active member of p_workspace_id, their role there, the first non-draft post they created there, and whether a client (client_invited) or an admin/agency member (team_invited) has been invited (null/false otherwise). Recorded in 20261015039000_induction_state_definer.sql.
 
 ### brand_agency_requests
 
