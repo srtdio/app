@@ -99,21 +99,62 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
 }
 
-function inviteSubject(workspaceName: string): string {
-  return `You're invited to ${workspaceName} on Sorted`;
+// Display labels for workspaces.platform (mirrors the app's platform labels).
+const PLATFORM_LABELS: Record<string, string> = {
+  instagram: 'Instagram',
+  x: 'X',
+  threads: 'Threads',
+  linkedin: 'LinkedIn',
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+  youtube_shorts: 'YouTube Shorts',
+};
+
+/** "<Brand> - <Platform>"; an unknown or missing platform falls back to the brand alone. */
+export function workspaceDisplayName(brand: string, platform: string | null | undefined): string {
+  const label = platform ? PLATFORM_LABELS[platform] : undefined;
+  if (!label) return brand;
+  return brand ? `${brand} - ${label}` : label;
 }
 
-function inviteEmailBody(input: { workspaceName: string; role: string; acceptUrl: string }): {
+// The email never says "client" or "agency": the app calls the sides Approver and Creator.
+function roleWording(role: string): string {
+  if (role === 'client') return 'an Approver';
+  if (role === 'admin') return 'a Creator who can manage members';
+  return 'a Creator';
+}
+
+export function inviteSubject(displayName: string): string {
+  return `You're invited to ${displayName} on Sorted`;
+}
+
+export function inviteEmailBody(input: {
+  brand: string;
+  displayName: string;
+  role: string;
+  acceptUrl: string;
+}): {
   html: string;
   text: string;
 } {
+  const heading = `Join ${input.displayName} on Sorted`;
+  const added = `You've been added as ${roleWording(input.role)}.`;
+  const detail =
+    input.role === 'client'
+      ? `Posts made for ${input.brand} come to you here for review: comment, ask for changes, or approve.`
+      : `You'll make posts for ${input.brand} here and send them to its approvers for review.`;
+  const signInNote =
+    "This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.";
+  const footer = `Sent by Sorted for the ${input.displayName} workspace.`;
   const text =
-    `You're invited to join the ${input.workspaceName} workspace on Sorted as a ${input.role}.\n\n` +
-    `Accept your invitation:\n${input.acceptUrl}\n\n` +
-    `This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.\n\n` +
-    `Sent by Sorted.`;
-  const safeWorkspace = escapeHtml(input.workspaceName);
-  const safeRole = escapeHtml(input.role);
+    `${heading}\n\n` +
+    `${added} ${detail}\n\n` +
+    `Accept invitation:\n${input.acceptUrl}\n\n` +
+    `${signInNote}\n\n` +
+    footer;
+  const safeWorkspace = escapeHtml(input.displayName);
+  const safeAdded = escapeHtml(added);
+  const safeDetail = escapeHtml(detail);
   const safeUrl = escapeHtml(input.acceptUrl);
   // Self-contained responsive email: every color is set inline on its element so
   // the card carries its OWN background + high-contrast text and stays legible
@@ -132,7 +173,7 @@ function inviteEmailBody(input: { workspaceName: string; role: string; acceptUrl
     `</tr></table></td></tr>` +
     `<tr><td align="left" style="padding:28px 40px 0 40px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#5a3fe0;">You're invited</span></td></tr>` +
     `<tr><td align="left" style="padding:8px 40px 0 40px;"><h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.4px;color:#1e1b2e;">Join ${safeWorkspace} on Sorted</h1></td></tr>` +
-    `<tr><td align="left" style="padding:16px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#4a4660;">You've been added to the <strong style="color:#1e1b2e;">${safeWorkspace}</strong> workspace as a <strong style="color:#1e1b2e;">${safeRole}</strong>. Sorted is where your team drafts posts, you review them, and approvals happen in one place.</p></td></tr>` +
+    `<tr><td align="left" style="padding:16px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#4a4660;"><strong style="color:#1e1b2e;">${safeAdded}</strong> ${safeDetail}</p></td></tr>` +
     `<tr><td style="padding:24px 40px 8px 40px;">` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
     `<td height="52" align="center" valign="middle" style="height:52px;border-radius:10px;background-color:#5a3fe0;box-shadow:0 4px 10px rgba(30,27,46,0.20);">` +
@@ -419,11 +460,13 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
       } else {
         const workspace = await callerClient
           .from('workspaces')
-          .select('name')
+          .select('name, platform')
           .eq('id', workspace_id)
           .maybeSingle();
-        const workspaceName = (workspace.data?.name as string | undefined) ?? '';
-        const body = inviteEmailBody({ workspaceName, role, acceptUrl: actionLink });
+        const brand = (workspace.data?.name as string | undefined) ?? '';
+        const platform = workspace.data?.platform as string | null | undefined;
+        const displayName = workspaceDisplayName(brand, platform);
+        const body = inviteEmailBody({ brand, displayName, role, acceptUrl: actionLink });
 
         let status: 'sent' | 'failed' = 'sent';
         let providerMessageId: string | null = null;
@@ -433,7 +476,7 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
             apiKey: resendKey,
             from: fromAddress,
             to: email,
-            subject: inviteSubject(workspaceName),
+            subject: inviteSubject(displayName),
             html: body.html,
             text: body.text,
           });
