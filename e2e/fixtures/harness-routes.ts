@@ -1290,6 +1290,20 @@ export async function installHarnessNetwork(
       });
       return;
     }
+    if (url.hostname === ASSET_UPLOAD_HOST && method === 'GET' && url.pathname === '/usage') {
+      // The asset-upload Worker's storage reading: a fresh workspace, no warning.
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          usedBytes: 0,
+          warnAtBytes: 800 * 1024 * 1024,
+          warn: false,
+          exempt: false,
+        }),
+      });
+      return;
+    }
     blocked.push(request.url());
     await route.abort('blockedbyclient');
   };

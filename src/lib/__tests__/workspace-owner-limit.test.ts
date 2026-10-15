@@ -39,31 +39,15 @@ describe('workspaceCreateBlocked', () => {
   });
 
   it('is open when the caller owns nothing (a member elsewhere may still create one)', () => {
-    expect(
-      workspaceCreateBlocked({ rows: [row('b', 'other')], userId: ME, isOperator: false }),
-    ).toBe(false);
+    expect(workspaceCreateBlocked({ rows: [row('b', 'other')], userId: ME })).toBe(false);
   });
 
-  it('blocks an owner of one active workspace who is not exempt', () => {
-    expect(workspaceCreateBlocked({ rows: [row('a', ME)], userId: ME, isOperator: false })).toBe(
-      true,
-    );
-    // An unreadable exemption falls back to the ownership rule.
-    expect(workspaceCreateBlocked({ rows: [row('a', ME)], userId: ME, isOperator: null })).toBe(
-      true,
-    );
+  it('blocks an owner of one active workspace', () => {
+    expect(workspaceCreateBlocked({ rows: [row('a', ME)], userId: ME })).toBe(true);
   });
 
-  it('never blocks an active platform operator', () => {
-    expect(workspaceCreateBlocked({ rows: [row('a', ME)], userId: ME, isOperator: true })).toBe(
-      false,
-    );
-  });
-
-  it('treats owning more than one active workspace as exempt', () => {
-    expect(
-      workspaceCreateBlocked({ rows: [row('a', ME), row('b', ME)], userId: ME, isOperator: null }),
-    ).toBe(false);
+  it('stays open for an owner of more than one (only an exempt owner can be one)', () => {
+    expect(workspaceCreateBlocked({ rows: [row('a', ME), row('b', ME)], userId: ME })).toBe(false);
   });
 });
 
