@@ -36,7 +36,10 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
           {workspaceName === null ? (
             <span className="flex-1 h-4 rounded bg-panel-3 animate-pulse" aria-hidden />
           ) : (
-            <span className="flex-1 font-semibold text-sm truncate">{workspaceName}</span>
+            // "<Client> - <Platform>": wrap (up to three lines) rather than clip the platform.
+            <span className="flex-1 min-w-0 font-semibold text-sm leading-tight line-clamp-3 break-words">
+              {workspaceName}
+            </span>
           )}
           <IconChevronDown size={16} className="text-fg-3 shrink-0" />
         </button>
