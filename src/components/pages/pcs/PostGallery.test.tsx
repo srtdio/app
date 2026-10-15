@@ -4,6 +4,9 @@ import {
   PIN_ARM_PRESS_MS,
   galleryFileKind,
   galleryView,
+  galleryFrameRatio,
+  frameCutLine,
+  framePins,
   intrinsicSize,
   nearestTileIndex,
   resolveRibbonTileStyle,
@@ -627,5 +630,89 @@ describe('file tiles (T8)', () => {
     expect(resolveRibbonTileStyle(pdf, {})).toEqual(ribbonTileStyle(null, null));
     rememberThumbnail(pdf.assetVersionId, { width: 600, height: 800, pageCount: 2 });
     expect(resolveRibbonTileStyle(pdf, {})).toEqual(ribbonTileStyle(600, 800));
+  });
+});
+
+describe('galleryView on the platform frame', () => {
+  const wide = (n: number): GalleryItem => ({ ...item(n), width: 1920, height: 1080 });
+
+  it('every slide renders in the same fixed frame, the media cropped to fill it', () => {
+    const items = [wide(1), item(2)];
+    const ratio = galleryFrameRatio('instagram', 'carousel', items, {});
+    expect(ratio).toBeCloseTo(16 / 9);
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      frameRatio: ratio,
+      platformLabel: 'Instagram',
+    });
+    const frames = elements(tree).filter(
+      (el) => (el.props as Record<string, unknown>)['data-frame-ratio'] !== undefined,
+    );
+    expect(frames).toHaveLength(2);
+    for (const f of frames) {
+      expect((f.props as { style: { aspectRatio: string } }).style.aspectRatio).toBe(String(ratio));
+    }
+    // The thumbnails cover the frame (no floating, letterboxed image).
+    const thumbs = elements(tree).filter((el) => (el.props as { fit?: string }).fit !== undefined);
+    expect(thumbs.every((el) => (el.props as { fit: string }).fit === 'cover')).toBe(true);
+  });
+
+  it('shows the cut line for the active slide and opens the full image on tap', () => {
+    let opened = -1;
+    const items = [wide(1)];
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: (i) => (opened = i),
+      frameRatio: 9 / 16,
+      platformLabel: 'TikTok',
+    });
+    const note = elements(tree).find(
+      (el) => (el.props as Record<string, unknown>)['data-frame-cut'] !== undefined,
+    );
+    expect((note?.props as { children: string }).children).toBe(
+      '68% outside the TikTok frame. Tap to see full image.',
+    );
+    (note?.props as { onClick: () => void }).onClick();
+    expect(opened).toBe(0);
+  });
+
+  it('no cut line when the slide fits the frame', () => {
+    expect(frameCutLine({ x: 0, y: 0, w: 1, h: 1 }, 'X')).toBeNull();
+  });
+
+  it('text formats keep the uncropped ribbon (no frame)', () => {
+    expect(galleryFrameRatio('x', 'text', [item(1)], {})).toBeNull();
+  });
+
+  it('the frame comes from the first slide, measured when not stored', () => {
+    const first = { ...item(1), width: null, height: null };
+    expect(galleryFrameRatio('instagram', 'carousel', [first], {})).toBeCloseTo(0.8);
+    expect(
+      galleryFrameRatio('instagram', 'carousel', [first], {
+        'aa-1': { width: 1080, height: 1080 },
+      }),
+    ).toBe(1);
+  });
+
+  it('draws pins at their spot and outside ones as edge markers', () => {
+    const win = { x: 0.25, y: 0, w: 0.5, h: 1 };
+    const tree = framePins(
+      [
+        { n: 1, annotationId: 'a1', commentId: 'c1', x: 0.5, y: 0.5 },
+        { n: 2, annotationId: 'a2', commentId: 'c2', x: 0.1, y: 0.5 },
+      ],
+      win,
+      () => {},
+    );
+    const pins = elements(tree).filter((el) => /^Pin /.test(label(el) ?? ''));
+    expect(pins.map(label)).toEqual(['Pin 1', 'Pin 2, outside the frame']);
+    expect((pins[0]?.props as { style: { left: string } }).style.left).toBe('50%');
+    expect((pins[1]?.props as Record<string, unknown>)['data-pin-edge']).toBe('left');
+    expect(className(pins[1]!)).toContain('h-11 w-11');
   });
 });

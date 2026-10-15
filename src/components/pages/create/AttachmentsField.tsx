@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { IconFile, IconLink, IconX } from '@/components/ui/icons';
+import { frameFor, type FrameMedia } from '@/lib/platform-specs';
+import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
@@ -118,9 +120,12 @@ export async function runLinkAttachment(deps: LinkAttachmentDeps): Promise<Attac
 export function attachmentItemList(
   items: readonly AttachmentItem[],
   onRemove: (index: number) => void,
-  /** The format's frame ratio (w / h); null or absent keeps the square tile. */
+  /** The post's platform frame ratio (w / h); null or absent keeps the small square tile. */
   frameRatio?: number | null,
+  /** Report a media tile's intrinsic size once it decodes (the first one sets the frame). */
+  onMeasure?: (versionId: string, w: number, h: number) => void,
 ): ReactElement[] {
+  const framed = frameRatio !== null && frameRatio !== undefined;
   const ratio = frameRatio ?? 1;
   return items.map((item, index) => {
     const isVideo = item.mime?.startsWith('video/') === true && item.previewUrl !== undefined;
@@ -129,8 +134,11 @@ export function attachmentItemList(
         <li
           key={`${item.versionId}-${index}`}
           data-frame-ratio={ratio}
-          className="relative h-20 shrink-0 overflow-hidden rounded-md border border-border bg-panel-3"
-          style={{ aspectRatio: String(ratio), minWidth: '44px' }}
+          className={cn(
+            'relative shrink-0 overflow-hidden rounded-md border border-border bg-panel-3',
+            framed ? 'h-40' : 'h-20',
+          )}
+          style={{ aspectRatio: String(ratio), minWidth: '44px', maxWidth: '100%' }}
         >
           {isVideo ? (
             <video
@@ -140,9 +148,27 @@ export function attachmentItemList(
               preload="metadata"
               aria-label={item.name}
               className="h-full w-full object-cover"
+              onLoadedMetadata={(event) =>
+                onMeasure?.(
+                  item.versionId,
+                  event.currentTarget.videoWidth,
+                  event.currentTarget.videoHeight,
+                )
+              }
             />
           ) : item.previewUrl !== undefined ? (
-            <img src={item.previewUrl} alt={item.name} className="h-full w-full object-cover" />
+            <img
+              src={item.previewUrl}
+              alt={item.name}
+              className="h-full w-full object-cover"
+              onLoad={(event) =>
+                onMeasure?.(
+                  item.versionId,
+                  event.currentTarget.naturalWidth,
+                  event.currentTarget.naturalHeight,
+                )
+              }
+            />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-fg-3">
               <IconFile size={20} />
@@ -203,15 +229,18 @@ interface AttachmentsFieldProps {
   workspaceId: string | null;
   value: AttachmentItem[];
   onChange: (items: AttachmentItem[]) => void;
-  /** The format's media frame ratio (w / h) for the preview tiles; absent = square. */
-  frameRatio?: number | null;
+  /**
+   * The post's platform and format: media tiles render in the same platform
+   * frame the post page shows (frameFor). Absent (briefs): small square tiles.
+   */
+  frame?: { platform: string; format: string } | null;
 }
 
 export function AttachmentsField({
   workspaceId,
   value,
   onChange,
-  frameRatio,
+  frame,
 }: AttachmentsFieldProps): ReactElement {
   const newTrace = useNewTrace();
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
@@ -222,6 +251,7 @@ export function AttachmentsField({
   const [linkName, setLinkName] = useState('');
   const [linkBusy, setLinkBusy] = useState(false);
 
+  const [measured, setMeasured] = useState<Record<string, { w: number; h: number }>>({});
   const photoInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
@@ -348,6 +378,16 @@ export function AttachmentsField({
   }
 
   const linkValid = isValidLinkUrl(linkUrl) && linkName.trim() !== '';
+  const frameRatio =
+    frame !== null && frame !== undefined
+      ? (frameFor(frame.platform, frame.format, firstMedia(value, measured))?.ratio ?? null)
+      : null;
+  function measure(versionId: string, w: number, h: number): void {
+    if (w <= 0 || h <= 0) return;
+    setMeasured((prev) =>
+      prev[versionId] !== undefined ? prev : { ...prev, [versionId]: { w, h } },
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -401,7 +441,7 @@ export function AttachmentsField({
 
       {value.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
-          {attachmentItemList(value, removeCompleted, frameRatio)}
+          {attachmentItemList(value, removeCompleted, frameRatio, measure)}
         </ul>
       ) : null}
 
@@ -452,6 +492,23 @@ export function AttachmentsField({
       />
     </div>
   );
+}
+
+/** The first attached image or video, for the frame rule (links and files skipped). */
+export function firstMedia(
+  items: readonly AttachmentItem[],
+  measured: Record<string, { w: number; h: number }>,
+): FrameMedia | null {
+  const first = items.find(
+    (item) => item.kind === 'image' || item.mime?.startsWith('video/') === true,
+  );
+  if (first === undefined) return null;
+  const dims = measured[first.versionId];
+  return {
+    kind: first.kind === 'image' ? 'image' : 'video',
+    w: dims?.w ?? null,
+    h: dims?.h ?? null,
+  };
 }
 
 function cnPending(error: string | null): string {

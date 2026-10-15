@@ -101,7 +101,14 @@ import { friendlyTransitionError } from '@/lib/post-transition-errors';
 import { createComment } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
 import { postSoftDelete, stageTransition } from '@srtdio/rpc';
-import { formatLabel, platformLabel, postStatusLine } from '@/lib/post-detail-presentation';
+import { formatLabel, postStatusLine } from '@/lib/post-detail-presentation';
+import { isPostPlatform, platformLabel as postPlatformLabel } from '@srtdio/posts';
+
+// The platform's display name from the single source (@srtdio/posts); a raw
+// value outside it renders as-is rather than throwing on the page.
+function platformLabel(platform: string): string {
+  return isPostPlatform(platform) ? postPlatformLabel(platform) : platform;
+}
 
 // Read a caption string out of a version snapshot defensively: the snapshot is
 // free-form Json, so a missing or non-string caption yields null (no quote)
@@ -1390,6 +1397,13 @@ export function PostDetailPage({
                     onPinClick={(commentId) => flashTo('feedback', `comment-${commentId}`)}
                   />
                 )}
+                frame={{
+                  platform: post.platform,
+                  format: post.format,
+                  platformLabel: platformLabel(post.platform),
+                }}
+                pinsFor={(item) => pinsByAttachment[item.assetAttachmentId] ?? []}
+                onPinClick={(commentId) => flashTo('feedback', `comment-${commentId}`)}
                 onRequestPin={handleRequestPin}
                 onPlacePin={handlePlacePin}
                 pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}

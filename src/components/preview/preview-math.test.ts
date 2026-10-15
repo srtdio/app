@@ -70,9 +70,26 @@ describe('format default size', () => {
     expect(formatFrameRatio('x', 'nope')).toBeNull();
   });
   it('the panel falls back to the media list default when the format is the other kind', () => {
-    expect(defaultSizeFor('instagram', 'reel', 'image')?.label).toBe('Portrait');
+    expect(defaultSizeFor('instagram', 'reel', 'image')?.label).toBe('Tall');
     expect(defaultSizeFor('instagram', 'story', 'video')?.label).toBe('Story');
-    expect(defaultSizeFor('instagram', 'carousel', 'video')?.label).toBe('Reel');
+    expect(defaultSizeFor('instagram', 'carousel', 'video')?.label).toBe('Feed');
+  });
+});
+
+describe('panel default follows the post frame', () => {
+  it('opens on the size nearest the frame the post page shows', () => {
+    expect(defaultSizeFor('instagram', 'carousel', 'image', { w: 1080, h: 1080 })?.label).toBe(
+      'Square',
+    );
+    expect(defaultSizeFor('instagram', 'single_image', 'image', { w: 1920, h: 1080 })?.label).toBe(
+      'Landscape',
+    );
+    expect(defaultSizeFor('linkedin', 'carousel', 'image', { w: 1920, h: 1080 })?.label).toBe(
+      'Portrait',
+    );
+    expect(defaultSizeFor('instagram', 'story', 'video', { w: 1920, h: 1080 })?.label).toBe(
+      'Story',
+    );
   });
 });
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import {
   attachmentItemList,
+  firstMedia,
   attachmentVersionIds,
   removeAttachmentAt,
   runFileAttachment,
@@ -138,5 +139,22 @@ describe('attachmentItemList frame', () => {
     const framed = attachmentItemList(img, () => undefined, 9 / 16)[0];
     expect(framed?.props['data-frame-ratio']).toBeCloseTo(9 / 16);
     expect(attachmentItemList(img, () => undefined)[0]?.props['data-frame-ratio']).toBe(1);
+  });
+});
+
+describe('firstMedia (composer frame input)', () => {
+  it('takes the first image or video, skipping files and links', () => {
+    const items: AttachmentItem[] = [
+      { versionId: 'l', kind: 'link', name: 'L' },
+      { versionId: 'd', kind: 'file', name: 'd.pdf', mime: 'application/pdf' },
+      { versionId: 'v', kind: 'file', name: 'v.mp4', mime: 'video/mp4', previewUrl: 'blob:v' },
+    ];
+    expect(firstMedia(items, {})).toEqual({ kind: 'video', w: null, h: null });
+    expect(firstMedia(items, { v: { w: 1080, h: 1920 } })).toEqual({
+      kind: 'video',
+      w: 1080,
+      h: 1920,
+    });
+    expect(firstMedia(items.slice(0, 2), {})).toBeNull();
   });
 });

@@ -83,3 +83,18 @@ describe('PlatformPreviewPanel', () => {
     );
   });
 });
+
+describe('the preview names and sizes the post platform', () => {
+  it('LinkedIn: LinkedIn preview with LinkedIn sizes', () => {
+    expect(previewChipLabel('linkedin')).toBe('LinkedIn preview');
+    const html = body('linkedin', 'carousel', item({ kind: 'image', width: 1080, height: 1350 }));
+    expect(html).toContain('1200 x 627 · 1.91:1');
+    expect(html).not.toContain('1080 x 566');
+  });
+  it('Instagram: Instagram preview with Instagram sizes', () => {
+    expect(previewChipLabel('instagram')).toBe('Instagram preview');
+    const html = body('instagram', 'carousel', item({ kind: 'image', width: 1080, height: 1350 }));
+    expect(html).toContain('1080 x 566 · 1.91:1');
+    expect(html).not.toContain('1200 x 627');
+  });
+});

@@ -96,3 +96,71 @@ export function buildPinData(
 
   return { pinsByAttachment, pinChipsByCommentId, nextN: liveN };
 }
+
+/** The part of the original a frame shows, as fractions of its width and height. */
+export interface ShownWindow {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export const FULL_WINDOW: ShownWindow = { x: 0, y: 0, w: 1, h: 1 };
+
+/**
+ * The centre crop a frame of ratio (w / h) takes from an original of w x h, as
+ * object-fit: cover draws it. Unknown or zero dimensions show the whole image.
+ */
+export function coverWindow(
+  original: { w: number; h: number } | null,
+  frameRatio: number,
+): ShownWindow {
+  if (original === null || original.w <= 0 || original.h <= 0 || frameRatio <= 0) {
+    return FULL_WINDOW;
+  }
+  const own = original.w / original.h;
+  if (own > frameRatio) {
+    const w = frameRatio / own;
+    return { x: (1 - w) / 2, y: 0, w, h: 1 };
+  }
+  const h = own / frameRatio;
+  return { x: 0, y: (1 - h) / 2, w: 1, h };
+}
+
+/**
+ * A tap on the frame, normalised to the frame, mapped to the ORIGINAL image:
+ * the value stored in post_annotations image_x / image_y.
+ */
+export function frameToOriginal(
+  point: { x: number; y: number },
+  win: ShownWindow,
+): { x: number; y: number } {
+  return { x: win.x + point.x * win.w, y: win.y + point.y * win.h };
+}
+
+export type PinEdge = 'left' | 'right' | 'top' | 'bottom';
+
+/**
+ * A stored pin (relative to the original) placed on the frame. Inside the
+ * window it lands exactly where it was put (edge null). Outside, it clamps to
+ * the nearest frame edge and names that edge, so it shows as an edge marker.
+ */
+export function originalToFrame(
+  point: { x: number; y: number },
+  win: ShownWindow,
+): { x: number; y: number; edge: PinEdge | null } {
+  const fx = (point.x - win.x) / win.w;
+  const fy = (point.y - win.y) / win.h;
+  const clamp = (n: number): number => Math.min(1, Math.max(0, n));
+  if (fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1) return { x: fx, y: fy, edge: null };
+  // The axis it overshoots furthest names the edge.
+  const overX = fx < 0 ? -fx : fx > 1 ? fx - 1 : 0;
+  const overY = fy < 0 ? -fy : fy > 1 ? fy - 1 : 0;
+  const edge: PinEdge = overX >= overY ? (fx < 0 ? 'left' : 'right') : fy < 0 ? 'top' : 'bottom';
+  return { x: clamp(fx), y: clamp(fy), edge };
+}
+
+/** The share of the original a window leaves out, as a whole percent. */
+export function cutPercent(win: ShownWindow): number {
+  return Math.round((1 - win.w * win.h) * 100);
+}

@@ -2,13 +2,17 @@
 // default size, and the crop math the preview panel shows. No DOM, no network.
 
 import {
-  FORMAT_DEFAULT_SIZE,
+  formatDefaultSize,
+  frameFor,
   PLATFORM_SPECS,
   VERTICAL_FRAME,
+  type FrameMedia,
   type PlatformSize,
   type PlatformSpec,
 } from '@/lib/platform-specs';
-import { isPostPlatform, POST_FORMATS, type PostFormat, type PostPlatform } from '@srtdio/posts';
+import { isPostPlatform, type PostPlatform } from '@srtdio/posts';
+
+export { formatDefaultSize };
 
 export type PreviewMedia = 'image' | 'video';
 
@@ -22,52 +26,41 @@ export function sizesFor(platform: string, media: PreviewMedia): readonly Platfo
   return specFor(platform)?.[media] ?? [];
 }
 
-function listDefault(list: readonly PlatformSize[]): PlatformSize | null {
-  return list.find((size) => size.isDefault === true) ?? list[0] ?? null;
-}
-
-function isPostFormat(value: string): value is PostFormat {
-  return (POST_FORMATS as readonly string[]).includes(value);
-}
-
 /**
- * The size a format starts on for the platform (FORMAT_DEFAULT_SIZE), or null
- * when the format takes no media or the platform has no matching list.
- */
-export function formatDefaultSize(
-  platform: string,
-  format: string,
-): { media: PreviewMedia; size: PlatformSize } | null {
-  if (!isPostPlatform(platform) || !isPostFormat(format)) return null;
-  const rule = FORMAT_DEFAULT_SIZE[format];
-  if (rule === null) return null;
-  const list = PLATFORM_SPECS[platform][rule.media];
-  const size =
-    rule.size === 'default'
-      ? listDefault(list)
-      : (list.find((s) => s.label === rule.size) ?? listDefault(list));
-  return size === null ? null : { media: rule.media, size };
-}
-
-/**
- * The size the preview opens on for attached media of one kind: the format's
- * default when it is in that kind's list, else that list's own default.
+ * The size the preview opens on for attached media of one kind: the size in
+ * that kind's list nearest the post's frame (frameFor, so the panel opens on
+ * what the post page shows); ties keep the list's default.
  */
 export function defaultSizeFor(
   platform: PostPlatform,
   format: string,
   media: PreviewMedia,
+  dims: { w: number; h: number } | null = null,
 ): PlatformSize | null {
   const list = PLATFORM_SPECS[platform][media];
+  const fallback = list.find((size) => size.isDefault === true) ?? list[0] ?? null;
+  const first: FrameMedia = { kind: media, w: dims?.w ?? null, h: dims?.h ?? null };
+  const frame = frameFor(platform, format, first);
   const byFormat = formatDefaultSize(platform, format);
-  if (byFormat !== null && byFormat.media === media) return byFormat.size;
-  return listDefault(list);
+  if (frame === null) return fallback;
+  // Prefer the format's own size (Reel vs Story share 9:16) when it is in this list.
+  if (byFormat !== null && byFormat.media === media && frame.source !== 'media')
+    return byFormat.size;
+  let best = fallback;
+  let bestGap = best === null ? Infinity : Math.abs(Math.log(best.w / best.h / frame.ratio));
+  for (const size of list) {
+    const gap = Math.abs(Math.log(size.w / size.h / frame.ratio));
+    if (gap < bestGap - 1e-9) {
+      best = size;
+      bestGap = gap;
+    }
+  }
+  return best;
 }
 
-/** The ratio a format's composer frame uses (w / h), or null for no frame. */
+/** The ratio a format's frame uses before any media is known (w / h), or null for no frame. */
 export function formatFrameRatio(platform: string, format: string): number | null {
-  const found = formatDefaultSize(platform, format);
-  return found === null ? null : found.size.w / found.size.h;
+  return frameFor(platform, format, null)?.ratio ?? null;
 }
 
 // The ratios platforms publish; a size within 1% reads as the published one

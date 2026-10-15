@@ -330,7 +330,7 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
     caption: 'Fixture caption',
     bucket_id: BUCKET_ID,
     owner_user_id: ME,
-    platform: 'instagram',
+    platform: 'linkedin',
     format: k === 1 ? 'video' : 'carousel',
     stage: 'review',
     stage_entered_at: iso(now - (k + 2) * 24 * HOUR),
@@ -836,7 +836,7 @@ export function seedDatedPlan(
         caption: 'Fixture caption',
         bucket_id: BUCKET_ID,
         owner_user_id: opts.sender,
-        platform: 'instagram',
+        platform: 'linkedin',
         format: 'image',
         stage: it.client === 'approved' ? 'approved' : 'review',
         stage_entered_at: '2026-10-09T09:00:00Z',
@@ -1085,4 +1085,18 @@ export function seedClientPlanWithDraft(
   (t.chat_messages ??= []).push(
     planMessage(DRAFT_PLAN_MESSAGE_ID, opts.channelId, opts.sender, [DRAFT_PLAN_ID], now),
   );
+}
+
+/**
+ * Point the harness workspace and every post at one platform: a post's platform
+ * always equals its workspace's (post_create takes it from the workspace). The
+ * format is set on every post too, so it is one the platform offers.
+ */
+export function setHarnessPlatform(world: ChatWorld, platform: string, format: string): void {
+  const t = world.tables;
+  for (const ws of t.workspaces ?? []) ws.platform = platform;
+  for (const post of t.posts ?? []) {
+    post.platform = platform;
+    post.format = format;
+  }
 }

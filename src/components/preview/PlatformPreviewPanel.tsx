@@ -190,13 +190,6 @@ export function PreviewBody(props: PlatformPreviewPanelProps): ReactElement {
   const spec = specFor(platform);
   const mediaList: PreviewMedia = kind === 'video' ? 'video' : 'image';
   const sizes = sizesFor(platform, mediaList);
-  const fallback = isPostPlatform(platform) ? defaultSizeFor(platform, format, mediaList) : null;
-
-  const [label, setLabel] = useState<string | null>(fallback?.label ?? null);
-  useEffect(() => {
-    setLabel(fallback?.label ?? null);
-  }, [fallback?.label]);
-  const size = sizes.find((s) => s.label === label) ?? fallback;
 
   const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null);
   useEffect(() => {
@@ -211,6 +204,15 @@ export function PreviewBody(props: PlatformPreviewPanelProps): ReactElement {
       ? { w: firstMedia.width, h: firstMedia.height }
       : null;
   const dims = stored ?? measured;
+  const fallback = isPostPlatform(platform)
+    ? defaultSizeFor(platform, format, mediaList, dims)
+    : null;
+
+  const [label, setLabel] = useState<string | null>(fallback?.label ?? null);
+  useEffect(() => {
+    setLabel(fallback?.label ?? null);
+  }, [fallback?.label]);
+  const size = sizes.find((s) => s.label === label) ?? fallback;
   const url = useMediaUrl(firstMedia, kind, props.cache, props.presignEnabled);
 
   function measure(w: number, h: number): void {

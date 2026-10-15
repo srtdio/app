@@ -1,11 +1,12 @@
 // Verified 16 Oct 2026 from published platform spec guides; update here only.
 //
-// Config only: the preview sizes each platform shows, keyed by the platform
-// keys in @srtdio/posts (POST_PLATFORMS). Each size is {label, w, h, layout}.
-// Logic that reads this (crop math, default lookup) lives in
+// The preview sizes each platform shows, keyed by the platform keys in
+// @srtdio/posts (POST_PLATFORMS). Each size is {label, w, h, layout}. One pure
+// frame rule (frameFor) sits at the bottom; the post gallery, the create sheet
+// and the preview panel all size their media box with it. Crop maths lives in
 // src/components/preview/preview-math.ts.
 
-import type { PostFormat, PostPlatform } from '@srtdio/posts';
+import { isPostPlatform, POST_FORMATS, type PostFormat, type PostPlatform } from '@srtdio/posts';
 
 /**
  * How the platform frames the media:
@@ -37,6 +38,17 @@ export interface PlatformSpec {
   videoNote?: string;
   /** PDF/document posts: pages are shown as-is, never cropped. */
   documentNote?: string;
+  /**
+   * The feed ratios (w / h) the platform accepts per media kind; outside the
+   * range it crops to the nearest end. Absent = no range data.
+   */
+  accepted?: { image?: RatioRange; video?: RatioRange };
+}
+
+/** An accepted ratio range, as w / h. */
+export interface RatioRange {
+  min: number;
+  max: number;
 }
 
 /** The 9:16 frame bands and letterbox layouts sit in. */
@@ -57,6 +69,7 @@ export const PLATFORM_SPECS: Readonly<Record<PostPlatform, PlatformSpec>> = {
     ],
     imageNote:
       'Accepted range is 1.91:1 to 3:4; anything outside is cropped. In a carousel the first slide sets the ratio for all slides.',
+    accepted: { image: { min: 3 / 4, max: 1.91 } },
   },
   facebook: {
     image: [
@@ -84,6 +97,7 @@ export const PLATFORM_SPECS: Readonly<Record<PostPlatform, PlatformSpec>> = {
       { label: 'Vertical', w: 1080, h: 1920, layout: 'feed' },
     ],
     videoNote: 'Accepted range is 1:2.4 to 2.4:1.',
+    accepted: { video: { min: 1 / 2.4, max: 2.4 } },
     documentNote: 'Document pages are shown as-is, with no crop.',
   },
   x: {
@@ -150,3 +164,82 @@ export const FORMAT_DEFAULT_SIZE: Readonly<
   story: { media: 'video', size: 'Story' },
   short: { media: 'video', size: 'Short' },
 };
+
+function listDefault(list: readonly PlatformSize[]): PlatformSize | null {
+  return list.find((size) => size.isDefault === true) ?? list[0] ?? null;
+}
+
+function isPostFormat(value: string): value is PostFormat {
+  return (POST_FORMATS as readonly string[]).includes(value);
+}
+
+/**
+ * The size a format starts on for the platform (FORMAT_DEFAULT_SIZE), or null
+ * when the format takes no media or the platform has no matching list.
+ */
+export function formatDefaultSize(
+  platform: string,
+  format: string,
+): { media: 'image' | 'video'; size: PlatformSize } | null {
+  if (!isPostPlatform(platform) || !isPostFormat(format)) return null;
+  const rule = FORMAT_DEFAULT_SIZE[format];
+  if (rule === null) return null;
+  const list = PLATFORM_SPECS[platform][rule.media];
+  const size =
+    rule.size === 'default'
+      ? listDefault(list)
+      : (list.find((s) => s.label === rule.size) ?? listDefault(list));
+  return size === null ? null : { media: rule.media, size };
+}
+
+/** Formats always shown full-screen at 9:16, whatever the media. */
+const FIXED_VERTICAL_FORMATS: readonly string[] = ['reel', 'story', 'short'];
+/** Platforms whose every post is full-screen 9:16. */
+const FIXED_VERTICAL_PLATFORMS: readonly string[] = ['tiktok', 'youtube_shorts'];
+
+/** The first media of a post, for the frame rule. */
+export interface FrameMedia {
+  kind: 'image' | 'video' | 'other';
+  /** Intrinsic size; null until stored or measured. */
+  w: number | null;
+  h: number | null;
+}
+
+/** The media box a post renders in: its ratio (w / h) and where that came from. */
+export interface Frame {
+  ratio: number;
+  source: 'fixed' | 'media' | 'default';
+}
+
+/**
+ * The one frame rule. text / link: null (no media box). reel / story / short
+ * and every TikTok or YouTube Shorts post: 9:16. Feed formats (single image,
+ * carousel, video, thread): the first media's own ratio clamped into the
+ * platform's accepted range for its kind; with no range data, or before the
+ * first media's size is known, the format's default size. A carousel passes its
+ * first slide, so every slide shares that frame.
+ */
+export function frameFor(platform: string, format: string, first: FrameMedia | null): Frame | null {
+  if (!isPostPlatform(platform) || !isPostFormat(format)) return null;
+  if (FORMAT_DEFAULT_SIZE[format] === null) return null;
+  if (FIXED_VERTICAL_FORMATS.includes(format) || FIXED_VERTICAL_PLATFORMS.includes(platform)) {
+    return { ratio: VERTICAL_FRAME.w / VERTICAL_FRAME.h, source: 'fixed' };
+  }
+  const range =
+    first !== null && first.kind !== 'other'
+      ? PLATFORM_SPECS[platform].accepted?.[first.kind]
+      : undefined;
+  if (
+    range !== undefined &&
+    first !== null &&
+    first.w !== null &&
+    first.h !== null &&
+    first.w > 0 &&
+    first.h > 0
+  ) {
+    const own = first.w / first.h;
+    return { ratio: Math.min(range.max, Math.max(range.min, own)), source: 'media' };
+  }
+  const fallback = formatDefaultSize(platform, format);
+  return fallback === null ? null : { ratio: fallback.size.w / fallback.size.h, source: 'default' };
+}

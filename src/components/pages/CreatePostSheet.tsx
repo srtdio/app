@@ -15,7 +15,6 @@ import {
 } from '@/components/pages/create/AttachmentsField';
 import { FilePromptSheet } from '@/components/pages/create/FilePromptSheet';
 import { fileKindOf, filePrompt, mismatchedFiles } from '@/components/pages/create/file-kind';
-import { formatFrameRatio } from '@/components/preview/preview-math';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
@@ -752,9 +751,9 @@ export function CreatePostSheet({
                 workspaceId={workspaceId}
                 value={form.attachments}
                 onChange={onAttachmentsChange}
-                frameRatio={
+                frame={
                   workspacePlatform !== null
-                    ? formatFrameRatio(workspacePlatform, form.format)
+                    ? { platform: workspacePlatform, format: form.format }
                     : null
                 }
               />
