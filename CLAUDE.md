@@ -91,6 +91,13 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Canonical docs live in `docs/`: `pr-list.md` (PR list, referenced by full title only, no numbers, no slugs), `prd.md` (PRD, decisions only), `schema.md` (live DB snapshot from Supabase project movnexawfhsyuluspxoc). Read these before planning any work; they outrank memory and prior chat context.
 - Schema changes: after executing SQL via Supabase MCP and verifying via `information_schema`, regenerate `docs/schema.md` in the same migration PR so the snapshot stays current. The PR prompt will say `Schema already applied. Do NOT execute.`
 
+## Test site (dev server)
+
+- https://test.srtdio-app.pages.dev is the permanent test site. Cloudflare hosts it (Pages alias `test`, plus Worker preview versions `test-<worker>` for avatar-upload, asset-upload, asset-read, chat-token, chat-transcribe). It uses the v2 Supabase project; production is untouched.
+- Every push to an open PR updates it automatically via `.github/workflows/preview-deploy.yml` (about 3 minutes). The latest push to any PR wins.
+- After every push, tell Shubham: "Changes are on the test site, please check: https://test.srtdio-app.pages.dev", and say which PR it is showing. Confirm it is live before saying so.
+- Never ask Shubham to merge a PR he has not checked on the test site and approved.
+
 ## How to handoff
 
 After pushing, reply with the exact PR URL: `https://github.com/srtdio/app/pull/[N]`.
