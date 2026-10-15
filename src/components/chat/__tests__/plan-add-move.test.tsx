@@ -78,19 +78,19 @@ const BUNDLE: PlanBundle = {
 };
 
 describe('header, progress and status (A1)', () => {
-  it('subtitle: "{range} · Draft" or "{range} · Shared with client" (item 3)', () => {
+  it('subtitle: "{range} · Draft" or "{range} · Shared with approvers" (item 3)', () => {
     expect(planRangeShort('2026-10-12', '2026-10-16')).toBe('12 to 16 Oct');
     expect(planRangeShort('2026-10-28', '2026-11-03')).toBe('28 Oct to 3 Nov');
     expect(planHeaderSubtitle(BUNDLE.plan)).toBe('12 to 16 Oct · Draft');
     expect(planHeaderSubtitle({ ...BUNDLE.plan, audience: 'client' })).toBe(
-      '12 to 16 Oct · Shared with client',
+      '12 to 16 Oct · Shared with approvers',
     );
   });
 
-  it('progress: Draft "Team X of N" (accent bar), Open "Client X of N" (good bar) (item 5)', () => {
+  it('progress: Draft "Team X of N" (accent bar), Open "Approved X of N" (good bar) (item 5)', () => {
     expect(planProgressView(BUNDLE)).toEqual({ lead: 'Team 0 of 3', percent: 0, tone: 'accent' });
     const open = { ...BUNDLE, plan: { ...BUNDLE.plan, audience: 'client' as const } };
-    expect(planProgressView(open)).toEqual({ lead: 'Client 0 of 3', percent: 0, tone: 'good' });
+    expect(planProgressView(open)).toEqual({ lead: 'Approved 0 of 3', percent: 0, tone: 'good' });
     const src = read('PlanScreen.tsx');
     const block = src.slice(src.indexOf('export function PlanProgressRow'));
     expect(block.slice(0, 1500)).not.toContain('font-mono');
@@ -99,10 +99,10 @@ describe('header, progress and status (A1)', () => {
   it('status line: agency only, "Client waiting / approved / changes asked"', () => {
     const at = (id: string): PlanItemRow => BUNDLE.items.find((i) => i.id === id)!;
     expect(itemStatusLine(BUNDLE, at('c1'), 'agency')).toEqual({
-      label: 'Client changes asked',
+      label: 'Changes asked',
       tone: 'review',
     });
-    expect(itemStatusLine(BUNDLE, at('p1'), 'agency')?.label).toBe('Client waiting');
+    expect(itemStatusLine(BUNDLE, at('p1'), 'agency')?.label).toBe('Waiting for approval');
     expect(itemStatusLine(BUNDLE, at('p1'), 'client')).toBeNull();
   });
 });

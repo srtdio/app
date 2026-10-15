@@ -28,14 +28,16 @@ test('PCS: agency approves with the on-behalf line in the confirm', async ({ pag
   const approve = page.getByRole('button', { name: 'Approve', exact: true }).first();
   await approve.waitFor({ state: 'visible', timeout: 15_000 });
   await expect(
-    page.getByText('Waiting on the client. You can approve on their behalf.').first(),
+    page
+      .getByText("Waiting on Harness Studio's approvers. You can approve on their behalf.")
+      .first(),
   ).toBeVisible();
   // Agency sees Approve and Reject in review (and Park).
   await expect(page.getByRole('button', { name: 'Reject', exact: true }).first()).toBeVisible();
   await approve.click();
 
   const line = page.locator('[data-approve-on-behalf]');
-  await expect(line).toHaveText('You are approving on behalf of client.');
+  await expect(line).toHaveText('You are approving on behalf of Harness Studio.');
   await expect(page.locator('[data-approve-confirm-button]')).toHaveText('Approve HS-101');
   // Back sends nothing.
   await page.locator('[data-approve-back]').click();
@@ -43,7 +45,7 @@ test('PCS: agency approves with the on-behalf line in the confirm', async ({ pag
   expectNoBlocked(network);
 });
 
-test('Activity: "<Name> approved KEY-N on behalf of client"', async ({ page }) => {
+test('Activity: "<Name> approved KEY-N on behalf of <Brand>"', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   withKey(network);
   const now = new Date().toISOString();
@@ -87,7 +89,9 @@ test('Activity: "<Name> approved KEY-N on behalf of client"', async ({ page }) =
   );
   await page.goto('/activity');
 
-  await expect(page.getByText('Leo Martins approved HS-101 on behalf of client')).toBeVisible({
+  await expect(
+    page.getByText('Leo Martins approved HS-101 on behalf of Harness Studio'),
+  ).toBeVisible({
     timeout: 15_000,
   });
   await expect(page.getByText('Leo Martins deleted 3 assets', { exact: true })).toBeVisible();

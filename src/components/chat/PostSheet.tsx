@@ -42,7 +42,7 @@ import {
   type SheetAction,
   type SheetActionSet,
 } from '@/components/chat/post-sheet';
-import { ON_BEHALF_CONFIRM_LINE } from '@/components/pages/pcs/stage-actions';
+import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import { formatShortDate } from '@/lib/chat/time-format';
 import { actsOnBehalfOfClient, type ViewerSide } from '@/lib/chat/viewer-role';
@@ -246,9 +246,14 @@ export function PostSheetMedia(props: {
 // Body
 
 /** The full title, the Stage tag, then the key/value rows. Presentational. */
-export function PostSheetDetails(props: { view: PostView; timeZone: string }): ReactElement {
+export function PostSheetDetails(props: {
+  view: PostView;
+  timeZone: string;
+  /** The workspace's brand name for "on behalf of <Brand>"; null falls back. */
+  brand?: string | null;
+}): ReactElement {
   const { post, approverName, approverRole } = props.view;
-  const rows = detailRows(post, approverName, props.timeZone, approverRole ?? null);
+  const rows = detailRows(post, approverName, props.timeZone, approverRole ?? null, props.brand);
   return (
     <div className="flex flex-col gap-3">
       <h3 data-sheet-title="" className="text-[17px] font-semibold leading-6 text-fg">
@@ -291,6 +296,8 @@ export interface PostSheetActionsProps {
   approverRole?: string | null;
   /** Agency side: the approve confirm adds the on-behalf-of-client line. */
   onBehalf?: boolean;
+  /** The workspace's brand name; null falls back to "the approvers". */
+  brand?: string | null;
   mediaCount: number;
   targetDate: string;
   busy: boolean;
@@ -310,6 +317,7 @@ export interface PostSheetActionsProps {
  */
 export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
   const { set, mode } = props;
+  const brand = props.brand ?? null;
   const error =
     props.error !== null ? (
       <p role="alert" data-sheet-error="" className="text-sm text-bad">
@@ -329,7 +337,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
         <p className="text-sm text-fg-2">{copy.detail}</p>
         {mode.confirm === 'approve' && props.onBehalf === true ? (
           <p data-sheet-on-behalf="" className="text-sm text-fg-2">
-            {ON_BEHALF_CONFIRM_LINE}
+            {onBehalfConfirmLine(brand)}
           </p>
         ) : null}
         {error}
@@ -373,7 +381,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
               'cursor-default bg-good-soft text-good disabled:opacity-100',
             )}
           >
-            {approvedPillLabel(props.approverName, props.approverRole ?? null)}
+            {approvedPillLabel(props.approverName, props.approverRole ?? null, brand)}
           </button>
         ) : null}
         {set.actions.map((action, index) => (
@@ -460,7 +468,8 @@ export function PostSheet(props: PostSheetProps): ReactElement {
   const navigate = useNavigate();
   const newTrace = useNewTrace();
   const toast = useToast();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaceName } = useWorkspace();
+  const brand = workspaceName ?? null;
   const gallery = useSheetGallery(open, view.postId);
   const [mode, setMode] = useState<SheetMode>({ kind: 'actions' });
   const [busy, setBusy] = useState(false);
@@ -561,6 +570,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
         footer={
           <PostSheetActions
             set={set}
+            brand={brand}
             mode={mode}
             refLabel={ref}
             approverName={view.approverName}
@@ -605,7 +615,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
                 onScroll={onStripScroll}
                 onOpen={setViewer}
               />
-              <PostSheetDetails view={view} timeZone={timeZone} />
+              <PostSheetDetails view={view} timeZone={timeZone} brand={brand} />
             </>
           )}
         </div>

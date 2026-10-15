@@ -314,8 +314,8 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
               <IconCheck size={16} />
             </span>
             <p data-task-counts="" className="min-w-0 flex-1 truncate text-[13px] text-fg-2">
-              <span className="font-mono text-accent">{groups.agency.length}</span> agency ·{' '}
-              <span className="font-mono text-accent">{groups.client.length}</span> client ·{' '}
+              <span className="font-mono text-accent">{groups.agency.length}</span> creators ·{' '}
+              <span className="font-mono text-accent">{groups.client.length}</span> approvers ·{' '}
               <span className="font-mono">{groups.done.length}</span> done
             </p>
             {props.share !== undefined ? (

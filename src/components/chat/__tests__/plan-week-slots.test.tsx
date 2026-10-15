@@ -173,8 +173,8 @@ describe('optimistic counts and toasts (W4, W6)', () => {
     const ticked = withReviewOverrides(b, 'client', { p2: 'approved', c1: 'approved' });
     expect(planProgress(ticked)).toMatchObject({ approved: 3, changes: 0 });
     expect(progressPercent(planProgress(ticked))).toBe(75);
-    expect(screenProgressLabel(ticked, 'client')).toBe('Client 3 of 4');
-    expect(screenProgressLabel(ticked, 'agency')).toBe('Client 3 of 4');
+    expect(screenProgressLabel(ticked, 'client')).toBe('Approved 3 of 4');
+    expect(screenProgressLabel(ticked, 'agency')).toBe('Approved 3 of 4');
     // Reverting is laying the previous status back.
     const reverted = withReviewOverrides(ticked, 'client', { p2: 'waiting', c1: 'changes' });
     expect(planProgress(reverted)).toMatchObject({ approved: 1, changes: 1 });
@@ -422,9 +422,9 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toContain('data-plan-slot="client"');
     expect(html).toContain('data-plan-slot-readonly=""');
     expect(html).toMatch(/data-plan-slot="client"[^>]*disabled=""/);
-    expect(html).toContain('Client 1 of 4');
-    expect(html).toMatch(/data-plan-row-status=""[^>]*>.*Client approved</);
-    expect(html).not.toContain('Client · Approved');
+    expect(html).toContain('Approved 1 of 4');
+    expect(html).toMatch(/data-plan-row-status=""[^>]*>.*Approved</);
+    expect(html).not.toContain('Approvers · Approved');
     expect(html).not.toContain('data-plan-pill="draft"');
     expect(html).toContain('data-plan-row-wrap="d1"');
     expect(html).toContain('data-plan-add="2026-10-12"');
@@ -445,6 +445,6 @@ describe('week list layout (L1-L4)', () => {
     const html = paint('client', 'client');
     expect(html).toContain('data-plan-slot="client"');
     expect(html).not.toContain('data-plan-slot-readonly');
-    expect(html).toContain('Client 1 of 4');
+    expect(html).toContain('Approved 1 of 4');
   });
 });

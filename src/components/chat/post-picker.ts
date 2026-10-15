@@ -94,7 +94,7 @@ export function searchStageFilter(
 
 /** The review section's label: the client is who review waits on. */
 export function waitingLabel(role: string | null): string {
-  return isClient(role) ? 'Waiting on you' : 'Waiting on client';
+  return isClient(role) ? 'Waiting on you' : 'Waiting on approvers';
 }
 
 export type PickerSectionKey = 'review' | 'approved' | 'parked' | 'rejected' | 'draft';

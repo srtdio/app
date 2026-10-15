@@ -177,11 +177,11 @@ async function agencyFlow(page: Page): Promise<void> {
   // The Draft footer: Open for client, and Send in this chat held back (it has a client).
   const openClient = plan.locator('[data-plan-open-client]');
   const send = plan.locator('[data-plan-send-here]');
-  await expect(openClient).toHaveText('Open for client');
+  await expect(openClient).toHaveText('Open for approvers');
   await expect(send).toHaveText(`Send in ${PEER_NAME}`);
   await expect(send).toBeDisabled();
   await expect(plan.locator('[data-plan-send-hint]')).toHaveText(
-    'Open the plan for client to send it here.',
+    'Open the plan for approvers to send it here.',
   );
   await expect(plan.getByText("Agency only. The client can't see it yet.")).toHaveCount(0);
   for (const target of [openClient, send]) expectMinTouchTarget(await target.boundingBox());
@@ -209,12 +209,12 @@ async function agencyFlow(page: Page): Promise<void> {
   // Remove from plan: a red button at the bottom, not a menu row.
   await expect(item.locator('[data-plan-remove]')).toHaveText(/Remove from plan/);
   await item.locator('[data-plan-approve]').click();
-  const confirm = page.getByRole('dialog', { name: 'Agency approve' });
+  const confirm = page.getByRole('dialog', { name: 'Mark checked' });
   await expect(confirm).toBeVisible();
-  await expect(confirm.getByText(/Only the agency sees this/)).toBeVisible();
+  await expect(confirm.getByText(/Only creators see this/)).toBeVisible();
   await confirm.locator('[data-plan-confirm]').click();
   await expect(confirm).toBeHidden();
-  await expect(item.locator('[data-plan-status] [data-plan-pill="team"]')).toHaveText('Approved');
+  await expect(item.locator('[data-plan-status] [data-plan-pill="team"]')).toHaveText('Checked');
 
   // An Agency only comment: tinted, with the lock label.
   await item.locator('[data-plan-visibility="team"]').click();
@@ -222,7 +222,7 @@ async function agencyFlow(page: Page): Promise<void> {
   await item.getByRole('button', { name: 'Send comment' }).click();
   const note = item.locator('[data-plan-comment="team"]');
   await expect(note).toBeVisible();
-  await expect(note.getByText('Agency only')).toBeVisible();
+  await expect(note.getByText('Creators only')).toBeVisible();
   await expect(note).toHaveClass(/bg-warn-soft/);
 
   // Back closes one layer: the item; the Draft plan shows the team tick.
@@ -237,24 +237,24 @@ async function agencyFlow(page: Page): Promise<void> {
 
   // Open for client: the confirm, then the client side for everyone.
   await openClient.click();
-  const openConfirm = page.getByRole('dialog', { name: 'Open this plan for client?' });
+  const openConfirm = page.getByRole('dialog', { name: 'Open this plan for approvers?' });
   await expect(openConfirm).toBeVisible();
   await expect(openConfirm).toContainText(
-    'Client can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.',
+    'Approvers can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.',
   );
   await openConfirm.locator('[data-plan-confirm]').click();
   await expect(openConfirm).toBeHidden();
-  await expect(page.getByText('Open for client', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Open for approvers', { exact: true }).last()).toBeVisible();
   expect(tables.plans?.[0]?.audience).toBe('client');
-  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with client$/);
+  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
   await expect(plan.locator('[data-plan-open-client]')).toHaveCount(0);
   // Team ticks are never shown on an Open plan: read-only client boxes.
   await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
   await expect(conceptWrap().locator('[data-plan-slot="client"]')).toBeDisabled();
-  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Client 0 of 2');
+  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Approved 0 of 2');
   // The agency's status line: the client's side, then the visible comment count.
   await expect(conceptRow().locator('[data-plan-row-status]')).toHaveText(
-    'Client waiting · 1 comment',
+    'Waiting for approval · 1 comment',
   );
 
   // Send in this chat: the card lands; the button becomes Go to card.
@@ -277,7 +277,7 @@ async function agencyFlow(page: Page): Promise<void> {
   ).toHaveCount(1);
   await expect(card.getByText('1 concept')).toBeVisible();
   await expect(card.getByText('1 post')).toBeVisible();
-  await expect(card.locator('[data-plan-progress]')).toHaveText('Client 0 of 2');
+  await expect(card.locator('[data-plan-progress]')).toHaveText('Approved 0 of 2');
   await expect(card.locator('[data-plan-chip="warn"]')).toHaveCount(0);
   await expect(card.locator('[data-plan-forward]')).toBeVisible();
 
@@ -293,7 +293,7 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(item).toBeVisible();
   await expect(item.getByText('Post 1 of 1')).toBeVisible();
   await expect(item.getByText('Fixture caption')).toBeVisible();
-  await expect(item.getByRole('button', { name: 'Agency approve' })).toHaveCount(0);
+  await expect(item.getByRole('button', { name: 'Mark checked' })).toHaveCount(0);
   await expect(item.locator('[data-plan-approve]')).toHaveCount(0);
   await expect(item.locator('[data-plan-ask]')).toHaveCount(0);
   // The post view's own sheet keeps Move but no Remove from plan row.
@@ -382,7 +382,7 @@ async function clientFlow(page: Page): Promise<void> {
   const plan = page_(page, 'plan');
   await expect(plan).toBeVisible();
   // The same subtitle for everyone; no status line and no Add for a client.
-  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with client$/);
+  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
   await expect(plan.locator('[data-plan-title-menu]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row-status]')).toHaveCount(0);
   // A client gets Go to card only (the card is in this chat).
@@ -411,7 +411,7 @@ async function clientFlow(page: Page): Promise<void> {
   const confirm = page.getByRole('dialog', { name: 'Approve' });
   await expect(confirm).toBeVisible();
   await expect(
-    confirm.getByText(`Approve "${PLAN_CONCEPT_TITLE}"? The agency will go ahead`, {
+    confirm.getByText(`Approve "${PLAN_CONCEPT_TITLE}"? The creators will go ahead`, {
       exact: false,
     }),
   ).toBeVisible();
@@ -482,7 +482,7 @@ async function teamAndHidden(page: Page): Promise<void> {
   await expect(picker).toBeVisible();
   const messagesBefore = (network.world.tables.chat_messages ?? []).length;
   await picker.getByRole('button', { name: new RegExp(PEER_NAME) }).click();
-  await expect(page.getByText('Open the plan for client first.')).toBeVisible();
+  await expect(page.getByText('Open the plan for approvers first.')).toBeVisible();
   expect(network.world.tables.chat_messages ?? []).toHaveLength(messagesBefore);
   await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
   await page.keyboard.press('Escape');

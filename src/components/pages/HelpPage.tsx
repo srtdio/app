@@ -30,21 +30,21 @@ const ARTICLES: HelpArticle[] = [
     category: 'Getting started',
     title: 'What is Sorted for?',
     content:
-      'Sorted helps a client and their agency work through social posts together. A client can share a brief, the agency drafts a post, and the post moves through review to an approved, rejected, or parked decision. Sorted does not publish or schedule posts.',
+      'Sorted helps creators and approvers work through social posts together. Approvers can share a brief, creators draft a post, and the post moves through review to an approved, rejected, or parked decision. Sorted does not publish or schedule posts.',
   },
   {
     id: 'first-steps',
     category: 'Getting started',
     title: 'Where should I start?',
     content:
-      'Open Pipeline to see posts and their current stages. Agency teammates can create a post from the Create menu, invite teammates in Settings, or open Briefs to create a brief. Clients can share what they need in a brief and review posts when they are ready.',
+      'Open Pipeline to see posts and their current stages. Creators can create a post from the Create menu, invite teammates in Settings, or open Briefs to create a brief. Approvers can share what they need in a brief and review posts when they are ready.',
   },
   {
     id: 'create-brief',
     category: 'Briefs',
     title: 'How do I create a brief?',
     content:
-      'Open Briefs and choose the create action. Add the request details so the agency has the context it needs to draft a post. Your brief will appear in Briefs and can be linked to related work.',
+      'Open Briefs and choose the create action. Add the request details so the creators have the context they need to draft a post. Your brief will appear in Briefs and can be linked to related work.',
   },
   {
     id: 'edit-brief',
@@ -58,14 +58,14 @@ const ARTICLES: HelpArticle[] = [
     category: 'Posts & approvals',
     title: 'How do I create or update a post?',
     content:
-      'Agency teammates can start a post from the Create menu. Add the post details and any relevant assets, then move it to review when it is ready for the client. Changes to a post are kept as versions so the team can follow its history.',
+      'Creators can start a post from the Create menu. Add the post details and any relevant assets, then move it to review when it is ready for the approvers. Changes to a post are kept as versions so the team can follow its history.',
   },
   {
     id: 'post-stages',
     category: 'Posts & approvals',
     title: 'What do the post stages mean?',
     content:
-      'Draft means the agency is still working on the post. Review means it is ready for a decision. Approved means the post has been approved; it is not published by Sorted. Parked means the agency is holding it for now. Rejected means it was declined. Parked and rejected posts can return to review.',
+      'Draft means the creators are still working on the post. Review means it is ready for a decision. Approved means the post has been approved; it is not published by Sorted. Parked means the creators are holding it for now. Rejected means it was declined. Parked and rejected posts can return to review.',
   },
   {
     id: 'request-changes',
@@ -98,16 +98,16 @@ const ARTICLES: HelpArticle[] = [
   {
     id: 'roles',
     category: 'Roles & access',
-    title: 'What can clients and agency teammates see?',
+    title: 'What can creators and approvers see?',
     content:
-      'Agency teammates can use the workspace sections available to their role; admin settings are limited to workspace admins. Clients can see posts outside Draft, their own briefs, assets, and Activity events that involve them. Your role determines which actions are available.',
+      'Creators can use the workspace sections available to their role; admin settings are limited to workspace admins. Approvers can see posts outside Draft, their own briefs, assets, and Activity events that involve them. Your role determines which actions are available.',
   },
   {
     id: 'missing-content',
     category: 'Troubleshooting',
     title: 'Why can’t I see a post or brief?',
     content:
-      'Check that you are in the right workspace using the workspace switcher. Clients cannot see posts while they are in Draft, and clients only see their own briefs. If the item should be visible, ask a workspace admin or your agency team to check your access.',
+      'Check that you are in the right workspace using the workspace switcher. Approvers cannot see posts while they are in Draft, and approvers only see their own briefs. If the item should be visible, ask a workspace admin or the creators to check your access.',
   },
   {
     id: 'activity-history',

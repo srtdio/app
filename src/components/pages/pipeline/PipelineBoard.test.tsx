@@ -13,7 +13,7 @@ import {
   type GateState,
 } from '@/components/pages/pipeline/approve-gate';
 import { ApproveConfirm } from '@/components/ui/ApproveConfirm';
-import { ON_BEHALF_CONFIRM_LINE } from '@/components/pages/pcs/stage-actions';
+import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { BOARD_CAP, emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
 import { groupByStage } from '@/lib/post-board';
@@ -468,7 +468,7 @@ describe('PipelineBoard approve confirm (drop)', () => {
       const html = renderToStaticMarkup(
         (el?.props as { children: ReactNode }).children as ReactElement,
       );
-      expect(html.includes(ON_BEHALF_CONFIRM_LINE)).toBe(onBehalf);
+      expect(html.includes(onBehalfConfirmLine(null))).toBe(onBehalf);
     }
   });
 });

@@ -78,7 +78,7 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   rejected: 'Rejected',
 };
 
-export const SIDE_LABEL: Record<TaskSide, string> = { agency: 'Agency', client: 'Client' };
+export const SIDE_LABEL: Record<TaskSide, string> = { agency: 'Creators', client: 'Approvers' };
 
 export const TASK_PRIORITIES: readonly TaskPriority[] = [0, 1, 2];
 

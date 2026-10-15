@@ -95,7 +95,7 @@ describe('reset line (E3)', () => {
     expect(conceptEditResets('waiting', 'changes')).toBe(true);
     expect(conceptEditResets('approved', 'approved')).toBe(true);
     expect(CONCEPT_EDIT_RESET_HINT).toBe(
-      'Saving sends this back to waiting for agency and client.',
+      'Saving sends this back to waiting for creators and approvers.',
     );
   });
 });

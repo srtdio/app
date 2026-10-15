@@ -56,10 +56,10 @@ export interface TrayTile {
 }
 
 /** The disabled Draft tile's accessible name. */
-export const DRAFT_UNAVAILABLE_LABEL = 'Draft, not available in chats with clients';
+export const DRAFT_UNAVAILABLE_LABEL = 'Draft, not available in chats with approvers';
 
 /** The disabled Plan tile's accessible name. */
-export const PLAN_UNAVAILABLE_LABEL = 'Plan, only the agency team can share a plan';
+export const PLAN_UNAVAILABLE_LABEL = 'Plan, only creators can share a plan';
 
 /** The Plan tile's accessible name in Personal notes (a plan is shared into a chat). */
 export const PLAN_NOTES_LABEL = 'Plan, not available in Personal notes';

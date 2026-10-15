@@ -72,7 +72,7 @@ describe('buildPickerSections', () => {
     const sections = buildPickerSections({ mode: 'posts', role: agency, ...rows });
     expect(sections.map((s) => s.key)).toEqual(['review', 'approved', 'parked', 'rejected']);
     expect(sections.map((s) => s.label)).toEqual([
-      'Waiting on client',
+      'Waiting on approvers',
       'Approved in the last 30 days',
       'Parked',
       'Rejected',

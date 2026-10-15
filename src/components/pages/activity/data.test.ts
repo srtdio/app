@@ -810,7 +810,7 @@ describe('fetchActivityEntries enrichment', () => {
       const row = res.data[0]!;
       expect(row.actorName).toBe('Chitra');
       expect(row.actorAvatarUrl).toBe('https://a/c.png');
-      expect(activityLine(row, 'key')).toBe('Chitra approved KEY-12 on behalf of client');
+      expect(activityLine(row, 'key')).toBe('Chitra approved KEY-12 on behalf of the approvers');
     }
   });
 
@@ -1233,16 +1233,16 @@ describe('actor rows: who did what (approve, reject, park, review, deletes)', ()
     );
   });
 
-  it('an agency-side approve, reject or park adds "on behalf of client"; never a workspace name', () => {
+  it('an agency-side approve, reject or park adds "on behalf of the approvers"; never a workspace name', () => {
     expect(activityLine(stage('parked', { actorRole: 'agency' }), 'gbl')).toBe(
-      'Chitra parked GBL-12 on behalf of client',
+      'Chitra parked GBL-12 on behalf of the approvers',
     );
     for (const role of ['agency', 'admin', 'owner']) {
       const line = activityLine(stage('approved', { actorRole: role }), 'gbl');
-      expect(line).toBe('Chitra approved GBL-12 on behalf of client');
+      expect(line).toBe('Chitra approved GBL-12 on behalf of the approvers');
     }
     expect(activityLine(stage('rejected', { actorRole: 'agency' }), 'gbl')).toBe(
-      'Chitra rejected GBL-12 on behalf of client',
+      'Chitra rejected GBL-12 on behalf of the approvers',
     );
   });
 

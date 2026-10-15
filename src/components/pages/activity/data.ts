@@ -404,13 +404,17 @@ const ON_BEHALF_STAGES: ReadonlySet<string> = new Set(['approved', 'rejected', '
  * deletes are always plain. A missing name reads "Someone". Null for any other
  * event type.
  */
-export function actorRowLine(item: ActivityItem, workspaceKey: string | null): string | null {
+export function actorRowLine(
+  item: ActivityItem,
+  workspaceKey: string | null,
+  brand: string | null = null,
+): string | null {
   if (!ACTOR_ROW_EVENTS.has(item.eventType)) return null;
   const who = item.actorName ?? UNKNOWN_ACTOR;
   if (item.eventType === 'stage_change') {
     const suffix =
       item.toStage !== null && ON_BEHALF_STAGES.has(item.toStage)
-        ? onBehalfSuffix(item.actorRole)
+        ? onBehalfSuffix(item.actorRole, brand)
         : '';
     return `${who} ${stagePhrase(item.toStage, postRef(item, workspaceKey))}${suffix}`;
   }
@@ -431,11 +435,15 @@ export function actorRowLine(item: ActivityItem, workspaceKey: string | null): s
  * name entirely rather than printing a placeholder (actor rows read "Someone"),
  * and a missing title falls back to "a post" / "a brief" by entity type.
  */
-export function activityLine(item: ActivityItem, workspaceKey: string | null = null): string {
+export function activityLine(
+  item: ActivityItem,
+  workspaceKey: string | null = null,
+  brand: string | null = null,
+): string {
   const who = item.actorName;
   const target = entityTarget(item);
   if (isChatMention(item)) return chatMentionLine(item);
-  const actorRow = actorRowLine(item, workspaceKey);
+  const actorRow = actorRowLine(item, workspaceKey, brand);
   if (actorRow !== null) return actorRow;
   const planLine = planEventLine(item);
   if (planLine !== null) return planLine;
@@ -498,8 +506,12 @@ export function cardTitle(item: ActivityItem): string {
  * (approve, reject, park, review, deletes) are the exception: who did it IS the
  * event, so they read the full who-did-what line.
  */
-export function shortLine(item: ActivityItem, workspaceKey: string | null = null): string {
-  const actorRow = actorRowLine(item, workspaceKey);
+export function shortLine(
+  item: ActivityItem,
+  workspaceKey: string | null = null,
+  brand: string | null = null,
+): string {
+  const actorRow = actorRowLine(item, workspaceKey, brand);
   if (actorRow !== null) return actorRow;
   const planLine = planEventLine(item);
   if (planLine !== null) return planLine;
@@ -541,7 +553,11 @@ function trimBody(text: string): string {
  * an empty/missing body) it falls back to the existing generic short line. Never
  * throws and never renders an empty string for a comment that has text.
  */
-export function cardBodyLine(item: ActivityItem, workspaceKey: string | null = null): string {
+export function cardBodyLine(
+  item: ActivityItem,
+  workspaceKey: string | null = null,
+  brand: string | null = null,
+): string {
   const showsBody =
     item.eventType === 'comment' ||
     item.eventType === 'checkpoints_added' ||
@@ -549,7 +565,7 @@ export function cardBodyLine(item: ActivityItem, workspaceKey: string | null = n
   if (showsBody && item.body !== null && item.body.trim().length > 0) {
     return trimBody(item.body);
   }
-  return shortLine(item, workspaceKey);
+  return shortLine(item, workspaceKey, brand);
 }
 
 /**

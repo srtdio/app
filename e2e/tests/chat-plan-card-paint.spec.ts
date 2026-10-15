@@ -145,7 +145,7 @@ const SCENARIOS: Scenario[] = [
       seedClientPlanWithDraft(network.world, { channelId: DM_CHANNEL, sender: PEER });
     },
     chips: ['1 concept', '1 post'],
-    progress: 'Client 0 of 2',
+    progress: 'Approved 0 of 2',
     forward: true,
   },
   {
@@ -167,7 +167,7 @@ const SCENARIOS: Scenario[] = [
     },
     slowMs: 2_500,
     chips: ['1 concept', '1 post'],
-    progress: 'Client 0 of 2',
+    progress: 'Approved 0 of 2',
     forward: true,
   },
 ];

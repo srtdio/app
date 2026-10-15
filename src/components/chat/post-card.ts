@@ -81,15 +81,16 @@ export function sharedPostViews(
 }
 
 /**
- * The approver as a label names them: "Chitra", or "Chitra on behalf of client"
- * when the approver is agency-side. No role (old data or a failed read) is the
- * name alone; no name is null.
+ * The approver as a label names them: "Chitra", or "Chitra on behalf of Zomato"
+ * when the approver is agency-side (no brand: "on behalf of the approvers"). No
+ * role (old data or a failed read) is the name alone; no name is null.
  */
 export function approverLabel(
   approverName: string | null,
   approverRole: string | null | undefined,
+  brand: string | null = null,
 ): string | null {
-  return approverName !== null ? `${approverName}${onBehalfSuffix(approverRole)}` : null;
+  return approverName !== null ? `${approverName}${onBehalfSuffix(approverRole, brand)}` : null;
 }
 
 /** The card footer: the state on the left, one action label on the right. */
@@ -139,7 +140,7 @@ export function cardFooter(
     case 'review':
       if (side === 'client')
         return { state: 'Waiting on you', action: 'Review', accent: true, check: false };
-      if (side === 'agency') return { ...plain, state: 'Waiting on client' };
+      if (side === 'agency') return { ...plain, state: 'Waiting on approvers' };
       return { ...plain, state: 'In review' };
     case 'draft':
       return { ...plain, state: 'Draft' };

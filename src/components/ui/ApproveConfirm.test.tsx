@@ -46,7 +46,7 @@ describe('ApproveConfirm', () => {
   it('T6: names KEY-N, the slide count and the target date when loaded (chat copy)', () => {
     expect(texts(base())).toEqual([
       'Approve GBL-7, all 4 slides, for Oct 2?',
-      'This is logged as your approval and the agency is notified.',
+      'This is logged as your approval and the creators are notified.',
       'Back',
       'Approve GBL-7',
     ]);
@@ -63,7 +63,7 @@ describe('ApproveConfirm', () => {
   it('shows a failed approve above the buttons as the chat sheet does, none by default', () => {
     expect(texts(base({ error: 'Could not approve.' }))).toEqual([
       'Approve GBL-7, all 4 slides, for Oct 2?',
-      'This is logged as your approval and the agency is notified.',
+      'This is logged as your approval and the creators are notified.',
       'Could not approve.',
       'Back',
       'Approve GBL-7',

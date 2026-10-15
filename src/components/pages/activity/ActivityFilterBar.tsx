@@ -31,7 +31,7 @@ const SCOPE_CHIPS: { key: Exclude<ActivityScope, 'everything'>; label: string }[
   { key: 'briefs', label: 'Briefs' },
   { key: 'people', label: 'People' },
   { key: 'groups', label: 'Groups' },
-  { key: 'clients', label: 'Clients' },
+  { key: 'clients', label: 'Approvers' },
 ];
 
 const DEFAULT_SCOPE: ActivityScope = 'everything';

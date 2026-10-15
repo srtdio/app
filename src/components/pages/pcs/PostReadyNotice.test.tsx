@@ -70,10 +70,10 @@ describe('notify copy and gating', () => {
     expect(notifyErrorMessage('checkpoints_open')).toBe(
       'Some checkpoints are still open. Resolve them all first.',
     );
-    expect(notifyErrorMessage('forbidden_role')).toBe('Only agency members can send this.');
+    expect(notifyErrorMessage('forbidden_role')).toBe('Only creators can send this.');
     expect(notifyErrorMessage('invalid_stage')).toBe('This post is not in review anymore.');
     expect(notifyErrorMessage('network down')).toBe(
-      'Could not notify the client. Please try again.',
+      'Could not notify the approvers. Please try again.',
     );
   });
 
@@ -84,7 +84,7 @@ describe('notify copy and gating', () => {
   });
 
   it('has the agreed button label', () => {
-    expect(NOTIFY_LABEL).toBe("Tell client it's ready");
+    expect(NOTIFY_LABEL).toBe("Tell approvers it's ready");
   });
 });
 
@@ -112,8 +112,8 @@ describe('notification record (permanent, read from the table)', () => {
   });
 
   it('phrases the headline for each side', () => {
-    expect(notifyHistoryHeadline(true)).toBe('The agency told you this post is ready.');
-    expect(notifyHistoryHeadline(false)).toBe('You told the client this post is ready.');
+    expect(notifyHistoryHeadline(true)).toBe('The creators told you this post is ready.');
+    expect(notifyHistoryHeadline(false)).toBe('You told the approvers this post is ready.');
   });
 
   it('labels the checkpoint count, singular at one', () => {
@@ -140,7 +140,7 @@ describe('send control gating (agency, in review)', () => {
   // here; these assert the synchronous send-control gating.
   // The send label carries an apostrophe SSR escapes to an entity, so assert on
   // an entity-free slice of NOTIFY_LABEL rather than the raw string.
-  const SEND_LABEL_FRAGMENT = 'Tell client it';
+  const SEND_LABEL_FRAGMENT = 'Tell approvers it';
 
   it('shows the send control with a count reason while checkpoints remain open', () => {
     const html = renderToStaticMarkup(<PostReadyNotice {...noticeProps({ openCount: 2 })} />);

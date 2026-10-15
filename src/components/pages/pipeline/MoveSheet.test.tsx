@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { MoveSheetView } from '@/components/pages/pipeline/MoveSheet';
-import { ON_BEHALF_CONFIRM_LINE } from '@/components/pages/pcs/stage-actions';
+import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import { ApproveConfirm } from '@/components/ui/ApproveConfirm';
 import {
   GATE_IDLE,
@@ -369,7 +369,7 @@ describe('MoveSheet targets per role', () => {
       const all: ReactElement[] = [];
       collect(tree, all);
       const texts = all.map((el) => (el.props as { children?: unknown }).children);
-      expect(texts.includes(ON_BEHALF_CONFIRM_LINE)).toBe(expected);
+      expect(texts.includes(onBehalfConfirmLine(null))).toBe(expected);
     }
   });
 });

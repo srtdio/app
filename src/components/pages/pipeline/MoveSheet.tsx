@@ -29,8 +29,8 @@ import {
 } from '@/components/pages/pipeline/approve-gate';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import {
-  ON_BEHALF_CONFIRM_LINE,
   canRoleMove,
+  onBehalfConfirmLine,
   roleMayTarget,
 } from '@/components/pages/pcs/stage-actions';
 import { STAGE_TRANSITIONS } from '@srtdio/posts';
@@ -60,7 +60,7 @@ export interface MoveSheetProps {
  */
 export function MoveSheet(props: MoveSheetProps): ReactElement | null {
   const { onMove, busy = false } = props;
-  const { workspaceKey, workspaces, workspaceId } = useWorkspace();
+  const { workspaceKey, workspaces, workspaceId, workspaceName } = useWorkspace();
   const { gate, state } = useApproveGate(onMove);
   const postId = props.post?.id ?? null;
   // A closed or re-targeted sheet forgets its confirm.
@@ -80,6 +80,7 @@ export function MoveSheet(props: MoveSheetProps): ReactElement | null {
       gateState={state}
       refLabel={props.post !== null ? approveRef(workspaceKey, props.post.number) : ''}
       targetDate={props.post !== null ? approveTargetDate(props.post.target_date, timeZone) : ''}
+      brand={workspaceName}
     />
   );
 }
@@ -91,6 +92,8 @@ export interface MoveSheetViewProps extends Omit<MoveSheetProps, 'onMove'> {
   refLabel: string;
   /** Short target date for the approve confirm; empty leaves the clause out. */
   targetDate: string;
+  /** The workspace's brand name for the on-behalf line; null falls back to "the approvers". */
+  brand?: string | null;
 }
 
 /** The stages this role sees as rows: a client only Approved and Rejected. */
@@ -117,6 +120,7 @@ export function MoveSheetView({
   refLabel,
   targetDate,
   role,
+  brand = null,
 }: MoveSheetViewProps): ReactElement | null {
   if (post === null) {
     return null;
@@ -158,7 +162,7 @@ export function MoveSheetView({
         </div>
         {confirming && isAgencySide(role) ? (
           <p data-approve-on-behalf="" className="text-sm text-fg-2">
-            {ON_BEHALF_CONFIRM_LINE}
+            {onBehalfConfirmLine(brand)}
           </p>
         ) : null}
         {confirming ? null : (

@@ -112,7 +112,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   await expect(plan.locator('[data-plan-week-header]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row-kind]')).toHaveCount(2);
   const progress = plan.locator('[data-plan-screen-progress]');
-  await expect(progress).toHaveText('Client 0 of 2');
+  await expect(progress).toHaveText('Approved 0 of 2');
 
   // The client box writes the client side; no team state anywhere.
   const box = plan.locator(`[data-plan-row-wrap="${PLAN_POST_ITEM}"] [data-plan-slot]`);
@@ -127,7 +127,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   // Tick: optimistic, the count moves, the toast offers Undo.
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'true');
-  await expect(progress).toHaveText('Client 1 of 2');
+  await expect(progress).toHaveText('Approved 1 of 2');
   const undo = page.locator('[data-toast-action]');
   await expect(undo).toHaveText('Undo');
   // The fixture's post item has no plan day, so the toast names none.
@@ -151,7 +151,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   // Undo: back to waiting, the count back, a withdrawal registered.
   await undo.click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
-  await expect(progress).toHaveText('Client 0 of 2');
+  await expect(progress).toHaveText('Approved 0 of 2');
   await expect
     .poll(() => (network.world.tables.plan_item_reviews ?? [])[0]?.status)
     .toBe('waiting');
@@ -187,7 +187,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByText('Slot approval removed')).toBeVisible();
-  await expect(progress).toHaveText('Client 0 of 2');
+  await expect(progress).toHaveText('Approved 0 of 2');
   expectClean(network);
 
   // The withdrawal row goes to the other members (never the actor): a plan
@@ -219,15 +219,15 @@ test('agency on an Open plan: read-only client checkbox, header subtitle, long t
   await expectRowLayout(page, PLAN_POST_ITEM);
   await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
   const row = plan.locator(`[data-plan-row="${PLAN_POST_ITEM}"]`);
-  await expect(row.locator('[data-plan-row-status]')).toHaveText('Client waiting');
-  await expect(row.getByText('Client · Waiting')).toHaveCount(0);
+  await expect(row.locator('[data-plan-row-status]')).toHaveText('Waiting for approval');
+  await expect(row.getByText('Approvers · Waiting')).toHaveCount(0);
   await box.click({ force: true });
   await expect(box).toHaveAttribute('aria-checked', 'false');
-  await expect(plan.locator('[data-plan-screen-progress] > span')).toHaveText(['Client 0 of 2']);
+  await expect(plan.locator('[data-plan-screen-progress] > span')).toHaveText(['Approved 0 of 2']);
   expect(network.world.tables.plan_item_reviews ?? []).toEqual([]);
   expect(network.rpcCalls.filter((c) => c.name === 'plan_item_review')).toEqual([]);
   // The subtitle, the same for every viewer.
-  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with client$/);
+  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
 
   // The post item: client side on a client plan reads pending.
   await row.click();

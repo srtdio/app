@@ -84,7 +84,7 @@ describe('submitFolderRename', () => {
       async (): Promise<FolderRenameOutcome> => ({
         ok: false,
         nameTaken: false,
-        message: 'Only the agency team can rename folders',
+        message: 'Only creators can rename folders',
       }),
     );
     const onToast = vi.fn();
@@ -100,7 +100,7 @@ describe('submitFolderRename', () => {
     });
 
     expect(inlineError).toBeNull();
-    expect(onToast).toHaveBeenCalledWith('Only the agency team can rename folders');
+    expect(onToast).toHaveBeenCalledWith('Only creators can rename folders');
     expect(onRenamed).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });

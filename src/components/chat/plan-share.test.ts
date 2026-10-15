@@ -90,10 +90,10 @@ describe('forward rule (item 4)', () => {
     // Unknown members: sent, and the server's refusal says the same.
     expect(forwardBlocked('team', null)).toBe(false);
     expect(forwardBlocked('client', true)).toBe(false);
-    expect(OPEN_FOR_CLIENT_FIRST).toBe('Open the plan for client first.');
+    expect(OPEN_FOR_CLIENT_FIRST).toBe('Open the plan for approvers first.');
   });
 
-  it('the refusal is plan_not_shared_with_client and reads "Open the plan for client first."', () => {
+  it('the refusal is plan_not_shared_with_client and reads "Open the plan for approvers first."', () => {
     expect(refusedForClient('P0001: plan_not_shared_with_client')).toBe(true);
     expect(refusedForClient('plan not available')).toBe(false);
     expect(shareFailureCopy('plan_not_shared_with_client')).toBe(TEAM_PLAN_CLIENT_CHAT);
@@ -115,7 +115,7 @@ describe('forward rule (item 4)', () => {
     expect(summaryHasClient({ channelType: 'dm', role: null })).toBeNull();
     expect(summaryHasClient({ channelType: 'dm' })).toBeNull();
     expect(summaryHasClient({ channelType: 'group', role: null })).toBeNull();
-    expect(HAS_CLIENT_TAG).toBe('Has client');
+    expect(HAS_CLIENT_TAG).toBe('Has approvers');
   });
 });
 
@@ -300,14 +300,14 @@ describe('Plans sheet (item 2)', () => {
 
 describe('Team is Agency in every plan string', () => {
   it('chips, hints, pills, rows and buttons', () => {
-    expect(TEAM_ONLY_LABEL).toBe('Agency only');
+    expect(TEAM_ONLY_LABEL).toBe('Creators only');
     expect(TEAM_APPROVE_CONFIRM).toBe(
-      'Mark as agency approved? Only the agency sees this. The client still approves separately.',
+      'Mark as checked? Only creators see this. Approvers still approve separately.',
     );
-    expect(SEGMENT_PILL.team).toBe('Agency approved');
-    expect(AGENCY_ROW).toBe('Agency');
+    expect(SEGMENT_PILL.team).toBe('Checked by creators');
+    expect(AGENCY_ROW).toBe('Creators');
     expect(CONCEPT_EDIT_RESET_HINT).toBe(
-      'Saving sends this back to waiting for agency and client.',
+      'Saving sends this back to waiting for creators and approvers.',
     );
     const draft = assembleBundles(
       [plan('a', { audience: 'team' })],
@@ -316,20 +316,20 @@ describe('Team is Agency in every plan string', () => {
       [],
     ).get('a') as PlanBundle;
     expect(itemPills(draft, draft.items[0] as PlanItemRow, 'agency')[0]?.label).toBe(
-      'Agency · Waiting',
+      'Creators · Waiting',
     );
     const itemScreen = readFileSync(
       fileURLToPath(new URL('./PlanItemScreen.tsx', import.meta.url)),
       'utf8',
     );
-    expect(itemScreen).toContain("'Agency approve'");
+    expect(itemScreen).toContain("'Mark checked'");
     expect(itemScreen).not.toContain("'Team approve'");
     const screen = readFileSync(
       fileURLToPath(new URL('./PlanScreen.tsx', import.meta.url)),
       'utf8',
     );
     // The old banner and its Share with client button are gone.
-    expect(screen).not.toContain('Agency only. The client can&apos;t see it yet.');
+    expect(screen).not.toContain('Creators only. The client can&apos;t see it yet.');
     expect(screen).not.toContain('data-plan-share-client');
     expect(screen).not.toContain('plan_has_drafts');
   });

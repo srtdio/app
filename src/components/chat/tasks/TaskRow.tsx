@@ -469,7 +469,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
                     NO_TOUCH_SELECT,
                   )}
                 >
-                  {task.side === 'agency' ? 'Move to Client →' : 'Move to Agency →'}
+                  {task.side === 'agency' ? 'Move to Approvers →' : 'Move to Creators →'}
                 </button>
               </div>
               <DuePicker

@@ -63,8 +63,8 @@ export function sheetActions(
     const hint =
       post.stage === 'review'
         ? since === ''
-          ? 'Waiting on the client'
-          : `Waiting on the client since ${since}`
+          ? 'Waiting on approvers'
+          : `Waiting on approvers since ${since}`
         : null;
     if (post.stage === 'review') {
       return { actions: ['approve', 'open_pipeline'], hint, approvedPill: false };
@@ -92,14 +92,15 @@ export function actionLabel(action: SheetAction, ref: string): string {
 
 /**
  * The disabled pill a client sees on an approved post: "Approved by Chitra", plus
- * "on behalf of client" when the approver is agency-side (no role: name only).
+ * "on behalf of <Brand>" when the approver is agency-side (no role: name only).
  */
 export function approvedPillLabel(
   approverName: string | null,
   approverRole: string | null = null,
+  brand: string | null = null,
 ): string {
   return approverName !== null
-    ? `Approved by ${approverName}${onBehalfSuffix(approverRole)}`
+    ? `Approved by ${approverName}${onBehalfSuffix(approverRole, brand)}`
     : 'Approved';
 }
 
@@ -133,14 +134,14 @@ export function confirmCopy(
   if (kind === 'approve') {
     return {
       question: `Approve ${subject}?`,
-      detail: 'This is logged as your approval and the agency is notified.',
+      detail: 'This is logged as your approval and the creators are notified.',
       confirmLabel: `Approve ${args.ref}`,
     };
   }
   return {
-    question: `Send ${args.ref} to the client for review?`,
+    question: `Send ${args.ref} to the approvers for review?`,
     detail:
-      'It leaves draft, and the client can approve it or comment, or you can approve on their behalf.',
+      'It leaves draft, and approvers can approve it or comment, or you can approve on their behalf.',
     confirmLabel: 'Send for review',
   };
 }
@@ -249,6 +250,7 @@ export function detailRows(
   approverName: string | null,
   timeZone: string,
   approverRole: string | null = null,
+  brand: string | null = null,
 ): DetailRow[] {
   const rows: DetailRow[] = [];
   const target = post.target_date !== null ? formatShortDate(post.target_date, timeZone) : '';
@@ -261,7 +263,8 @@ export function detailRows(
   });
   if (post.approved_by !== null) {
     const at = post.approved_at !== null ? dateTime(post.approved_at, timeZone) : '';
-    const who = approverName !== null ? `${approverName}${onBehalfSuffix(approverRole)}` : '';
+    const who =
+      approverName !== null ? `${approverName}${onBehalfSuffix(approverRole, brand)}` : '';
     const value = [who, at].filter((part) => part !== '').join(' · ');
     if (value !== '') rows.push({ key: 'approved', label: 'Approved', value });
   } else if (post.stage === 'approved') {

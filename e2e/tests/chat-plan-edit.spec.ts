@@ -89,7 +89,7 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue(target.date ?? '');
   await expect(sheet.locator('[data-plan-concept-save]')).toHaveText('Save');
   await expect(sheet.locator('[data-plan-concept-reset]')).toHaveText(
-    'Saving sends this back to waiting for agency and client.',
+    'Saving sends this back to waiting for creators and approvers.',
   );
   await sheet.locator('[data-plan-concept-save]').click();
   await expect(sheet).toBeHidden();

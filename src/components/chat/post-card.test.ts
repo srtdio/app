@@ -146,7 +146,7 @@ describe('cardFooter', () => {
       check: false,
     });
     expect(cardFooter(review, null, 'agency', TZ)).toMatchObject({
-      state: 'Waiting on client',
+      state: 'Waiting on approvers',
       action: 'Open',
       accent: false,
     });
@@ -236,10 +236,10 @@ describe('freshness', () => {
   });
 });
 
-describe('approver label (on behalf of client)', () => {
-  it('an agency-side approver reads "<name> on behalf of client"', () => {
+describe('approver label (on behalf of the approvers)', () => {
+  it('an agency-side approver reads "<name> on behalf of the approvers"', () => {
     for (const role of ['agency', 'admin', 'owner']) {
-      expect(approverLabel('Chitra', role)).toBe('Chitra on behalf of client');
+      expect(approverLabel('Chitra', role)).toBe('Chitra on behalf of the approvers');
     }
   });
 
@@ -272,7 +272,7 @@ describe('approver label (on behalf of client)', () => {
     deviceLocale('en-GB');
     const approved = cardRow('p1', { approved_by: 'u1', approved_at: '2026-09-21T14:05:00Z' });
     expect(cardFooter(approved, approverLabel('Chitra', 'agency'), 'client', TZ).state).toBe(
-      'Approved by Chitra on behalf of client · Sep 21 14:05',
+      'Approved by Chitra on behalf of the approvers · Sep 21 14:05',
     );
   });
 });

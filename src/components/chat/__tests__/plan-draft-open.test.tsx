@@ -207,7 +207,7 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
       'Cards already in chat will show Plan deleted. This cannot be undone.',
     );
     expect(deletePlanBody('client')).toBe(
-      'Cards already in chat will show Plan deleted. Client gets a notification. This cannot be undone.',
+      'Cards already in chat will show Plan deleted. Approvers get a notification. This cannot be undone.',
     );
     expect(deletePlanErrorCopy('P0001: forbidden_role')).toBe(DELETE_FORBIDDEN);
     expect(DELETE_FORBIDDEN).toBe("Only the plan's creator or a workspace admin can delete it.");
@@ -249,10 +249,10 @@ describe('item 4: footer', () => {
     expect(
       planSendAction({ side: 'client', audience: 'client', chat: { ...chat, cardInChat: true } }),
     ).toEqual({ kind: 'go' });
-    expect(SEND_NEEDS_OPEN).toBe('Open the plan for client to send it here.');
+    expect(SEND_NEEDS_OPEN).toBe('Open the plan for approvers to send it here.');
   });
 
-  it('renders Open for client, Send in and the hint; Go to card; 44px+', () => {
+  it('renders Open for approvers, Send in and the hint; Go to card; 44px+', () => {
     const html = renderToStaticMarkup(
       <PlanFooter
         showOpen
@@ -264,7 +264,7 @@ describe('item 4: footer', () => {
         onGoToCard={noop}
       />,
     );
-    expect(html).toContain('Open for client');
+    expect(html).toContain('Open for approvers');
     expect(html).toMatch(/data-plan-send-here=""[^>]*disabled=""/);
     expect(html).toContain('Send in Priya');
     expect(html).toContain(SEND_NEEDS_OPEN);
@@ -281,13 +281,13 @@ describe('item 4: footer', () => {
       />,
     );
     expect(go).toContain('Go to card');
-    expect(go).not.toContain('Open for client');
+    expect(go).not.toContain('Open for approvers');
   });
 
-  it('Open for client confirm copy and write; the old banner is gone', () => {
-    expect(OPEN_FOR_CLIENT_TITLE).toBe('Open this plan for client?');
+  it('Open for approvers confirm copy and write; the old banner is gone', () => {
+    expect(OPEN_FOR_CLIENT_TITLE).toBe('Open this plan for approvers?');
     expect(OPEN_FOR_CLIENT_BODY).toBe(
-      'Client can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.',
+      'Approvers can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.',
     );
     const src = read('PlanScreen.tsx');
     expect(src).toContain(
@@ -343,10 +343,10 @@ describe('item 5: one view of ticks', () => {
     expect(agency).not.toContain('data-plan-slot="team"');
     expect(agency).toMatch(/data-plan-slot="client"[^>]*data-plan-slot-state="approved"/);
     expect(agency).toContain('data-plan-slot-readonly=""');
-    expect(agency).toContain('Client 1 of 2');
+    expect(agency).toContain('Approved 1 of 2');
     const client = paint('client', 'client');
     expect(client).not.toContain('data-plan-slot-readonly');
-    expect(client).toContain('Client 1 of 2');
+    expect(client).toContain('Approved 1 of 2');
   });
 
   it('Draft: the team side for the agency, writable', () => {

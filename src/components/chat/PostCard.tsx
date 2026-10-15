@@ -489,7 +489,7 @@ export function SharedPostCards({
   onTalkAboutFocus?: (() => void) | undefined;
   onOpenThread?: (() => void) | undefined;
 }): ReactElement | null {
-  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
+  const { workspaceId, workspaceKey, workspaces, workspaceName } = useWorkspace();
   const { side, ready, known } = useSettledViewerSide(workspaceId);
   const { views, loading, failed, cache } = useSharedPosts(postIds);
   const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
@@ -513,6 +513,7 @@ export function SharedPostCards({
       sideKnown={known}
       workspaceKey={workspaceKey}
       timeZone={timeZone}
+      brand={workspaceName ?? null}
       onTalkAbout={
         onTalkAbout !== undefined && messageId !== undefined
           ? (postId) => onTalkAbout(postId, messageId)
@@ -550,6 +551,8 @@ export interface CardContext {
   sideKnown?: boolean;
   workspaceKey: string | null;
   timeZone: string;
+  /** The workspace's brand name for "on behalf of <Brand>"; null falls back. */
+  brand?: string | null;
 }
 
 /** The resolved cards in postIds order (presentational; no reads). */
@@ -769,7 +772,7 @@ export function PostCardItem(
   const { view, side, workspaceKey, timeZone } = props;
   const { post } = view;
   const ref = entityRef(workspaceKey, post.number);
-  const approver = approverLabel(view.approverName, view.approverRole);
+  const approver = approverLabel(view.approverName, view.approverRole, props.brand ?? null);
   const footer = approvedWithoutName(
     cardFooter(post, approver, side, timeZone),
     post,

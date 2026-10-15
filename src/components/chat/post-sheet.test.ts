@@ -69,7 +69,7 @@ describe('sheetActions', () => {
   it('agency in review: approve on their behalf, open in pipeline; elsewhere open in pipeline', () => {
     const review = sheetActions('agency', row({ stage: 'review' }), TZ);
     expect(review.actions).toEqual(['approve', 'open_pipeline']);
-    expect(review.hint).toBe('Waiting on the client since Sep 20');
+    expect(review.hint).toBe('Waiting on approvers since Sep 20');
     for (const stage of ['approved', 'parked', 'rejected']) {
       const set = sheetActions('agency', row({ stage }), TZ);
       expect(set.actions).toEqual(['open_pipeline']);
@@ -101,7 +101,7 @@ describe('labels and copy', () => {
   it('approve confirm names the post, every slide and the target date', () => {
     const copy = confirmCopy('approve', { ref: 'GBL-12', mediaCount: 5, targetDate: 'Oct 2' });
     expect(copy.question).toBe('Approve GBL-12, all 5 slides, for Oct 2?');
-    expect(copy.detail).toBe('This is logged as your approval and the agency is notified.');
+    expect(copy.detail).toBe('This is logged as your approval and the creators are notified.');
     expect(copy.confirmLabel).toBe('Approve GBL-12');
   });
 
@@ -116,9 +116,9 @@ describe('labels and copy', () => {
 
   it('send-for-review confirm has its own copy', () => {
     const copy = confirmCopy('send_review', { ref: 'GBL-12', mediaCount: 3, targetDate: 'Oct 2' });
-    expect(copy.question).toBe('Send GBL-12 to the client for review?');
+    expect(copy.question).toBe('Send GBL-12 to the approvers for review?');
     expect(copy.detail).toBe(
-      'It leaves draft, and the client can approve it or comment, or you can approve on their behalf.',
+      'It leaves draft, and approvers can approve it or comment, or you can approve on their behalf.',
     );
     expect(copy.confirmLabel).toBe('Send for review');
   });
@@ -302,7 +302,7 @@ describe('detailRows approver suffix', () => {
 
   it('suffixes an agency-side approver', () => {
     const value = detailRows(approved, 'Chitra', TZ, 'agency').find((r) => r.key === 'approved');
-    expect(value?.value.startsWith('Chitra on behalf of client · ')).toBe(true);
+    expect(value?.value.startsWith('Chitra on behalf of the approvers · ')).toBe(true);
   });
 
   it('a client approver or a missing role: name only', () => {
@@ -313,7 +313,9 @@ describe('detailRows approver suffix', () => {
   });
 
   it('the approved pill matches', () => {
-    expect(approvedPillLabel('Chitra', 'agency')).toBe('Approved by Chitra on behalf of client');
+    expect(approvedPillLabel('Chitra', 'agency')).toBe(
+      'Approved by Chitra on behalf of the approvers',
+    );
     expect(approvedPillLabel('Asha', 'client')).toBe('Approved by Asha');
     expect(approvedPillLabel('Asha')).toBe('Approved by Asha');
   });

@@ -620,7 +620,7 @@ export async function renameFolderRequest(
       };
     }
     if (response.status === 403) {
-      return { ok: false, nameTaken: false, message: 'Only the agency team can rename folders' };
+      return { ok: false, nameTaken: false, message: 'Only creators can rename folders' };
     }
     return {
       ok: false,
@@ -680,7 +680,7 @@ export async function deleteFolderRequest(
 
   if (!response.ok) {
     if (response.status === 403) {
-      return { ok: false, message: 'Only the agency team can delete folders' };
+      return { ok: false, message: 'Only creators can delete folders' };
     }
     return { ok: false, message: "Couldn't delete the folder. Try again." };
   }
@@ -756,7 +756,7 @@ export function canRenameAssets(role: string | null): boolean {
  * gets the agency-only line; everything else falls back to the retry line.
  */
 export function renameErrorMessage(status: number): string {
-  if (status === 403) return 'Only the agency team can rename assets';
+  if (status === 403) return 'Only creators can rename assets';
   return "Couldn't rename this asset. Try again.";
 }
 

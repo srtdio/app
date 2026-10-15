@@ -957,7 +957,7 @@ export const PLAN_SHARE_FAILED = "Couldn't share. Try again.";
 /** Shown inline when Create plan fails (a retry resumes). */
 export const PLAN_CREATE_FAILED = "Couldn't create. Try again.";
 /** Shown when a Draft plan meets a chat with a client (the server refused it). */
-export const TEAM_PLAN_CLIENT_CHAT = 'Open the plan for client first.';
+export const TEAM_PLAN_CLIENT_CHAT = 'Open the plan for approvers first.';
 
 export type PlanShareResult =
   | { ok: true; progress: ShareProgress }
@@ -1856,7 +1856,7 @@ export const CONCEPT_WORD_AIM = 50;
 export function wordCounterLabel(text: string): { label: string; over: boolean } {
   const n = wordCount(text);
   return n > CONCEPT_WORD_AIM
-    ? { label: `${n} words · aim for ${CONCEPT_WORD_AIM} so the client reads it all`, over: true }
+    ? { label: `${n} words · aim for ${CONCEPT_WORD_AIM} so approvers read it all`, over: true }
     : { label: `${n} / ${CONCEPT_WORD_AIM} words`, over: false };
 }
 

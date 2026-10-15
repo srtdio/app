@@ -334,7 +334,7 @@ export function BriefsPage() {
         <EmptyState
           icon={<IconBriefs size={24} />}
           title="No briefs yet"
-          description="Briefs from clients will show up here."
+          description="Briefs from approvers will show up here."
         />
       ) : (
         <div className="px-4 md:px-6 py-4 flex flex-col gap-6">

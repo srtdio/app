@@ -255,7 +255,7 @@ describe('concept sheet: tiles and soft counter', () => {
     expect(html).toContain('rows="4"');
     expect(html).toContain('min-h-[104px]');
     expect(html).toContain(
-      'placeholder="What is the concept? The idea, the hook, what the client will see."',
+      'placeholder="What is the concept? The idea, the hook, what approvers will see."',
     );
     expect(html).toContain('0 / 50 words');
     expect(html).not.toContain('Need a later day?');
@@ -264,7 +264,7 @@ describe('concept sheet: tiles and soft counter', () => {
   it('past 50 words: warning colour and the aim line; Save never blocked', () => {
     const html = sheet(Array(60).fill('word').join(' '), RANGE);
     expect(html).toMatch(/data-plan-concept-words="over"[^>]*text-warn/);
-    expect(html).toContain('60 words · aim for 50 so the client reads it all');
+    expect(html).toContain('60 words · aim for 50 so approvers read it all');
     const save = /<button[^>]*data-plan-concept-save=""[^>]*>/.exec(html)?.[0] ?? '';
     expect(save).not.toMatch(/ disabled=""/);
   });

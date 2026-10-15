@@ -14,7 +14,7 @@ import {
 import type { PresignCache } from '@/lib/asset-presign';
 import { useWorkspace } from '@/lib/workspace-context';
 import { isAgencySide } from '@/components/pages/pcs/roles';
-import { ON_BEHALF_CONFIRM_LINE, canRoleMove } from '@/components/pages/pcs/stage-actions';
+import { canRoleMove, onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
 export interface PipelineBoardProps {
@@ -104,7 +104,7 @@ function onColumnDrop(
  */
 export function PipelineBoard(props: PipelineBoardProps): ReactElement {
   const { gate, state } = useApproveGate(props.onMovePost);
-  const { workspaces, workspaceId } = useWorkspace();
+  const { workspaces, workspaceId, workspaceName } = useWorkspace();
   const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
   const pending = pendingPost(props.grouped, state.pendingId);
   // The last confirmed-or-cancelled post stays rendered so the sheet plays its
@@ -123,6 +123,7 @@ export function PipelineBoard(props: PipelineBoardProps): ReactElement {
         workspaceKey={props.workspaceKey ?? null}
         timeZone={timeZone}
         onBehalf={isAgencySide(props.role)}
+        brand={workspaceName}
       />
     </>
   );
@@ -157,6 +158,8 @@ export function BoardApproveConfirm(props: {
   timeZone: string;
   /** Agency side: the confirm adds the on-behalf-of-client line. */
   onBehalf: boolean;
+  /** The workspace's brand name; null falls back to "the approvers". */
+  brand?: string | null;
 }): ReactElement | null {
   const { post, gate, gateState } = props;
   if (post === null) return null;
@@ -182,7 +185,7 @@ export function BoardApproveConfirm(props: {
       </p>
       {props.onBehalf ? (
         <p data-approve-on-behalf="" className="mt-2 text-sm text-fg-2">
-          {ON_BEHALF_CONFIRM_LINE}
+          {onBehalfConfirmLine(props.brand)}
         </p>
       ) : null}
     </Sheet>

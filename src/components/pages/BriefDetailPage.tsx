@@ -336,7 +336,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           {mediaItems.length > 0 ? (
             <section>
               <p className="mb-3 text-sm text-fg-3">
-                Reference images from the client. Tap for full screen or download. Briefs are
+                Reference images from the approvers. Tap for full screen or download. Briefs are
                 read-only after creation.
               </p>
               <PostGallery
