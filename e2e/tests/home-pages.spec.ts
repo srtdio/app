@@ -72,7 +72,7 @@ test.describe('phone', () => {
     const hero = page.locator('.home .hero');
     await expect(hero.locator('p')).toHaveCount(1);
     await expect(hero.getByRole('heading', { level: 1 })).toHaveText(
-      'Social media agencies hate WhatsApp.',
+      'Social media teams hate WhatsApp.',
     );
     await expect(
       hero.getByText(
