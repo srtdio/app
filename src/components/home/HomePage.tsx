@@ -97,7 +97,7 @@ function SignupBand() {
   return (
     <section className="band" id="signup-mid">
       <div className="wrap">
-        <h2 className="d">You&pos;ve scrolled this far. Might as well sign up.</h2>
+        <h2 className="d">You&apos;ve scrolled this far. Might as well sign up.</h2>
         <p>Set up a client in two minutes. Invite them with a link.</p>
         <form onSubmit={onSubmit} noValidate>
           <input
