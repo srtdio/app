@@ -24,10 +24,21 @@ describe('postCreate payload validation', () => {
     if (!result.ok) expect(result.error.code).toBe('invalid_payload');
   });
 
-  it('rejects a payload missing the platform', async () => {
+  it('accepts a payload without a platform (post_create takes the workspace one)', async () => {
+    const { client, calls } = rpcClient(ok);
+    const result = await postCreate(client, {
+      workspaceId: 'ws-1',
+      payload: { title: 'T' },
+    });
+    expect(result).toEqual({ ok: true, data: 'id-1' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.args.p_payload).toEqual({ title: 'T' });
+  });
+
+  it('rejects an unknown platform when one is supplied', async () => {
     const result = await postCreate(unreachableRpcClient(), {
       workspaceId: 'ws-1',
-      payload: { title: 'T' } as unknown as PostCreatePayload,
+      payload: { title: 'T', platform: 'myspace' } as unknown as PostCreatePayload,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('invalid_payload');
