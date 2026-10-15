@@ -80,6 +80,10 @@ declare global {
 /** Record the open chat per DOM change and after each painted frame. */
 async function recordOpen(page: Page): Promise<void> {
   await page.addInitScript((planId) => {
+    // The page's real clock and frames, kept before a spec installs the
+    // Playwright page clock (which fakes Date, timers and frames for the app).
+    const now = performance.now.bind(performance);
+    const raf = window.requestAnimationFrame.bind(window);
     performance.setResourceTimingBufferSize(100_000);
     const log: OpenLog = {
       taps: [],
@@ -91,7 +95,7 @@ async function recordOpen(page: Page): Promise<void> {
       cardHeights: [],
     };
     window.__open = log;
-    document.addEventListener('pointerdown', () => log.taps.push(performance.now()), true);
+    document.addEventListener('pointerdown', () => log.taps.push(now()), true);
     const seenCards = new WeakSet<Element>();
     let lastCard: Element | null = null;
     let lastTop: number | null = null;
@@ -130,7 +134,7 @@ async function recordOpen(page: Page): Promise<void> {
         last.card === state.card &&
         last.badges === state.badges &&
         last.ticker === state.ticker;
-      if (!same) log.frames.push({ at: Math.round(performance.now()), ...state });
+      if (!same) log.frames.push({ at: Math.round(now()), ...state });
       const card = document.querySelector(`[data-plan-card="${CSS.escape(planId)}"]`);
       if (card !== null && !seenCards.has(card)) {
         seenCards.add(card);
@@ -187,9 +191,9 @@ async function recordOpen(page: Page): Promise<void> {
       const frame = (): void => {
         sampleDom();
         afterPaint.port2.postMessage(null);
-        requestAnimationFrame(frame);
+        raf(frame);
       };
-      requestAnimationFrame(frame);
+      raf(frame);
     };
     if (document.body !== null) start();
     else document.addEventListener('DOMContentLoaded', start, { once: true });
@@ -348,18 +352,30 @@ async function runTimeline(page: Page): Promise<void> {
 async function runAtOnce(page: Page): Promise<void> {
   const network = await installHarnessNetwork(page);
   seedPlanChat(network);
-  // Messages 200ms, every other read 80ms: the whole open (three rounds on
-  // each path: the page, its chips, their files; the plan ids, the plans,
-  // their reviews) settles well under 1s, leaving headroom for a runner busy
-  // with parallel workers.
+  // Messages 200ms, every other read 80ms: three rounds on each path (the
+  // page, its chips, their files; the plan ids, the plans, their reviews).
   await delaySupabaseReads(page, (name) => (name === 'chat_messages' ? 200 : 80));
   await recordOpen(page);
   const reads = countReads(page);
   await page.goto('/chat');
   await page.getByText(PEER_NAME, { exact: true }).first().waitFor();
   await page.waitForTimeout(1_500);
+  // "Settled inside the hold" is the scenario. The hold is the app's own
+  // clock (Date.now and a 1s timer from the tap), so it must not hinge on how
+  // fast the runner serves the stubbed reads: a busy runner takes over 1s of
+  // wall time for them, the cap fires first and this scenario never happens
+  // (the one-late scenario covers the cap). So the app's clock stands still
+  // from just before the tap until the open has painted: the cap cannot fire
+  // and the only way anything paints is the hold's all-settled release.
+  // Rendering, network, DOM changes and the recorder's frames run as usual.
+  await page.clock.install();
+  // (A moment ahead: the list is idle, and the clock runs while this travels.)
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
   const tap = await tapChat(page, PEER_NAME);
   await settled(page);
+  // Time flows again: the cap fires (a no-op once released), then 2s of
+  // frames that must show nothing changing.
+  await page.clock.resume();
   await page.waitForTimeout(2_000);
   const log = await logOf(page);
   const frames = framesSince(log, tap);
