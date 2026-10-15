@@ -1,57 +1,215 @@
 name: CI
 
+# changes: picks what a PR runs, from its diff against the merge base with the
+#   PR's base branch. A push to main runs everything.
+#   - code=false when every changed file is under docs/ or ends in .md:
+#     typecheck, lint, format-check and build then report green and skip.
+#   - unit: all (push to main; or a PR touching vitest.config.ts, a
+#     package.json, pnpm-lock.yaml, pnpm-workspace.yaml, a root tsconfig*, this
+#     file, or deleting a file), related (the PR's changed files, passed to
+#     `vitest related`, which runs every test that imports them at any depth),
+#     or none (only docs/, *.md or e2e/ changed).
+#   - Tests that read source as text (readFileSync/readdirSync) are invisible to
+#     `vitest related`, so a related run adds them unless the PR touches only
+#     src/server/, workers/ or .github/ (none of those tests read there).
+# test-shard: the unit run in 4 parallel shards.
+# test: the required check; fails if change detection or any shard failed,
+#   passes on success or skip.
 on:
   pull_request:
   push:
     branches: [main]
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+      unit: ${{ steps.diff.outputs.unit }}
+      related: ${{ steps.diff.outputs.related }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect relevant changes
+        id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "unit=all" >> "$GITHUB_OUTPUT"
+            echo "related=" >> "$GITHUB_OUTPUT"
+            echo "push: everything, full unit suite"
+            exit 0
+          fi
+          git fetch --no-tags origin "$BASE_REF"
+          base=$(git merge-base "origin/$BASE_REF" HEAD)
+          files=$(git diff --name-only "$base" HEAD)
+          deleted=$(git diff --name-only --diff-filter=D "$base" HEAD)
+          echo "$files"
+          code=false
+          full=false
+          fs=false
+          related=()
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              docs/*|*.md) continue ;;
+            esac
+            code=true
+            case "$f" in
+              e2e/*) continue ;;
+            esac
+            if [[ "$f" =~ ^(vitest\.config\.ts|(.*/)?package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig[^/]*\.json|\.github/workflows/ci\.yml)$ ]]; then
+              full=true
+            fi
+            if grep -qxF -- "$f" <<< "$deleted"; then
+              full=true
+            fi
+            case "$f" in
+              src/server/*|workers/*|.github/*) ;;
+              *) fs=true ;;
+            esac
+            related+=("$f")
+          done <<< "$files"
+          if [ "$code" = false ]; then
+            unit=none
+          elif [ "$full" = true ]; then
+            unit=all
+          elif [ "${#related[@]}" -eq 0 ]; then
+            unit=none
+          else
+            unit=related
+            if [ "$fs" = true ]; then
+              if readers=$(git grep -lE 'readFileSync|readdirSync|readFile\(' -- '*.test.ts' '*.test.tsx' ':!e2e/**'); then
+                mapfile -t extra <<< "$readers"
+                related+=("${extra[@]}")
+              else
+                rc=$?
+                if [ "$rc" -ne 1 ]; then exit "$rc"; fi
+              fi
+            fi
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "unit=$unit" >> "$GITHUB_OUTPUT"
+          {
+            echo "related<<__RELATED__"
+            if [ "$unit" = related ]; then printf '%s\n' "${related[@]}" | sort -u; fi
+            echo "__RELATED__"
+          } >> "$GITHUB_OUTPUT"
+          echo "code: $code, unit: $unit"
+
   typecheck:
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+    env:
+      RUN: ${{ needs.changes.outputs.code }}
     steps:
+      - name: Check change detection
+        if: needs.changes.result != 'success'
+        run: |
+          set -euo pipefail
+          echo "changes job: ${{ needs.changes.result }}"
+          exit 1
+      - name: Skip note
+        if: env.RUN != 'true'
+        run: |
+          echo "skipped: no relevant files changed"
       - uses: actions/checkout@v4
+        if: env.RUN == 'true'
       - uses: pnpm/action-setup@v4
+        if: env.RUN == 'true'
       - uses: actions/setup-node@v4
+        if: env.RUN == 'true'
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: env.RUN == 'true'
       - run: pnpm typecheck
+        if: env.RUN == 'true'
 
   lint:
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+    env:
+      RUN: ${{ needs.changes.outputs.code }}
     steps:
+      - name: Check change detection
+        if: needs.changes.result != 'success'
+        run: |
+          set -euo pipefail
+          echo "changes job: ${{ needs.changes.result }}"
+          exit 1
+      - name: Skip note
+        if: env.RUN != 'true'
+        run: |
+          echo "skipped: no relevant files changed"
       - uses: actions/checkout@v4
+        if: env.RUN == 'true'
       - uses: pnpm/action-setup@v4
+        if: env.RUN == 'true'
       - uses: actions/setup-node@v4
+        if: env.RUN == 'true'
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: env.RUN == 'true'
       - run: pnpm lint
+        if: env.RUN == 'true'
 
   format-check:
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+    env:
+      RUN: ${{ needs.changes.outputs.code }}
     steps:
+      - name: Check change detection
+        if: needs.changes.result != 'success'
+        run: |
+          set -euo pipefail
+          echo "changes job: ${{ needs.changes.result }}"
+          exit 1
+      - name: Skip note
+        if: env.RUN != 'true'
+        run: |
+          echo "skipped: no relevant files changed"
       - uses: actions/checkout@v4
+        if: env.RUN == 'true'
       - uses: pnpm/action-setup@v4
+        if: env.RUN == 'true'
       - uses: actions/setup-node@v4
+        if: env.RUN == 'true'
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: env.RUN == 'true'
       - run: pnpm format:check
+        if: env.RUN == 'true'
 
-  test:
+  test-shard:
+    needs: changes
+    if: needs.changes.outputs.unit == 'all' || needs.changes.outputs.unit == 'related'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -61,22 +219,75 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Run unit tests
-        run: pnpm test
+        env:
+          UNIT: ${{ needs.changes.outputs.unit }}
+          RELATED: ${{ needs.changes.outputs.related }}
+          SHARD: ${{ matrix.shard }}/4
+        run: |
+          set -euo pipefail
+          if [ "$UNIT" = all ]; then
+            pnpm exec vitest run --shard="$SHARD"
+          else
+            mapfile -t files <<< "$RELATED"
+            pnpm exec vitest related --run --passWithNoTests --shard="$SHARD" "${files[@]}"
+          fi
+
+  test:
+    needs: [changes, test-shard]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check shard results
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHARD_RESULT: ${{ needs.test-shard.result }}
+          UNIT: ${{ needs.changes.outputs.unit }}
+        run: |
+          set -euo pipefail
+          echo "changes: $CHANGES_RESULT, unit: $UNIT, test-shard: $SHARD_RESULT"
+          if [ "$CHANGES_RESULT" != "success" ]; then exit 1; fi
+          case "$SHARD_RESULT" in
+            success|skipped) ;;
+            *) exit 1 ;;
+          esac
+          if [ "$SHARD_RESULT" = skipped ] && [ "$UNIT" != none ]; then exit 1; fi
+      - name: Skip note
+        if: needs.changes.outputs.unit == 'none'
+        run: |
+          echo "skipped: no relevant files changed"
 
   build:
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
     env:
+      RUN: ${{ needs.changes.outputs.code }}
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       VITE_CHAT_TOKEN_URL: ${{ vars.VITE_CHAT_TOKEN_URL }}
     steps:
+      - name: Check change detection
+        if: needs.changes.result != 'success'
+        run: |
+          set -euo pipefail
+          echo "changes job: ${{ needs.changes.result }}"
+          exit 1
+      - name: Skip note
+        if: env.RUN != 'true'
+        run: |
+          echo "skipped: no relevant files changed"
       - uses: actions/checkout@v4
+        if: env.RUN == 'true'
       - uses: pnpm/action-setup@v4
+        if: env.RUN == 'true'
       - uses: actions/setup-node@v4
+        if: env.RUN == 'true'
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: env.RUN == 'true'
       - run: pnpm build
+        if: env.RUN == 'true'

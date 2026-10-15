@@ -1,6 +1,7 @@
 name: E2E WebKit
 
 # changes: diffs against the merge base with main (push: previous commit) and picks what to run: nothing for non-UI paths or unit tests only, the matching specs for homepage-only or spec-only PRs (one job), the whole suite for anything else and for every push to main.
+#   On a PR, src/server/ (Workers) never reaches the harness and runs nothing; package.json or pnpm-lock.yaml run the whole suite only when a dependency the UI imports changed (see Detect UI-relevant changes).
 # webkit-shard: runs the Playwright WebKit iPhone suite (e2e/harness, no DB, no secrets; every spec dark, @theme specs light too), the whole suite in 6 parallel shards of 2 workers each (see playwright.config.ts).
 # e2e-typecheck: on a UI change, type-checks the e2e workspace in parallel with the shards.
 # e2e-webkit: the required check; fails if any shard or the typecheck failed or was cancelled, passes on success or skip.
@@ -33,6 +34,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
         run: |
+          set -euo pipefail
           if [ "$EVENT_NAME" = "pull_request" ]; then
             git fetch --no-tags origin main
             base=$(git merge-base origin/main HEAD)
@@ -49,9 +51,14 @@ jobs:
           # always runs the whole suite.
           ui=false
           all=false
+          deps=false
           specs=""
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            # Worker code is a separate build target the harness never imports.
+            case "$f" in
+              src/server/*) if [ "$EVENT_NAME" = "pull_request" ]; then continue; fi ;;
+            esac
             if ! echo "$f" | grep -qE '^(src/|e2e/|public/|index\.html$|package\.json$|pnpm-lock\.yaml$|playwright\.config\.ts$|vite\.config\.ts$|tailwind\.config\.ts$|postcss\.config\.js$|tsconfig[^/]*\.json$|\.github/workflows/e2e-webkit\.yml$)'; then
               continue
             fi
@@ -64,10 +71,79 @@ jobs:
               # Homepage bundle, except the files the app shell imports.
               src/components/home/HomeGate.tsx|src/components/home/guest-path.ts|src/components/home/Wordmark.tsx) all=true ;;
               src/components/home/*|e2e/harness/home.html|e2e/harness/home-fixture.tsx) specs="$specs e2e/tests/home-pages.spec.ts" ;;
+              # Decided below from which dependencies changed.
+              package.json|pnpm-lock.yaml) deps=true ;;
               *) all=true ;;
             esac
           done <<< "$files"
           if [ "$ui" = true ] && [ "$EVENT_NAME" != "pull_request" ]; then all=true; fi
+          # package.json / pnpm-lock.yaml on a PR: the whole suite only when a
+          # dependency the UI uses changed. "Used" = imported (or url()'d) by
+          # src/ outside src/server/ and tests, e2e/, or the root build configs,
+          # plus the toolchain those configs name, and @types/<x> for a used x.
+          # A changed non-dependency field (scripts, engines, pnpm, ...), a
+          # changed lockfile header, or a lockfile change with no importer
+          # change (transitive only) cannot be attributed, so it runs the suite.
+          if [ "$deps" = true ] && [ "$EVENT_NAME" = "pull_request" ] && [ "$all" != true ]; then
+            # diff exits 1 when the inputs differ; only 2 (trouble) is an error.
+            ldiff() { diff "$@" || [ "$?" -eq 1 ]; }
+            pj_deps() { jq -r '[.dependencies, .devDependencies, .optionalDependencies, .peerDependencies] | map(. // {} | to_entries[] | "\(.key) \(.value)") | .[]' | sort; }
+            lock_header() { sed '/^importers:/,$d'; }
+            lock_importers() {
+              awk '
+                /^packages:/ { exit }
+                /^  [^ ].*:$/ { imp = $1; sub(/:$/, "", imp); next }
+                /^      [^ ].*:$/ { dep = $1; sub(/:$/, "", dep); next }
+                /^        (specifier|version):/ { print imp " " dep " " $1 " " $2 }
+              ' | sed "s/'//g" | sort
+            }
+            changed=""
+            if grep -qx 'package.json' <<< "$files"; then
+              changed="$changed $(ldiff <(git show "$base:package.json" | pj_deps) <(pj_deps < package.json) | sed -n 's/^[<>] \([^ ]*\) .*/\1/p' | tr '\n' ' ')"
+              if [ "$(git show "$base:package.json" | jq -S 'del(.dependencies, .devDependencies, .optionalDependencies, .peerDependencies)')" != "$(jq -S 'del(.dependencies, .devDependencies, .optionalDependencies, .peerDependencies)' package.json)" ]; then
+                echo "package.json: a non-dependency field changed"
+                all=true
+              fi
+            fi
+            if grep -qx 'pnpm-lock.yaml' <<< "$files"; then
+              if [ "$(git show "$base:pnpm-lock.yaml" | lock_header)" != "$(lock_header < pnpm-lock.yaml)" ]; then
+                echo "pnpm-lock.yaml: header (settings/overrides) changed"
+                all=true
+              fi
+              imp_diff=$(ldiff <(git show "$base:pnpm-lock.yaml" | lock_importers) <(lock_importers < pnpm-lock.yaml) | sed -n 's/^[<>] \([^ ]*\) \([^ ]*\) .*/\1 \2/p' | sort -u)
+              if [ -z "$imp_diff" ]; then
+                echo "pnpm-lock.yaml: transitive-only change"
+                all=true
+              fi
+              while read -r imp dep; do
+                [ -z "$imp" ] && continue
+                if [ "$imp" = "." ]; then
+                  changed="$changed $dep"
+                elif [ -f "$imp/package.json" ]; then
+                  # A workspace package's own dependency reaches the UI through that package.
+                  changed="$changed $dep $(jq -r .name "$imp/package.json")"
+                else
+                  changed="$changed $dep"
+                fi
+              done <<< "$imp_diff"
+            fi
+            used=$(git grep -hoE "(^|[[:space:]}])(from|import|@import|url\()[[:space:]]*\(?[[:space:]]*['\"][^'\"./][^'\"]*['\"]" -- src e2e index.html vite.config.ts tailwind.config.ts playwright.config.ts ':!src/server/**' ':!*.test.ts' ':!*.test.tsx' ':!src/__tests__/**' \
+              | sed -E "s/.*['\"]([^'\"]+)['\"]$/\1/" | grep -vE '^(@/|[a-z]+:)' | sed -E 's#^(@[^/]+/[^/]+|[^@/][^/]*).*#\1#' | sort -u)
+            used=$(printf '%s\n' "$used" tailwindcss postcss autoprefixer typescript vite @playwright/test node | sort -u)
+            changed=$(printf '%s\n' $changed | sort -u | tr '\n' ' ')
+            echo "dependencies changed: $changed"
+            for dep in $changed; do
+              name="$dep"
+              case "$dep" in
+                @types/*__*) scoped="${dep#@types/}"; name="@${scoped/__//}" ;;
+                @types/*) name="${dep#@types/}" ;;
+              esac
+              if grep -qxF -- "$name" <<< "$used"; then
+                echo "UI dependency changed: $dep"
+                all=true
+              fi
+            done
+          fi
           specs=$(echo "$specs" | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/^ *//;s/ *$//')
           if [ "$all" = true ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
@@ -187,4 +263,5 @@ jobs:
 
       - name: Skip note
         if: needs.changes.outputs.run != 'true'
-        run: echo "no UI change, WebKit suite skipped"
+        run: |
+          echo "skipped: no relevant files changed"

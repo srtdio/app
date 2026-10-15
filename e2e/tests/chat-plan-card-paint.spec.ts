@@ -518,7 +518,7 @@ async function runTickerFill(page: Page): Promise<void> {
       gates.release(input);
       await page.waitForTimeout(200);
     }
-    await page.locator('[data-loops-strip="open"]').waitFor({ state: 'visible', timeout: 8_000 });
+    await page.locator('[data-loops-strip="open"]').waitFor({ state: 'visible' });
     // The catch-up after the live connection: chat_messages and the plan again.
     await page.waitForTimeout(3_000);
     const before = { ...reads };
