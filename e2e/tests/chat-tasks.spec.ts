@@ -65,7 +65,9 @@ test(
     await expect(sheet.locator('[data-task-group="agency"]')).toContainText('Creators');
     await expect(sheet.locator('[data-task-group="client"]')).toContainText('Approvers');
     await expect(sheet.locator('[data-task-group="done"]')).toContainText('Done today');
-    await expect(sheet.locator('[data-task-counts]')).toHaveText('2 creators · 2 approvers · 0 done');
+    await expect(sheet.locator('[data-task-counts]')).toHaveText(
+      '2 creators · 2 approvers · 0 done',
+    );
     // Agency: P1 (8) before P2 (9); Client: P0 (10) before P2 (11).
     const numbers = await sheet
       .locator('[data-task-row-id]')
