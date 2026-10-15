@@ -24,6 +24,23 @@ export const WorkspaceSchema = z.object({
   digest_default_time: z.string(),
   target_distributions: z.unknown(),
   asset_bucket: z.string().nullable(),
+  platform: z.enum([
+    'instagram',
+    'x',
+    'threads',
+    'linkedin',
+    'facebook',
+    'tiktok',
+    'youtube_shorts',
+  ]),
+  client_domain: z
+    .string()
+    .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/)
+    .nullable(),
+  logo_url: z
+    .string()
+    .regex(/^https:\/\//)
+    .nullable(),
   row_version: z.number().int(),
   created_at: z.string(),
   updated_at: z.string(),

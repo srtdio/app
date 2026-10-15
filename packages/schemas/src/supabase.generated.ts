@@ -2031,6 +2031,47 @@ export type Database = {
         }
         Relationships: []
       }
+      brand_agency_requests: {
+        Row: {
+          agency_email: string
+          brand_name: string | null
+          created_at: string
+          fulfilled_at: string | null
+          id: string
+          last_sent_at: string
+          requested_by: string
+          send_count: number
+        }
+        Insert: {
+          agency_email: string
+          brand_name?: string | null
+          created_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          last_sent_at?: string
+          requested_by: string
+          send_count?: number
+        }
+        Update: {
+          agency_email?: string
+          brand_name?: string | null
+          created_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          last_sent_at?: string
+          requested_by?: string
+          send_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_agency_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       briefs: {
         Row: {
           brand_requirements: string | null
@@ -8117,18 +8158,24 @@ export type Database = {
         Row: {
           age_range: string | null
           heard_from: string | null
+          induction_done_at: string | null
+          induction_step: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           age_range?: string | null
           heard_from?: string | null
+          induction_done_at?: string | null
+          induction_step?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           age_range?: string | null
           heard_from?: string | null
+          induction_done_at?: string | null
+          induction_step?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -8300,6 +8347,58 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "workspace_buckets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_client_domains: {
+        Row: {
+          approved_by: string
+          created_at: string
+          domain: string
+          id: string
+          removed_at: string | null
+          removed_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          approved_by: string
+          created_at?: string
+          domain: string
+          id?: string
+          removed_at?: string | null
+          removed_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          approved_by?: string
+          created_at?: string
+          domain?: string
+          id?: string
+          removed_at?: string | null
+          removed_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_client_domains_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_client_domains_removed_by_fkey"
+            columns: ["removed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_client_domains_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -8494,15 +8593,17 @@ export type Database = {
         Row: {
           activated_at: string | null
           asset_bucket: string | null
+          client_domain: string | null
           created_at: string
           deleted_at: string | null
           digest_default_time: string
           id: string
           key: string
+          logo_url: string | null
           name: string
           owner_user_id: string
           plan_tier: string
-          platform: string | null
+          platform: string
           row_version: number
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -8517,15 +8618,17 @@ export type Database = {
         Insert: {
           activated_at?: string | null
           asset_bucket?: string | null
+          client_domain?: string | null
           created_at?: string
           deleted_at?: string | null
           digest_default_time?: string
           id?: string
           key: string
+          logo_url?: string | null
           name: string
           owner_user_id: string
           plan_tier?: string
-          platform?: string | null
+          platform: string
           row_version?: number
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -8540,15 +8643,17 @@ export type Database = {
         Update: {
           activated_at?: string | null
           asset_bucket?: string | null
+          client_domain?: string | null
           created_at?: string
           deleted_at?: string | null
           digest_default_time?: string
           id?: string
           key?: string
+          logo_url?: string | null
           name?: string
           owner_user_id?: string
           plan_tier?: string
-          platform?: string | null
+          platform?: string
           row_version?: number
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -8637,6 +8742,14 @@ export type Database = {
           p_payload?: Json
           p_trace_id: string
           p_workspace_id?: string
+        }
+        Returns: string
+      }
+      brand_agency_request: {
+        Args: {
+          p_agency_email: string
+          p_brand_name: string
+          p_trace_id: string
         }
         Returns: string
       }
@@ -9199,6 +9312,7 @@ export type Database = {
         }
         Returns: string
       }
+      domain_brand_word: { Args: { p_domain: string }; Returns: string }
       ensure_future_partitions: {
         Args: { p_months?: number }
         Returns: undefined
@@ -9288,6 +9402,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      induction_finish: { Args: { p_trace_id: string }; Returns: undefined }
+      induction_state: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      induction_step_set: {
+        Args: { p_step: string; p_trace_id: string }
+        Returns: undefined
+      }
       is_active_workspace_member: {
         Args: { p_workspace_id: string }
         Returns: boolean
@@ -9296,6 +9419,7 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: boolean
       }
+      is_free_mail_domain: { Args: { p_domain: string }; Returns: boolean }
       is_group_member: { Args: { p_group_id: string }; Returns: boolean }
       member_accept: {
         Args: { p_invite_id: string; p_trace_id: string }
@@ -9519,6 +9643,14 @@ export type Database = {
         Returns: string
       }
       uuidv7: { Args: never; Returns: string }
+      workspace_client_domain_add: {
+        Args: { p_domain: string; p_trace_id: string; p_workspace_id: string }
+        Returns: string
+      }
+      workspace_client_domain_remove: {
+        Args: { p_domain: string; p_trace_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
       workspace_create: {
         Args: { p_payload: Json; p_trace_id: string }
         Returns: string
