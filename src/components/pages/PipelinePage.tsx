@@ -18,6 +18,7 @@ import { useToasts } from '@/components/pages/assets/useToasts';
 import { dispatchSorted } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useSort } from '@/lib/use-sort';
 import { useSession } from '@/lib/session-context';
@@ -481,6 +482,7 @@ export function PipelinePage() {
     [posts, push, role],
   );
 
+  const canCreateBrief = useWorkspaceCapability('brief.create') === true;
   const steps: OnboardingStep[] = [
     {
       key: 'post',
@@ -494,12 +496,17 @@ export function PipelinePage() {
       action: 'Invite',
       run: () => navigate('/settings?panel=members'),
     },
-    {
-      key: 'brief',
-      label: 'Create your first brief',
-      action: 'Create brief',
-      run: () => dispatchSorted('sorted:create-brief'),
-    },
+    // New brief is a client action: listed only where the role holds brief.create.
+    ...(canCreateBrief
+      ? [
+          {
+            key: 'brief',
+            label: 'Create your first brief',
+            action: 'Create brief',
+            run: () => dispatchSorted('sorted:create-brief'),
+          },
+        ]
+      : []),
   ];
 
   const visibleSteps = steps.filter((step) => skipped[step.key] !== true);

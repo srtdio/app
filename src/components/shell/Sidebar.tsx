@@ -10,10 +10,13 @@ import { CountBadge } from '@/components/ui/CountBadge';
 import { cn } from '@/lib/cn';
 
 interface SidebarProps {
+  /** The active workspace's display name ("<Brand> - <Platform>"). */
   workspaceName: string | null;
+  /** The brand name alone, for the avatar's initials. */
+  clientName?: string | null;
 }
 
-export function Sidebar({ workspaceName }: SidebarProps) {
+export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
   const { unreadCount } = useInboxStore();
@@ -26,14 +29,17 @@ export function Sidebar({ workspaceName }: SidebarProps) {
           className="flex w-full items-center gap-2.5 min-h-[44px] px-2 rounded-lg hover:bg-panel-2 transition-colors text-left"
         >
           {workspaceName !== null ? (
-            <Avatar name={workspaceName} size="lg" />
+            <Avatar name={clientName ?? workspaceName} size="lg" />
           ) : (
             <Avatar size="lg" />
           )}
           {workspaceName === null ? (
             <span className="flex-1 h-4 rounded bg-panel-3 animate-pulse" aria-hidden />
           ) : (
-            <span className="flex-1 font-semibold text-sm truncate">{workspaceName}</span>
+            // "<Brand> - <Platform>": wrap (up to three lines) rather than clip the platform.
+            <span className="flex-1 min-w-0 font-semibold text-sm leading-tight line-clamp-3 break-words">
+              {workspaceName}
+            </span>
           )}
           <IconChevronDown size={16} className="text-fg-3 shrink-0" />
         </button>

@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
 import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { useCurrentProfile } from '@/lib/use-current-profile';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
@@ -48,6 +49,7 @@ export function shellChrome(threadOpen: boolean): {
 export function AppLayout() {
   const {
     workspaceName,
+    workspaceDisplayName,
     workspaces,
     loading,
     workspaceId,
@@ -66,6 +68,8 @@ export function AppLayout() {
   const { pathname } = useLocation();
   const chrome = shellChrome(isThreadRoute(pathname, searchParams));
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // New brief is a client action: shown only where the role holds brief.create.
+  const canCreateBrief = useWorkspaceCapability('brief.create') === true;
   const [avatarOpen, setAvatarOpen] = useState(false);
 
   // Email deep-link: ?w={workspaceId} sets the active workspace before the entity
@@ -168,7 +172,7 @@ export function AppLayout() {
   if (onboardingNeeded && flow === null) {
     setFlow({
       workspaceId: workspaces.length > 0 ? workspaceId : null,
-      workspaceName: workspaces.length > 0 ? workspaceName : null,
+      workspaceName: workspaces.length > 0 ? workspaceDisplayName : null,
       finishing: null,
       finishError: null,
     });
@@ -219,11 +223,12 @@ export function AppLayout() {
         <ChatTabSignals />
         <InboxStoreProvider>
           <div className="flex h-full">
-            <Sidebar workspaceName={workspaceName} />
+            <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
             <div className="flex flex-1 min-w-0 flex-col h-full">
               <div className={chrome.topbarClassName}>
                 <Topbar
-                  workspaceName={workspaceName}
+                  workspaceName={workspaceDisplayName}
+                  canCreateBrief={canCreateBrief}
                   {...(profile !== null ? { currentUserName: profile.display_name } : {})}
                   currentUserAvatarUrl={profile?.avatar_url ?? null}
                   onOpenPalette={() => setPaletteOpen(true)}
@@ -234,7 +239,11 @@ export function AppLayout() {
             </div>
             {chrome.showBottomTabs ? <BottomTabs /> : null}
             <ToastViewport />
-            <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+            <CommandPalette
+              open={paletteOpen}
+              onClose={() => setPaletteOpen(false)}
+              canCreateBrief={canCreateBrief}
+            />
             <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
             <WorkspaceSwitcher />
           </div>

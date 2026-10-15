@@ -9,6 +9,8 @@ import { DUR_BASE_MS } from '@/lib/motion';
 interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
+  /** Whether the viewer holds brief.create; the New brief command shows only then. */
+  canCreateBrief?: boolean;
 }
 
 interface PaletteItem {
@@ -25,7 +27,7 @@ const GROUPS: Array<PaletteItem['group']> = ['Go to', 'Actions'];
 // (CSS collapses to 1ms), so the closing phase always completes.
 const EXIT_MS = DUR_BASE_MS;
 
-export function CommandPalette({ open, onClose }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, canCreateBrief = false }: CommandPaletteProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -58,14 +60,18 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         label: 'New post',
         run: () => dispatchSorted('sorted:create-post'),
       },
-      {
-        id: 'new-brief',
-        group: 'Actions',
-        label: 'New brief',
-        run: () => dispatchSorted('sorted:create-brief'),
-      },
+      ...(canCreateBrief
+        ? [
+            {
+              id: 'new-brief',
+              group: 'Actions' as const,
+              label: 'New brief',
+              run: () => dispatchSorted('sorted:create-brief'),
+            },
+          ]
+        : []),
     ],
-    [navigate],
+    [navigate, canCreateBrief],
   );
 
   const filtered = useMemo(() => {

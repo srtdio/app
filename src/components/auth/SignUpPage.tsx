@@ -131,7 +131,7 @@ export function SignUpPage() {
 
   return (
     <AuthShell
-      title="Start your 15-day free trial"
+      title="Create your free account"
       subtitle="No card needed. Takes about a minute."
       footer={
         <span className="inline-flex flex-wrap items-center justify-center gap-x-1">
@@ -157,7 +157,7 @@ export function SignUpPage() {
             id="signup-email"
             type="email"
             autoComplete="email"
-            placeholder="you@agency.com"
+            placeholder="you@company.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />

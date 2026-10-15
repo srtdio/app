@@ -13,13 +13,25 @@ import { listWorkspaces } from '@srtdio/workspace';
 import { workspaceCreate } from '@srtdio/rpc';
 import type { Client } from '@srtdio/rpc';
 import type { Database, Json } from '@srtdio/schemas';
+import { platformLabel } from '@srtdio/posts';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session-context';
 import { useNewTrace } from '@/lib/trace-context';
 import { logger } from '@/lib/logger';
+import { primeWorkspacePlatforms } from '@/lib/workspace-context-platform';
 
 /** A workspace row, as returned by the RLS-scoped listWorkspaces select. */
 export type WorkspaceRow = Database['public']['Tables']['workspaces']['Row'];
+
+/**
+ * The one display form of a workspace: "<Brand> - <Platform>". workspaces.name
+ * holds the brand name only and the platform is fixed at creation, so the
+ * suffix is composed here and never stored. Every surface that shows a
+ * workspace name goes through this. Throws on an unknown platform.
+ */
+export function workspaceDisplayName(row: Pick<WorkspaceRow, 'name' | 'platform'>): string {
+  return `${row.name} - ${platformLabel(row.platform)}`;
+}
 
 /** Read a non-empty string field from the session user's signup metadata. */
 function metadataString(session: Session, key: string): string | null {
@@ -85,7 +97,10 @@ export async function bootstrapWorkspaces(
  */
 interface WorkspaceContextValue {
   workspaceId: string | null;
+  /** The active workspace's brand name (workspaces.name), unsuffixed. */
   workspaceName: string | null;
+  /** The active workspace as shown everywhere: "<Brand> - <Platform>". */
+  workspaceDisplayName: string | null;
   /** The active workspace's short key (e.g. "GBL"), or null before it resolves. */
   workspaceKey: string | null;
   workspaces: WorkspaceRow[];
@@ -93,7 +108,15 @@ interface WorkspaceContextValue {
   error: string | null;
   setActiveWorkspaceId: (id: string) => void;
   refreshWorkspaces: () => Promise<void>;
+  /**
+   * Merge a successful workspace_update into the cached row, without the
+   * loading state a full refresh shows (that would remount the shell).
+   */
+  applyWorkspacePatch: (id: string, patch: WorkspacePatch) => void;
 }
+
+/** The workspace fields workspace_update may change. */
+export type WorkspacePatch = Partial<Pick<WorkspaceRow, 'name' | 'logo_url' | 'timezone'>>;
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
@@ -182,6 +205,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [session, newTrace]);
 
+  const applyWorkspacePatch = useCallback((id: string, patch: WorkspacePatch) => {
+    setWorkspaces((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }, []);
+
+  // The listed rows already carry each platform: seed the sheets' lookup.
+  useEffect(() => {
+    primeWorkspacePlatforms(workspaces);
+  }, [workspaces]);
+
   const activeWorkspace = useMemo(
     () => workspaces.find((w) => w.id === activeId) ?? null,
     [workspaces, activeId],
@@ -191,14 +223,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     () => ({
       workspaceId: activeWorkspace?.id ?? null,
       workspaceName: activeWorkspace?.name ?? null,
+      workspaceDisplayName: activeWorkspace ? workspaceDisplayName(activeWorkspace) : null,
       workspaceKey: activeWorkspace?.key ?? null,
       workspaces,
       loading,
       error,
       setActiveWorkspaceId,
       refreshWorkspaces,
+      applyWorkspacePatch,
     }),
-    [activeWorkspace, workspaces, loading, error, setActiveWorkspaceId, refreshWorkspaces],
+    [
+      activeWorkspace,
+      workspaces,
+      loading,
+      error,
+      setActiveWorkspaceId,
+      refreshWorkspaces,
+      applyWorkspacePatch,
+    ],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

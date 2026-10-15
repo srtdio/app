@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildPostCreatePayload,
+  defaultFormatFor,
+  formatOptionsFor,
   initialCreateState,
+  postCreateErrorMessage,
   submitCreatePost,
   type BuildPayloadInput,
 } from '@/components/pages/CreatePostSheet';
@@ -13,7 +16,6 @@ const BRIEF_ID = '11111111-1111-1111-1111-111111111111';
 const base: BuildPayloadInput = {
   title: 'Launch teaser',
   caption: 'Caption copy',
-  platform: 'instagram',
   format: 'single_image',
   ownerUserId: '22222222-2222-2222-2222-222222222222',
   bucketId: '33333333-3333-3333-3333-333333333333',
@@ -30,7 +32,6 @@ describe('buildPostCreatePayload', () => {
     expect(result.payload).toMatchObject({
       title: 'Launch teaser',
       caption: 'Caption copy',
-      platform: 'instagram',
       format: 'single_image',
       owner_user_id: '22222222-2222-2222-2222-222222222222',
       bucket_id: '33333333-3333-3333-3333-333333333333',
@@ -38,6 +39,8 @@ describe('buildPostCreatePayload', () => {
     });
     expect('origin' in (result.payload as object)).toBe(false);
     expect('brief_id' in (result.payload as object)).toBe(false);
+    // post_create takes the platform from the workspace: the sheet never sends one.
+    expect('platform' in (result.payload as object)).toBe(false);
   });
 
   it('includes origin and brief_id when origin is a brief', () => {
@@ -68,8 +71,44 @@ describe('buildPostCreatePayload', () => {
     expect('target_date' in (result.payload as object)).toBe(false);
   });
 
-  it('rejects a missing platform', () => {
-    expect(buildPostCreatePayload({ ...base, platform: '' }).ok).toBe(false);
+  it('rejects a format outside POST_FORMATS', () => {
+    expect(buildPostCreatePayload({ ...base, format: 'gif' }).ok).toBe(false);
+  });
+});
+
+describe('format options per workspace platform', () => {
+  it("lists only the workspace platform's formats, in its order", () => {
+    expect(formatOptionsFor('instagram')).toEqual([
+      { value: 'reel', label: 'Reel' },
+      { value: 'story', label: 'Story' },
+      { value: 'carousel', label: 'Carousel' },
+      { value: 'single_image', label: 'Single image' },
+    ]);
+    expect(formatOptionsFor('x').map((o) => o.label)).toEqual(['Text', 'Image', 'Video', 'Thread']);
+    expect(formatOptionsFor('tiktok')).toEqual([{ value: 'video', label: 'Video' }]);
+    expect(formatOptionsFor('youtube_shorts')).toEqual([{ value: 'short', label: 'Short' }]);
+  });
+
+  it("defaults to the platform's first format", () => {
+    expect(defaultFormatFor('instagram')).toBe('reel');
+    expect(defaultFormatFor('linkedin')).toBe('text');
+    expect(defaultFormatFor('youtube_shorts')).toBe('short');
+  });
+
+  it('words invalid_format with the platform name and passes other errors through', () => {
+    expect(postCreateErrorMessage('invalid_format', 'tiktok')).toBe(
+      'That format is not available on TikTok.',
+    );
+    expect(postCreateErrorMessage('boom', 'x')).toBe('boom');
+  });
+});
+
+describe('CreatePostSheet source', () => {
+  it('has no Platform select', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('./CreatePostSheet.tsx', import.meta.url), 'utf8');
+    expect(source).not.toContain('label="Platform"');
+    expect(source).not.toContain('POST_PLATFORMS');
   });
 });
 
@@ -138,7 +177,6 @@ describe('initialCreateState (reset-on-open)', () => {
     expect(initialCreateState({ defaultFormat: 'text', currentUserId: 'me' })).toEqual({
       title: '',
       caption: '',
-      platform: '',
       format: 'text',
       ownerUserId: 'me',
       bucketId: '',

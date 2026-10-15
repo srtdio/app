@@ -16,8 +16,9 @@ function PrivacyPolicyContent() {
       <p>Last Updated: 08 Oct 2026</p>
       <p>
         This Privacy Policy explains how we collect, use, share and protect your personal data when
-        you use srtd.io and the Sorted app. Sorted is a tool for social media agencies and their
-        clients to write briefs, draft posts, review them and approve them.
+        you use srtd.io and the Sorted app. Sorted is a tool for the people who make social media
+        posts and the people who approve them: write briefs, draft posts, review them and approve
+        them.
       </p>
       <p>
         By using the Service you agree to this Policy. If you don&apos;t agree, please don&apos;t
@@ -92,9 +93,9 @@ function PrivacyPolicyContent() {
             people.
           </li>
           <li>
-            To send notifications: in-app, push, and email (for example mentions, review requests,
-            trial reminders and billing notices). Email notifications are bundled and sent during
-            daytime hours in your workspace timezone.
+            To send notifications: in-app, push, and email (for example mentions, review requests
+            and billing notices). Email notifications are bundled and sent during daytime hours in
+            your workspace timezone.
           </li>
           <li>To prevent abuse and fraud, fix bugs, and keep the Service reliable.</li>
           <li>To answer your support requests.</li>

@@ -14,8 +14,9 @@ import {
 } from '@/components/pages/create/AttachmentsField';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
+import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
 import { briefCreate, type Client, type Result } from '@srtdio/rpc';
-import { POST_FORMATS } from '@srtdio/posts';
+import { FORMATS_BY_PLATFORM, formatLabel, type PostPlatform } from '@srtdio/posts';
 import { createComment, type CreateCommentInput, type CommentResult } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
 
@@ -26,21 +27,28 @@ interface CreateBriefSheetProps {
   onCreated: () => void;
 }
 
-/** Title-case a snake_case enum value for display (single_image -> Single Image). */
-function humanize(value: string): string {
-  return value
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
 // 'Any' is the absence of a format requirement: when selected, format_requested
 // is omitted from the payload rather than sent. It is not a POST_FORMATS value.
 const FORMAT_ANY = '';
 
-// Briefs request a deliverable format but never a 'link': a link is an asset, not
-// a post the agency produces, so it is dropped from the choices here.
-const BRIEF_FORMATS = POST_FORMATS.filter((value) => value !== 'link');
+/**
+ * The formats a brief may request on the workspace's platform. Briefs request a
+ * deliverable format but never a 'link': a link is an asset, not a post the
+ * agency produces, so it is dropped from the choices here.
+ */
+export function briefFormatsFor(platform: PostPlatform): string[] {
+  return FORMATS_BY_PLATFORM[platform].filter((value) => value !== 'link');
+}
+
+/** The brief sheet's Format options: Any, then the platform's brief formats. */
+export function briefFormatOptions(platform: PostPlatform | null): SelectOption[] {
+  return [
+    { value: FORMAT_ANY, label: 'Any' },
+    ...(platform !== null
+      ? briefFormatsFor(platform).map((value) => ({ value, label: formatLabel(platform, value) }))
+      : []),
+  ];
+}
 
 /** The reset-on-open form state: every field cleared, format defaulted to Any. */
 export interface CreateBriefFormState {
@@ -150,6 +158,7 @@ export async function submitCreateBrief(
 
 export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: CreateBriefSheetProps) {
   const newTrace = useNewTrace();
+  const workspacePlatform = useWorkspacePlatform(open ? workspaceId : null);
   const [form, setForm] = useState<CreateBriefFormState>(() => initialBriefState());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -172,10 +181,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
   const canSubmit =
     workspaceId !== null && form.title.trim() !== '' && form.objective.trim() !== '' && !submitting;
 
-  const formatOptions: SelectOption[] = [
-    { value: FORMAT_ANY, label: 'Any' },
-    ...BRIEF_FORMATS.map((value) => ({ value, label: humanize(value) })),
-  ];
+  const formatOptions = briefFormatOptions(workspacePlatform);
 
   async function handleSubmit(): Promise<void> {
     if (workspaceId === null) return;
@@ -245,7 +251,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
     >
       <div className="flex flex-col gap-4 overflow-x-hidden">
         <p className="text-xs text-fg-3">
-          Briefs are written by clients and are read-only once created.
+          Briefs are written by approvers and are read-only once created.
         </p>
 
         <Field label="Title" htmlFor="brief-title" required>
@@ -304,7 +310,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             id="brief-initial-comment"
             value={form.initialComment}
             onChange={(event) => patch({ initialComment: event.target.value })}
-            placeholder="Add an opening note for the agency"
+            placeholder="Add an opening note for the creators"
           />
         </Field>
 

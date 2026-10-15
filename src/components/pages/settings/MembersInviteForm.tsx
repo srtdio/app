@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
+import { FREE_MAIL_APPROVER_MESSAGE } from './members-data';
 
 export type InviteRole = 'admin' | 'agency' | 'client';
 
@@ -101,27 +102,45 @@ function readString(body: Record<string, unknown>, key: string): string | undefi
   return typeof value === 'string' ? value : undefined;
 }
 
+/** The invite-check codes the form words itself instead of echoing the detail. */
+export type InviteErrorCode = 'free_mail_client' | 'client_domain_mismatch';
+
+function inviteErrorCode(value: string | undefined): InviteErrorCode | null {
+  return value === 'free_mail_client' || value === 'client_domain_mismatch' ? value : null;
+}
+
 /**
- * Best-effort read of the structured failure body. Returns a user-facing message
- * built from error_detail (plus trace_id when present), or null when no JSON body
- * with a detail can be read so the caller can fall back to the generic copy.
+ * Best-effort read of the structured failure body. Returns the mapped code (see
+ * InviteErrorCode) and a user-facing message: the approver copy for a free mail
+ * address, otherwise one built from error_detail (plus trace_id when present).
+ * message is null when no JSON body with a detail can be read so the caller can
+ * fall back to the generic copy.
  */
-async function readInviteErrorDetail(error: unknown): Promise<string | null> {
-  if (!hasResponseContext(error)) return null;
+async function readInviteError(
+  error: unknown,
+): Promise<{ code: InviteErrorCode | null; message: string | null }> {
+  const none = { code: null, message: null };
+  if (!hasResponseContext(error)) return none;
   let body: unknown;
   try {
     body = await error.context.json();
   } catch {
-    return null;
+    return none;
   }
-  if (typeof body !== 'object' || body === null) return null;
+  if (typeof body !== 'object' || body === null) return none;
   const record = body as Record<string, unknown>;
+  const code = inviteErrorCode(readString(record, 'error'));
+  if (code === 'free_mail_client') return { code, message: FREE_MAIL_APPROVER_MESSAGE };
   const detail = readString(record, 'error_detail');
-  if (detail === undefined) return null;
+  if (detail === undefined) return { code, message: null };
   const traceId = readString(record, 'trace_id');
-  return traceId !== undefined
-    ? `Invite failed: ${detail} (trace ${traceId})`
-    : `Invite failed: ${detail}`;
+  return {
+    code,
+    message:
+      traceId !== undefined
+        ? `Invite failed: ${detail} (trace ${traceId})`
+        : `Invite failed: ${detail}`,
+  };
 }
 
 /**
@@ -136,11 +155,11 @@ export async function sendInvite(deps: {
   traceId: string;
   invoke: InvokeInviteSend;
   onSuccess: () => void;
-  onError: (detail: string | null) => void;
-}): Promise<{ ok: true } | { ok: false; message: string }> {
+  onError: (detail: string | null, code: InviteErrorCode | null) => void;
+}): Promise<{ ok: true } | { ok: false; message: string; code: InviteErrorCode | null }> {
   if (!isValidInviteEmail(deps.email)) {
-    deps.onError(INVITE_INVALID_EMAIL_MESSAGE);
-    return { ok: false, message: INVITE_INVALID_EMAIL_MESSAGE };
+    deps.onError(INVITE_INVALID_EMAIL_MESSAGE, null);
+    return { ok: false, message: INVITE_INVALID_EMAIL_MESSAGE, code: null };
   }
 
   const email = deps.email.trim();
@@ -150,27 +169,32 @@ export async function sendInvite(deps: {
       headers: { 'x-trace-id': deps.traceId },
     });
     if (error !== null && error !== undefined) {
-      const detail = await readInviteErrorDetail(error);
-      deps.onError(detail);
-      return { ok: false, message: detail ?? INVITE_ERROR_MESSAGE };
+      const failure = await readInviteError(error);
+      deps.onError(failure.message, failure.code);
+      return { ok: false, message: failure.message ?? INVITE_ERROR_MESSAGE, code: failure.code };
     }
   } catch {
-    deps.onError(null);
-    return { ok: false, message: INVITE_ERROR_MESSAGE };
+    deps.onError(null, null);
+    return { ok: false, message: INVITE_ERROR_MESSAGE, code: null };
   }
   deps.onSuccess();
   return { ok: true };
 }
 
+// The role value stays `client`; people read it as the approver.
+const APPROVER_ROLE_OPTION: SelectOption = { value: 'client', label: 'Approver' };
 const ROLE_OPTIONS: SelectOption[] = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'agency', label: 'Agency (team member)' },
-  { value: 'client', label: 'Client (reviewer)' },
+  { value: 'admin', label: 'Creator, can manage members' },
+  { value: 'agency', label: 'Creator' },
+  APPROVER_ROLE_OPTION,
 ];
-const CLIENT_ROLE_OPTION: SelectOption = { value: 'client', label: 'Client (reviewer)' };
 
+/**
+ * The role choices for an inviter. A client may invite approvers only, so a
+ * client inviter never sees a role member_invite would refuse (forbidden_role).
+ */
 export function getInviteRoleOptions(clientOnly: boolean): readonly SelectOption[] {
-  return clientOnly ? [CLIENT_ROLE_OPTION] : ROLE_OPTIONS;
+  return clientOnly ? [APPROVER_ROLE_OPTION] : ROLE_OPTIONS;
 }
 
 function isInviteRole(value: string): value is InviteRole {
@@ -180,9 +204,12 @@ function isInviteRole(value: string): value is InviteRole {
 export function MembersInviteForm({
   clientOnly = false,
   onInvited,
+  onClientDomainMismatch,
 }: {
   clientOnly?: boolean;
   onInvited?: () => void;
+  /** client_domain_mismatch is a toast, not an inline line; the panel shows it. */
+  onClientDomainMismatch?: () => void;
 } = {}) {
   const { workspaceId } = useWorkspace();
   const newTrace = useNewTrace();
@@ -232,8 +259,12 @@ export function MembersInviteForm({
         setSingleSubmitting(false);
         onInvited?.();
       },
-      onError: (detail) => {
-        setSingleError(detail ?? INVITE_ERROR_MESSAGE);
+      onError: (detail, code) => {
+        if (code === 'client_domain_mismatch') {
+          onClientDomainMismatch?.();
+        } else {
+          setSingleError(detail ?? INVITE_ERROR_MESSAGE);
+        }
         setSingleSubmitting(false);
       },
     });
@@ -304,9 +335,13 @@ export function MembersInviteForm({
 
     const failed = results.filter(({ result }) => !result.ok);
     const errors: Record<string, string> = {};
+    let mismatch = false;
     for (const { invitee, result } of failed) {
-      if (!result.ok) errors[invitee.email] = result.message;
+      if (result.ok) continue;
+      if (result.code === 'client_domain_mismatch') mismatch = true;
+      else errors[invitee.email] = result.message;
     }
+    if (mismatch) onClientDomainMismatch?.();
     setInviteErrors(errors);
     setInvitees(failed.map(({ invitee }) => invitee));
     setSentCount(results.length - failed.length);

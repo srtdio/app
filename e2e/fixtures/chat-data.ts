@@ -355,6 +355,10 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
       {
         id: WORKSPACE_ID,
         name: 'Harness Studio',
+        // workspaces.platform is NOT NULL: one workspace = one platform.
+        platform: 'linkedin',
+        client_domain: null,
+        logo_url: null,
         owner_user_id: ME,
         plan_tier: 'studio',
         timezone: 'UTC',
@@ -532,6 +536,7 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
     chat_task_events: [],
     posts,
     briefs: [],
+    workspace_client_domains: [],
     inbox_entries: [
       {
         id: '0190f100-0000-7000-8000-000000000001',

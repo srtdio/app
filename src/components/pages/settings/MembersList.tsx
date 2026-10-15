@@ -1,5 +1,5 @@
-// Presentational members list: two grouped cards (Agency / Client) plus a
-// Pending invites card. Pure and prop-driven so it renders statically in tests
+// Presentational members list: two groups by side (Approvers / Creators), each
+// with its pending invites inline. Pure and prop-driven so it renders statically in tests
 // (a client-role viewer sees no kebab; the owner row shows the lock). All colour
 // comes from theme tokens for light+dark parity; every control is >=44px.
 
@@ -98,90 +98,149 @@ function MemberRowItem({ member, canManage, onOpenActions }: RowProps) {
   );
 }
 
-function Card({ title, count, children }: { title: string; count: number; children: ReactNode }) {
+function PendingRowItem({
+  member,
+  canManage,
+  cancelling,
+  onCancelInvite,
+}: {
+  member: MemberEntry;
+  canManage: boolean;
+  cancelling: boolean;
+  onCancelInvite: (member: MemberEntry) => void;
+}) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-panel">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <h3 className="text-sm font-semibold text-fg">{title}</h3>
-        <span className="text-xs text-fg-3">{count}</span>
+    <div className="flex items-center gap-3 px-4 py-3">
+      <Avatar
+        name={member.displayName}
+        {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
+        size="lg"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-medium text-fg">{member.displayName}</span>
+          <span className="inline-flex items-center rounded-md bg-panel-2 px-1.5 py-0.5 text-[11px] font-medium text-fg-3">
+            Invited
+          </span>
+        </div>
+        {member.email !== null ? (
+          <div className="truncate text-xs text-fg-3">{member.email}</div>
+        ) : null}
+      </div>
+      <RoleBadge role={member.role} />
+      {canManage ? (
+        <Button
+          size="lg"
+          disabled={cancelling}
+          onClick={() => onCancelInvite(member)}
+          className={cn(cancelling && 'opacity-70')}
+        >
+          {cancelling ? 'Cancelling' : 'Cancel'}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function Group({
+  title,
+  subtitle,
+  count,
+  emptyText,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  count: number;
+  emptyText: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-label={title}
+      className="overflow-hidden rounded-xl border border-border bg-panel"
+    >
+      <header className="border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-fg">{title}</h3>
+          <span className="text-xs text-fg-3">{count}</span>
+        </div>
+        {subtitle !== undefined && subtitle !== '' ? (
+          <p className="mt-0.5 truncate text-xs text-fg-3">{subtitle}</p>
+        ) : null}
       </header>
-      <div className="divide-y divide-border">{children}</div>
+      <div className="divide-y divide-border">
+        {count === 0 ? <p className="px-4 py-3 text-sm text-fg-3">{emptyText}</p> : children}
+      </div>
     </section>
   );
 }
 
 interface MembersListProps {
   derived: DerivedMembers;
+  /** The brand name (workspaces.name), shown under the Approvers heading. */
+  clientName: string | null;
   canManage: boolean;
   cancellingId: string | null;
   onOpenActions: (member: MemberEntry) => void;
   onCancelInvite: (member: MemberEntry) => void;
 }
 
+/**
+ * The roster grouped by side: "Approvers" (role client) under the brand
+ * name, then "Creators" (owner, admin, agency). Pending invites sit inline at the
+ * end of their side's group with their Cancel action.
+ */
 export function MembersList({
   derived,
+  clientName,
   canManage,
   cancellingId,
   onOpenActions,
   onCancelInvite,
 }: MembersListProps) {
   const { agency, client, pending } = derived;
+  const pendingApprovers = pending.filter((m) => m.role === 'client');
+  const pendingTeam = pending.filter((m) => m.role !== 'client');
+
+  const renderPending = (member: MemberEntry) => (
+    <PendingRowItem
+      key={member.id}
+      member={member}
+      canManage={canManage}
+      cancelling={cancellingId === member.id}
+      onCancelInvite={onCancelInvite}
+    />
+  );
+  const renderActive = (member: MemberEntry) => (
+    <MemberRowItem
+      key={member.id}
+      member={member}
+      canManage={canManage}
+      onOpenActions={onOpenActions}
+    />
+  );
+
   return (
     <div className="flex max-w-[720px] flex-col gap-5">
-      <Card title="Agency" count={agency.length}>
-        {agency.map((member) => (
-          <MemberRowItem
-            key={member.id}
-            member={member}
-            canManage={canManage}
-            onOpenActions={onOpenActions}
-          />
-        ))}
-      </Card>
+      <Group
+        title="Approvers"
+        {...(clientName !== null ? { subtitle: clientName } : {})}
+        count={client.length + pendingApprovers.length}
+        emptyText="No approvers yet"
+      >
+        {client.map(renderActive)}
+        {pendingApprovers.map(renderPending)}
+      </Group>
 
-      <Card title="Client" count={client.length}>
-        {client.map((member) => (
-          <MemberRowItem
-            key={member.id}
-            member={member}
-            canManage={canManage}
-            onOpenActions={onOpenActions}
-          />
-        ))}
-      </Card>
-
-      <Card title="Pending invites" count={pending.length}>
-        {pending.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-fg-3">No pending invites</p>
-        ) : (
-          pending.map((member) => (
-            <div key={member.id} className="flex items-center gap-3 px-4 py-3">
-              <Avatar
-                name={member.displayName}
-                {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-                size="lg"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-fg">{member.displayName}</div>
-                {member.email !== null ? (
-                  <div className="truncate text-xs text-fg-3">{member.email}</div>
-                ) : null}
-              </div>
-              <RoleBadge role={member.role} />
-              {canManage ? (
-                <Button
-                  size="lg"
-                  disabled={cancellingId === member.id}
-                  onClick={() => onCancelInvite(member)}
-                  className={cn(cancellingId === member.id && 'opacity-70')}
-                >
-                  {cancellingId === member.id ? 'Cancelling' : 'Cancel'}
-                </Button>
-              ) : null}
-            </div>
-          ))
-        )}
-      </Card>
+      <Group
+        title="Creators"
+        count={agency.length + pendingTeam.length}
+        emptyText="No creators yet"
+      >
+        {agency.map(renderActive)}
+        {pendingTeam.map(renderPending)}
+      </Group>
     </div>
   );
 }

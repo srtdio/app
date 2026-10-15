@@ -4,7 +4,10 @@ import {
   activeMemberRole,
   canInviteMembers,
   canManageMembers,
+  clientDomainLabel,
+  clientDomainMismatchMessage,
   deriveMembers,
+  domainBrandWord,
   formatJoined,
   isActiveMember,
   isPendingInvite,
@@ -167,7 +170,9 @@ describe('client invitations', () => {
 describe('roleLabel / memberRemoveErrorMessage / formatJoined', () => {
   it('maps known roles and passes unknown ones through', () => {
     expect(roleLabel('owner')).toBe('Owner');
-    expect(roleLabel('client')).toBe('Client');
+    // The role value stays client; people read it as the approver.
+    expect(roleLabel('client')).toBe('Approver');
+    expect(roleLabel('agency')).toBe('Creator');
     expect(roleLabel('mystery')).toBe('mystery');
   });
 
@@ -181,5 +186,41 @@ describe('roleLabel / memberRemoveErrorMessage / formatJoined', () => {
     expect(formatJoined('2026-01-15T00:00:00Z')).not.toBeNull();
     expect(formatJoined(null)).toBeNull();
     expect(formatJoined('not-a-date')).toBeNull();
+  });
+});
+
+describe('client domain copy', () => {
+  it('reads the brand word the way domain_brand_word does', () => {
+    expect(domainBrandWord('brand.com')).toBe('brand');
+    expect(domainBrandWord('mail.brand.com')).toBe('brand');
+    expect(domainBrandWord('brand.co.in')).toBe('brand');
+    expect(domainBrandWord('brand.com.au')).toBe('brand');
+    expect(domainBrandWord('brand.io')).toBe('brand');
+  });
+
+  it('prefers workspaces.client_domain, then the first approver email brand word', () => {
+    const approver = {
+      id: 'm',
+      userId: 'u',
+      role: 'client',
+      displayName: 'A',
+      avatarUrl: null,
+      email: 'a@team.brand.co.uk',
+      acceptedAt: null,
+      isOwner: false,
+      isSelf: true,
+    };
+    expect(clientDomainLabel('brand.com', [approver])).toBe('brand.com');
+    expect(clientDomainLabel(null, [{ ...approver, email: null }, approver])).toBe('brand');
+    expect(clientDomainLabel(null, [])).toBe('');
+  });
+
+  it('words the one-client toast', () => {
+    expect(clientDomainMismatchMessage('brand.com')).toBe(
+      'One brand per workspace. Every approver needs a brand.com address.',
+    );
+    expect(clientDomainMismatchMessage('')).toBe(
+      'One brand per workspace. Every approver needs the same company address.',
+    );
   });
 });

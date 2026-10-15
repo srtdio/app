@@ -8,6 +8,8 @@ const PLATFORM_MARK: Record<string, string> = {
   instagram: 'ig',
   facebook: 'fb',
   threads: 'th',
+  tiktok: 'tt',
+  youtube_shorts: 'yt',
 };
 
 export function PlatformMark({ platform }: { platform: string }) {

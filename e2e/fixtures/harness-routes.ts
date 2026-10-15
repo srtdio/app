@@ -654,6 +654,10 @@ const ONBOARDING_RPC: Record<string, RpcHandler> = {
       id,
       name: String(payload.name ?? ''),
       timezone: String(payload.timezone ?? 'UTC'),
+      // workspace_create falls back to linkedin when no platform is sent.
+      platform: String(payload.platform ?? 'linkedin'),
+      client_domain: null,
+      logo_url: null,
       owner_user_id: ME,
       key: 'KC',
       created_at: new Date().toISOString(),
@@ -671,8 +675,28 @@ const ONBOARDING_RPC: Record<string, RpcHandler> = {
   },
 };
 
+// The default capability seed per role (workspace_role_permissions), as far as
+// the app reads it: brief.create is the client's, settings are owner/admin's.
+const ROLE_CAPABILITIES: Record<string, readonly string[]> = {
+  owner: ['workspace.manage_settings'],
+  admin: ['workspace.manage_settings'],
+  agency: [],
+  client: ['brief.create'],
+};
+
+const CAPABILITY_RPC: Record<string, RpcHandler> = {
+  proc_capability: (args, tables) => {
+    const member = (tables.workspace_members ?? []).find(
+      (m) => m.workspace_id === args.p_workspace_id && m.user_id === ME && m.active === true,
+    );
+    const role = typeof member?.role === 'string' ? member.role : '';
+    return (ROLE_CAPABILITIES[role] ?? []).includes(String(args.p_capability));
+  },
+};
+
 const RPC: Record<string, RpcHandler> = {
   ...PLAN_RPC,
+  ...CAPABILITY_RPC,
   ...TASK_RPC,
   ...ONBOARDING_RPC,
   chat_unread_counts: (_args, tables) => {
