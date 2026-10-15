@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { createClient } from '@supabase/supabase-js';
-import { handleInviteSend } from './handler.ts';
+import {
+  handleInviteSend,
+  inviteEmailBody,
+  inviteSubject,
+  workspaceDisplayName,
+} from './handler.ts';
 
 const WORKSPACE_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
 
@@ -106,5 +111,77 @@ describe('invite-send member_invite_check pre-flight', () => {
     ]);
     expect(s.createUser).toHaveBeenCalledTimes(1);
     errorSpy.mockRestore();
+  });
+});
+
+describe('invite email copy', () => {
+  const URL_ = 'https://app.test/accept?x=1&y=2';
+  const email = (role: string, platform: string | null = 'instagram') => {
+    const displayName = workspaceDisplayName('Acme', platform);
+    return {
+      subject: inviteSubject(displayName),
+      ...inviteEmailBody({ brand: 'Acme', displayName, role, acceptUrl: URL_ }),
+    };
+  };
+
+  it('subject, heading and footer use "<Brand> - <Platform>"', () => {
+    const e = email('client');
+    expect(e.subject).toBe("You're invited to Acme - Instagram on Sorted");
+    expect(e.html).toContain('Join Acme - Instagram on Sorted</h1>');
+    expect(e.html).toContain('for the Acme - Instagram workspace.');
+    expect(e.text.startsWith('Join Acme - Instagram on Sorted\n')).toBe(true);
+    expect(e.text).toContain('Sent by Sorted for the Acme - Instagram workspace.');
+    expect(workspaceDisplayName('Acme', 'youtube_shorts')).toBe('Acme - YouTube Shorts');
+  });
+
+  it('client reads as an Approver', () => {
+    const e = email('client');
+    const line =
+      "You've been added as an Approver. Posts made for Acme come to you here for review: comment, ask for changes, or approve.";
+    expect(e.text).toContain(line);
+    expect(e.html).toContain(
+      'You&#39;ve been added as an Approver.</strong> Posts made for Acme come to you here for review: comment, ask for changes, or approve.',
+    );
+  });
+
+  it('agency reads as a Creator', () => {
+    expect(email('agency').text).toContain(
+      "You've been added as a Creator. You'll make posts for Acme here and send them to its approvers for review.",
+    );
+  });
+
+  it('admin reads as a Creator who can manage members', () => {
+    expect(email('admin').text).toContain(
+      "You've been added as a Creator who can manage members. You'll make posts for Acme here and send them to its approvers for review.",
+    );
+  });
+
+  it.each(['client', 'agency', 'admin'])(
+    '%s email never says client, agency, trial or an em-dash',
+    (role) => {
+      const e = email(role);
+      for (const part of [e.subject, e.html, e.text]) {
+        expect(part).not.toMatch(/client|agency|trial|\u2014/i);
+        expect(part).toContain('Acme');
+      }
+      expect(e.html).toContain('>Accept invitation</a>');
+      expect(e.html).toContain('href="https://app.test/accept?x=1&amp;y=2"');
+    },
+  );
+
+  it.each([null, undefined, 'myspace'])(
+    'unknown platform (%s) falls back to the name',
+    (platform) => {
+      const displayName = workspaceDisplayName('Acme', platform);
+      expect(displayName).toBe('Acme');
+      expect(inviteSubject(displayName)).toBe("You're invited to Acme on Sorted");
+    },
+  );
+
+  it('escapes interpolated brand names', () => {
+    const displayName = workspaceDisplayName('<b>&Co', 'x');
+    const e = inviteEmailBody({ brand: '<b>&Co', displayName, role: 'agency', acceptUrl: URL_ });
+    expect(e.html).toContain('Join &lt;b&gt;&amp;Co - X on Sorted');
+    expect(e.html).not.toContain('<b>&Co');
   });
 });
