@@ -17,12 +17,17 @@ export default defineConfig({
   outputDir: 'e2e/results',
   forbidOnly: isCI,
   fullyParallel: true,
-  // Three workers on the 4-vCPU runner: the open-at-once paint test measures
-  // against the app's 1s hold, and a fourth worker starves the browser of CPU.
-  ...(isCI ? { workers: 3 } : {}),
+  // Two workers on the hosted runner: the open-at-once paint test measures
+  // against the app's 1s hold, and a third worker starves the browser of CPU.
+  // (Three were fine until the ubuntu-24.04 image of 12 Oct 2026, on which
+  // parallel work runs about 2.5x slower; the suite is sharded wider instead.)
+  ...(isCI ? { workers: 2 } : {}),
   // Parallel workers share the runner's CPUs with Vite: long flows get
   // headroom (specs that set their own timeout keep it).
   timeout: 60_000,
+  // Auto-retrying assertions wait 10s on the runner (5s locally): a paint
+  // or a read that lands in 2s on a laptop can take 6s there.
+  expect: { timeout: isCI ? 10_000 : 5_000 },
   retries: isCI ? 1 : 0,
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
