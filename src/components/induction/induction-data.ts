@@ -1,5 +1,6 @@
-// The induction's network calls. The induction procs and brand_agency_request
-// have no @srtdio/rpc wrapper, so they are called directly with the args object
+// The induction's network calls. brand_agency_request goes through the
+// brand-request-send edge function, which also sends the email. The induction
+// procs have no @srtdio/rpc wrapper, so they are called directly with the args object
 // passed through as the wrappers do (p_trace_id included), like
 // src/components/pages/settings/workspace-settings-data.ts. Every read fails
 // soft: the guide is never the reason a screen breaks.
