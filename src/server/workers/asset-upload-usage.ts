@@ -112,7 +112,7 @@ export function createSupabaseUsageStore(
 }
 
 export interface CloudflareAnalyticsEnv {
-  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_ANALYTICS_ACCOUNT_ID?: string;
   CLOUDFLARE_ANALYTICS_TOKEN?: string;
 }
 
@@ -163,7 +163,7 @@ export async function fetchR2BucketBytes(input: {
   now: Date;
   fetcher?: Fetcher;
 }): Promise<number | null> {
-  const accountTag = input.env.CLOUDFLARE_ACCOUNT_ID;
+  const accountTag = input.env.CLOUDFLARE_ANALYTICS_ACCOUNT_ID;
   const token = input.env.CLOUDFLARE_ANALYTICS_TOKEN;
   if (!accountTag || !token) {
     logger.warn('usage: Cloudflare analytics secrets are not set');

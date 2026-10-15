@@ -101,7 +101,8 @@ export interface AssetUploadEnv {
   SUPABASE_URL: string;
   SUPABASE_SECRET_KEY: string;
   VIRUS_SCAN_PROVIDER?: string;
-  /** Cloudflare API token with Account Analytics read, for GET /usage only. */
+  /** Account and API token (Account Analytics: Read) for GET /usage only. */
+  CLOUDFLARE_ANALYTICS_ACCOUNT_ID?: string;
   CLOUDFLARE_ANALYTICS_TOKEN?: string;
   /**
    * Comma-separated list of browser origins allowed to call this Worker

@@ -91,7 +91,7 @@ describe('parseR2StorageBytes', () => {
 });
 
 describe('fetchR2BucketBytes', () => {
-  const env = { CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_ANALYTICS_TOKEN: 'tok' };
+  const env = { CLOUDFLARE_ANALYTICS_ACCOUNT_ID: 'acct', CLOUDFLARE_ANALYTICS_TOKEN: 'tok' };
 
   it('queries r2StorageAdaptiveGroups for the bucket with the analytics token', async () => {
     const fetcher = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () =>
