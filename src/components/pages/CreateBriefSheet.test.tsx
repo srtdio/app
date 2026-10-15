@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  briefFormatOptions,
   buildBriefCreatePayload,
   initialBriefState,
   submitCreateBrief,
@@ -153,5 +154,30 @@ describe('initialBriefState (reset-on-open)', () => {
       initialComment: '',
       attachments: [],
     });
+  });
+});
+
+describe('briefFormatOptions', () => {
+  it("offers Any plus the workspace platform's formats, never link", () => {
+    expect(briefFormatOptions('linkedin').map((o) => o.value)).toEqual([
+      '',
+      'text',
+      'single_image',
+      'carousel',
+      'video',
+    ]);
+    expect(briefFormatOptions('facebook').map((o) => o.value)).not.toContain('link');
+    expect(briefFormatOptions('youtube_shorts')).toEqual([
+      { value: '', label: 'Any' },
+      { value: 'short', label: 'Short' },
+    ]);
+  });
+
+  it("uses the platform's wording", () => {
+    expect(briefFormatOptions('x').find((o) => o.value === 'single_image')?.label).toBe('Image');
+  });
+
+  it('offers only Any before the platform resolves', () => {
+    expect(briefFormatOptions(null)).toEqual([{ value: '', label: 'Any' }]);
   });
 });

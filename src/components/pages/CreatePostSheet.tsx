@@ -16,10 +16,17 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
+import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
 import { listBuckets, type BucketOption } from '@/lib/buckets';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { postCreate, gallerySet, type Client, type Result } from '@srtdio/rpc';
-import { POST_FORMATS, POST_PLATFORMS, PostCreatePayloadSchema } from '@srtdio/posts';
+import {
+  FORMATS_BY_PLATFORM,
+  PostCreatePayloadSchema,
+  formatLabel,
+  platformLabel,
+  type PostPlatform,
+} from '@srtdio/posts';
 import { listBriefs, type BriefWithThumbnail } from '@srtdio/briefs';
 import type { Json } from '@srtdio/schemas';
 
@@ -33,22 +40,41 @@ interface CreatePostSheetProps {
   onCreated: (postId: string) => void;
 }
 
-/** Title-case a snake_case enum value for display (e.g. single_image -> Single Image). */
-function humanize(value: string): string {
-  return value
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+/**
+ * The Format choices for the workspace's platform, in the platform's order and
+ * with its own wording (single_image reads "Image" on X and Threads). There is
+ * no Platform field: post_create takes the platform from the workspace.
+ */
+export function formatOptionsFor(platform: PostPlatform): SelectOption[] {
+  return FORMATS_BY_PLATFORM[platform].map((value) => ({
+    value,
+    label: formatLabel(platform, value),
+  }));
 }
 
-const DEFAULT_FORMAT = POST_FORMATS[0];
+/** The default format for a platform: the first one it offers. */
+export function defaultFormatFor(platform: PostPlatform): string {
+  const first = FORMATS_BY_PLATFORM[platform][0];
+  if (first === undefined) throw new Error(`no formats for platform: ${platform}`);
+  return first;
+}
+
+/**
+ * User-facing copy for a post_create failure. invalid_format (a format the
+ * workspace's platform does not offer) names the platform; anything else keeps
+ * the proc's message.
+ */
+export function postCreateErrorMessage(message: string, platform: PostPlatform): string {
+  return message === 'invalid_format'
+    ? `That format is not available on ${platformLabel(platform)}.`
+    : message;
+}
 
 type OriginValue = 'none' | 'brief';
 
 export interface CreateFormState {
   title: string;
   caption: string;
-  platform: string;
   format: string;
   ownerUserId: string;
   bucketId: string;
@@ -72,7 +98,6 @@ export function initialCreateState(opts: {
   return {
     title: '',
     caption: '',
-    platform: '',
     format: opts.defaultFormat,
     ownerUserId: opts.currentUserId ?? '',
     bucketId: '',
@@ -86,7 +111,6 @@ export function initialCreateState(opts: {
 export interface BuildPayloadInput {
   title: string;
   caption: string;
-  platform: string;
   format: string;
   ownerUserId: string;
   bucketId: string;
@@ -107,7 +131,6 @@ export function buildPostCreatePayload(
   const candidate = {
     title: input.title.trim(),
     caption: input.caption.trim(),
-    platform: input.platform,
     format: input.format,
     ...(input.ownerUserId !== '' ? { ownerUserId: input.ownerUserId } : {}),
     ...(input.bucketId !== '' ? { bucketId: input.bucketId } : {}),
@@ -138,7 +161,6 @@ export function buildPostCreatePayload(
   const payload: Record<string, Json> = {
     title: data.title,
     caption: data.caption ?? '',
-    platform: data.platform,
     format: data.format ?? input.format,
   };
   if (data.ownerUserId !== undefined) payload.owner_user_id = data.ownerUserId;
@@ -203,10 +225,13 @@ export function CreatePostSheet({
   const { session } = useSession();
   const currentUserId = session?.user.id ?? null;
   const { options: memberOptions } = usePostMembers(open ? workspaceId : null);
+  // One workspace = one platform: the format list is that platform's own.
+  const workspacePlatform = useWorkspacePlatform(open ? workspaceId : null);
 
   const [form, setForm] = useState<CreateFormState>(() =>
     initialCreateState({
-      defaultFormat: DEFAULT_FORMAT,
+      // Defaulted to the platform's first format by the effect below.
+      defaultFormat: '',
       currentUserId,
       ...(initialTargetDate !== undefined ? { targetDate: initialTargetDate } : {}),
     }),
@@ -228,7 +253,7 @@ export function CreatePostSheet({
     if (!open) return;
     setForm(
       initialCreateState({
-        defaultFormat: DEFAULT_FORMAT,
+        defaultFormat: '',
         currentUserId: null,
         ...(initialTargetDate !== undefined ? { targetDate: initialTargetDate } : {}),
       }),
@@ -239,6 +264,19 @@ export function CreatePostSheet({
     setSubmitError(null);
     setSubmitting(false);
   }, [open, initialTargetDate]);
+
+  // Default the format to the platform's first one, and keep it inside the
+  // platform's list (the platform resolves with the workspace). Runs after the
+  // reset above, so a fresh open always lands on the first allowed format.
+  useEffect(() => {
+    if (!open || workspacePlatform === null) return;
+    const allowed: readonly string[] = FORMATS_BY_PLATFORM[workspacePlatform];
+    setForm((prev) =>
+      allowed.includes(prev.format)
+        ? prev
+        : { ...prev, format: defaultFormatFor(workspacePlatform) },
+    );
+  }, [open, workspacePlatform]);
 
   // Default the owner to the current user once the session resolves while open.
   useEffect(() => {
@@ -265,14 +303,8 @@ export function CreatePostSheet({
     };
   }, [open, workspaceId]);
 
-  const platformOptions: SelectOption[] = POST_PLATFORMS.map((value) => ({
-    value,
-    label: humanize(value),
-  }));
-  const formatOptions: SelectOption[] = POST_FORMATS.map((value) => ({
-    value,
-    label: humanize(value),
-  }));
+  const formatOptions: SelectOption[] =
+    workspacePlatform !== null ? formatOptionsFor(workspacePlatform) : [];
   const bucketOptions: SelectOption[] = [
     { value: '', label: 'No bucket' },
     ...buckets.map((bucket) => ({
@@ -311,7 +343,7 @@ export function CreatePostSheet({
     workspaceId !== null &&
     form.title.trim() !== '' &&
     form.caption.trim() !== '' &&
-    form.platform !== '' &&
+    form.format !== '' &&
     (form.origin !== 'brief' || form.briefId !== '') &&
     !submitting;
 
@@ -321,7 +353,6 @@ export function CreatePostSheet({
     const built = buildPostCreatePayload({
       title: form.title,
       caption: form.caption,
-      platform: form.platform,
       format: form.format,
       ownerUserId: form.ownerUserId,
       bucketId: form.bucketId,
@@ -350,7 +381,11 @@ export function CreatePostSheet({
 
     setSubmitting(false);
     if (!result.ok) {
-      setSubmitError(result.message);
+      setSubmitError(
+        workspacePlatform !== null
+          ? postCreateErrorMessage(result.message, workspacePlatform)
+          : result.message,
+      );
       return;
     }
     onCreated(result.postId);
@@ -407,19 +442,6 @@ export function CreatePostSheet({
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="min-w-0">
-            <Field label="Platform" required>
-              <Select
-                label="Platform"
-                value={form.platform}
-                options={platformOptions}
-                onChange={(value) => patch({ platform: value })}
-                placeholder="Choose a platform"
-              />
-              {gridError('platform')}
-            </Field>
-          </div>
-
           <div className="min-w-0">
             <Field label="Format">
               <Select

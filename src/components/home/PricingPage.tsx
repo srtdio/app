@@ -52,9 +52,7 @@ export default function PricingPage() {
               </li>
             ))}
           </ul>
-          <p className="plans-note">
-            Prices in INR. Add as many clients as you like. The trial covers every client you add.
-          </p>
+          <p className="plans-note">Prices in INR. Add as many clients as you like.</p>
         </div>
       </section>
 

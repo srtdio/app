@@ -20,6 +20,7 @@ import {
   getInviteRoleOptions,
   parseInviteEmails,
 } from './MembersInviteForm';
+import { FREE_MAIL_APPROVER_MESSAGE } from './members-data';
 
 describe('isValidInviteEmail', () => {
   it.each(['name@example.com', 'name@mail.example.co.uk', 'name@example.technology'])(
@@ -59,8 +60,8 @@ describe('parseInviteEmails', () => {
 });
 
 describe('invite role options', () => {
-  it('limits client inviters to the client reviewer role', () => {
-    expect(getInviteRoleOptions(true).map(({ value }) => value)).toEqual(['client']);
+  it('limits client inviters to the approver role (no forbidden_role choices)', () => {
+    expect(getInviteRoleOptions(true)).toEqual([{ value: 'client', label: 'Approver' }]);
   });
 
   it('keeps all existing role options for owners and admins', () => {
@@ -77,7 +78,8 @@ describe('MembersInviteForm render', () => {
     mockInvoke.mockReset();
     const out = renderToStaticMarkup(<MembersInviteForm />);
     expect(out).toContain('Invite member');
-    expect(out).toContain('Client (reviewer)');
+    expect(out).toContain('>Approver<');
+    expect(out).not.toContain('Client (reviewer)');
     expect(out).toContain('type="email"');
     expect(out).toContain('Send invite');
     expect(out).toContain('Invite group members');
@@ -91,13 +93,13 @@ describe('MembersInviteForm render', () => {
     const individualInviteIndex = out.indexOf('Invite member');
     const groupInviteIndex = out.indexOf('Invite group members');
     expect(individualInviteIndex).toBeLessThan(groupInviteIndex);
-    expect(out.indexOf('Client (reviewer)')).toBeLessThan(groupInviteIndex);
+    expect(out.indexOf('>Approver<')).toBeLessThan(groupInviteIndex);
   });
 
   it('restricts client invite forms to the client role', () => {
     const out = renderToStaticMarkup(<MembersInviteForm clientOnly />);
     expect(out).toContain('Invite group members');
-    expect(out.match(/Client \(reviewer\)/g)).toHaveLength(1);
+    expect(out.match(/>Approver</g)).toHaveLength(1);
     expect(out).not.toContain('Agency (team member)');
     expect(out).not.toContain('>Admin<');
   });
@@ -163,7 +165,7 @@ describe('sendInvite', () => {
     });
 
     expect(invoke).not.toHaveBeenCalled();
-    expect(onError).toHaveBeenCalledWith(INVITE_INVALID_EMAIL_MESSAGE);
+    expect(onError).toHaveBeenCalledWith(INVITE_INVALID_EMAIL_MESSAGE, null);
     expect(onSuccess).not.toHaveBeenCalled();
   });
 
@@ -182,8 +184,66 @@ describe('sendInvite', () => {
         onSuccess,
         onError,
       }),
-    ).resolves.toEqual({ ok: false, message: INVITE_ERROR_MESSAGE });
-    expect(onError).toHaveBeenCalledWith(null);
+    ).resolves.toEqual({ ok: false, message: INVITE_ERROR_MESSAGE, code: null });
+    expect(onError).toHaveBeenCalledWith(null, null);
     expect(onSuccess).not.toHaveBeenCalled();
+  });
+});
+
+describe('sendInvite error mapping', () => {
+  function failingInvoke(body: Record<string, unknown>) {
+    return vi.fn().mockResolvedValue({
+      error: { context: { json: async () => body } },
+    });
+  }
+
+  async function send(body: Record<string, unknown>) {
+    const onError = vi.fn();
+    const result = await sendInvite({
+      workspaceId: 'ws-1',
+      email: 'name@gmail.com',
+      role: 'client',
+      traceId: 't-1',
+      invoke: failingInvoke(body),
+      onSuccess: vi.fn(),
+      onError,
+    });
+    return { result, onError };
+  }
+
+  it('words free_mail_client as the work-address line', async () => {
+    const { result, onError } = await send({
+      error: 'free_mail_client',
+      error_detail: 'free_mail_client',
+      trace_id: 't-1',
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: FREE_MAIL_APPROVER_MESSAGE,
+      code: 'free_mail_client',
+    });
+    expect(FREE_MAIL_APPROVER_MESSAGE).toBe(
+      'Your approver needs a work address, like name@theirbrand.com.',
+    );
+    expect(onError).toHaveBeenCalledWith(FREE_MAIL_APPROVER_MESSAGE, 'free_mail_client');
+  });
+
+  it('flags client_domain_mismatch so the panel shows the toast', async () => {
+    const { result, onError } = await send({
+      error: 'client_domain_mismatch',
+      error_detail: 'client_domain_mismatch',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('client_domain_mismatch');
+    expect(onError.mock.calls[0]![1]).toBe('client_domain_mismatch');
+  });
+
+  it('keeps the detail line for other failures', async () => {
+    const { result } = await send({ error: 'forbidden_role', error_detail: 'forbidden_role' });
+    expect(result).toEqual({
+      ok: false,
+      message: 'Invite failed: forbidden_role',
+      code: null,
+    });
   });
 });

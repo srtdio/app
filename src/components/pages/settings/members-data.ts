@@ -15,14 +15,15 @@ const ROLE_LABEL: Record<string, string> = {
   owner: 'Owner',
   admin: 'Admin',
   agency: 'Agency',
-  client: 'Client',
+  // The role value stays `client`; people read it as the approver.
+  client: 'Approver',
 };
 
 export function roleLabel(role: string): string {
   return ROLE_LABEL[role] ?? role;
 }
 
-// The "Agency" card groups the internal roles; "Client" is client-only.
+// The "Team" group holds the internal roles; "Approvers" is client-only.
 const AGENCY_ROLES = new Set(['owner', 'admin', 'agency']);
 
 /** Active member: on the roster and not removed. */
@@ -142,4 +143,69 @@ export function formatJoined(acceptedAt: string | null): string | null {
   const date = new Date(acceptedAt);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** The client's brand word in a domain, mirroring public.domain_brand_word. */
+export function domainBrandWord(domain: string): string {
+  const labels = domain.trim().toLowerCase().split('.').filter(Boolean);
+  const n = labels.length;
+  if (n < 2) return labels[0] ?? '';
+  const second = labels[n - 2] ?? '';
+  if (n >= 3 && (labels[n - 1] ?? '').length === 2 && SECOND_LEVEL.has(second)) {
+    return labels[n - 3] ?? '';
+  }
+  return second;
+}
+
+const SECOND_LEVEL = new Set([
+  'co',
+  'com',
+  'net',
+  'org',
+  'gov',
+  'ac',
+  'edu',
+  'ltd',
+  'plc',
+  'gen',
+  'firm',
+  'ind',
+  'biz',
+]);
+
+/** The domain part of an email address, lower-cased ('' when there is none). */
+export function emailDomain(email: string): string {
+  const at = email.lastIndexOf('@');
+  return at < 0
+    ? ''
+    : email
+        .slice(at + 1)
+        .trim()
+        .toLowerCase();
+}
+
+/**
+ * The client's domain label for copy: workspaces.client_domain when set, else
+ * the brand word of the first approver's known email, else ''.
+ */
+export function clientDomainLabel(
+  clientDomain: string | null,
+  approvers: readonly MemberEntry[],
+): string {
+  if (clientDomain !== null && clientDomain !== '') return clientDomain;
+  const email = approvers
+    .map((m) => m.email)
+    .find((e): e is string => e !== null && emailDomain(e) !== '');
+  return email !== undefined ? domainBrandWord(emailDomain(email)) : '';
+}
+
+/** Inline copy when an approver invite uses a free mail address. */
+export const FREE_MAIL_APPROVER_MESSAGE =
+  'Your approver needs a work address, like name@theirbrand.com.';
+
+/** Toast copy when an approver invite is outside the workspace's client domain. */
+export function clientDomainMismatchMessage(domainLabel: string): string {
+  return domainLabel === ''
+    ? 'One client per workspace. Everyone here needs the same company address.'
+    : `One client per workspace. Everyone here needs a ${domainLabel} address.`;
 }

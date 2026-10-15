@@ -18,6 +18,8 @@ import {
   activeMemberRole,
   canInviteMembers,
   canManageMembers,
+  clientDomainLabel,
+  clientDomainMismatchMessage,
   deriveMembers,
   memberRemoveErrorMessage,
 } from './members-data';
@@ -25,7 +27,7 @@ import type { MemberEntry } from './members-data';
 import { useMembersData } from './useMembersData';
 
 export function MembersPanel() {
-  const { workspaceId, workspaceName } = useWorkspace();
+  const { workspaceId, workspaceName, workspaceDisplayName } = useWorkspace();
   const { session } = useSession();
   const newTrace = useNewTrace();
   const toast = useToast();
@@ -47,7 +49,23 @@ export function MembersPanel() {
   const [removing, setRemoving] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const workspaceLabel = workspaceName ?? 'this workspace';
+  const workspaceLabel = workspaceDisplayName ?? 'this workspace';
+
+  // client_domain_mismatch: read the client domain fresh (the first approver
+  // invite sets it server-side, so the cached workspace row can be stale), then
+  // fall back to the first approver's brand word.
+  async function showClientDomainMismatch(): Promise<void> {
+    let domain: string | null = null;
+    if (workspaceId !== null) {
+      const res = await supabase
+        .from('workspaces')
+        .select('client_domain')
+        .eq('id', workspaceId)
+        .maybeSingle();
+      domain = res.error ? null : (res.data?.client_domain ?? null);
+    }
+    toast.show({ title: clientDomainMismatchMessage(clientDomainLabel(domain, derived.client)) });
+  }
 
   async function performRemove(member: MemberEntry): Promise<void> {
     setRemoving(true);
@@ -86,7 +104,11 @@ export function MembersPanel() {
   return (
     <div className="flex flex-col gap-6">
       {canInvite ? (
-        <MembersInviteForm clientOnly={callerRole === 'client'} onInvited={refetch} />
+        <MembersInviteForm
+          clientOnly={callerRole === 'client'}
+          onInvited={refetch}
+          onClientDomainMismatch={() => void showClientDomainMismatch()}
+        />
       ) : null}
 
       {loading ? (
@@ -96,6 +118,7 @@ export function MembersPanel() {
       ) : (
         <MembersList
           derived={derived}
+          clientName={workspaceName}
           canManage={canManage}
           cancellingId={cancellingId}
           onOpenActions={(member) => setActionsFor(member)}

@@ -92,9 +92,9 @@ function PrivacyPolicyContent() {
             people.
           </li>
           <li>
-            To send notifications: in-app, push, and email (for example mentions, review requests,
-            trial reminders and billing notices). Email notifications are bundled and sent during
-            daytime hours in your workspace timezone.
+            To send notifications: in-app, push, and email (for example mentions, review requests
+            and billing notices). Email notifications are bundled and sent during daytime hours in
+            your workspace timezone.
           </li>
           <li>To prevent abuse and fraud, fix bugs, and keep the Service reliable.</li>
           <li>To answer your support requests.</li>

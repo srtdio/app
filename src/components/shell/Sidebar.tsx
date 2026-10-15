@@ -10,10 +10,13 @@ import { CountBadge } from '@/components/ui/CountBadge';
 import { cn } from '@/lib/cn';
 
 interface SidebarProps {
+  /** The active workspace's display name ("<Client> - <Platform>"). */
   workspaceName: string | null;
+  /** The client name alone, for the avatar's initials. */
+  clientName?: string | null;
 }
 
-export function Sidebar({ workspaceName }: SidebarProps) {
+export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
   const { unreadCount } = useInboxStore();
@@ -26,7 +29,7 @@ export function Sidebar({ workspaceName }: SidebarProps) {
           className="flex w-full items-center gap-2.5 min-h-[44px] px-2 rounded-lg hover:bg-panel-2 transition-colors text-left"
         >
           {workspaceName !== null ? (
-            <Avatar name={workspaceName} size="lg" />
+            <Avatar name={clientName ?? workspaceName} size="lg" />
           ) : (
             <Avatar size="lg" />
           )}

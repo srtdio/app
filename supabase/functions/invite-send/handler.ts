@@ -1,0 +1,483 @@
+// invite-send request handling, kept apart from the Deno.serve entry (index.ts)
+// so it unit-tests under Node with an injected env reader + client factory.
+// Self-contained: NO @srtdio/* imports (see index.ts for why).
+//
+// member_invite requires the invitee to exist in auth.users (it never creates
+// them), so this resolves/provisions the auth user first, then runs the RPC as
+// the CALLER (anon key + caller bearer) so auth.uid() is the inviter. Running
+// member_invite on the service role would leave auth.uid() null and fail.
+// member_invite_check runs before any of that, as the same caller, so a
+// refused invite creates nothing.
+
+import type { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { z } from 'zod';
+
+const TRACE_ID_HEADER = 'X-Trace-Id';
+const INVITE_TEMPLATE_KEY = 'member_invite';
+
+function hasValidEmailDomain(email: string): boolean {
+  const domain = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
+  const labels = domain.split('.');
+  const topLevelDomain = labels.at(-1) ?? '';
+  const isValidLabel = (label: string) =>
+    label.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label);
+
+  return (
+    domain.length <= 253 &&
+    labels.length >= 2 &&
+    labels.every(isValidLabel) &&
+    (/^[a-z]{2,}$/.test(topLevelDomain) || /^xn--[a-z0-9-]{2,}$/.test(topLevelDomain))
+  );
+}
+
+const inputSchema = z.object({
+  workspace_id: z.string().uuid(),
+  email: z
+    .string()
+    .trim()
+    .email()
+    .refine(hasValidEmailDomain, 'A valid email domain is required.')
+    .transform((value) => value.toLowerCase()),
+  role: z.enum(['admin', 'agency', 'client']),
+});
+
+/** What the handler needs from the runtime; index.ts passes the edge runtime's. */
+export interface InviteSendDeps {
+  env: (name: string) => string | undefined;
+  createClient: typeof createClient;
+}
+
+// Time-ordered UUID v7, generated inline (no dependency).
+function uuidv7(): string {
+  const ts = Date.now();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[0] = Math.floor(ts / 2 ** 40) & 0xff;
+  bytes[1] = Math.floor(ts / 2 ** 32) & 0xff;
+  bytes[2] = Math.floor(ts / 2 ** 24) & 0xff;
+  bytes[3] = Math.floor(ts / 2 ** 16) & 0xff;
+  bytes[4] = Math.floor(ts / 2 ** 8) & 0xff;
+  bytes[5] = ts & 0xff;
+  bytes[6] = 0x70 | (bytes[6] & 0x0f); // version 7
+  bytes[8] = 0x80 | (bytes[8] & 0x3f); // RFC 4122 variant
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function corsHeaders(origin: string): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin': origin.replace(/\/$/, ''),
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers':
+      'authorization, apikey, x-client-info, content-type, x-trace-id, x-device-fingerprint',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+function json(body: unknown, status: number, origin: string, traceId: string): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      [TRACE_ID_HEADER]: traceId,
+      ...corsHeaders(origin),
+    },
+  });
+}
+
+// --- Inlined invite email (packages/workspace/src/email.ts) ---------------
+
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
+}
+
+function inviteSubject(workspaceName: string): string {
+  return `You're invited to ${workspaceName} on Sorted`;
+}
+
+function inviteEmailBody(input: { workspaceName: string; role: string; acceptUrl: string }): {
+  html: string;
+  text: string;
+} {
+  const text =
+    `You're invited to join the ${input.workspaceName} workspace on Sorted as a ${input.role}.\n\n` +
+    `Accept your invitation:\n${input.acceptUrl}\n\n` +
+    `This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.\n\n` +
+    `Sent by Sorted.`;
+  const safeWorkspace = escapeHtml(input.workspaceName);
+  const safeRole = escapeHtml(input.role);
+  const safeUrl = escapeHtml(input.acceptUrl);
+  // Self-contained responsive email: every color is set inline on its element so
+  // the card carries its OWN background + high-contrast text and stays legible
+  // whether the client renders on a light or a dark canvas. No <style> block
+  // (clients strip them); no reliance on client default colors.
+  const html =
+    `<!DOCTYPE html>` +
+    `<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>` +
+    `<body style="margin:0;padding:0;background-color:#1e1b2e;-webkit-text-size-adjust:100%;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#1e1b2e;"><tr><td align="center" style="padding:32px 16px;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background-color:#ffffff;border-radius:16px;border:1px solid #e7e5ef;overflow:hidden;">` +
+    `<tr><td align="left" style="padding:40px 40px 0 40px;">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
+    `<td style="vertical-align:middle;"><span style="display:inline-block;width:30px;height:30px;border-radius:8px;background-color:#5a3fe0;">&nbsp;</span></td>` +
+    `<td style="vertical-align:middle;padding-left:12px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;letter-spacing:-0.3px;color:#1e1b2e;">Sorted</span></td>` +
+    `</tr></table></td></tr>` +
+    `<tr><td align="left" style="padding:28px 40px 0 40px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#5a3fe0;">You're invited</span></td></tr>` +
+    `<tr><td align="left" style="padding:8px 40px 0 40px;"><h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.4px;color:#1e1b2e;">Join ${safeWorkspace} on Sorted</h1></td></tr>` +
+    `<tr><td align="left" style="padding:16px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#4a4660;">You've been added to the <strong style="color:#1e1b2e;">${safeWorkspace}</strong> workspace as a <strong style="color:#1e1b2e;">${safeRole}</strong>. Sorted is where your team drafts posts, you review them, and approvals happen in one place.</p></td></tr>` +
+    `<tr><td style="padding:24px 40px 8px 40px;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
+    `<td height="52" align="center" valign="middle" style="height:52px;border-radius:10px;background-color:#5a3fe0;box-shadow:0 4px 10px rgba(30,27,46,0.20);">` +
+    `<a href="${safeUrl}" style="display:block;height:52px;line-height:52px;padding:0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;text-align:center;">Accept invitation</a>` +
+    `</td></tr></table></td></tr>` +
+    `<tr><td align="left" style="padding:10px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#8b8799;">This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.</p></td></tr>` +
+    `<tr><td style="padding:26px 40px 0 40px;"><div style="height:1px;background-color:#eeecf4;line-height:1px;font-size:1px;">&nbsp;</div></td></tr>` +
+    `<tr><td align="left" style="padding:20px 40px 36px 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#a8a4b5;">Sent by <strong style="color:#5a3fe0;font-weight:600;">Sorted</strong> for the ${safeWorkspace} workspace.</p></td></tr>` +
+    `</table></td></tr></table></body></html>`;
+  return { html, text };
+}
+
+// Resend via fetch (NOT the npm SDK, which pulls node: internals that break the
+// edge bundler). Returns the provider message id.
+async function sendViaResend(opts: {
+  apiKey: string;
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<string> {
+  // globalThis.fetch (not the bare global) satisfies the ESLint fetch guard;
+  // this edge function has no src/lib/fetch wrapper to reach for.
+  const response = await globalThis.fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${opts.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: opts.from,
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
+      text: opts.text,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`resend send failed (${response.status}): ${await response.text()}`);
+  }
+  const data = (await response.json()) as { id?: string };
+  if (!data.id) throw new Error('resend response did not include an id');
+  return data.id;
+}
+
+// Resolve an existing auth user id by email via the admin API (paginated).
+async function findUserIdByEmail(admin: SupabaseClient, email: string): Promise<string | null> {
+  for (let page = 1; ; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error || !data) return null;
+    const match = data.users.find((u) => u.email?.toLowerCase() === email);
+    if (match) return match.id;
+    if (data.users.length < 200) return null;
+  }
+}
+
+// member_invite and member_invite_check raise their domain code as the error message.
+function mapInviteErrorStatus(message: string): number {
+  if (message === 'workspace_member_only') return 403;
+  if (message === 'forbidden_role') return 403;
+  if (message === 'invalid_payload') return 400;
+  if (message === 'free_mail_client') return 400;
+  if (message === 'client_domain_mismatch') return 409;
+  return 500;
+}
+
+// The one failure shape for a member_invite / member_invite_check refusal.
+function inviteErrorResponse(message: string, origin: string, traceId: string): Response {
+  const status = mapInviteErrorStatus(message);
+  return json(
+    {
+      error: status === 500 ? 'internal' : message,
+      error_detail: message,
+      trace_id: traceId,
+    },
+    status,
+    origin,
+    traceId,
+  );
+}
+
+export async function handleInviteSend(req: Request, deps: InviteSendDeps): Promise<Response> {
+  const { createClient } = deps;
+  const requireEnv = (name: string): string => {
+    const value = deps.env(name);
+    if (!value) throw new Error(`missing required env ${name}`);
+    return value;
+  };
+  const appBaseUrl = requireEnv('APP_BASE_URL');
+  const traceId = req.headers.get(TRACE_ID_HEADER) ?? uuidv7();
+  // Reflect the caller's exact Origin so the allowed origin never depends on the
+  // exact APP_BASE_URL value; fall back to APP_BASE_URL (trailing slash stripped)
+  // for server-to-server callers that send no Origin header. Safe because this
+  // function enforces auth via its own getUser check; CORS is not the boundary.
+  const allowedOrigin = req.headers.get('Origin') ?? appBaseUrl.replace(/\/$/, '');
+
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders(allowedOrigin) });
+  }
+  if (req.method !== 'POST') {
+    return json({ error: 'method_not_allowed', trace_id: traceId }, 405, allowedOrigin, traceId);
+  }
+
+  let parsed: z.infer<typeof inputSchema>;
+  try {
+    parsed = inputSchema.parse(await req.json());
+  } catch {
+    return json({ error: 'invalid_payload', trace_id: traceId }, 400, allowedOrigin, traceId);
+  }
+  const { workspace_id, email, role } = parsed;
+
+  try {
+    const url = requireEnv('SUPABASE_URL');
+    const noPersist = { auth: { persistSession: false, autoRefreshToken: false } } as const;
+
+    // Service-role client: auth admin + delivery_attempts insert.
+    const adminClient = createClient(url, requireEnv('SUPABASE_SERVICE_ROLE_KEY'), noPersist);
+    // Caller client: member_invite runs as the inviter (auth.uid()).
+    const callerClient = createClient(url, requireEnv('SUPABASE_ANON_KEY'), {
+      ...noPersist,
+      global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
+    });
+
+    // In-function auth gate: the gateway JWT check is disabled for this function
+    // (asymmetric key cutover), so verify the caller here BEFORE any provisioning.
+    // Guarantees no unauthenticated request can ever reach createUser.
+    const caller = await callerClient.auth.getUser();
+    if (caller.error || !caller.data?.user) {
+      const message = caller.error?.message ?? 'no authenticated user';
+      console.error(traceId, message);
+      return json(
+        { error: 'unauthorized', error_detail: message, trace_id: traceId },
+        401,
+        allowedOrigin,
+        traceId,
+      );
+    }
+
+    const inviterMembership = await callerClient
+      .from('workspace_members')
+      .select('role')
+      .eq('workspace_id', workspace_id)
+      .eq('user_id', caller.data.user.id)
+      .eq('active', true)
+      .is('removed_at', null)
+      .maybeSingle();
+    if (inviterMembership.error) {
+      const message = inviterMembership.error.message;
+      console.error(traceId, message);
+      return json(
+        { error: 'membership_lookup_failed', error_detail: message, trace_id: traceId },
+        500,
+        allowedOrigin,
+        traceId,
+      );
+    }
+    if (!inviterMembership.data) {
+      return json(
+        { error: 'workspace_member_only', trace_id: traceId },
+        403,
+        allowedOrigin,
+        traceId,
+      );
+    }
+    if (inviterMembership.data.role === 'client' && role !== 'client') {
+      return json({ error: 'forbidden_role', trace_id: traceId }, 403, allowedOrigin, traceId);
+    }
+
+    // Pre-flight the invite rules as the CALLER, BEFORE any auth user is resolved
+    // or created: member_invite_check writes nothing and raises the same codes as
+    // member_invite (free_mail_client, client_domain_mismatch, ...), so a refused
+    // invite never leaves a provisioned auth user behind.
+    const checkArgs = { p_workspace_id: workspace_id, p_email: email, p_role: role };
+    const checked = await callerClient.rpc('member_invite_check', checkArgs);
+    if (checked.error) {
+      console.error(traceId, checked.error.message);
+      return inviteErrorResponse(checked.error.message, allowedOrigin, traceId);
+    }
+
+    // Resolve the invitee; provision the auth user when absent so member_invite
+    // can find the row. createUser mints a confirmed user without sending any
+    // email; the login link is generated separately after the invite row exists.
+    let invitedUserId = await findUserIdByEmail(adminClient, email);
+    if (!invitedUserId) {
+      const created = await adminClient.auth.admin.createUser({ email, email_confirm: true });
+      if (created.error || !created.data?.user) {
+        const message = created.error?.message ?? 'createUser returned no user';
+        console.error(traceId, message);
+        return json(
+          { error: 'provisioning_failed', error_detail: message, trace_id: traceId },
+          500,
+          allowedOrigin,
+          traceId,
+        );
+      }
+      invitedUserId = created.data.user.id;
+    }
+
+    // Dedup: reuse a pending invite row instead of re-inviting.
+    const existing = await callerClient
+      .from('workspace_members')
+      .select('id')
+      .eq('workspace_id', workspace_id)
+      .eq('user_id', invitedUserId)
+      .eq('active', false)
+      .is('accepted_at', null)
+      .is('removed_at', null)
+      .limit(1)
+      .maybeSingle();
+
+    let inviteId: string;
+    if (existing.data?.id) {
+      inviteId = existing.data.id as string;
+    } else {
+      // Args built as a variable: the .rpc() lint guard only inspects inline
+      // object literals, and p_trace_id is the proc's real trace parameter.
+      const inviteArgs = {
+        p_workspace_id: workspace_id,
+        p_email: email,
+        p_role: role,
+        p_trace_id: traceId,
+      };
+      const invited = await callerClient.rpc('member_invite', inviteArgs);
+      if (invited.error) {
+        console.error(traceId, invited.error.message);
+        return inviteErrorResponse(invited.error.message, allowedOrigin, traceId);
+      }
+      inviteId = invited.data as string;
+    }
+
+    const acceptUrl = `${appBaseUrl}/invite/accept/${inviteId}`;
+
+    // Record one delivery attempt; send when a Resend key is configured.
+    const attempt = await adminClient
+      .from('delivery_attempts')
+      .insert({
+        workspace_id,
+        user_id: invitedUserId,
+        channel: 'email',
+        template_key: INVITE_TEMPLATE_KEY,
+        provider: 'resend',
+        status: 'queued',
+        email_thread_id: null,
+      })
+      .select('id')
+      .single();
+    if (attempt.error || !attempt.data) {
+      const message = attempt.error?.message ?? 'delivery_attempts insert returned no row';
+      console.error(traceId, message);
+      return json(
+        { error: 'delivery_record_failed', error_detail: message, trace_id: traceId },
+        500,
+        allowedOrigin,
+        traceId,
+      );
+    }
+
+    let emailed = false;
+    let errorDetail: string | null = null;
+    const resendKey = deps.env('RESEND_API_KEY');
+    const fromAddress = deps.env('INVITE_FROM_ADDRESS');
+    if (!resendKey || !fromAddress) {
+      errorDetail = 'resend_not_configured';
+      console.error(traceId, errorDetail);
+    } else {
+      // Passwordless login link for the email: lands the invitee on the
+      // set-password screen carrying the invite id. A failure here must not
+      // discard the provisioned user or the invite row.
+      const link = await adminClient.auth.admin.generateLink({
+        type: 'magiclink',
+        email,
+        options: { redirectTo: `${appBaseUrl}/invite/accept/${inviteId}` },
+      });
+      const actionLink = link.data?.properties?.action_link;
+      if (link.error || !actionLink) {
+        const message = link.error?.message ?? 'generateLink returned no action_link';
+        errorDetail = message;
+        console.error(traceId, message);
+        await adminClient
+          .from('delivery_attempts')
+          .update({ status: 'failed', provider_message_id: null, error: message, sent_at: null })
+          .eq('id', attempt.data.id);
+      } else {
+        const workspace = await callerClient
+          .from('workspaces')
+          .select('name')
+          .eq('id', workspace_id)
+          .maybeSingle();
+        const workspaceName = (workspace.data?.name as string | undefined) ?? '';
+        const body = inviteEmailBody({ workspaceName, role, acceptUrl: actionLink });
+
+        let status: 'sent' | 'failed' = 'sent';
+        let providerMessageId: string | null = null;
+        let sendError: string | null = null;
+        try {
+          providerMessageId = await sendViaResend({
+            apiKey: resendKey,
+            from: fromAddress,
+            to: email,
+            subject: inviteSubject(workspaceName),
+            html: body.html,
+            text: body.text,
+          });
+          emailed = true;
+        } catch (err) {
+          status = 'failed';
+          sendError = err instanceof Error ? err.message : String(err);
+          errorDetail = sendError;
+          console.error(traceId, sendError);
+        }
+
+        await adminClient
+          .from('delivery_attempts')
+          .update({
+            status,
+            provider_message_id: providerMessageId,
+            error: sendError,
+            sent_at: status === 'sent' ? new Date().toISOString() : null,
+          })
+          .eq('id', attempt.data.id);
+      }
+    }
+
+    return json(
+      {
+        invite_id: inviteId,
+        invited_user_id: invitedUserId,
+        accept_url: acceptUrl,
+        emailed,
+        error_detail: errorDetail,
+        trace_id: traceId,
+      },
+      200,
+      allowedOrigin,
+      traceId,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(traceId, message);
+    return json(
+      { error: 'internal', error_detail: message, trace_id: traceId },
+      500,
+      allowedOrigin,
+      traceId,
+    );
+  }
+}

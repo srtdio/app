@@ -152,7 +152,7 @@ export function SignInPage() {
         to="/signup"
         className="inline-flex min-h-[44px] items-center justify-center font-medium text-accent hover:underline"
       >
-        Start a free trial
+        Sign up free
       </Link>
     </span>
   );

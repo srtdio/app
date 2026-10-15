@@ -34,6 +34,7 @@ describe('MembersList', () => {
     const out = renderToStaticMarkup(
       <MembersList
         derived={derived}
+        clientName="Acme"
         canManage={false}
         cancellingId={null}
         onOpenActions={vi.fn()}
@@ -49,6 +50,7 @@ describe('MembersList', () => {
     const out = renderToStaticMarkup(
       <MembersList
         derived={derived}
+        clientName="Acme"
         canManage={true}
         cancellingId={null}
         onOpenActions={vi.fn()}
@@ -63,16 +65,55 @@ describe('MembersList', () => {
     expect(out).toContain('Actions for Cara Client');
   });
 
-  it('renders the empty state when there are no pending invites', () => {
+  it('groups approvers (under the client name) before the team, pending inline', () => {
     const out = renderToStaticMarkup(
       <MembersList
-        derived={derived}
+        derived={{
+          ...derived,
+          pending: [
+            entry({ id: 'p-client', displayName: 'Pia Pending', role: 'client', acceptedAt: null }),
+            entry({ id: 'p-agency', displayName: 'Tom Pending', role: 'agency', acceptedAt: null }),
+          ],
+        }}
+        clientName="Acme"
         canManage={true}
         cancellingId={null}
         onOpenActions={vi.fn()}
         onCancelInvite={vi.fn()}
       />,
     );
-    expect(out).toContain('No pending invites');
+    const approvers = out.indexOf('>Approvers<');
+    const team = out.indexOf('>Team<');
+    expect(approvers).toBeGreaterThan(-1);
+    expect(team).toBeGreaterThan(approvers);
+    // The client name is the Approvers subheading.
+    expect(out.indexOf('>Acme<')).toBeGreaterThan(approvers);
+    expect(out.indexOf('>Acme<')).toBeLessThan(team);
+    // Each side holds its own active rows then its pending invites.
+    const at = (text: string) => out.indexOf(text);
+    expect(at('Cara Client')).toBeGreaterThan(approvers);
+    expect(at('Pia Pending')).toBeGreaterThan(at('Cara Client'));
+    expect(at('Pia Pending')).toBeLessThan(team);
+    expect(at('Olive Owner')).toBeGreaterThan(team);
+    expect(at('Tom Pending')).toBeGreaterThan(at('Ada Agency'));
+    // Pending invites keep their Cancel action; the role reads Approver.
+    expect(out.match(/>Cancel</g)).toHaveLength(2);
+    expect(out).toContain('>Approver<');
+    expect(out).not.toContain('>Client<');
+    expect(out).not.toContain('Pending invites');
+  });
+
+  it('shows the empty line for a side with nobody yet', () => {
+    const out = renderToStaticMarkup(
+      <MembersList
+        derived={{ ...derived, client: [] }}
+        clientName="Acme"
+        canManage={true}
+        cancellingId={null}
+        onOpenActions={vi.fn()}
+        onCancelInvite={vi.fn()}
+      />,
+    );
+    expect(out).toContain('No approvers yet');
   });
 });

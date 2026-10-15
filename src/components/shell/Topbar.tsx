@@ -13,7 +13,10 @@ import { MenuItem } from '@/components/shell/MenuItem';
 import { dispatchSorted } from '@/lib/events';
 
 interface TopbarProps {
+  /** The active workspace's display name ("<Client> - <Platform>"). */
   workspaceName: string | null;
+  /** Whether the viewer holds brief.create; the New brief entry shows only then. */
+  canCreateBrief?: boolean;
   currentUserName?: string;
   currentUserAvatarUrl?: string | null;
   onOpenPalette: () => void;
@@ -22,6 +25,7 @@ interface TopbarProps {
 
 export function Topbar({
   workspaceName,
+  canCreateBrief = false,
   currentUserName,
   currentUserAvatarUrl,
   onOpenPalette,
@@ -39,9 +43,13 @@ export function Topbar({
           aria-label="Switch workspace"
           aria-haspopup="dialog"
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="md:hidden flex items-center gap-1 min-h-[44px] max-w-[180px] px-2 rounded-lg text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="md:hidden flex min-w-0 items-center gap-1 min-h-[44px] max-w-[190px] px-2 rounded-lg text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <span className="font-semibold text-sm truncate">{workspaceName}</span>
+          {/* "<Client> - <Platform>" can outgrow one line on a phone: wrap to two
+              short lines at word breaks instead of clipping the platform. */}
+          <span className="min-w-0 font-semibold text-[13px] leading-tight line-clamp-2 break-words">
+            {workspaceName}
+          </span>
           <IconChevronDown size={16} className="shrink-0 text-fg-3" />
         </button>
       )}
@@ -74,14 +82,16 @@ export function Topbar({
                 dispatchSorted('sorted:create-post');
               }}
             />
-            <MenuItem
-              icon={<IconBriefs size={18} />}
-              label="New brief"
-              onClick={() => {
-                setCreateOpen(false);
-                dispatchSorted('sorted:create-brief');
-              }}
-            />
+            {canCreateBrief ? (
+              <MenuItem
+                icon={<IconBriefs size={18} />}
+                label="New brief"
+                onClick={() => {
+                  setCreateOpen(false);
+                  dispatchSorted('sorted:create-brief');
+                }}
+              />
+            ) : null}
           </MenuPopover>
         </div>
 
