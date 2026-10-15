@@ -97,7 +97,7 @@ function SignupBand() {
   return (
     <section className="band" id="signup-mid">
       <div className="wrap">
-        <h2 className="d">Start free. Fifteen days. No card.</h2>
+        <h2 className="d">You&pos;ve scrolled this far. Might as well sign up.</h2>
         <p>Set up a client in two minutes. Invite them with a link.</p>
         <form onSubmit={onSubmit} noValidate>
           <input
@@ -114,11 +114,6 @@ function SignupBand() {
             Sign up for free
           </button>
         </form>
-        <div className="alt">
-          <a className="btn line" href={DEMO_HREF}>
-            Book a demo
-          </a>
-        </div>
         <small id="home-signup-note" aria-live="polite">
           {message}
         </small>
@@ -216,7 +211,7 @@ export default function HomePage() {
       <section className="hero">
         <div className="wrap in">
           <h1 className="d">
-            Social media agencies <em>hate WhatsApp.</em>
+            Social media teams <em>hate WhatsApp.</em>
           </h1>
           <p className="lede">
             Approvals, feedback and files get buried in group chats that never switch off. Sorted
