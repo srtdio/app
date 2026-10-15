@@ -1,28 +1,23 @@
 // The post sheet's media field on an induction post step. It runs the existing
 // upload path (uploadChatAttachment over the asset-upload Worker, XHR for
-// progress) and adds what a first upload on a weak connection needs: a 2 s
-// speed probe and an honest estimate from it, three automatic retries, then a
-// plain reason with Try again. The rest of the sheet keeps everything typed
-// whatever happens here. Chunked background upload is a later backend PR.
+// progress) and adds what a first upload on a weak connection needs: a progress
+// bar from the real upload progress, three automatic retries, then a plain
+// reason with Try again. File names are never shown (phones name photos
+// IMG_4821.HEIC). The rest of the sheet keeps everything typed whatever
+// happens here. Chunked background upload is a later backend PR.
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { ALLOWED_MIME_TYPES, isImageMime } from '@srtdio/storage';
 import { Button } from '@/components/ui/Button';
+import { IconVideo, IconX } from '@/components/ui/icons';
 import {
-  attachmentItemList,
   removeAttachmentAt,
   type AttachmentItem,
 } from '@/components/pages/create/AttachmentsField';
 import { precheckFile } from '@/lib/asset-upload';
 import { uploadChatAttachment } from '@/lib/chat/attachments';
 import { env } from '@/lib/env';
-import {
-  UPLOAD_PROBE_MS,
-  UPLOAD_RETRIES,
-  uploadEstimate,
-  uploadFailedReason,
-  withRetries,
-} from '@/lib/induction';
+import { UPLOAD_RETRIES, uploadFailedReason, withRetries } from '@/lib/induction';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 
@@ -36,7 +31,7 @@ const NOT_STARTED = "We couldn't start the upload. Try again in a moment.";
 
 type Upload =
   | { phase: 'idle' }
-  | { phase: 'sending'; name: string; line: string }
+  | { phase: 'sending'; percent: number; retrying: boolean }
   | { phase: 'failed'; file: File; reason: string };
 
 export function PresetMediaField({
@@ -78,18 +73,12 @@ export function PresetMediaField({
       return;
     }
     onBusyChange(true);
-    setUpload({ phase: 'sending', name: file.name, line: 'Starting the upload' });
+    setUpload({ phase: 'sending', percent: 0, retrying: false });
     const outcome = await withRetries(
       () => attemptOnce({ file, workspaceId, endpoint, token }),
       UPLOAD_RETRIES,
       () => {
-        if (alive.current) {
-          setUpload({
-            phase: 'sending',
-            name: file.name,
-            line: 'The connection dropped. Trying again',
-          });
-        }
+        if (alive.current) setUpload({ phase: 'sending', percent: 0, retrying: true });
       },
     );
     if (!alive.current) return;
@@ -111,42 +100,30 @@ export function PresetMediaField({
     ]);
   }
 
-  /** One attempt, with the speed probe: after 2 s the estimate replaces the line. */
+  /** One attempt; its real progress drives the bar. */
   async function attemptOnce(input: {
     file: File;
     workspaceId: string;
     endpoint: string;
     token: string;
   }): Promise<{ ok: true; value: string } | { ok: false }> {
-    const started = performance.now();
-    let fraction = 0;
-    const probe = window.setTimeout(() => {
-      if (!alive.current) return;
-      const line = uploadEstimate({
-        sentBytes: fraction * input.file.size,
-        elapsedMs: performance.now() - started,
-        totalBytes: input.file.size,
-      });
-      setUpload({ phase: 'sending', name: input.file.name, line });
-    }, UPLOAD_PROBE_MS);
-    try {
-      const result = await uploadChatAttachment({
-        file: input.file,
-        workspaceId: input.workspaceId,
-        origin: 'library',
-        token: input.token,
-        endpoint: input.endpoint,
-        xhr: {
-          traceId: newTrace(),
-          onProgress: (next) => {
-            fraction = next;
-          },
+    const result = await uploadChatAttachment({
+      file: input.file,
+      workspaceId: input.workspaceId,
+      origin: 'library',
+      token: input.token,
+      endpoint: input.endpoint,
+      xhr: {
+        traceId: newTrace(),
+        onProgress: (fraction) => {
+          if (!alive.current) return;
+          setUpload((prev) =>
+            prev.phase === 'sending' ? { ...prev, percent: Math.round(fraction * 100) } : prev,
+          );
         },
-      });
-      return result.ok ? { ok: true, value: result.versionId } : { ok: false };
-    } finally {
-      window.clearTimeout(probe);
-    }
+      },
+    });
+    return result.ok ? { ok: true, value: result.versionId } : { ok: false };
   }
 
   function remove(index: number): void {
@@ -159,8 +136,17 @@ export function PresetMediaField({
   return (
     <div className="flex flex-col gap-3">
       {value.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">{attachmentItemList(value, remove)}</ul>
+        <ul className="flex flex-wrap gap-2">
+          {value.map((item, index) => (
+            <MediaTile
+              key={`${item.versionId}-${index}`}
+              item={item}
+              onRemove={() => remove(index)}
+            />
+          ))}
+        </ul>
       ) : null}
+      {upload.phase === 'sending' ? <UploadBar percent={upload.percent} /> : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
@@ -181,7 +167,9 @@ export function PresetMediaField({
         className={upload.phase === 'failed' ? 'text-[12px] text-bad' : 'text-[12px] text-fg-3'}
       >
         {upload.phase === 'sending'
-          ? `${upload.name}: ${upload.line}.`
+          ? upload.retrying
+            ? `The connection dropped. Trying again, ${upload.percent}%`
+            : `Uploading, ${upload.percent}%`
           : upload.phase === 'failed'
             ? upload.reason
             : required
@@ -201,5 +189,56 @@ export function PresetMediaField({
         }}
       />
     </div>
+  );
+}
+
+/** The upload's real progress as a bar. */
+function UploadBar({ percent }: { percent: number }): ReactElement {
+  return (
+    <div
+      role="progressbar"
+      aria-label="Upload progress"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      className="h-2 w-full overflow-hidden rounded-full bg-panel-3"
+    >
+      <div
+        className="h-full rounded-full bg-accent transition-[width] duration-200 ease-out motion-reduce:transition-none"
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  );
+}
+
+/** A finished upload: the photo itself, or a video tile. No file name. */
+function MediaTile({
+  item,
+  onRemove,
+}: {
+  item: AttachmentItem;
+  onRemove: () => void;
+}): ReactElement {
+  const label = item.kind === 'image' ? 'Remove photo' : 'Remove video';
+  return (
+    <li className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md border border-border bg-panel-3">
+      {item.previewUrl !== undefined ? (
+        <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center text-fg-3">
+          <IconVideo size={22} />
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onRemove}
+        className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center"
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-panel text-fg shadow">
+          <IconX size={14} />
+        </span>
+      </button>
+    </li>
   );
 }

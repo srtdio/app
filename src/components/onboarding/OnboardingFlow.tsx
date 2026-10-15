@@ -12,7 +12,7 @@
 // (finish), because either refetch flips the shell gate and would unmount the
 // flow mid-way. Colors are tokens only, so light and dark both hold.
 
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { userOnboardingSave, usernameAvailable } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
@@ -23,6 +23,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Sheet } from '@/components/ui/Sheet';
 import { uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
@@ -119,11 +120,31 @@ export function OnboardingFlow({
   const [username, setUsername] = useState('');
   const [usernameEdited, setUsernameEdited] = useState(false);
   const [nameCheck, setNameCheck] = useState<NameCheck>('idle');
+  // The photo: picked from the device, positioned in a sheet (so the name and
+  // username stay on screen), kept as the cropped file and uploaded with the
+  // profile save.
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const cropperRef = useRef<AvatarCropperHandle>(null);
-  // The cropped photo, taken when the person leaves the name screen (the
-  // cropper unmounts after that), uploaded with the profile save.
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
+  // The positioning sheet's photo has loaded and can be used.
+  const [cropReady, setCropReady] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const cropperRef = useRef<AvatarCropperHandle | null>(null);
+  const pickedRef = useRef<File | null>(null);
+  // The cropper mounts inside the sheet: hand it the picked file as soon as it exists.
+  const attachCropper = useCallback((handle: AvatarCropperHandle | null) => {
+    cropperRef.current = handle;
+    const picked = pickedRef.current;
+    if (handle !== null && picked !== null) {
+      // After the mount settles: a remount in development would cancel an
+      // image that started loading during the first mount.
+      window.setTimeout(() => {
+        if (pickedRef.current !== picked) return;
+        pickedRef.current = null;
+        cropperRef.current?.loadFile(picked);
+      }, 0);
+    }
+  }, []);
   const [role, setRole] = useState('');
   const [roleOther, setRoleOther] = useState('');
   const [age, setAge] = useState('');
@@ -291,20 +312,20 @@ export function OnboardingFlow({
     next();
   }
 
-  /** Keep the cropped photo before the name screen (and its cropper) goes away. */
-  async function leaveNameStep(): Promise<void> {
+  /** The positioned photo becomes the profile photo; the sheet closes. */
+  async function applyPhoto(): Promise<void> {
     const cropper = cropperRef.current;
-    if (cropper !== null && cropper.hasPhoto()) {
-      setBusy(true);
-      const file = await cropper.exportPng();
-      setBusy(false);
-      if (file === null) {
-        setError("We couldn't read that photo. Try another one.");
-        return;
-      }
-      setPhotoFile(file);
+    if (cropper === null || !cropper.hasPhoto()) return;
+    const file = await cropper.exportPng();
+    if (file === null) {
+      setError("We couldn't read that photo. Try another one.");
+      setCropOpen(false);
+      return;
     }
-    next();
+    setError(null);
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    setCropOpen(false);
   }
 
   /** brand_agency_request, then the wait is stored so a reload opens on it. */
@@ -441,19 +462,37 @@ export function OnboardingFlow({
           title="What should we call you?"
           lead="This is how people see you in notifications, comments and chat."
         />
-        <div className="rounded-lg border border-border bg-panel p-4">
-          <AvatarCropper
-            ref={cropperRef}
-            onPhotoChange={(info) => {
-              // A fresh cropper (after Back) starts empty: keep the photo already taken.
-              if (info.hasPhoto) setPhotoPreview(info.previewUrl);
+        <div className="flex items-center gap-4">
+          {photoPreview !== null ? (
+            <Avatar name={name || 'You'} src={photoPreview} size="xl" />
+          ) : (
+            <Avatar name={name || 'You'} size="xl" />
+          )}
+          <div className="flex min-w-0 flex-col gap-1">
+            <Button size="lg" onClick={() => photoInputRef.current?.click()}>
+              {photoPreview !== null ? 'Change photo' : 'Add a photo'}
+            </Button>
+            <p className="text-[11px] text-fg-3">
+              {photoPreview !== null
+                ? 'People see it next to your comments.'
+                : 'Needed to continue. People see it next to your comments.'}
+            </p>
+          </div>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            aria-label="Choose a photo"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file === undefined) return;
+              pickedRef.current = file;
+              setCropReady(false);
+              setCropOpen(true);
             }}
           />
-          <p className="mt-2 text-[11px] text-fg-3">
-            {photoPreview !== null
-              ? 'Looks good. People see it next to your comments.'
-              : 'Add a photo to continue. People see it next to your comments.'}
-          </p>
         </div>
         <Labeled label="Full name" htmlFor="ob-name">
           <Input
@@ -500,7 +539,7 @@ export function OnboardingFlow({
           format !== 'ok' ||
           nameCheck !== 'free'
         }
-        onClick={() => void leaveNameStep()}
+        onClick={next}
       >
         Continue
       </Primary>
@@ -685,6 +724,35 @@ export function OnboardingFlow({
       <aside className="hidden h-full flex-col items-center justify-center gap-3.5 border-l border-border bg-panel-2 p-8 md:flex">
         {preview ?? <WaitingPreview />}
       </aside>
+
+      <Sheet
+        open={cropOpen}
+        onClose={() => setCropOpen(false)}
+        title="Position your photo"
+        footer={
+          <>
+            <Button size="lg" onClick={() => setCropOpen(false)}>
+              Cancel
+            </Button>
+            <span className="ml-auto">
+              <Button
+                variant="primary"
+                size="lg"
+                disabled={!cropReady}
+                onClick={() => void applyPhoto()}
+              >
+                Use this photo
+              </Button>
+            </span>
+          </>
+        }
+      >
+        <AvatarCropper
+          ref={attachCropper}
+          hidePicker
+          onPhotoChange={(info) => setCropReady(info.hasPhoto)}
+        />
+      </Sheet>
     </div>
   );
 }

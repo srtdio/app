@@ -40,11 +40,17 @@ test('a Creator walks side, name with photo, role and age, then makes the worksp
   await expect(page.getByText('@meera.shah is yours.')).toBeVisible();
   // The photo is required.
   await expect(cont).toBeDisabled();
-  await page.locator('input[type="file"]').setInputFiles({
+  // The username stays on screen with the photo row (no scrolling to reach it).
+  const usernameBox = await page.getByLabel('Username').boundingBox();
+  expect((usernameBox?.y ?? 9999) + (usernameBox?.height ?? 0)).toBeLessThan(
+    page.viewportSize()?.height ?? 0,
+  );
+  await page.getByLabel('Choose a photo').setInputFiles({
     name: 'me.png',
     mimeType: 'image/png',
     buffer: solidPng(64, 64, [200, 120, 80]),
   });
+  await page.getByRole('button', { name: 'Use this photo' }).click();
   await expect(cont).toBeEnabled();
   await cont.click();
 

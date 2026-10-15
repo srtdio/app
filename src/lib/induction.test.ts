@@ -9,6 +9,7 @@ import {
   approverStageOf,
   boxRect,
   boxRadius,
+  clampToViewport,
   brandRequestErrorMessage,
   formatNeedsMedia,
   hardGates,
@@ -23,7 +24,6 @@ import {
   stepCopy,
   stripRect,
   titleFromCaption,
-  uploadEstimate,
   uploadFailedReason,
   withRetries,
   type InductionAvailability,
@@ -369,22 +369,6 @@ describe('the first post', () => {
     expect(title.endsWith('word')).toBe(true);
   });
 
-  it('estimates honestly from what the probe saw', () => {
-    // 1 MB in 2 s of a 21 MB file: 20 MB left at 0.5 MB/s = 40 s.
-    expect(uploadEstimate({ sentBytes: 1e6, elapsedMs: 2000, totalBytes: 21e6 })).toBe(
-      'About 40 s on this connection',
-    );
-    expect(uploadEstimate({ sentBytes: 1e6, elapsedMs: 2000, totalBytes: 1.5e6 })).toBe(
-      'A few seconds on this connection',
-    );
-    expect(uploadEstimate({ sentBytes: 1e5, elapsedMs: 2000, totalBytes: 50e6 })).toBe(
-      'About 17 min on this connection',
-    );
-    expect(uploadEstimate({ sentBytes: 0, elapsedMs: 2000, totalBytes: 1e6 })).toBe(
-      'Working out the time on this connection',
-    );
-  });
-
   it('retries three times, then gives a plain reason', async () => {
     const attempt = vi.fn(async () => ({ ok: false as const }));
     const onRetry = vi.fn();
@@ -437,5 +421,20 @@ describe('placeCard never leaves the screen', () => {
     expect(at.top).toBeGreaterThanOrEqual(16);
     expect(at.top + 140).toBeLessThanOrEqual(800 - 16);
     expect(at.left + 320).toBeLessThanOrEqual(1280 - 16);
+  });
+});
+
+describe('clampToViewport', () => {
+  it('pulls a box for a full-width control inside the screen so all four sides show', () => {
+    const r = clampToViewport(
+      { top: 100, left: -7, width: 404, height: 58 },
+      { width: 390, height: 844 },
+    );
+    expect(r).toEqual({ top: 100, left: 2, width: 386, height: 58 });
+  });
+
+  it('leaves a box that already fits alone', () => {
+    const box = { top: 50, left: 20, width: 100, height: 40 };
+    expect(clampToViewport(box, { width: 390, height: 844 })).toEqual(box);
   });
 });

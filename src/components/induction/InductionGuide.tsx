@@ -14,6 +14,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   boxRadius,
   boxRect,
+  clampToViewport,
   onPlace,
   placeCard,
   placeRoute,
@@ -189,7 +190,7 @@ function GuideLayer({
         className="pointer-events-none invisible fixed bottom-0 left-0 h-[env(safe-area-inset-bottom)] w-0"
       />
       {box !== undefined && el !== undefined ? (
-        <GuideBox rect={boxRect(box)} radius={boxRadius(radiusOf(el))} />
+        <GuideBox rect={clampToViewport(boxRect(box), viewport)} radius={boxRadius(radiusOf(el))} />
       ) : null}
       {overlay}
     </div>,

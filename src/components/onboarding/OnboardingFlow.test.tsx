@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, forwardRef, useImperativeHandle } from 'react';
+import { act, forwardRef, useImperativeHandle, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,24 +33,26 @@ vi.mock('@/components/induction/induction-data', () => ({
   requestBrandTeam: mockRequest,
   readLatestBrandRequest: async () => undefined,
 }));
-// The cropper draws on a canvas; a stand-in button "picks" a photo.
+// The cropper draws on a canvas: a stand-in keeps the file it is handed.
 vi.mock('@/components/onboarding/AvatarCropper', () => ({
   AvatarCropper: forwardRef<
-    { hasPhoto: () => boolean; exportPng: () => Promise<File | null> },
+    {
+      hasPhoto: () => boolean;
+      exportPng: () => Promise<File | null>;
+      loadFile: (file: File) => void;
+    },
     { onPhotoChange?: (info: { hasPhoto: boolean; previewUrl: string | null }) => void }
   >(function FakeCropper({ onPhotoChange }, ref) {
+    const loadedRef = useRef<File | null>(null);
     useImperativeHandle(ref, () => ({
-      hasPhoto: () => true,
-      exportPng: async () => new File(['x'], 'me.png', { type: 'image/png' }),
+      hasPhoto: () => loadedRef.current !== null,
+      exportPng: async () => loadedRef.current,
+      loadFile: (file: File) => {
+        loadedRef.current = file;
+        onPhotoChange?.({ hasPhoto: true, previewUrl: 'blob:photo' });
+      },
     }));
-    return (
-      <button
-        type="button"
-        onClick={() => onPhotoChange?.({ hasPhoto: true, previewUrl: 'blob:me' })}
-      >
-        Pick photo
-      </button>
-    );
+    return <div>Cropper</div>;
   }),
 }));
 // A native select stands in for the custom dropdown.
@@ -97,6 +99,7 @@ const onFinish = vi.fn();
 
 beforeEach(() => {
   vi.useFakeTimers();
+  URL.createObjectURL = () => 'blob:photo';
   mockRequest.mockReset();
   mockSave.mockReset();
   mockUsername.mockReset();
@@ -154,6 +157,22 @@ async function type(el: HTMLInputElement, value: string): Promise<void> {
   });
 }
 
+/** Pick a photo from the device, then keep it from the positioning sheet. */
+async function addPhoto(): Promise<void> {
+  const input = document.querySelector<HTMLInputElement>('input[aria-label="Choose a photo"]')!;
+  Object.defineProperty(input, 'files', {
+    configurable: true,
+    value: [new File(['x'], 'IMG_4821.png', { type: 'image/png' })],
+  });
+  await act(async () => {
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10);
+  });
+  await click(button('Use this photo'));
+}
+
 async function pick(label: string, value: string): Promise<void> {
   // The stand-in select is a plain element here; set its value as a browser would.
   const el = document.querySelector<HTMLElement>(`select[aria-label="${label}"]`);
@@ -199,13 +218,13 @@ describe('pre-app screens', () => {
     expect(mockUsername.mock.calls.length).toBe(1);
     expect(document.body.textContent).toContain('@riya.menon is yours.');
     expect(button('Continue').disabled).toBe(true);
-    await click(button('Pick photo'));
+    await addPhoto();
     expect(button('Continue').disabled).toBe(false);
   });
 
   it('takes free text for Something else, needs an age, and has no How did you hear', async () => {
     await toNameScreen('Creator');
-    await click(button('Pick photo'));
+    await addPhoto();
     await click(button('Continue'));
     expect(document.body.textContent).not.toContain('How did you hear');
     await pick('Your role', 'Something else');
@@ -224,7 +243,7 @@ describe('pre-app screens', () => {
 
   it('sends an approver who signed up alone on to name their team', async () => {
     await toNameScreen('Approver');
-    await click(button('Pick photo'));
+    await addPhoto();
     await click(button('Continue'));
     await pick('Your role', 'Brand manager');
     await click(button('18-24'));

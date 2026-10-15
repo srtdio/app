@@ -41,6 +41,16 @@ async function selectorRect(page: Page, selector: string): Promise<R | null> {
   }, selector);
 }
 
+/** The box around a control: 7px out, kept 2px inside the screen. */
+async function expectedBox(page: Page, control: R): Promise<R> {
+  const vp = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  const left = Math.max(control.x - OUTSET, 2);
+  const top = Math.max(control.y - OUTSET, 2);
+  const right = Math.min(control.x + control.width + OUTSET, vp.w - 2);
+  const bottom = Math.min(control.y + control.height + OUTSET, vp.h - 2);
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
 function overlaps(a: R, b: R): boolean {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
@@ -56,11 +66,12 @@ async function expectBoxed(page: Page, info: TestInfo, key: string): Promise<voi
         const control = await controlRect(page, key);
         const box = await selectorRect(page, '[data-induction-box]');
         if (control === null || box === null) return 99;
+        const want = await expectedBox(page, control);
         return Math.max(
-          Math.abs(box.x - (control.x - OUTSET)),
-          Math.abs(box.y - (control.y - OUTSET)),
-          Math.abs(box.width - (control.width + OUTSET * 2)),
-          Math.abs(box.height - (control.height + OUTSET * 2)),
+          Math.abs(box.x - want.x),
+          Math.abs(box.y - want.y),
+          Math.abs(box.width - want.width),
+          Math.abs(box.height - want.height),
         );
       },
       { message: `box on ${key}`, timeout: 10_000 },
@@ -261,7 +272,7 @@ test('creator: workspace, first post and approver invite gates, through to finis
   await next(page);
 
   await expect(page.locator('[data-induction-layer]')).toHaveCount(0);
-  expect(inductionDone(t)).toBe(true);
+  await expect.poll(() => inductionDone(t)).toBe(true);
   expect(network.rpcCalls.map((c) => c.name)).toEqual(
     expect.arrayContaining([
       'post_create',
@@ -316,7 +327,7 @@ test('approver: top bar, review, post, assets, briefs, activity, the group @them
   await next(page);
 
   await expect(page.locator('[data-induction-layer]')).toHaveCount(0);
-  expect(inductionDone(t)).toBe(true);
+  await expect.poll(() => inductionDone(t)).toBe(true);
   expectNoBlocked(network);
 });
 
@@ -355,6 +366,6 @@ test('teammate: drafts, an optional post, assets, activity, the group @theme @de
   await next(page);
 
   await expect(page.locator('[data-induction-layer]')).toHaveCount(0);
-  expect(inductionDone(t)).toBe(true);
+  await expect.poll(() => inductionDone(t)).toBe(true);
   expectNoBlocked(network);
 });

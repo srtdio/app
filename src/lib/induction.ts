@@ -611,6 +611,21 @@ export function boxRect(target: Rect): Rect {
   };
 }
 
+/** How far inside the screen edge the box stays, so all four sides always show. */
+export const BOX_SCREEN_EDGE = 2;
+
+/**
+ * The box kept inside the viewport. A control that runs to the screen edge (a
+ * full-width row) gets its box pulled in rather than cut off.
+ */
+export function clampToViewport(rect: Rect, viewport: { width: number; height: number }): Rect {
+  const left = Math.max(rect.left, BOX_SCREEN_EDGE);
+  const top = Math.max(rect.top, BOX_SCREEN_EDGE);
+  const right = Math.min(rect.left + rect.width, viewport.width - BOX_SCREEN_EDGE);
+  const bottom = Math.min(rect.top + rect.height, viewport.height - BOX_SCREEN_EDGE);
+  return { top, left, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+}
+
 /** The box radius: the control's own radius grown by the outset, so the corners run parallel. */
 export function boxRadius(controlRadiusPx: number): number {
   return Math.max(0, controlRadiusPx) + BOX_OUTSET;
@@ -755,28 +770,8 @@ export function titleFromCaption(caption: string): string {
   return (space > 40 ? cut.slice(0, space) : cut).trimEnd();
 }
 
-/** The time window the upload speed probe watches before it estimates. */
-export const UPLOAD_PROBE_MS = 2000;
 /** Automatic retries after the first failed upload attempt. */
 export const UPLOAD_RETRIES = 3;
-
-/**
- * An honest estimate from what actually went out during the probe: bytes sent
- * over elapsed time, applied to what is left. "About 40 s on this connection".
- */
-export function uploadEstimate(input: {
-  sentBytes: number;
-  elapsedMs: number;
-  totalBytes: number;
-}): string {
-  const { sentBytes, elapsedMs, totalBytes } = input;
-  if (sentBytes <= 0 || elapsedMs <= 0) return 'Working out the time on this connection';
-  const perMs = sentBytes / elapsedMs;
-  const leftSeconds = Math.max(0, totalBytes - sentBytes) / perMs / 1000;
-  if (leftSeconds < 5) return 'A few seconds on this connection';
-  if (leftSeconds < 90) return `About ${Math.round(leftSeconds / 5) * 5} s on this connection`;
-  return `About ${Math.round(leftSeconds / 60)} min on this connection`;
-}
 
 function timesWord(n: number): string {
   if (n === 1) return 'once';
