@@ -43,6 +43,7 @@ import { type Result } from '@/server/assets/types';
 // set by asset-upload.ts.
 import { getSupabaseJwks, verifyCaller, type ReadError } from './asset-read';
 import { serializeError } from './lib/serialize-error';
+import { isPreviewOrigin } from '@/server/preview-origin';
 
 /** Largest avatar accepted: 5 MiB. The cropper emits a small canvas PNG. */
 export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
@@ -181,7 +182,7 @@ function resolveAllowedOrigin(request: Request, env: AvatarUploadEnv): string | 
   if (origin === null) {
     return null;
   }
-  return allowedOrigins(env).includes(origin) ? origin : null;
+  return allowedOrigins(env).includes(origin) || isPreviewOrigin(origin) ? origin : null;
 }
 
 /** Attach the reflected origin (and Vary) when one is allowed. */

@@ -47,6 +47,7 @@ import {
 import { extractTraceId } from '@/server/trace';
 import { logger } from '@/server/logger';
 import { TRACE_ID_HEADER } from '@/lib/trace';
+import { isPreviewOrigin } from '@/server/preview-origin';
 
 /** Signed-URL lifetime: 15 minutes. */
 const URL_TTL_SECONDS = 900;
@@ -449,7 +450,7 @@ function resolveAllowedOrigin(request: Request, env: AssetReadEnv): string | nul
   if (origin === null) {
     return null;
   }
-  return allowedOrigins(env).includes(origin) ? origin : null;
+  return allowedOrigins(env).includes(origin) || isPreviewOrigin(origin) ? origin : null;
 }
 
 /** Attach the reflected origin (and Vary) when one is allowed. */

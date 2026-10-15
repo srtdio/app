@@ -50,6 +50,7 @@ import { logger } from '@/server/logger';
 // Reuse asset-read's verified-token + membership primitives verbatim so the two
 // workers cannot drift: same ES256 JWKS verification, same workspace_members read.
 import { createSupabaseAssetReadStore, getSupabaseJwks, verifyCaller } from './asset-read';
+import { isPreviewOrigin } from '@/server/preview-origin';
 
 export interface AssetUploadEnv {
   CLOUDFLARE_ACCOUNT_ID: string;
@@ -247,7 +248,7 @@ function resolveAllowedOrigin(request: Request, env: AssetUploadEnv): string | n
   if (origin === null) {
     return null;
   }
-  return allowedOrigins(env).includes(origin) ? origin : null;
+  return allowedOrigins(env).includes(origin) || isPreviewOrigin(origin) ? origin : null;
 }
 
 /** Attach the reflected origin (and Vary) when one is allowed. */
