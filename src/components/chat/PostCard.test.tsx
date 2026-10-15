@@ -168,7 +168,7 @@ describe('SharedPostCardList', () => {
     expect(client).toContain('Review');
     expect(client).toContain('text-accent');
     const agency = render(['p1'], post, { side: 'agency' });
-    expect(agency).toContain('Waiting on client');
+    expect(agency).toContain('Waiting on approvers');
     expect(agency).toContain('>Open<');
     expect(render(['p1'], post, { side: 'unknown' })).toContain('In review');
   });

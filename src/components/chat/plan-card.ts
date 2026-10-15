@@ -22,17 +22,17 @@ export const PLAN_NOT_AVAILABLE = 'Plan not available';
 export const PLAN_DELETED = 'Plan deleted';
 export const PLAN_SHARED_TOAST = 'Plan shared';
 /** An Agency only comment's tag (plan comments' visibility). */
-export const TEAM_ONLY_LABEL = 'Agency only';
+export const TEAM_ONLY_LABEL = 'Creators only';
 /** A Draft plan (audience team): the chip, the subtitle and the progress side. */
 export const PLAN_DRAFT_LABEL = 'Draft';
 /** An Open plan (audience client): the subtitle. */
-export const PLAN_OPEN_LABEL = 'Shared with client';
+export const PLAN_OPEN_LABEL = 'Shared with approvers';
 export const TEAM_APPROVE_CONFIRM =
-  'Mark as agency approved? Only the agency sees this. The client still approves separately.';
+  'Mark as checked? Only creators see this. Approvers still approve separately.';
 /** The "In this chat" chip on a plan already shared here (the Plans sheet). */
 export const IN_THIS_CHAT_LABEL = 'In this chat';
 /** The Forward list's tag on a chat known to have a client (a Draft plan). */
-export const HAS_CLIENT_TAG = 'Has client';
+export const HAS_CLIENT_TAG = 'Has approvers';
 /** A draft post's pill, and a client's sub line on its row. */
 export const DRAFT_LABEL = 'Draft';
 export const DRAFT_NOT_READY = 'Not ready to view yet';
@@ -47,7 +47,7 @@ export const CONCEPT_FILES_MAX = 20;
 
 /** The client confirm for approving a concept. Pure. */
 export function clientApproveConfirm(title: string): string {
-  return `Approve "${title}"? The agency will go ahead and make this into a post.`;
+  return `Approve "${title}"? The creators will go ahead and make this into a post.`;
 }
 
 /** The toast after a forward. Pure. */
@@ -147,7 +147,7 @@ function shownApproved(progress: PlanProgress): number {
  */
 export function progressLabel(progress: PlanProgress, side?: ViewerSide): string {
   void side;
-  const who = (progress.side ?? 'client') === 'team' ? 'Team' : 'Client';
+  const who = (progress.side ?? 'client') === 'team' ? 'Team' : 'Approved';
   return `${who} ${shownApproved(progress)} of ${progress.total}`;
 }
 
@@ -188,7 +188,7 @@ export function canForwardPlan(side: ViewerSide, audience: PlanAudience): boolea
 }
 
 /** Forward on a Draft card into a chat with a client: nothing is sent. */
-export const OPEN_FOR_CLIENT_FIRST = 'Open the plan for client first.';
+export const OPEN_FOR_CLIENT_FIRST = 'Open the plan for approvers first.';
 
 /**
  * Whether a forward is refused before any write: a Draft plan into a chat
@@ -265,6 +265,12 @@ export const STATUS_LABELS: Record<ReviewStatus, string> = {
   changes: 'Changes asked',
 };
 
+/** The creators' side of a review: they check, only approvers approve. */
+export const TEAM_STATUS_LABELS: Record<ReviewStatus, string> = {
+  ...STATUS_LABELS,
+  approved: 'Checked',
+};
+
 const STAGE_LABELS: Record<string, string> = {
   draft: 'Draft',
   review: 'In review',
@@ -310,12 +316,14 @@ export function itemPills(bundle: PlanBundle, item: PlanItemRow, side: ViewerSid
     return [{ label: STATUS_LABELS[client], tone: toneOf(client), side: 'client' }];
   }
   if (bundle.plan.audience === 'client') {
-    return [{ label: `Client · ${STATUS_LABELS[client]}`, tone: toneOf(client), side: 'client' }];
+    return [
+      { label: `Approvers · ${STATUS_LABELS[client]}`, tone: toneOf(client), side: 'client' },
+    ];
   }
   const team = reviewStatus(bundle, item.id, 'team');
   return [
-    { label: `Agency · ${STATUS_LABELS[team]}`, tone: toneOf(team), side: 'team' },
-    { label: `Client · ${STATUS_LABELS[client]}`, tone: toneOf(client), side: 'client' },
+    { label: `Creators · ${TEAM_STATUS_LABELS[team]}`, tone: toneOf(team), side: 'team' },
+    { label: `Approvers · ${STATUS_LABELS[client]}`, tone: toneOf(client), side: 'client' },
   ];
 }
 
@@ -577,9 +585,13 @@ export function itemStatusLine(
 ): { label: string; tone: PillTone } | null {
   if (side !== 'agency') return null;
   const status = clientStatus(bundle, item);
-  const word =
-    status === 'approved' ? 'approved' : status === 'changes' ? 'changes asked' : 'waiting';
-  return { label: `Client ${word}`, tone: toneOf(status) };
+  const label =
+    status === 'approved'
+      ? 'Approved'
+      : status === 'changes'
+        ? 'Changes asked'
+        : 'Waiting for approval';
+  return { label, tone: toneOf(status) };
 }
 
 /** The Add sheet's title: "Add to Wed 14 Oct", or "Add to plan" with no day. Pure. */
@@ -623,7 +635,7 @@ export const PLAN_CREATE_ERROR_COPY: PlanWriteErrorTable = {
     "A post's date changed and is now outside this plan. Nothing was saved. Check the orange items.",
   invalid_payload:
     'Something in this plan is no longer available, such as a deleted post. Nothing was saved.',
-  forbidden: 'Only the agency team can create plans.',
+  forbidden: 'Only creators can create plans.',
 };
 
 /** New plan's Create, any other failure. */
@@ -688,13 +700,13 @@ export const DELETE_PLAN_TITLE = 'Delete this plan?';
 export const PLAN_DELETED_TOAST = 'Plan deleted';
 export const DELETE_FORBIDDEN = "Only the plan's creator or a workspace admin can delete it.";
 export const DELETE_FAILED = "Couldn't delete. Try again.";
-export const OPEN_FOR_CLIENT_LABEL = 'Open for client';
-export const OPEN_FOR_CLIENT_TITLE = 'Open this plan for client?';
+export const OPEN_FOR_CLIENT_LABEL = 'Open for approvers';
+export const OPEN_FOR_CLIENT_TITLE = 'Open this plan for approvers?';
 export const OPEN_FOR_CLIENT_BODY =
-  'Client can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.';
-export const OPEN_FOR_CLIENT_TOAST = 'Open for client';
-export const OPEN_FOR_CLIENT_FAILED = "Couldn't open for client. Try again.";
-export const SEND_NEEDS_OPEN = 'Open the plan for client to send it here.';
+  'Approvers can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.';
+export const OPEN_FOR_CLIENT_TOAST = 'Open for approvers';
+export const OPEN_FOR_CLIENT_FAILED = "Couldn't open for approvers. Try again.";
+export const SEND_NEEDS_OPEN = 'Open the plan for approvers to send it here.';
 export const SEND_FAILED = "Couldn't send. Try again.";
 export const GO_TO_CARD_LABEL = 'Go to card';
 export const CREATE_PLAN_LABEL = 'Create plan';
@@ -711,7 +723,7 @@ export function sendInLabel(chatName: string): string {
  * only on an Open plan, then " This cannot be undone." Pure.
  */
 export function deletePlanBody(audience: PlanAudience): string {
-  const notify = audience === 'client' ? ' Client gets a notification.' : '';
+  const notify = audience === 'client' ? ' Approvers get a notification.' : '';
   return `Cards already in chat will show Plan deleted.${notify} This cannot be undone.`;
 }
 

@@ -408,10 +408,10 @@ export interface CheckpointLabel {
 export function checkpointStateLabel(state: CheckpointState, isClient: boolean): CheckpointLabel {
   switch (state) {
     case 'open':
-      return { text: isClient ? 'With agency' : 'Open', className: 'bg-panel-3 text-fg-3' };
+      return { text: isClient ? 'With creators' : 'Open', className: 'bg-panel-3 text-fg-3' };
     case 'client_turn':
       return {
-        text: isClient ? 'Your turn' : 'With client',
+        text: isClient ? 'Your turn' : 'With approvers',
         className: 'bg-accent-soft text-accent',
       };
     case 'confirmed':
@@ -465,7 +465,7 @@ export function checkpointWithdrawalText(unacceptedAt: string, name: string | nu
 /** The pushback reason prompt. Un-resolving without saying why is the failure
  *  mode "Not done" exists to prevent, so the reply composer opens pre-filled with
  *  this line. No em-dash (user-facing string). */
-export const PUSHBACK_SEED = 'This point has gone back to the agency. What is still off? ';
+export const PUSHBACK_SEED = 'This point has gone back to the creators. What is still off? ';
 
 /** The seed body for a checkpoint's reply composer: the pushback prompt after a
  *  "Not done", otherwise the ordinary author pre-tag. */

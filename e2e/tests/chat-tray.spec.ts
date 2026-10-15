@@ -101,7 +101,7 @@ async function trayAndPickers(page: Page): Promise<void> {
   const draft = page.locator('[data-tray-tile="draft"]');
   await expect(draft).toBeDisabled();
   await expect(draft).toHaveAttribute('aria-disabled', 'true');
-  await expect(draft).toHaveAttribute('aria-label', 'Draft, not available in chats with clients');
+  await expect(draft).toHaveAttribute('aria-label', 'Draft, not available in chats with approvers');
   expect(Number(await draft.evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
   for (const box of await page
     .locator('[data-tray-tile]')
@@ -117,7 +117,7 @@ async function trayAndPickers(page: Page): Promise<void> {
   const posts = page.getByRole('dialog', { name: 'Share a post' });
   await expect(posts).toBeVisible();
   await expect(posts.getByRole('tablist')).toHaveCount(0);
-  await expect(posts.getByText('Waiting on client')).toBeVisible();
+  await expect(posts.getByText('Waiting on approvers')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(posts).toBeHidden();
 

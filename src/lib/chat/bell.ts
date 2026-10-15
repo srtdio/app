@@ -335,7 +335,7 @@ export function planBellLine(
     case 'plan_opened':
       return side === 'client'
         ? `${who} shared ${plan} with you`
-        : `${who} opened ${plan} for client`;
+        : `${who} opened ${plan} for approvers`;
     case 'plan_deleted':
       return `${who} deleted ${plan}`;
     case 'plan_date_changed': {

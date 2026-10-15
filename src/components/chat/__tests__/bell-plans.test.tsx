@@ -107,7 +107,7 @@ describe('row copy', () => {
   it('plan_opened per side; plan_deleted', () => {
     const opened = entry({});
     expect(planBellLine(opened, names, 'client')).toBe('Priya shared Week of 12 Oct with you');
-    expect(planBellLine(opened, names, 'agency')).toBe('Priya opened Week of 12 Oct for client');
+    expect(planBellLine(opened, names, 'agency')).toBe('Priya opened Week of 12 Oct for approvers');
     expect(planBellLine(entry({ event_type: 'plan_deleted' }), names, 'agency')).toBe(
       'Priya deleted Week of 12 Oct',
     );
@@ -249,7 +249,7 @@ describe('the row (reuses the bell row component)', () => {
     const html = renderToStaticMarkup(<NowTab bell={bell} />);
     expect(html).toContain('data-bell-section="plans"');
     expect(html).toContain('data-bell-row="plan"');
-    expect(html).toContain('Priya opened Week of 12 Oct for client');
+    expect(html).toContain('Priya opened Week of 12 Oct for approvers');
     expect(html).toMatch(/data-bell-open="e1"[^>]*min-h-\[44px\]/);
   });
 });

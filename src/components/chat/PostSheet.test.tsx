@@ -97,7 +97,7 @@ describe('PostSheetActions by side and stage', () => {
     const html = actions('agency', row({ stage: 'review' }));
     expect(actionIds(html)).toEqual(['approve', 'open_pipeline']);
     expect(html).toContain('Approve GBL-12');
-    expect(html).toContain('Waiting on the client since Sep 20');
+    expect(html).toContain('Waiting on approvers since Sep 20');
     expect(html).toContain('bg-good');
   });
 
@@ -120,7 +120,7 @@ describe('PostSheetActions by side and stage', () => {
       onBehalf: true,
     });
     expect(html).toContain('Approve GBL-12, all 5 slides, for Oct 2?');
-    expect(html).toContain('You are approving on behalf of client.');
+    expect(html).toContain('You are approving on behalf of the approvers.');
   });
 
   it('client approve confirm has no on-behalf line', () => {
@@ -128,7 +128,7 @@ describe('PostSheetActions by side and stage', () => {
       mode: { kind: 'confirm', confirm: 'approve' },
       onBehalf: false,
     });
-    expect(html).not.toContain('on behalf of client');
+    expect(html).not.toContain('on behalf of the approvers');
   });
 
   it('approved pill suffixes an agency-side approver, not a client or unknown one', () => {
@@ -136,14 +136,14 @@ describe('PostSheetActions by side and stage', () => {
       approverName: 'Chitra',
       approverRole: 'agency',
     });
-    expect(agency).toContain('Approved by Chitra on behalf of client');
+    expect(agency).toContain('Approved by Chitra on behalf of the approvers');
     const client = actions('client', row({ stage: 'approved' }), {
       approverName: 'Asha',
       approverRole: 'client',
     });
     expect(client).toContain('Approved by Asha<');
     const old = actions('client', row({ stage: 'approved' }), { approverName: 'Asha' });
-    expect(old).not.toContain('on behalf of client');
+    expect(old).not.toContain('on behalf of the approvers');
   });
 
   it('every action button is 48px tall and the area pads for the safe area', () => {
@@ -163,7 +163,7 @@ describe('PostSheetActions confirm and error', () => {
     });
     expect(html).toContain('data-sheet-confirm="approve"');
     expect(html).toContain('Approve GBL-12, all 5 slides, for Oct 2?');
-    expect(html).toContain('This is logged as your approval and the agency is notified.');
+    expect(html).toContain('This is logged as your approval and the creators are notified.');
     expect(html).toContain('>Back<');
     expect(html).toContain('>Approve GBL-12<');
     expect(actionIds(html)).toEqual([]);
@@ -175,7 +175,7 @@ describe('PostSheetActions confirm and error', () => {
       mode: { kind: 'confirm', confirm: 'send_review' },
     });
     expect(html).toContain('data-sheet-confirm="send_review"');
-    expect(html).toContain('Send GBL-12 to the client for review?');
+    expect(html).toContain('Send GBL-12 to the approvers for review?');
   });
 
   it('shows the mapped error copy in the confirm block', () => {

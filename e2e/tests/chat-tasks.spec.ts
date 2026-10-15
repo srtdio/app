@@ -58,14 +58,16 @@ test(
     await burst.click();
     await expect(page.locator('[data-task-line="created"]')).toHaveCount(4);
     await expect(page.locator('[data-task-line="created"]').first()).toContainText(
-      `Leo Martins added 8 ${TASK_ROW_TITLE} · Agency`,
+      `Leo Martins added 8 ${TASK_ROW_TITLE} · Creators`,
     );
 
     const sheet = await openSheet(page);
-    await expect(sheet.locator('[data-task-group="agency"]')).toContainText('Agency');
-    await expect(sheet.locator('[data-task-group="client"]')).toContainText('Client');
+    await expect(sheet.locator('[data-task-group="agency"]')).toContainText('Creators');
+    await expect(sheet.locator('[data-task-group="client"]')).toContainText('Approvers');
     await expect(sheet.locator('[data-task-group="done"]')).toContainText('Done today');
-    await expect(sheet.locator('[data-task-counts]')).toHaveText('2 agency · 2 client · 0 done');
+    await expect(sheet.locator('[data-task-counts]')).toHaveText(
+      '2 creators · 2 approvers · 0 done',
+    );
     // Agency: P1 (8) before P2 (9); Client: P0 (10) before P2 (11).
     const numbers = await sheet
       .locator('[data-task-row-id]')
@@ -81,7 +83,7 @@ test(
     // Opening it cleared the dot.
     await expect(button.locator('[data-task-dot]')).toHaveCount(0);
 
-    const add = sheet.getByRole('textbox', { name: 'Add to Agency' });
+    const add = sheet.getByRole('textbox', { name: 'Add to Creators' });
     await expect(sheet.locator('[data-task-add="agency"] [data-task-preview]')).toHaveText('12');
     await add.fill('Story frames');
     await add.press('Enter');
@@ -223,8 +225,8 @@ test('Share: the snapshot lands here and, Forwarded, in the picked chat and its 
   expect(copy).toHaveLength(1);
   const body = String(own[0]?.args.p_body);
   expect(body.startsWith(`Task list · ${GROUP_NAME} · `)).toBe(true);
-  expect(body).toContain('\nAgency\n8. Hook options · P1\n9. Shot list · P2 · today');
-  expect(body).toContain(`\nClient\n10. ${TASK_DUE_TITLE} · P0 · today`);
+  expect(body).toContain('\nCreators\n8. Hook options · P1\n9. Shot list · P2 · today');
+  expect(body).toContain(`\nApprovers\n10. ${TASK_DUE_TITLE} · P0 · today`);
   expect(body).toContain('(missed)');
   expect(copy[0]?.args.p_body).toBe(body);
   expect(copy[0]?.args.p_forwarded_from_message_id).toBe(own[0]?.args.p_id);

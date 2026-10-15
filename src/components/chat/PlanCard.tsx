@@ -228,7 +228,7 @@ export function PlanCardBody(props: {
         </span>
         <span
           role="progressbar"
-          aria-label={draft ? 'Approved by team' : 'Approved by client'}
+          aria-label={draft ? 'Checked by creators' : 'Approved'}
           aria-valuemin={0}
           aria-valuemax={progress.total}
           aria-valuenow={draft ? progress.teamApproved : progress.approved}

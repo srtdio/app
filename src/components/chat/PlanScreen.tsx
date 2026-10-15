@@ -3113,7 +3113,7 @@ export function SlotCheckbox(props: {
       aria-checked={props.checked}
       aria-label={
         readOnly
-          ? `${props.checked ? 'Client approved' : 'Client pending'}: ${props.title}`
+          ? `${props.checked ? 'Approved' : 'Waiting for approval'}: ${props.title}`
           : props.checked
             ? `Remove slot approval: ${props.title}`
             : `Approve slot: ${props.title}`

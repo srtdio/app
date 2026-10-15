@@ -24,14 +24,23 @@ export function canDeletePost(role: string | null): boolean {
   return isAgencySide(role);
 }
 
-/** The suffix an agency-side actor's approve, reject or other action label carries. */
-export const ON_BEHALF_OF_CLIENT = 'on behalf of client';
+/** The on-behalf phrase when the workspace's brand name is unavailable. */
+export const ON_BEHALF_OF_CLIENT = 'on behalf of the approvers';
+
+/** "on behalf of Zomato" for the workspace's brand; "on behalf of the approvers" without one. */
+export function onBehalfOf(brand: string | null | undefined): string {
+  const name = brand?.trim() ?? '';
+  return name !== '' ? `on behalf of ${name}` : ON_BEHALF_OF_CLIENT;
+}
 
 /**
- * " on behalf of client" when `role` is agency-side, else ''. A missing role
+ * " on behalf of <Brand>" when `role` is agency-side, else ''. A missing role
  * (an old row with no actor_role, or a failed role read) reads as the name only.
  */
-export function onBehalfSuffix(role: string | null | undefined): string {
+export function onBehalfSuffix(
+  role: string | null | undefined,
+  brand: string | null | undefined,
+): string {
   if (role === undefined || role === null || role === '') return '';
-  return isAgencySide(role) ? ` ${ON_BEHALF_OF_CLIENT}` : '';
+  return isAgencySide(role) ? ` ${onBehalfOf(brand)}` : '';
 }

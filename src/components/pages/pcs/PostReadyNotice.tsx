@@ -21,7 +21,7 @@ import { DOMAIN_ERROR_CODES } from '@srtdio/rpc';
 import type { Client, DomainErrorCode, Result } from '@srtdio/rpc';
 import type { Stage } from '@srtdio/posts';
 
-export const NOTIFY_LABEL = "Tell client it's ready";
+export const NOTIFY_LABEL = "Tell approvers it's ready";
 
 /** The permanent ready-notification record read. */
 export const NOTIFICATION_SELECT = 'id, sent_by, checkpoint_count, sent_at';
@@ -43,8 +43,8 @@ export function checkpointCountLabel(count: number): string {
  *  the agency's reflects that the client was notified. */
 export function notifyHistoryHeadline(viewerIsClient: boolean): string {
   return viewerIsClient
-    ? 'The agency told you this post is ready.'
-    : 'You told the client this post is ready.';
+    ? 'The creators told you this post is ready.'
+    : 'You told the approvers this post is ready.';
 }
 
 /** The record view: the newest send prominent, the rest as earlier history.
@@ -93,11 +93,11 @@ export function notifyErrorMessage(message: string): string {
     case 'checkpoints_open':
       return 'Some checkpoints are still open. Resolve them all first.';
     case 'forbidden_role':
-      return 'Only agency members can send this.';
+      return 'Only creators can send this.';
     case 'invalid_stage':
       return 'This post is not in review anymore.';
     default:
-      return 'Could not notify the client. Please try again.';
+      return 'Could not notify the approvers. Please try again.';
   }
 }
 

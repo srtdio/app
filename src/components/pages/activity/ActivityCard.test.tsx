@@ -376,7 +376,7 @@ describe('A3 @all in the Activity preview', () => {
 });
 
 describe('ActivityCard actor rows', () => {
-  it('stage_change: "<Name> approved KEY-N on behalf of client" with the avatar', () => {
+  it('stage_change: "<Name> approved KEY-N on behalf of the approvers" with the avatar', () => {
     const html = renderCard([
       item({
         id: 'a',
@@ -388,7 +388,7 @@ describe('ActivityCard actor rows', () => {
         actorRole: 'agency',
       }),
     ]);
-    expect(html).toContain('Chitra approved GBL-12 on behalf of client');
+    expect(html).toContain('Chitra approved GBL-12 on behalf of the approvers');
     expect(html).not.toContain('Moved to');
     expect(html).toContain('role="button"');
   });
@@ -405,7 +405,7 @@ describe('ActivityCard actor rows', () => {
         }),
       ]);
       expect(html).toContain('Asha rejected GBL-3');
-      expect(html).not.toContain('on behalf of client');
+      expect(html).not.toContain('on behalf of the approvers');
     }
   });
 
@@ -420,7 +420,7 @@ describe('ActivityCard actor rows', () => {
       }),
     ]);
     expect(html).toContain('Chitra deleted GBL-9 Old teaser');
-    expect(html).not.toContain('on behalf of client');
+    expect(html).not.toContain('on behalf of the approvers');
     expect(html).not.toContain('role="button"');
     expect(html).not.toContain('cursor-pointer');
   });
@@ -453,7 +453,7 @@ describe('ActivityCard actor rows', () => {
       }),
     ]);
     expect(many).toContain('Someone deleted 3 assets');
-    expect(many).not.toContain('on behalf of client');
+    expect(many).not.toContain('on behalf of the approvers');
   });
 
   it('a plan_comment card: item title as the header, the comment as the body, the plan icon tile', () => {

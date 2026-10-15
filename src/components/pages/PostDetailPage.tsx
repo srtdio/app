@@ -47,8 +47,8 @@ import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { canDeletePost, isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import { FirstReviewTip } from '@/components/onboarding/FirstReviewTip';
 import {
-  AGENCY_REVIEW_HELPER,
-  ON_BEHALF_CONFIRM_LINE,
+  agencyReviewHelper,
+  onBehalfConfirmLine,
   visibleStageActions,
   type StageAction,
 } from '@/components/pages/pcs/stage-actions';
@@ -212,6 +212,8 @@ export function PcsApproveConfirm(props: {
   error: string | null;
   /** Agency side: the confirm adds the on-behalf-of-client line. */
   onBehalf: boolean;
+  /** The workspace's brand name; null falls back to "the approvers". */
+  brand?: string | null;
 }) {
   const { gate, gateState } = props;
   return (
@@ -236,7 +238,7 @@ export function PcsApproveConfirm(props: {
       </p>
       {props.onBehalf ? (
         <p data-approve-on-behalf="" className="mt-2 text-sm text-fg-2">
-          {ON_BEHALF_CONFIRM_LINE}
+          {onBehalfConfirmLine(props.brand)}
         </p>
       ) : null}
     </Sheet>
@@ -279,7 +281,7 @@ export function PostDetailPage({
   const postId = postIdProp ?? params.postId;
   const navigate = useNavigate();
   const newTrace = useNewTrace();
-  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
+  const { workspaceId, workspaceKey, workspaces, workspaceName } = useWorkspace();
 
   // Email deep-link: ?comment={commentId} focuses that comment row. Captured into
   // state so it survives the immediate strip below, then handed to Comments which
@@ -1183,7 +1185,7 @@ export function PostDetailPage({
         </>
       ) : currentStage === 'review' && agencySide ? (
         <>
-          <p className="mb-3 text-sm text-fg-2">{AGENCY_REVIEW_HELPER}</p>
+          <p className="mb-3 text-sm text-fg-2">{agencyReviewHelper(workspaceName)}</p>
           {stageButtons}
         </>
       ) : stageActions.length > 0 ? (
@@ -1626,6 +1628,7 @@ export function PostDetailPage({
         busy={transitioning}
         error={actionError}
         onBehalf={agencySide}
+        brand={workspaceName}
       />
 
       <SlideActionsSheet

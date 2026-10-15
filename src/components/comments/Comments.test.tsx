@@ -330,7 +330,7 @@ describe('checkpoint state + feed controls', () => {
 
   it('labels each state with the right wording per side and a chip token pair', () => {
     expect(checkpointStateLabel('open', true)).toEqual({
-      text: 'With agency',
+      text: 'With creators',
       className: 'bg-panel-3 text-fg-3',
     });
     expect(checkpointStateLabel('open', false)).toEqual({
@@ -342,7 +342,7 @@ describe('checkpoint state + feed controls', () => {
       className: 'bg-accent-soft text-accent',
     });
     expect(checkpointStateLabel('client_turn', false)).toEqual({
-      text: 'With client',
+      text: 'With approvers',
       className: 'bg-accent-soft text-accent',
     });
     expect(checkpointStateLabel('confirmed', true)).toEqual({

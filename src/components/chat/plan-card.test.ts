@@ -84,14 +84,14 @@ describe('plan progress', () => {
     });
     // An Open plan: "Client X of N" for every viewer (no changes part, no team count).
     for (const side of ['agency', 'client', 'unknown'] as const) {
-      expect(progressLabel(planProgress(MIXED), side)).toBe('Client 2 of 5');
+      expect(progressLabel(planProgress(MIXED), side)).toBe('Approved 2 of 5');
     }
     expect(progressPercent(planProgress(MIXED))).toBe(40);
   });
 
   it('no changes: the label stops after the approvals; an empty plan is 0%', () => {
     const empty = bundle([]);
-    expect(progressLabel(planProgress(empty), 'client')).toBe('Client 0 of 0');
+    expect(progressLabel(planProgress(empty), 'client')).toBe('Approved 0 of 0');
     expect(progressPercent(planProgress(empty))).toBe(0);
     const two = bundle(
       [item({ id: 'a' }), item({ id: 'b' })],
@@ -100,7 +100,7 @@ describe('plan progress', () => {
         { item_id: 'b', side: 'client', status: 'changes' },
       ],
     );
-    expect(progressLabel(planProgress(two), 'client')).toBe('Client 0 of 2');
+    expect(progressLabel(planProgress(two), 'client')).toBe('Approved 0 of 2');
   });
 });
 
@@ -143,11 +143,11 @@ describe('rows and labels', () => {
     const c1 = MIXED.items[0] as PlanItemRow;
     const draft = { ...MIXED, plan: { ...MIXED.plan, audience: 'team' as const } };
     expect(itemPills(draft, c1, 'agency').map((p) => p.label)).toEqual([
-      'Agency · Waiting',
-      'Client · Approved',
+      'Creators · Waiting',
+      'Approvers · Approved',
     ]);
     // Team reviews are never shown on an Open plan.
-    expect(itemPills(MIXED, c1, 'agency').map((p) => p.label)).toEqual(['Client · Approved']);
+    expect(itemPills(MIXED, c1, 'agency').map((p) => p.label)).toEqual(['Approvers · Approved']);
     expect(itemPills(MIXED, c1, 'client').map((p) => p.label)).toEqual(['Approved']);
     // A post's pill follows its client slot review, not its stage.
     const p1 = MIXED.items[3] as PlanItemRow;
@@ -171,7 +171,7 @@ describe('rows and labels', () => {
     expect(range).toBe('12 Oct - 18 Oct');
     expect(range).not.toContain(String.fromCharCode(0x2014));
     expect(clientApproveConfirm('Reel')).toBe(
-      'Approve "Reel"? The agency will go ahead and make this into a post.',
+      'Approve "Reel"? The creators will go ahead and make this into a post.',
     );
   });
 });
@@ -253,7 +253,7 @@ describe('both progress counts (D1)', () => {
     const p = planProgress(b);
     expect(p).toEqual({ approved: 2, teamApproved: 3, total: 4, changes: 0, side: 'client' });
     // Open: the client side for everyone, never the team count.
-    expect(progressLabel(p, 'agency')).toBe('Client 2 of 4');
+    expect(progressLabel(p, 'agency')).toBe('Approved 2 of 4');
     expect(progressPercent(p)).toBe(50);
     // Draft: the team side.
     const draft = planProgress({ ...b, plan: { ...b.plan, audience: 'team' } });
@@ -264,7 +264,7 @@ describe('both progress counts (D1)', () => {
   it('a missing review row reads as waiting on both sides', () => {
     const b = bundle([item({ id: 'a' }), item({ id: 'b' })]);
     expect(planProgress(b)).toMatchObject({ approved: 0, teamApproved: 0, total: 2, changes: 0 });
-    expect(progressLabel(planProgress(b), 'agency')).toBe('Client 0 of 2');
+    expect(progressLabel(planProgress(b), 'agency')).toBe('Approved 0 of 2');
   });
 
   it('an unreadable post counts in N and is never client approved', () => {
@@ -278,14 +278,14 @@ describe('both progress counts (D1)', () => {
 
   it('the old two-count strings are gone', () => {
     const src = readFileSync(fileURLToPath(new URL('./plan-card.ts', import.meta.url)), 'utf8');
-    expect(src).not.toContain('approved by client`');
+    expect(src).not.toContain('approved`');
     expect(src).not.toMatch(/Agency \$\{/);
   });
 
   it('nobody sees a team count on an Open plan', () => {
     for (const side of ['agency', 'client', 'unknown'] as const) {
       const label = progressLabel(planProgress(MIXED), side);
-      expect(label).toBe('Client 2 of 5');
+      expect(label).toBe('Approved 2 of 5');
       expect(label).not.toMatch(/Agency|Team/);
     }
   });

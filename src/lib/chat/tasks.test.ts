@@ -203,14 +203,14 @@ describe('event text: every kind', () => {
   const ref = { number: 12, title: 'Reel cut', side: 'agency' as const };
   const text = (over: Partial<TaskEvent>): string => eventText(ev(over), ref, NOW, UTC);
   it('reads each change', () => {
-    expect(text({ kind: 'created', newValue: 'Reel cut' })).toBe('added 12 Reel cut · Agency');
+    expect(text({ kind: 'created', newValue: 'Reel cut' })).toBe('added 12 Reel cut · Creators');
     expect(text({ kind: 'status', oldValue: 'todo', newValue: 'shared' })).toBe(
       '12 Reel cut → Shared',
     );
     expect(text({ kind: 'priority', oldValue: '1', newValue: '0' })).toBe('12 P1 → P0');
     expect(text({ kind: 'due', newValue: '2026-10-13T20:00:00+00:00' })).toBe('12 due today 8 pm');
     expect(text({ kind: 'due', newValue: null })).toBe('12 due cleared');
-    expect(text({ kind: 'side', newValue: 'client' })).toBe('12 moved to Client');
+    expect(text({ kind: 'side', newValue: 'client' })).toBe('12 moved to Approvers');
     expect(text({ kind: 'title', oldValue: 'Old', newValue: 'New cut' })).toBe(
       'renamed 12 to New cut',
     );
@@ -316,10 +316,10 @@ describe('shareSnapshot', () => {
     expect(shareSnapshot({ chatName: 'Launch crew', tasks, nowMs: NOW, timeZone: UTC })).toBe(
       [
         'Task list · Launch crew · 13 Oct, 2 pm',
-        'Agency',
+        'Creators',
         '3. Hook copy · P0 · today 8 pm',
         '5. Reel cut · P2 · today 10 am (missed)',
-        'Client',
+        'Approvers',
         '2. Approve grid · P2 · tomorrow 12 pm',
         '7. Moodboard · P2 · 16 Oct 5 pm',
         'Done today: 4, 6',
@@ -334,7 +334,7 @@ describe('shareSnapshot', () => {
       timeZone: UTC,
     });
     expect(text).toBe(
-      'Task list · X · 13 Oct, 2 pm\nClient\n2. Approve grid · P2 · tomorrow 12 pm',
+      'Task list · X · 13 Oct, 2 pm\nApprovers\n2. Approve grid · P2 · tomorrow 12 pm',
     );
   });
   it('past the limit: drops the done line, then trailing items, ending "+k more"', () => {

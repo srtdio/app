@@ -20,7 +20,7 @@ vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't1' }));
 vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
 
 import { PcsApproveConfirm, PostDetailPage, StageButtons } from '@/components/pages/PostDetailPage';
-import { ON_BEHALF_CONFIRM_LINE, visibleStageActions } from '@/components/pages/pcs/stage-actions';
+import { onBehalfConfirmLine, visibleStageActions } from '@/components/pages/pcs/stage-actions';
 import {
   GATE_IDLE,
   createApproveGate,
@@ -190,7 +190,7 @@ describe('PCS approve confirm', () => {
     const all: ReactElement[] = [];
     collect((el.props as { children: ReactNode }).children, all);
     const texts = all.map((n) => (n.props as { children?: unknown }).children);
-    expect(texts).toContain(ON_BEHALF_CONFIRM_LINE);
+    expect(texts).toContain(onBehalfConfirmLine(null));
     confirmOf(el).onConfirm();
     expect(h.move).toHaveBeenCalledWith('p1', 'approved');
   });
@@ -201,7 +201,7 @@ describe('PCS approve confirm', () => {
     const all: ReactElement[] = [];
     collect((sheet(h).props as { children: ReactNode }).children, all);
     const texts = all.map((n) => (n.props as { children?: unknown }).children);
-    expect(texts).not.toContain(ON_BEHALF_CONFIRM_LINE);
+    expect(texts).not.toContain(onBehalfConfirmLine(null));
   });
 
   it('T9: agency Reject from review and from approved moves at once', () => {

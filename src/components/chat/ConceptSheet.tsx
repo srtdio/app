@@ -118,7 +118,7 @@ export function useConceptFilesRead(
 
 /** The description's placeholder. */
 export const CONCEPT_DESCRIPTION_PLACEHOLDER =
-  'What is the concept? The idea, the hook, what the client will see.';
+  'What is the concept? The idea, the hook, what approvers will see.';
 
 /** The tiles' selection for a form date: '' is No date; a day outside the plan selects none. Pure. */
 export function conceptTileDay(date: string, range: ComposeRange): ComposeDay {

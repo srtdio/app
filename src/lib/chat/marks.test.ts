@@ -162,14 +162,14 @@ describe('strip counts', () => {
 describe('open posts wording', () => {
   it('posts part per side, never a guess', () => {
     expect(openPostsPart(1, 'client')).toBe('1 post waiting on you');
-    expect(openPostsPart(2, 'agency')).toBe('2 posts waiting on client');
+    expect(openPostsPart(2, 'agency')).toBe('2 posts waiting on approvers');
     expect(openPostsPart(1, 'unknown')).toBe('1 post in review');
     expect(NOTHING_OPEN).toBe('Nothing open between you');
   });
 
   it('sheet headings follow the side', () => {
     expect(openPostsHeading('client')).toBe('Posts waiting on you');
-    expect(openPostsHeading('agency')).toBe('Posts waiting on client');
+    expect(openPostsHeading('agency')).toBe('Posts waiting on approvers');
     expect(openPostsHeading('unknown')).toBe('Posts in review');
   });
 });

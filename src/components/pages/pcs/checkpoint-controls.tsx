@@ -10,7 +10,7 @@ import type { CommentResolveArgs, DomainError } from '@srtdio/rpc';
 
 /** The proc trims and caps the note at 500 chars; the input mirrors the cap. */
 export const MAX_NOTE_CHARS = 500;
-export const NOTE_PLACEHOLDER = 'What changed (optional, client sees this)';
+export const NOTE_PLACEHOLDER = 'What changed (optional, approvers see this)';
 
 /**
  * Build the comment_resolve args. The note rides as p_resolution_note ONLY on a
@@ -56,7 +56,7 @@ export function friendlyAcceptError(error: DomainError): string {
       return 'This is not a checkpoint.';
     case 'forbidden_role':
     case 'workspace_member_only':
-      return 'Only the client can confirm a checkpoint.';
+      return 'Only approvers can confirm a checkpoint.';
     default:
       return 'Something went wrong. Please try again.';
   }

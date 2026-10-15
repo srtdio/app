@@ -195,7 +195,7 @@ describe('soft word counter', () => {
       over: false,
     });
     expect(wordCounterLabel(Array(51).fill('w').join(' '))).toEqual({
-      label: '51 words · aim for 50 so the client reads it all',
+      label: '51 words · aim for 50 so approvers read it all',
       over: true,
     });
   });

@@ -89,7 +89,7 @@ test('agency: title menu, inline rename, delete (Open plan copy), the card reads
   const title = plan.locator('[data-plan-title-menu]');
   await expect(title).toContainText(DATED_PLAN_TITLE);
   expectMinTouchTarget(await title.boundingBox());
-  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with client$/);
+  await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
   await title.click();
   const menu = plan.locator('[data-plan-header-menu]');
   await expect(menu).toBeVisible();
@@ -132,7 +132,7 @@ test('agency: title menu, inline rename, delete (Open plan copy), the card reads
   const confirm = page.getByRole('dialog', { name: 'Delete this plan?' });
   await expect(confirm).toBeVisible();
   await expect(confirm).toContainText(
-    'Cards already in chat will show Plan deleted. Client gets a notification. This cannot be undone.',
+    'Cards already in chat will show Plan deleted. Approvers get a notification. This cannot be undone.',
   );
   await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeVisible();
   await confirm.locator('[data-plan-confirm]').click();
@@ -319,7 +319,7 @@ test('the chat bell: plan alerts as bell rows; a deleted plan only toasts; a tap
   await expect(section.locator('[data-bell-row="plan"]')).toHaveCount(4);
   const line = (event: string) => section.locator(`[data-bell-plan="${event}"]`);
   await expect(line('plan_opened')).toContainText(
-    `${PEER_NAME} opened ${DATED_PLAN_TITLE} for client`,
+    `${PEER_NAME} opened ${DATED_PLAN_TITLE} for approvers`,
   );
   await expect(line('plan_deleted')).toContainText(`${PEER_NAME} deleted ${DATED_PLAN_TITLE}`);
   await expect(line('plan_date_changed')).toContainText('Lamp lighting reel moved to Fri 16 Oct');

@@ -23,8 +23,8 @@ describe('planWriteErrorCopy: New plan create', () => {
     expect(create('invalid_payload')).toBe(
       'Something in this plan is no longer available, such as a deleted post. Nothing was saved.',
     );
-    expect(create('forbidden_role')).toBe('Only the agency team can create plans.');
-    expect(create('workspace_member_only')).toBe('Only the agency team can create plans.');
+    expect(create('forbidden_role')).toBe('Only creators can create plans.');
+    expect(create('workspace_member_only')).toBe('Only creators can create plans.');
     expect(create('boom')).toBe(PLAN_CREATE_FAILED_COPY);
     for (const copy of [...Object.values(PLAN_CREATE_ERROR_COPY), PLAN_CREATE_FAILED_COPY]) {
       expect(copy).not.toBe('Try again');

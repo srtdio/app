@@ -301,9 +301,12 @@ describe('sections render', () => {
     });
     if (!result.ok) throw new Error('load failed');
     const html = renderToStaticMarkup(<PostSectionsView data={result.data} {...ctx} />);
-    const order = ['Waiting on client', 'Approved in the last 30 days', 'Parked', 'Rejected'].map(
-      (label) => html.indexOf(label),
-    );
+    const order = [
+      'Waiting on approvers',
+      'Approved in the last 30 days',
+      'Parked',
+      'Rejected',
+    ].map((label) => html.indexOf(label));
     expect(html).not.toContain('Drafts');
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
@@ -475,7 +478,7 @@ describe('inline mode (the composer hash picker)', () => {
       <InlinePickerPanel open>
         <PostSectionsView
           data={{
-            sections: [{ key: 'review', label: 'Waiting on client', rows: [row(1)] }],
+            sections: [{ key: 'review', label: 'Waiting on approvers', rows: [row(1)] }],
             olderApprovedCount: 0,
           }}
           {...ctx}
@@ -483,7 +486,7 @@ describe('inline mode (the composer hash picker)', () => {
         />
       </InlinePickerPanel>,
     );
-    expect(html).toContain('Waiting on client');
+    expect(html).toContain('Waiting on approvers');
     expect(html).toContain('in this chat');
   });
 });

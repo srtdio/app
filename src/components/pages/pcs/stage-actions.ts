@@ -7,7 +7,7 @@
 // proc would reject. Pure, unit-tested.
 
 import { STAGE_TRANSITIONS, canTransition, type Stage } from '@srtdio/posts';
-import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
+import { isAgencySide, isClient, onBehalfOf } from '@/components/pages/pcs/roles';
 
 /** One rendered stage button: its target stage, its label, and its emphasis. */
 export interface StageAction {
@@ -16,11 +16,17 @@ export interface StageAction {
   variant: 'primary' | 'default' | 'danger';
 }
 
-/** The extra confirm line an agency-side approver sees (B1). */
-export const ON_BEHALF_CONFIRM_LINE = 'You are approving on behalf of client.';
+/** The extra confirm line an agency-side approver sees (B1): "You are approving on behalf of Zomato." */
+export function onBehalfConfirmLine(brand: string | null | undefined): string {
+  return `You are approving ${onBehalfOf(brand)}.`;
+}
 
 /** The agency's review helper copy on the post page. */
-export const AGENCY_REVIEW_HELPER = 'Waiting on the client. You can approve on their behalf.';
+export function agencyReviewHelper(brand: string | null | undefined): string {
+  const name = brand?.trim() ?? '';
+  const who = name !== '' ? `${name}'s approvers` : 'approvers';
+  return `Waiting on ${who}. You can approve on their behalf.`;
+}
 
 /**
  * Whether a viewer in `role` may trigger a move INTO `to`, mirroring the

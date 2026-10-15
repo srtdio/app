@@ -271,13 +271,13 @@ export type LoopsSide = 'agency' | 'client' | 'unknown';
 export function openPostsPart(count: number, side: LoopsSide): string {
   const posts = plural(count, 'post', 'posts');
   if (side === 'client') return `${posts} waiting on you`;
-  if (side === 'agency') return `${posts} waiting on client`;
+  if (side === 'agency') return `${posts} waiting on approvers`;
   return `${posts} in review`;
 }
 
 export function openPostsHeading(side: LoopsSide): string {
   if (side === 'client') return 'Posts waiting on you';
-  if (side === 'agency') return 'Posts waiting on client';
+  if (side === 'agency') return 'Posts waiting on approvers';
   return 'Posts in review';
 }
 

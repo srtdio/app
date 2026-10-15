@@ -124,7 +124,7 @@ const SCOPE_TAG: Record<string, string> = {
   briefs: 'Briefs',
   people: 'People',
   groups: 'Groups',
-  clients: 'Clients',
+  clients: 'Approvers',
 };
 
 /** "1 point" / "N points". UI vocabulary: the DB stores these as checkpoints. */
@@ -185,6 +185,15 @@ function useWorkspaceKey(): string | null {
   }
 }
 
+/** The active workspace's brand name for "on behalf of <Brand>", or null (as above). */
+function useWorkspaceBrand(): string | null {
+  try {
+    return useWorkspace().workspaceName ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** A deleted post has nowhere to open: its entries are not tappable. */
 function opensNothing(item: ActivityItem): boolean {
   return item.eventType === 'post_deleted';
@@ -209,6 +218,7 @@ export function ActivityCard({
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
   const workspaceKey = useWorkspaceKey();
+  const brand = useWorkspaceBrand();
 
   const lead = group[0];
   if (lead === undefined) return null;
@@ -226,7 +236,7 @@ export function ActivityCard({
     ? cardTitle(lead)
     : assetsDeleted
       ? 'Assets'
-      : activityLine(lead, workspaceKey);
+      : activityLine(lead, workspaceKey, brand);
   const leadTappable = !opensNothing(lead);
   const tag = SCOPE_TAG[lead.scope];
   const actorEntry = group.find((entry) => entry.actorName !== null) ?? null;
@@ -294,7 +304,7 @@ export function ActivityCard({
 
             {showsBody ? (
               <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2">
-                {cardBodyLine(lead, workspaceKey)}
+                {cardBodyLine(lead, workspaceKey, brand)}
               </p>
             ) : null}
 
@@ -382,7 +392,7 @@ export function ActivityCard({
                       entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
                     )}
                   >
-                    {cardBodyLine(entry, workspaceKey)}
+                    {cardBodyLine(entry, workspaceKey, brand)}
                   </p>
                   <p className="mt-0.5 text-xs text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
                 </div>

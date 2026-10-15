@@ -122,13 +122,13 @@ test('agency: Plans lists upcoming plans; a row opens the plan, never sends; sen
   const send = plan.locator('[data-plan-send-here]');
   await expect(send).toBeDisabled();
   await expect(plan.locator('[data-plan-send-hint]')).toHaveText(
-    'Open the plan for client to send it here.',
+    'Open the plan for approvers to send it here.',
   );
   await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
 
   // Open for client, then send: two separate writes.
   await plan.locator('[data-plan-open-client]').click();
-  const confirm = page.getByRole('dialog', { name: 'Open this plan for client?' });
+  const confirm = page.getByRole('dialog', { name: 'Open this plan for approvers?' });
   await expect(confirm).toBeVisible();
   const from = network.rpcCalls.length;
   await confirm.locator('[data-plan-confirm]').click();
@@ -157,7 +157,7 @@ test('agency: Plans lists upcoming plans; a row opens the plan, never sends; sen
   // The ticker's plan: the soonest ending, now shared here (Plan A/N).
   const tickerPlan = page.locator('[data-loops-strip="open"] [data-status-item="plan"]');
   await expect(tickerPlan).toBeVisible();
-  await expect(tickerPlan).toHaveAttribute('aria-label', 'Plan 0 of 2 approved by client');
+  await expect(tickerPlan).toHaveAttribute('aria-label', 'Plan 0 of 2 approved');
   expectClean(network);
 });
 
@@ -173,13 +173,13 @@ test('agency: Forward a Draft plan into a client chat sends nothing', async ({ p
   const forward = page.getByRole('dialog', { name: 'Forward plan' });
   await expect(forward).toBeVisible();
   const target = forward.locator(`[data-plan-forward-target="${DM_CHANNEL}"]`);
-  await expect(target.locator('[data-plan-has-client]')).toHaveText('Has client');
+  await expect(target.locator('[data-plan-has-client]')).toHaveText('Has approvers');
   await expect(
     forward.locator(`[data-plan-forward-target="${GROUP_CHANNEL}"] [data-plan-has-client]`),
   ).toHaveCount(0);
   const from = network.rpcCalls.length;
   await target.click();
-  await expect(page.getByText('Open the plan for client first.')).toBeVisible();
+  await expect(page.getByText('Open the plan for approvers first.')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
   // No plan or share write (a read cursor may land meanwhile).
   expect(
@@ -204,7 +204,7 @@ test('client: a draft post in a client plan shows by name only and does nothing'
   await card.scrollIntoViewIfNeeded();
   // The draft counts: 1 concept, 1 post, 0 of 2.
   await expect(card.getByText('1 post')).toBeVisible();
-  await expect(card.locator('[data-plan-progress]')).toHaveText('Client 0 of 2');
+  await expect(card.locator('[data-plan-progress]')).toHaveText('Approved 0 of 2');
   await card.locator('[data-plan-open]').click();
   const plan = page.locator('[data-plan-page="plan"]');
   await expect(plan).toBeVisible();

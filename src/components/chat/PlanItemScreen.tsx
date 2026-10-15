@@ -54,6 +54,7 @@ import {
   SLOT_UNDO,
   SLOT_UNDO_MS,
   STATUS_LABELS,
+  TEAM_STATUS_LABELS,
   TEAM_APPROVE_CONFIRM,
   TEAM_ONLY_LABEL,
   clientApproveConfirm,
@@ -136,7 +137,7 @@ export function itemActions(
   if (item.kind === 'post') return { kind: 'none' };
   if (side === 'agency') {
     return audience === 'team'
-      ? { kind: 'review', side: 'team', approveLabel: 'Agency approve' }
+      ? { kind: 'review', side: 'team', approveLabel: 'Mark checked' }
       : { kind: 'none' };
   }
   if (side === 'client' && audience === 'client') {
@@ -152,7 +153,7 @@ export function actionLabels(actions: ItemActions): string[] {
 }
 
 /** The agency's status row label (the review side stays 'team'). */
-export const AGENCY_ROW = 'Agency';
+export const AGENCY_ROW = 'Creators';
 
 /** The status box rows: Pipeline (post), Agency (Draft plan only), Client. Pure. */
 export function statusRows(
@@ -173,13 +174,13 @@ export function statusRows(
     s === 'approved' ? 'good' : s === 'changes' ? 'review' : 'neutral';
   if (side === 'agency' && bundle.plan.audience === 'team') {
     const team = overrides.team ?? reviewStatus(bundle, item.id, 'team');
-    rows.push({ label: AGENCY_ROW, value: STATUS_LABELS[team], tone: tone(team) });
+    rows.push({ label: AGENCY_ROW, value: TEAM_STATUS_LABELS[team], tone: tone(team) });
   }
   const client =
     item.kind === 'concept' && overrides.client !== undefined
       ? overrides.client
       : clientStatus(bundle, item);
-  rows.push({ label: 'Client', value: STATUS_LABELS[client], tone: tone(client) });
+  rows.push({ label: 'Approvers', value: STATUS_LABELS[client], tone: tone(client) });
   return rows;
 }
 
@@ -192,7 +193,8 @@ export function canEditConcept(side: ViewerSide, item: Pick<PlanItemRow, 'kind'>
 }
 
 /** The muted line above Save when an edit would reset a review. */
-export const CONCEPT_EDIT_RESET_HINT = 'Saving sends this back to waiting for agency and client.';
+export const CONCEPT_EDIT_RESET_HINT =
+  'Saving sends this back to waiting for creators and approvers.';
 
 /** Toasts after an Edit concept save. */
 export const CONCEPT_UPDATED = 'Concept updated';
@@ -700,7 +702,7 @@ export function PlanItemScreen(props: {
                   aria-label="Comment"
                   autoComplete="off"
                   maxLength={5000}
-                  placeholder={teamNote ? 'Note for the agency only' : 'Comment for everyone'}
+                  placeholder={teamNote ? 'Note for creators only' : 'Comment for everyone'}
                   className={cn(
                     'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                     teamNote ? 'border-warn' : 'border-border',
@@ -876,9 +878,7 @@ export function PlanItemScreen(props: {
       </PlanPage>
       <PlanConfirmSheet
         open={confirmOpen}
-        title={
-          actions.kind === 'review' && actions.side === 'client' ? 'Approve' : 'Agency approve'
-        }
+        title={actions.kind === 'review' && actions.side === 'client' ? 'Approve' : 'Mark checked'}
         message={
           actions.kind === 'review' && actions.side === 'client'
             ? clientApproveConfirm(title)

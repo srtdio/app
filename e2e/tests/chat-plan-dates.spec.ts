@@ -79,7 +79,7 @@ test.describe('phone', () => {
     await card.scrollIntoViewIfNeeded();
     // An Open plan: the client side for everyone, never the team count.
     await expect(card.locator('[data-plan-progress]')).toHaveText(
-      `Client ${c.client} of ${c.total}`,
+      `Approved ${c.client} of ${c.total}`,
     );
 
     await card.locator('[data-plan-open]').click();
@@ -90,7 +90,7 @@ test.describe('phone', () => {
     expect(await rowTitles(page)).toEqual(expectedTitles());
     // One line, the same for every viewer.
     await expect(plan.locator('[data-plan-screen-progress] > span')).toHaveText([
-      `Client ${c.client} of ${c.total}`,
+      `Approved ${c.client} of ${c.total}`,
     ]);
     await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
     const dates = plan.locator('[data-plan-row-date]');
@@ -211,13 +211,13 @@ test.describe('phone', () => {
     const card = page.locator(`[data-plan-card="${DATED_PLAN_ID}"]`);
     await card.scrollIntoViewIfNeeded();
     await expect(card.locator('[data-plan-progress]')).toHaveText(
-      `Client ${c.client} of ${c.total}`,
+      `Approved ${c.client} of ${c.total}`,
     );
     await expect(card.getByText(/Agency \d/)).toHaveCount(0);
     await card.locator('[data-plan-open]').click();
     const plan = page_(page, 'plan');
     await expect(plan.locator('[data-plan-screen-progress]')).toHaveText(
-      `Client ${c.client} of ${c.total}`,
+      `Approved ${c.client} of ${c.total}`,
     );
     expect(await rowTitles(page)).toEqual(expectedTitles());
     await expect(plan.locator('[data-plan-pill="team"]')).toHaveCount(0);

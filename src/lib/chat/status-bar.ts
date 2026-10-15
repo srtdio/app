@@ -130,7 +130,7 @@ export function statusItems(input: StatusInput): StatusItem[] {
       more: Math.max(0, plan.more),
       tone: planTone(plan),
       count: plan.total,
-      aria: `Plan ${plan.approved} of ${plan.total} approved by client`,
+      aria: `Plan ${plan.approved} of ${plan.total} approved`,
     });
   }
   if (input.posts !== null && input.posts > 0) {
@@ -321,9 +321,9 @@ export function planSegment(
 
 /** Item status pill copy per segment. */
 export const SEGMENT_PILL: Record<PlanSegment, string> = {
-  client: 'Client approved',
+  client: 'Approved',
   changes: 'Changes asked',
-  team: 'Agency approved',
+  team: 'Checked by creators',
   waiting: 'Waiting',
 };
 

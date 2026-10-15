@@ -195,7 +195,7 @@ export function PostDetailsSheet({
           <DetailRow label="Origin" value={originLabel(origin)} />
 
           {isClient ? (
-            <p className="px-2 pt-2 text-xs text-fg-3">Only the agency can change these.</p>
+            <p className="px-2 pt-2 text-xs text-fg-3">Only creators can change these.</p>
           ) : null}
         </div>
       </Sheet>
