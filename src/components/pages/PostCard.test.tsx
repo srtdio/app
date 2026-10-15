@@ -32,6 +32,7 @@ function makePost(overrides: Partial<PipelinePost>): PipelinePost {
     updated_at: '2026-01-01T00:00:00Z',
     stage_entered_at: '2026-01-01T00:00:00Z',
     approved_by: null,
+    approved_on_behalf_of: null,
     approved_at: null,
     deleted_at: null,
     row_version: 1,

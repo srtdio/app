@@ -8014,6 +8014,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          approved_on_behalf_of: string | null
           brief_id: string | null
           bucket_id: string | null
           caption: string | null
@@ -8038,6 +8039,7 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          approved_on_behalf_of?: string | null
           brief_id?: string | null
           bucket_id?: string | null
           caption?: string | null
@@ -8062,6 +8064,7 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          approved_on_behalf_of?: string | null
           brief_id?: string | null
           bucket_id?: string | null
           caption?: string | null
@@ -8084,6 +8087,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "posts_approved_on_behalf_of_fkey"
+            columns: ["approved_on_behalf_of"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "posts_brief_id_fkey"
             columns: ["brief_id"]
@@ -9620,10 +9630,20 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       slugify_workspace: { Args: { p: string }; Returns: string }
-      stage_transition: {
-        Args: { p_post_id: string; p_to_stage: string; p_trace_id: string }
-        Returns: string
-      }
+      stage_transition:
+        | {
+            Args: { p_post_id: string; p_to_stage: string; p_trace_id: string }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_on_behalf_of: string
+              p_post_id: string
+              p_to_stage: string
+              p_trace_id: string
+            }
+            Returns: string
+          }
       user_onboarding_save: {
         Args: { p_payload: Json; p_trace_id: string }
         Returns: string

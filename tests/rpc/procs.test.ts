@@ -967,4 +967,112 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
       expect(await countPostVersions(postId)).toBe(countBefore);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Approved on behalf of: an agency-side approver records approval on behalf
+  // of an active client member. Every guard raises invalid_on_behalf.
+  // -------------------------------------------------------------------------
+  describe('stage_transition on behalf of', () => {
+    async function readOnBehalf(postId: string): Promise<string | null | undefined> {
+      const res = await admin.from('posts').select('approved_on_behalf_of').eq('id', postId);
+      return res.data?.[0]?.approved_on_behalf_of;
+    }
+
+    function approveOnBehalf(client: Client, postId: string, onBehalfOf: string) {
+      return stageTransition(client, {
+        p_post_id: postId,
+        p_to_stage: 'approved',
+        p_trace_id: generateTraceId(),
+        p_on_behalf_of: onBehalfOf,
+      });
+    }
+
+    function expectInvalidOnBehalf<T>(result: Result<T>): void {
+      expect(expectError(result).message).toBe('invalid_on_behalf');
+    }
+
+    it('agency approves on behalf of an active client and stores it', async () => {
+      const postId = await insertPost(ctxA, 'review');
+      expect(expectOk(await approveOnBehalf(agencyClient, postId, clientUser.id))).toBe(postId);
+      expect(await readPostStage(postId)).toBe('approved');
+      expect(await readOnBehalf(postId)).toBe(clientUser.id);
+      expect((await readApproval(postId))?.approved_by).toBe(agencyUser.id);
+    });
+
+    it('rejects a non-approve target stage', async () => {
+      const postId = await insertPost(ctxA, 'review');
+      expectInvalidOnBehalf(
+        await stageTransition(agencyClient, {
+          p_post_id: postId,
+          p_to_stage: 'rejected',
+          p_trace_id: generateTraceId(),
+          p_on_behalf_of: clientUser.id,
+        }),
+      );
+      expect(await readPostStage(postId)).toBe('review');
+    });
+
+    it('rejects a client approver acting on behalf of someone', async () => {
+      const postId = await insertPost(ctxA, 'review');
+      expectInvalidOnBehalf(await approveOnBehalf(clientClient, postId, owner.id));
+      expect(await readPostStage(postId)).toBe('review');
+    });
+
+    it('rejects acting on behalf of self', async () => {
+      const postId = await insertPost(ctxA, 'review');
+      expectInvalidOnBehalf(await approveOnBehalf(agencyClient, postId, agencyUser.id));
+    });
+
+    it('rejects a non-member', async () => {
+      const postId = await insertPost(ctxA, 'review');
+      expectInvalidOnBehalf(await approveOnBehalf(agencyClient, postId, ownerB.id));
+    });
+
+    it('rejects an inactive member', async () => {
+      const inactive = await seedUser(loadRlsEnv(), admin);
+      invitees.push(inactive);
+      await insertRow(asGeneric(admin), 'workspace_members', {
+        workspace_id: wsA.id,
+        user_id: inactive.id,
+        role: 'client',
+        active: false,
+        accepted_at: new Date().toISOString(),
+      });
+      const postId = await insertPost(ctxA, 'review');
+      expectInvalidOnBehalf(await approveOnBehalf(agencyClient, postId, inactive.id));
+    });
+
+    it('rejects a target member whose role is not client', async () => {
+      const postId = await insertPost(ctxA, 'review');
+      expectInvalidOnBehalf(await approveOnBehalf(ownerClient, postId, agencyUser.id));
+      expect(await readPostStage(postId)).toBe('review');
+    });
+
+    it('leaving approved clears approved_on_behalf_of', async () => {
+      const postId = await insertPost(ctxA, 'review');
+      expectOk(await approveOnBehalf(agencyClient, postId, clientUser.id));
+      expectOk(
+        await stageTransition(agencyClient, {
+          p_post_id: postId,
+          p_to_stage: 'parked',
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(await readPostStage(postId)).toBe('parked');
+      expect(await readOnBehalf(postId)).toBeNull();
+    });
+
+    it('the 3-arg overload still approves and stores null', async () => {
+      const postId = await insertPost(ctxA, 'review');
+      expectOk(
+        await stageTransition(agencyClient, {
+          p_post_id: postId,
+          p_to_stage: 'approved',
+          p_trace_id: generateTraceId(),
+        }),
+      );
+      expect(await readPostStage(postId)).toBe('approved');
+      expect(await readOnBehalf(postId)).toBeNull();
+    });
+  });
 });
