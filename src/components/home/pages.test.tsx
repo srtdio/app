@@ -54,13 +54,18 @@ describe('homepage copy', () => {
 
   it('the new hero and features lines are present, the old ones gone', () => {
     expect(html).not.toContain('top-line');
-    expect(html).toContain('Social media agencies <em>hate WhatsApp.</em>');
+    expect(html).toContain('Social media teams <em>hate WhatsApp.</em>');
     expect(html).toContain(
       'Approvals, feedback and files get buried in group chats that never switch off. Sorted gives each client one workspace, so WhatsApp goes back to being WhatsApp.',
     );
     expect(html).toContain('The three jobs WhatsApp was never built to do.');
     expect(html).not.toContain('block <em>your clients');
     expect(html).not.toContain('Each one replaces a habit');
+  });
+
+  it('the signup band apostrophe renders as an apostrophe, not a raw entity', () => {
+    expect(html).toContain('You&#x27;ve scrolled this far. Might as well sign up.');
+    expect(html).not.toContain('&amp;pos;');
   });
 
   it('every Book a demo goes to /demo; no mailto is left', () => {
