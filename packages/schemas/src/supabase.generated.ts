@@ -9434,6 +9434,10 @@ export type Database = {
         }
         Returns: string
       }
+      member_invite_check: {
+        Args: { p_email: string; p_role: string; p_workspace_id: string }
+        Returns: undefined
+      }
       member_join_group_set: {
         Args: { p_join: boolean; p_member_id: string; p_trace_id: string }
         Returns: string
@@ -9656,6 +9660,10 @@ export type Database = {
         Returns: string
       }
       workspace_id: { Args: never; Returns: string }
+      workspace_update: {
+        Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
