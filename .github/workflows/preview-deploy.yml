@@ -1,16 +1,17 @@
-name: Preview Deploy
+name: Test Site Deploy
 
-# Every pull request gets its own Cloudflare Pages preview at
-# https://pr-<number>.srtdio-app.pages.dev so changes can be clicked through
-# before merging to main. Production (branch main) is untouched; the preview
-# reuses the same v2 Supabase project as staging.
+# One permanent test site, https://test.srtdio-app.pages.dev, always shows the
+# latest push to any open pull request (app plus the browser-facing Workers),
+# so changes can be clicked through before merging to main. Production (branch
+# main) is untouched; the test site uses the same v2 Supabase project as
+# staging. With two PRs open, the most recent push wins.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: preview-${{ github.event.pull_request.number }}
+  group: test-site
   cancel-in-progress: true
 
 permissions:
@@ -25,7 +26,7 @@ jobs:
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      PREVIEW_BRANCH: pr-${{ github.event.pull_request.number }}
+      PREVIEW_BRANCH: test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -35,7 +36,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Each browser-facing Worker gets a preview version built from this PR,
-      # served at https://pr-<n>-<worker>.<subdomain>.workers.dev. Uploading a
+      # served at https://test-<worker>.<subdomain>.workers.dev. Uploading a
       # version never changes what the live Worker serves; secrets and bindings
       # carry over from the live version. If an upload fails, the preview falls
       # back to the live Worker and the PR comment says so.
@@ -52,7 +53,7 @@ jobs:
             dir="${pair%%:*}"
             var="${pair#*:}"
             out="$(cd "workers/$dir" && pnpm dlx wrangler@4.140.0 versions upload \
-              --preview-alias "$PREVIEW_BRANCH" --message "Preview for PR #$PR_NUMBER" 2>&1)" || true
+              --preview-alias "$PREVIEW_BRANCH" --message "Test site: PR #$PR_NUMBER" 2>&1)" || true
             url="$(printf '%s\n' "$out" | sed -n 's/.*Version Preview Alias URL: \(https:[^ ]*\).*/\1/p' | head -n 1)"
             if [ -n "$url" ]; then
               echo "PREVIEW_$var=$url" >> "$GITHUB_ENV"
@@ -93,7 +94,7 @@ jobs:
             const sha = context.payload.pull_request.head.sha.slice(0, 7);
             const fs = require('fs');
             const workers = fs.readFileSync(`${process.env.RUNNER_TEMP}/preview-workers.md`, 'utf8').trim();
-            const body = `${marker}\nPreview: ${url}\n\nBuilt from \`${sha}\`. Updates on every push to this PR.\n\nBackend services used by this preview:\n${workers}`;
+            const body = `${marker}\nTest site now shows this PR: ${url}\n\nBuilt from \`${sha}\`. A later push to any PR replaces it there.\n\nBackend services on the test site:\n${workers}`;
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
