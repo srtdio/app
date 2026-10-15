@@ -16,6 +16,18 @@
 //   -> same auth + membership gate, then returns the current summary scoped to
 //      the workspace (cross-tenant 404).
 //
+// Resumable uploads (R2 multipart, 8 MB parts; see asset-upload-multipart.ts):
+//   POST /multipart/create   {workspace_id, size, content_type}
+//   PUT  /multipart/part     ?workspace_id&key&upload_id&part_number, raw bytes
+//   GET  /multipart/parts    ?workspace_id&key&upload_id
+//   POST /multipart/complete the POST form above with {key, upload_id, filename,
+//                            content_type} in place of the file part
+//   POST /multipart/abort    {workspace_id, key, upload_id}
+//
+// Optional batch_id / batch_size form fields group a library upload run: after
+// a stored (not deduped) library file, every other active member gets one
+// ambient asset_uploaded Activity entry per batch (asset-upload-activity.ts).
+//
 // The Worker is the only holder of the Supabase service-role key and the R2
 // credentials; neither is ever shipped to the browser. Caller tokens are
 // verified against the project's published asymmetric JWKS (ES256); membership
@@ -42,7 +54,7 @@ import {
   type UploadErrorCode,
   type UploadInput,
 } from '@/server/assets';
-import { R2StorageClient, type StorageClient } from '@srtdio/storage';
+import { R2StorageClient } from '@srtdio/storage';
 import { extractTraceId } from '@/server/trace';
 import { TRACE_ID_HEADER } from '@/lib/trace';
 import { tracedFetch } from '@/server/traced-fetch';
@@ -51,6 +63,26 @@ import { logger } from '@/server/logger';
 // workers cannot drift: same ES256 JWKS verification, same workspace_members read.
 import { createSupabaseAssetReadStore, getSupabaseJwks, verifyCaller } from './asset-read';
 import { isPreviewOrigin } from '@/server/preview-origin';
+import {
+  abortUpload,
+  completeUpload,
+  createUpload,
+  listUploadedParts,
+  MULTIPART_PART_SIZE,
+  uploadPart,
+  type MultipartDeps,
+  type MultipartError,
+} from './asset-upload-multipart';
+import {
+  createSupabaseActivityStore,
+  parseBatch,
+  recordUploadActivity,
+} from './asset-upload-activity';
+
+/** The slice of the Workers ExecutionContext the upload path uses. */
+export interface UploadContext {
+  waitUntil(promise: Promise<unknown>): void;
+}
 
 export interface AssetUploadEnv {
   CLOUDFLARE_ACCOUNT_ID: string;
@@ -269,7 +301,7 @@ function preflightResponse(request: Request, env: AssetUploadEnv): Response {
     resolveAllowedOrigin(request, env) ?? allowedOrigins(env)[0] ?? DEFAULT_ALLOWED_ORIGINS[0];
   const headers = new Headers({
     'Access-Control-Allow-Origin': acao,
-    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'POST, GET, PUT, OPTIONS',
     'Access-Control-Allow-Headers': `authorization, content-type, ${TRACE_ID_HEADER.toLowerCase()}`,
     'Access-Control-Max-Age': String(CORS_MAX_AGE_SECONDS),
     Vary: 'Origin',
@@ -284,7 +316,7 @@ function json(status: number, body: unknown, traceId: string, acao: string | nul
   return new Response(JSON.stringify(body), { status, headers });
 }
 
-function buildStorage(env: AssetUploadEnv): StorageClient {
+function buildStorage(env: AssetUploadEnv): R2StorageClient {
   return new R2StorageClient(
     {
       CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
@@ -409,11 +441,19 @@ async function attachThumbnail(
   }
 }
 
+/**
+ * The upload POST. 'direct' carries the file part; 'multipart' (POST
+ * /multipart/complete) carries {key, upload_id, filename, content_type} of a
+ * resumable upload whose parts are already in R2, and is otherwise the same
+ * form. Both run the same pipeline, so the cap and file-type rules are shared.
+ */
 async function handlePost(
   request: Request,
   env: AssetUploadEnv,
   traceId: string,
   acao: string | null,
+  ctx: UploadContext | undefined,
+  mode: 'direct' | 'multipart' = 'direct',
 ): Promise<Response> {
   const caller = await verifyCaller(request, getSupabaseJwks(env));
   if (!caller.ok) {
@@ -443,10 +483,34 @@ async function handlePost(
   const thumbnailPart = form.get('thumbnail');
   const thumbnailPageCount = form.get('thumbnail_page_count');
 
-  if (!(file instanceof File)) {
+  const stagedKey = form.get('key');
+  const stagedUploadId = form.get('upload_id');
+  const stagedFilename = form.get('filename');
+  const stagedContentType = form.get('content_type');
+  if (mode === 'direct' && !(file instanceof File)) {
     return json(
       400,
       { error: { code: 'bad_request', message: 'Missing file part.' } },
+      traceId,
+      acao,
+    );
+  }
+  if (
+    mode === 'multipart' &&
+    (typeof stagedKey !== 'string' ||
+      typeof stagedUploadId !== 'string' ||
+      typeof stagedFilename !== 'string' ||
+      stagedFilename === '' ||
+      typeof stagedContentType !== 'string')
+  ) {
+    return json(
+      400,
+      {
+        error: {
+          code: 'bad_request',
+          message: 'key, upload_id, filename and content_type are required.',
+        },
+      },
       traceId,
       acao,
     );
@@ -537,7 +601,52 @@ async function handlePost(
     displayName = valid;
   }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  let filename: string;
+  let contentType: string;
+  let bytes: Uint8Array;
+  let staged: { bucket: string; key: string } | null = null;
+  if (file instanceof File && mode === 'direct') {
+    filename = file.name;
+    contentType = file.type;
+    bytes = new Uint8Array(await file.arrayBuffer());
+  } else {
+    // Membership first: no R2 read for a caller outside the workspace.
+    const member = await createSupabaseAssetReadStore(env).isActiveMember({
+      userId: caller.value,
+      workspaceId,
+    });
+    if (!member) {
+      logger.warn('asset upload denied: caller not a workspace member', {
+        workspace_id: workspaceId,
+      });
+      return json(
+        403,
+        { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
+        traceId,
+        acao,
+      );
+    }
+    const key = String(stagedKey);
+    const assembled = await completeUpload(buildMultipartDeps(env), {
+      userId: caller.value,
+      workspaceId,
+      key,
+      uploadId: String(stagedUploadId),
+      traceId,
+    });
+    if (!assembled.ok) {
+      return multipartError(assembled.error, traceId, acao);
+    }
+    filename = String(stagedFilename);
+    contentType = String(stagedContentType);
+    bytes = assembled.value.bytes;
+    staged = { bucket: assembled.value.bucket, key };
+  }
+
+  const batch = parseBatch(form.get('batch_id'), form.get('batch_size')) ?? {
+    id: crypto.randomUUID(),
+    size: 1,
+  };
   const outcome = await authorizeAndUpload(
     {
       membership: createSupabaseAssetReadStore(env),
@@ -546,8 +655,8 @@ async function handlePost(
     {
       userId: caller.value,
       workspaceId,
-      filename: file.name,
-      contentType: file.type,
+      filename,
+      contentType,
       bytes,
       traceId,
       origin,
@@ -557,6 +666,13 @@ async function handlePost(
     },
   );
 
+  // The pipeline stored its own copy (or refused the file): the staging
+  // object of a resumable upload is no longer needed either way. A thrown
+  // pipeline fault skips this, so a retried complete can still read it.
+  if (staged !== null) {
+    await dropStaged(env, staged, traceId);
+  }
+
   if (!outcome.ok) {
     if (outcome.error.code === 'forbidden') {
       logger.warn('asset upload denied: caller not a workspace member', {
@@ -564,6 +680,24 @@ async function handlePost(
       });
     }
     return json(STATUS_BY_CODE[outcome.error.code], { error: outcome.error }, traceId, acao);
+  }
+  if (origin === 'library' && !outcome.value.reused) {
+    const activity = recordUploadActivity(
+      createSupabaseActivityStore(
+        { SUPABASE_URL: env.SUPABASE_URL, SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY },
+        traceId,
+      ),
+      {
+        workspaceId,
+        uploaderId: caller.value,
+        batch,
+        assetId: outcome.value.summary.assetId,
+        filename: outcome.value.summary.filename,
+        traceId,
+      },
+    );
+    if (ctx !== undefined) ctx.waitUntil(activity);
+    else await activity;
   }
   const thumbnail = await attachThumbnail(env, {
     summary: outcome.value.summary,
@@ -577,6 +711,233 @@ async function handlePost(
     traceId,
     acao,
   );
+}
+
+function buildMultipartDeps(env: AssetUploadEnv): MultipartDeps {
+  const repository = buildRepository(env);
+  return {
+    storage: buildStorage(env),
+    bucketFor: (workspaceId) => repository.getAssetBucket(workspaceId),
+    newId: () => crypto.randomUUID(),
+  };
+}
+
+/** Delete a resumable upload's staging object. Never throws. */
+async function dropStaged(
+  env: AssetUploadEnv,
+  staged: { bucket: string; key: string },
+  traceId: string,
+): Promise<void> {
+  try {
+    await buildStorage(env).deleteObject(staged.bucket, staged.key, traceId);
+  } catch (error) {
+    logger.error(`asset upload staging delete failed: ${serializeError(error)}`, {
+      key: staged.key,
+    });
+  }
+}
+
+function multipartError(error: MultipartError, traceId: string, acao: string | null): Response {
+  return json(STATUS_BY_CODE[error.code], { error }, traceId, acao);
+}
+
+/**
+ * Verify the caller and their membership of the workspace for a multipart
+ * route. Returns the verified user id, or the error response to send.
+ */
+async function multipartCaller(
+  request: Request,
+  env: AssetUploadEnv,
+  workspaceId: unknown,
+  traceId: string,
+  acao: string | null,
+): Promise<{ ok: true; userId: string; workspaceId: string } | { ok: false; response: Response }> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return {
+      ok: false,
+      response: json(
+        401,
+        { error: { code: 'unauthorized', message: caller.error.message } },
+        traceId,
+        acao,
+      ),
+    };
+  }
+  if (typeof workspaceId !== 'string' || !isUuid(workspaceId)) {
+    return {
+      ok: false,
+      response: json(
+        400,
+        { error: { code: 'bad_request', message: 'Invalid workspace_id.' } },
+        traceId,
+        acao,
+      ),
+    };
+  }
+  const member = await createSupabaseAssetReadStore(env).isActiveMember({
+    userId: caller.value,
+    workspaceId,
+  });
+  if (!member) {
+    logger.warn('multipart upload denied: caller not a workspace member', {
+      workspace_id: workspaceId,
+    });
+    return {
+      ok: false,
+      response: json(
+        403,
+        { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
+        traceId,
+        acao,
+      ),
+    };
+  }
+  return { ok: true, userId: caller.value, workspaceId };
+}
+
+/** POST /multipart/create {workspace_id, size, content_type} -> {key, upload_id, part_size, part_count}. */
+async function handleMultipartCreate(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const parsed = await readJsonObject(request);
+  if (!parsed.ok) {
+    return json(400, { error: { code: 'bad_request', message: parsed.error } }, traceId, acao);
+  }
+  const auth = await multipartCaller(request, env, parsed.value.workspace_id, traceId, acao);
+  if (!auth.ok) return auth.response;
+  const { size, content_type: contentType } = parsed.value;
+  if (typeof size !== 'number' || typeof contentType !== 'string') {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'size and content_type are required.' } },
+      traceId,
+      acao,
+    );
+  }
+  const result = await createUpload(buildMultipartDeps(env), {
+    userId: auth.userId,
+    workspaceId: auth.workspaceId,
+    size,
+    contentType,
+    traceId,
+  });
+  if (!result.ok) return multipartError(result.error, traceId, acao);
+  return json(
+    201,
+    {
+      key: result.value.key,
+      upload_id: result.value.uploadId,
+      part_size: result.value.partSize,
+      part_count: result.value.partCount,
+    },
+    traceId,
+    acao,
+  );
+}
+
+/** PUT /multipart/part?workspace_id&key&upload_id&part_number, raw bytes -> {part_number, etag}. */
+async function handleMultipartPart(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const auth = await multipartCaller(
+    request,
+    env,
+    url.searchParams.get('workspace_id'),
+    traceId,
+    acao,
+  );
+  if (!auth.ok) return auth.response;
+  // Refuse to buffer an oversize part: the size is checked again on the bytes.
+  const declared = Number.parseInt(request.headers.get('content-length') ?? '', 10);
+  if (Number.isFinite(declared) && declared > MULTIPART_PART_SIZE) {
+    return json(
+      413,
+      { error: { code: 'file_too_large', message: 'Part exceeds 8 MB.' } },
+      traceId,
+      acao,
+    );
+  }
+  const result = await uploadPart(buildMultipartDeps(env), {
+    userId: auth.userId,
+    workspaceId: auth.workspaceId,
+    key: url.searchParams.get('key') ?? '',
+    uploadId: url.searchParams.get('upload_id') ?? '',
+    partNumber: Number(url.searchParams.get('part_number')),
+    body: new Uint8Array(await request.arrayBuffer()),
+    traceId,
+  });
+  if (!result.ok) return multipartError(result.error, traceId, acao);
+  return json(
+    200,
+    { part_number: result.value.partNumber, etag: result.value.etag },
+    traceId,
+    acao,
+  );
+}
+
+/** GET /multipart/parts?workspace_id&key&upload_id -> {parts: [{part_number, size}]}. */
+async function handleMultipartParts(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const auth = await multipartCaller(
+    request,
+    env,
+    url.searchParams.get('workspace_id'),
+    traceId,
+    acao,
+  );
+  if (!auth.ok) return auth.response;
+  const result = await listUploadedParts(buildMultipartDeps(env), {
+    userId: auth.userId,
+    workspaceId: auth.workspaceId,
+    key: url.searchParams.get('key') ?? '',
+    uploadId: url.searchParams.get('upload_id') ?? '',
+    traceId,
+  });
+  if (!result.ok) return multipartError(result.error, traceId, acao);
+  return json(
+    200,
+    { parts: result.value.map((p) => ({ part_number: p.partNumber, size: p.size })) },
+    traceId,
+    acao,
+  );
+}
+
+/** POST /multipart/abort {workspace_id, key, upload_id}. Idempotent. */
+async function handleMultipartAbort(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const parsed = await readJsonObject(request);
+  if (!parsed.ok) {
+    return json(400, { error: { code: 'bad_request', message: parsed.error } }, traceId, acao);
+  }
+  const auth = await multipartCaller(request, env, parsed.value.workspace_id, traceId, acao);
+  if (!auth.ok) return auth.response;
+  const { key, upload_id: uploadId } = parsed.value;
+  const result = await abortUpload(buildMultipartDeps(env), {
+    userId: auth.userId,
+    workspaceId: auth.workspaceId,
+    key: typeof key === 'string' ? key : '',
+    uploadId: typeof uploadId === 'string' ? uploadId : '',
+    traceId,
+  });
+  if (!result.ok) return multipartError(result.error, traceId, acao);
+  return json(200, { ok: true }, traceId, acao);
 }
 
 async function handleGet(
@@ -1197,7 +1558,7 @@ async function handleMoveAssets(
 }
 
 export default {
-  async fetch(request: Request, env: AssetUploadEnv): Promise<Response> {
+  async fetch(request: Request, env: AssetUploadEnv, ctx?: UploadContext): Promise<Response> {
     const traceId = extractTraceId(request);
     logger.setTraceId(traceId);
     const acao = resolveAllowedOrigin(request, env);
@@ -1225,14 +1586,29 @@ export default {
         if (path === '/folders/move') {
           return await handleMoveAssets(request, env, traceId, acao);
         }
-        return await handlePost(request, env, traceId, acao);
+        if (path === '/multipart/create') {
+          return await handleMultipartCreate(request, env, traceId, acao);
+        }
+        if (path === '/multipart/complete') {
+          return await handlePost(request, env, traceId, acao, ctx, 'multipart');
+        }
+        if (path === '/multipart/abort') {
+          return await handleMultipartAbort(request, env, traceId, acao);
+        }
+        return await handlePost(request, env, traceId, acao, ctx);
+      }
+      if (request.method === 'PUT' && new URL(request.url).pathname === '/multipart/part') {
+        return await handleMultipartPart(request, env, traceId, acao);
       }
       if (request.method === 'GET') {
+        if (new URL(request.url).pathname === '/multipart/parts') {
+          return await handleMultipartParts(request, env, traceId, acao);
+        }
         return await handleGet(request, env, traceId, acao);
       }
       return json(
         405,
-        { error: { code: 'method_not_allowed', message: 'Use GET or POST.' } },
+        { error: { code: 'method_not_allowed', message: 'Use GET, POST or PUT.' } },
         traceId,
         acao,
       );

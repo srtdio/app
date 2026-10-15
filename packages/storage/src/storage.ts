@@ -31,6 +31,115 @@ export interface StorageClient {
   objectExists(bucket: string, key: string, traceId: string): Promise<boolean>;
 }
 
+/** One finished part of a multipart upload, as R2 reports it. */
+export interface UploadedPart {
+  partNumber: number;
+  etag: string;
+  size: number;
+}
+
+/**
+ * R2 multipart uploads plus the whole-object read and delete the resumable
+ * upload path needs to hand the assembled bytes to the upload pipeline. Kept
+ * apart from StorageClient so existing StorageClient fakes stay valid.
+ */
+export interface MultipartStorage {
+  /** Start a multipart upload; returns R2's upload id. */
+  createMultipartUpload(input: {
+    bucket: string;
+    key: string;
+    contentType: string;
+    traceId: string;
+  }): Promise<string>;
+  /** Store one part; returns its ETag. */
+  uploadPart(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    partNumber: number;
+    body: Uint8Array;
+    traceId: string;
+  }): Promise<string>;
+  /** The parts R2 already holds, by ascending part number; null when the upload is gone. */
+  listParts(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    traceId: string;
+  }): Promise<UploadedPart[] | null>;
+  /** Assemble the parts into the object. False when the upload is gone (completed or aborted). */
+  completeMultipartUpload(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    parts: readonly { partNumber: number; etag: string }[];
+    traceId: string;
+  }): Promise<boolean>;
+  /** Drop an upload and its parts. Idempotent: an unknown upload is not an error. */
+  abortMultipartUpload(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    traceId: string;
+  }): Promise<void>;
+  /** The object's bytes, or null when absent. */
+  getObject(bucket: string, key: string, traceId: string): Promise<Uint8Array | null>;
+  /** Delete an object. Idempotent. */
+  deleteObject(bucket: string, key: string, traceId: string): Promise<void>;
+}
+
+/** Text of the first <tag>...</tag> in an S3 XML body, or null. */
+function xmlTag(xml: string, tag: string): string | null {
+  const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(xml);
+  return match === null ? null : (match[1] ?? null);
+}
+
+/** Undo the five XML entities S3 escapes (ETags carry &quot;). */
+function xmlUnescape(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Parse a ListParts body into parts sorted by part number. */
+export function parseListPartsXml(xml: string): UploadedPart[] {
+  const parts: UploadedPart[] = [];
+  for (const match of xml.matchAll(/<Part>([\s\S]*?)<\/Part>/g)) {
+    const body = match[1] ?? '';
+    const partNumber = Number.parseInt(xmlTag(body, 'PartNumber') ?? '', 10);
+    const etag = xmlTag(body, 'ETag');
+    const size = Number.parseInt(xmlTag(body, 'Size') ?? '', 10);
+    if (!Number.isInteger(partNumber) || etag === null || !Number.isFinite(size)) continue;
+    parts.push({ partNumber, etag: xmlUnescape(etag), size });
+  }
+  return parts.sort((a, b) => a.partNumber - b.partNumber);
+}
+
+/** The CompleteMultipartUpload request body. */
+export function completeMultipartXml(
+  parts: readonly { partNumber: number; etag: string }[],
+): string {
+  const items = [...parts]
+    .sort((a, b) => a.partNumber - b.partNumber)
+    .map(
+      (p) =>
+        `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${xmlEscape(p.etag)}</ETag></Part>`,
+    )
+    .join('');
+  return `<CompleteMultipartUpload>${items}</CompleteMultipartUpload>`;
+}
+
 /**
  * A fetch that attaches the X-Trace-Id header. Matches the signature of the
  * app's fetchWithTrace so callers can pass it directly; the package defines the
@@ -174,7 +283,12 @@ function attachmentDisposition(filename: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeRfc5987(clean)}`;
 }
 
-export class R2StorageClient implements StorageClient {
+/** The S3 path of an object: /{bucket}/{key segments}, each RFC 3986-encoded. */
+function objectPath(bucket: string, key: string): string {
+  return `/${encodeSegment(bucket)}/${key.split('/').map(encodeSegment).join('/')}`;
+}
+
+export class R2StorageClient implements StorageClient, MultipartStorage {
   private readonly host: string;
 
   constructor(
@@ -236,6 +350,167 @@ export class R2StorageClient implements StorageClient {
     }
     const text = await res.text();
     throw new Error(`R2 objectExists failed (${res.status}): ${text}`);
+  }
+
+  async createMultipartUpload(input: {
+    bucket: string;
+    key: string;
+    contentType: string;
+    traceId: string;
+  }): Promise<string> {
+    const res = await this.signedFetch({
+      method: 'POST',
+      path: objectPath(input.bucket, input.key),
+      query: [['uploads', '']],
+      body: new Uint8Array(0),
+      contentType: input.contentType,
+      traceId: input.traceId,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`R2 createMultipartUpload failed (${res.status}): ${text}`);
+    }
+    const uploadId = xmlTag(text, 'UploadId');
+    if (uploadId === null || uploadId === '') {
+      throw new Error('R2 createMultipartUpload returned no UploadId');
+    }
+    return xmlUnescape(uploadId);
+  }
+
+  async uploadPart(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    partNumber: number;
+    body: Uint8Array;
+    traceId: string;
+  }): Promise<string> {
+    const res = await this.signedFetch({
+      method: 'PUT',
+      path: objectPath(input.bucket, input.key),
+      query: [
+        ['partNumber', String(input.partNumber)],
+        ['uploadId', input.uploadId],
+      ],
+      body: input.body,
+      contentType: 'application/octet-stream',
+      traceId: input.traceId,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`R2 uploadPart failed (${res.status}): ${text}`);
+    }
+    const etag = res.headers.get('ETag');
+    if (etag === null || etag === '') {
+      throw new Error('R2 uploadPart returned no ETag');
+    }
+    return etag;
+  }
+
+  async listParts(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    traceId: string;
+  }): Promise<UploadedPart[] | null> {
+    const res = await this.signedFetch({
+      method: 'GET',
+      path: objectPath(input.bucket, input.key),
+      query: [['uploadId', input.uploadId]],
+      body: new Uint8Array(0),
+      contentType: 'application/octet-stream',
+      traceId: input.traceId,
+    });
+    const text = await res.text();
+    if (res.status === 404 || /NoSuchUpload/.test(text)) {
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error(`R2 listParts failed (${res.status}): ${text}`);
+    }
+    return parseListPartsXml(text);
+  }
+
+  async completeMultipartUpload(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    parts: readonly { partNumber: number; etag: string }[];
+    traceId: string;
+  }): Promise<boolean> {
+    const res = await this.signedFetch({
+      method: 'POST',
+      path: objectPath(input.bucket, input.key),
+      query: [['uploadId', input.uploadId]],
+      body: enc.encode(completeMultipartXml(input.parts)),
+      contentType: 'application/xml',
+      traceId: input.traceId,
+    });
+    const text = await res.text();
+    // S3 can answer 200 with an <Error> body when assembly fails late.
+    if (res.ok && !/<Error>/.test(text)) {
+      return true;
+    }
+    if (res.status === 404 || /NoSuchUpload/.test(text)) {
+      return false;
+    }
+    throw new Error(`R2 completeMultipartUpload failed (${res.status}): ${text}`);
+  }
+
+  async abortMultipartUpload(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    traceId: string;
+  }): Promise<void> {
+    const res = await this.signedFetch({
+      method: 'DELETE',
+      path: objectPath(input.bucket, input.key),
+      query: [['uploadId', input.uploadId]],
+      body: new Uint8Array(0),
+      contentType: 'application/octet-stream',
+      traceId: input.traceId,
+    });
+    if (res.ok || res.status === 404) {
+      return;
+    }
+    const text = await res.text();
+    if (/NoSuchUpload/.test(text)) {
+      return;
+    }
+    throw new Error(`R2 abortMultipartUpload failed (${res.status}): ${text}`);
+  }
+
+  async getObject(bucket: string, key: string, traceId: string): Promise<Uint8Array | null> {
+    const res = await this.signedFetch({
+      method: 'GET',
+      path: objectPath(bucket, key),
+      body: new Uint8Array(0),
+      contentType: 'application/octet-stream',
+      traceId,
+    });
+    if (res.status === 404) {
+      return null;
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`R2 getObject failed (${res.status}): ${text}`);
+    }
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  async deleteObject(bucket: string, key: string, traceId: string): Promise<void> {
+    const res = await this.signedFetch({
+      method: 'DELETE',
+      path: objectPath(bucket, key),
+      body: new Uint8Array(0),
+      contentType: 'application/octet-stream',
+      traceId,
+    });
+    if (!res.ok && res.status !== 404) {
+      const text = await res.text();
+      throw new Error(`R2 deleteObject failed (${res.status}): ${text}`);
+    }
   }
 
   /**
@@ -310,6 +585,8 @@ export class R2StorageClient implements StorageClient {
   private async signedFetch(req: {
     method: string;
     path: string;
+    /** Query parameters; signed in SigV4 canonical (sorted, RFC 3986) form. */
+    query?: ReadonlyArray<readonly [string, string]>;
     body: Uint8Array;
     contentType: string;
     traceId: string;
@@ -322,10 +599,16 @@ export class R2StorageClient implements StorageClient {
       `host:${this.host}\n` + `x-amz-content-sha256:${payloadHash}\n` + `x-amz-date:${full}\n`;
     const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
 
+    const canonicalQuery = [...(req.query ?? [])]
+      .map(([k, v]) => [encodeSegment(k), encodeSegment(v)] as const)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&');
+
     const canonicalRequest = [
       req.method,
       req.path,
-      '',
+      canonicalQuery,
       canonicalHeaders,
       signedHeaders,
       payloadHash,
@@ -356,7 +639,8 @@ export class R2StorageClient implements StorageClient {
     const init: RequestInit = sendsBody
       ? { method: req.method, headers, body: req.body as BodyInit }
       : { method: req.method, headers };
-    return this.tracedFetch(`https://${this.host}${req.path}`, init, req.traceId);
+    const url = `https://${this.host}${req.path}${canonicalQuery === '' ? '' : `?${canonicalQuery}`}`;
+    return this.tracedFetch(url, init, req.traceId);
   }
 }
 
@@ -401,5 +685,109 @@ export class InMemoryStorageClient implements StorageClient {
 
   get(bucket: string, key: string): StoredObject | undefined {
     return this.objects.get(this.id(bucket, key));
+  }
+}
+
+/** In-memory multipart storage for tests; extends the plain in-memory client. */
+export class InMemoryMultipartStorage extends InMemoryStorageClient implements MultipartStorage {
+  readonly uploads = new Map<
+    string,
+    { bucket: string; key: string; contentType: string; parts: Map<number, Uint8Array> }
+  >();
+  private nextUpload = 1;
+
+  createMultipartUpload(input: {
+    bucket: string;
+    key: string;
+    contentType: string;
+  }): Promise<string> {
+    const uploadId = `upload-${this.nextUpload++}`;
+    this.uploads.set(uploadId, {
+      bucket: input.bucket,
+      key: input.key,
+      contentType: input.contentType,
+      parts: new Map(),
+    });
+    return Promise.resolve(uploadId);
+  }
+
+  private upload(bucket: string, key: string, uploadId: string) {
+    const upload = this.uploads.get(uploadId);
+    return upload !== undefined && upload.bucket === bucket && upload.key === key
+      ? upload
+      : undefined;
+  }
+
+  uploadPart(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    partNumber: number;
+    body: Uint8Array;
+  }): Promise<string> {
+    const upload = this.upload(input.bucket, input.key, input.uploadId);
+    if (upload === undefined) return Promise.reject(new Error('NoSuchUpload'));
+    upload.parts.set(input.partNumber, new Uint8Array(input.body));
+    return Promise.resolve(`"etag-${input.partNumber}-${input.body.byteLength}"`);
+  }
+
+  listParts(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+  }): Promise<UploadedPart[] | null> {
+    const upload = this.upload(input.bucket, input.key, input.uploadId);
+    if (upload === undefined) return Promise.resolve(null);
+    return Promise.resolve(
+      [...upload.parts.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([partNumber, body]) => ({
+          partNumber,
+          etag: `"etag-${partNumber}-${body.byteLength}"`,
+          size: body.byteLength,
+        })),
+    );
+  }
+
+  completeMultipartUpload(input: {
+    bucket: string;
+    key: string;
+    uploadId: string;
+    parts: readonly { partNumber: number; etag: string }[];
+  }): Promise<boolean> {
+    const upload = this.upload(input.bucket, input.key, input.uploadId);
+    if (upload === undefined) return Promise.resolve(false);
+    const chunks = [...input.parts]
+      .sort((a, b) => a.partNumber - b.partNumber)
+      .map((p) => upload.parts.get(p.partNumber) ?? new Uint8Array(0));
+    const total = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+    const body = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    this.uploads.delete(input.uploadId);
+    this.objects.set(`${input.bucket}/${input.key}`, {
+      bucket: input.bucket,
+      key: input.key,
+      body,
+      contentType: upload.contentType,
+    });
+    return Promise.resolve(true);
+  }
+
+  abortMultipartUpload(input: { uploadId: string }): Promise<void> {
+    this.uploads.delete(input.uploadId);
+    return Promise.resolve();
+  }
+
+  getObject(bucket: string, key: string): Promise<Uint8Array | null> {
+    return Promise.resolve(this.get(bucket, key)?.body ?? null);
+  }
+
+  deleteObject(bucket: string, key: string): Promise<void> {
+    this.objects.delete(`${bucket}/${key}`);
+    return Promise.resolve();
   }
 }
