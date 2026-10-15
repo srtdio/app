@@ -8,6 +8,7 @@ import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { dispatchSorted } from '@/lib/events';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { cn } from '@/lib/cn';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 interface SidebarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
@@ -25,6 +26,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
       <div className="p-2.5">
         <button
           type="button"
+          data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
           className="flex w-full items-center gap-2.5 min-h-[44px] px-2 rounded-lg hover:bg-panel-2 transition-colors text-left"
         >
@@ -49,6 +51,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
           <NavLink
             key={item.to}
             to={item.to}
+            {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-sm font-medium transition-colors',

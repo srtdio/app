@@ -28,6 +28,7 @@ import { cn } from '@/lib/cn';
 import { briefClose } from '@srtdio/rpc';
 import { listBriefs } from '@srtdio/briefs';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 // Filter chips: All shows everything; Open/Closed key off brief.status. The
 // status keys come from the @srtdio/briefs type, never inline literals.
@@ -65,6 +66,7 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
             variant="primary"
             size="lg"
             aria-label="Create brief"
+            data-induction={INDUCTION_KEYS.briefsNew}
             className="w-11 px-0"
             onClick={() => dispatchSorted('sorted:create-brief')}
           >

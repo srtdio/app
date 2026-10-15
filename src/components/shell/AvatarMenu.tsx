@@ -10,6 +10,7 @@ import {
   IconSwitch,
   IconTrash,
   IconUser,
+  IconUsers,
 } from '@/components/ui/icons';
 import { dispatchSorted } from '@/lib/events';
 import { useTheme } from '@/lib/use-theme';
@@ -44,6 +45,11 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
         icon={<IconSettings size={18} />}
         label="Settings"
         onClick={() => go('/settings')}
+      />
+      <MenuItem
+        icon={<IconUsers size={18} />}
+        label="Members"
+        onClick={() => go('/settings?panel=members')}
       />
       <MenuItem
         icon={<IconTrash size={18} />}

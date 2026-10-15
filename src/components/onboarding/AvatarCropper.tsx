@@ -176,12 +176,20 @@ function AvatarCropperImpl(
   );
 
   // Revoke the last object URL on unmount so a chosen photo never leaks.
-  useEffect(
-    () => () => {
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-    },
-    [],
-  );
+  // Release the photo's object URL when the cropper really goes away. The revoke
+  // waits a tick and is skipped if the cropper set up again: a development
+  // remount runs this clean-up mid-load, and WebKit cancels an image whose URL
+  // is revoked while it loads (the photo then never arrives).
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      window.setTimeout(() => {
+        if (!mountedRef.current && urlRef.current) URL.revokeObjectURL(urlRef.current);
+      }, 0);
+    };
+  }, []);
 
   // Wheel zoom for desktop. Attached manually so preventDefault is honoured (a
   // React onWheel listener is passive and cannot block the page scroll).

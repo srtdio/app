@@ -78,6 +78,7 @@ import {
   watchBatchFreshness,
   type SharedPostView,
 } from '@/components/chat/post-card';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 /** Title-case a stage value for its chip (stage strings come from the Row). */
 function stageLabel(stage: string): string {
@@ -576,7 +577,10 @@ export function SharedPostCardList(
   } = props;
   const failedIds = new Set(failed);
   return (
-    <div className="mt-1.5 flex flex-col items-start gap-1.5">
+    <div
+      data-induction={INDUCTION_KEYS.chatPostCard}
+      className="mt-1.5 flex flex-col items-start gap-1.5"
+    >
       {views.map((view) =>
         failedIds.has(view.postId) ? (
           <CouldntLoadCard key={view.postId} onRetry={() => onRetry?.([view.postId])} />

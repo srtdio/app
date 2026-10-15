@@ -28,6 +28,7 @@ import { isClient } from '@/components/pages/pcs/roles';
 import { cn } from '@/lib/cn';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 /** The tray and the plus icon move for this long. */
 export const TRAY_MOTION_MS = 180;
@@ -186,6 +187,7 @@ export function ComposerTray(props: {
         ref={buttonRef}
         type="button"
         data-plus=""
+        data-induction={INDUCTION_KEYS.chatPlus}
         aria-label={open ? 'Close attachments' : 'Add attachment'}
         aria-expanded={open}
         aria-controls="composer-tray"
@@ -214,6 +216,7 @@ export function ComposerTray(props: {
           role="group"
           aria-label="Attach"
           data-tray=""
+          data-induction={INDUCTION_KEYS.chatAttachTray}
           className={cn(
             'absolute inset-x-0 bottom-full z-20 border-t border-border bg-panel px-3 pb-2 pt-3 transition-[opacity,transform] duration-[180ms] ease-out motion-reduce:transition-none',
             shown ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',

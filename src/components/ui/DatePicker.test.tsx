@@ -5,6 +5,7 @@ import {
   formatDisplay,
   monthGrid,
   parseISO,
+  popoverPlacement,
   shiftMonth,
   toISO,
 } from '@/components/ui/DatePicker';
@@ -56,5 +57,23 @@ describe('dayCells', () => {
     const cells = gridButtons(dayCells(2026, 5, '2026-06-10', '', () => {}));
     const day10 = cells.find((cell) => (cell.props as { children: number }).children === 10);
     expect((day10!.props as { 'aria-selected': boolean })['aria-selected']).toBe(true);
+  });
+});
+
+describe('popoverPlacement', () => {
+  const phone = { width: 390, height: 844 };
+
+  it('opens below a trigger with room under it, at least 288px wide', () => {
+    const at = popoverPlacement({ top: 200, bottom: 244, left: 200, width: 170 }, phone);
+    expect(at.top).toBe(250);
+    expect(at.width).toBe(288);
+    expect(at.left + at.width).toBeLessThanOrEqual(390 - 8);
+  });
+
+  it('opens above a trigger near the bottom of the screen', () => {
+    const at = popoverPlacement({ top: 700, bottom: 744, left: 16, width: 358 }, phone);
+    expect(at.top).toBeUndefined();
+    expect(at.bottom).toBe(844 - 700 + 6);
+    expect(at.width).toBe(358);
   });
 });

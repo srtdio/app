@@ -1,7 +1,7 @@
 name: E2E WebKit
 
 # changes: diffs against the merge base with main (push: previous commit) and outputs run=true only for UI-relevant paths.
-# webkit-shard: on a UI change, runs the Playwright WebKit iPhone suite (e2e/harness, no DB, no secrets; every spec dark, @theme specs light too) in 3 parallel shards.
+# webkit-shard: on a UI change, runs the Playwright WebKit iPhone suite (e2e/harness, no DB, no secrets; every spec dark, @theme specs light too) in 6 parallel shards of 2 workers each (see playwright.config.ts).
 # e2e-typecheck: on a UI change, type-checks the e2e workspace in parallel with the shards.
 # e2e-webkit: the required check; fails if any shard or the typecheck failed or was cancelled, passes on success or skip.
 # No workflow-level paths filter, so the required check always reports. Linux WebKit is close to, not identical to, iOS Safari.
@@ -55,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
 
@@ -89,7 +89,7 @@ jobs:
         run: pnpm exec playwright install-deps webkit
 
       - name: Run WebKit e2e shard
-        run: pnpm test:e2e --shard=${{ matrix.shard }}/3
+        run: pnpm test:e2e --shard=${{ matrix.shard }}/6
 
       - name: Upload results on failure
         if: failure()

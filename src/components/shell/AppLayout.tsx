@@ -13,6 +13,11 @@ import { InboxStoreProvider } from '@/components/shell/InboxStoreProvider';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
 import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
+import { InductionGuide } from '@/components/induction/InductionGuide';
+import { InductionProvider } from '@/components/induction/InductionProvider';
+import { useInductionData } from '@/components/induction/useInductionData';
+import { approverStageOf, type ApproverStage } from '@/lib/induction';
+import { dispatchSorted } from '@/lib/events';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { useCurrentProfile } from '@/lib/use-current-profile';
@@ -102,6 +107,14 @@ export function AppLayout() {
     workspaces.some((x) => x.id === wParam) &&
     wParam !== workspaceId;
 
+  // The induction: induction_state for the active workspace (null before one
+  // exists). With no workspace yet, the stored step decides between the
+  // Creator's shell (make the workspace) and the approver's screens.
+  const induction = useInductionData(workspaceId);
+  const noWorkspace = !loading && workspaceError === null && workspaces.length === 0;
+  const inductionPending = noWorkspace && induction.status === 'loading';
+  const approverStage: ApproverStage = noWorkspace ? approverStageOf(induction.state) : 'none';
+
   const onboardingNeeded =
     !profileLoading &&
     !loading &&
@@ -109,14 +122,17 @@ export function AppLayout() {
     // A failed list also comes back empty: never read that as "no workspace".
     workspaceError === null &&
     profile !== null &&
-    (profile.profile_completed_at === null || workspaces.length === 0);
+    !inductionPending &&
+    (profile.profile_completed_at === null || approverStage !== 'none');
   const [flow, setFlow] = useState<{
     workspaceId: string | null;
     workspaceName: string | null;
+    approverStage: ApproverStage;
     finishing: string | null;
     finishError: string | null;
   } | null>(null);
   // Close the flow once the finish refetch has landed, then open its destination.
+  // A Creator may finish with no workspace yet: the shell then asks for one.
   useEffect(() => {
     if (flow === null || flow.finishing === null) return;
     if (loading || profileLoading) return;
@@ -129,20 +145,11 @@ export function AppLayout() {
       });
       return;
     }
-    if (profile.profile_completed_at === null || workspaces.length === 0) return;
+    if (profile.profile_completed_at === null) return;
     const to = flow.finishing;
     setFlow(null);
     navigate(to, { replace: true });
-  }, [
-    flow,
-    loading,
-    profileLoading,
-    profile,
-    profileError,
-    workspaceError,
-    workspaces.length,
-    navigate,
-  ]);
+  }, [flow, loading, profileLoading, profile, profileError, workspaceError, navigate]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -162,7 +169,7 @@ export function AppLayout() {
   // and its workspace context is frozen at open, then it stays mounted until the
   // finish refetch shows a complete profile and a workspace, so the flow never
   // remounts mid-way or flashes the shell.
-  if (flow === null && (profileLoading || loading)) {
+  if (flow === null && (profileLoading || loading || inductionPending)) {
     return (
       <div className="min-h-full w-full grid place-items-center bg-bg">
         <span className="text-sm text-fg-3">Loading</span>
@@ -173,6 +180,7 @@ export function AppLayout() {
     setFlow({
       workspaceId: workspaces.length > 0 ? workspaceId : null,
       workspaceName: workspaces.length > 0 ? workspaceDisplayName : null,
+      approverStage,
       finishing: null,
       finishError: null,
     });
@@ -184,6 +192,8 @@ export function AppLayout() {
         profile={profile}
         workspaceId={flow.workspaceId}
         workspaceName={flow.workspaceName}
+        approverStage={flow.approverStage}
+        onStep={induction.setStep}
         finishError={flow.finishError}
         onFinish={(to) => {
           setFlow({ ...flow, finishing: to, finishError: null });
@@ -200,17 +210,44 @@ export function AppLayout() {
     logger.error('onboarding gate: profile load failed, falling through to app');
   }
 
-  // An authed user with zero workspaces is a benign state, not a crash: show a
-  // calm full-page empty state instead of an empty board.
-  if (!loading && workspaces.length === 0) {
+  // A failed workspace list is not "no workspace": say so instead of a shell.
+  if (!loading && workspaceError !== null && workspaces.length === 0) {
     return (
       <div className="grid h-full w-full place-items-center bg-bg px-6">
         <EmptyState
           icon={<IconPipeline />}
-          title="No workspace yet"
-          description="You are not a member of any workspace. An invite will bring you into one."
+          title="We couldn't load your workspaces"
+          description="Check your connection, then reload the page."
         />
       </div>
+    );
+  }
+
+  // No workspace yet: the real shell with an empty main, its slot opening the
+  // create dialog. Chat and inbox mount only once a workspace exists.
+  if (noWorkspace) {
+    return (
+      <ToastProvider>
+        <InductionProvider data={induction} workspaceId={null} workspaceLabel="">
+          <div className="flex h-full">
+            <div className="flex flex-1 min-w-0 flex-col h-full">
+              <Topbar
+                workspaceName={null}
+                {...(profile !== null ? { currentUserName: profile.display_name } : {})}
+                currentUserAvatarUrl={profile?.avatar_url ?? null}
+                onOpenPalette={() => undefined}
+                onOpenAvatar={() => setAvatarOpen(true)}
+                onCreateWorkspace={() => dispatchSorted('sorted:switch-workspace')}
+              />
+              <main className={chrome.mainClassName} />
+            </div>
+            <ToastViewport />
+            <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+            <WorkspaceSwitcher />
+            <InductionGuide tabsShown={false} />
+          </div>
+        </InductionProvider>
+      </ToastProvider>
     );
   }
 
@@ -219,36 +256,43 @@ export function AppLayout() {
   // store is live across routes and the Chat-tab badge (a later PR) can read it.
   return (
     <ToastProvider>
-      <ChatStoreProvider>
-        <ChatTabSignals />
-        <InboxStoreProvider>
-          <div className="flex h-full">
-            <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
-            <div className="flex flex-1 min-w-0 flex-col h-full">
-              <div className={chrome.topbarClassName}>
-                <Topbar
-                  workspaceName={workspaceDisplayName}
-                  canCreateBrief={canCreateBrief}
-                  {...(profile !== null ? { currentUserName: profile.display_name } : {})}
-                  currentUserAvatarUrl={profile?.avatar_url ?? null}
-                  onOpenPalette={() => setPaletteOpen(true)}
-                  onOpenAvatar={() => setAvatarOpen(true)}
-                />
+      <InductionProvider
+        data={induction}
+        workspaceId={workspaceId}
+        workspaceLabel={workspaceDisplayName ?? ''}
+      >
+        <ChatStoreProvider>
+          <ChatTabSignals />
+          <InboxStoreProvider>
+            <div className="flex h-full">
+              <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
+              <div className="flex flex-1 min-w-0 flex-col h-full">
+                <div className={chrome.topbarClassName}>
+                  <Topbar
+                    workspaceName={workspaceDisplayName}
+                    canCreateBrief={canCreateBrief}
+                    {...(profile !== null ? { currentUserName: profile.display_name } : {})}
+                    currentUserAvatarUrl={profile?.avatar_url ?? null}
+                    onOpenPalette={() => setPaletteOpen(true)}
+                    onOpenAvatar={() => setAvatarOpen(true)}
+                  />
+                </div>
+                <main className={chrome.mainClassName}>{switchPending ? null : <Outlet />}</main>
               </div>
-              <main className={chrome.mainClassName}>{switchPending ? null : <Outlet />}</main>
+              {chrome.showBottomTabs ? <BottomTabs /> : null}
+              <ToastViewport />
+              <CommandPalette
+                open={paletteOpen}
+                onClose={() => setPaletteOpen(false)}
+                canCreateBrief={canCreateBrief}
+              />
+              <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+              <WorkspaceSwitcher />
+              <InductionGuide tabsShown={chrome.showBottomTabs} />
             </div>
-            {chrome.showBottomTabs ? <BottomTabs /> : null}
-            <ToastViewport />
-            <CommandPalette
-              open={paletteOpen}
-              onClose={() => setPaletteOpen(false)}
-              canCreateBrief={canCreateBrief}
-            />
-            <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
-            <WorkspaceSwitcher />
-          </div>
-        </InboxStoreProvider>
-      </ChatStoreProvider>
+          </InboxStoreProvider>
+        </ChatStoreProvider>
+      </InductionProvider>
     </ToastProvider>
   );
 }

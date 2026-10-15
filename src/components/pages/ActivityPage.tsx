@@ -40,6 +40,7 @@ import { useSort } from '@/lib/use-sort';
 import { PresignCache } from '@/lib/asset-presign';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'newest', label: 'Newest' },
@@ -344,7 +345,7 @@ export function ActivityPage() {
         )
       ) : (
         <div className="pb-6">
-          {buckets.map((bucket) => {
+          {buckets.map((bucket, bucketIndex) => {
             const entries = bucket.groups.flat();
             return (
               <section key={bucket.key} className="mt-4">
@@ -356,20 +357,34 @@ export function ActivityPage() {
                   <span className="ml-auto text-xs text-fg-3">{entries.length}</span>
                 </div>
                 <div className="mt-2 flex flex-col gap-2 px-4 md:px-6">
-                  {bucket.groups.map((group) => (
-                    <ActivityCard
-                      key={group[0]?.id ?? bucket.key}
-                      group={group}
-                      nowMs={nowMs}
-                      cache={cache}
-                      presignEnabled={presignEnabled}
-                      onOpenGroup={handleOpenGroup}
-                      onOpenEntry={handleOpenEntry}
-                      onSnooze={handleSnooze}
-                      onMarkRead={handleMarkRead}
-                      selfName={selfName}
-                    />
-                  ))}
+                  {bucket.groups.map((group, groupIndex) => {
+                    const card = (
+                      <ActivityCard
+                        key={group[0]?.id ?? bucket.key}
+                        group={group}
+                        nowMs={nowMs}
+                        cache={cache}
+                        presignEnabled={presignEnabled}
+                        onOpenGroup={handleOpenGroup}
+                        onOpenEntry={handleOpenEntry}
+                        onSnooze={handleSnooze}
+                        onMarkRead={handleMarkRead}
+                        selfName={selfName}
+                      />
+                    );
+                    // The newest card is what the induction points at (its own corners, not the padded list).
+                    return bucketIndex === 0 && groupIndex === 0 ? (
+                      <div
+                        key={group[0]?.id ?? bucket.key}
+                        data-induction={INDUCTION_KEYS.activityList}
+                        className="rounded-xl"
+                      >
+                        {card}
+                      </div>
+                    ) : (
+                      card
+                    );
+                  })}
                 </div>
               </section>
             );
