@@ -1107,12 +1107,14 @@ export async function installHarnessNetwork(
           await route.fulfill({ status: 204, headers: CORS });
           return;
         }
-        // The create form's exemption read: the harness user is never a platform operator.
+        // The create form's exemption read (own row under RLS): the harness user is an
+        // active platform operator, so the create-workspace flows stay open. The
+        // non-exempt path is covered by the WorkspaceSwitcher unit tests.
         if (table === 'platform_operators') {
           await route.fulfill({
             status: 200,
             headers: { ...CORS, 'content-type': 'application/json' },
-            body: '[]',
+            body: JSON.stringify([{ user_id: ME }]),
           });
           return;
         }
