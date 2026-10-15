@@ -12,7 +12,17 @@ import { FileTile, storedThumbnailMeta } from '@/components/ui/FileTile';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { cn } from '@/lib/cn';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
-import type { GalleryItem } from '@srtdio/posts';
+import { frameFor, PLATFORM_SPECS, type Frame, type FrameMedia } from '@/lib/platform-specs';
+import {
+  cutPercent,
+  frameMap,
+  frameToOriginal,
+  IDENTITY_MAP,
+  originalToFrame,
+  type FrameMap,
+  type PinDot,
+} from '@/components/pages/pcs/pin-annotations';
+import { isPostPlatform, type GalleryItem } from '@srtdio/posts';
 
 /** Hold this long on a slide to arm pin placement (the relocated F5 flow). */
 export const PIN_ARM_PRESS_MS = 500;
@@ -71,8 +81,12 @@ function GalleryThumb({
   item: GalleryItem;
   cache: PresignCache;
   presignEnabled: boolean;
-  /** 'cover' crops to fill (the brief grid); 'contain' shows the whole image (the ribbon). */
-  fit?: 'cover' | 'contain';
+  /**
+   * 'cover' crops to fill (the brief grid, cropping platform frames); 'contain'
+   * shows the whole image at most its own size (the ribbon); 'fit' scales the
+   * whole image to the frame (banded platform frames).
+   */
+  fit?: 'cover' | 'contain' | 'fit';
   /**
    * Ribbon only: report the image's intrinsic size once it decodes, so a tile
    * whose stored dimensions are null can still hug its true ratio. Never fires
@@ -119,7 +133,11 @@ function GalleryThumb({
           if (size !== null) onMeasure(size.width, size.height);
         }}
         className={
-          fit === 'contain' ? 'max-h-full max-w-full object-contain' : 'h-full w-full object-cover'
+          fit === 'contain'
+            ? 'max-h-full max-w-full object-contain'
+            : fit === 'fit'
+              ? 'h-full w-full object-contain'
+              : 'h-full w-full object-cover'
         }
       />
     );
@@ -263,6 +281,133 @@ export function resolveRibbonTileStyle(
   return solo ? soloTileStyle(width, height) : ribbonTileStyle(width, height);
 }
 
+/** An item's intrinsic size: stored first, then measured from the decoded image. */
+export function itemDims(
+  item: GalleryItem,
+  measured: MeasuredDimensions,
+): { w: number; h: number } | null {
+  if (item.width !== null && item.height !== null && item.width > 0 && item.height > 0) {
+    return { w: item.width, h: item.height };
+  }
+  const seen = measured[item.assetAttachmentId];
+  return seen !== undefined ? { w: seen.width, h: seen.height } : null;
+}
+
+/**
+ * The post's platform frame from the shared frame rule, fed the FIRST item (a
+ * carousel's first slide sets every slide's frame); null when the format has no
+ * media box. Pure.
+ */
+export function galleryFrame(
+  platform: string,
+  format: string,
+  items: readonly GalleryItem[],
+  measured: MeasuredDimensions,
+): Frame | null {
+  const first = items[0];
+  const media: FrameMedia | null =
+    first === undefined
+      ? null
+      : {
+          kind: isImage(first) ? 'image' : isVideo(first) ? 'video' : 'other',
+          w: itemDims(first, measured)?.w ?? null,
+          h: itemDims(first, measured)?.h ?? null,
+        };
+  return frameFor(platform, format, media);
+}
+
+/** The frame's ratio (w / h) alone, or null. Pure. */
+export function galleryFrameRatio(
+  platform: string,
+  format: string,
+  items: readonly GalleryItem[],
+  measured: MeasuredDimensions,
+): number | null {
+  return galleryFrame(platform, format, items, measured)?.ratio ?? null;
+}
+
+/** How one slide sits in the frame: cropped (cover) or fit with bands. Pure. */
+export function slideMap(item: GalleryItem, measured: MeasuredDimensions, frame: Frame): FrameMap {
+  return isImage(item) ? frameMap(itemDims(item, measured), frame.ratio, frame.fit) : IDENTITY_MAP;
+}
+
+/**
+ * The platform's one-line note for the first slide's kind (YouTube Shorts with
+ * an image: "Shorts are video only."), the same line the preview panel shows.
+ */
+export function frameKindNote(platform: string, items: readonly GalleryItem[]): string | null {
+  const first = items[0];
+  if (first === undefined || !isImage(first) || !isPostPlatform(platform)) return null;
+  return PLATFORM_SPECS[platform].imageUnsupported ?? null;
+}
+
+/**
+ * The fixed frame box: full column width at the frame ratio, never taller than
+ * the solo cap (a 9:16 frame narrows instead). Every slide uses it. Pure.
+ */
+export function framedTileStyle(ratio: number): CSSProperties {
+  return {
+    width: `min(100%, calc(${SOLO_TILE_MAX_HEIGHT} * ${ratio}))`,
+    aspectRatio: String(ratio),
+  };
+}
+
+/** The line under the frame when it cuts the slide, or null when it fits. */
+export function frameCutLine(map: FrameMap, platformLabel: string): string | null {
+  const pct = cutPercent(map);
+  return pct > 0 ? `${pct}% outside the ${platformLabel} frame. Tap to see full image.` : null;
+}
+
+const EDGE_SHIFT: Record<string, string> = {
+  left: 'translate-x-0 -translate-y-1/2',
+  right: '-translate-x-full -translate-y-1/2',
+  top: '-translate-x-1/2 translate-y-0',
+  bottom: '-translate-x-1/2 -translate-y-full',
+};
+
+/**
+ * Pins over a framed slide. Stored points are relative to the original; each is
+ * mapped through the shown window. Inside: the numbered dot at its exact spot.
+ * Outside: a small marker on the nearest frame edge, still a 44px button.
+ */
+export function framePins(
+  pins: readonly PinDot[],
+  map: FrameMap,
+  onPinClick: ((commentId: string) => void) | undefined,
+): ReactElement {
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      {pins.map((pin) => {
+        const at = originalToFrame(pin, map);
+        return (
+          <button
+            key={pin.annotationId}
+            type="button"
+            data-pin-edge={at.edge ?? undefined}
+            aria-label={at.edge === null ? `Pin ${pin.n}` : `Pin ${pin.n}, outside the frame`}
+            onClick={() => onPinClick?.(pin.commentId)}
+            style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
+            className={cn(
+              'pointer-events-auto absolute flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-annotation-line',
+              at.edge === null ? '-translate-x-1/2 -translate-y-1/2' : EDGE_SHIFT[at.edge],
+            )}
+          >
+            {at.edge === null ? (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-annotation-line bg-annotation-bg text-[11px] font-semibold tabular-nums text-fg shadow">
+                {pin.n}
+              </span>
+            ) : (
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg px-1 text-[9px] font-semibold tabular-nums text-fg shadow">
+                {pin.n}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * What a slide tap does given the pin-arming state: the click trailing the
  * arming long-press is swallowed, a tap on the armed slide places the pin, a
@@ -332,6 +477,19 @@ interface GalleryViewProps {
   measuredDimensions?: MeasuredDimensions;
   /** Ribbon: report a tile's intrinsic size once its image decodes. */
   onMeasure?: ((assetAttachmentId: string, width: number, height: number) => void) | undefined;
+  /**
+   * Platform frame (post gallery): every slide renders in this fixed ratio,
+   * cropped or fit with bands as the platform shows it. null keeps the
+   * uncropped ribbon.
+   */
+  frame?: Frame | null;
+  /** Framed: the platform's one-line note under the frame (Shorts with an image). */
+  frameNote?: string | null;
+  /** Framed: the platform's display name, for the cut line. */
+  platformLabel?: string;
+  /** Framed: current-version pins per slide (relative to the original). */
+  pinsFor?: ((item: GalleryItem) => PinDot[]) | undefined;
+  onPinClick?: ((commentId: string) => void) | undefined;
 }
 
 /**
@@ -369,6 +527,11 @@ export function galleryView({
   onSlideTap,
   measuredDimensions = {},
   onMeasure,
+  frame = null,
+  frameNote = null,
+  platformLabel = '',
+  pinsFor,
+  onPinClick,
 }: GalleryViewProps): ReactElement {
   if (items.length === 0) {
     // Agency-side (onAddSlide present): a full-width "Add images" upload zone in
@@ -438,6 +601,160 @@ export function galleryView({
   // and dots reflect activeIndex, clamped so a shrinking gallery never points
   // past the end while the scroll listener catches up.
   const active = Math.min(Math.max(activeIndex, 0), items.length - 1);
+  const dots =
+    items.length > 1 ? (
+      <div className="flex flex-wrap items-center justify-center">
+        {items.map((item, index) => (
+          <button
+            key={item.assetAttachmentId}
+            type="button"
+            aria-label={`Go to slide ${index + 1}`}
+            aria-current={index === active}
+            onClick={() => {
+              if (onDotClick !== undefined) onDotClick(index);
+            }}
+            className="flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <span
+              className={`h-2 w-2 rounded-full transition-colors ${
+                index === active ? 'bg-accent' : 'bg-border-strong'
+              }`}
+            />
+          </button>
+        ))}
+      </div>
+    ) : null;
+
+  if (frame !== null) {
+    const frameRatio = frame.ratio;
+    // The platform frame: one fixed box for every slide, the media filling it
+    // with the platform's centre crop. Slides swipe inside the same frame
+    // (native X scrolling only). Pins map through each slide's shown window.
+    const mapFor = (item: GalleryItem): FrameMap => slideMap(item, measuredDimensions, frame);
+    const activeItem = items[active];
+    const cutLine =
+      activeItem !== undefined ? frameCutLine(mapFor(activeItem), platformLabel) : null;
+    const bandClass =
+      frame.bands === 'black' ? 'bg-black' : frame.bands === 'blur' ? 'bg-black' : 'bg-panel-2';
+    return (
+      <div>
+        <div className="relative">
+          {pinArmedIndex !== null ? (
+            <div
+              role="status"
+              className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-xs font-medium text-overlay-fg"
+            >
+              Tap the image to place a pin
+            </div>
+          ) : null}
+          <div
+            ref={scrollerRef}
+            onScroll={onScroll}
+            aria-roledescription="carousel"
+            className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
+          >
+            {items.map((item, index) => {
+              const pinCount = pinCountFor !== undefined ? pinCountFor(item) : 0;
+              const map = mapFor(item);
+              return (
+                <div
+                  key={item.assetAttachmentId}
+                  className="flex w-full shrink-0 snap-start justify-center"
+                >
+                  <div
+                    data-frame-ratio={frameRatio}
+                    data-frame-fit={frame.fit}
+                    data-frame-bands={frame.bands}
+                    style={framedTileStyle(frameRatio)}
+                    className={cn(
+                      'relative overflow-hidden rounded-xl border border-border',
+                      bandClass,
+                    )}
+                  >
+                    {frame.bands === 'blur' ? (
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 scale-110 opacity-70 blur-xl"
+                      >
+                        <GalleryThumb
+                          item={item}
+                          cache={cache}
+                          presignEnabled={presignEnabled}
+                          fit="cover"
+                        />
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      aria-label={`View image ${index + 1}`}
+                      {...(slideGestures !== undefined ? slideGestures(index) : {})}
+                      onClick={(event) => {
+                        if (onSlideTap !== undefined) {
+                          onSlideTap(index, event);
+                          return;
+                        }
+                        if (consumeClickSuppression !== undefined && consumeClickSuppression())
+                          return;
+                        onOpen(index);
+                      }}
+                      className={cn(
+                        'absolute inset-0 flex h-full w-full items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+                        pinArmedIndex === index && 'cursor-crosshair',
+                      )}
+                    >
+                      <GalleryThumb
+                        item={item}
+                        cache={cache}
+                        presignEnabled={presignEnabled}
+                        fit={frame.fit === 'contain' ? 'fit' : 'cover'}
+                        onMeasure={
+                          onMeasure !== undefined
+                            ? (width, height) => onMeasure(item.assetAttachmentId, width, height)
+                            : undefined
+                        }
+                      />
+                    </button>
+                    {pinsFor !== undefined ? framePins(pinsFor(item), map, onPinClick) : null}
+                    {pinsFor === undefined && pinCount > 0 ? (
+                      <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
+                        <IconPin size={11} />
+                        {pinCount}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {showIndex ? (
+            <span
+              aria-live="polite"
+              className="pointer-events-none absolute bottom-2 left-2 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg"
+            >
+              {`${active + 1}/${items.length}`}
+            </span>
+          ) : null}
+        </div>
+        {cutLine !== null ? (
+          <button
+            type="button"
+            data-frame-cut
+            onClick={() => onOpen(active)}
+            className="mt-1 flex min-h-[44px] w-full items-center text-left text-[13px] text-fg-2 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {cutLine}
+          </button>
+        ) : null}
+        {frameNote !== null ? (
+          <p data-frame-note className="mt-1 text-[13px] text-fg-2">
+            {frameNote}
+          </p>
+        ) : null}
+        {dots}
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="relative">
@@ -507,28 +824,7 @@ export function galleryView({
           </span>
         ) : null}
       </div>
-      {items.length > 1 ? (
-        <div className="flex flex-wrap items-center justify-center">
-          {items.map((item, index) => (
-            <button
-              key={item.assetAttachmentId}
-              type="button"
-              aria-label={`Go to slide ${index + 1}`}
-              aria-current={index === active}
-              onClick={() => {
-                if (onDotClick !== undefined) onDotClick(index);
-              }}
-              className="flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <span
-                className={`h-2 w-2 rounded-full transition-colors ${
-                  index === active ? 'bg-accent' : 'bg-border-strong'
-                }`}
-              />
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {dots}
     </div>
   );
 }
@@ -571,6 +867,14 @@ interface PostGalleryProps {
   onAddAfter?: ((index: number) => void) | undefined;
   /** Lightbox manage bar: remove the slide over the existing gallery_set commit. */
   onRemove?: ((index: number) => void) | undefined;
+  /**
+   * The post's platform frame (workspace platform + format). Absent (briefs) or
+   * a format with no media box keeps the uncropped ribbon.
+   */
+  frame?: { platform: string; format: string; platformLabel: string } | undefined;
+  /** Framed: current-version pins per slide, drawn mapped through the crop. */
+  pinsFor?: ((item: GalleryItem) => PinDot[]) | undefined;
+  onPinClick?: ((commentId: string) => void) | undefined;
 }
 
 /**
@@ -601,6 +905,9 @@ export function PostGallery({
   onMakeLast,
   onAddAfter,
   onRemove,
+  frame,
+  pinsFor,
+  onPinClick,
 }: PostGalleryProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -698,13 +1005,27 @@ export function PostGallery({
   // A carousel slide tap routes through the arming state: place on the armed
   // slide (existing onPlacePin path, percentage coords), disarm elsewhere,
   // otherwise open the lightbox.
+  const postFrame =
+    frame !== undefined && columns === 4
+      ? galleryFrame(frame.platform, frame.format, items, measuredDimensions)
+      : null;
+
   const handleSlideTap = (index: number, event: ReactMouseEvent<HTMLButtonElement>): void => {
     const action = slideTapAction(pinArmedIndex, index, consumeClickSuppression());
     if (action === 'suppress') return;
     if (action === 'place') {
       const point = placePinFromEvent(event.currentTarget, event.clientX, event.clientY);
       setPinArmedIndex(null);
-      if (point !== null) onPlacePin?.(index, point.x, point.y);
+      if (point === null) return;
+      // On the platform frame the tap is relative to the cropped box: map it back
+      // to the original so the stored image_x / image_y stay original-relative.
+      const item = items[index];
+      // A tap on a band (outside the media) places nothing.
+      const stored =
+        postFrame !== null && item !== undefined
+          ? frameToOriginal(point, slideMap(item, measuredDimensions, postFrame))
+          : point;
+      if (stored !== null) onPlacePin?.(index, stored.x, stored.y);
       return;
     }
     if (action === 'disarm') {
@@ -760,6 +1081,12 @@ export function PostGallery({
       onSlideTap: columns === 4 ? handleSlideTap : undefined,
       measuredDimensions,
       onMeasure: columns === 4 ? handleMeasure : undefined,
+      frame: postFrame,
+      frameNote:
+        postFrame !== null && frame !== undefined ? frameKindNote(frame.platform, items) : null,
+      platformLabel: frame?.platformLabel ?? '',
+      pinsFor,
+      onPinClick,
     })
   );
 }

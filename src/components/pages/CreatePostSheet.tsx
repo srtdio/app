@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
@@ -13,6 +13,8 @@ import {
   attachmentVersionIds,
   type AttachmentItem,
 } from '@/components/pages/create/AttachmentsField';
+import { FilePromptSheet } from '@/components/pages/create/FilePromptSheet';
+import { fileKindOf, filePrompt, mismatchedFiles } from '@/components/pages/create/file-kind';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
@@ -294,10 +296,59 @@ export function CreatePostSheet({
   const [share, setShare] = useState(true);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [shareGuard] = useState(createInFlightGuard);
+  // The soft file prompt: version ids of attached files the format does not
+  // usually carry, awaiting keep or remove. Never blocks saving.
+  const [promptIds, setPromptIds] = useState<string[]>([]);
+  // The latest attachments and format, for the upload loop's sequential
+  // onChange calls (which close over an older render).
+  const formRef = useRef(form);
+  formRef.current = form;
 
   function patch(next: Partial<CreateFormState>): void {
     setForm((prev) => ({ ...prev, ...next }));
   }
+
+  /** Newly attached files: flag any the current format does not usually carry. */
+  function onAttachmentsChange(next: AttachmentItem[]): void {
+    const before = new Set(formRef.current.attachments.map((item) => item.versionId));
+    patch({ attachments: next });
+    if (workspacePlatform === null) return;
+    const added = next.filter((item) => !before.has(item.versionId));
+    const off = mismatchedFiles(workspacePlatform, formRef.current.format, added);
+    if (off.length > 0) {
+      setPromptIds((prev) => [...prev, ...off.map((item) => item.versionId)]);
+    }
+  }
+
+  /** A format change re-checks every attached file against the new format. */
+  function onFormatChange(format: string): void {
+    patch({ format });
+    if (workspacePlatform === null) return;
+    setPromptIds(
+      mismatchedFiles(workspacePlatform, format, formRef.current.attachments).map(
+        (item) => item.versionId,
+      ),
+    );
+  }
+
+  function removePrompted(): void {
+    const drop = new Set(promptIds);
+    for (const item of formRef.current.attachments) {
+      if (drop.has(item.versionId) && item.previewUrl !== undefined) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+    }
+    patch({ attachments: formRef.current.attachments.filter((item) => !drop.has(item.versionId)) });
+    setPromptIds([]);
+  }
+
+  const promptKinds = form.attachments
+    .filter((item) => promptIds.includes(item.versionId) && item.mime !== undefined)
+    .map((item) => fileKindOf(item.mime ?? ''));
+  const activePrompt =
+    workspacePlatform !== null && promptKinds.length > 0
+      ? filePrompt(workspacePlatform, form.format, promptKinds)
+      : null;
 
   // Reset the form each time the sheet opens so a prior draft never lingers. The
   // owner is left empty here and defaulted to the current user by the effect
@@ -319,6 +370,7 @@ export function CreatePostSheet({
     setSavedDraftId(null);
     setShare(true);
     setMediaBusy(false);
+    setPromptIds([]);
   }, [open, initialTargetDate]);
 
   // Default the format to the platform's first one, and keep it inside the
@@ -623,7 +675,7 @@ export function CreatePostSheet({
                     label="Format"
                     value={form.format}
                     options={formatOptions}
-                    onChange={(value) => patch({ format: value })}
+                    onChange={onFormatChange}
                   />
                 </Field>
               </div>
@@ -698,7 +750,12 @@ export function CreatePostSheet({
               <AttachmentsField
                 workspaceId={workspaceId}
                 value={form.attachments}
-                onChange={(attachments) => patch({ attachments })}
+                onChange={onAttachmentsChange}
+                frame={
+                  workspacePlatform !== null
+                    ? { platform: workspacePlatform, format: form.format }
+                    : null
+                }
               />
             </Field>
           </>
@@ -710,6 +767,13 @@ export function CreatePostSheet({
           </div>
         ) : null}
       </div>
+      {open && activePrompt !== null ? (
+        <FilePromptSheet
+          prompt={activePrompt}
+          onKeep={() => setPromptIds([])}
+          onRemove={removePrompted}
+        />
+      ) : null}
     </Sheet>
   );
 }

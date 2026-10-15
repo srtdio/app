@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { IconFile, IconLink, IconX } from '@/components/ui/icons';
+import { frameFor, type Frame, type FrameMedia } from '@/lib/platform-specs';
+import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
@@ -40,6 +42,8 @@ export interface AttachmentItem {
   kind: 'image' | 'file' | 'link';
   name: string;
   previewUrl?: string;
+  /** The picked file's MIME type (files only), for the format's soft file check. */
+  mime?: string;
 }
 
 /** The ordered asset VERSION ids the parent binds via gallery_set. */
@@ -78,6 +82,7 @@ export async function runFileAttachment(
       versionId: outcome.versionId,
       kind: file.type.startsWith('image/') ? 'image' : 'file',
       name: file.name,
+      ...(file.type !== '' ? { mime: file.type } : {}),
     },
   };
 }
@@ -115,16 +120,72 @@ export async function runLinkAttachment(deps: LinkAttachmentDeps): Promise<Attac
 export function attachmentItemList(
   items: readonly AttachmentItem[],
   onRemove: (index: number) => void,
+  /**
+   * The post's platform frame (frameFor): its ratio, and whether the media is
+   * cropped to fill or fit with bands. null or absent keeps the small square tile.
+   */
+  frame?: Frame | null,
+  /** Report a media tile's intrinsic size once it decodes (the first one sets the frame). */
+  onMeasure?: (versionId: string, w: number, h: number) => void,
 ): ReactElement[] {
+  const framed = frame !== null && frame !== undefined;
+  const ratio = frame?.ratio ?? 1;
+  const fitClass =
+    frame?.fit === 'contain' ? 'h-full w-full object-contain' : 'h-full w-full object-cover';
   return items.map((item, index) => {
-    if (item.kind === 'image') {
+    const isVideo = item.mime?.startsWith('video/') === true && item.previewUrl !== undefined;
+    if (item.kind === 'image' || isVideo) {
       return (
         <li
           key={`${item.versionId}-${index}`}
-          className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md border border-border bg-panel-3"
+          data-frame-ratio={ratio}
+          data-frame-fit={frame?.fit ?? 'cover'}
+          className={cn(
+            'relative shrink-0 overflow-hidden rounded-md border border-border',
+            framed ? 'h-40' : 'h-20',
+            frame !== null && frame !== undefined && frame.bands !== 'none'
+              ? 'bg-black'
+              : 'bg-panel-3',
+          )}
+          style={{ aspectRatio: String(ratio), minWidth: '44px', maxWidth: '100%' }}
         >
-          {item.previewUrl !== undefined ? (
-            <img src={item.previewUrl} alt={item.name} className="h-full w-full object-cover" />
+          {frame?.bands === 'blur' && item.previewUrl !== undefined && !isVideo ? (
+            <img
+              src={item.previewUrl}
+              alt=""
+              aria-hidden
+              className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-lg"
+            />
+          ) : null}
+          {isVideo ? (
+            <video
+              src={item.previewUrl}
+              muted
+              playsInline
+              preload="metadata"
+              aria-label={item.name}
+              className={cn('relative', fitClass)}
+              onLoadedMetadata={(event) =>
+                onMeasure?.(
+                  item.versionId,
+                  event.currentTarget.videoWidth,
+                  event.currentTarget.videoHeight,
+                )
+              }
+            />
+          ) : item.previewUrl !== undefined ? (
+            <img
+              src={item.previewUrl}
+              alt={item.name}
+              className={cn('relative', fitClass)}
+              onLoad={(event) =>
+                onMeasure?.(
+                  item.versionId,
+                  event.currentTarget.naturalWidth,
+                  event.currentTarget.naturalHeight,
+                )
+              }
+            />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-fg-3">
               <IconFile size={20} />
@@ -185,12 +246,18 @@ interface AttachmentsFieldProps {
   workspaceId: string | null;
   value: AttachmentItem[];
   onChange: (items: AttachmentItem[]) => void;
+  /**
+   * The post's platform and format: media tiles render in the same platform
+   * frame the post page shows (frameFor). Absent (briefs): small square tiles.
+   */
+  frame?: { platform: string; format: string } | null;
 }
 
 export function AttachmentsField({
   workspaceId,
   value,
   onChange,
+  frame,
 }: AttachmentsFieldProps): ReactElement {
   const newTrace = useNewTrace();
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
@@ -201,6 +268,7 @@ export function AttachmentsField({
   const [linkName, setLinkName] = useState('');
   const [linkBusy, setLinkBusy] = useState(false);
 
+  const [measured, setMeasured] = useState<Record<string, { w: number; h: number }>>({});
   const photoInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
@@ -258,7 +326,8 @@ export function AttachmentsField({
     for (const file of Array.from(list)) {
       const id = `att-${(pendingSeq += 1)}`;
       const isImage = isPhoto || file.type.startsWith('image/');
-      const previewUrl = isImage ? URL.createObjectURL(file) : null;
+      const previewUrl =
+        isImage || file.type.startsWith('video/') ? URL.createObjectURL(file) : null;
       setPending((prev) => [
         ...prev,
         { id, name: file.name, kind: isImage ? 'image' : 'file', previewUrl, error: null },
@@ -326,6 +395,16 @@ export function AttachmentsField({
   }
 
   const linkValid = isValidLinkUrl(linkUrl) && linkName.trim() !== '';
+  const postFrame =
+    frame !== null && frame !== undefined
+      ? frameFor(frame.platform, frame.format, firstMedia(value, measured))
+      : null;
+  function measure(versionId: string, w: number, h: number): void {
+    if (w <= 0 || h <= 0) return;
+    setMeasured((prev) =>
+      prev[versionId] !== undefined ? prev : { ...prev, [versionId]: { w, h } },
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -378,7 +457,9 @@ export function AttachmentsField({
       ) : null}
 
       {value.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">{attachmentItemList(value, removeCompleted)}</ul>
+        <ul className="flex flex-wrap gap-2">
+          {attachmentItemList(value, removeCompleted, postFrame, measure)}
+        </ul>
       ) : null}
 
       {pending.length > 0 ? (
@@ -428,6 +509,23 @@ export function AttachmentsField({
       />
     </div>
   );
+}
+
+/** The first attached image or video, for the frame rule (links and files skipped). */
+export function firstMedia(
+  items: readonly AttachmentItem[],
+  measured: Record<string, { w: number; h: number }>,
+): FrameMedia | null {
+  const first = items.find(
+    (item) => item.kind === 'image' || item.mime?.startsWith('video/') === true,
+  );
+  if (first === undefined) return null;
+  const dims = measured[first.versionId];
+  return {
+    kind: first.kind === 'image' ? 'image' : 'video',
+    w: dims?.w ?? null,
+    h: dims?.h ?? null,
+  };
 }
 
 function cnPending(error: string | null): string {

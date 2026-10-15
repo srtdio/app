@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import {
   attachmentItemList,
+  firstMedia,
   attachmentVersionIds,
   removeAttachmentAt,
   runFileAttachment,
@@ -48,7 +49,7 @@ describe('runFileAttachment', () => {
     const result = await runFileAttachment(file, true, uploadFile);
     expect(result).toEqual({
       ok: true,
-      item: { versionId: 'ver-1', kind: 'image', name: 'photo.png' },
+      item: { versionId: 'ver-1', kind: 'image', name: 'photo.png', mime: 'image/png' },
     });
   });
 
@@ -60,7 +61,7 @@ describe('runFileAttachment', () => {
     const result = await runFileAttachment(file, false, uploadFile);
     expect(result).toEqual({
       ok: true,
-      item: { versionId: 'ver-2', kind: 'file', name: 'doc.pdf' },
+      item: { versionId: 'ver-2', kind: 'file', name: 'doc.pdf', mime: 'application/pdf' },
     });
   });
 
@@ -127,5 +128,39 @@ describe('AttachmentsField upload origin', () => {
     const args = call.slice(0, call.indexOf('});'));
     expect(args).toContain("origin: 'library'");
     expect(source).not.toContain("origin: 'chat'");
+  });
+});
+
+describe('attachmentItemList frame', () => {
+  it('frames image tiles at the format ratio, square when absent', () => {
+    const img: AttachmentItem[] = [
+      { versionId: 'v', kind: 'image', name: 'p.png', previewUrl: 'blob:p', mime: 'image/png' },
+    ];
+    const framed = attachmentItemList(img, () => undefined, {
+      ratio: 9 / 16,
+      source: 'fixed',
+      fit: 'contain',
+      bands: 'black',
+    })[0];
+    expect(framed?.props['data-frame-fit']).toBe('contain');
+    expect(framed?.props['data-frame-ratio']).toBeCloseTo(9 / 16);
+    expect(attachmentItemList(img, () => undefined)[0]?.props['data-frame-ratio']).toBe(1);
+  });
+});
+
+describe('firstMedia (composer frame input)', () => {
+  it('takes the first image or video, skipping files and links', () => {
+    const items: AttachmentItem[] = [
+      { versionId: 'l', kind: 'link', name: 'L' },
+      { versionId: 'd', kind: 'file', name: 'd.pdf', mime: 'application/pdf' },
+      { versionId: 'v', kind: 'file', name: 'v.mp4', mime: 'video/mp4', previewUrl: 'blob:v' },
+    ];
+    expect(firstMedia(items, {})).toEqual({ kind: 'video', w: null, h: null });
+    expect(firstMedia(items, { v: { w: 1080, h: 1920 } })).toEqual({
+      kind: 'video',
+      w: 1080,
+      h: 1920,
+    });
+    expect(firstMedia(items.slice(0, 2), {})).toBeNull();
   });
 });
