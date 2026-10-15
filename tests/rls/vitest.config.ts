@@ -16,5 +16,10 @@ export default defineConfig({
     // One shared container; run files serially for deterministic ordering. Each
     // test still builds its own fixtures, so they remain independently runnable.
     fileParallelism: false,
+    // The local stack's gateway can answer one request with a 502 ("An invalid
+    // response was received from the upstream server") on the slower hosted
+    // runner image. Every test seeds its own rows, so a second attempt is a
+    // clean re-run, as in playwright.config.ts. Local runs keep one attempt.
+    retry: process.env.CI === 'true' ? 1 : 0,
   },
 });
