@@ -73,16 +73,36 @@ export function ownedActiveCount(rows: readonly WorkspaceRow[], userId: string |
 
 /**
  * Whether the create form starts disabled with {@link WORKSPACE_LIMIT_MESSAGE}:
- * the caller already owns exactly one active workspace. Read from the existing
- * workspace load: owning more than one is only possible for an exempt owner
- * (the workspaces_owner_limit trigger's platform_operators exemption), so it
- * leaves the form open. The server stays the real gate.
+ * the caller already owns an active workspace and is not an active platform
+ * operator. Exemption comes only from platform_operators; an unknown or failed
+ * read is not exempt (the workspaces_owner_limit trigger still decides on
+ * submit).
  */
 export function workspaceCreateBlocked(input: {
   rows: readonly WorkspaceRow[];
   userId: string | null;
+  isOperator: boolean | null;
 }): boolean {
-  return ownedActiveCount(input.rows, input.userId) === 1;
+  if (ownedActiveCount(input.rows, input.userId) === 0) return false;
+  return input.isOperator !== true;
+}
+
+/**
+ * The caller's own active platform_operators row under RLS
+ * (platform_operators_select_self). Any failure reads as not an operator.
+ */
+export async function readIsPlatformOperator(client: Client, userId: string): Promise<boolean> {
+  const res = await client
+    .from('platform_operators')
+    .select('user_id')
+    .eq('user_id', userId)
+    .is('revoked_at', null)
+    .maybeSingle();
+  if (res.error) {
+    logger.warn('operator read failed', { error: res.error.message });
+    return false;
+  }
+  return res.data !== null;
 }
 
 export interface BootstrapResult {
@@ -177,6 +197,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // onAuthStateChange that flips `session` to a new (but equivalent) object.
   const bootstrapGuard = useRef(false);
   const userId = session?.user.id ?? null;
+  const [isOperator, setIsOperator] = useState<boolean | null>(null);
+
+  // Exemption from the one-workspace rule, read once per user under RLS.
+  useEffect(() => {
+    setIsOperator(null);
+    if (userId === null) return;
+    let active = true;
+    readIsPlatformOperator(supabase, userId).then(
+      (next) => {
+        if (active) setIsOperator(next);
+      },
+      (err: unknown) => {
+        logger.warn('operator read failed', { error: String(err) });
+        if (active) setIsOperator(false);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!session) return;
@@ -267,8 +307,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   const createBlocked = useMemo(
-    () => workspaceCreateBlocked({ rows: workspaces, userId }),
-    [workspaces, userId],
+    () => workspaceCreateBlocked({ rows: workspaces, userId, isOperator }),
+    [workspaces, userId, isOperator],
   );
 
   const value = useMemo<WorkspaceContextValue>(

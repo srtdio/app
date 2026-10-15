@@ -1107,6 +1107,15 @@ export async function installHarnessNetwork(
           await route.fulfill({ status: 204, headers: CORS });
           return;
         }
+        // The create form's exemption read: the harness user is never a platform operator.
+        if (table === 'platform_operators') {
+          await route.fulfill({
+            status: 200,
+            headers: { ...CORS, 'content-type': 'application/json' },
+            body: '[]',
+          });
+          return;
+        }
         if (!(table in world.tables)) unmatched.push(`table ${table}`);
         if (table === 'chat_messages' && historyGate) await historyGate;
         const tableGate = tableGates.get(table);

@@ -5,6 +5,7 @@ import {
   bootstrapWorkspaces,
   isWorkspaceLimitError,
   ownedActiveCount,
+  readIsPlatformOperator,
   workspaceCreateBlocked,
   workspaceCreateErrorMessage,
   WORKSPACE_LIMIT_MESSAGE,
@@ -39,15 +40,66 @@ describe('workspaceCreateBlocked', () => {
   });
 
   it('is open when the caller owns nothing (a member elsewhere may still create one)', () => {
-    expect(workspaceCreateBlocked({ rows: [row('b', 'other')], userId: ME })).toBe(false);
+    expect(
+      workspaceCreateBlocked({ rows: [row('b', 'other')], userId: ME, isOperator: false }),
+    ).toBe(false);
   });
 
-  it('blocks an owner of one active workspace', () => {
-    expect(workspaceCreateBlocked({ rows: [row('a', ME)], userId: ME })).toBe(true);
+  it('blocks an owner of an active workspace who is not a platform operator', () => {
+    expect(workspaceCreateBlocked({ rows: [row('a', ME)], userId: ME, isOperator: false })).toBe(
+      true,
+    );
+    // Unknown (read pending) is not exempt either.
+    expect(workspaceCreateBlocked({ rows: [row('a', ME)], userId: ME, isOperator: null })).toBe(
+      true,
+    );
   });
 
-  it('stays open for an owner of more than one (only an exempt owner can be one)', () => {
-    expect(workspaceCreateBlocked({ rows: [row('a', ME), row('b', ME)], userId: ME })).toBe(false);
+  it('never blocks an active platform operator', () => {
+    expect(workspaceCreateBlocked({ rows: [row('a', ME)], userId: ME, isOperator: true })).toBe(
+      false,
+    );
+  });
+
+  it('does not treat owning two workspaces as exempt without a platform_operators row', () => {
+    expect(
+      workspaceCreateBlocked({ rows: [row('a', ME), row('b', ME)], userId: ME, isOperator: false }),
+    ).toBe(true);
+  });
+});
+
+describe('readIsPlatformOperator', () => {
+  function clientReturning(result: { data: unknown; error: { message: string } | null }) {
+    const calls: Array<[string, unknown]> = [];
+    const query = {
+      select: (cols: string) => (calls.push(['select', cols]), query),
+      eq: (col: string, val: unknown) => (calls.push([`eq ${col}`, val]), query),
+      is: (col: string, val: unknown) => (calls.push([`is ${col}`, val]), query),
+      maybeSingle: async () => result,
+    };
+    const from = vi.fn(() => query);
+    return { client: { from } as unknown as Client, from, calls };
+  }
+
+  it('reads the caller own active row', async () => {
+    const { client, from, calls } = clientReturning({ data: { user_id: ME }, error: null });
+    expect(await readIsPlatformOperator(client, ME)).toBe(true);
+    expect(from).toHaveBeenCalledWith('platform_operators');
+    expect(calls).toEqual([
+      ['select', 'user_id'],
+      ['eq user_id', ME],
+      ['is revoked_at', null],
+    ]);
+  });
+
+  it('is false with no row', async () => {
+    const { client } = clientReturning({ data: null, error: null });
+    expect(await readIsPlatformOperator(client, ME)).toBe(false);
+  });
+
+  it('is false (not exempt) when the read fails', async () => {
+    const { client } = clientReturning({ data: null, error: { message: 'denied' } });
+    expect(await readIsPlatformOperator(client, ME)).toBe(false);
   });
 });
 

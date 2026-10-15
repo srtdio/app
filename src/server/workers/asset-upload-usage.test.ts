@@ -1,6 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
+
+// The service-role client: one chainable query whose result each test sets.
+const supa = vi.hoisted(() => ({
+  result: { data: null as unknown, error: null as { message: string } | null },
+  calls: [] as Array<[string, unknown]>,
+}));
+vi.mock('@supabase/supabase-js', () => {
+  const query: Record<string, unknown> = {};
+  for (const name of ['select', 'eq', 'is']) {
+    query[name] = (a: unknown, b?: unknown) => {
+      supa.calls.push([name, b === undefined ? a : [a, b]]);
+      return query;
+    };
+  }
+  query.maybeSingle = async () => supa.result;
+  return {
+    createClient: () => ({
+      from: (table: string) => {
+        supa.calls.push(['from', table]);
+        return query;
+      },
+    }),
+  };
+});
 import {
   cachedBucketBytes,
+  createSupabaseUsageStore,
   fetchR2BucketBytes,
   parseR2StorageBytes,
   resolveWorkspaceUsage,
@@ -225,5 +250,36 @@ describe('resolveWorkspaceUsage', () => {
     });
     expect(res.ok).toBe(false);
     expect(!res.ok && res.error.code).toBe('not_found');
+  });
+});
+
+describe('createSupabaseUsageStore.isExemptOwner', () => {
+  const store = createSupabaseUsageStore(
+    { SUPABASE_URL: 'https://db.test', SUPABASE_SECRET_KEY: 'k' },
+    't',
+  );
+
+  it('reads only the owner active platform_operators row', async () => {
+    supa.calls = [];
+    supa.result = { data: { user_id: 'owner-1' }, error: null };
+    expect(await store.isExemptOwner('owner-1')).toBe(true);
+    expect(supa.calls).toEqual([
+      ['from', 'platform_operators'],
+      ['select', 'user_id'],
+      ['eq', ['user_id', 'owner-1']],
+      ['is', ['revoked_at', null]],
+    ]);
+  });
+
+  it('is not exempt without a row, or when the read fails (never a workspace count)', async () => {
+    supa.calls = [];
+    supa.result = { data: null, error: null };
+    expect(await store.isExemptOwner('owner-1')).toBe(false);
+    supa.result = { data: null, error: { message: 'denied' } };
+    expect(await store.isExemptOwner('owner-1')).toBe(false);
+    expect(supa.calls.filter(([name]) => name === 'from')).toEqual([
+      ['from', 'platform_operators'],
+      ['from', 'platform_operators'],
+    ]);
   });
 });

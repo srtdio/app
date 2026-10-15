@@ -6,10 +6,8 @@
 // minutes through the Workers Cache API. A Cloudflare failure is a domain error
 // (never a made-up number), and the UI then shows nothing.
 //
-// Exempt = the workspace owner is an active platform_operator; exempt never
-// warns. The operator read is a service-role select; if that read is refused
-// the owner still counts as exempt when they own more than one active
-// workspace, which only the workspaces_owner_limit trigger's exemption allows.
+// Exempt = the workspace owner is an active platform_operators row (a
+// service-role read); exempt never warns. A failed read is not exempt.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@srtdio/schemas';
@@ -93,20 +91,18 @@ export function createSupabaseUsageStore(
       return data ? { bucket: data.asset_bucket, ownerUserId: data.owner_user_id } : null;
     },
     async isExemptOwner(ownerUserId) {
-      const operator = await client
+      const { data, error } = await client
         .from('platform_operators')
         .select('user_id')
         .eq('user_id', ownerUserId)
         .is('revoked_at', null)
         .maybeSingle();
-      if (!operator.error) return operator.data !== null;
-      const owned = await client
-        .from('workspaces')
-        .select('id', { count: 'exact', head: true })
-        .eq('owner_user_id', ownerUserId)
-        .is('deleted_at', null);
-      if (owned.error) throw owned.error;
-      return (owned.count ?? 0) > 1;
+      if (error) {
+        // Never guess: a failed read is not exempt.
+        logger.warn('usage: platform_operators read failed', { error: error.message });
+        return false;
+      }
+      return data !== null;
     },
   };
 }

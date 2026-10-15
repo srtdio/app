@@ -14,3 +14,7 @@ end $$;
 revoke all on function public.workspaces_enforce_owner_limit() from public, anon, authenticated;
 drop trigger if exists workspaces_owner_limit on public.workspaces;
 create trigger workspaces_owner_limit before insert or update of owner_user_id on public.workspaces for each row execute function public.workspaces_enforce_owner_limit();
+-- Exemption read path (already applied live; record only). RLS policy
+-- platform_operators_select_self limits authenticated to its own row;
+-- service_role bypasses RLS. Re-running a grant is a no-op.
+grant select on public.platform_operators to authenticated, service_role;
