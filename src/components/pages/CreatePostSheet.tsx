@@ -19,7 +19,21 @@ import { useSession } from '@/lib/session-context';
 import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
 import { listBuckets, type BucketOption } from '@/lib/buckets';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
-import { postCreate, gallerySet, type Client, type Result } from '@srtdio/rpc';
+import { postCreate, gallerySet, stageTransition, type Client, type Result } from '@srtdio/rpc';
+import { PresetMediaField } from '@/components/induction/PresetMediaField';
+import {
+  dispatchInductionRefresh,
+  formatNeedsMedia,
+  INDUCTION_KEYS,
+  titleFromCaption,
+  type PostSheetPreset,
+} from '@/lib/induction';
+import { logger } from '@/lib/logger';
+import { sendMessageRecord } from '@/lib/chat/record';
+import { newMessageId } from '@/lib/chat/message-id';
+import { sharePostToChannel } from '@/lib/chat/share-post';
+import { createInFlightGuard } from '@/lib/chat/thread-actions';
+import { cn } from '@/lib/cn';
 import {
   FORMATS_BY_PLATFORM,
   PostCreatePayloadSchema,
@@ -38,6 +52,38 @@ interface CreatePostSheetProps {
   onClose: () => void;
   /** Called with the new post's id once it (and its attachments) saved. */
   onCreated: (postId: string) => void;
+  /**
+   * An induction post step: owner, bucket, origin and brief stay out, the title
+   * comes from the caption, media is required when the format needs it, and the
+   * primary is Send for review or Save as draft. Absent: the full sheet.
+   */
+  preset?: PostSheetPreset;
+}
+
+/** The post saved but the move to review did not land: retry the move, never re-create. */
+export const REVIEW_RETRY_MESSAGE =
+  "Your post is saved, but it didn't reach review. Try sending it again.";
+
+/** The preset's primary button label. */
+export function presetPrimaryLabel(input: {
+  preset: PostSheetPreset;
+  submitting: boolean;
+  savedDraft: boolean;
+}): string {
+  if (input.preset.primary === 'save_draft') return input.submitting ? 'Saving' : 'Save as draft';
+  if (input.submitting) return 'Sending';
+  return input.savedDraft ? 'Send for review again' : 'Send for review';
+}
+
+/** Whether the preset sheet may submit: a caption, a format, and media when the format needs it. */
+export function presetCanSubmit(input: {
+  caption: string;
+  format: string;
+  attachments: number;
+  busy: boolean;
+}): boolean {
+  if (input.busy || input.caption.trim() === '' || input.format === '') return false;
+  return !formatNeedsMedia(input.format) || input.attachments > 0;
 }
 
 /**
@@ -220,6 +266,7 @@ export function CreatePostSheet({
   initialTargetDate,
   onClose,
   onCreated,
+  preset,
 }: CreatePostSheetProps) {
   const newTrace = useNewTrace();
   const { session } = useSession();
@@ -241,6 +288,12 @@ export function CreatePostSheet({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Preset only: the saved post whose move to review failed, the share toggle,
+  // and an upload in flight.
+  const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
+  const [share, setShare] = useState(true);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [shareGuard] = useState(createInFlightGuard);
 
   function patch(next: Partial<CreateFormState>): void {
     setForm((prev) => ({ ...prev, ...next }));
@@ -263,6 +316,9 @@ export function CreatePostSheet({
     setFieldErrors({});
     setSubmitError(null);
     setSubmitting(false);
+    setSavedDraftId(null);
+    setShare(true);
+    setMediaBusy(false);
   }, [open, initialTargetDate]);
 
   // Default the format to the platform's first one, and keep it inside the
@@ -340,15 +396,114 @@ export function CreatePostSheet({
   }));
 
   const canSubmit =
-    workspaceId !== null &&
-    form.title.trim() !== '' &&
-    form.caption.trim() !== '' &&
-    form.format !== '' &&
-    (form.origin !== 'brief' || form.briefId !== '') &&
-    !submitting;
+    preset !== undefined
+      ? workspaceId !== null &&
+        presetCanSubmit({
+          caption: form.caption,
+          format: form.format,
+          attachments: form.attachments.length,
+          busy: submitting || mediaBusy,
+        })
+      : workspaceId !== null &&
+        form.title.trim() !== '' &&
+        form.caption.trim() !== '' &&
+        form.format !== '' &&
+        (form.origin !== 'brief' || form.briefId !== '') &&
+        !submitting;
+
+  /** Preset: move the saved post to review; a failure keeps it to retry the move only. */
+  async function sendForReview(postId: string): Promise<boolean> {
+    const moved = await stageTransition(supabase, {
+      p_post_id: postId,
+      p_to_stage: 'review',
+      p_trace_id: newTrace(),
+    });
+    if (!moved.ok) {
+      logger.error('first post to review failed', { error: moved.error.message });
+      setSavedDraftId(postId);
+      setSubmitError(REVIEW_RETRY_MESSAGE);
+      return false;
+    }
+    setSavedDraftId(null);
+    return true;
+  }
+
+  /** Preset: post the card into the default group through the existing share path. */
+  async function shareToGroup(postId: string): Promise<void> {
+    if (preset === undefined || preset.share === 'no_group' || !share) return;
+    const shared = await sharePostToChannel(
+      {
+        guard: shareGuard,
+        record: (input) => sendMessageRecord({ client: supabase, ...input }),
+        // Postgres first; members catch up from the row (no live connection here).
+        publish: null,
+        newMessageId,
+        newTraceId: newTrace,
+        onPublishFailed: () => undefined,
+      },
+      { channelId: preset.share.channelId, postId },
+    );
+    if (!shared.ok) logger.warn('first post share to group failed', { reason: shared.reason });
+  }
+
+  async function handlePresetSubmit(): Promise<void> {
+    if (workspaceId === null || preset === undefined) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    let postId = savedDraftId;
+    if (postId === null) {
+      const built = buildPostCreatePayload({
+        title: titleFromCaption(form.caption),
+        caption: form.caption,
+        format: form.format,
+        ownerUserId: '',
+        bucketId: '',
+        targetDate: form.targetDate,
+        origin: 'none',
+        briefId: '',
+      });
+      if (!built.ok) {
+        setSubmitting(false);
+        setFieldErrors(built.errors);
+        return;
+      }
+      const result = await submitCreatePost({
+        client: supabase,
+        workspaceId,
+        payload: built.payload,
+        versionIds: attachmentVersionIds(form.attachments),
+        newTrace,
+        postCreate,
+        gallerySet,
+      });
+      if (!result.ok) {
+        setSubmitting(false);
+        setSubmitError(
+          workspacePlatform !== null
+            ? postCreateErrorMessage(result.message, workspacePlatform)
+            : result.message,
+        );
+        return;
+      }
+      postId = result.postId;
+    }
+    if (preset.primary === 'send_for_review' && !(await sendForReview(postId))) {
+      setSubmitting(false);
+      dispatchInductionRefresh();
+      return;
+    }
+    await shareToGroup(postId);
+    setSubmitting(false);
+    dispatchInductionRefresh();
+    onCreated(postId);
+  }
 
   async function handleSubmit(): Promise<void> {
     if (workspaceId === null) return;
+    if (preset !== undefined) {
+      await handlePresetSubmit();
+      return;
+    }
 
     const built = buildPostCreatePayload({
       title: form.title,
@@ -388,6 +543,7 @@ export function CreatePostSheet({
       );
       return;
     }
+    dispatchInductionRefresh();
     onCreated(result.postId);
   }
 
@@ -411,121 +567,142 @@ export function CreatePostSheet({
             <Button
               variant="primary"
               size="lg"
+              data-induction={INDUCTION_KEYS.postSheetPrimary}
               onClick={() => void handleSubmit()}
               disabled={!canSubmit}
             >
-              {submitting ? 'Creating' : 'Save as draft'}
+              {preset !== undefined
+                ? presetPrimaryLabel({ preset, submitting, savedDraft: savedDraftId !== null })
+                : submitting
+                  ? 'Creating'
+                  : 'Save as draft'}
             </Button>
           </span>
         </>
       }
     >
       <div className="flex flex-col gap-4 overflow-x-hidden">
-        <Field label="Title" htmlFor="post-title" required>
-          <Input
-            id="post-title"
-            value={form.title}
-            onChange={(event) => patch({ title: event.target.value })}
-            placeholder="Post title"
-          />
-          {gridError('title')}
-        </Field>
-
-        <Field label="Caption" htmlFor="post-caption" required>
-          <Textarea
-            id="post-caption"
-            value={form.caption}
-            onChange={(event) => patch({ caption: event.target.value })}
-            placeholder="Write the caption"
-          />
-          {gridError('caption')}
-        </Field>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="min-w-0">
-            <Field label="Format">
-              <Select
-                label="Format"
-                value={form.format}
-                options={formatOptions}
-                onChange={(value) => patch({ format: value })}
-              />
-            </Field>
-          </div>
-
-          <div className="min-w-0">
-            <Field label="Bucket">
-              <Select
-                label="Bucket"
-                value={form.bucketId}
-                options={bucketOptions}
-                onChange={(value) => patch({ bucketId: value })}
-                placeholder="No bucket"
-              />
-            </Field>
-          </div>
-
-          <div className="min-w-0">
-            <Field label="Owner">
-              <Select
-                label="Owner"
-                value={form.ownerUserId}
-                options={ownerOptions}
-                onChange={(value) => patch({ ownerUserId: value })}
-                placeholder="Choose an owner"
-              />
-            </Field>
-          </div>
-
-          <div className="min-w-0">
-            <Field label="Target date">
-              <DatePicker
-                label="Target date"
-                value={form.targetDate}
-                onChange={(value) => patch({ targetDate: value })}
-              />
-            </Field>
-          </div>
-
-          <div className="min-w-0">
-            <Field label="Origin">
-              <Select
-                label="Origin"
-                value={form.origin}
-                options={originOptions}
-                onChange={(value) =>
-                  patch({
-                    origin: value as OriginValue,
-                    ...(value === 'none' ? { briefId: '' } : {}),
-                  })
-                }
-              />
-            </Field>
-          </div>
-
-          {form.origin === 'brief' ? (
-            <div className="col-span-2 min-w-0">
-              <Field label="Brief" required>
-                <Select
-                  label="Brief"
-                  value={form.briefId}
-                  options={briefOptions}
-                  onChange={(value) => patch({ briefId: value })}
-                  placeholder="Choose a brief"
-                />
-                {gridError('briefId')}
-              </Field>
-            </div>
-          ) : null}
-        </div>
-
-        <Field label="Attachments">
-          <AttachmentsField
+        {preset !== undefined ? (
+          <PresetFields
+            preset={preset}
+            form={form}
+            patch={patch}
+            formatOptions={formatOptions}
             workspaceId={workspaceId}
-            value={form.attachments}
-            onChange={(attachments) => patch({ attachments })}
+            share={share}
+            onShareChange={setShare}
+            onMediaBusyChange={setMediaBusy}
+            captionError={gridError('caption')}
           />
-        </Field>
+        ) : (
+          <>
+            <Field label="Title" htmlFor="post-title" required>
+              <Input
+                id="post-title"
+                value={form.title}
+                onChange={(event) => patch({ title: event.target.value })}
+                placeholder="Post title"
+              />
+              {gridError('title')}
+            </Field>
+
+            <Field label="Caption" htmlFor="post-caption" required>
+              <Textarea
+                id="post-caption"
+                value={form.caption}
+                onChange={(event) => patch({ caption: event.target.value })}
+                placeholder="Write the caption"
+              />
+              {gridError('caption')}
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="min-w-0">
+                <Field label="Format">
+                  <Select
+                    label="Format"
+                    value={form.format}
+                    options={formatOptions}
+                    onChange={(value) => patch({ format: value })}
+                  />
+                </Field>
+              </div>
+
+              <div className="min-w-0">
+                <Field label="Bucket">
+                  <Select
+                    label="Bucket"
+                    value={form.bucketId}
+                    options={bucketOptions}
+                    onChange={(value) => patch({ bucketId: value })}
+                    placeholder="No bucket"
+                  />
+                </Field>
+              </div>
+
+              <div className="min-w-0">
+                <Field label="Owner">
+                  <Select
+                    label="Owner"
+                    value={form.ownerUserId}
+                    options={ownerOptions}
+                    onChange={(value) => patch({ ownerUserId: value })}
+                    placeholder="Choose an owner"
+                  />
+                </Field>
+              </div>
+
+              <div className="min-w-0">
+                <Field label="Target date">
+                  <DatePicker
+                    label="Target date"
+                    value={form.targetDate}
+                    onChange={(value) => patch({ targetDate: value })}
+                  />
+                </Field>
+              </div>
+
+              <div className="min-w-0">
+                <Field label="Origin">
+                  <Select
+                    label="Origin"
+                    value={form.origin}
+                    options={originOptions}
+                    onChange={(value) =>
+                      patch({
+                        origin: value as OriginValue,
+                        ...(value === 'none' ? { briefId: '' } : {}),
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+
+              {form.origin === 'brief' ? (
+                <div className="col-span-2 min-w-0">
+                  <Field label="Brief" required>
+                    <Select
+                      label="Brief"
+                      value={form.briefId}
+                      options={briefOptions}
+                      onChange={(value) => patch({ briefId: value })}
+                      placeholder="Choose a brief"
+                    />
+                    {gridError('briefId')}
+                  </Field>
+                </div>
+              ) : null}
+            </div>
+
+            <Field label="Attachments">
+              <AttachmentsField
+                workspaceId={workspaceId}
+                value={form.attachments}
+                onChange={(attachments) => patch({ attachments })}
+              />
+            </Field>
+          </>
+        )}
 
         {submitError !== null ? (
           <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
@@ -534,5 +711,111 @@ export function CreatePostSheet({
         ) : null}
       </div>
     </Sheet>
+  );
+}
+
+/** The preset's fields: caption, format, an optional target date, media, and the share toggle. */
+function PresetFields(props: {
+  preset: PostSheetPreset;
+  form: CreateFormState;
+  patch: (next: Partial<CreateFormState>) => void;
+  formatOptions: SelectOption[];
+  workspaceId: string | null;
+  share: boolean;
+  onShareChange: (value: boolean) => void;
+  onMediaBusyChange: (busy: boolean) => void;
+  captionError: ReactElement | null;
+}): ReactElement {
+  const { preset, form, patch } = props;
+  return (
+    <>
+      <Field label="Caption" htmlFor="post-caption" required>
+        <Textarea
+          id="post-caption"
+          value={form.caption}
+          onChange={(event) => patch({ caption: event.target.value })}
+          placeholder="Write the caption. Its first line becomes the title."
+        />
+        {props.captionError}
+      </Field>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="min-w-0">
+          <Field label="Format">
+            <Select
+              label="Format"
+              value={form.format}
+              options={props.formatOptions}
+              onChange={(value) => patch({ format: value })}
+            />
+          </Field>
+        </div>
+        <div className="min-w-0">
+          <Field label="Target date (optional)">
+            <DatePicker
+              label="Target date"
+              value={form.targetDate}
+              onChange={(value) => patch({ targetDate: value })}
+            />
+          </Field>
+        </div>
+      </div>
+
+      <Field label="Photo or video" required={formatNeedsMedia(form.format)}>
+        <PresetMediaField
+          workspaceId={props.workspaceId}
+          value={form.attachments}
+          onChange={(attachments) => patch({ attachments })}
+          required={formatNeedsMedia(form.format)}
+          onBusyChange={props.onMediaBusyChange}
+        />
+      </Field>
+
+      {preset.share === 'no_group' ? (
+        <p className="text-[13px] text-fg-3">
+          This workspace has no chat group yet, so the post is not shared in chat.
+        </p>
+      ) : (
+        <ShareToggle
+          label={`Share in the ${preset.share.groupName} chat`}
+          checked={props.share}
+          onChange={props.onShareChange}
+        />
+      )}
+    </>
+  );
+}
+
+function ShareToggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}): ReactElement {
+  return (
+    <div className="flex min-h-[44px] items-center justify-between gap-3 text-sm">
+      <span className="[text-wrap:pretty]">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          'relative inline-flex h-11 w-[60px] shrink-0 items-center rounded-full px-1 transition-colors motion-reduce:transition-none',
+          checked ? 'bg-accent' : 'bg-panel-3',
+        )}
+      >
+        <span
+          className={cn(
+            'h-7 w-7 rounded-full bg-panel transition-transform motion-reduce:transition-none',
+            checked ? 'translate-x-[24px]' : 'translate-x-0',
+          )}
+        />
+      </button>
+    </div>
   );
 }

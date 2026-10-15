@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { IconCheck, IconFolder, IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 interface AssetAddMenuProps {
   /** Open the New folder sheet (the "New folder" option). */
@@ -35,6 +36,7 @@ export function AssetAddMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Add asset"
+        data-induction={INDUCTION_KEYS.assetsAdd}
         onClick={() => setOpen((prev) => !prev)}
         className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-accent text-accent-fg transition-colors hover:bg-accent-hover"
       >

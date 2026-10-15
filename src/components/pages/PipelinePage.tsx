@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
-import { useNavigate } from 'react-router-dom';
+import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
+import { IconPlus } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
@@ -16,9 +14,10 @@ import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { dispatchSorted } from '@/lib/events';
+import { INDUCTION_KEYS } from '@/lib/induction';
+import { useInductionPostPreset } from '@/components/induction/InductionProvider';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
-import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useSort } from '@/lib/use-sort';
 import { useSession } from '@/lib/session-context';
@@ -40,7 +39,6 @@ interface DateRange {
   end: string;
 }
 import { groupByStage, stageColumns } from '@/lib/post-board';
-import { useWorkspaceMembers } from '@/components/chat/use-workspace-members';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, DomainErrorCode, PipelinePost, Stage } from '@srtdio/posts';
 import { PresignCache } from '@/lib/asset-presign';
@@ -115,6 +113,7 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
             variant="primary"
             size="lg"
             aria-label="Create post"
+            data-induction={INDUCTION_KEYS.pipelineCreate}
             className="w-11 px-0"
             onClick={() => dispatchSorted('sorted:create-post')}
           >
@@ -123,8 +122,30 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
         ),
       }}
     >
-      <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
+      <StageRow>
+        <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
+      </StageRow>
     </SectionHeader>
+  );
+}
+
+/** The Draft chip's place in the row: the stages keep transition-map order. */
+const DRAFT_CHIP_INDEX = STAGES.indexOf('draft');
+
+/**
+ * The stage row, marked for the induction. StageChips renders its own buttons,
+ * so the Draft chip's key is set on the rendered chip from here (attribute only).
+ */
+function StageRow({ children }: { children: ReactNode }): ReactElement {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const chip = ref.current?.querySelectorAll('button')[DRAFT_CHIP_INDEX];
+    chip?.setAttribute('data-induction', INDUCTION_KEYS.pipelineDraftChip);
+  });
+  return (
+    <div ref={ref} data-induction={INDUCTION_KEYS.pipelineStageRow}>
+      {children}
+    </div>
   );
 }
 
@@ -312,15 +333,7 @@ export async function runMovePost(
   }
 }
 
-interface OnboardingStep {
-  key: string;
-  label: string;
-  action: string;
-  run: () => void;
-}
-
 export function PipelinePage() {
-  const navigate = useNavigate();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   // Opens on Review (a stale ?view=plan link included).
@@ -343,8 +356,6 @@ export function PipelinePage() {
   const activeWorkspace = workspaces.find((w) => w.id === workspaceId);
   const timeZone = activeWorkspace?.timezone ?? 'UTC';
   const weekStartDay = activeWorkspace?.week_start_day ?? 1;
-  const [cardDismissed, setCardDismissed] = useState(false);
-  const [skipped, setSkipped] = useState<Record<string, boolean>>({});
 
   const [posts, setPosts] = useState<PipelinePost[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
@@ -355,6 +366,8 @@ export function PipelinePage() {
   // itself is a ref (no re-render), so this state drives the sheet's busy prop.
   const [movingId, setMovingId] = useState<string | null>(null);
   const { toasts, push, dismiss } = useToasts();
+  // A post step of the induction opens the sheet with its preset.
+  const postPreset = useInductionPostPreset();
   // The viewer's role, loaded once from the membership exactly as PCS does: it
   // filters the board's drop targets and the move sheet.
   const { session } = useSession();
@@ -482,53 +495,6 @@ export function PipelinePage() {
     [posts, push, role],
   );
 
-  const canCreateBrief = useWorkspaceCapability('brief.create') === true;
-  const steps: OnboardingStep[] = [
-    {
-      key: 'post',
-      label: 'Create your first post',
-      action: 'Create post',
-      run: () => dispatchSorted('sorted:create-post'),
-    },
-    {
-      key: 'invite',
-      label: 'Invite a teammate',
-      action: 'Invite',
-      run: () => navigate('/settings?panel=members'),
-    },
-    // New brief is a client action: listed only where the role holds brief.create.
-    ...(canCreateBrief
-      ? [
-          {
-            key: 'brief',
-            label: 'Create your first brief',
-            action: 'Create brief',
-            run: () => dispatchSorted('sorted:create-brief'),
-          },
-        ]
-      : []),
-  ];
-
-  const visibleSteps = steps.filter((step) => skipped[step.key] !== true);
-
-  // The onboarding card is for fresh workspaces only: once a workspace has real
-  // content it should auto-hide, computed live with no persistence. "Has content"
-  // means it carries posts AND more than a solo roster. Both signals reuse data
-  // already on this surface: counts.all (the same filtered total the header shows)
-  // for posts, and the RLS-scoped member roster the chat picker uses for members.
-  // Default to HIDDEN while either signal is still loading or the member read
-  // errored, so the card never flashes on a populated workspace. Manual dismiss
-  // (X) and per-row Skip stay local-only and are unaffected.
-  const members = useWorkspaceMembers(workspaceId);
-  const signalsReady =
-    workspaceId !== null && !postsLoading && !members.loading && members.error === null;
-  const hasPosts = (counts.all ?? 0) >= 1;
-  const activeMemberCount = members.options.length;
-  const workspacePopulated = hasPosts && activeMemberCount >= 2;
-  const workspaceEmptyEnough = signalsReady && !workspacePopulated;
-
-  const showCard = !cardDismissed && visibleSteps.length > 0 && workspaceEmptyEnough;
-
   const boardLoading = workspaceId === null || (postsLoading && posts.length === 0);
 
   return (
@@ -552,44 +518,6 @@ export function PipelinePage() {
           grouped list the board/feed render), so it tracks the active search
           instead of freezing at the unfiltered posts.length. */}
       <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">{postCountLabel(shownCount)}</div>
-
-      {showCard ? (
-        <div className="px-4 md:px-6 mt-4">
-          <div className="rounded-xl border border-border bg-panel-2 p-4">
-            <div className="flex items-center gap-2">
-              <div className="text-sm font-semibold">Get started</div>
-              <span className="ml-auto">
-                <IconButton label="Dismiss" onClick={() => setCardDismissed(true)}>
-                  <IconX size={16} />
-                </IconButton>
-              </span>
-            </div>
-            <ul className="mt-2 flex flex-col gap-1">
-              {visibleSteps.map((step) => (
-                <li
-                  key={step.key}
-                  className="flex items-center gap-3 min-h-[44px] rounded-lg px-2 hover:bg-panel-3 transition-colors"
-                >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border text-fg-3 shrink-0">
-                    <IconCheck size={14} />
-                  </span>
-                  <span className="flex-1 text-sm">{step.label}</span>
-                  <Button variant="primary" size="sm" onClick={step.run}>
-                    {step.action}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSkipped((prev) => ({ ...prev, [step.key]: true }))}
-                  >
-                    Skip
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ) : null}
 
       {postsError !== null ? (
         <div className="px-4 md:px-6 mt-4">
@@ -627,6 +555,7 @@ export function PipelinePage() {
       <CreatePostSheet
         open={createOpen}
         workspaceId={workspaceId}
+        {...(postPreset !== undefined ? { preset: postPreset } : {})}
         onClose={() => setCreateOpen(false)}
         onCreated={() => {
           setCreateOpen(false);

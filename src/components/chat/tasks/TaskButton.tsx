@@ -6,6 +6,7 @@ import type { ReactElement } from 'react';
 import { IconTaskSquare } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 export const TASK_BUTTON_LABEL = 'Task list';
 
@@ -15,6 +16,7 @@ export function TaskButton(props: { unseen: boolean; onOpen: () => void }): Reac
       type="button"
       aria-label={TASK_BUTTON_LABEL}
       data-task-button=""
+      data-induction={INDUCTION_KEYS.chatTasks}
       {...(props.unseen ? { 'data-task-unseen': '' } : {})}
       onClick={props.onOpen}
       onContextMenu={(event) => event.preventDefault()}

@@ -1,54 +1,53 @@
-// Full-screen onboarding, one question per screen (Airtable), a live preview of
-// how you appear (Notion), a setup question that makes something real (Slack:
-// the first post), about a minute end to end (Linear). The shell (AppLayout)
-// shows it to anyone whose profile is unfinished or who has no workspace.
+// Full-screen pre-app screens, one question per screen, before the shell. The
+// shell (AppLayout) shows them to anyone whose profile is unfinished, and to an
+// approver who signed up alone and is waiting for their team. Everything after
+// them happens on the real screens with the guide on top (src/components/induction).
 //
 // Which screens a person walks comes from stepsFor (src/lib/onboarding.ts):
-//   self sign-up: name, role, quick, workspace, firstpost, invite
-//   invitee:      password, name, role, ready
-//   profile done, no workspace: workspace, firstpost, invite
+//   self sign-up, Creator:  side, name, role, then the shell (make the workspace)
+//   self sign-up, Approver: side, name, role, brand, waiting
+//   invitee:                password, name, role, then the shell
 //
 // Nothing here refetches the profile or the workspace list until the very end
 // (finish), because either refetch flips the shell gate and would unmount the
-// flow mid-way. Colors are tokens only, so light and dark both hold; new people
-// are always in light (src/lib/theme.ts).
+// flow mid-way. Colors are tokens only, so light and dark both hold.
 
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import {
-  memberJoinGroupSet,
-  stageTransition,
-  userOnboardingSave,
-  usernameAvailable,
-  workspaceCreate,
-} from '@srtdio/rpc';
+import { userOnboardingSave, usernameAvailable } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
-import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { isValidInviteEmail } from '@/components/pages/settings/MembersInviteForm';
 import { Wordmark } from '@/components/home/Wordmark';
+import { readLatestBrandRequest, requestBrandTeam } from '@/components/induction/induction-data';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
+import {
+  APPROVER_BRAND_STEP,
+  APPROVER_WAITING_STEP,
+  brandRequestErrorMessage,
+  WORKSPACE_STEP,
+  type ApproverStage,
+} from '@/lib/induction';
 import { logger } from '@/lib/logger';
 import {
   AGE_RANGES,
-  HEARD_FROM,
-  defaultGroupName,
-  firstName,
-  initialsOf,
-  inviteRoleFor,
-  peopleLine,
+  OTHER_ROLE,
+  ROLE_TILES,
+  SIDE_TILES,
+  designationFor,
   normalizeUsernameInput,
   progressSteps,
-  roleGroupsFor,
   stepsFor,
   suggestUsername,
   usernameFormat,
   type OnboardingStep,
+  type Side,
 } from '@/lib/onboarding';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
@@ -61,6 +60,10 @@ interface OnboardingFlowProps {
   /** The invitee's workspace (already joined); null for a self sign-up. */
   workspaceId: string | null;
   workspaceName: string | null;
+  /** An approver who signed up alone: resume on naming their team, or on the wait. */
+  approverStage: ApproverStage;
+  /** Store the induction step (induction_step_set); resolves false when it did not save. */
+  onStep: (step: string) => Promise<boolean>;
   /**
    * Done: the shell refetches profile and workspaces, then opens `to`. The flow
    * stays mounted (busy) until both have landed, so nothing flickers.
@@ -70,27 +73,17 @@ interface OnboardingFlowProps {
   finishError: string | null;
 }
 
-type Side = 'client' | 'team';
-interface InviteRow {
-  email: string;
-  side: Side;
-}
 type NameCheck = 'idle' | 'checking' | 'free' | 'taken' | 'error';
 
-const OTHER_ROLE = 'Something else';
-
-function detectTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return 'UTC';
-  }
-}
+/** Where a finished Creator or invitee lands: the shell takes it from there. */
+const SHELL_HOME = '/pipeline';
 
 export function OnboardingFlow({
   profile,
   workspaceId: joinedWorkspaceId,
   workspaceName: joinedWorkspaceName,
+  approverStage,
+  onStep,
   onFinish,
   finishError,
 }: OnboardingFlowProps): ReactElement {
@@ -98,16 +91,22 @@ export function OnboardingFlow({
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const email = session?.user.email ?? '';
+  const invitee = joinedWorkspaceId !== null;
 
-  // Fixed at mount: the flow does not reshuffle while the person is in it.
-  const [steps] = useState<OnboardingStep[]>(() =>
-    stepsFor({
-      profileIncomplete: profile === null || profile.profile_completed_at === null,
-      hasWorkspace: joinedWorkspaceId !== null,
-    }),
-  );
+  // The side: picked on the first screen, or the invite's role for an invitee.
+  const [side, setSide] = useState<Side | null>(approverStage !== 'none' ? 'approver' : null);
+  const [inviteSide, setInviteSide] = useState<Side>('creator');
+  const shownSide: Side = invitee ? inviteSide : (side ?? 'creator');
+  // Fixed at mount except for the approver's tail, which follows the side picked.
+  const [profileIncomplete] = useState(profile === null || profile.profile_completed_at === null);
+  const steps = stepsFor({
+    profileIncomplete,
+    hasWorkspace: invitee,
+    side: shownSide,
+    approverStage,
+  });
   const [index, setIndex] = useState(0);
-  const step = steps[index] ?? 'workspace';
+  const step: OnboardingStep = steps[index] ?? 'waiting';
 
   // Profile answers
   const [password, setPassword] = useState('');
@@ -120,7 +119,6 @@ export function OnboardingFlow({
   const [username, setUsername] = useState('');
   const [usernameEdited, setUsernameEdited] = useState(false);
   const [nameCheck, setNameCheck] = useState<NameCheck>('idle');
-  const [photoOpen, setPhotoOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const cropperRef = useRef<AvatarCropperHandle>(null);
   // The cropped photo, taken when the person leaves the name screen (the
@@ -129,34 +127,19 @@ export function OnboardingFlow({
   const [role, setRole] = useState('');
   const [roleOther, setRoleOther] = useState('');
   const [age, setAge] = useState('');
-  const [heard, setHeard] = useState('');
   const [emailOptIn] = useState(profile?.email_opt_in ?? true);
 
-  // Workspace answers
-  const [wsName, setWsName] = useState('');
-  const [createdWorkspaceId, setCreatedWorkspaceId] = useState<string | null>(null);
-  const [postOpen, setPostOpen] = useState(false);
-  const [postSent, setPostSent] = useState(false);
-  // A first post that saved as a draft but did not reach review: retry the move, never re-create.
-  const [draftPostId, setDraftPostId] = useState<string | null>(null);
-  const [invites, setInvites] = useState<InviteRow[]>([
-    { email: '', side: 'client' },
-    { email: '', side: 'team' },
-  ]);
-  const [joinGroup, setJoinGroup] = useState(true);
-
-  // Invitee context (ready screen, role tiles)
-  const [isClient, setIsClient] = useState(false);
-  const [ready, setReady] = useState<ReadyFacts | null>(null);
+  // The approver who signed up alone: who makes their posts.
+  const [teamEmail, setTeamEmail] = useState('');
+  const [brandName, setBrandName] = useState('');
+  const [resent, setResent] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const shownUsername = usernameEdited ? username : suggestUsername(name);
   const format = usernameFormat(shownUsername);
-  const designation = role === OTHER_ROLE ? roleOther.trim() : role;
-  const activeWorkspaceId = joinedWorkspaceId ?? createdWorkspaceId;
-  const activeWorkspaceName = joinedWorkspaceName ?? wsName.trim();
+  const designation = designationFor(role, roleOther);
 
   // Live username check, debounced; only well-formed names reach the server.
   useEffect(() => {
@@ -185,7 +168,7 @@ export function OnboardingFlow({
     };
   }, [shownUsername, format, newTrace]);
 
-  // Invitee: read their side once, for client-first role tiles.
+  // Invitee: their side comes from the invite's role.
   useEffect(() => {
     if (joinedWorkspaceId === null || userId === null) return;
     let cancelled = false;
@@ -197,24 +180,26 @@ export function OnboardingFlow({
       .eq('active', true)
       .maybeSingle()
       .then(({ data }) => {
-        if (!cancelled) setIsClient(data?.role === 'client');
+        if (!cancelled) setInviteSide(data?.role === 'client' ? 'approver' : 'creator');
       });
     return () => {
       cancelled = true;
     };
   }, [joinedWorkspaceId, userId]);
 
-  // Invitee: what is waiting, loaded when the ready screen comes up.
+  // The waiting screen after a reload: the last request, for Resend.
   useEffect(() => {
-    if (step !== 'ready' || joinedWorkspaceId === null || userId === null) return;
+    if (step !== 'waiting' || userId === null || teamEmail !== '') return;
     let cancelled = false;
-    void loadReadyFacts(joinedWorkspaceId, userId).then((facts) => {
-      if (!cancelled) setReady(facts);
+    void readLatestBrandRequest(supabase, userId).then((found) => {
+      if (cancelled || found === undefined) return;
+      setTeamEmail(found.email);
+      setBrandName(found.brandName);
     });
     return () => {
       cancelled = true;
     };
-  }, [step, joinedWorkspaceId, userId]);
+  }, [step, userId, teamEmail]);
 
   useEffect(() => {
     if (finishError === null) return;
@@ -228,7 +213,7 @@ export function OnboardingFlow({
   function next(): void {
     setError(null);
     if (index < steps.length - 1) setIndex(index + 1);
-    else finish('/chat');
+    else finish(SHELL_HOME);
   }
 
   function back(): void {
@@ -252,7 +237,7 @@ export function OnboardingFlow({
     next();
   }
 
-  /** Upload the photo when one was chosen, then save the whole profile in one call. */
+  /** Upload the photo, then save the whole profile in one call. */
   async function saveProfile(): Promise<void> {
     setBusy(true);
     setError(null);
@@ -266,7 +251,7 @@ export function OnboardingFlow({
       });
       if (!up.ok) {
         setBusy(false);
-        setError("Your photo didn't upload. Try again, or add one later in Settings.");
+        setError("Your photo didn't upload. Check your connection and try again.");
         return;
       }
       avatarUrl = up.data.avatarUrl;
@@ -277,15 +262,14 @@ export function OnboardingFlow({
       designation,
       email_opt_in: emailOptIn,
       age_range: age,
-      heard_from: heard,
     };
     if (avatarUrl !== null) payload.avatar_url = avatarUrl;
     const saved = await userOnboardingSave(supabase, {
       p_payload: payload as Json,
       p_trace_id: newTrace(),
     });
-    setBusy(false);
     if (!saved.ok) {
+      setBusy(false);
       if (saved.error.message.includes('username_taken')) {
         setNameCheck('taken');
         setIndex(steps.indexOf('name'));
@@ -296,6 +280,14 @@ export function OnboardingFlow({
       setError("We couldn't save that. Try again.");
       return;
     }
+    // A Creator makes the workspace in the shell; an approver goes on to name their team.
+    if (!invitee && shownSide === 'creator') {
+      await onStep(WORKSPACE_STEP);
+      finish(SHELL_HOME);
+      return;
+    }
+    if (!invitee) await onStep(APPROVER_BRAND_STEP);
+    setBusy(false);
     next();
   }
 
@@ -306,130 +298,58 @@ export function OnboardingFlow({
       setBusy(true);
       const file = await cropper.exportPng();
       setBusy(false);
-      if (file !== null) setPhotoFile(file);
+      if (file === null) {
+        setError("We couldn't read that photo. Try another one.");
+        return;
+      }
+      setPhotoFile(file);
     }
     next();
   }
 
-  async function createWorkspace(): Promise<void> {
-    if (createdWorkspaceId !== null) {
-      next();
-      return;
-    }
+  /** brand_agency_request, then the wait is stored so a reload opens on it. */
+  async function askTeam(): Promise<void> {
     setBusy(true);
     setError(null);
-    const tz =
-      typeof session?.user.user_metadata.timezone === 'string' &&
-      session.user.user_metadata.timezone !== ''
-        ? session.user.user_metadata.timezone
-        : detectTimezone();
-    const created = await workspaceCreate(supabase, {
-      p_payload: { name: wsName.trim(), timezone: tz },
-      p_trace_id: newTrace(),
+    const sent = await requestBrandTeam(supabase, {
+      email: teamEmail,
+      brandName,
+      traceId: newTrace(),
     });
-    setBusy(false);
-    if (!created.ok) {
-      logger.error('onboarding workspace create failed', { error: created.error.message });
-      setError("We couldn't create the workspace. Try again.");
-      return;
-    }
-    setCreatedWorkspaceId(created.data);
-    next();
-  }
-
-  async function onPostCreated(postId: string): Promise<void> {
-    setPostOpen(false);
-    setDraftPostId(postId);
-    setBusy(true);
-    setError(null);
-    const moved = await stageTransition(supabase, {
-      p_post_id: postId,
-      p_to_stage: 'review',
-      p_trace_id: newTrace(),
-    });
-    if (!moved.ok) {
-      // The post exists as a draft; the checklist still offers sending it.
+    if (!sent.ok) {
       setBusy(false);
-      logger.error('onboarding first post to review failed', { error: moved.error.message });
-      setError("Your post is saved, but it didn't reach review. Try sending it again.");
+      setError(brandRequestErrorMessage(sent.error.message));
       return;
     }
+    await onStep(APPROVER_WAITING_STEP);
     setBusy(false);
-    setDraftPostId(null);
-    setPostSent(true);
+    if (step === 'brand') next();
+    else setResent(true);
   }
 
-  async function sendInvites(): Promise<void> {
-    if (activeWorkspaceId === null) return;
-    const rows = invites.filter((row) => isValidInviteEmail(row.email));
+  /** The approver makes the posts after all: the Creator path, workspace first. */
+  async function switchToCreator(): Promise<void> {
     setBusy(true);
-    setError(null);
-    const failed: string[] = [];
-    const stillInGroup: string[] = [];
-    for (const row of rows) {
-      const traceId = newTrace();
-      const { data, error: err } = await supabase.functions.invoke<{ invite_id?: string }>(
-        'invite-send',
-        {
-          body: {
-            workspace_id: activeWorkspaceId,
-            email: row.email.trim(),
-            role: inviteRoleFor(row.side),
-          },
-          headers: { 'x-trace-id': traceId },
-        },
-      );
-      if (err || typeof data?.invite_id !== 'string') {
-        failed.push(row.email.trim());
-        continue;
-      }
-      if (!joinGroup) {
-        const off = await memberJoinGroupSet(supabase, {
-          p_member_id: data.invite_id,
-          p_join: false,
-          p_trace_id: newTrace(),
-        });
-        if (!off.ok) {
-          logger.error('join group opt-out failed', { error: off.error.message });
-          stillInGroup.push(row.email.trim());
-        }
-      }
-    }
-    setBusy(false);
-    if (failed.length > 0 || stillInGroup.length > 0) {
-      const parts: string[] = [];
-      if (failed.length > 0) {
-        parts.push(
-          `We couldn't invite ${failed.join(', ')}. Check the address, or invite them later from Settings.`,
-        );
-      }
-      if (stillInGroup.length > 0) {
-        parts.push(
-          `${stillInGroup.join(', ')} will join the chat group when they accept. Remove them from Group info if needed.`,
-        );
-      }
-      setError(parts.join(' '));
-      // Only the addresses that failed stay on screen to fix; sent ones are done.
-      setInvites((prev) => prev.filter((row) => failed.includes(row.email.trim())));
+    const stored = await onStep(WORKSPACE_STEP);
+    if (!stored) {
+      setBusy(false);
+      setError("We couldn't switch that. Try again.");
       return;
     }
-    finish('/chat');
+    finish(SHELL_HOME);
   }
-
-  const validInvites = invites.filter((row) => isValidInviteEmail(row.email)).length;
 
   // ---------- screens ----------
 
   let body: ReactNode;
   let primary: ReactNode = null;
-  let skip: (() => void) | null = null;
   let preview: ReactNode = (
     <PersonPreview
       name={name}
       role={designation}
       username={shownUsername}
       photo={photoPreview}
-      workspace={activeWorkspaceName}
+      workspace={joinedWorkspaceName ?? ''}
     />
   );
 
@@ -462,7 +382,38 @@ export function OnboardingFlow({
         Continue
       </Primary>
     );
-    preview = <WaitingPreview workspace={joinedWorkspaceName ?? ''} />;
+  } else if (step === 'side') {
+    body = (
+      <>
+        <Heading
+          title="Who are you here as?"
+          lead="Creators make the posts. Approvers read them and approve them."
+        />
+        <div role="radiogroup" aria-label="Who are you here as?" className="flex flex-col gap-3">
+          {SIDE_TILES.map((tile) => (
+            <button
+              key={tile.side}
+              type="button"
+              role="radio"
+              aria-checked={side === tile.side}
+              onClick={() => setSide(tile.side)}
+              className={cn(
+                'flex min-h-[72px] flex-col items-start justify-center rounded-xl border bg-panel px-4 py-3 text-left',
+                side === tile.side ? 'border-fg ring-1 ring-fg' : 'border-border',
+              )}
+            >
+              <span className="text-[17px] font-semibold text-fg">{tile.title}</span>
+              <span className="text-sm text-fg-2">{tile.sub}</span>
+            </button>
+          ))}
+        </div>
+      </>
+    );
+    primary = (
+      <Primary disabled={side === null} onClick={next}>
+        Continue
+      </Primary>
+    );
   } else if (step === 'name') {
     const hint =
       format === 'empty'
@@ -490,36 +441,26 @@ export function OnboardingFlow({
           title="What should we call you?"
           lead="This is how people see you in notifications, comments and chat."
         />
-        <div className="flex items-center gap-4">
-          {photoPreview !== null ? (
-            <Avatar name={name || 'You'} src={photoPreview} size="xl" />
-          ) : (
-            <Avatar name={name || 'You'} size="xl" />
-          )}
-          <Button size="lg" onClick={() => setPhotoOpen(true)}>
-            {photoPreview !== null ? 'Change photo' : 'Add a photo'}
-          </Button>
+        <div className="rounded-lg border border-border bg-panel p-4">
+          <AvatarCropper
+            ref={cropperRef}
+            onPhotoChange={(info) => {
+              // A fresh cropper (after Back) starts empty: keep the photo already taken.
+              if (info.hasPhoto) setPhotoPreview(info.previewUrl);
+            }}
+          />
+          <p className="mt-2 text-[11px] text-fg-3">
+            {photoPreview !== null
+              ? 'Looks good. People see it next to your comments.'
+              : 'Add a photo to continue. People see it next to your comments.'}
+          </p>
         </div>
-        {photoOpen ? (
-          <div className="rounded-lg border border-border bg-panel p-4">
-            <AvatarCropper
-              ref={cropperRef}
-              onPhotoChange={(info) => {
-                // A fresh cropper (after Back) starts empty: keep the photo already taken.
-                if (info.hasPhoto) setPhotoPreview(info.previewUrl);
-              }}
-            />
-            <p className="mt-2 text-[11px] text-fg-3">
-              Optional. You can add one later in Settings.
-            </p>
-          </div>
-        ) : null}
         <Labeled label="Full name" htmlFor="ob-name">
           <Input
             id="ob-name"
             autoComplete="name"
             maxLength={80}
-            placeholder="Meera Shah"
+            placeholder="Your full name"
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
@@ -535,7 +476,7 @@ export function OnboardingFlow({
               autoCapitalize="off"
               autoComplete="off"
               spellCheck={false}
-              placeholder="meera.shah"
+              placeholder="your.name"
               value={shownUsername}
               onChange={(event) => {
                 setUsernameEdited(true);
@@ -552,44 +493,41 @@ export function OnboardingFlow({
     );
     primary = (
       <Primary
-        disabled={busy || name.trim().length === 0 || format !== 'ok' || nameCheck !== 'free'}
+        disabled={
+          busy ||
+          photoPreview === null ||
+          name.trim().length === 0 ||
+          format !== 'ok' ||
+          nameCheck !== 'free'
+        }
         onClick={() => void leaveNameStep()}
       >
         Continue
       </Primary>
     );
   } else if (step === 'role') {
-    const groups = roleGroupsFor(isClient);
-    const isLastProfileStep = !steps.includes('quick');
+    const options = [...ROLE_TILES[shownSide], OTHER_ROLE].map((value) => ({
+      value,
+      label: value,
+    }));
     body = (
       <>
         <Heading
           title="What do you do?"
           lead="It shows under your name, so people know who to ask."
         />
-        {groups.map((group) => (
-          <div key={group.label} className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.06em] text-fg-3">
-              {group.label}
-            </p>
-            <div
-              role="radiogroup"
-              aria-label={`${group.label} roles`}
-              className="grid grid-cols-2 gap-2"
-            >
-              {group.roles.map((option) => (
-                <Tile key={option} checked={role === option} onClick={() => setRole(option)}>
-                  {option}
-                </Tile>
-              ))}
-            </div>
-          </div>
-        ))}
-        <Tile checked={role === OTHER_ROLE} onClick={() => setRole(OTHER_ROLE)}>
-          {OTHER_ROLE}
-        </Tile>
+        <div>
+          <p className="mb-1.5 block text-sm font-medium">Your role</p>
+          <Select
+            label="Your role"
+            value={role}
+            options={options}
+            placeholder="Pick your role"
+            onChange={setRole}
+          />
+        </div>
         {role === OTHER_ROLE ? (
-          <Labeled label="Your role" htmlFor="ob-role-other">
+          <Labeled label="Tell us your role" htmlFor="ob-role-other">
             <Input
               id="ob-role-other"
               maxLength={80}
@@ -599,23 +537,6 @@ export function OnboardingFlow({
             />
           </Labeled>
         ) : null}
-      </>
-    );
-    primary = (
-      <Primary
-        disabled={busy || designation.length === 0}
-        onClick={() => (isLastProfileStep ? void saveProfile() : next())}
-      >
-        {busy ? 'Saving' : 'Continue'}
-      </Primary>
-    );
-  } else if (step === 'quick') {
-    body = (
-      <>
-        <Heading
-          title="Two quick ones"
-          lead="Both optional. They help us build Sorted for people like you."
-        />
         <ChipGroup
           label="Your age range"
           hint="Never shown to anyone."
@@ -623,223 +544,75 @@ export function OnboardingFlow({
           value={age}
           onChange={setAge}
         />
-        <ChipGroup
-          label="How did you hear about Sorted?"
-          options={HEARD_FROM.map((option) => ({ value: option.value, label: option.label }))}
-          value={heard}
-          onChange={setHeard}
-        />
       </>
     );
-    skip = () => void saveProfile();
     primary = (
-      <Primary disabled={busy} onClick={() => void saveProfile()}>
+      <Primary
+        disabled={busy || designation.length === 0 || age === ''}
+        onClick={() => void saveProfile()}
+      >
         {busy ? 'Saving' : 'Continue'}
       </Primary>
     );
-  } else if (step === 'workspace') {
-    const named = wsName.trim().length > 1;
+  } else if (step === 'brand') {
+    const valid = isValidInviteEmail(teamEmail) && brandName.trim().length > 0;
     body = (
       <>
         <Heading
-          title="Which brand are you starting with?"
-          lead="Each client brand gets its own workspace. Add more any time."
+          title="Who makes your posts?"
+          lead="The team, freelancer or studio behind your posts. We ask them to set up Sorted with you."
         />
-        <Labeled
-          label="Workspace name"
-          htmlFor="ob-ws"
-          hint="Usually the brand's name. Your agency's name works too."
-        >
+        <Labeled label="Their email" htmlFor="ob-team-email">
           <Input
-            id="ob-ws"
-            maxLength={80}
-            placeholder="Kite & Co"
-            value={wsName}
-            disabled={createdWorkspaceId !== null}
-            onChange={(event) => setWsName(event.target.value)}
+            id="ob-team-email"
+            type="email"
+            autoComplete="off"
+            placeholder="name@theirteam.com"
+            value={teamEmail}
+            onChange={(event) => setTeamEmail(event.target.value)}
           />
         </Labeled>
-        {named ? (
-          <GroupLine name={defaultGroupName(wsName)} note="Chat group, made with your workspace" />
-        ) : null}
+        <Labeled label="Brand name" htmlFor="ob-brand" hint="The brand they make posts for.">
+          <Input
+            id="ob-brand"
+            maxLength={80}
+            placeholder="Your brand"
+            value={brandName}
+            onChange={(event) => setBrandName(event.target.value)}
+          />
+        </Labeled>
       </>
     );
     primary = (
-      <Primary disabled={busy || !named} onClick={() => void createWorkspace()}>
-        {busy ? 'Creating' : 'Create workspace'}
+      <Primary disabled={busy || !valid} onClick={() => void askTeam()}>
+        {busy ? 'Sending' : 'Ask them to join'}
       </Primary>
-    );
-    preview = <WorkspacePreview name={wsName.trim()} />;
-  } else if (step === 'firstpost') {
-    body = (
-      <>
-        <Heading
-          title="What needs approval first?"
-          lead="Add one post now. It will be waiting in review when your client joins."
-        />
-        {postSent || draftPostId !== null ? (
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-panel p-4">
-            <span
-              className={cn(
-                'grid h-9 w-9 place-items-center rounded-full',
-                postSent ? 'bg-good-soft text-good' : 'bg-warn-soft text-warn',
-              )}
-            >
-              <CheckGlyph />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-fg">
-                {postSent ? 'Your first post is in review' : 'Your first post is saved'}
-              </p>
-              <p className="text-xs text-fg-2">
-                {postSent
-                  ? 'Your client sees it as soon as they join.'
-                  : 'It still needs to go to review.'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setPostOpen(true)}
-            className="flex min-h-[150px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-dashed border-border-strong bg-panel-2 text-sm text-fg-2 hover:bg-panel-3"
-          >
-            <UploadGlyph />
-            <span className="text-[15px] font-semibold text-fg">Add a photo or video</span>
-            <span>Then the caption</span>
-          </button>
-        )}
-      </>
-    );
-    skip = postSent || draftPostId !== null ? null : next;
-    primary =
-      draftPostId !== null && !postSent ? (
-        <Primary disabled={busy} onClick={() => void onPostCreated(draftPostId)}>
-          {busy ? 'Sending' : 'Send for review again'}
-        </Primary>
-      ) : (
-        <Primary disabled={busy || !postSent} onClick={next}>
-          Continue
-        </Primary>
-      );
-    preview = <WorkspacePreview name={activeWorkspaceName} postSent={postSent} />;
-  } else if (step === 'invite') {
-    body = (
-      <>
-        <Heading
-          title={`Who works on ${activeWorkspaceName}?`}
-          lead="Clients review and approve. Your team makes the posts."
-        />
-        <div className="flex flex-col gap-2.5">
-          {invites.map((row, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <label htmlFor={`ob-invite-${i}`} className="sr-only">
-                Email {i + 1}
-              </label>
-              <Input
-                id={`ob-invite-${i}`}
-                type="email"
-                autoComplete="off"
-                placeholder={i === 0 ? 'client@brand.com' : 'teammate@agency.com'}
-                value={row.email}
-                onChange={(event) =>
-                  setInvites((prev) =>
-                    prev.map((item, j) =>
-                      j === i ? { ...item, email: event.target.value } : item,
-                    ),
-                  )
-                }
-                className="min-w-0 flex-1"
-              />
-              <div
-                role="group"
-                aria-label={`Side for email ${i + 1}`}
-                className="flex shrink-0 overflow-hidden rounded-md border border-border"
-              >
-                {(['client', 'team'] as const).map((side) => (
-                  <button
-                    key={side}
-                    type="button"
-                    aria-pressed={row.side === side}
-                    onClick={() =>
-                      setInvites((prev) =>
-                        prev.map((item, j) => (j === i ? { ...item, side } : item)),
-                      )
-                    }
-                    className={cn(
-                      'h-11 min-w-[56px] px-3 text-xs font-medium',
-                      row.side === side ? 'bg-fg text-bg' : 'bg-panel text-fg-2',
-                    )}
-                  >
-                    {side === 'client' ? 'Client' : 'Team'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setInvites((prev) => [...prev, { email: '', side: 'team' }])}
-            className="min-h-[44px] rounded-md border border-dashed border-border-strong text-sm font-medium text-fg-2 hover:bg-panel-2"
-          >
-            Add another person
-          </button>
-        </div>
-        <Toggle
-          label={`Invite them to the ${defaultGroupName(activeWorkspaceName)} chat group`}
-          checked={joinGroup}
-          onChange={setJoinGroup}
-        />
-      </>
-    );
-    skip = () => finish('/chat');
-    primary = (
-      <Primary disabled={busy || validInvites === 0} onClick={() => void sendInvites()}>
-        {busy
-          ? 'Sending'
-          : validInvites > 0
-            ? `Send ${validInvites} invite${validInvites > 1 ? 's' : ''}`
-            : 'Send invites'}
-      </Primary>
-    );
-    preview = (
-      <InvitePreview
-        name={name}
-        rows={invites}
-        group={joinGroup ? defaultGroupName(activeWorkspaceName) : null}
-      />
     );
   } else {
-    // ready
+    // waiting
     body = (
-      <ReadyBody
-        name={name}
-        isClient={isClient}
-        facts={ready}
-        workspace={joinedWorkspaceName ?? ''}
+      <WaitingBody
+        email={teamEmail}
+        resent={resent}
+        busy={busy}
+        onSwitch={() => void switchToCreator()}
       />
     );
-    const firstPost = ready?.firstReviewPostId ?? null;
-    primary =
-      isClient && firstPost !== null ? (
-        <Primary disabled={busy} onClick={() => finish(`/posts/${firstPost}`)}>
-          Review the first post
-        </Primary>
-      ) : (
-        <Primary disabled={busy || ready === null} onClick={() => finish('/chat')}>
-          Open {joinedWorkspaceName ?? 'your workspace'}
-        </Primary>
-      );
-    preview = <WaitingPreview workspace={joinedWorkspaceName ?? ''} facts={ready} />;
+    primary = (
+      <Primary
+        disabled={busy || !isValidInviteEmail(teamEmail) || brandName.trim() === ''}
+        onClick={() => void askTeam()}
+      >
+        {busy ? 'Sending' : 'Resend'}
+      </Primary>
+    );
+    preview = null;
   }
 
-  // Back is offered inside the profile steps only; a created workspace is not undone.
+  // Back is offered between the profile screens only; a saved profile is not undone.
+  const previous = steps[index - 1];
   const canGoBack =
-    index > 0 &&
-    step !== 'ready' &&
-    step !== 'firstpost' &&
-    step !== 'invite' &&
-    step !== 'password';
+    index > 0 && (step === 'name' || step === 'role') && previous !== 'password' && !busy;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-bg md:grid md:grid-cols-2 md:overflow-hidden">
@@ -868,16 +641,6 @@ export function OnboardingFlow({
                 <Wordmark />
               </span>
             )}
-            {skip !== null ? (
-              <button
-                type="button"
-                onClick={skip}
-                disabled={busy}
-                className="min-h-[44px] min-w-[44px] px-1 text-sm font-medium text-fg-2 hover:text-fg"
-              >
-                Skip
-              </button>
-            ) : null}
           </header>
 
           {progressAt >= 0 ? (
@@ -920,71 +683,10 @@ export function OnboardingFlow({
       </div>
 
       <aside className="hidden h-full flex-col items-center justify-center gap-3.5 border-l border-border bg-panel-2 p-8 md:flex">
-        {preview}
+        {preview ?? <WaitingPreview />}
       </aside>
-
-      {activeWorkspaceId !== null ? (
-        <CreatePostSheet
-          open={postOpen}
-          workspaceId={activeWorkspaceId}
-          onClose={() => setPostOpen(false)}
-          onCreated={(postId) => void onPostCreated(postId)}
-        />
-      ) : null}
     </div>
   );
-}
-
-// ---------- data ----------
-
-export interface ReadyFacts {
-  inReview: number;
-  firstReviewPostId: string | null;
-  people: string[];
-  groupName: string | null;
-  inFlight: number;
-}
-
-async function loadReadyFacts(workspaceId: string, userId: string): Promise<ReadyFacts> {
-  const [posts, members, group] = await Promise.all([
-    supabase
-      .from('posts')
-      .select('id, stage, target_date')
-      .eq('workspace_id', workspaceId)
-      .is('deleted_at', null)
-      .in('stage', ['draft', 'review'])
-      .order('target_date', { ascending: true, nullsFirst: false })
-      .limit(200),
-    supabase
-      .from('workspace_members')
-      .select('user_id')
-      .eq('workspace_id', workspaceId)
-      .eq('active', true)
-      .neq('user_id', userId)
-      .limit(50),
-    supabase
-      .from('groups')
-      .select('name')
-      .eq('workspace_id', workspaceId)
-      .eq('is_default', true)
-      .is('deleted_at', null)
-      .maybeSingle(),
-  ]);
-  const rows = posts.data ?? [];
-  const review = rows.filter((row) => row.stage === 'review');
-  const ids = (members.data ?? []).map((row) => row.user_id);
-  let people: string[] = [];
-  if (ids.length > 0) {
-    const users = await supabase.from('users').select('display_name').in('id', ids).limit(50);
-    people = (users.data ?? []).map((row) => row.display_name);
-  }
-  return {
-    inReview: review.length,
-    firstReviewPostId: review[0]?.id ?? null,
-    people,
-    groupName: group.data?.name ?? null,
-    inFlight: rows.length,
-  };
 }
 
 // ---------- pieces ----------
@@ -1043,31 +745,6 @@ function Primary({
   );
 }
 
-function Tile({
-  checked,
-  onClick,
-  children,
-}: {
-  checked: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={checked}
-      onClick={onClick}
-      className={cn(
-        'min-h-[48px] rounded-lg border bg-panel px-3 py-2 text-left text-sm leading-tight',
-        checked ? 'border-fg font-semibold text-fg ring-1 ring-fg' : 'border-border text-fg',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 function ChipGroup({
   label,
   hint,
@@ -1106,51 +783,51 @@ function ChipGroup({
   );
 }
 
-function Toggle({
-  label,
-  checked,
-  onChange,
+const WAITING_LINES: readonly string[] = [
+  'We email them to set up your brand on Sorted.',
+  'They invite you as the approver. You get an email too.',
+  'Their first post lands here for you to read and approve.',
+];
+
+function WaitingBody({
+  email,
+  resent,
+  busy,
+  onSwitch,
 }: {
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
+  email: string;
+  resent: boolean;
+  busy: boolean;
+  onSwitch: () => void;
 }): ReactElement {
   return (
-    <div className="flex min-h-[44px] items-center justify-between gap-3 text-sm">
-      <span className="[text-wrap:pretty]">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={() => onChange(!checked)}
-        className={cn(
-          'relative inline-flex h-11 w-[60px] shrink-0 items-center rounded-full px-1 transition-colors',
-          checked ? 'bg-fg' : 'bg-panel-3',
-        )}
-      >
-        <span
-          className={cn(
-            'h-7 w-7 rounded-full bg-panel transition-transform motion-reduce:transition-none',
-            checked ? 'translate-x-[24px]' : 'translate-x-0',
-          )}
-        />
-      </button>
-    </div>
-  );
-}
-
-function GroupLine({ name, note }: { name: string; note: string }): ReactElement {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-panel p-3">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-sm font-bold text-accent">
-        {initialsOf(name)}
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-fg">{name}</p>
-        <p className="text-xs text-fg-3">{note}</p>
-      </div>
-    </div>
+    <>
+      <Heading
+        title="Your team is on its way"
+        lead="The real work starts the day they raise your first post: it lands here, you read it, you approve it."
+      />
+      <ol className="flex flex-col gap-3">
+        {WAITING_LINES.map((line, i) => (
+          <li
+            key={line}
+            className="flex items-center gap-3 rounded-lg border border-border bg-panel p-3.5"
+          >
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft font-mono text-sm font-semibold text-accent">
+              {i + 1}
+            </span>
+            <span className="text-[14px] text-fg [text-wrap:pretty]">{line}</span>
+          </li>
+        ))}
+      </ol>
+      {email !== '' ? (
+        <p className="text-[13px] text-fg-2" aria-live="polite">
+          {resent ? `Sent again to ${email}.` : `We asked ${email}.`}
+        </p>
+      ) : null}
+      <Button variant="ghost" size="lg" disabled={busy} onClick={onSwitch} className="self-start">
+        I make the posts after all
+      </Button>
+    </>
   );
 }
 
@@ -1218,197 +895,17 @@ function PersonPreview({
   );
 }
 
-function WorkspacePreview({
-  name,
-  postSent = false,
-}: {
-  name: string;
-  postSent?: boolean;
-}): ReactElement {
-  const group = name === '' ? 'Your brand' : defaultGroupName(name);
+function WaitingPreview(): ReactElement {
   return (
     <>
-      <PreviewLabel>Your chat home</PreviewLabel>
-      <PreviewCard label="Groups">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-sm font-bold text-accent">
-            {initialsOf(group)}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-fg">{group}</p>
-            <p className="text-xs text-fg-3">
-              {postSent
-                ? 'You. Your first post is in review.'
-                : 'You. More join as you invite them.'}
-            </p>
-          </div>
-        </div>
-      </PreviewCard>
-      <PreviewCard label="One place">
+      <PreviewLabel>What comes next</PreviewLabel>
+      <PreviewCard label="Review">
         <p className="text-sm text-fg-2">
-          Every post, brief and approval for this brand lives here.
+          Your first post waits here with its caption and creative, ready for your approval.
         </p>
       </PreviewCard>
     </>
   );
-}
-
-function InvitePreview({
-  name,
-  rows,
-  group,
-}: {
-  name: string;
-  rows: InviteRow[];
-  group: string | null;
-}): ReactElement {
-  const valid = rows.filter((row) => isValidInviteEmail(row.email));
-  return (
-    <>
-      <PreviewLabel>{group !== null ? `${group} chat group` : 'People'}</PreviewLabel>
-      <PreviewCard label="Members">
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-center gap-2.5">
-            <Avatar name={name || 'You'} size="md" />
-            <div>
-              <p className="text-sm font-semibold text-fg">{name.trim() || 'You'}</p>
-              <p className="text-xs text-fg-3">Admin</p>
-            </div>
-          </div>
-          {valid.length === 0 ? (
-            <p className="text-xs text-fg-3">Add an email to see them here.</p>
-          ) : (
-            valid.map((row) => (
-              <div key={row.email} className="flex items-center gap-2.5">
-                <Avatar name={row.email} size="md" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-fg">{row.email.trim()}</p>
-                  <p className="text-xs text-fg-3">
-                    {row.side === 'client' ? 'Client' : 'Team'} · invited
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </PreviewCard>
-    </>
-  );
-}
-
-function WaitingPreview({
-  workspace,
-  facts,
-}: {
-  workspace: string;
-  facts?: ReadyFacts | null;
-}): ReactElement {
-  return (
-    <>
-      <PreviewLabel>Waiting for you</PreviewLabel>
-      <PreviewCard label="Workspace">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-sm font-bold text-accent">
-            {initialsOf(workspace)}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-fg">{workspace}</p>
-            <p className="text-xs text-fg-3">
-              {facts != null
-                ? `${facts.inReview} in review · ${facts.people.length + 1} people`
-                : 'Ready when you are'}
-            </p>
-          </div>
-        </div>
-      </PreviewCard>
-    </>
-  );
-}
-
-function ReadyBody({
-  name,
-  isClient,
-  facts,
-  workspace,
-}: {
-  name: string;
-  isClient: boolean;
-  facts: ReadyFacts | null;
-  workspace: string;
-}): ReactElement {
-  const hello = firstName(name);
-  if (facts === null) {
-    return (
-      <Heading
-        title={`You're in${hello ? `, ${hello}` : ''}`}
-        lead="Getting your workspace ready."
-      />
-    );
-  }
-  const rows: { lead: ReactNode; title: string; note: string }[] = [];
-  if (isClient) {
-    rows.push({
-      lead: <Num>{facts.inReview}</Num>,
-      title: facts.inReview === 1 ? 'Post needs your review' : 'Posts need your review',
-      note:
-        facts.inReview === 0
-          ? "You'll get an email when one is ready"
-          : 'Approve or comment on each one',
-    });
-  }
-  rows.push({
-    lead: <Num>{facts.people.length}</Num>,
-    title: peopleLine(facts.people),
-    note: isClient ? 'Your team at the agency' : 'The people you work with here',
-  });
-  if (!isClient) {
-    rows.push({
-      lead: <Num>{facts.inFlight}</Num>,
-      title: facts.inFlight === 1 ? 'Post in flight' : 'Posts in flight',
-      note: `${facts.inReview} in review, ${facts.inFlight - facts.inReview} in draft`,
-    });
-  }
-  if (facts.groupName !== null) {
-    rows.push({
-      lead: (
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent-soft text-xs font-bold text-accent">
-          {initialsOf(facts.groupName)}
-        </span>
-      ),
-      title: `${facts.groupName} group`,
-      note: isClient ? 'Talk to the agency here' : 'Client and team, one conversation',
-    });
-  }
-  return (
-    <>
-      <Heading
-        title={`You're in${hello ? `, ${hello}` : ''}`}
-        lead={
-          isClient
-            ? `Here's what's waiting for you at ${workspace}.`
-            : `Here's who you'll work with on ${workspace}.`
-        }
-      />
-      <div className="flex flex-col gap-3">
-        {rows.map((row) => (
-          <div
-            key={row.title}
-            className="flex items-center gap-3 rounded-lg border border-border bg-panel p-3.5"
-          >
-            <span className="flex w-9 shrink-0 justify-center">{row.lead}</span>
-            <div className="min-w-0">
-              <p className="text-[15px] font-semibold text-fg">{row.title}</p>
-              <p className="text-[13px] text-fg-2">{row.note}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function Num({ children }: { children: ReactNode }): ReactElement {
-  return <span className="font-mono text-[22px] font-medium tabular-nums text-fg">{children}</span>;
 }
 
 function BackGlyph(): ReactElement {
@@ -1425,43 +922,6 @@ function BackGlyph(): ReactElement {
       aria-hidden="true"
     >
       <path d="M15 18l-6-6 6-6" />
-    </svg>
-  );
-}
-
-function CheckGlyph(): ReactElement {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M5 12l5 5L20 7" />
-    </svg>
-  );
-}
-
-function UploadGlyph(): ReactElement {
-  return (
-    <svg
-      width="26"
-      height="26"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 16V4M7 9l5-5 5 5" />
-      <path d="M4 16v4h16v-4" />
     </svg>
   );
 }

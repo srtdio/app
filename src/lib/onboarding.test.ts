@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
-  defaultGroupName,
-  gettingStartedItems,
-  initialsOf,
-  inviteRoleFor,
+  AGE_RANGES,
+  OTHER_ROLE,
+  ROLE_TILES,
+  SIDE_TILES,
+  designationFor,
   normalizeUsernameInput,
-  peopleLine,
   progressSteps,
-  roleGroupsFor,
   stepsFor,
   suggestUsername,
   usernameFormat,
+  type OnboardingContext,
 } from './onboarding';
 
 describe('suggestUsername', () => {
@@ -40,81 +40,78 @@ describe('usernameFormat', () => {
   });
 });
 
+const SELF: OnboardingContext = {
+  profileIncomplete: true,
+  hasWorkspace: false,
+  side: 'creator',
+  approverStage: 'none',
+};
+
 describe('stepsFor', () => {
-  it('walks a self sign-up through profile, workspace, first post and invites', () => {
-    expect(stepsFor({ profileIncomplete: true, hasWorkspace: false })).toEqual([
+  it('walks a Creator who signed up through side, name and role, then into the shell', () => {
+    expect(stepsFor(SELF)).toEqual(['side', 'name', 'role']);
+  });
+
+  it('walks an Approver who signed up alone on to their team and the wait', () => {
+    expect(stepsFor({ ...SELF, side: 'approver' })).toEqual([
+      'side',
       'name',
       'role',
-      'quick',
-      'workspace',
-      'firstpost',
-      'invite',
+      'brand',
+      'waiting',
     ]);
   });
-  it('walks an invitee through password, profile and what is waiting', () => {
-    expect(stepsFor({ profileIncomplete: true, hasWorkspace: true })).toEqual([
-      'password',
-      'name',
-      'role',
-      'ready',
-    ]);
-  });
-  it('sends a finished profile with no workspace straight to making one', () => {
-    expect(stepsFor({ profileIncomplete: false, hasWorkspace: false })).toEqual([
-      'workspace',
-      'firstpost',
-      'invite',
-    ]);
-  });
-  it('shows nothing once profile and workspace both exist', () => {
-    expect(stepsFor({ profileIncomplete: false, hasWorkspace: true })).toEqual([]);
-  });
-  it('keeps the ready screen out of the progress bar', () => {
-    expect(progressSteps(['password', 'name', 'role', 'ready'])).toEqual([
+
+  it('walks an invitee through password, name and role (their side comes from the invite)', () => {
+    expect(stepsFor({ ...SELF, hasWorkspace: true })).toEqual(['password', 'name', 'role']);
+    expect(stepsFor({ ...SELF, hasWorkspace: true, side: 'approver' })).toEqual([
       'password',
       'name',
       'role',
     ]);
   });
-});
 
-describe('roles and invites', () => {
-  it('puts brand-side roles first for clients only', () => {
-    expect(roleGroupsFor(true)[0]?.label).toBe('Brand side');
-    expect(roleGroupsFor(false)[0]?.label).toBe('Agency');
+  it('resumes an approver who reloaded on the screen they left', () => {
+    const done = { ...SELF, profileIncomplete: false };
+    expect(stepsFor({ ...done, approverStage: 'brand' })).toEqual(['brand', 'waiting']);
+    expect(stepsFor({ ...done, approverStage: 'waiting' })).toEqual(['waiting']);
+    expect(stepsFor(done)).toEqual([]);
   });
-  it('maps sides to invite roles', () => {
-    expect(inviteRoleFor('client')).toBe('client');
-    expect(inviteRoleFor('team')).toBe('agency');
-  });
-});
 
-describe('gettingStartedItems', () => {
-  it('opens with the workspace done and marks the rest from facts', () => {
-    const items = gettingStartedItems({ postsSent: 1, clientsInvited: 0, assets: 0 });
-    expect(items.map((item) => item.done)).toEqual([true, true, false, false]);
+  it('never asks how they heard about Sorted here', () => {
+    expect(stepsFor({ ...SELF, side: 'approver' }).join(' ')).not.toContain('quick');
   });
-});
 
-describe('defaultGroupName', () => {
-  it('matches the database rule', () => {
-    expect(defaultGroupName('Kite & Co')).toBe('Kite and Co');
-    expect(defaultGroupName("Tara's Jewels!")).toBe('Taras Jewels');
-    expect(defaultGroupName('&&')).toBe('and and');
-    expect(defaultGroupName('!!!')).toBe('Team');
+  it('keeps the waiting screen out of the step count', () => {
+    expect(progressSteps(['side', 'name', 'role', 'brand', 'waiting'])).toEqual([
+      'side',
+      'name',
+      'role',
+      'brand',
+    ]);
   });
 });
 
-describe('ready screen text', () => {
-  it('summarises people by first name', () => {
-    expect(peopleLine([])).toBe('Your agency team');
-    expect(peopleLine(['Arjun Shah'])).toBe('Arjun');
-    expect(peopleLine(['Arjun Shah', 'Dev Rao'])).toBe('Arjun and Dev');
-    expect(peopleLine(['A B', 'C D', 'E F', 'G H'])).toBe('A, C and 2 more');
+describe('sides and roles', () => {
+  it('names the sides Creator and Approver', () => {
+    expect(SIDE_TILES).toEqual([
+      { side: 'creator', title: 'Creator', sub: 'We make the posts' },
+      { side: 'approver', title: 'Approver', sub: 'We approve them' },
+    ]);
   });
-  it('makes tile initials, skipping "and"', () => {
-    expect(initialsOf('Kite and Co')).toBe('KC');
-    expect(initialsOf('Inside Edge')).toBe('IE');
-    expect(initialsOf('')).toBe('S');
+
+  it('has a role list per side', () => {
+    expect(ROLE_TILES.creator).toContain('Copywriter');
+    expect(ROLE_TILES.approver).toContain('Brand manager');
+  });
+
+  it('saves the free text for Something else', () => {
+    expect(designationFor(OTHER_ROLE, '  Community lead ')).toBe('Community lead');
+    expect(designationFor(OTHER_ROLE, '   ')).toBe('');
+    expect(designationFor('Copywriter', 'ignored')).toBe('Copywriter');
+  });
+
+  it('mirrors the age ranges the database accepts', () => {
+    expect(AGE_RANGES).toEqual(['18-24', '25-34', '35-44', '45-54', '55+']);
   });
 });

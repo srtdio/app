@@ -7,6 +7,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
 import { Comments, writeClipboard } from '@/components/comments/Comments';
+import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
 import {
@@ -45,7 +46,6 @@ import {
 } from '@/lib/post-versions';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { canDeletePost, isAgencySide, isClient } from '@/components/pages/pcs/roles';
-import { FirstReviewTip } from '@/components/onboarding/FirstReviewTip';
 import {
   agencyReviewHelper,
   onBehalfConfirmLine,
@@ -182,6 +182,7 @@ export function StageButtons(props: {
           variant={action.variant}
           disabled={props.transitioning}
           onClick={() => props.onPick(action.to)}
+          {...(action.to === 'approved' ? { 'data-induction': INDUCTION_KEYS.postApprove } : {})}
           className={action.to === 'approved' ? 'bg-good text-white hover:bg-good' : undefined}
         >
           {action.label}
@@ -788,6 +789,7 @@ export function PostDetailPage({
     setComposer(null);
     await load(true);
     setCommentsRefresh((n) => n + 1);
+    dispatchInductionRefresh();
   }
 
   // Pin placement (F5): the lightbox owns the armed state; arming just clears any
@@ -847,6 +849,7 @@ export function PostDetailPage({
     setPinComposer(null);
     await load(true);
     setCommentsRefresh((n) => n + 1);
+    dispatchInductionRefresh();
   }
 
   /** Resolves true once the move landed, false on a failure (the error is set). */
@@ -867,6 +870,7 @@ export function PostDetailPage({
     // Re-fetch so the stage badge and the set of available buttons update.
     await load(true);
     setTransitioning(false);
+    dispatchInductionRefresh();
     return true;
   }
 
@@ -1177,7 +1181,6 @@ export function PostDetailPage({
     <section className="rounded-xl border border-border bg-panel-2 p-4">
       {currentStage === 'review' && clientRole ? (
         <>
-          <FirstReviewTip />
           <p className="mb-3 text-sm text-fg-2">
             Commenting keeps the post in review. Approval is deliberate, one post at a time.
           </p>
@@ -1541,18 +1544,20 @@ export function PostDetailPage({
                 <span className="text-xs text-fg-3">Tap the menu for actions</span>
               </div>
               {workspaceId !== null && postId !== undefined ? (
-                <Comments
-                  workspaceId={workspaceId}
-                  entityType="post"
-                  entityId={postId}
-                  annotationsByCommentId={annotationsByCommentId}
-                  onAnnotationChipClick={(commentId) =>
-                    flashTo('post', `caption-mark-${commentId}`)
-                  }
-                  refreshSignal={commentsRefresh}
-                  focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
-                  viewerIsClient={clientRole}
-                />
+                <div data-induction={INDUCTION_KEYS.postCommentComposer}>
+                  <Comments
+                    workspaceId={workspaceId}
+                    entityType="post"
+                    entityId={postId}
+                    annotationsByCommentId={annotationsByCommentId}
+                    onAnnotationChipClick={(commentId) =>
+                      flashTo('post', `caption-mark-${commentId}`)
+                    }
+                    refreshSignal={commentsRefresh}
+                    focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
+                    viewerIsClient={clientRole}
+                  />
+                </div>
               ) : (
                 <div className="px-4 py-8 text-center text-sm text-fg-3">
                   Select a workspace to view comments.

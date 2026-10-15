@@ -1,7 +1,7 @@
-// Pure logic for the onboarding flow (src/components/onboarding/OnboardingFlow.tsx)
-// and the chat-home getting-started card. No network, no React: every rule the
-// screens depend on (username format and suggestion, which steps a person sees,
-// role lists, checklist state) lives here so it is unit tested.
+// Pure logic for the pre-app screens (src/components/onboarding/OnboardingFlow.tsx).
+// No network, no React: every rule the screens depend on (username format and
+// suggestion, which screens a person sees, the role lists) lives here so it is
+// unit tested. The in-app guide is src/lib/induction.ts.
 
 /** Mirrors users_username_format in the 20261014140000 migration. */
 export const USERNAME_PATTERN = /^[a-z0-9._]{3,20}$/;
@@ -46,8 +46,17 @@ export function usernameFormat(value: string): UsernameFormat {
   return 'ok';
 }
 
-export const ROLE_TILES = {
-  agency: [
+/** Who a person is here as: Creators make the posts, Approvers approve them. */
+export type Side = 'creator' | 'approver';
+
+export const SIDE_TILES: readonly { side: Side; title: string; sub: string }[] = [
+  { side: 'creator', title: 'Creator', sub: 'We make the posts' },
+  { side: 'approver', title: 'Approver', sub: 'We approve them' },
+];
+
+/** The role list per side, shown under a person's name. */
+export const ROLE_TILES: Readonly<Record<Side, readonly string[]>> = {
+  creator: [
     'Founder or director',
     'Account manager',
     'Client servicing',
@@ -61,7 +70,7 @@ export const ROLE_TILES = {
     'Motion designer',
     'Photographer',
   ],
-  brand: [
+  approver: [
     'Brand manager',
     'Marketing manager',
     'Marketing head',
@@ -69,153 +78,50 @@ export const ROLE_TILES = {
     'Social media lead',
     'Product manager',
   ],
-} as const;
+};
 
-export interface RoleGroup {
-  label: string;
-  roles: readonly string[];
-}
+/** The free-text choice at the end of every role list. */
+export const OTHER_ROLE = 'Something else';
 
-/** Brand-side roles first for an invited client, agency roles first for everyone else. */
-export function roleGroupsFor(isClient: boolean): RoleGroup[] {
-  const agency: RoleGroup = { label: 'Agency', roles: ROLE_TILES.agency };
-  const brand: RoleGroup = { label: 'Brand side', roles: ROLE_TILES.brand };
-  return isClient ? [brand, agency] : [agency, brand];
-}
-
-/** Values mirror the user_private check constraints. */
+/** Values mirror the user_private check constraint. */
 export const AGE_RANGES = ['18-24', '25-34', '35-44', '45-54', '55+'] as const;
-export const HEARD_FROM = [
-  { value: 'friend', label: 'A friend' },
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'google', label: 'Google' },
-  { value: 'client', label: 'A client' },
-  { value: 'other', label: 'Other' },
-] as const;
 
-export type OnboardingStep =
-  | 'password'
-  | 'name'
-  | 'role'
-  | 'quick'
-  | 'ready'
-  | 'workspace'
-  | 'firstpost'
-  | 'invite';
+export type OnboardingStep = 'password' | 'side' | 'name' | 'role' | 'brand' | 'waiting';
 
 export interface OnboardingContext {
   /** profile_completed_at is still null. */
   profileIncomplete: boolean;
   /** The person already belongs to at least one workspace (an invitee). */
   hasWorkspace: boolean;
+  /** The side picked on the first screen (an invitee's comes from the invite). */
+  side: Side;
+  /** An approver who signed up alone: naming their team, or waiting for it. */
+  approverStage: 'none' | 'brand' | 'waiting';
 }
 
 /**
- * The steps a person walks, in order. A self sign-up names themselves, answers
- * the optional questions, then makes a workspace, a first post and invites. An
- * invitee sets a password (the invite link signed them in without one), names
- * themselves, then sees what is waiting. Someone with a profile but no workspace
- * goes straight to making one.
+ * The pre-app screens, in order. An invitee sets a password (the invite link
+ * signed them in without one) and names themselves, then goes straight into
+ * the shell. A self sign-up picks a side and names themselves; a Creator then
+ * makes the workspace in the shell, an Approver names who makes their posts and
+ * waits for them. An approver back after a reload resumes where they were.
  */
 export function stepsFor(ctx: OnboardingContext): OnboardingStep[] {
-  if (ctx.hasWorkspace) {
-    return ctx.profileIncomplete ? ['password', 'name', 'role', 'ready'] : [];
+  if (ctx.hasWorkspace) return ctx.profileIncomplete ? ['password', 'name', 'role'] : [];
+  const approverTail: OnboardingStep[] = ctx.side === 'approver' ? ['brand', 'waiting'] : [];
+  if (!ctx.profileIncomplete) {
+    if (ctx.approverStage === 'brand') return ['brand', 'waiting'];
+    return ctx.approverStage === 'waiting' ? ['waiting'] : [];
   }
-  const profile: OnboardingStep[] = ctx.profileIncomplete ? ['name', 'role', 'quick'] : [];
-  return [...profile, 'workspace', 'firstpost', 'invite'];
+  return ['side', 'name', 'role', ...approverTail];
 }
 
-/** Steps that fill the progress bar (the ready screen sits after it). */
+/** Steps that count towards "Step N of M" (the waiting screen sits after them). */
 export function progressSteps(steps: readonly OnboardingStep[]): OnboardingStep[] {
-  return steps.filter((step) => step !== 'ready');
+  return steps.filter((step) => step !== 'waiting');
 }
 
-/** Map a chosen side to the member_invite role. */
-export function inviteRoleFor(side: 'client' | 'team'): 'client' | 'agency' {
-  return side === 'client' ? 'client' : 'agency';
-}
-
-export interface GettingStartedFacts {
-  postsSent: number;
-  clientsInvited: number;
-  assets: number;
-}
-
-export interface ChecklistItem {
-  key: 'workspace' | 'post' | 'client' | 'assets';
-  title: string;
-  hint: string;
-  done: boolean;
-  to: string;
-}
-
-/** The chat-home checklist. Creating the workspace is always done, so it never opens at zero. */
-export function gettingStartedItems(facts: GettingStartedFacts): ChecklistItem[] {
-  return [
-    {
-      key: 'workspace',
-      title: 'Create your workspace',
-      hint: '',
-      done: true,
-      to: '/chat',
-    },
-    {
-      key: 'post',
-      title: 'Send your first post for review',
-      hint: 'Add the creative and caption',
-      done: facts.postsSent > 0,
-      to: '/pipeline',
-    },
-    {
-      key: 'client',
-      title: 'Invite your client',
-      hint: 'They review and approve here',
-      done: facts.clientsInvited > 0,
-      to: '/settings?panel=members',
-    },
-    {
-      key: 'assets',
-      title: 'Add your brand assets',
-      hint: 'Logos, fonts and photos in one place',
-      done: facts.assets > 0,
-      to: '/assets',
-    },
-  ];
-}
-
-/**
- * The default chat group's name, as workspace_create derives it: group names
- * allow letters, digits, spaces and hyphens only, so "&" reads "and".
- */
-export function defaultGroupName(workspaceName: string): string {
-  const cleaned = workspaceName
-    .replace(/&/g, ' and ')
-    .replace(/[^A-Za-z0-9 -]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 40);
-  return cleaned === '' ? 'Team' : cleaned;
-}
-
-export function firstName(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? '';
-}
-
-/** "Arjun", "Arjun and Dev", "Arjun, Dev and 3 more": the ready screen's people line. */
-export function peopleLine(people: readonly string[]): string {
-  const firsts = people.map(firstName).filter((n) => n.length > 0);
-  if (firsts.length === 0) return 'Your agency team';
-  if (firsts.length === 1) return firsts[0] ?? '';
-  if (firsts.length === 2) return `${firsts[0]} and ${firsts[1]}`;
-  return `${firsts[0]}, ${firsts[1]} and ${firsts.length - 2} more`;
-}
-
-/** Two-letter tile label for a workspace or group ("Kite and Co" -> "KC"). */
-export function initialsOf(text: string): string {
-  const words = text
-    .trim()
-    .split(/\s+/)
-    .filter((w) => w.length > 0 && w.toLowerCase() !== 'and');
-  return ((words[0]?.[0] ?? 'S') + (words[1]?.[0] ?? '')).toUpperCase();
+/** The designation saved for a role pick: the free text for "Something else". */
+export function designationFor(role: string, other: string): string {
+  return role === OTHER_ROLE ? other.trim() : role;
 }

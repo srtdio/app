@@ -40,6 +40,7 @@ import { useSort } from '@/lib/use-sort';
 import { PresignCache } from '@/lib/asset-presign';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'newest', label: 'Newest' },
@@ -344,7 +345,7 @@ export function ActivityPage() {
         )
       ) : (
         <div className="pb-6">
-          {buckets.map((bucket) => {
+          {buckets.map((bucket, bucketIndex) => {
             const entries = bucket.groups.flat();
             return (
               <section key={bucket.key} className="mt-4">
@@ -355,7 +356,10 @@ export function ActivityPage() {
                   <AvatarStack names={bucketActorNames(entries)} />
                   <span className="ml-auto text-xs text-fg-3">{entries.length}</span>
                 </div>
-                <div className="mt-2 flex flex-col gap-2 px-4 md:px-6">
+                <div
+                  {...(bucketIndex === 0 ? { 'data-induction': INDUCTION_KEYS.activityList } : {})}
+                  className="mt-2 flex flex-col gap-2 px-4 md:px-6"
+                >
                   {bucket.groups.map((group) => (
                     <ActivityCard
                       key={group[0]?.id ?? bucket.key}
