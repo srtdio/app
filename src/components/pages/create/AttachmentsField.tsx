@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { IconFile, IconLink, IconX } from '@/components/ui/icons';
-import { frameFor, type FrameMedia } from '@/lib/platform-specs';
+import { frameFor, type Frame, type FrameMedia } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
@@ -120,13 +120,18 @@ export async function runLinkAttachment(deps: LinkAttachmentDeps): Promise<Attac
 export function attachmentItemList(
   items: readonly AttachmentItem[],
   onRemove: (index: number) => void,
-  /** The post's platform frame ratio (w / h); null or absent keeps the small square tile. */
-  frameRatio?: number | null,
+  /**
+   * The post's platform frame (frameFor): its ratio, and whether the media is
+   * cropped to fill or fit with bands. null or absent keeps the small square tile.
+   */
+  frame?: Frame | null,
   /** Report a media tile's intrinsic size once it decodes (the first one sets the frame). */
   onMeasure?: (versionId: string, w: number, h: number) => void,
 ): ReactElement[] {
-  const framed = frameRatio !== null && frameRatio !== undefined;
-  const ratio = frameRatio ?? 1;
+  const framed = frame !== null && frame !== undefined;
+  const ratio = frame?.ratio ?? 1;
+  const fitClass =
+    frame?.fit === 'contain' ? 'h-full w-full object-contain' : 'h-full w-full object-cover';
   return items.map((item, index) => {
     const isVideo = item.mime?.startsWith('video/') === true && item.previewUrl !== undefined;
     if (item.kind === 'image' || isVideo) {
@@ -134,12 +139,24 @@ export function attachmentItemList(
         <li
           key={`${item.versionId}-${index}`}
           data-frame-ratio={ratio}
+          data-frame-fit={frame?.fit ?? 'cover'}
           className={cn(
-            'relative shrink-0 overflow-hidden rounded-md border border-border bg-panel-3',
+            'relative shrink-0 overflow-hidden rounded-md border border-border',
             framed ? 'h-40' : 'h-20',
+            frame !== null && frame !== undefined && frame.bands !== 'none'
+              ? 'bg-black'
+              : 'bg-panel-3',
           )}
           style={{ aspectRatio: String(ratio), minWidth: '44px', maxWidth: '100%' }}
         >
+          {frame?.bands === 'blur' && item.previewUrl !== undefined && !isVideo ? (
+            <img
+              src={item.previewUrl}
+              alt=""
+              aria-hidden
+              className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-lg"
+            />
+          ) : null}
           {isVideo ? (
             <video
               src={item.previewUrl}
@@ -147,7 +164,7 @@ export function attachmentItemList(
               playsInline
               preload="metadata"
               aria-label={item.name}
-              className="h-full w-full object-cover"
+              className={cn('relative', fitClass)}
               onLoadedMetadata={(event) =>
                 onMeasure?.(
                   item.versionId,
@@ -160,7 +177,7 @@ export function attachmentItemList(
             <img
               src={item.previewUrl}
               alt={item.name}
-              className="h-full w-full object-cover"
+              className={cn('relative', fitClass)}
               onLoad={(event) =>
                 onMeasure?.(
                   item.versionId,
@@ -378,9 +395,9 @@ export function AttachmentsField({
   }
 
   const linkValid = isValidLinkUrl(linkUrl) && linkName.trim() !== '';
-  const frameRatio =
+  const postFrame =
     frame !== null && frame !== undefined
-      ? (frameFor(frame.platform, frame.format, firstMedia(value, measured))?.ratio ?? null)
+      ? frameFor(frame.platform, frame.format, firstMedia(value, measured))
       : null;
   function measure(versionId: string, w: number, h: number): void {
     if (w <= 0 || h <= 0) return;
@@ -441,7 +458,7 @@ export function AttachmentsField({
 
       {value.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
-          {attachmentItemList(value, removeCompleted, frameRatio, measure)}
+          {attachmentItemList(value, removeCompleted, postFrame, measure)}
         </ul>
       ) : null}
 

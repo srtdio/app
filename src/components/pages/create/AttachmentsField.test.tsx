@@ -136,7 +136,13 @@ describe('attachmentItemList frame', () => {
     const img: AttachmentItem[] = [
       { versionId: 'v', kind: 'image', name: 'p.png', previewUrl: 'blob:p', mime: 'image/png' },
     ];
-    const framed = attachmentItemList(img, () => undefined, 9 / 16)[0];
+    const framed = attachmentItemList(img, () => undefined, {
+      ratio: 9 / 16,
+      source: 'fixed',
+      fit: 'contain',
+      bands: 'black',
+    })[0];
+    expect(framed?.props['data-frame-fit']).toBe('contain');
     expect(framed?.props['data-frame-ratio']).toBeCloseTo(9 / 16);
     expect(attachmentItemList(img, () => undefined)[0]?.props['data-frame-ratio']).toBe(1);
   });

@@ -7,6 +7,7 @@ import {
   defaultSizeFor,
   formatDefaultSize,
   formatFrameRatio,
+  postSize,
   ratioLabel,
   sizeMeta,
   sizesFor,
@@ -85,6 +86,9 @@ describe('panel default follows the post frame', () => {
       'Landscape',
     );
     expect(defaultSizeFor('linkedin', 'carousel', 'image', { w: 1920, h: 1080 })?.label).toBe(
+      'Landscape',
+    );
+    expect(defaultSizeFor('linkedin', 'carousel', 'image', { w: 1080, h: 1920 })?.label).toBe(
       'Portrait',
     );
     expect(defaultSizeFor('instagram', 'story', 'video', { w: 1920, h: 1080 })?.label).toBe(
@@ -175,4 +179,37 @@ it('matches the verified 16 Oct 2026 table exactly', () => {
     'letterbox',
     'letterbox',
   ]);
+});
+
+describe('postSize: the panel opens on the frame the post page shows', () => {
+  it('matches frameFor for crop and bands', () => {
+    expect(postSize('instagram', 'carousel', 'image', { w: 1920, h: 1080 })).toMatchObject({
+      label: 'This post',
+      w: 1920,
+      h: 1080,
+      layout: 'feed',
+    });
+    expect(postSize('facebook', 'single_image', 'image', { w: 1080, h: 1920 })).toMatchObject({
+      w: 1080,
+      h: 1350,
+      layout: 'feed',
+    });
+    const tiktok = postSize('tiktok', 'video', 'image', { w: 1920, h: 1080 });
+    expect(tiktok?.layout).toBe('letterbox');
+    expect(tiktok?.feedCard).toBeUndefined();
+    expect(postSize('youtube_shorts', 'short', 'image', { w: 1920, h: 1080 })?.layout).toBe(
+      'bands',
+    );
+    const threads = postSize('threads', 'carousel', 'image', { w: 3000, h: 1000 });
+    expect(threads).toMatchObject({ layout: 'letterbox', feedCard: true });
+  });
+  it('crop line agrees with the page: bands never cut', () => {
+    const tiktok = postSize('tiktok', 'video', 'image', { w: 1920, h: 1080 });
+    if (tiktok === null) throw new Error('size');
+    expect(cropLine(cropFor({ w: 1920, h: 1080 }, tiktok))).toBe('Shown with bands');
+    expect(cropLine(cropFor({ w: 1080, h: 1920 }, tiktok))).toBe('Fits exactly');
+    const ig = postSize('instagram', 'carousel', 'image', { w: 1080, h: 1920 });
+    if (ig === null) throw new Error('size');
+    expect(cropLine(cropFor({ w: 1080, h: 1920 }, ig))).toBe('25% cut from top and bottom');
+  });
 });

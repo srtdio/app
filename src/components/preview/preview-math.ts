@@ -120,7 +120,7 @@ export function cropFor(media: { w: number; h: number }, size: PlatformSize): Cr
   if (media.w <= 0 || media.h <= 0) return { kind: 'fits', window: FULL };
   const mediaR = media.w / media.h;
   if (size.layout === 'bands' || size.layout === 'letterbox') {
-    const frameR = VERTICAL_FRAME.w / VERTICAL_FRAME.h;
+    const frameR = frameRatio(size);
     return Math.abs(mediaR / frameR - 1) < 0.005
       ? { kind: 'fits', window: FULL }
       : { kind: 'bands', window: FULL };
@@ -155,11 +155,59 @@ export function cropLine(result: CropResult): string {
   return `${result.pct}% cut from ${result.from}`;
 }
 
-/** The ratio of the mock frame: 9:16 for bands / letterbox, else the size's own. */
+/**
+ * The ratio of the mock frame: for bands / letterbox the frame the media sits
+ * in (its own frame, else 9:16), else the size's own.
+ */
 export function frameRatio(size: PlatformSize): number {
-  return size.layout === 'bands' || size.layout === 'letterbox'
-    ? VERTICAL_FRAME.w / VERTICAL_FRAME.h
-    : size.w / size.h;
+  if (size.layout === 'bands' || size.layout === 'letterbox') {
+    const f = size.frame ?? VERTICAL_FRAME;
+    return f.w / f.h;
+  }
+  return size.w / size.h;
+}
+
+/** The label of the panel's first size: the frame this post renders in. */
+export const THIS_POST = 'This post';
+
+/**
+ * The frame this post renders in on the post page (frameFor), as a panel size,
+ * so the panel opens on exactly what the page shows. Cropping frames are feed /
+ * story / vertical; fitting frames are bands (blurred) or letterbox (black)
+ * around the media's own ratio. null when the format has no media box.
+ */
+export function postSize(
+  platform: string,
+  format: string,
+  media: PreviewMedia,
+  dims: { w: number; h: number } | null,
+): PlatformSize | null {
+  const frame = frameFor(platform, format, { kind: media, w: dims?.w ?? null, h: dims?.h ?? null });
+  if (frame === null) return null;
+  const r = frame.ratio;
+  const listed = sizesFor(platform, media).find((s) => Math.abs(s.w / s.h / r - 1) < 0.005);
+  const own = dims !== null && Math.abs(dims.w / dims.h / r - 1) < 0.005 ? dims : null;
+  const box =
+    own ??
+    (listed !== undefined
+      ? { w: listed.w, h: listed.h }
+      : r >= 1
+        ? { w: Math.round(1080 * r), h: 1080 }
+        : { w: 1080, h: Math.round(1080 / r) });
+  if (frame.fit === 'contain') {
+    const frameBox =
+      r >= 1 ? { w: Math.round(1080 * r), h: 1080 } : { w: 1080, h: Math.round(1080 / r) };
+    return {
+      label: THIS_POST,
+      w: frameBox.w,
+      h: frameBox.h,
+      layout: frame.bands === 'blur' ? 'bands' : 'letterbox',
+      frame: frameBox,
+      ...(frame.source !== 'fixed' ? { feedCard: true as const } : {}),
+    };
+  }
+  const layout = format === 'story' ? 'story' : r < 0.6 ? 'vertical' : 'feed';
+  return { label: THIS_POST, w: box.w, h: box.h, layout };
 }
 
 /** Lines of caption each layout shows before "more". */

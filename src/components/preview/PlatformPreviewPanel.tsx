@@ -21,6 +21,7 @@ import {
   cropFor,
   cropLine,
   defaultSizeFor,
+  postSize,
   frameRatio,
   sizeMeta,
   sizesFor,
@@ -189,7 +190,7 @@ export function PreviewBody(props: PlatformPreviewPanelProps): ReactElement {
   const kind = previewMediaKind(firstMedia);
   const spec = specFor(platform);
   const mediaList: PreviewMedia = kind === 'video' ? 'video' : 'image';
-  const sizes = sizesFor(platform, mediaList);
+  const listSizes = sizesFor(platform, mediaList);
 
   const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null);
   useEffect(() => {
@@ -204,9 +205,13 @@ export function PreviewBody(props: PlatformPreviewPanelProps): ReactElement {
       ? { w: firstMedia.width, h: firstMedia.height }
       : null;
   const dims = stored ?? measured;
-  const fallback = isPostPlatform(platform)
-    ? defaultSizeFor(platform, format, mediaList, dims)
-    : null;
+  // The panel opens on the frame the post page shows ("This post"), then the
+  // platform's published sizes to compare.
+  const thisPost = postSize(platform, format, mediaList, dims);
+  const sizes: readonly PlatformSize[] = thisPost !== null ? [thisPost, ...listSizes] : listSizes;
+  const fallback =
+    thisPost ??
+    (isPostPlatform(platform) ? defaultSizeFor(platform, format, mediaList, dims) : null);
 
   const [label, setLabel] = useState<string | null>(fallback?.label ?? null);
   useEffect(() => {
@@ -233,13 +238,15 @@ export function PreviewBody(props: PlatformPreviewPanelProps): ReactElement {
     );
   }
 
-  if (kind === 'image' && sizes.length === 0) {
-    return <p className="text-sm text-fg-2">{spec?.imageUnsupported ?? 'No preview.'}</p>;
-  }
-
   if (size === null) return <p className="text-sm text-fg-2">No preview.</p>;
 
-  const note = mediaList === 'video' ? spec?.videoNote : spec?.imageNote;
+  // Shorts with an image: the same "Shorts are video only." line the post page shows.
+  const note =
+    mediaList === 'video'
+      ? spec?.videoNote
+      : kind === 'image' && spec?.imageUnsupported !== undefined
+        ? spec.imageUnsupported
+        : spec?.imageNote;
   const media: ReactNode =
     url === null ? null : kind === 'video' ? (
       <video
@@ -354,7 +361,9 @@ function LayoutMock({
     </span>
   );
 
-  if (size.layout === 'feed') {
+  // A feed post fit with bands (Threads, never cropped) keeps the feed card.
+  const feedLetterbox = size.layout === 'letterbox' && size.feedCard === true;
+  if (size.layout === 'feed' || feedLetterbox) {
     return (
       <figure
         aria-label="Feed preview"
@@ -365,7 +374,13 @@ function LayoutMock({
           <span className="truncate text-sm font-semibold text-fg">{handle}</span>
         </div>
         <div
-          className="w-full overflow-hidden bg-panel-3 [&>img]:h-full [&>img]:w-full [&>img]:object-cover [&>video]:h-full [&>video]:w-full [&>video]:object-cover"
+          data-mock-fit={feedLetterbox ? 'contain' : 'cover'}
+          className={cn(
+            'w-full overflow-hidden [&>img]:h-full [&>img]:w-full [&>video]:h-full [&>video]:w-full',
+            feedLetterbox
+              ? 'bg-black [&>img]:object-contain [&>video]:object-contain'
+              : 'bg-panel-3 [&>img]:object-cover [&>video]:object-cover',
+          )}
           style={{ aspectRatio: String(ratio) }}
         >
           {media ?? placeholder}

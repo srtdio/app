@@ -4,9 +4,12 @@ import {
   PIN_ARM_PRESS_MS,
   galleryFileKind,
   galleryView,
+  galleryFrame,
   galleryFrameRatio,
   frameCutLine,
+  frameKindNote,
   framePins,
+  slideMap,
   intrinsicSize,
   nearestTileIndex,
   resolveRibbonTileStyle,
@@ -16,6 +19,7 @@ import {
   viewerReplacesRibbon,
 } from '@/components/pages/pcs/PostGallery';
 import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
+import { IDENTITY_MAP } from '@/components/pages/pcs/pin-annotations';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
 import { createLongPressController } from '@/components/ui/useLongPress';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -635,54 +639,111 @@ describe('file tiles (T8)', () => {
 
 describe('galleryView on the platform frame', () => {
   const wide = (n: number): GalleryItem => ({ ...item(n), width: 1920, height: 1080 });
+  const tall = (n: number): GalleryItem => ({ ...item(n), width: 1080, height: 1920 });
+  const framesOf = (tree: ReactNode) =>
+    elements(tree).filter(
+      (el) => (el.props as Record<string, unknown>)['data-frame-ratio'] !== undefined,
+    );
+  const cutOf = (tree: ReactNode) =>
+    elements(tree).find(
+      (el) => (el.props as Record<string, unknown>)['data-frame-cut'] !== undefined,
+    );
 
   it('every slide renders in the same fixed frame, the media cropped to fill it', () => {
     const items = [wide(1), item(2)];
-    const ratio = galleryFrameRatio('instagram', 'carousel', items, {});
-    expect(ratio).toBeCloseTo(16 / 9);
+    const frame = galleryFrame('instagram', 'carousel', items, {});
+    expect(frame?.ratio).toBeCloseTo(16 / 9);
     const tree = galleryView({
       items,
       cache,
       presignEnabled: true,
       onOpen: () => {},
-      frameRatio: ratio,
+      frame,
       platformLabel: 'Instagram',
     });
-    const frames = elements(tree).filter(
-      (el) => (el.props as Record<string, unknown>)['data-frame-ratio'] !== undefined,
-    );
+    const frames = framesOf(tree);
     expect(frames).toHaveLength(2);
     for (const f of frames) {
-      expect((f.props as { style: { aspectRatio: string } }).style.aspectRatio).toBe(String(ratio));
+      expect((f.props as { style: { aspectRatio: string } }).style.aspectRatio).toBe(
+        String(frame?.ratio),
+      );
     }
-    // The thumbnails cover the frame (no floating, letterboxed image).
     const thumbs = elements(tree).filter((el) => (el.props as { fit?: string }).fit !== undefined);
     expect(thumbs.every((el) => (el.props as { fit: string }).fit === 'cover')).toBe(true);
+    // 16:9 sits inside Instagram's range: nothing is cut, so no cut line.
+    expect(cutOf(tree)).toBeUndefined();
   });
 
-  it('shows the cut line for the active slide and opens the full image on tap', () => {
+  it('a cropped slide shows the cut line, which opens the full image', () => {
     let opened = -1;
-    const items = [wide(1)];
+    const items = [tall(1)];
     const tree = galleryView({
       items,
       cache,
       presignEnabled: true,
       onOpen: (i) => (opened = i),
-      frameRatio: 9 / 16,
-      platformLabel: 'TikTok',
+      frame: galleryFrame('facebook', 'single_image', items, {}),
+      platformLabel: 'Facebook',
     });
-    const note = elements(tree).find(
-      (el) => (el.props as Record<string, unknown>)['data-frame-cut'] !== undefined,
-    );
+    const note = cutOf(tree);
     expect((note?.props as { children: string }).children).toBe(
-      '68% outside the TikTok frame. Tap to see full image.',
+      '30% outside the Facebook frame. Tap to see full image.',
     );
     (note?.props as { onClick: () => void }).onClick();
     expect(opened).toBe(0);
   });
 
-  it('no cut line when the slide fits the frame', () => {
-    expect(frameCutLine({ x: 0, y: 0, w: 1, h: 1 }, 'X')).toBeNull();
+  it('TikTok and Shorts fit a 16:9 slide in a 9:16 frame with bands, no cut line', () => {
+    for (const [platform, format, bands] of [
+      ['tiktok', 'video', 'black'],
+      ['youtube_shorts', 'short', 'blur'],
+    ] as const) {
+      const items = [wide(1)];
+      const frame = galleryFrame(platform, format, items, {});
+      const tree = galleryView({
+        items,
+        cache,
+        presignEnabled: true,
+        onOpen: () => {},
+        frame,
+        frameNote: frameKindNote(platform, items),
+        platformLabel: 'P',
+      });
+      const f = framesOf(tree)[0];
+      expect((f?.props as Record<string, unknown>)['data-frame-ratio']).toBeCloseTo(9 / 16);
+      expect((f?.props as Record<string, unknown>)['data-frame-bands']).toBe(bands);
+      expect(cutOf(tree)).toBeUndefined();
+      const fits = elements(tree)
+        .filter((el) => (el.props as { fit?: string }).fit !== undefined)
+        .map((el) => (el.props as { fit: string }).fit);
+      expect(fits).toContain('fit');
+    }
+  });
+
+  it('YouTube Shorts with an image shows the same note as the panel', () => {
+    const items = [wide(1)];
+    expect(frameKindNote('youtube_shorts', items)).toBe('Shorts are video only.');
+    expect(frameKindNote('tiktok', items)).toBeNull();
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      frame: galleryFrame('youtube_shorts', 'short', items, {}),
+      frameNote: frameKindNote('youtube_shorts', items),
+      platformLabel: 'YouTube Shorts',
+    });
+    const note = elements(tree).find(
+      (el) => (el.props as Record<string, unknown>)['data-frame-note'] !== undefined,
+    );
+    expect((note?.props as { children: string }).children).toBe('Shorts are video only.');
+  });
+
+  it('no cut line when the slide fits the frame or sits in bands', () => {
+    expect(frameCutLine(IDENTITY_MAP, 'X')).toBeNull();
+    expect(
+      frameCutLine(slideMap(wide(1), {}, galleryFrame('tiktok', 'video', [wide(1)], {})!), 'T'),
+    ).toBeNull();
   });
 
   it('text formats keep the uncropped ribbon (no frame)', () => {
@@ -699,14 +760,14 @@ describe('galleryView on the platform frame', () => {
     ).toBe(1);
   });
 
-  it('draws pins at their spot and outside ones as edge markers', () => {
-    const win = { x: 0.25, y: 0, w: 0.5, h: 1 };
+  it('draws pins at their spot and cropped-off ones as edge markers', () => {
+    const map = { win: { x: 0.25, y: 0, w: 0.5, h: 1 }, box: { x: 0, y: 0, w: 1, h: 1 } };
     const tree = framePins(
       [
         { n: 1, annotationId: 'a1', commentId: 'c1', x: 0.5, y: 0.5 },
         { n: 2, annotationId: 'a2', commentId: 'c2', x: 0.1, y: 0.5 },
       ],
-      win,
+      map,
       () => {},
     );
     const pins = elements(tree).filter((el) => /^Pin /.test(label(el) ?? ''));
@@ -714,5 +775,16 @@ describe('galleryView on the platform frame', () => {
     expect((pins[0]?.props as { style: { left: string } }).style.left).toBe('50%');
     expect((pins[1]?.props as Record<string, unknown>)['data-pin-edge']).toBe('left');
     expect(className(pins[1]!)).toContain('h-11 w-11');
+  });
+
+  it('pins sit on the media inside bands', () => {
+    const map = { win: { x: 0, y: 0, w: 1, h: 1 }, box: { x: 0, y: 0.25, w: 1, h: 0.5 } };
+    const tree = framePins(
+      [{ n: 1, annotationId: 'a1', commentId: 'c1', x: 0.5, y: 0 }],
+      map,
+      () => {},
+    );
+    const pin = elements(tree).find((el) => label(el) === 'Pin 1');
+    expect((pin?.props as { style: { top: string } }).style.top).toBe('25%');
   });
 });

@@ -68,14 +68,19 @@ describe('PlatformPreviewPanel', () => {
       item({ kind: 'image', width: 1080, height: 1350 }),
     );
     expect(html).toContain('aria-checked="true"');
-    expect(html).toMatch(/aria-checked="true"[^>]*><span[^>]*>Portrait</);
+    expect(html).toMatch(/aria-checked="true"[^>]*><span[^>]*>This post</);
     expect(html).toContain('1080 x 1350 · 4:5');
     expect(html).toContain('Test Workspace');
   });
-  it('says Shorts are video only for an image', () => {
-    expect(body('youtube_shorts', 'short', item({ kind: 'image' }))).toContain(
-      'Shorts are video only.',
+  it('says Shorts are video only for an image, and still shows it in the 9:16 frame', () => {
+    const html = body(
+      'youtube_shorts',
+      'short',
+      item({ kind: 'image', width: 1920, height: 1080 }),
     );
+    expect(html).toContain('Shorts are video only.');
+    expect(html).toContain('This post');
+    expect(html).toContain('1080 x 1920 · 9:16');
   });
   it('shows documents as-is', () => {
     expect(body('linkedin', 'carousel', item({ mimeType: 'application/pdf' }))).toContain(

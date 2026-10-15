@@ -25,6 +25,10 @@ export interface PlatformSize {
   layout: PreviewLayout;
   /** The size shown first when nothing else picks one. */
   isDefault?: true;
+  /** bands / letterbox only: the frame the media sits in (default 9:16). */
+  frame?: { w: number; h: number };
+  /** letterbox only: draw it as an in-feed card (Threads), not full-screen. */
+  feedCard?: true;
 }
 
 export interface PlatformSpec {
@@ -39,10 +43,17 @@ export interface PlatformSpec {
   /** PDF/document posts: pages are shown as-is, never cropped. */
   documentNote?: string;
   /**
-   * The feed ratios (w / h) the platform accepts per media kind; outside the
-   * range it crops to the nearest end. Absent = no range data.
+   * Feed posts (single image, carousel, feed video, thread): the ratios (w / h)
+   * the platform shows per media kind, and what happens outside the range:
+   * 'crop' = centre crop to the nearest end, 'bands' = fit inside with bands,
+   * never cut. Absent = no range data (the format's default size is used).
    */
-  accepted?: { image?: RatioRange; video?: RatioRange };
+  feed?: { image: RatioRange; video: RatioRange; outside: 'crop' | 'bands' };
+  /**
+   * Full-screen-only platforms (TikTok, YouTube Shorts): every post sits in a
+   * 9:16 frame and any other ratio is fit inside it with these bands, never cut.
+   */
+  verticalBands?: 'black' | 'blur';
 }
 
 /** An accepted ratio range, as w / h. */
@@ -69,7 +80,11 @@ export const PLATFORM_SPECS: Readonly<Record<PostPlatform, PlatformSpec>> = {
     ],
     imageNote:
       'Accepted range is 1.91:1 to 3:4; anything outside is cropped. In a carousel the first slide sets the ratio for all slides.',
-    accepted: { image: { min: 3 / 4, max: 1.91 } },
+    feed: {
+      image: { min: 3 / 4, max: 1.91 },
+      video: { min: 3 / 4, max: 1.91 },
+      outside: 'crop',
+    },
   },
   facebook: {
     image: [
@@ -83,6 +98,11 @@ export const PLATFORM_SPECS: Readonly<Record<PostPlatform, PlatformSpec>> = {
       { label: 'Reel', w: 1080, h: 1920, layout: 'vertical' },
       { label: 'Story', w: 1080, h: 1920, layout: 'story' },
     ],
+    feed: {
+      image: { min: 4 / 5, max: 1.91 },
+      video: { min: 4 / 5, max: 1.91 },
+      outside: 'crop',
+    },
   },
   linkedin: {
     image: [
@@ -97,7 +117,11 @@ export const PLATFORM_SPECS: Readonly<Record<PostPlatform, PlatformSpec>> = {
       { label: 'Vertical', w: 1080, h: 1920, layout: 'feed' },
     ],
     videoNote: 'Accepted range is 1:2.4 to 2.4:1.',
-    accepted: { video: { min: 1 / 2.4, max: 2.4 } },
+    feed: {
+      image: { min: 4 / 5, max: 1.91 },
+      video: { min: 1 / 2.4, max: 2.4 },
+      outside: 'crop',
+    },
     documentNote: 'Document pages are shown as-is, with no crop.',
   },
   x: {
@@ -112,21 +136,28 @@ export const PLATFORM_SPECS: Readonly<Record<PostPlatform, PlatformSpec>> = {
       { label: 'Square', w: 1080, h: 1080, layout: 'feed' },
     ],
     imageNote: 'With more than one image, each is cropped from the centre.',
+    feed: {
+      image: { min: 4 / 5, max: 16 / 9 },
+      video: { min: 4 / 5, max: 16 / 9 },
+      outside: 'crop',
+    },
   },
   youtube_shorts: {
     image: [],
     video: [{ label: 'Short', w: 1080, h: 1920, layout: 'bands', isDefault: true }],
     imageUnsupported: 'Shorts are video only.',
+    verticalBands: 'blur',
     videoNote: 'Horizontal and square videos are shown whole, with blurred bands top and bottom.',
   },
   tiktok: {
-    image: [{ label: 'Vertical', w: 1080, h: 1920, layout: 'vertical', isDefault: true }],
+    image: [{ label: 'Vertical', w: 1080, h: 1920, layout: 'letterbox', isDefault: true }],
     video: [
-      { label: 'Vertical', w: 1080, h: 1920, layout: 'vertical', isDefault: true },
+      { label: 'Vertical', w: 1080, h: 1920, layout: 'letterbox', isDefault: true },
       { label: 'Landscape', w: 1920, h: 1080, layout: 'letterbox' },
       { label: 'Square', w: 1080, h: 1080, layout: 'letterbox' },
     ],
     imageNote: 'Photo posts use one ratio for all slides.',
+    verticalBands: 'black',
   },
   threads: {
     image: [
@@ -138,7 +169,12 @@ export const PLATFORM_SPECS: Readonly<Record<PostPlatform, PlatformSpec>> = {
       { label: 'Portrait', w: 1080, h: 1350, layout: 'feed' },
       { label: 'Square', w: 1080, h: 1080, layout: 'feed' },
     ],
-    imageNote: 'A carousel keeps the same ratio across slides.',
+    imageNote: 'A carousel keeps the same ratio across slides. Nothing is cropped.',
+    feed: {
+      image: { min: 9 / 16, max: 1.91 },
+      video: { min: 9 / 16, max: 1.91 },
+      outside: 'bands',
+    },
   },
 };
 
@@ -192,10 +228,8 @@ export function formatDefaultSize(
   return size === null ? null : { media: rule.media, size };
 }
 
-/** Formats always shown full-screen at 9:16, whatever the media. */
+/** Formats always shown full-screen at 9:16 and cropped to fill. */
 const FIXED_VERTICAL_FORMATS: readonly string[] = ['reel', 'story', 'short'];
-/** Platforms whose every post is full-screen 9:16. */
-const FIXED_VERTICAL_PLATFORMS: readonly string[] = ['tiktok', 'youtube_shorts'];
 
 /** The first media of a post, for the frame rule. */
 export interface FrameMedia {
@@ -205,32 +239,51 @@ export interface FrameMedia {
   h: number | null;
 }
 
-/** The media box a post renders in: its ratio (w / h) and where that came from. */
+/**
+ * The media box a post renders in. ratio is w / h. fit 'cover' fills the frame
+ * with a centre crop; 'contain' fits the whole media inside it, with bands
+ * where the ratios differ. bands names how those bands look.
+ */
 export interface Frame {
   ratio: number;
   source: 'fixed' | 'media' | 'default';
+  fit: 'cover' | 'contain';
+  bands: 'none' | 'black' | 'blur';
 }
 
+const VERTICAL = VERTICAL_FRAME.w / VERTICAL_FRAME.h;
+
 /**
- * The one frame rule. text / link: null (no media box). reel / story / short
- * and every TikTok or YouTube Shorts post: 9:16. Feed formats (single image,
- * carousel, video, thread): the first media's own ratio clamped into the
- * platform's accepted range for its kind; with no range data, or before the
- * first media's size is known, the format's default size. A carousel passes its
- * first slide, so every slide shares that frame.
+ * The one frame rule, shared by the post page gallery, the create sheet and
+ * the preview panel.
+ * - text / link: null (no media box).
+ * - TikTok and YouTube Shorts: always 9:16; other ratios are fit inside with
+ *   bands (black / blurred), never cropped.
+ * - reel / story / short elsewhere: 9:16, cropped to fill.
+ * - Feed formats: the first media's own ratio clamped into the platform's feed
+ *   range. Outside it, Instagram / Facebook / LinkedIn / X crop from the centre;
+ *   Threads fits the media inside the clamped frame with bands, never cutting.
+ *   A carousel passes its first slide, so every slide shares that frame.
+ * - No range data, or the first media's size not known yet: the format's
+ *   default size, cropped to fill.
  */
 export function frameFor(platform: string, format: string, first: FrameMedia | null): Frame | null {
   if (!isPostPlatform(platform) || !isPostFormat(format)) return null;
   if (FORMAT_DEFAULT_SIZE[format] === null) return null;
-  if (FIXED_VERTICAL_FORMATS.includes(format) || FIXED_VERTICAL_PLATFORMS.includes(platform)) {
-    return { ratio: VERTICAL_FRAME.w / VERTICAL_FRAME.h, source: 'fixed' };
+  const spec = PLATFORM_SPECS[platform];
+  if (spec.verticalBands !== undefined) {
+    return { ratio: VERTICAL, source: 'fixed', fit: 'contain', bands: spec.verticalBands };
+  }
+  if (FIXED_VERTICAL_FORMATS.includes(format)) {
+    return { ratio: VERTICAL, source: 'fixed', fit: 'cover', bands: 'none' };
   }
   const range =
-    first !== null && first.kind !== 'other'
-      ? PLATFORM_SPECS[platform].accepted?.[first.kind]
+    first !== null && first.kind !== 'other' && spec.feed !== undefined
+      ? spec.feed[first.kind]
       : undefined;
   if (
     range !== undefined &&
+    spec.feed !== undefined &&
     first !== null &&
     first.w !== null &&
     first.h !== null &&
@@ -238,8 +291,21 @@ export function frameFor(platform: string, format: string, first: FrameMedia | n
     first.h > 0
   ) {
     const own = first.w / first.h;
-    return { ratio: Math.min(range.max, Math.max(range.min, own)), source: 'media' };
+    const ratio = Math.min(range.max, Math.max(range.min, own));
+    if (spec.feed.outside === 'bands') {
+      return { ratio, source: 'media', fit: 'contain', bands: ratio === own ? 'none' : 'black' };
+    }
+    return { ratio, source: 'media', fit: 'cover', bands: 'none' };
   }
   const fallback = formatDefaultSize(platform, format);
-  return fallback === null ? null : { ratio: fallback.size.w / fallback.size.h, source: 'default' };
+  if (fallback === null) return null;
+  // Threads never cuts: until the media's size is known it is fit, not cropped.
+  return spec.feed?.outside === 'bands'
+    ? {
+        ratio: fallback.size.w / fallback.size.h,
+        source: 'default',
+        fit: 'contain',
+        bands: 'black',
+      }
+    : { ratio: fallback.size.w / fallback.size.h, source: 'default', fit: 'cover', bands: 'none' };
 }

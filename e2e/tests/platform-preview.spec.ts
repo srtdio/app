@@ -34,10 +34,12 @@ for (const c of CASES) {
 
     const panel = page.getByRole('dialog', { name: `${c.label} preview` });
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole('radio', { name: /Portrait/ })).toHaveAttribute(
+    // It opens on the frame the post page shows, then lists the platform's sizes.
+    await expect(panel.getByRole('radio', { name: /This post/ })).toHaveAttribute(
       'aria-checked',
       'true',
     );
+    await expect(panel.getByRole('radio', { name: /Portrait/ })).toBeVisible();
     await expect(panel).toContainText(c.size);
     await page.keyboard.press('Escape');
     await expect(panel).toHaveCount(0);
