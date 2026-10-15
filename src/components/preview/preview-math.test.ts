@@ -119,3 +119,43 @@ describe('crop math', () => {
     expect(cropFor({ w: 0, h: 10 }, size(1080, 1350)).kind).toBe('fits');
   });
 });
+
+// The verified table: label WxH, * = default.
+const T: Record<string, [string, string]> = {
+  instagram: [
+    'Portrait 1080x1350*,Tall 1080x1440,Square 1080x1080,Landscape 1080x566',
+    'Reel 1080x1920*,Story 1080x1920,Feed 1080x1350',
+  ],
+  facebook: [
+    'Portrait 1080x1350*,Square 1080x1080,Landscape 1200x630',
+    'Feed 1080x1350*,Feed square 1080x1080,Reel 1080x1920,Story 1080x1920',
+  ],
+  linkedin: [
+    'Landscape 1200x627,Square 1080x1080,Portrait 1080x1350*',
+    'Landscape 1920x1080*,Square 1080x1080,Portrait 1080x1350,Vertical 1080x1920',
+  ],
+  x: [
+    'Landscape 1600x900*,Square 1080x1080,Portrait 1080x1350',
+    'Landscape 1920x1080*,Vertical 1080x1920,Square 1080x1080',
+  ],
+  youtube_shorts: ['', 'Short 1080x1920*'],
+  tiktok: ['Vertical 1080x1920*', 'Vertical 1080x1920*,Landscape 1920x1080,Square 1080x1080'],
+  threads: [
+    'Portrait 1080x1350*,Square 1080x1080',
+    'Vertical 1080x1920*,Portrait 1080x1350,Square 1080x1080',
+  ],
+};
+it('matches the verified 16 Oct 2026 table exactly', () => {
+  for (const [p, [img, vid]] of Object.entries(T)) {
+    const s = PLATFORM_SPECS[p as keyof typeof PLATFORM_SPECS];
+    const f = (l: typeof s.image) =>
+      l.map((z) => `${z.label} ${z.w}x${z.h}${z.isDefault ? '*' : ''}`).join(',');
+    expect(f(s.image), p).toBe(img);
+    expect(f(s.video), p).toBe(vid);
+  }
+  expect(PLATFORM_SPECS.youtube_shorts.video[0]?.layout).toBe('bands');
+  expect(PLATFORM_SPECS.tiktok.video.slice(1).map((z) => z.layout)).toEqual([
+    'letterbox',
+    'letterbox',
+  ]);
+});

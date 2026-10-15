@@ -42,7 +42,7 @@ function body(platform: string, format: string, media: GalleryItem | null): stri
       platform={platform}
       format={format}
       caption="Hello there"
-      handle="Acme Studio"
+      handle="Test Workspace"
       firstMedia={media}
       cache={cache}
       presignEnabled={false}
@@ -70,7 +70,7 @@ describe('PlatformPreviewPanel', () => {
     expect(html).toContain('aria-checked="true"');
     expect(html).toMatch(/aria-checked="true"[^>]*><span[^>]*>Portrait</);
     expect(html).toContain('1080 x 1350 · 4:5');
-    expect(html).toContain('Acme Studio');
+    expect(html).toContain('Test Workspace');
   });
   it('says Shorts are video only for an image', () => {
     expect(body('youtube_shorts', 'short', item({ kind: 'image' }))).toContain(

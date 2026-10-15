@@ -7,7 +7,17 @@ export const PostSchema = z.object({
   caption: z.string().nullable(),
   bucket_id: z.string().uuid().nullable(),
   owner_user_id: z.string().uuid(),
-  platform: z.enum(['linkedin', 'x', 'instagram', 'facebook', 'threads']),
+  // Keep in step with POST_PLATFORMS (packages/posts/src/create.ts); a parity test
+  // in packages/posts guards drift. Not imported: schemas cannot depend on posts.
+  platform: z.enum([
+    'linkedin',
+    'x',
+    'instagram',
+    'facebook',
+    'threads',
+    'tiktok',
+    'youtube_shorts',
+  ]),
   format: z.enum([
     'text',
     'single_image',
