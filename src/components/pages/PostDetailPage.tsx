@@ -21,7 +21,14 @@ import type { PcsTab } from '@/components/pages/pcs/PcsTabs';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconChevronLeft, IconChevronRight, IconCopy, IconPipeline } from '@/components/ui/icons';
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconCopy,
+  IconEye,
+  IconPipeline,
+} from '@/components/ui/icons';
+import { PlatformPreviewPanel, previewChipLabel } from '@/components/preview/PlatformPreviewPanel';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { CaptionView } from '@/components/pages/pcs/CaptionView';
 import type { CaptionAnnotationView } from '@/components/pages/pcs/CaptionView';
@@ -332,6 +339,7 @@ export function PostDetailPage({
 
   const [detail, setDetail] = useState<PostDetail | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -1268,6 +1276,16 @@ export function PostDetailPage({
           <span className="text-sm text-fg-2">
             {platformLabel(post.platform)} · {formatLabel(post.format)}
           </span>
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            className="group inline-flex h-11 items-center focus:outline-none"
+          >
+            <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg transition-colors group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent motion-reduce:transition-none">
+              <IconEye size={14} />
+              {previewChipLabel(post.platform)}
+            </span>
+          </button>
         </div>
 
         {agencySide && !readOnly ? (
@@ -1620,6 +1638,18 @@ export function PostDetailPage({
         onChangeBucket={(bucketId) => void applyPostUpdate({ bucketId })}
         onChangeOwner={(ownerUserId) => void applyPostUpdate({ ownerUserId })}
         onChangeTargetDate={(targetDate) => void applyPostUpdate({ targetDate })}
+      />
+
+      <PlatformPreviewPanel
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        platform={post.platform}
+        format={post.format}
+        caption={post.caption ?? ''}
+        handle={workspaceName ?? ''}
+        firstMedia={gallery[0] ?? null}
+        cache={cache}
+        presignEnabled={presignEnabled}
       />
 
       <PcsApproveConfirm

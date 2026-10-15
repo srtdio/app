@@ -40,6 +40,8 @@ export interface AttachmentItem {
   kind: 'image' | 'file' | 'link';
   name: string;
   previewUrl?: string;
+  /** The picked file's MIME type (files only), for the format's soft file check. */
+  mime?: string;
 }
 
 /** The ordered asset VERSION ids the parent binds via gallery_set. */
@@ -78,6 +80,7 @@ export async function runFileAttachment(
       versionId: outcome.versionId,
       kind: file.type.startsWith('image/') ? 'image' : 'file',
       name: file.name,
+      ...(file.type !== '' ? { mime: file.type } : {}),
     },
   };
 }
@@ -115,15 +118,30 @@ export async function runLinkAttachment(deps: LinkAttachmentDeps): Promise<Attac
 export function attachmentItemList(
   items: readonly AttachmentItem[],
   onRemove: (index: number) => void,
+  /** The format's frame ratio (w / h); null or absent keeps the square tile. */
+  frameRatio?: number | null,
 ): ReactElement[] {
+  const ratio = frameRatio ?? 1;
   return items.map((item, index) => {
-    if (item.kind === 'image') {
+    const isVideo = item.mime?.startsWith('video/') === true && item.previewUrl !== undefined;
+    if (item.kind === 'image' || isVideo) {
       return (
         <li
           key={`${item.versionId}-${index}`}
-          className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md border border-border bg-panel-3"
+          data-frame-ratio={ratio}
+          className="relative h-20 shrink-0 overflow-hidden rounded-md border border-border bg-panel-3"
+          style={{ aspectRatio: String(ratio), minWidth: '44px' }}
         >
-          {item.previewUrl !== undefined ? (
+          {isVideo ? (
+            <video
+              src={item.previewUrl}
+              muted
+              playsInline
+              preload="metadata"
+              aria-label={item.name}
+              className="h-full w-full object-cover"
+            />
+          ) : item.previewUrl !== undefined ? (
             <img src={item.previewUrl} alt={item.name} className="h-full w-full object-cover" />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-fg-3">
@@ -185,12 +203,15 @@ interface AttachmentsFieldProps {
   workspaceId: string | null;
   value: AttachmentItem[];
   onChange: (items: AttachmentItem[]) => void;
+  /** The format's media frame ratio (w / h) for the preview tiles; absent = square. */
+  frameRatio?: number | null;
 }
 
 export function AttachmentsField({
   workspaceId,
   value,
   onChange,
+  frameRatio,
 }: AttachmentsFieldProps): ReactElement {
   const newTrace = useNewTrace();
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
@@ -258,7 +279,8 @@ export function AttachmentsField({
     for (const file of Array.from(list)) {
       const id = `att-${(pendingSeq += 1)}`;
       const isImage = isPhoto || file.type.startsWith('image/');
-      const previewUrl = isImage ? URL.createObjectURL(file) : null;
+      const previewUrl =
+        isImage || file.type.startsWith('video/') ? URL.createObjectURL(file) : null;
       setPending((prev) => [
         ...prev,
         { id, name: file.name, kind: isImage ? 'image' : 'file', previewUrl, error: null },
@@ -378,7 +400,9 @@ export function AttachmentsField({
       ) : null}
 
       {value.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">{attachmentItemList(value, removeCompleted)}</ul>
+        <ul className="flex flex-wrap gap-2">
+          {attachmentItemList(value, removeCompleted, frameRatio)}
+        </ul>
       ) : null}
 
       {pending.length > 0 ? (

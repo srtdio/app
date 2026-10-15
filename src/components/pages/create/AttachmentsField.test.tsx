@@ -48,7 +48,7 @@ describe('runFileAttachment', () => {
     const result = await runFileAttachment(file, true, uploadFile);
     expect(result).toEqual({
       ok: true,
-      item: { versionId: 'ver-1', kind: 'image', name: 'photo.png' },
+      item: { versionId: 'ver-1', kind: 'image', name: 'photo.png', mime: 'image/png' },
     });
   });
 
@@ -60,7 +60,7 @@ describe('runFileAttachment', () => {
     const result = await runFileAttachment(file, false, uploadFile);
     expect(result).toEqual({
       ok: true,
-      item: { versionId: 'ver-2', kind: 'file', name: 'doc.pdf' },
+      item: { versionId: 'ver-2', kind: 'file', name: 'doc.pdf', mime: 'application/pdf' },
     });
   });
 
@@ -127,5 +127,16 @@ describe('AttachmentsField upload origin', () => {
     const args = call.slice(0, call.indexOf('});'));
     expect(args).toContain("origin: 'library'");
     expect(source).not.toContain("origin: 'chat'");
+  });
+});
+
+describe('attachmentItemList frame', () => {
+  it('frames image tiles at the format ratio, square when absent', () => {
+    const img: AttachmentItem[] = [
+      { versionId: 'v', kind: 'image', name: 'p.png', previewUrl: 'blob:p', mime: 'image/png' },
+    ];
+    const framed = attachmentItemList(img, () => undefined, 9 / 16)[0];
+    expect(framed?.props['data-frame-ratio']).toBeCloseTo(9 / 16);
+    expect(attachmentItemList(img, () => undefined)[0]?.props['data-frame-ratio']).toBe(1);
   });
 });

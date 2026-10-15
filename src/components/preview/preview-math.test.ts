@@ -1,0 +1,121 @@
+import { describe, expect, it } from 'vitest';
+import { POST_PLATFORMS } from '@srtdio/posts';
+import { PLATFORM_SPECS, type PlatformSize } from '@/lib/platform-specs';
+import {
+  cropFor,
+  cropLine,
+  defaultSizeFor,
+  formatDefaultSize,
+  formatFrameRatio,
+  ratioLabel,
+  sizeMeta,
+  sizesFor,
+  specFor,
+} from '@/components/preview/preview-math';
+
+const size = (w: number, h: number, layout: PlatformSize['layout'] = 'feed'): PlatformSize => ({
+  label: 'x',
+  w,
+  h,
+  layout,
+});
+
+describe('spec lookup', () => {
+  it('has a spec for every platform key', () => {
+    for (const p of POST_PLATFORMS) expect(specFor(p)).toBe(PLATFORM_SPECS[p]);
+  });
+  it('returns null / empty for an unknown key', () => {
+    expect(specFor('twitter')).toBeNull();
+    expect(sizesFor('twitter', 'image')).toEqual([]);
+  });
+  it('each non-empty list has exactly one default', () => {
+    for (const p of POST_PLATFORMS) {
+      for (const media of ['image', 'video'] as const) {
+        const list = PLATFORM_SPECS[p][media];
+        if (list.length > 0) expect(list.filter((s) => s.isDefault).length).toBe(1);
+      }
+    }
+  });
+  it('YouTube Shorts takes no image', () => {
+    expect(sizesFor('youtube_shorts', 'image')).toEqual([]);
+    expect(specFor('youtube_shorts')?.imageUnsupported).toBe('Shorts are video only.');
+  });
+  it('reads the verified values', () => {
+    expect(sizesFor('instagram', 'image')[0]).toMatchObject({ w: 1080, h: 1350 });
+    expect(sizesFor('x', 'image')[0]).toMatchObject({ label: 'Landscape', w: 1600, h: 900 });
+    expect(sizesFor('linkedin', 'image')[0]).toMatchObject({ w: 1200, h: 627 });
+  });
+});
+
+describe('format default size', () => {
+  it('reel / story / short / tiktok video are 9:16', () => {
+    expect(formatFrameRatio('instagram', 'reel')).toBeCloseTo(9 / 16);
+    expect(formatFrameRatio('instagram', 'story')).toBeCloseTo(9 / 16);
+    expect(formatFrameRatio('facebook', 'reel')).toBeCloseTo(9 / 16);
+    expect(formatFrameRatio('youtube_shorts', 'short')).toBeCloseTo(9 / 16);
+    expect(formatFrameRatio('tiktok', 'video')).toBeCloseTo(9 / 16);
+  });
+  it('single image / carousel use the platform default image size', () => {
+    expect(formatDefaultSize('instagram', 'single_image')?.size).toMatchObject({
+      w: 1080,
+      h: 1350,
+    });
+    expect(formatDefaultSize('x', 'single_image')?.size).toMatchObject({ w: 1600, h: 900 });
+    expect(formatDefaultSize('linkedin', 'carousel')?.size).toMatchObject({ w: 1080, h: 1350 });
+    expect(formatDefaultSize('threads', 'carousel')?.size).toMatchObject({ w: 1080, h: 1350 });
+  });
+  it('text and link have no frame', () => {
+    expect(formatFrameRatio('x', 'text')).toBeNull();
+    expect(formatFrameRatio('linkedin', 'link')).toBeNull();
+    expect(formatFrameRatio('x', 'nope')).toBeNull();
+  });
+  it('the panel falls back to the media list default when the format is the other kind', () => {
+    expect(defaultSizeFor('instagram', 'reel', 'image')?.label).toBe('Portrait');
+    expect(defaultSizeFor('instagram', 'story', 'video')?.label).toBe('Story');
+    expect(defaultSizeFor('instagram', 'carousel', 'video')?.label).toBe('Reel');
+  });
+});
+
+describe('ratio labels', () => {
+  it('names published ratios', () => {
+    expect(ratioLabel(1080, 1350)).toBe('4:5');
+    expect(ratioLabel(1080, 1920)).toBe('9:16');
+    expect(ratioLabel(1080, 566)).toBe('1.91:1');
+    expect(ratioLabel(1200, 630)).toBe('1.91:1');
+    expect(ratioLabel(1200, 627)).toBe('1.91:1');
+    expect(sizeMeta(size(1080, 1440))).toBe('1080 x 1440 · 3:4');
+  });
+});
+
+describe('crop math', () => {
+  it('fits exactly', () => {
+    const r = cropFor({ w: 2160, h: 2700 }, size(1080, 1350));
+    expect(r.kind).toBe('fits');
+    expect(cropLine(r)).toBe('Fits exactly');
+  });
+  it('cuts the sides of a wider original', () => {
+    const r = cropFor({ w: 1920, h: 1080 }, size(1080, 1080));
+    expect(r).toMatchObject({ kind: 'cut', pct: 44, from: 'sides' });
+    expect(cropLine(r)).toBe('44% cut from sides');
+    expect(r.window.w).toBeCloseTo(0.5625);
+    expect(r.window.x).toBeCloseTo(0.21875);
+  });
+  it('cuts top and bottom of a taller original', () => {
+    const r = cropFor({ w: 1080, h: 1920 }, size(1080, 1350));
+    expect(r).toMatchObject({ kind: 'cut', pct: 30, from: 'top and bottom' });
+    expect(cropLine(r)).toBe('30% cut from top and bottom');
+    expect(r.window.h).toBeCloseTo(0.703125);
+  });
+  it('shows bands / letterbox without a crop', () => {
+    const bands = cropFor({ w: 1920, h: 1080 }, size(1080, 1920, 'bands'));
+    expect(bands.kind).toBe('bands');
+    expect(cropLine(bands)).toBe('Shown with bands');
+    expect(bands.window).toEqual({ x: 0, y: 0, w: 1, h: 1 });
+    expect(cropFor({ w: 1080, h: 1080 }, size(1080, 1080, 'letterbox')).kind).toBe('bands');
+    expect(cropFor({ w: 720, h: 1280 }, size(1080, 1920, 'bands')).kind).toBe('fits');
+  });
+  it('treats a sub-0.5% cut as a fit and a zero dimension as a fit', () => {
+    expect(cropFor({ w: 1081, h: 1350 }, size(1080, 1350)).kind).toBe('fits');
+    expect(cropFor({ w: 0, h: 10 }, size(1080, 1350)).kind).toBe('fits');
+  });
+});
