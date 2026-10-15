@@ -10,15 +10,20 @@ import type { Rect } from '@/lib/induction';
 /** Above page content and Sheet (z-50); below toasts (z-60/70) and the lightbox (z-80). */
 export const GUIDE_Z = 'z-[55]';
 
+/**
+ * The box is placed in page coordinates (absolute, the live rect plus the
+ * page scroll), not fixed to the screen: when the iOS keyboard opens, Safari
+ * pans the page under fixed elements, and a fixed box drifts off its control.
+ */
 export function GuideBox({ rect, radius }: { rect: Rect; radius: number }): ReactElement {
   return (
     <div
       data-induction-box=""
       aria-hidden="true"
-      className={`pointer-events-none fixed ${GUIDE_Z} border-2 border-accent`}
+      className={`pointer-events-none absolute ${GUIDE_Z} border-2 border-accent`}
       style={{
-        top: rect.top,
-        left: rect.left,
+        top: rect.top + window.scrollY,
+        left: rect.left + window.scrollX,
         width: rect.width,
         height: rect.height,
         borderRadius: radius,

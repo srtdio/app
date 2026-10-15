@@ -118,7 +118,7 @@ export function PresetMediaField({
         onProgress: (fraction) => {
           if (!alive.current) return;
           setUpload((prev) =>
-            prev.phase === 'sending' ? { ...prev, percent: Math.round(fraction * 100) } : prev,
+            prev.phase === 'sending' ? { ...prev, percent: sendingPercent(fraction) } : prev,
           );
         },
       },
@@ -167,9 +167,7 @@ export function PresetMediaField({
         className={upload.phase === 'failed' ? 'text-[12px] text-bad' : 'text-[12px] text-fg-3'}
       >
         {upload.phase === 'sending'
-          ? upload.retrying
-            ? `The connection dropped. Trying again, ${upload.percent}%`
-            : `Uploading, ${upload.percent}%`
+          ? uploadLine(upload.percent, upload.retrying)
           : upload.phase === 'failed'
             ? upload.reason
             : required
@@ -190,6 +188,24 @@ export function PresetMediaField({
       />
     </div>
   );
+}
+
+/**
+ * The bar's share for the bytes sent so far. Sending ends at 90%: the server
+ * still checks and stores the photo after the last byte, and only its answer
+ * fills the bar, so 100% always means the photo is in the post.
+ */
+export function sendingPercent(fraction: number): number {
+  return Math.round(Math.min(Math.max(fraction, 0), 1) * SENT_SHARE);
+}
+
+const SENT_SHARE = 90;
+
+/** The line under the bar. */
+export function uploadLine(percent: number, retrying: boolean): string {
+  if (retrying) return `The connection dropped. Trying again, ${percent}%`;
+  if (percent >= SENT_SHARE) return 'Almost done, saving your photo';
+  return `Uploading, ${percent}%`;
 }
 
 /** The upload's real progress as a bar. */

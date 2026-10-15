@@ -15,7 +15,7 @@ vi.mock('@/lib/env', () => ({ env: { VITE_ASSET_UPLOAD_URL: 'https://upload.test
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => newTrace }));
 vi.mock('@/lib/chat/attachments', () => ({ uploadChatAttachment: mockUpload }));
 
-import { PresetMediaField } from './PresetMediaField';
+import { PresetMediaField, sendingPercent, uploadLine } from './PresetMediaField';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -71,8 +71,9 @@ describe('PresetMediaField', () => {
     });
     await pickFile('IMG_4821.HEIC.png');
     const bar = document.querySelector('[role="progressbar"]');
-    expect(bar?.getAttribute('aria-valuenow')).toBe('42');
-    expect(document.body.textContent).toContain('Uploading, 42%');
+    // 42% of the bytes is 38% of the bar: the last 10% waits for the server's answer.
+    expect(bar?.getAttribute('aria-valuenow')).toBe('38');
+    expect(document.body.textContent).toContain('Uploading, 38%');
     expect(document.body.textContent).not.toContain('IMG_4821');
 
     await act(async () => finish({ ok: true, reused: false, versionId: 'v-1' }));
@@ -100,5 +101,11 @@ describe('PresetMediaField', () => {
     expect(mockUpload).toHaveBeenCalledTimes(4);
     expect(document.body.textContent).toContain('The file did not reach us.');
     expect(document.body.textContent).toContain('Try again');
+  });
+
+  it('never reads 100% before the server answers', () => {
+    expect(sendingPercent(1)).toBe(90);
+    expect(uploadLine(90, false)).toBe('Almost done, saving your photo');
+    expect(uploadLine(10, true)).toBe('The connection dropped. Trying again, 10%');
   });
 });

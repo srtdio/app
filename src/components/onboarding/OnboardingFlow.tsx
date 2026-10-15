@@ -348,18 +348,6 @@ export function OnboardingFlow({
     else setResent(true);
   }
 
-  /** The approver makes the posts after all: the Creator path, workspace first. */
-  async function switchToCreator(): Promise<void> {
-    setBusy(true);
-    const stored = await onStep(WORKSPACE_STEP);
-    if (!stored) {
-      setBusy(false);
-      setError("We couldn't switch that. Try again.");
-      return;
-    }
-    finish(SHELL_HOME);
-  }
-
   // ---------- screens ----------
 
   let body: ReactNode;
@@ -629,14 +617,7 @@ export function OnboardingFlow({
     );
   } else {
     // waiting
-    body = (
-      <WaitingBody
-        email={teamEmail}
-        resent={resent}
-        busy={busy}
-        onSwitch={() => void switchToCreator()}
-      />
-    );
+    body = <WaitingBody email={teamEmail} resent={resent} />;
     primary = (
       <Primary
         disabled={busy || !isValidInviteEmail(teamEmail) || brandName.trim() === ''}
@@ -857,17 +838,11 @@ const WAITING_LINES: readonly string[] = [
   'Their first post lands here for you to read and approve.',
 ];
 
-function WaitingBody({
-  email,
-  resent,
-  busy,
-  onSwitch,
-}: {
-  email: string;
-  resent: boolean;
-  busy: boolean;
-  onSwitch: () => void;
-}): ReactElement {
+/**
+ * An approver who signed up alone waits here: there is no workspace to tour
+ * yet. Their tour starts on the real post the day their team invites them.
+ */
+function WaitingBody({ email, resent }: { email: string; resent: boolean }): ReactElement {
   return (
     <>
       <Heading
@@ -892,9 +867,6 @@ function WaitingBody({
           {resent ? `Sent again to ${email}.` : `We asked ${email}.`}
         </p>
       ) : null}
-      <Button variant="ghost" size="lg" disabled={busy} onClick={onSwitch} className="self-start">
-        I make the posts after all
-      </Button>
     </>
   );
 }

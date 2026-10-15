@@ -269,7 +269,7 @@ describe('pre-app screens', () => {
     });
     expect(onStep).toHaveBeenCalledWith('approver_waiting');
     expect(document.body.textContent).toContain('Your team is on its way');
-    expect(document.body.textContent).toContain('I make the posts after all');
+    expect(document.body.textContent).not.toContain('I make the posts after all');
   });
 
   it('maps too_many_requests on Resend to the five-sends line', async () => {
@@ -289,13 +289,14 @@ describe('pre-app screens', () => {
     );
   });
 
-  it('switches a waiting approver to the Creator path', async () => {
+  it('holds a waiting approver on the wait, with Resend and no way round it', async () => {
     await render({
       profile: { ...NEW_PROFILE, profile_completed_at: '2026-10-15T00:00:00Z' },
       approverStage: 'waiting',
     });
-    await click(button('I make the posts after all'));
-    expect(onStep).toHaveBeenCalledWith('workspace');
-    expect(onFinish).toHaveBeenCalledWith('/pipeline');
+    expect(document.body.textContent).toContain('Your team is on its way');
+    expect(button('Resend')).toBeDefined();
+    expect(document.body.textContent).not.toContain('after all');
+    expect(onFinish).not.toHaveBeenCalled();
   });
 });
