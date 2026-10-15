@@ -453,7 +453,8 @@ function available(
   path: InductionPath,
 ): boolean {
   if (step.place === 'post') return path === 'creator' || where.postId !== null;
-  if (step.place === 'group') return where.groupChannelId !== null;
+  // workspace_create makes the default group, so before a workspace it still counts.
+  if (step.place === 'group') return where.groupChannelId !== null || !where.hasWorkspace;
   return true;
 }
 
@@ -665,7 +666,9 @@ export function placeCard(input: {
       side: 'below',
       top: box.top + box.height + CARD_GAP,
       left: clampLeft(box.left),
-      fits: box.top + box.height + CARD_GAP + card.height <= viewport.height - EDGE,
+      fits:
+        box.top + box.height + CARD_GAP >= EDGE &&
+        box.top + box.height + CARD_GAP + card.height <= viewport.height - EDGE,
     },
     {
       side: 'right',
@@ -683,13 +686,17 @@ export function placeCard(input: {
       side: 'above',
       top: box.top - CARD_GAP - card.height,
       left: clampLeft(box.left),
-      fits: box.top - CARD_GAP - card.height >= EDGE,
+      fits:
+        box.top - CARD_GAP - card.height >= EDGE && box.top - CARD_GAP <= viewport.height - EDGE,
     },
   ];
+  // Never off screen: a side that does not fit is pulled inside the viewport,
+  // and is taken only if it still keeps clear of the box.
+  const inside = options.map((o) => ({ ...o, top: clampTop(o.top), left: clampLeft(o.left) }));
   const pick =
     options.find((o) => o.fits && !covers(o, card, box)) ??
-    options.find((o) => !covers(o, card, box)) ??
-    options[0];
+    inside.find((o) => !covers(o, card, box)) ??
+    inside[0];
   return { side: pick?.side ?? 'below', top: pick?.top ?? EDGE, left: pick?.left ?? EDGE };
 }
 

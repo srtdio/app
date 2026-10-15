@@ -99,6 +99,7 @@ function GuideLayer({
   const target = findTarget(step.targets);
   const el = target.found ? target.el : undefined;
   useLiveTick(el);
+  useBringIntoView(step.id, el);
 
   const safeTop = useRef<HTMLDivElement>(null);
   const safeBottom = useRef<HTMLDivElement>(null);
@@ -194,4 +195,26 @@ function GuideLayer({
     </div>,
     document.body,
   );
+}
+
+/** How long after a step starts the guide keeps its control in view (a thread re-sticking to its bottom). */
+const BRING_WINDOW_MS = 1500;
+
+/**
+ * When a step starts, scroll its control into view if it sits off screen, and
+ * keep doing so for a moment while the page settles (a chat thread scrolls to
+ * its newest message after it loads). After that the person's own scrolling wins.
+ * Instant, so reduced motion holds.
+ */
+function useBringIntoView(stepId: string, el: HTMLElement | undefined): void {
+  const since = useRef({ key: '', at: 0 });
+  useEffect(() => {
+    if (el === undefined) return;
+    const key = `${stepId}:${el.getAttribute('data-induction') ?? ''}`;
+    if (since.current.key !== key) since.current = { key, at: performance.now() };
+    if (performance.now() - since.current.at > BRING_WINDOW_MS) return;
+    const r = el.getBoundingClientRect();
+    if (r.top >= 0 && r.bottom <= window.innerHeight) return;
+    el.scrollIntoView?.({ block: 'center' });
+  });
 }

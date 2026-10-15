@@ -131,7 +131,7 @@ describe('the steps', () => {
   it('keeps the copy free of em-dashes, "trial", and "agency" or "client" for people', () => {
     for (const step of [...CREATOR_STEPS, ...APPROVER_STEPS, ...TEAMMATE_STEPS]) {
       const text = `${step.title} ${step.body} ${step.laterLabel ?? ''}`;
-      expect(text).not.toMatch(/—|\btrial\b|\bagency\b|\bclient\b/i);
+      expect(text).not.toMatch(/\u2014|\btrial\b|\bagency\b|\bclient\b/i);
     }
   });
 
@@ -421,5 +421,21 @@ describe('brandRequestErrorMessage', () => {
     );
     expect(brandRequestErrorMessage('invalid_payload')).toContain('email');
     expect(brandRequestErrorMessage('boom')).toBe("We couldn't send that. Try again.");
+  });
+});
+
+describe('placeCard never leaves the screen', () => {
+  it('pulls the card inside the viewport when the control is scrolled off the top', () => {
+    const target = { top: -400, left: 300, width: 700, height: 200 };
+    const at = placeCard({
+      target,
+      card: { width: 320, height: 140 },
+      viewport: { width: 1280, height: 800 },
+      phone: false,
+      insets: { top: 0, bottom: 0 },
+    });
+    expect(at.top).toBeGreaterThanOrEqual(16);
+    expect(at.top + 140).toBeLessThanOrEqual(800 - 16);
+    expect(at.left + 320).toBeLessThanOrEqual(1280 - 16);
   });
 });
