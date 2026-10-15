@@ -58,19 +58,50 @@ export async function finishInduction(client: Client, traceId: string): Promise<
   return { ok: true, data: null };
 }
 
-/** brand_agency_request: records who makes the approver's posts. Returns the request id. */
+/** The brand-request-send failure code, read from the function's JSON reply. */
+async function readFunctionErrorCode(error: unknown): Promise<string> {
+  if (typeof error !== 'object' || error === null || !('context' in error)) return 'unknown';
+  const context = (error as { context: unknown }).context;
+  if (!(context instanceof Response)) return 'unknown';
+  try {
+    const body: unknown = await context.json();
+    if (typeof body === 'object' && body !== null && 'error' in body) {
+      const code = (body as { error: unknown }).error;
+      if (typeof code === 'string') return code;
+    }
+  } catch {
+    // Not JSON: fall through to unknown.
+  }
+  return 'unknown';
+}
+
+/**
+ * brand-request-send: records who makes the approver's posts (brand_agency_request,
+ * as the caller) and emails them a sign-up link. Returns the request id.
+ */
 export async function requestBrandTeam(
   client: Client,
   input: { email: string; brandName: string; traceId: string },
 ): Promise<Result<string>> {
-  const args = {
-    p_agency_email: input.email.trim(),
-    p_brand_name: input.brandName.trim(),
-    p_trace_id: input.traceId,
-  };
-  const { data, error } = await client.rpc('brand_agency_request', args);
-  if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
-  return { ok: true, data };
+  try {
+    const { data, error } = await client.functions.invoke<{ request_id?: string }>(
+      'brand-request-send',
+      {
+        body: { email: input.email.trim(), brand_name: input.brandName.trim() },
+        headers: { 'x-trace-id': input.traceId },
+      },
+    );
+    if (error) {
+      const code = await readFunctionErrorCode(error);
+      return { ok: false, error: { code: 'unknown', message: code } };
+    }
+    if (typeof data?.request_id !== 'string') {
+      return { ok: false, error: { code: 'unknown', message: 'unknown' } };
+    }
+    return { ok: true, data: data.request_id };
+  } catch (err: unknown) {
+    return { ok: false, error: { code: 'unknown', message: String(err) } };
+  }
 }
 
 /** The caller's latest brand team request, for the waiting screen's Resend. */
