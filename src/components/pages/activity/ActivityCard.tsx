@@ -19,6 +19,7 @@ import {
   isSnoozed,
   relativeTime,
   isChatMention,
+  isWelcome,
   segmentSelfMentions,
   type ActivityItem,
   type SnoozeKind,
@@ -127,6 +128,9 @@ const SCOPE_TAG: Record<string, string> = {
   clients: 'Approvers',
 };
 
+/** The welcome row's top line. */
+export const WELCOME_LABEL = 'Welcome';
+
 /** "1 point" / "N points". UI vocabulary: the DB stores these as checkpoints. */
 function pointsPhrase(n: number): string {
   return `${n} ${n === 1 ? 'point' : 'points'}`;
@@ -145,6 +149,7 @@ function actorLine(item: ActivityItem, who: string | null): string {
   // Actor rows (approve, reject, park, review, deletes): the body line says who
   // did what, so the top line is the actor's name.
   if (ACTOR_ROW_EVENTS.has(item.eventType)) return who ?? UNKNOWN_ACTOR;
+  if (isWelcome(item)) return WELCOME_LABEL;
   switch (item.eventType) {
     case 'comment':
       return who !== null ? `${who} commented` : 'New comment';
@@ -231,12 +236,15 @@ export function ActivityCard({
   // An assets_deleted card has no entity: a short title, and the who-did-what
   // line in the body so it is never cut off.
   const assetsDeleted = lead.eventType === 'assets_deleted';
-  const showsBody = hasEntity || assetsDeleted;
-  const title = hasEntity
-    ? cardTitle(lead)
-    : assetsDeleted
-      ? 'Assets'
-      : activityLine(lead, workspaceKey, brand);
+  // The welcome row: its title names the workspace, the body says what lands here.
+  const welcome = isWelcome(lead);
+  const showsBody = hasEntity || assetsDeleted || welcome;
+  const title =
+    hasEntity || welcome
+      ? cardTitle(lead)
+      : assetsDeleted
+        ? 'Assets'
+        : activityLine(lead, workspaceKey, brand);
   const leadTappable = !opensNothing(lead);
   const tag = SCOPE_TAG[lead.scope];
   const actorEntry = group.find((entry) => entry.actorName !== null) ?? null;

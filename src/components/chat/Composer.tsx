@@ -114,6 +114,7 @@ import {
   sized,
   useChatLayout,
 } from '@/components/chat/chat-type';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 export interface ComposerProps {
   /**
@@ -2012,6 +2013,7 @@ export function Composer(props: ComposerProps): ReactElement {
 
               <Textarea
                 ref={setTextarea}
+                data-induction={INDUCTION_KEYS.chatHash}
                 // A chat message, not an AutoFill target: off stops the iOS AutoFill bar.
                 autoComplete="off"
                 value={held ? resolveMentionText(text, nameOf) : text}
@@ -2044,6 +2046,7 @@ export function Composer(props: ComposerProps): ReactElement {
                   variant="primary"
                   size="lg"
                   aria-label="Record voice note"
+                  data-induction={INDUCTION_KEYS.chatMic}
                   className="w-11 shrink-0 px-0"
                   onClick={() => void start()}
                 >

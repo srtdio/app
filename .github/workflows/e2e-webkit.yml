@@ -1,7 +1,7 @@
 name: E2E WebKit
 
-# changes: diffs against the merge base with main (push: previous commit) and outputs run=true only for UI-relevant paths.
-# webkit-shard: on a UI change, runs the Playwright WebKit iPhone suite (e2e/harness, no DB, no secrets; every spec dark, @theme specs light too) in 6 parallel shards of 2 workers each (see playwright.config.ts).
+# changes: diffs against the merge base with main (push: previous commit) and picks what to run: nothing for non-UI paths or unit tests only, the matching specs for homepage-only or spec-only PRs (one job), the whole suite for anything else and for every push to main.
+# webkit-shard: runs the Playwright WebKit iPhone suite (e2e/harness, no DB, no secrets; every spec dark, @theme specs light too), the whole suite in 6 parallel shards of 2 workers each (see playwright.config.ts).
 # e2e-typecheck: on a UI change, type-checks the e2e workspace in parallel with the shards.
 # e2e-webkit: the required check; fails if any shard or the typecheck failed or was cancelled, passes on success or skip.
 # No workflow-level paths filter, so the required check always reports. Linux WebKit is close to, not identical to, iOS Safari.
@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.diff.outputs.run }}
+      specs: ${{ steps.diff.outputs.specs }}
+      shards: ${{ steps.diff.outputs.shards }}
+      shard_total: ${{ steps.diff.outputs.shard_total }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,8 +44,43 @@ jobs:
           fi
           files=$(git diff --name-only "$base" HEAD)
           echo "$files"
-          if echo "$files" | grep -qE '^(src/|e2e/|public/|index\.html$|package\.json$|pnpm-lock\.yaml$|playwright\.config\.ts$|vite\.config\.ts$|tailwind\.config\.ts$|postcss\.config\.js$|tsconfig[^/]*\.json$)'; then
+          # Pick the specs a change can affect. Anything not listed below can
+          # reach every screen, so it runs the whole suite; a push to main
+          # always runs the whole suite.
+          ui=false
+          all=false
+          specs=""
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            if ! echo "$f" | grep -qE '^(src/|e2e/|public/|index\.html$|package\.json$|pnpm-lock\.yaml$|playwright\.config\.ts$|vite\.config\.ts$|tailwind\.config\.ts$|postcss\.config\.js$|tsconfig[^/]*\.json$|\.github/workflows/e2e-webkit\.yml$)'; then
+              continue
+            fi
+            ui=true
+            case "$f" in
+              # Unit tests never reach the browser.
+              src/*.test.ts|src/*.test.tsx|src/__tests__/*) ;;
+              # An edited spec runs itself (a deleted one runs nothing).
+              e2e/tests/*.spec.ts) if [ -f "$f" ]; then specs="$specs $f"; fi ;;
+              # Homepage bundle, except the files the app shell imports.
+              src/components/home/HomeGate.tsx|src/components/home/guest-path.ts|src/components/home/Wordmark.tsx) all=true ;;
+              src/components/home/*|e2e/harness/home.html|e2e/harness/home-fixture.tsx) specs="$specs e2e/tests/home-pages.spec.ts" ;;
+              *) all=true ;;
+            esac
+          done <<< "$files"
+          if [ "$ui" = true ] && [ "$EVENT_NAME" != "pull_request" ]; then all=true; fi
+          specs=$(echo "$specs" | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/^ *//;s/ *$//')
+          if [ "$all" = true ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "specs=" >> "$GITHUB_OUTPUT"
+            echo "shards=[1,2,3,4,5,6]" >> "$GITHUB_OUTPUT"
+            echo "shard_total=6" >> "$GITHUB_OUTPUT"
+            echo "WebKit: whole suite"
+          elif [ -n "$specs" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "specs=$specs" >> "$GITHUB_OUTPUT"
+            echo "shards=[1]" >> "$GITHUB_OUTPUT"
+            echo "shard_total=1" >> "$GITHUB_OUTPUT"
+            echo "WebKit: $specs"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
@@ -55,7 +93,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: ${{ fromJSON(needs.changes.outputs.shards) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -89,7 +127,11 @@ jobs:
         run: pnpm exec playwright install-deps webkit
 
       - name: Run WebKit e2e shard
-        run: pnpm test:e2e --shard=${{ matrix.shard }}/6
+        env:
+          SPECS: ${{ needs.changes.outputs.specs }}
+          SHARD: ${{ matrix.shard }}/${{ needs.changes.outputs.shard_total }}
+        # SPECS is unquoted on purpose: one argument per spec path.
+        run: pnpm test:e2e --shard="$SHARD" $SPECS
 
       - name: Upload results on failure
         if: failure()

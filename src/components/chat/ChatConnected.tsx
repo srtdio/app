@@ -5,8 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
 import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
-import { useWorkspace } from '@/lib/workspace-context';
-import { GettingStartedCard } from '@/components/onboarding/GettingStartedCard';
+import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
 import {
   listGroupMemberIds,
   readMentionProfiles,
@@ -579,6 +578,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // The workspace civil clock every timestamp renders on; the browser's own zone
   // only when the workspace has none.
   const workspace = workspaces.find((w) => w.id === workspaceId);
+  // Every chat screen shows the workspace as "<Brand> - <Platform>"; stored group names stay as they are.
+  const workspaceLabel = workspace !== undefined ? workspaceDisplayName(workspace) : undefined;
   const timeZone = workspaceTimeZone(workspace?.timezone);
 
   const [selected, setSelected] = useState<ChannelSummary | null>(null);
@@ -1924,13 +1925,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             onOpenSearchHit={openSearchHit}
             onOpenStarred={openStarredMessage}
             notes={notesChat}
-            lead={
-              <GettingStartedCard
-                workspaceId={workspaceId}
-                workspaceName={workspace?.name ?? ''}
-                userId={currentUserId}
-              />
-            }
           />
         </div>
       ) : null}
@@ -1970,8 +1964,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       title={(shown ?? selected).title}
                       channelId={selected.channelId}
                       avatarUrl={(shown ?? selected).avatarUrl}
-                      {...(!isGroup && !notesOpen && workspace !== undefined
-                        ? { subtitle: workspace.name }
+                      {...(!isGroup && !notesOpen && workspaceLabel !== undefined
+                        ? { subtitle: workspaceLabel }
                         : {})}
                       {...(!isGroup && !notesOpen
                         ? { role: (shown ?? selected).role ?? null }
@@ -2062,7 +2056,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                                 open={groupInfoOpen}
                                 onClose={() => setGroupInfoOpen(false)}
                                 workspaceId={workspaceId}
-                                workspaceName={workspace?.name}
+                                workspaceName={workspaceLabel}
                                 groupId={infoGroupId}
                                 groupName={(shown ?? selected).title}
                                 avatarUrl={(shown ?? selected).avatarUrl}
@@ -2095,7 +2089,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                   <PlanPickerSheet
                     open={planPicker !== null}
                     workspaceId={workspaceId}
-                    workspaceName={workspace?.name ?? ''}
+                    workspaceName={workspaceLabel ?? ''}
                     timeZone={timeZone}
                     inChatPlanIds={planPicker?.inChat ?? NO_PLAN_IDS}
                     onClose={() => setPlanPicker(null)}

@@ -5,6 +5,7 @@ import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { cn } from '@/lib/cn';
+import { INDUCTION_KEYS } from '@/lib/induction';
 
 export function BottomTabs() {
   const { state } = useChatStore();
@@ -16,6 +17,7 @@ export function BottomTabs() {
         <NavLink
           key={item.to}
           to={item.to}
+          {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
           className={({ isActive }) =>
             cn(
               'flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] text-[11px] font-medium transition-colors',
