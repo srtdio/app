@@ -284,8 +284,9 @@ export function WorkspaceSwitcher() {
         ) : (
           <div className="flex flex-col gap-4 p-[18px]">
             <p className="text-sm leading-relaxed text-fg-2">
-              <span className="font-semibold text-fg">{preview}</span> is final. Another platform
-              means another workspace.
+              Check the spelling: <span className="font-semibold text-fg">{preview}</span>{' '}
+              can&apos;t be changed later. To change it, you delete this workspace and create a new
+              one.
             </p>
             {formError !== null ? <p className="text-sm text-bad">{formError}</p> : null}
             <div className="flex items-center justify-end gap-2.5">

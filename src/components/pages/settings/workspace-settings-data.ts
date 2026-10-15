@@ -8,12 +8,14 @@ import type { Client, DomainError, Result } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 import { domainBrandWord } from './members-data';
 
-/** The editable workspace fields, as workspace_update's payload keys. */
+/**
+ * The editable workspace fields, as workspace_update's payload keys: the
+ * timezone only. The client name and platform are final after creation
+ * (workspace_update refuses name with invalid_payload) and there is no
+ * workspace logo in v2.0, so none of those is ever sent.
+ */
 export interface WorkspaceUpdatePayload {
-  name?: string;
-  /** An https URL, or '' to clear the logo. */
-  logo_url?: string;
-  timezone?: string;
+  timezone: string;
 }
 
 function domainError(message: string): DomainError {
@@ -27,7 +29,7 @@ export async function updateWorkspace(
 ): Promise<Result<null>> {
   const args = {
     p_workspace_id: input.workspaceId,
-    p_payload: input.payload as Json,
+    p_payload: { timezone: input.payload.timezone } satisfies Json,
     p_trace_id: input.traceId,
   };
   const { error } = await client.rpc('workspace_update', args);
@@ -78,14 +80,6 @@ export async function listClientDomains(
     .order('created_at', { ascending: true });
   if (res.error) return { ok: false, error: domainError(res.error.message) };
   return { ok: true, data: res.data.map((row) => row.domain) };
-}
-
-export const NAME_MAX = 80;
-
-/** A trimmed client name workspace_update accepts (1 to 80 characters). */
-export function isValidClientName(value: string): boolean {
-  const trimmed = value.trim();
-  return trimmed.length >= 1 && trimmed.length <= NAME_MAX;
 }
 
 /** Normalise a typed domain: trimmed, lower case, without a leading "@" or scheme. */

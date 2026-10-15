@@ -46,7 +46,11 @@ vi.mock('@/lib/supabase', () => {
   return { supabase: { from: () => query, rpc: mockRpc } };
 });
 
-import { PLATFORM_FIXED_LINE, WorkspaceSettingsPanel } from './WorkspaceSettingsPanel';
+import {
+  CLIENT_NAME_FIXED_LINE,
+  PLATFORM_FIXED_LINE,
+  WorkspaceSettingsPanel,
+} from './WorkspaceSettingsPanel';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -81,42 +85,58 @@ describe('WorkspaceSettingsPanel', () => {
     expect(text).toContain('Client name');
     expect(text).toContain('Acme');
     expect(text).toContain('Instagram');
+    expect(text).toContain(CLIENT_NAME_FIXED_LINE);
     expect(text).toContain(PLATFORM_FIXED_LINE);
     expect(text).toContain('Asia/Kolkata');
-    expect(document.querySelector('#workspace-client-name')).toBeNull();
+    expect(document.querySelector('input')).toBeNull();
     expect(document.querySelector('button[aria-label="Timezone"]')).toBeNull();
-    expect(button('Upload logo')).toBeUndefined();
+    expect(text).not.toContain('Logo');
     expect(text).not.toContain('Approved approver addresses');
   });
 
-  it('lets an admin edit but keeps the approver addresses owner-only', async () => {
+  it('lets an admin edit the timezone only, with no logo, and keeps addresses owner-only', async () => {
     state.canEdit = true;
     state.userId = 'user-admin';
     await render();
-    expect(document.querySelector('#workspace-client-name')).not.toBeNull();
     expect(document.querySelector('button[aria-label="Timezone"]')).not.toBeNull();
-    expect(button('Upload logo')).toBeDefined();
+    expect(document.querySelector('input')).toBeNull();
+    expect(button('Upload logo')).toBeUndefined();
+    expect(document.body.textContent).not.toContain('Logo');
     expect(document.body.textContent).not.toContain('Approved approver addresses');
   });
 
-  it('saves the client name through workspace_update', async () => {
+  it('keeps the client name read-only for an admin too, and never sends it', async () => {
     state.canEdit = true;
     state.userId = 'user-admin';
     mockRpc.mockResolvedValue({ data: null, error: null });
     await render();
-    const input = document.querySelector<HTMLInputElement>('#workspace-client-name')!;
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-    await act(async () => {
-      setter?.call(input, ' Acme Foods ');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await act(async () => button('Save name')!.click());
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('Acme');
+    expect(text).toContain(CLIENT_NAME_FIXED_LINE);
+    expect(CLIENT_NAME_FIXED_LINE).toBe(
+      'Fixed when the workspace was created. To change it, delete this workspace and create a new one.',
+    );
+    expect(document.querySelector('#workspace-client-name')).toBeNull();
+    expect(button('Save name')).toBeUndefined();
+
+    // Timezone still saves, and the payload carries nothing else.
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('button[aria-label="Timezone"]')!.click(),
+    );
+    const other = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
+      (o) => o.textContent !== 'Asia/Kolkata',
+    )!;
+    const zone = other.textContent ?? '';
+    await act(async () => other.click());
     expect(mockRpc).toHaveBeenCalledWith('workspace_update', {
       p_workspace_id: 'ws-1',
-      p_payload: { name: 'Acme Foods' },
+      p_payload: { timezone: zone },
       p_trace_id: 'trace-1',
     });
-    expect(mockPatch).toHaveBeenCalledWith('ws-1', { name: 'Acme Foods' });
+    for (const call of mockRpc.mock.calls) {
+      expect(Object.keys((call[1] as { p_payload: object }).p_payload)).toEqual(['timezone']);
+    }
+    expect(mockPatch).toHaveBeenCalledWith('ws-1', { timezone: zone });
   });
 
   it('shows the owner the approved addresses and words free_mail_client', async () => {

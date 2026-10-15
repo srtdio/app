@@ -3,7 +3,7 @@ import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // One workspace = one client = one platform. Creating a workspace asks for the
-// client name and a platform, confirms that the platform is final, and sends it
+// client name and a platform, confirms that both are final, and sends it
 // to workspace_create; the shell then names the workspace "<Client> - <Platform>"
 // and New post offers only that platform's formats. Tagged @theme (phone, light
 // and dark) and @desktop (laptop). The viewer is the fixture owner, a maker
@@ -62,7 +62,7 @@ test('create a workspace with a platform, then post in its formats @theme @deskt
 
   await expect(dialog).toHaveAttribute('aria-label', 'One platform per workspace');
   await expect(dialog).toContainText(
-    'Kite - Instagram is final. Another platform means another workspace.',
+    "Check the spelling: Kite - Instagram can't be changed later. To change it, you delete this workspace and create a new one.",
   );
   await dialog.getByRole('button', { name: 'Create', exact: true }).click();
 

@@ -112,7 +112,7 @@ describe('WorkspaceSwitcher', () => {
     await act(async () => button('Continue').click());
     expect(dialogTitle()).toBe('One platform per workspace');
     expect(document.body.textContent).toContain(
-      'Somaiya - Instagram is final. Another platform means another workspace.',
+      "Check the spelling: Somaiya - Instagram can't be changed later. To change it, you delete this workspace and create a new one.",
     );
     expect(mockWorkspaceCreate).not.toHaveBeenCalled();
 
