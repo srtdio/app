@@ -47,6 +47,7 @@ import {
   nextEntityNumber,
   randomSuffix,
   seedMember,
+  seedOperator,
   seedUser,
   seedWorkspace,
   type GenericClient,
@@ -287,6 +288,9 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     admin = createAdminClient(env);
     g = asGeneric(admin);
     owner = await seedUser(env, admin);
+    // Fixture owner of several workspaces: exempt from the one-workspace-per-owner
+    // trigger (20261016000000_workspace_owner_limit.sql) as an active platform operator.
+    await seedOperator(asGeneric(admin), owner);
     agency = await seedUser(env, admin);
     client = await seedUser(env, admin);
     otherAgency = await seedUser(env, admin);

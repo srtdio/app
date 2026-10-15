@@ -14,6 +14,7 @@ import { fetchWithTrace } from '@/lib/fetch';
 import { PresignCache } from '@/lib/asset-presign';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { entityUrlPath } from '@/lib/entityRef';
 import { useNewTrace } from '@/lib/trace-context';
 import { filterByTitle } from '@/lib/list-sort';
@@ -43,6 +44,8 @@ interface BriefsHeaderProps {
   onSearchChange: (value: string) => void;
   filter: BriefFilter;
   onFilterChange: (filter: BriefFilter) => void;
+  /** Whether the viewer holds brief.create; the "+" shows only then (same gate as Topbar). */
+  canCreate: boolean;
 }
 
 /**
@@ -60,20 +63,24 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
         onChange: props.onSearchChange,
         placeholder: 'Search briefs',
       }}
-      primaryAction={{
-        node: (
-          <Button
-            variant="primary"
-            size="lg"
-            aria-label="Create brief"
-            data-induction={INDUCTION_KEYS.briefsNew}
-            className="w-11 px-0"
-            onClick={() => dispatchSorted('sorted:create-brief')}
-          >
-            <IconPlus size={18} />
-          </Button>
-        ),
-      }}
+      {...(props.canCreate
+        ? {
+            primaryAction: {
+              node: (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  aria-label="Create brief"
+                  data-induction={INDUCTION_KEYS.briefsNew}
+                  className="w-11 px-0"
+                  onClick={() => dispatchSorted('sorted:create-brief')}
+                >
+                  <IconPlus size={18} />
+                </Button>
+              ),
+            },
+          }
+        : {})}
     >
       {FILTERS.map((item) => (
         <Chip
@@ -210,6 +217,8 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
 export function BriefsPage() {
   const navigate = useNavigate();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
+  // New brief is an approver action: the "+" shows only where the role holds brief.create.
+  const canCreateBrief = useWorkspaceCapability('brief.create') === true;
   const newTrace = useNewTrace();
   // The active workspace's civil calendar: the sections and the day headings are
   // read on the WORKSPACE zone and week start, never the browser's. Derived the
@@ -318,6 +327,7 @@ export function BriefsPage() {
         onSearchChange: setSearch,
         filter,
         onFilterChange: setFilter,
+        canCreate: canCreateBrief,
       })}
 
       <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">

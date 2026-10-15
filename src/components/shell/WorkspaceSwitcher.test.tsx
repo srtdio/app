@@ -3,10 +3,11 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockWorkspaceCreate, mockRefresh, mockSetActive } = vi.hoisted(() => ({
+const { mockWorkspaceCreate, mockRefresh, mockSetActive, mockState } = vi.hoisted(() => ({
   mockWorkspaceCreate: vi.fn(),
   mockRefresh: vi.fn(async () => {}),
   mockSetActive: vi.fn(),
+  mockState: { createBlocked: false },
 }));
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
@@ -23,6 +24,7 @@ vi.mock('@/lib/workspace-context', async (importOriginal) => {
       error: null,
       setActiveWorkspaceId: mockSetActive,
       refreshWorkspaces: mockRefresh,
+      createBlocked: mockState.createBlocked,
     }),
   };
 });
@@ -33,9 +35,7 @@ import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 
 let root: Root | null = null;
 
-beforeEach(async () => {
-  mockWorkspaceCreate.mockReset();
-  mockWorkspaceCreate.mockResolvedValue({ ok: true, data: 'ws-new' });
+async function mount(): Promise<void> {
   const host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -43,6 +43,14 @@ beforeEach(async () => {
   await act(async () => {
     window.dispatchEvent(new CustomEvent('sorted:switch-workspace'));
   });
+}
+
+beforeEach(async () => {
+  mockState.createBlocked = false;
+  mockSetActive.mockReset();
+  mockWorkspaceCreate.mockReset();
+  mockWorkspaceCreate.mockResolvedValue({ ok: true, data: 'ws-new' });
+  await mount();
 });
 
 afterEach(() => {
@@ -131,5 +139,39 @@ describe('WorkspaceSwitcher', () => {
     expect(typeof args.p_payload.timezone).toBe('string');
     expect(args.p_trace_id).toBe('trace-1');
     expect(mockSetActive).toHaveBeenCalledWith('ws-new');
+  });
+
+  it('shows the free-plan message when workspace_create hits the owner limit', async () => {
+    mockWorkspaceCreate.mockResolvedValue({
+      ok: false,
+      error: { code: 'unknown', message: 'workspace_limit_reached' },
+    });
+    await act(async () => button('Create workspace').click());
+    await typeName('Somaiya');
+    const tiles = [...document.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+    await act(async () => tiles[0]!.click());
+    await act(async () => button('Continue').click());
+    await act(async () => button('Create').click());
+    expect(document.body.textContent).toContain('On the free plan you can own one workspace.');
+    expect(document.body.textContent).not.toContain('workspace_limit_reached');
+    expect(mockSetActive).not.toHaveBeenCalledWith('ws-new');
+    // Still open, Create usable again: no crash, no retry loop.
+    expect(mockWorkspaceCreate).toHaveBeenCalledTimes(1);
+    expect(button('Create').disabled).toBe(false);
+  });
+
+  it('starts Create disabled with the message when the owner may not create another', async () => {
+    act(() => root?.unmount());
+    document.body.innerHTML = '';
+    mockState.createBlocked = true;
+    await mount();
+    const create = button('Create workspace');
+    expect(create.disabled).toBe(true);
+    expect(create.getAttribute('aria-describedby')).toBe('workspace-limit-note');
+    expect(document.getElementById('workspace-limit-note')?.textContent).toBe(
+      'On the free plan you can own one workspace.',
+    );
+    await act(async () => create.click());
+    expect(dialogTitle()).toBe('Switch workspace');
   });
 });

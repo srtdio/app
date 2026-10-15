@@ -15,6 +15,7 @@ import {
   insertRow,
   loadRlsEnv,
   randomSha256,
+  seedOperator,
   seedScaffold,
   seedUser,
   seedWorkspace,
@@ -289,6 +290,9 @@ describe.runIf(COMMENTS_SUITE)('comment_create attachment binding (version ids)'
     admin = createAdminClient(env);
 
     owner = await seedUser(env, admin);
+    // Fixture owner of several workspaces: exempt from the one-workspace-per-owner
+    // trigger (20261016000000_workspace_owner_limit.sql) as an active platform operator.
+    await seedOperator(asGeneric(admin), owner);
     wsA = await seedWorkspace(admin, owner, `Attach A ${owner.email}`);
     ctxA = await seedScaffold(admin, wsA);
     ownerClient = clientFor(owner.id);

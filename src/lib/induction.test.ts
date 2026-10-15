@@ -226,6 +226,25 @@ describe('resolveStep: approver and teammate', () => {
     expect(r.kind === 'step' && r.nextId).toBe('a_assets');
   });
 
+  it('skips the New brief step for a viewer without brief.create', () => {
+    const state = { ...FRESH, role: 'client', step: 'a_assets' };
+    const kept = resolveStep({ path: 'approver', state, where: EVERYWHERE });
+    expect(kept.kind === 'step' && kept.nextId).toBe('a_briefs');
+    const unknown = { ...EVERYWHERE, canCreateBrief: null };
+    const stillKept = resolveStep({ path: 'approver', state, where: unknown });
+    expect(stillKept.kind === 'step' && stillKept.nextId).toBe('a_briefs');
+    const without = { ...EVERYWHERE, canCreateBrief: false };
+    const skipped = resolveStep({ path: 'approver', state, where: without });
+    expect(skipped.kind === 'step' && skipped.nextId).toBe('a_activity');
+    // Resuming on the dropped step moves on instead of pointing at a missing "+".
+    const resumed = resolveStep({
+      path: 'approver',
+      state: { ...state, step: 'a_briefs' },
+      where: without,
+    });
+    expect(resumed.kind === 'step' && resumed.step.id).not.toBe('a_briefs');
+  });
+
   it('opens a teammate on the Draft chip', () => {
     const state = { ...FRESH, role: 'agency' };
     expect(stepOf(resolveStep({ path: 'teammate', state, where: EVERYWHERE }))).toBe('t_drafts');

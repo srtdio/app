@@ -15,6 +15,10 @@
 // GET   ?workspace_id=&asset_id=
 //   -> same auth + membership gate, then returns the current summary scoped to
 //      the workspace (cross-tenant 404).
+// GET   /usage?workspace_id=
+//   -> same auth + membership gate, then the workspace bucket's stored bytes
+//      { usedBytes, warnAtBytes, warn, exempt } (asset-upload-usage.ts). Warn
+//      only; a Cloudflare analytics failure is 503 usage_unavailable.
 //
 // Resumable uploads (R2 multipart, 8 MB parts; see asset-upload-multipart.ts):
 //   POST /multipart/create   {workspace_id, size, content_type}
@@ -78,6 +82,12 @@ import {
   parseBatch,
   recordUploadActivity,
 } from './asset-upload-activity';
+import {
+  createSupabaseUsageStore,
+  defaultUsageCache,
+  fetchR2BucketBytes,
+  resolveWorkspaceUsage,
+} from './asset-upload-usage';
 
 /** The slice of the Workers ExecutionContext the upload path uses. */
 export interface UploadContext {
@@ -91,6 +101,8 @@ export interface AssetUploadEnv {
   SUPABASE_URL: string;
   SUPABASE_SECRET_KEY: string;
   VIRUS_SCAN_PROVIDER?: string;
+  /** Cloudflare API token with Account Analytics read, for GET /usage only. */
+  CLOUDFLARE_ANALYTICS_TOKEN?: string;
   /**
    * Comma-separated list of browser origins allowed to call this Worker
    * cross-origin. Operator sets it as a Worker var/secret; when unset the code
@@ -998,6 +1010,59 @@ async function handleGet(
 }
 
 /** Trim a candidate name and confirm it is 1-500 chars, or null when invalid. */
+async function handleUsage(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
+  }
+
+  const workspaceId = new URL(request.url).searchParams.get('workspace_id');
+  if (!workspaceId || !isUuid(workspaceId)) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'A valid workspace_id is required.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const member = await createSupabaseAssetReadStore(env).isActiveMember({
+    userId: caller.value,
+    workspaceId,
+  });
+  if (!member) {
+    logger.warn('usage read denied: caller not a workspace member', { workspace_id: workspaceId });
+    return json(
+      403,
+      { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const result = await resolveWorkspaceUsage({
+    workspaceId,
+    store: createSupabaseUsageStore(env, traceId),
+    cache: defaultUsageCache(),
+    readBytes: (bucket) => fetchR2BucketBytes({ env, bucket, traceId, now: new Date() }),
+  });
+  if (!result.ok) {
+    const status = result.error.code === 'not_found' ? 404 : 503;
+    return json(status, { error: result.error }, traceId, acao);
+  }
+  return json(200, result.value, traceId, acao);
+}
+
 function validName(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -1601,8 +1666,12 @@ export default {
         return await handleMultipartPart(request, env, traceId, acao);
       }
       if (request.method === 'GET') {
-        if (new URL(request.url).pathname === '/multipart/parts') {
+        const getPath = new URL(request.url).pathname;
+        if (getPath === '/multipart/parts') {
           return await handleMultipartParts(request, env, traceId, acao);
+        }
+        if (getPath === '/usage') {
+          return await handleUsage(request, env, traceId, acao);
         }
         return await handleGet(request, env, traceId, acao);
       }
