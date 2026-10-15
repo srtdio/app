@@ -28,8 +28,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect UI-relevant changes
-        id: diff
+      - name: List changed files
+        id: files
         env:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
@@ -44,15 +44,50 @@ jobs:
               base=$(git rev-parse HEAD~1)
             fi
           fi
-          files=$(git diff --name-only "$base" HEAD)
-          echo "$files"
-          # Pick the specs a change can affect. Anything not listed below can
-          # reach every screen, so it runs the whole suite; a push to main
-          # always runs the whole suite.
+          git diff --name-only "$base" HEAD > "$RUNNER_TEMP/changed.txt"
+          cat "$RUNNER_TEMP/changed.txt"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          # The spec selector (scripts/ci/e2e-select.ts) needs Node 22 and the
+          # TypeScript compiler: install only for a PR that touches src/ outside
+          # src/server/ (a push to main runs the whole suite without it).
+          if [ "$EVENT_NAME" = "pull_request" ] && grep -E '^src/' "$RUNNER_TEMP/changed.txt" | grep -qvE '^src/server/'; then
+            echo "select=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "select=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.files.outputs.select == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.files.outputs.select == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.files.outputs.select == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Detect UI-relevant changes
+        id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE: ${{ steps.files.outputs.base }}
+        run: |
+          set -euo pipefail
+          base="$BASE"
+          files=$(cat "$RUNNER_TEMP/changed.txt")
+          # Pick the specs a change can affect. Other src/ files on a PR go to
+          # the import-closure selector (scripts/ci/e2e-select.ts); anything
+          # else not listed below can reach every screen, so it runs the whole
+          # suite; a push to main always runs the whole suite. Each rule logs
+          # the file it decided as "rule: file -> what runs".
           ui=false
           all=false
           deps=false
           specs=""
+          sel=""
           while IFS= read -r f; do
             [ -z "$f" ] && continue
             # Worker code is a separate build target the harness never imports.
@@ -65,17 +100,37 @@ jobs:
             ui=true
             case "$f" in
               # Unit tests never reach the browser.
-              src/*.test.ts|src/*.test.tsx|src/__tests__/*) ;;
+              src/*.test.ts|src/*.test.tsx|src/__tests__/*) echo "unit test: $f -> nothing" ;;
               # An edited spec runs itself (a deleted one runs nothing).
-              e2e/tests/*.spec.ts) if [ -f "$f" ]; then specs="$specs $f"; fi ;;
+              e2e/tests/*.spec.ts) if [ -f "$f" ]; then specs="$specs $f"; echo "spec-only: $f -> itself"; fi ;;
               # Homepage bundle, except the files the app shell imports.
-              src/components/home/HomeGate.tsx|src/components/home/guest-path.ts|src/components/home/Wordmark.tsx) all=true ;;
-              src/components/home/*|e2e/harness/home.html|e2e/harness/home-fixture.tsx) specs="$specs e2e/tests/home-pages.spec.ts" ;;
+              src/components/home/HomeGate.tsx|src/components/home/guest-path.ts|src/components/home/Wordmark.tsx) all=true; echo "homepage shell file: $f -> whole suite" ;;
+              src/components/home/*|e2e/harness/home.html|e2e/harness/home-fixture.tsx) specs="$specs e2e/tests/home-pages.spec.ts"; echo "homepage-only: $f -> e2e/tests/home-pages.spec.ts" ;;
               # Decided below from which dependencies changed.
               package.json|pnpm-lock.yaml) deps=true ;;
-              *) all=true ;;
+              # Decided below by the import-closure selector.
+              src/*) if [ "$EVENT_NAME" = "pull_request" ]; then sel="$sel $f"; else all=true; fi ;;
+              *) all=true; echo "other UI file: $f -> whole suite" ;;
             esac
           done <<< "$files"
+          # src/ UI files on a PR: the specs of every area whose import closure
+          # holds a changed file (scripts/ci/e2e-areas.ts); the app shell,
+          # shared UI, CSS, and any file no area reaches run the whole suite.
+          # A selector failure runs the whole suite.
+          if [ -n "$sel" ] && [ "$all" != true ]; then
+            if picked=$(node --experimental-strip-types --no-warnings scripts/ci/e2e-select.ts $sel); then
+              if [ "$picked" = "ALL" ]; then
+                all=true
+                echo "selector: whole suite"
+              else
+                specs="$specs $(echo $picked)"
+                echo "selector: $(echo ${picked:-no specs})"
+              fi
+            else
+              all=true
+              echo "selector failed: whole suite"
+            fi
+          fi
           if [ "$ui" = true ] && [ "$EVENT_NAME" != "pull_request" ]; then all=true; fi
           # package.json / pnpm-lock.yaml on a PR: the whole suite only when a
           # dependency the UI uses changed. "Used" = imported (or url()'d) by
@@ -152,11 +207,15 @@ jobs:
             echo "shard_total=6" >> "$GITHUB_OUTPUT"
             echo "WebKit: whole suite"
           elif [ -n "$specs" ]; then
+            # About six specs per shard, up to the whole suite's six shards.
+            n=$(echo $specs | wc -w)
+            total=$(( (n + 5) / 6 ))
+            if [ "$total" -gt 6 ]; then total=6; fi
             echo "run=true" >> "$GITHUB_OUTPUT"
             echo "specs=$specs" >> "$GITHUB_OUTPUT"
-            echo "shards=[1]" >> "$GITHUB_OUTPUT"
-            echo "shard_total=1" >> "$GITHUB_OUTPUT"
-            echo "WebKit: $specs"
+            echo "shards=[$(seq -s, 1 "$total")]" >> "$GITHUB_OUTPUT"
+            echo "shard_total=$total" >> "$GITHUB_OUTPUT"
+            echo "WebKit: $n specs in $total shards: $specs"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
