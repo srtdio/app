@@ -1,16 +1,17 @@
-name: Preview Deploy
+name: Test Site Deploy
 
-# Every pull request gets its own Cloudflare Pages preview at
-# https://pr-<number>.srtdio-app.pages.dev so changes can be clicked through
-# before merging to main. Production (branch main) is untouched; the preview
-# reuses the same v2 Supabase project as staging.
+# One permanent test site, https://test.srtdio-app.pages.dev, always shows the
+# latest push to any open pull request (app plus the browser-facing Workers),
+# so changes can be clicked through before merging to main. Production (branch
+# main) is untouched; the test site uses the same v2 Supabase project as
+# staging. With two PRs open, the most recent push wins.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: preview-${{ github.event.pull_request.number }}
+  group: test-site
   cancel-in-progress: true
 
 permissions:
@@ -25,7 +26,7 @@ jobs:
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      PREVIEW_BRANCH: pr-${{ github.event.pull_request.number }}
+      PREVIEW_BRANCH: test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -34,6 +35,35 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Each browser-facing Worker gets a preview version built from this PR,
+      # served at https://test-<worker>.<subdomain>.workers.dev. Uploading a
+      # version never changes what the live Worker serves; secrets and bindings
+      # carry over from the live version. If an upload fails, the preview falls
+      # back to the live Worker and the PR comment says so.
+      - name: Upload preview versions of the Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          : > "$RUNNER_TEMP/preview-workers.md"
+          for pair in avatar-upload:VITE_AVATAR_UPLOAD_URL asset-upload:VITE_ASSET_UPLOAD_URL \
+                      asset-read:VITE_ASSET_READ_URL chat-token:VITE_CHAT_TOKEN_URL \
+                      chat-transcribe:VITE_CHAT_TRANSCRIBE_URL; do
+            dir="${pair%%:*}"
+            var="${pair#*:}"
+            out="$(cd "workers/$dir" && pnpm dlx wrangler@4.140.0 versions upload \
+              --preview-alias "$PREVIEW_BRANCH" --message "Test site: PR #$PR_NUMBER" 2>&1)" || true
+            url="$(printf '%s\n' "$out" | sed -n 's/.*Version Preview Alias URL: \(https:[^ ]*\).*/\1/p' | head -n 1)"
+            if [ -n "$url" ]; then
+              echo "PREVIEW_$var=$url" >> "$GITHUB_ENV"
+              echo "- $dir: preview copy from this PR" >> "$RUNNER_TEMP/preview-workers.md"
+            else
+              printf '%s\n' "$out"
+              echo "::warning::$dir preview upload failed; the preview uses the live Worker"
+              echo "- $dir: live version (preview upload failed, see the Preview Deploy log)" >> "$RUNNER_TEMP/preview-workers.md"
+            fi
+          done
       - name: Build
         run: pnpm build
         env:
@@ -42,11 +72,11 @@ jobs:
           # value fails env validation and blanks every page past the homepage.
           VITE_SENTRY_ENVIRONMENT: development
           VITE_SENTRY_RELEASE: ${{ github.event.pull_request.head.sha }}
-          VITE_ASSET_READ_URL: ${{ vars.VITE_ASSET_READ_URL }}
-          VITE_ASSET_UPLOAD_URL: ${{ vars.VITE_ASSET_UPLOAD_URL }}
-          VITE_AVATAR_UPLOAD_URL: ${{ vars.VITE_AVATAR_UPLOAD_URL }}
-          VITE_CHAT_TOKEN_URL: ${{ vars.VITE_CHAT_TOKEN_URL }}
-          VITE_CHAT_TRANSCRIBE_URL: ${{ vars.VITE_CHAT_TRANSCRIBE_URL }}
+          VITE_ASSET_READ_URL: ${{ env.PREVIEW_VITE_ASSET_READ_URL || vars.VITE_ASSET_READ_URL }}
+          VITE_ASSET_UPLOAD_URL: ${{ env.PREVIEW_VITE_ASSET_UPLOAD_URL || vars.VITE_ASSET_UPLOAD_URL }}
+          VITE_AVATAR_UPLOAD_URL: ${{ env.PREVIEW_VITE_AVATAR_UPLOAD_URL || vars.VITE_AVATAR_UPLOAD_URL }}
+          VITE_CHAT_TOKEN_URL: ${{ env.PREVIEW_VITE_CHAT_TOKEN_URL || vars.VITE_CHAT_TOKEN_URL }}
+          VITE_CHAT_TRANSCRIBE_URL: ${{ env.PREVIEW_VITE_CHAT_TRANSCRIBE_URL || vars.VITE_CHAT_TRANSCRIBE_URL }}
           VITE_SITE_MEDIA_URL: ${{ vars.VITE_SITE_MEDIA_URL }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           CI: true
@@ -62,7 +92,9 @@ jobs:
             const marker = '<!-- preview-deploy -->';
             const url = `https://${process.env.PREVIEW_BRANCH}.srtdio-app.pages.dev`;
             const sha = context.payload.pull_request.head.sha.slice(0, 7);
-            const body = `${marker}\nPreview: ${url}\n\nBuilt from \`${sha}\`. Updates on every push to this PR.`;
+            const fs = require('fs');
+            const workers = fs.readFileSync(`${process.env.RUNNER_TEMP}/preview-workers.md`, 'utf8').trim();
+            const body = `${marker}\nTest site now shows this PR: ${url}\n\nBuilt from \`${sha}\`. A later push to any PR replaces it there.\n\nBackend services on the test site:\n${workers}`;
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });

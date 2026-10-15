@@ -43,6 +43,7 @@ import { tracedFetch } from '@/server/traced-fetch';
 // does, so the auth surface cannot drift: same ES256 JWKS verification.
 import { getSupabaseJwks, verifyCaller } from './asset-read';
 import { serializeError } from './lib/serialize-error';
+import { isPreviewOrigin } from '@/server/preview-origin';
 
 /** The Whisper model id. Multilingual; handles mixed Hindi/English voice notes. */
 const WHISPER_MODEL = '@cf/openai/whisper-large-v3-turbo';
@@ -151,7 +152,7 @@ function resolveAllowedOrigin(request: Request, env: ChatTranscribeEnv): string 
   if (origin === null) {
     return null;
   }
-  return allowedOrigins(env).includes(origin) ? origin : null;
+  return allowedOrigins(env).includes(origin) || isPreviewOrigin(origin) ? origin : null;
 }
 
 /** Attach the reflected origin (and Vary) when one is allowed. */
