@@ -38,7 +38,9 @@ jobs:
         run: pnpm build
         env:
           VITE_SENTRY_DSN_FRONTEND: ${{ secrets.SENTRY_DSN_FRONTEND }}
-          VITE_SENTRY_ENVIRONMENT: preview
+          # src/lib/env.ts only accepts development | production; any other
+          # value fails env validation and blanks every page past the homepage.
+          VITE_SENTRY_ENVIRONMENT: development
           VITE_SENTRY_RELEASE: ${{ github.event.pull_request.head.sha }}
           VITE_ASSET_READ_URL: ${{ vars.VITE_ASSET_READ_URL }}
           VITE_ASSET_UPLOAD_URL: ${{ vars.VITE_ASSET_UPLOAD_URL }}
