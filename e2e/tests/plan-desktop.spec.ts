@@ -41,6 +41,28 @@ function expectClean(network: HarnessNetwork): void {
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
 }
 
+type Box = { x: number; y: number; width: number; height: number };
+
+// Sub-pixel layout rounding differs by engine (840.0003 on WebKit, 840.0146 on
+// Chromium), so compare each edge within 1px, polling until the box settles.
+async function expectBoxNear(locator: Locator, expected: Box, tolerance = 1): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const box = await locator.boundingBox();
+        if (!box) return Number.POSITIVE_INFINITY;
+        return Math.max(
+          Math.abs(box.x - expected.x),
+          Math.abs(box.y - expected.y),
+          Math.abs(box.width - expected.width),
+          Math.abs(box.height - expected.height),
+        );
+      },
+      { message: `boundingBox within ${tolerance}px of ${JSON.stringify(expected)}` },
+    )
+    .toBeLessThanOrEqual(tolerance);
+}
+
 function viewAsClient(network: HarnessNetwork): void {
   for (const m of network.world.tables.workspace_members ?? []) {
     if (m.user_id === ME) m.role = 'client';
@@ -415,7 +437,7 @@ test('C: keyboard only: Space picks up, Down x3 crosses into the next day, Space
   await page.keyboard.press('Enter');
   const item = page.locator('[data-plan-page="item"]');
   await expect(item).toBeVisible();
-  expect(await item.boundingBox()).toEqual({ x: 840, y: 0, width: 440, height: 800 });
+  await expectBoxNear(item, { x: 840, y: 0, width: 440, height: 800 });
   await page.keyboard.press('Escape');
   await expect(item).toHaveCount(0);
   await expect(panel).toBeVisible();
