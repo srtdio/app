@@ -508,6 +508,79 @@ export function mentionNamesIn(workspaceId: string | null): NameOf {
   return (userId) => knownMentionName(workspaceId, userId);
 }
 
+// --- search surfaces -----------------------------------------------------------
+//
+// The palette resolves names with one batched read (users and workspace_members,
+// each one .in() call) for the ids it does not know yet, then renders through
+// the registry above. A person without a current membership reads "Former
+// member"; a current member reads their @username.
+
+/** What a person who is not a current member of the workspace reads as. */
+export const FORMER_MEMBER = 'Former member';
+
+/** The ids that still need a read in this workspace: no remembered name and not known former. */
+export function unresolvedMentionIds(workspaceId: string | null, ids: Iterable<string>): string[] {
+  if (workspaceId === null) return [];
+  const out = new Set<string>();
+  for (const raw of ids) {
+    const id = raw.toLowerCase();
+    if (id === '' || id === ALL_MENTION) continue;
+    if (knownMentionName(workspaceId, id) !== undefined || isFormerMember(workspaceId, id))
+      continue;
+    out.add(id);
+  }
+  return [...out];
+}
+
+/**
+ * Remember one successful batched read: the profiles as rememberMentionProfiles
+ * does, and every asked id the read did not return (no visible profile) as former.
+ */
+export function rememberMentionRead(
+  workspaceId: string | null,
+  asked: readonly string[],
+  profiles: ReadonlyArray<{
+    userId: string;
+    displayName: string;
+    username?: string | null;
+    member: boolean | null;
+  }>,
+): void {
+  if (workspaceId === null) return;
+  const returned = new Set(profiles.map((p) => p.userId.toLowerCase()));
+  rememberMentionProfiles(workspaceId, [
+    ...profiles,
+    ...asked
+      .filter((id) => !returned.has(id.toLowerCase()))
+      .map((userId) => ({ userId, displayName: '', member: false })),
+  ]);
+}
+
+/**
+ * A body as a search line: like resolveMentionText, but a former member's token
+ * reads "Former member". Never a raw token. Pure over the registry.
+ */
+export function resolveSearchMentionText(body: string, workspaceId: string | null): string {
+  const nameOf = mentionNamesIn(workspaceId);
+  return body.replace(tokenPattern(), (_match, id: string) =>
+    isFormerMember(workspaceId, id) ? FORMER_MEMBER : mentionLabel(id, nameOf),
+  );
+}
+
+/**
+ * The name an acting person (author, sender) shows in search: "Former member"
+ * when `isMember` is false or the registry knows them as former, else their
+ * remembered name; undefined when nothing is known yet.
+ */
+export function searchActorName(
+  workspaceId: string | null,
+  userId: string,
+  isMember: boolean | null = null,
+): string | undefined {
+  if (isMember === false || isFormerMember(workspaceId, userId)) return FORMER_MEMBER;
+  return knownMentionName(workspaceId, userId);
+}
+
 /** Test-only: forget every remembered name in every workspace. */
 export function resetMentionNames(): void {
   registries.clear();

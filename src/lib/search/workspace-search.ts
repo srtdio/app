@@ -1,11 +1,11 @@
-// Workspace search for the command palette: the workspace_search wrapper
-// (posts, briefs, comments) and the debounced runner that fires it in parallel
-// with the existing chat_message_search caller (src/lib/chat/search.ts).
+// Workspace search for the command palette: the workspace_search_grouped and
+// workspace_search_counts wrappers (called together, in parallel, under one
+// uuid_v7 trace id per search) and the debounced runner that fires them with
+// the existing chat_message_search caller (src/lib/chat/search.ts).
 //
-// workspace_search is SECURITY INVOKER: RLS decides what comes back (clients
-// never see drafts), so nothing here filters rows. It is called with NAMED
-// args and a fresh uuid_v7 p_trace_id per call; the server returns newest
-// first, at most p_limit rows across all kinds.
+// Both RPCs are SECURITY INVOKER: RLS decides what comes back, so nothing here
+// filters rows. grouped returns at most p_per_kind rows per kind (newest
+// first); counts returns each kind's full match total for "Show all (N)".
 
 import type { Client } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
@@ -18,99 +18,186 @@ import {
   type SearchResult as ChatSearchResult,
 } from '@/lib/chat/search';
 import { entityUrlPath } from '@/lib/entityRef';
-import { chatMessageHref } from '@/lib/inbox/bell-types';
+import { chatMessageHref, chatTaskHref, planHref } from '@/lib/inbox/bell-types';
 import { generateTraceId } from '@/lib/trace';
 
-type WorkspaceSearchFn = Database['public']['Functions']['workspace_search'];
-export type WorkspaceSearchArgs = WorkspaceSearchFn['Args'];
-type WorkspaceSearchRow = WorkspaceSearchFn['Returns'][number];
+type GroupedFn = Database['public']['Functions']['workspace_search_grouped'];
+type CountsFn = Database['public']['Functions']['workspace_search_counts'];
+export type GroupedArgs = GroupedFn['Args'];
+export type CountsArgs = CountsFn['Args'];
+type GroupedRow = GroupedFn['Returns'][number];
+type CountsRow = CountsFn['Returns'][number];
 
-/** Rows per call (and per expanded group). */
-export const WORKSPACE_SEARCH_LIMIT = 20;
+/** Rows per kind on a search, and on a group's "Show all". */
+export const PER_KIND_PREVIEW = 5;
+export const PER_KIND_FULL = 20;
+/** Chat hits per search (chat_message_search; its group expands in place). */
+export const CHAT_SEARCH_LIMIT = 20;
 
-export type WorkspaceHitKind = 'post' | 'brief' | 'comment';
+export const WORKSPACE_KINDS = [
+  'person',
+  'post',
+  'brief',
+  'comment',
+  'file',
+  'plan',
+  'plan_item',
+  'task',
+  'chat_group',
+] as const;
+export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number];
 
-/** One post, brief or comment hit. A comment's entity is its parent post or brief. */
+const KINDS = new Set<string>(WORKSPACE_KINDS);
+function isKind(value: string): value is WorkspaceKind {
+  return KINDS.has(value);
+}
+
+/** One workspace hit. A comment's parent is its post or brief; a plan item's its plan. */
 export interface WorkspaceHit {
-  kind: WorkspaceHitKind;
+  kind: WorkspaceKind;
   id: string;
-  entityType: 'post' | 'brief';
-  entityId: string;
-  entityNumber: number | null;
+  parentId: string | null;
+  channelId: string | null;
+  entityType: string;
+  number: number | null;
   title: string;
   snippet: string;
+  actorUserId: string | null;
+  actorIsMember: boolean;
   createdAt: string;
 }
 
+export type KindCounts = Partial<Record<WorkspaceKind, number>>;
+
+export interface WorkspaceSearchData {
+  hits: WorkspaceHit[];
+  /** Null when counts were not asked for (a group's "Show all" refetch). */
+  counts: KindCounts | null;
+}
+
 export type WorkspaceSearchResult =
-  | { ok: true; data: WorkspaceHit[] }
+  | { ok: true; data: WorkspaceSearchData }
   | { ok: false; error: string };
 
-/** The named args of one call; the query trimmed. Pure. */
-export function workspaceSearchArgs(params: {
+/** The named args of a grouped call; the query trimmed. Pure. */
+export function groupedArgs(params: {
   workspaceId: string;
   query: string;
   traceId: string;
-}): WorkspaceSearchArgs {
+  perKind: number;
+}): GroupedArgs {
   return {
     p_workspace_id: params.workspaceId,
     p_query: normalizeQuery(params.query),
     p_trace_id: params.traceId,
-    p_limit: WORKSPACE_SEARCH_LIMIT,
+    p_per_kind: params.perKind,
   };
 }
 
-function isKind(value: string): value is WorkspaceHitKind {
-  return value === 'post' || value === 'brief' || value === 'comment';
+/** The named args of a counts call. Pure. */
+export function countsArgs(params: {
+  workspaceId: string;
+  query: string;
+  traceId: string;
+}): CountsArgs {
+  return {
+    p_workspace_id: params.workspaceId,
+    p_query: normalizeQuery(params.query),
+    p_trace_id: params.traceId,
+  };
 }
 
-/** A server row as a hit; null for a kind or parent this client does not know. Pure. */
-export function mapWorkspaceRow(row: WorkspaceSearchRow): WorkspaceHit | null {
+/** A mention token cut off at the end of a snippet (never rendered). */
+const CUT_TOKEN = /@\[[^\]]*$/;
+
+/** A server row as a hit; null for a kind this client does not know. Pure. */
+export function mapWorkspaceRow(row: GroupedRow): WorkspaceHit | null {
   if (!isKind(row.kind)) return null;
-  if (row.entity_type !== 'post' && row.entity_type !== 'brief') return null;
+  const nullable = (v: string | null | undefined): string | null =>
+    typeof v === 'string' && v !== '' ? v : null;
   return {
     kind: row.kind,
     id: row.id,
-    entityType: row.entity_type,
-    entityId: row.entity_id,
-    entityNumber: typeof row.entity_number === 'number' ? row.entity_number : null,
+    parentId: nullable(row.parent_id),
+    channelId: nullable(row.channel_id),
+    entityType: row.entity_type ?? '',
+    number: typeof row.number === 'number' ? row.number : null,
     title: row.title ?? '',
-    snippet: (row.snippet ?? '').replace(/\s+/g, ' ').trim(),
+    snippet: (row.snippet ?? '').replace(CUT_TOKEN, '').replace(/\s+/g, ' ').trim(),
+    actorUserId: nullable(row.actor_user_id),
+    actorIsMember: row.actor_is_member === true,
     createdAt: row.created_at,
   };
 }
 
+/** Counts rows as a per-kind map (unknown kinds dropped). Pure. */
+export function mapCounts(rows: readonly CountsRow[]): KindCounts {
+  const out: KindCounts = {};
+  for (const row of rows) {
+    if (isKind(row.kind) && typeof row.total === 'number') out[row.kind] = row.total;
+  }
+  return out;
+}
+
 /**
- * One workspace_search call. Under 2 (or over 100) characters: no call, no
- * rows. Never throws; an abort or timeout is a failure.
+ * One search: workspace_search_grouped and (unless `counts` is false)
+ * workspace_search_counts, in parallel, one round trip each, both carrying the
+ * same trace id. Under 2 (or over 100) characters: no call, no rows. Never
+ * throws; an abort, a timeout or either call failing is a failure.
  */
 export async function searchWorkspace(params: {
   client: Client;
   workspaceId: string;
   query: string;
   signal: AbortSignal;
+  perKind?: number;
+  counts?: boolean;
   traceId?: string;
   timeoutMs?: number;
 }): Promise<WorkspaceSearchResult> {
-  if (!searchQueryReady(params.query)) return { ok: true, data: [] };
-  const args = workspaceSearchArgs({
-    workspaceId: params.workspaceId,
-    query: params.query,
-    traceId: params.traceId ?? generateTraceId(),
-  });
+  const withCounts = params.counts !== false;
+  if (!searchQueryReady(params.query)) {
+    return { ok: true, data: { hits: [], counts: withCounts ? {} : null } };
+  }
+  const traceId = params.traceId ?? generateTraceId();
   const controller = new AbortController();
   const abort = (): void => controller.abort();
   if (params.signal.aborted) controller.abort();
   else params.signal.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(abort, params.timeoutMs ?? READ_TIMEOUT_MS);
   try {
-    const res = await abortable(params.client.rpc('workspace_search', args), controller.signal);
+    const grouped = abortable(
+      params.client.rpc(
+        'workspace_search_grouped',
+        groupedArgs({
+          workspaceId: params.workspaceId,
+          query: params.query,
+          traceId,
+          perKind: params.perKind ?? PER_KIND_PREVIEW,
+        }),
+      ),
+      controller.signal,
+    );
+    const counts = withCounts
+      ? abortable(
+          params.client.rpc(
+            'workspace_search_counts',
+            countsArgs({ workspaceId: params.workspaceId, query: params.query, traceId }),
+          ),
+          controller.signal,
+        )
+      : null;
+    const [g, c] = await Promise.all([grouped, counts]);
     if (controller.signal.aborted) return { ok: false, error: 'aborted' };
-    if (res.error) return { ok: false, error: res.error.message };
-    const rows = (res.data ?? []) as WorkspaceSearchRow[];
+    if (g.error) return { ok: false, error: g.error.message };
+    if (c !== null && c.error) return { ok: false, error: c.error.message };
+    const rows = (g.data ?? []) as GroupedRow[];
     return {
       ok: true,
-      data: rows.map(mapWorkspaceRow).filter((hit): hit is WorkspaceHit => hit !== null),
+      data: {
+        hits: rows.map(mapWorkspaceRow).filter((hit): hit is WorkspaceHit => hit !== null),
+        counts: c !== null ? mapCounts((c.data ?? []) as CountsRow[]) : null,
+      },
     };
   } catch (error: unknown) {
     return { ok: false, error: String(error) };
@@ -120,15 +207,43 @@ export async function searchWorkspace(params: {
   }
 }
 
+/** Where a hit opens: a path, or a person (their DM; me, my notes). */
+export type HitTarget = { path: string } | { person: string };
+
+function entityPath(type: string, id: string, n: number | null, key: string | null): string {
+  const kind = type === 'brief' ? 'brief' : 'post';
+  if (key !== null && n !== null) return entityUrlPath(kind, key, n);
+  return `/${kind === 'post' ? 'posts' : 'briefs'}/${encodeURIComponent(id)}`;
+}
+
 /**
- * Where a hit opens: a post or brief its short link; a comment its parent's
- * page. Without the workspace key yet, the id routes. Pure.
+ * Where a hit opens, through the existing routes: a post or brief its page; a
+ * comment its parent at the comment (?comment=); a file the viewer
+ * (?asset=); a plan its page; a plan item its plan at the item (?item=); a
+ * task its chat's task sheet; a group its chat; a person their DM. Pure.
  */
-export function workspaceHitPath(hit: WorkspaceHit, workspaceKey: string | null): string {
-  if (workspaceKey !== null && hit.entityNumber !== null) {
-    return entityUrlPath(hit.entityType, workspaceKey, hit.entityNumber);
+export function workspaceHitTarget(hit: WorkspaceHit, workspaceKey: string | null): HitTarget {
+  switch (hit.kind) {
+    case 'post':
+    case 'brief':
+      return { path: entityPath(hit.kind, hit.id, hit.number, workspaceKey) };
+    case 'comment': {
+      const parent = entityPath(hit.entityType, hit.parentId ?? '', hit.number, workspaceKey);
+      return { path: `${parent}?comment=${encodeURIComponent(hit.id)}` };
+    }
+    case 'file':
+      return { path: `/assets?asset=${encodeURIComponent(hit.id)}` };
+    case 'plan':
+      return { path: planHref(hit.id, null) };
+    case 'plan_item':
+      return { path: planHref(hit.parentId ?? '', hit.id) };
+    case 'task':
+      return { path: chatTaskHref(hit.channelId ?? '', hit.id) };
+    case 'chat_group':
+      return { path: chatMessageHref(hit.channelId ?? '', null) };
+    case 'person':
+      return { person: hit.id };
   }
-  return hit.entityType === 'post' ? `/posts/${hit.entityId}` : `/briefs/${hit.entityId}`;
 }
 
 /** A chat hit opens its chat at the message (the chat search's deep link). Pure. */
@@ -142,14 +257,19 @@ export interface PaletteSearchState {
   query: string;
   status: 'idle' | 'loading' | 'ready' | 'error';
   workspace: WorkspaceHit[];
+  counts: KindCounts;
   chat: SearchHit[];
+  /** Kinds refetched at PER_KIND_FULL ("Show all" landed). */
+  full: WorkspaceKind[];
 }
 
 export const IDLE_PALETTE_SEARCH: PaletteSearchState = {
   query: '',
   status: 'idle',
   workspace: [],
+  counts: {},
   chat: [],
+  full: [],
 };
 
 export interface PaletteSearchRunner {
@@ -157,18 +277,26 @@ export interface PaletteSearchRunner {
   setQuery: (raw: string) => void;
   /** Run the failed query again, now. */
   retry: () => void;
+  /** "Show all" on a workspace group: refetch at PER_KIND_FULL, expand in place. */
+  expand: (kind: WorkspaceKind) => void;
   dispose: () => void;
 }
 
 /**
  * The palette's search state machine: from 2 characters, after the debounce,
- * one workspace_search and one chat search go out together. A newer
- * keystroke aborts both and any answer for an older query is dropped. Either
- * call failing is an error (retry runs both again). Timers are injectable.
+ * the workspace search (grouped + counts) and the chat search go out together;
+ * `prepare` (the batched name read) runs on their rows before the state turns
+ * ready, so names never flash. A newer keystroke aborts everything and any
+ * answer for an older query is dropped. Timers are injectable.
  */
 export function createPaletteSearchRunner(options: {
-  searchWorkspace: (query: string, signal: AbortSignal) => Promise<WorkspaceSearchResult>;
+  searchWorkspace: (
+    query: string,
+    signal: AbortSignal,
+    full: boolean,
+  ) => Promise<WorkspaceSearchResult>;
   searchChat: (query: string, signal: AbortSignal) => Promise<ChatSearchResult>;
+  prepare?: (workspace: readonly WorkspaceHit[], chat: readonly SearchHit[]) => Promise<void>;
   onChange: (state: PaletteSearchState) => void;
   debounceMs?: number;
   setTimer?: (run: () => void, ms: number) => unknown;
@@ -180,10 +308,12 @@ export function createPaletteSearchRunner(options: {
   const clearTimer =
     options.clearTimer ??
     ((handle: unknown): void => clearTimeout(handle as ReturnType<typeof setTimeout>));
+  const prepare = options.prepare ?? (() => Promise.resolve());
   let state: PaletteSearchState = IDLE_PALETTE_SEARCH;
   let generation = 0;
   let timer: unknown = null;
   let controller: AbortController | null = null;
+  const expanding = new Set<WorkspaceKind>();
   let disposed = false;
 
   const emit = (next: PaletteSearchState): void => {
@@ -195,6 +325,7 @@ export function createPaletteSearchRunner(options: {
     timer = null;
     controller?.abort();
     controller = null;
+    expanding.clear();
   };
 
   const run = (query: string, gen: number): void => {
@@ -202,17 +333,32 @@ export function createPaletteSearchRunner(options: {
     const ctl = new AbortController();
     controller = ctl;
     void Promise.all([
-      options.searchWorkspace(query, ctl.signal),
+      options.searchWorkspace(query, ctl.signal, false),
       options.searchChat(query, ctl.signal),
-    ]).then(([ws, chat]) => {
-      if (gen !== generation || disposed) return;
-      controller = null;
-      if (!ws.ok || !chat.ok) {
+    ])
+      .then(async ([ws, chat]) => {
+        if (gen !== generation || disposed) return;
+        if (!ws.ok || !chat.ok) {
+          controller = null;
+          emit({ ...IDLE_PALETTE_SEARCH, query, status: 'error' });
+          return;
+        }
+        await prepare(ws.data.hits, chat.data.hits).catch(() => undefined);
+        if (gen !== generation || disposed) return;
+        controller = null;
+        emit({
+          query,
+          status: 'ready',
+          workspace: ws.data.hits,
+          counts: ws.data.counts ?? {},
+          chat: chat.data.hits,
+          full: [],
+        });
+      })
+      .catch(() => {
+        if (gen !== generation || disposed) return;
         emit({ ...IDLE_PALETTE_SEARCH, query, status: 'error' });
-        return;
-      }
-      emit({ query, status: 'ready', workspace: ws.data, chat: chat.data.hits });
-    });
+      });
   };
 
   const start = (query: string): void => {
@@ -225,6 +371,33 @@ export function createPaletteSearchRunner(options: {
     const gen = generation;
     emit({ ...IDLE_PALETTE_SEARCH, query, status: 'loading' });
     timer = setTimer(() => run(query, gen), debounceMs);
+  };
+
+  const expand = (kind: WorkspaceKind): void => {
+    if (state.status !== 'ready' || state.full.includes(kind) || expanding.has(kind)) return;
+    const gen = generation;
+    const query = state.query;
+    expanding.add(kind);
+    const ctl = new AbortController();
+    void options
+      .searchWorkspace(query, ctl.signal, true)
+      .then(async (res) => {
+        if (gen !== generation || disposed) return;
+        expanding.delete(kind);
+        // A failed refetch keeps the 5 rows already shown.
+        if (!res.ok) return;
+        const rows = res.data.hits.filter((h) => h.kind === kind);
+        await prepare(rows, []).catch(() => undefined);
+        if (gen !== generation || disposed || state.status !== 'ready') return;
+        emit({
+          ...state,
+          workspace: [...state.workspace.filter((h) => h.kind !== kind), ...rows],
+          full: [...state.full, kind],
+        });
+      })
+      .catch(() => {
+        expanding.delete(kind);
+      });
   };
 
   return {
@@ -244,6 +417,7 @@ export function createPaletteSearchRunner(options: {
       emit({ ...IDLE_PALETTE_SEARCH, query, status: 'loading' });
       run(query, gen);
     },
+    expand,
     dispose: () => {
       generation += 1;
       stop();

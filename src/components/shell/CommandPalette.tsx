@@ -8,12 +8,24 @@ import type {
 import { useNavigate } from 'react-router-dom';
 import { IconSearch } from '@/components/ui/icons';
 import { boldMatches } from '@/components/chat/SearchResults';
+import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
 import { DUR_BASE_MS } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
-import type { PreviewNameOf } from '@/lib/chat/chat-store';
+import { logger } from '@/lib/logger';
+import { generateTraceId } from '@/lib/trace';
+import { readMentionProfiles, READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import { formatRelativeTime } from '@/lib/chat/format-relative-time';
-import { mentionNamesIn } from '@/lib/chat/mentions';
+import {
+  mentionIds,
+  mentionNamesIn,
+  rememberMentionRead,
+  resolveSearchMentionText,
+  searchActorName,
+  unresolvedMentionIds,
+  UNKNOWN_MEMBER,
+} from '@/lib/chat/mentions';
+import { notesChannelId } from '@/lib/chat/notes';
 import {
   normalizeQuery,
   queryWords,
@@ -21,17 +33,31 @@ import {
   searchQueryReady,
   snippetText,
   SEARCH_FAILED_COPY,
+  type SearchHit,
 } from '@/lib/chat/search';
 import { safeTimeZone } from '@/lib/chat/time-format';
+import { chatMessageHref } from '@/lib/inbox/bell-types';
+import {
+  deviceStorage,
+  loadRecentEntries,
+  readRecents,
+  RECENT_TYPE_LABEL,
+  type RecentEntry,
+} from '@/lib/recent-items';
 import {
   chatHitPath,
+  CHAT_SEARCH_LIMIT,
   createPaletteSearchRunner,
   IDLE_PALETTE_SEARCH,
+  PER_KIND_PREVIEW,
   searchWorkspace,
-  workspaceHitPath,
-  WORKSPACE_SEARCH_LIMIT,
+  workspaceHitTarget,
+  PER_KIND_FULL,
+  type HitTarget,
   type PaletteSearchRunner,
   type PaletteSearchState,
+  type WorkspaceHit,
+  type WorkspaceKind,
 } from '@/lib/search/workspace-search';
 
 interface CommandPaletteProps {
@@ -41,19 +67,61 @@ interface CommandPaletteProps {
   workspaceId: string | null;
   /** The active workspace's short key, for post and brief links. */
   workspaceKey: string | null;
+  /** The signed-in user: recents are theirs, and their own row opens Notes. */
+  userId: string | null;
 }
 
-export type ResultGroup = 'Posts' | 'Briefs' | 'Comments' | 'Chat';
+export type ResultGroup =
+  | 'People'
+  | 'Posts'
+  | 'Briefs'
+  | 'Comments'
+  | 'Files'
+  | 'Plans'
+  | 'Plan items'
+  | 'Tasks'
+  | 'Groups'
+  | 'Chat';
 
 /** Result groups, in the order they show. */
-export const RESULT_GROUPS: readonly ResultGroup[] = ['Posts', 'Briefs', 'Comments', 'Chat'];
+export const RESULT_GROUPS: readonly ResultGroup[] = [
+  'People',
+  'Posts',
+  'Briefs',
+  'Comments',
+  'Files',
+  'Plans',
+  'Plan items',
+  'Tasks',
+  'Groups',
+  'Chat',
+];
+
+/** The workspace group each kind lands in. */
+export const KIND_GROUP: Record<WorkspaceKind, ResultGroup> = {
+  person: 'People',
+  post: 'Posts',
+  brief: 'Briefs',
+  comment: 'Comments',
+  file: 'Files',
+  plan: 'Plans',
+  plan_item: 'Plan items',
+  task: 'Tasks',
+  chat_group: 'Groups',
+};
+
+const GROUP_KIND = new Map<ResultGroup, WorkspaceKind>(
+  (Object.entries(KIND_GROUP) as Array<[WorkspaceKind, ResultGroup]>).map(([k, g]) => [g, k]),
+);
 
 /** Rows a group shows before "Show all". */
-export const GROUP_PREVIEW = 5;
+export const GROUP_PREVIEW = PER_KIND_PREVIEW;
 
-/** One keyboard-reachable row: a Go to command, a result, or a group's "Show all". */
+/** The empty-search section. */
+export const RECENT_LABEL = 'Recent';
+
+/** One keyboard-reachable row: a recent, a result, or a group's "Show all". */
 export type PaletteItem =
-  | { id: string; type: 'goto'; label: string; path: string }
   | {
       id: string;
       type: 'result';
@@ -61,91 +129,129 @@ export type PaletteItem =
       title: string;
       snippet: string;
       time: string;
-      path: string;
+      target: HitTarget;
     }
+  | { id: string; type: 'recent'; title: string; typeLabel: string; target: HitTarget }
   | { id: string; type: 'more'; group: ResultGroup; count: number };
 
 export interface PaletteSection {
-  label: 'Go to' | ResultGroup;
+  label: typeof RECENT_LABEL | ResultGroup;
   items: PaletteItem[];
 }
 
-const GOTO: ReadonlyArray<{ id: string; label: string; path: string }> = [
-  { id: 'goto-pipeline', label: 'Pipeline', path: '/pipeline' },
-  { id: 'goto-briefs', label: 'Briefs', path: '/briefs' },
-  { id: 'goto-activity', label: 'Activity', path: '/activity' },
-  { id: 'goto-help', label: 'Help', path: '/help' },
-];
+/** The search line of a body: mentions resolved (never a raw token), cut near the match. */
+function lineOf(body: string, words: readonly string[], workspaceId: string | null): string {
+  return snippetText(
+    resolveSearchMentionText(body, workspaceId),
+    words,
+    mentionNamesIn(workspaceId),
+  );
+}
+
+/** A workspace hit as a row. Pure over the name registry. */
+function workspaceRow(
+  hit: WorkspaceHit,
+  ctx: { words: readonly string[]; workspaceId: string | null; workspaceKey: string | null },
+  time: string,
+): PaletteItem {
+  let snippet = '';
+  if (hit.kind === 'person') {
+    snippet = hit.snippet !== '' ? `@${hit.snippet}` : '';
+  } else if (hit.kind === 'file') {
+    snippet = hit.snippet;
+  } else if (hit.snippet !== '') {
+    snippet = lineOf(hit.snippet, ctx.words, ctx.workspaceId);
+  }
+  if (hit.kind === 'comment' && hit.actorUserId !== null) {
+    const actor = searchActorName(ctx.workspaceId, hit.actorUserId, hit.actorIsMember);
+    if (actor !== undefined) snippet = `${actor}: ${snippet}`;
+  }
+  return {
+    id: `${hit.kind}-${hit.id}`,
+    type: 'result',
+    group: KIND_GROUP[hit.kind],
+    title: hit.title,
+    snippet,
+    time: hit.kind === 'person' ? '' : time,
+    target: workspaceHitTarget(hit, ctx.workspaceKey),
+  };
+}
+
+/** A chat hit's title: its sender ("Former member" once gone). Pure over the registry. */
+export function chatSenderTitle(hit: SearchHit, workspaceId: string | null): string {
+  if (hit.senderUserId === null) return 'Chat';
+  return searchActorName(workspaceId, hit.senderUserId) ?? UNKNOWN_MEMBER;
+}
 
 /**
- * The palette's sections: the Go to commands filtered by label, then (from 2
- * characters, once results are in) Posts, Briefs, Comments, Chat, each capped
- * at 5 rows with a "Show all" row unless expanded. Pure.
+ * The palette's sections. Empty search: Recent. From 2 characters, once
+ * results are in: People, Posts, Briefs, Comments, Files, Plans, Plan items,
+ * Tasks, Groups, Chat; empty groups hidden; each capped at 5 with "Show all
+ * (N)" (N the server's total) unless expanded. Pure.
  */
 export function paletteSections(input: {
   query: string;
   search: PaletteSearchState;
+  recents: readonly RecentEntry[];
   expanded: ReadonlySet<ResultGroup>;
+  workspaceId: string | null;
   workspaceKey: string | null;
-  nameOf: PreviewNameOf;
   nowMs: number;
   timeZone: string;
 }): PaletteSection[] {
-  const needle = normalizeQuery(input.query).toLowerCase();
-  const sections: PaletteSection[] = [];
-  const gotos = needle ? GOTO.filter((g) => g.label.toLowerCase().includes(needle)) : GOTO;
-  if (gotos.length > 0) {
-    sections.push({
-      label: 'Go to',
-      items: gotos.map((g) => ({ id: g.id, type: 'goto', label: g.label, path: g.path })),
-    });
+  const query = normalizeQuery(input.query);
+  if (query === '') {
+    if (input.recents.length === 0) return [];
+    return [
+      {
+        label: RECENT_LABEL,
+        items: input.recents.map((r) => ({
+          id: `recent-${r.type}-${r.id}`,
+          type: 'recent',
+          title: r.title,
+          typeLabel: RECENT_TYPE_LABEL[r.type],
+          target: r.target,
+        })),
+      },
+    ];
   }
   const { search } = input;
-  if (search.status !== 'ready' || search.query !== normalizeQuery(input.query)) return sections;
+  if (search.status !== 'ready' || search.query !== query) return [];
   const words = queryWords(search.query);
   const time = (createdAt: string): string => {
     const ts = Date.parse(createdAt);
     return Number.isNaN(ts) ? '' : formatRelativeTime(ts, input.nowMs, input.timeZone);
   };
-  const byGroup: Record<ResultGroup, PaletteItem[]> = {
-    Posts: [],
-    Briefs: [],
-    Comments: [],
-    Chat: [],
-  };
+  const ctx = { words, workspaceId: input.workspaceId, workspaceKey: input.workspaceKey };
+  const byGroup = new Map<ResultGroup, PaletteItem[]>(RESULT_GROUPS.map((g) => [g, []]));
   for (const hit of search.workspace) {
-    const group: ResultGroup =
-      hit.kind === 'post' ? 'Posts' : hit.kind === 'brief' ? 'Briefs' : 'Comments';
-    byGroup[group].push({
-      id: `${hit.kind}-${hit.id}`,
-      type: 'result',
-      group,
-      title: hit.title,
-      snippet: hit.snippet,
-      time: time(hit.createdAt),
-      path: workspaceHitPath(hit, input.workspaceKey),
-    });
+    byGroup.get(KIND_GROUP[hit.kind])?.push(workspaceRow(hit, ctx, time(hit.createdAt)));
   }
   for (const hit of search.chat) {
-    byGroup.Chat.push({
+    byGroup.get('Chat')?.push({
       id: `chat-${hit.id}`,
       type: 'result',
       group: 'Chat',
-      title: input.nameOf(hit.senderUserId ?? '') ?? 'Chat',
+      title: chatSenderTitle(hit, input.workspaceId),
       snippet:
         hit.body.trim() === '' && hit.mediaLine !== undefined && hit.mediaLine !== ''
           ? hit.mediaLine
-          : snippetText(hit.body, words, input.nameOf),
+          : lineOf(hit.body, words, input.workspaceId),
       time: time(hit.createdAt),
-      path: chatHitPath(hit),
+      target: { path: chatHitPath(hit) },
     });
   }
+  const sections: PaletteSection[] = [];
   for (const group of RESULT_GROUPS) {
-    const all = byGroup[group].slice(0, WORKSPACE_SEARCH_LIMIT);
+    const all = (byGroup.get(group) ?? []).slice(0, Math.max(PER_KIND_FULL, CHAT_SEARCH_LIMIT));
     if (all.length === 0) continue;
-    const open = input.expanded.has(group) || all.length <= GROUP_PREVIEW;
+    const kind = GROUP_KIND.get(group);
+    const total = kind !== undefined ? Math.max(search.counts[kind] ?? 0, all.length) : all.length;
+    const open = input.expanded.has(group);
     const items = open ? all : all.slice(0, GROUP_PREVIEW);
-    if (!open) items.push({ id: `more-${group}`, type: 'more', group, count: all.length });
+    if (!open && total > items.length) {
+      items.push({ id: `more-${group}`, type: 'more', group, count: total });
+    }
     sections.push({ label: group, items });
   }
   return sections;
@@ -154,6 +260,25 @@ export function paletteSections(input: {
 /** The empty copy for a query with no hits. Pure. */
 export function emptyCopy(query: string): string {
   return `No results for "${normalizeQuery(query)}"`;
+}
+
+/** The person, mention and actor ids a set of rows needs names for. Pure. */
+export function namesNeeded(
+  workspace: readonly WorkspaceHit[],
+  chat: readonly SearchHit[],
+): string[] {
+  const ids: string[] = [];
+  for (const hit of workspace) {
+    ids.push(...mentionIds(hit.snippet));
+    if (hit.kind === 'comment' && hit.actorUserId !== null && hit.actorIsMember) {
+      ids.push(hit.actorUserId);
+    }
+  }
+  for (const hit of chat) {
+    ids.push(...mentionIds(hit.body));
+    if (hit.senderUserId !== null) ids.push(hit.senderUserId);
+  }
+  return ids;
 }
 
 const ROW =
@@ -206,17 +331,17 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
         {emptyCopy(props.query)}
       </div>
     );
-  } else if (flat.length === 0) {
-    status = (
-      <div data-palette-state="empty" className="px-4 py-6 text-center text-sm text-fg-3">
-        No results
-      </div>
-    );
   }
   return (
     <>
       {sections.map((section) => (
-        <div key={section.label} data-palette-group={section.label} className="px-2 pb-1">
+        <div
+          key={section.label}
+          role="group"
+          aria-label={section.label}
+          data-palette-group={section.label}
+          className="px-2 pb-1"
+        >
           <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-fg-3">
             {section.label}
           </div>
@@ -224,28 +349,20 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
             const index = flat.indexOf(item);
             const isActive = index === props.active;
             const tone = isActive ? 'bg-panel-2 text-fg' : 'text-fg-2';
-            if (item.type === 'goto') {
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  data-palette-item={item.id}
-                  onMouseEnter={() => props.onHover(index)}
-                  onClick={() => props.onPick(item)}
-                  className={cn(ROW, tone)}
-                >
-                  {item.label}
-                </button>
-              );
-            }
+            const common = {
+              type: 'button' as const,
+              role: 'option',
+              'aria-selected': isActive,
+              'data-palette-item': item.id,
+              'data-active': isActive ? '' : undefined,
+              onMouseEnter: () => props.onHover(index),
+              onClick: () => props.onPick(item),
+            };
             if (item.type === 'more') {
               return (
                 <button
                   key={item.id}
-                  type="button"
-                  data-palette-item={item.id}
-                  onMouseEnter={() => props.onHover(index)}
-                  onClick={() => props.onPick(item)}
+                  {...common}
                   className={cn(
                     ROW,
                     'font-medium',
@@ -256,20 +373,31 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                 </button>
               );
             }
+            if (item.type === 'recent') {
+              return (
+                <button
+                  key={item.id}
+                  {...common}
+                  className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1.5', tone)}
+                >
+                  <span className="min-w-0 truncate font-medium text-fg">{item.title}</span>
+                  <span className="truncate text-xs text-fg-3">{item.typeLabel}</span>
+                </button>
+              );
+            }
             return (
               <button
                 key={item.id}
-                type="button"
-                data-palette-item={item.id}
-                onMouseEnter={() => props.onHover(index)}
-                onClick={() => props.onPick(item)}
+                {...common}
                 className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1.5', tone)}
               >
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="min-w-0 flex-1 truncate font-medium text-fg">
                     {boldMatches(item.title, words)}
                   </span>
-                  <span className="shrink-0 text-xs text-fg-3">{item.time}</span>
+                  {item.time !== '' ? (
+                    <span className="shrink-0 text-xs text-fg-3">{item.time}</span>
+                  ) : null}
                 </span>
                 {item.snippet !== '' ? (
                   <span className="truncate text-xs text-fg-3">
@@ -286,18 +414,43 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
   );
 }
 
+/** One batched name read (users + workspace_members, one .in() each) for ids not known yet. */
+export async function resolvePaletteNames(
+  workspaceId: string,
+  ids: readonly string[],
+  read: (userIds: string[]) => ReturnType<typeof readMentionProfiles> = (userIds) =>
+    readMentionProfiles(supabase, { workspaceId, userIds, timeoutMs: READ_TIMEOUT_MS }),
+): Promise<void> {
+  const need = unresolvedMentionIds(workspaceId, ids);
+  if (need.length === 0) return;
+  const res = await read(need);
+  if (!res.ok) {
+    logger.warn('palette: name read failed', { error: res.error.message });
+    return;
+  }
+  rememberMentionRead(workspaceId, need, res.data);
+}
+
 // Exit transition length; mirrors --dur-base so the palette stays mounted for
 // the fade/scale-out, then unmounts. Fires even under prefers-reduced-motion
 // (CSS collapses to 1ms), so the closing phase always completes.
 const EXIT_MS = DUR_BASE_MS;
 
-export function CommandPalette({ open, onClose, workspaceId, workspaceKey }: CommandPaletteProps) {
+export function CommandPalette({
+  open,
+  onClose,
+  workspaceId,
+  workspaceKey,
+  userId,
+}: CommandPaletteProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [expanded, setExpanded] = useState<ReadonlySet<ResultGroup>>(new Set());
   const [search, setSearch] = useState<PaletteSearchState>(IDLE_PALETTE_SEARCH);
+  const [recents, setRecents] = useState<RecentEntry[]>([]);
   const runnerRef = useRef<PaletteSearchRunner | null>(null);
   // `rendered` keeps the palette mounted through its exit; `entered` drives the
   // enter/exit transition.
@@ -315,21 +468,29 @@ export function CommandPalette({ open, onClose, workspaceId, workspaceKey }: Com
     return () => clearTimeout(timer);
   }, [open]);
 
-  // One runner per open palette and workspace: both searches stay inside the
+  // One runner per open palette and workspace: every search stays inside the
   // active workspace, and closing or switching aborts whatever is in flight.
   useEffect(() => {
     if (!open || workspaceId === null) return;
     const runner = createPaletteSearchRunner({
-      searchWorkspace: (q, signal) =>
-        searchWorkspace({ client: supabase, workspaceId, query: q, signal }),
+      searchWorkspace: (q, signal, full) =>
+        searchWorkspace({
+          client: supabase,
+          workspaceId,
+          query: q,
+          signal,
+          perKind: full ? PER_KIND_FULL : PER_KIND_PREVIEW,
+          counts: !full,
+        }),
       searchChat: (q, signal) =>
         searchMessages({
           client: supabase,
           workspaceId,
           query: q,
           signal,
-          limit: WORKSPACE_SEARCH_LIMIT,
+          limit: CHAT_SEARCH_LIMIT,
         }),
+      prepare: (ws, chat) => resolvePaletteNames(workspaceId, namesNeeded(ws, chat)),
       onChange: setSearch,
     });
     runnerRef.current = runner;
@@ -340,6 +501,27 @@ export function CommandPalette({ open, onClose, workspaceId, workspaceKey }: Com
     };
   }, [open, workspaceId]);
 
+  // Recents: this device's list for me in this workspace, titled with one
+  // batched read per type; anything not returned drops.
+  useEffect(() => {
+    setRecents([]);
+    if (!open || workspaceId === null || userId === null) return;
+    const items = readRecents(deviceStorage(), userId, workspaceId);
+    if (items.length === 0) return;
+    const controller = new AbortController();
+    void loadRecentEntries({
+      client: supabase,
+      workspaceId,
+      workspaceKey,
+      userId,
+      items,
+      signal: controller.signal,
+    }).then((entries) => {
+      if (!controller.signal.aborted) setRecents(entries);
+    });
+    return () => controller.abort();
+  }, [open, workspaceId, workspaceKey, userId]);
+
   useEffect(() => {
     runnerRef.current?.setQuery(query);
   }, [query, workspaceId, open]);
@@ -349,13 +531,14 @@ export function CommandPalette({ open, onClose, workspaceId, workspaceKey }: Com
       paletteSections({
         query,
         search,
+        recents,
         expanded,
+        workspaceId,
         workspaceKey,
-        nameOf: mentionNamesIn(workspaceId),
         nowMs: Date.now(),
         timeZone: safeTimeZone(''),
       }),
-    [query, search, expanded, workspaceKey, workspaceId],
+    [query, search, recents, expanded, workspaceKey, workspaceId],
   );
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 
@@ -372,8 +555,33 @@ export function CommandPalette({ open, onClose, workspaceId, workspaceKey }: Com
     setExpanded(new Set());
   }, [query]);
 
+  // Keep the keyboard's row in view.
+  useEffect(() => {
+    listRef.current?.querySelector('[data-active]')?.scrollIntoView?.({ block: 'nearest' });
+  }, [active, flat]);
+
   if (!rendered) {
     return null;
+  }
+
+  function openTarget(target: HitTarget): void {
+    onClose();
+    if ('path' in target) {
+      navigate(target.path);
+      return;
+    }
+    if (workspaceId === null) return;
+    if (target.person === userId) {
+      navigate(chatMessageHref(notesChannelId(workspaceId, target.person), null));
+      return;
+    }
+    void startDmChannel(
+      supabase,
+      { workspaceId, peerUserId: target.person, traceId: generateTraceId() },
+      (channelId) => navigate(chatMessageHref(channelId, null)),
+    ).then((error) => {
+      if (error !== null) logger.warn('palette: open DM failed', { error: error.message });
+    });
   }
 
   function pick(item: PaletteItem | undefined): void {
@@ -382,10 +590,11 @@ export function CommandPalette({ open, onClose, workspaceId, workspaceKey }: Com
     }
     if (item.type === 'more') {
       setExpanded((prev) => new Set(prev).add(item.group));
+      const kind = GROUP_KIND.get(item.group);
+      if (kind !== undefined) runnerRef.current?.expand(kind);
       return;
     }
-    onClose();
-    navigate(item.path);
+    openTarget(item.target);
   }
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
@@ -412,8 +621,9 @@ export function CommandPalette({ open, onClose, workspaceId, workspaceKey }: Com
 
   return (
     <div
+      data-palette-overlay=""
       className={cn(
-        'fixed inset-0 z-50 bg-black/45 flex items-stretch justify-center sm:items-start sm:pt-[12vh] sm:px-4 transition-opacity duration-fast',
+        'fixed inset-0 z-50 bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12vh] sm:px-4 transition-opacity duration-fast',
         entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
       )}
       onClick={onOverlayClick}
@@ -439,7 +649,7 @@ export function CommandPalette({ open, onClose, workspaceId, workspaceKey }: Com
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Search or jump to"
+            placeholder="Search anything"
             aria-label="Search this workspace"
             className="flex-1 min-w-0 h-12 bg-transparent outline-none text-base sm:text-sm placeholder:text-fg-3"
           />
@@ -454,7 +664,12 @@ export function CommandPalette({ open, onClose, workspaceId, workspaceKey }: Com
             Cancel
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto py-2 sm:flex-none sm:max-h-[60vh]">
+        <div
+          ref={listRef}
+          role="listbox"
+          aria-label="Search this workspace"
+          className="flex-1 overflow-y-auto py-2 sm:flex-none sm:max-h-[60vh]"
+        >
           <PaletteBody
             query={query}
             search={search}

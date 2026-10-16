@@ -17,6 +17,7 @@ import {
 import { notesChannelRow } from './notes-data';
 import { TASK_RPC } from './tasks-data';
 import { INDUCTION_RPC } from './induction-rpc';
+import { SEARCH_RPC } from './search-data';
 
 const SUPABASE_HOST = 'harness.supabase.test';
 const CHAT_TOKEN_HOST = 'chat-token.harness.test';
@@ -701,6 +702,7 @@ const RPC: Record<string, RpcHandler> = {
   ...TASK_RPC,
   ...ONBOARDING_RPC,
   ...INDUCTION_RPC,
+  ...SEARCH_RPC,
   chat_unread_counts: (_args, tables) => {
     const cursors = tables.chat_read_cursors ?? [];
     const channels = tables.chat_channels ?? [];
