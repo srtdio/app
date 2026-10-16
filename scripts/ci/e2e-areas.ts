@@ -182,6 +182,14 @@ export const AREAS: Area[] = [
     specs: ['onboarding', 'induction', 'workspace-platform'].map(t),
   },
   {
+    // Public one-click unsubscribe page (/unsubscribe), outside the auth guards.
+    name: 'unsubscribe',
+    entries: ['src/components/unsubscribe/UnsubscribePage.tsx'],
+    routed: true,
+    ownedDirs: ['src/components/unsubscribe/'],
+    specs: ['unsubscribe'].map(t),
+  },
+  {
     // The harness's "/" smoke page renders with src/index.css only.
     name: 'smoke',
     entries: ['src/index.css'],
