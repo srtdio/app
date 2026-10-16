@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   AgoraRestError,
+  createAgoraGroupApi,
   createAgoraMessageApi,
   type AgoraTextMessage,
   type TracedFetchFn,
@@ -65,5 +66,27 @@ describe('createAgoraMessageApi.sendMessage', () => {
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AgoraRestError);
     expect(error).toMatchObject({ operation: 'send_message', status: 403, body: 'forbidden' });
+  });
+});
+
+describe('createAgoraGroupApi.createGroup', () => {
+  it('creates a private, owner-invite-only group capped at 200 members', async () => {
+    const fetchImpl = fetchReturning(
+      new Response(JSON.stringify({ data: { groupid: 'g1' } }), { status: 200 }),
+    );
+    const groupId = await createAgoraGroupApi(CONFIG, fetchImpl).createGroup(
+      { name: 'Acme', ownerUsername: 'u_owner', memberUsernames: ['u_owner', 'u_a'] },
+      'trace-4',
+    );
+
+    expect(groupId).toBe('g1');
+    const [url, init] = fetchImpl.mock.calls[0] as Parameters<TracedFetchFn>;
+    expect(url).toBe('https://a.example/org/app/chatgroups');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.public).toBe(false);
+    expect(body.allowinvites).toBe(false);
+    expect(body).not.toHaveProperty('membersonly');
+    expect(body.maxusers).toBe(200);
+    expect(body.members).toEqual(['u_a']);
   });
 });
