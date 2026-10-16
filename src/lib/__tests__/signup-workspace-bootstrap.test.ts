@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
 import type { Client } from '@srtdio/rpc';
 import { performSignUp, POLICY_CONSENT_MESSAGE } from '@/components/auth/SignUpPage';
@@ -36,6 +36,16 @@ function mockClient(lists: Array<{ data?: WorkspaceRow[]; error?: { message: str
 }
 
 describe('performSignUp', () => {
+  const ORIGIN = 'https://preview.example.test';
+
+  beforeEach(() => {
+    vi.stubGlobal('window', { location: { origin: ORIGIN } });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('shows the confirm-email state and fires NO workspaceCreate when session is null', async () => {
     const rpc = vi.fn();
     const signUp = vi.fn(async () => ({ data: { session: null }, error: null }));
@@ -55,6 +65,7 @@ describe('performSignUp', () => {
           data: {
             timezone: 'UTC',
           },
+          emailRedirectTo: ORIGIN,
         },
       }),
     );

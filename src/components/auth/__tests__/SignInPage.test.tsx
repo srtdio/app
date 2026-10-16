@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The page module reads supabase at import time; stub it so the pure helper can
 // be imported without spinning up a real client (node-env, no network).
@@ -15,6 +15,16 @@ function authClient(overrides: Partial<SignInAuthClient['auth']>): SignInAuthCli
   };
 }
 
+const ORIGIN = 'https://preview.example.test';
+
+beforeEach(() => {
+  vi.stubGlobal('window', { location: { origin: ORIGIN } });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe('sendSignInLink', () => {
   it('requests a sign-in link for an existing user and reports success', async () => {
     const signInWithOtp = vi.fn().mockResolvedValue({ error: null });
@@ -25,8 +35,21 @@ describe('sendSignInLink', () => {
     expect(result).toEqual({ status: 'sent' });
     expect(signInWithOtp).toHaveBeenCalledWith({
       email: 'a@b.com',
-      options: { shouldCreateUser: false },
+      options: { shouldCreateUser: false, emailRedirectTo: ORIGIN },
     });
+  });
+
+  it('sends the current origin, not a hardcoded site, as the link redirect', async () => {
+    vi.stubGlobal('window', { location: { origin: 'https://other.example.test' } });
+    const signInWithOtp = vi.fn().mockResolvedValue({ error: null });
+
+    await sendSignInLink(authClient({ signInWithOtp }), 'a@b.com');
+
+    expect(signInWithOtp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({ emailRedirectTo: 'https://other.example.test' }),
+      }),
+    );
   });
 
   it('surfaces the provider error message and stays', async () => {
