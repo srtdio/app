@@ -16,7 +16,7 @@ export interface SignInAuthClient {
   auth: {
     signInWithOtp(params: {
       email: string;
-      options?: { shouldCreateUser?: boolean };
+      options?: { shouldCreateUser?: boolean; emailRedirectTo?: string };
     }): Promise<{ error: { message: string } | null }>;
     signInWithPassword?(params: {
       email: string;
@@ -42,8 +42,10 @@ function isNoAccountError(message: string): boolean {
 
 /**
  * Email an existing user a sign-in link; never creates a user. emailRedirectTo
- * is intentionally omitted: the link URL is built by the email template so it
- * points at our own callback page, not at Supabase's verify endpoint.
+ * is the current origin (no path) so the template's {{ .RedirectTo }} sends the
+ * link back to the site it was requested from. The template still appends our
+ * own /auth/callback path, never Supabase's verify endpoint. A non-allowlisted
+ * origin falls back to the project Site URL.
  */
 export async function sendSignInLink(
   client: SignInAuthClient,
@@ -51,7 +53,7 @@ export async function sendSignInLink(
 ): Promise<SendLinkResult> {
   const { error } = await client.auth.signInWithOtp({
     email: email.trim(),
-    options: { shouldCreateUser: false },
+    options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
   });
   if (error) {
     return isNoAccountError(error.message)

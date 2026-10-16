@@ -27,7 +27,7 @@ export interface SignUpAuthClient {
     signUp(credentials: {
       email: string;
       password: string;
-      options?: { data?: Record<string, unknown> };
+      options?: { data?: Record<string, unknown>; emailRedirectTo?: string };
     }): Promise<{ data: { session: Session | null }; error: { message: string } | null }>;
   };
 }
@@ -60,7 +60,8 @@ export async function performSignUp(
   const { data, error } = await client.auth.signUp({
     email: input.email.trim(),
     password: input.password,
-    options: { data: { timezone: input.timezone } },
+    // Origin only: the confirm email links back to the site it was requested from.
+    options: { data: { timezone: input.timezone }, emailRedirectTo: window.location.origin },
   });
   if (error) return { status: 'error', message: error.message };
   if (data.session === null) return { status: 'confirm-email' };
