@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { isGuestHome, isHomeBundlePath, localStorageKeys } from '@/components/home/guest-path';
 import {
   APP_STYLESHEET,
@@ -96,11 +96,29 @@ async function bootHome(root: HTMLElement): Promise<void> {
   const shouldRender = await runStaleDeployGuard(browserStaleDeployDeps(HOME_STYLESHEET, lazyWarn));
   if (!shouldRender) return;
 
-  createRoot(root).render(
+  const page = (
     <StrictMode>
       <HomeEntry />
-    </StrictMode>,
+    </StrictMode>
   );
+  // Built pages arrive prerendered (scripts/prerender.ts): hydrate that markup
+  // in place. A mismatch (the /demo calendar's "today" after the build date)
+  // makes React re-render on the client; it is logged once, not thrown.
+  if (root.hasChildNodes()) {
+    let reported = false;
+    hydrateRoot(root, page, {
+      onRecoverableError: (err) => {
+        if (reported) return;
+        reported = true;
+        lazyWarn('home hydration fell back to client render', {
+          path: window.location.pathname,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      },
+    });
+  } else {
+    createRoot(root).render(page);
+  }
   scheduleSentry();
 }
 

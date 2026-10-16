@@ -35,5 +35,8 @@ export default defineConfig({
     // Generate source maps for Sentry upload but do not reference them from the
     // shipped bundle.
     sourcemap: 'hidden',
+    // scripts/prerender.ts reads the hashed CSS for each prerendered page from
+    // the manifest, then deletes it from dist.
+    manifest: true,
   },
 });

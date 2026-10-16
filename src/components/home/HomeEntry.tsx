@@ -48,8 +48,9 @@ export function homePageFor(pathname: string): 'pricing' | 'demo' | 'home' {
 
 const PAGES = { home: HomePage, pricing: PricingPage, demo: DemoPage };
 
-export function HomeEntry() {
-  const Page = PAGES[homePageFor(window.location.pathname)];
+/** `pathname` is passed when prerendering (scripts/prerender.ts); the browser reads its own. */
+export function HomeEntry({ pathname }: { pathname?: string }) {
+  const Page = PAGES[homePageFor(pathname ?? window.location.pathname)];
   // After the first commit; loadAdTags then waits for idle and runs once.
   useEffect(loadAdTags, []);
   return (
