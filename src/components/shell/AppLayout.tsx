@@ -75,9 +75,8 @@ export function AppLayout() {
   const { pathname } = useLocation();
   const chrome = shellChrome(isThreadRoute(pathname, searchParams));
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // New brief is a client action: shown only where the role holds brief.create.
+  // Induction tailors its brief steps to whether the role holds brief.create.
   const briefCreate = useWorkspaceCapability('brief.create');
-  const canCreateBrief = briefCreate === true;
   const [avatarOpen, setAvatarOpen] = useState(false);
 
   // Email deep-link: ?w={workspaceId} sets the active workspace before the entity
@@ -279,7 +278,6 @@ export function AppLayout() {
                 <div className={chrome.topbarClassName}>
                   <Topbar
                     workspaceName={workspaceDisplayName}
-                    canCreateBrief={canCreateBrief}
                     {...(profile !== null ? { currentUserName: profile.display_name } : {})}
                     currentUserAvatarUrl={profile?.avatar_url ?? null}
                     onOpenPalette={() => setPaletteOpen(true)}
@@ -292,11 +290,7 @@ export function AppLayout() {
               </div>
               {chrome.showBottomTabs ? <BottomTabs /> : null}
               <ToastViewport />
-              <CommandPalette
-                open={paletteOpen}
-                onClose={() => setPaletteOpen(false)}
-                canCreateBrief={canCreateBrief}
-              />
+              <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
               <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
               <WorkspaceSwitcher />
               <InductionGuide tabsShown={chrome.showBottomTabs} />

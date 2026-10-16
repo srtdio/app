@@ -3,19 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 
 // The unit env is `node` with no DOM, so Topbar is invoked as a plain function
 // and its element tree walked (the SectionHeader/SortMenu test style in this
-// codebase). Its single useState (the create popover) is shimmed to a pure
-// value/setter pair so the body can run without a renderer.
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  return {
-    ...actual,
-    useState: (init: unknown) => [
-      typeof init === 'function' ? (init as () => unknown)() : init,
-      () => {},
-    ],
-  };
-});
-
+// codebase). Topbar holds no hooks, so no renderer is needed.
 import { Topbar } from '@/components/shell/Topbar';
 
 function isElement(node: ReactNode): node is ReactElement {
@@ -82,7 +70,7 @@ describe('Topbar mobile workspace switcher', () => {
     // Touch target invariant: the tap area is at least 44px tall.
     expect(className(button)).toContain('min-h-[44px]');
     expect(texts(button)).toContain('Acme');
-    // The name is bounded so search / create / avatar stay on a 375px screen.
+    // The name is bounded so search / avatar stay on a 375px screen.
     expect(className(button)).toMatch(/max-w-\[\d+px\]/);
   });
 
@@ -102,5 +90,19 @@ describe('Topbar mobile workspace switcher', () => {
   it('renders no switcher button while the workspace name is still loading', () => {
     const tree = Topbar({ ...baseProps, workspaceName: null });
     expect(switcherButtons(tree)).toHaveLength(0);
+  });
+});
+
+describe('Topbar create menu', () => {
+  it('renders no Create button and no New post / New brief entries', () => {
+    const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
+    const labels = findAll(tree, () => true).map(
+      (el) => (el.props as { label?: string; 'aria-label'?: string }).label ?? ariaLabel(el),
+    );
+    expect(labels).not.toContain('Create');
+    expect(labels).not.toContain('New post');
+    expect(labels).not.toContain('New brief');
+    expect(texts(tree)).not.toContain('New post');
+    expect(texts(tree)).not.toContain('New brief');
   });
 });

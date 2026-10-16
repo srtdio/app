@@ -1,46 +1,32 @@
-import { useState } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
-import {
-  IconBriefs,
-  IconChevronDown,
-  IconPipeline,
-  IconPlus,
-  IconSearch,
-} from '@/components/ui/icons';
-import { MenuPopover } from '@/components/shell/MenuPopover';
-import { MenuItem } from '@/components/shell/MenuItem';
+import { IconChevronDown, IconPlus, IconSearch } from '@/components/ui/icons';
 import { dispatchSorted } from '@/lib/events';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 interface TopbarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
   workspaceName: string | null;
-  /** Whether the viewer holds brief.create; the New brief entry shows only then. */
-  canCreateBrief?: boolean;
   currentUserName?: string;
   currentUserAvatarUrl?: string | null;
   onOpenPalette: () => void;
   onOpenAvatar: () => void;
   /**
    * Set while the person has no workspace yet: the slot reads "Create your
-   * workspace" at every width and opens the create dialog, and search and
-   * Create stay out (nothing behind them works without a workspace).
+   * workspace" at every width and opens the create dialog, and search stays
+   * out (nothing behind it works without a workspace).
    */
   onCreateWorkspace?: () => void;
 }
 
 export function Topbar({
   workspaceName,
-  canCreateBrief = false,
   currentUserName,
   currentUserAvatarUrl,
   onOpenPalette,
   onOpenAvatar,
   onCreateWorkspace,
 }: TopbarProps) {
-  const [createOpen, setCreateOpen] = useState(false);
-
   return (
     <header className="sticky top-0 z-30 flex items-center gap-2 h-14 px-3 md:px-4 border-b border-border bg-panel">
       {workspaceName === null && onCreateWorkspace !== undefined ? (
@@ -88,37 +74,9 @@ export function Topbar({
 
       <div className="ml-auto flex items-center gap-1">
         {onCreateWorkspace !== undefined ? null : (
-          <>
-            <IconButton label="Search" className="md:hidden" onClick={onOpenPalette}>
-              <IconSearch />
-            </IconButton>
-
-            <div className="relative">
-              <IconButton label="Create" onClick={() => setCreateOpen((value) => !value)}>
-                <IconPlus />
-              </IconButton>
-              <MenuPopover open={createOpen} onClose={() => setCreateOpen(false)}>
-                <MenuItem
-                  icon={<IconPipeline size={18} />}
-                  label="New post"
-                  onClick={() => {
-                    setCreateOpen(false);
-                    dispatchSorted('sorted:create-post');
-                  }}
-                />
-                {canCreateBrief ? (
-                  <MenuItem
-                    icon={<IconBriefs size={18} />}
-                    label="New brief"
-                    onClick={() => {
-                      setCreateOpen(false);
-                      dispatchSorted('sorted:create-brief');
-                    }}
-                  />
-                ) : null}
-              </MenuPopover>
-            </div>
-          </>
+          <IconButton label="Search" className="md:hidden" onClick={onOpenPalette}>
+            <IconSearch />
+          </IconButton>
         )}
 
         <button

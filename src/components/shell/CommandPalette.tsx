@@ -2,32 +2,29 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconSearch } from '@/components/ui/icons';
-import { dispatchSorted } from '@/lib/events';
 import { cn } from '@/lib/cn';
 import { DUR_BASE_MS } from '@/lib/motion';
 
 interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
-  /** Whether the viewer holds brief.create; the New brief command shows only then. */
-  canCreateBrief?: boolean;
 }
 
 interface PaletteItem {
   id: string;
-  group: 'Go to' | 'Actions';
+  group: 'Go to';
   label: string;
   run: () => void;
 }
 
-const GROUPS: Array<PaletteItem['group']> = ['Go to', 'Actions'];
+const GROUPS: Array<PaletteItem['group']> = ['Go to'];
 
 // Exit transition length; mirrors --dur-base so the palette stays mounted for
 // the fade/scale-out, then unmounts. Fires even under prefers-reduced-motion
 // (CSS collapses to 1ms), so the closing phase always completes.
 const EXIT_MS = DUR_BASE_MS;
 
-export function CommandPalette({ open, onClose, canCreateBrief = false }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -54,24 +51,8 @@ export function CommandPalette({ open, onClose, canCreateBrief = false }: Comman
       { id: 'goto-briefs', group: 'Go to', label: 'Briefs', run: () => navigate('/briefs') },
       { id: 'goto-activity', group: 'Go to', label: 'Activity', run: () => navigate('/activity') },
       { id: 'goto-help', group: 'Go to', label: 'Help', run: () => navigate('/help') },
-      {
-        id: 'new-post',
-        group: 'Actions',
-        label: 'New post',
-        run: () => dispatchSorted('sorted:create-post'),
-      },
-      ...(canCreateBrief
-        ? [
-            {
-              id: 'new-brief',
-              group: 'Actions' as const,
-              label: 'New brief',
-              run: () => dispatchSorted('sorted:create-brief'),
-            },
-          ]
-        : []),
     ],
-    [navigate, canCreateBrief],
+    [navigate],
   );
 
   const filtered = useMemo(() => {
