@@ -166,7 +166,7 @@ export const AREAS: Area[] = [
     entries: ['src/components/home/HomeEntry.tsx'],
     routed: true,
     ownedDirs: ['src/components/home/'],
-    specs: ['home-pages'].map(t),
+    specs: ['home-pages', 'home-first-paint'].map(t),
   },
   {
     // Mounted by AppLayout on every route, so the shell rule runs everything.
