@@ -9698,6 +9698,13 @@ export type Database = {
           title: string
         }[]
       }
+      workspace_search_counts: {
+        Args: { p_query: string; p_trace_id: string; p_workspace_id: string }
+        Returns: {
+          kind: string
+          total: number
+        }[]
+      }
       workspace_search_grouped: {
         Args: {
           p_per_kind?: number
@@ -9716,6 +9723,21 @@ export type Database = {
           number: number
           parent_id: string
           snippet: string
+          title: string
+        }[]
+      }
+      workspace_search_matches: {
+        Args: { p_query: string; p_workspace_id: string }
+        Returns: {
+          actor: string
+          body: string
+          channel_id: string
+          created_at: string
+          entity_type: string
+          id: string
+          kind: string
+          number: number
+          parent_id: string
           title: string
         }[]
       }
