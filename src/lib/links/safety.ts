@@ -81,6 +81,75 @@ const SUBSTRING_BRANDS: ReadonlySet<string> = new Set([
   'flipkart',
   'phonepe',
   'paytm',
+  'hdfc',
+  'icici',
+  'kotak',
+]);
+
+/**
+ * Brand phrases phishing domains glue together. Matched against a host label
+ * with its hyphens removed (apple-id -> appleid, hdfcbank-kyc -> hdfcbankkyc).
+ */
+const BRAND_COMPOUNDS = [
+  'appleid',
+  'icloudid',
+  'office365',
+  'microsoft365',
+  'outlooklogin',
+  'outlookverify',
+  'outlookmail',
+  'sbibank',
+  'onlinesbi',
+  'yonosbi',
+  'sbionline',
+  'axisbank',
+] as const;
+
+/**
+ * Endings that are cheap or free and favoured for phishing. A brand's bare name
+ * on one of these (paypal.top, sbi.help, paypal.tk) is not the brand. Brands do
+ * use other new endings (amazon.jobs, google.dev), so this is a list, not a rule.
+ */
+const ABUSED_ENDINGS: ReadonlySet<string> = new Set([
+  'top',
+  'xyz',
+  'help',
+  'click',
+  'link',
+  'online',
+  'live',
+  'shop',
+  'support',
+  'info',
+  'icu',
+  'buzz',
+  'rest',
+  'monster',
+  'cyou',
+  'sbs',
+  'cfd',
+  'quest',
+  'vip',
+  'work',
+  'loan',
+  'win',
+  'bid',
+  'club',
+  'site',
+  'website',
+  'space',
+  'fun',
+  'store',
+  'tech',
+  'tk',
+  'ml',
+  'ga',
+  'cf',
+  'gq',
+  'cc',
+  'pw',
+  'ws',
+  'su',
 ]);
 
 /**
@@ -141,6 +210,9 @@ const OFFICIAL_DOMAINS: ReadonlySet<string> = new Set([
   'kotak.com',
   'kotaksecurities.com',
   'paytmmall.com',
+  'googlemail.com',
+  'googledrive.com',
+  'youtubekids.com',
   'media-amazon.com',
   'ssl-images-amazon.com',
   'amazon-adsystem.com',
@@ -307,7 +379,7 @@ function brandVerdict(host: string): 'lookalike' | 'brand' | null {
   let found: 'lookalike' | 'brand' | null = null;
   for (const word of words) {
     const folded = foldLookalike(word);
-    const hasDigit = /\d/.test(word);
+    const digitsFolded = foldDigits(word);
     for (const { brand, folded: foldedBrand } of FOLDED_BRANDS) {
       if (folded === foldedBrand) {
         // A swapped spelling (g00gle) is a lookalike; the real spelling on
@@ -319,28 +391,33 @@ function brandVerdict(host: string): 'lookalike' | 'brand' | null {
       if (!SUBSTRING_BRANDS.has(brand)) continue;
       if (word.includes(brand)) {
         found = 'brand';
-      } else if (hasDigit && folded.includes(foldedBrand)) {
-        // Inside a longer word, only a digit swap (g00gledocs) counts: letter
+      } else if (digitsFolded.includes(brand)) {
+        // Inside a longer word only a digit swap counts (g00gledocs): letter
         // folds alone misread ordinary words (shoppingmall -> "gmail").
         return 'lookalike';
       }
     }
   }
+  const joined = hostLabels
+    .slice(0, hostLabels.length - suffixLabels)
+    .join('')
+    .replace(/-/g, '');
+  if (found === null && BRAND_COMPOUNDS.some((phrase) => joined.includes(phrase))) found = 'brand';
   return found;
 }
 
-/**
- * A brand's bare name on an unusual ending (paypal.top, sbi.help) is not the
- * brand: the brands use .com, .net, .org or a country ending.
- */
+/** Only the digit swaps (0/o, 1/l, 5/s), for matching inside longer words. */
+function foldDigits(text: string): string {
+  return text.toLowerCase().replace(/0/g, 'o').replace(/1/g, 'l').replace(/5/g, 's');
+}
+
+/** A brand's bare name on a phishing-favoured ending (paypal.top, sbi.help, paypal.tk). */
 function brandOnOddEnding(host: string): boolean {
   const registrable = registrableDomain(host);
   if (OFFICIAL_DOMAINS.has(registrable)) return false;
   const label = siteLabel(registrable);
-  if (!(BRANDS as readonly string[]).includes(label) || COMMON_WORD_BRANDS.has(label)) return false;
-  const suffix = registrable.slice(label.length + 1);
-  if (suffix.includes('.')) return false;
-  return suffix.length > 2 && !['com', 'net', 'org', 'sbi'].includes(suffix);
+  if (!(BRANDS as readonly string[]).includes(label)) return false;
+  return ABUSED_ENDINGS.has(registrable.slice(label.length + 1));
 }
 
 function isLocalHost(host: string): boolean {

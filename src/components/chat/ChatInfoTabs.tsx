@@ -16,7 +16,16 @@ import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconBookmark, IconFile, IconImage, IconLink, IconStar } from '@/components/ui/icons';
+import {
+  IconAlertTriangle,
+  IconBookmark,
+  IconFile,
+  IconImage,
+  IconLink,
+  IconStar,
+} from '@/components/ui/icons';
+import { UnsafeLinkText } from '@/components/ui/UnsafeLinkSheet';
+import { checkLink } from '@/lib/links/safety';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { FileViewer, remoteFileSource } from '@/components/ui/FileViewer';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
@@ -368,6 +377,29 @@ export function LinkRow(props: {
   sender: string;
   date: string;
 }): ReactElement {
+  // An unsafe link opens the check sheet here too, never the site directly.
+  const verdict = checkLink(props.item.url);
+  if (verdict.verdict === 'unsafe') {
+    return (
+      <li>
+        <UnsafeLinkText
+          url={props.item.url}
+          reasons={verdict.reasons}
+          className={cn(ROW, 'w-full rounded-md text-left hover:bg-panel-2')}
+        >
+          <span className={cn(ROW_ICON, 'text-[color:var(--warn-ink)]')}>
+            <IconAlertTriangle size={20} />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="truncate text-sm font-medium text-[color:var(--warn-ink)]">
+              {displayUrl(props.item.url)}
+            </span>
+            <span className="truncate text-xs text-fg-2">{`${props.sender} · ${props.date}`}</span>
+          </span>
+        </UnsafeLinkText>
+      </li>
+    );
+  }
   return (
     <li>
       <a

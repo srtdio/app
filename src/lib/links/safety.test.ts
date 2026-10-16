@@ -188,3 +188,46 @@ describe('real-world domains (audit round 2)', () => {
     expect(checkLink('https://raw.githubusercontent.com/x/y/main/run.ps1').verdict).toBe('unsafe');
   });
 });
+
+describe('audit round 3', () => {
+  it.each([
+    'https://shoppingmall24.com/',
+    'https://bigmall1.in/',
+    'https://4kingmall.com/',
+    'https://google.dev/',
+    'https://amazon.jobs/',
+    'https://amazon.science/',
+    'https://canva.dev/',
+    'https://microsoft.design/',
+    'https://facebook.design/',
+    'https://googlemail.com/',
+    'https://www.youtubekids.com/',
+    'https://www.hdfcbank.com/',
+    'https://netbanking.hdfcbank.com/',
+    'https://www.onlinesbi.sbi/',
+    'https://www.axisbank.com/',
+  ])('%s is ok', (url) => {
+    expect(checkLink(url)).toEqual({ verdict: 'ok', reasons: [] });
+  });
+
+  it.each([
+    'https://paypal.tk/',
+    'https://google.ga/',
+    'https://sbi.ws/',
+    'https://hdfcbank.top/',
+    'https://icicibank.top/',
+    'https://axisbank.top/',
+    'https://kotakbank.top/',
+    'https://hdfcbank-kyc.com/',
+    'https://icicibank-update.in/',
+    'https://yonosbi.top/',
+    'https://onlinesbi.top/',
+    'https://axisbank-kyc.com/',
+    'https://appleid-verify.com/',
+    'https://apple-id.top/',
+    'https://outlook-verify.top/',
+    'https://office365-login.top/',
+  ])('%s is unsafe', (url) => {
+    expect(checkLink(url).verdict).toBe('unsafe');
+  });
+});

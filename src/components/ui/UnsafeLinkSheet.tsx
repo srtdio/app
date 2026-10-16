@@ -212,22 +212,32 @@ export function UnsafeLinkText(props: {
   url: string;
   reasons: readonly string[];
   className?: string;
+  /** Mark it as a chat body link (data-msg-link) so a press acts like other links. */
+  msgLink?: boolean;
   children: ReactNode;
 }): ReactElement {
   const [open, setOpen] = useState(false);
+  const show = (event: { stopPropagation: () => void; preventDefault: () => void }): void => {
+    event.stopPropagation();
+    event.preventDefault();
+    setOpen(true);
+  };
   return (
     <>
-      <button
-        type="button"
+      {/* A span (role=button), not a <button>: it wraps with the text around it. */}
+      <span
+        role="button"
+        tabIndex={0}
         data-unsafe-link=""
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen(true);
+        data-msg-link={props.msgLink === true ? '' : undefined}
+        onClick={show}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') show(event);
         }}
-        className={cn('break-all text-left', props.className ?? 'inline')}
+        className={cn('cursor-pointer break-all', props.className ?? 'inline')}
       >
         {props.children}
-      </button>
+      </span>
       <UnsafeLinkSheet
         open={open}
         url={props.url}

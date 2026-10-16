@@ -1574,6 +1574,7 @@ export function renderMessageBody(
           url={segment.url}
           reasons={verdict.reasons}
           className={cn('inline', className)}
+          msgLink
         >
           {label}
         </UnsafeLinkText>
