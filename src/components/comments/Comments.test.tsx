@@ -60,7 +60,8 @@ import { PAGE_SIZE } from '@srtdio/comments';
 import type { Client } from '@srtdio/comments';
 import { friendlyPointFreezeError, tickCircle } from '@/components/pages/pcs/checkpoint-controls';
 import type { DomainError } from '@srtdio/rpc';
-import { EX_MEMBER_LABEL, resolveName } from '@/components/comments/commentProfiles';
+import { resolveName } from '@/components/comments/commentProfiles';
+import { FORMER_MEMBER } from '@/lib/people-names';
 import type { CommentProfile } from '@/components/comments/commentProfiles';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 import { attachmentView } from '@/components/chat/MessageAttachments';
@@ -552,8 +553,7 @@ describe('legacy author display (migrated v1 comments)', () => {
 
   it('renders the legacy name, not the resolved FK (operator) name', () => {
     const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (v1)' });
-    const authorName =
-      legacy.legacy_author_name ?? nameOf(legacy.author_user_id) ?? EX_MEMBER_LABEL;
+    const authorName = legacy.legacy_author_name ?? nameOf(legacy.author_user_id) ?? FORMER_MEMBER;
     expect(authorName).toBe('Bob (v1)');
     expect(authorName).not.toBe('Operator');
   });
@@ -567,7 +567,7 @@ describe('legacy author display (migrated v1 comments)', () => {
 
   it('keeps the resolved name and avatar for a non-legacy comment', () => {
     const live = row({ id: 'c', author_user_id: UUID_A });
-    const authorName = live.legacy_author_name ?? nameOf(live.author_user_id) ?? EX_MEMBER_LABEL;
+    const authorName = live.legacy_author_name ?? nameOf(live.author_user_id) ?? FORMER_MEMBER;
     const authorAvatarUrl = live.legacy_author_name !== null ? null : avatarOf(live.author_user_id);
     expect(authorName).toBe('Operator');
     expect(authorAvatarUrl).toBe('https://cdn/operator.png');

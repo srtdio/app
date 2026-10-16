@@ -167,7 +167,8 @@ describe('searchResultsView', () => {
       ]),
     );
     expect(html).not.toContain('@[');
-    expect(html).toContain('@Former member');
+    // Not read yet: no guessed label.
+    expect(html).not.toContain('Former member');
   });
 });
 

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { installHarnessNetwork } from '../fixtures/harness-routes';
-import { GROUP_CHANNEL, GROUP_NAME, ME, WORKSPACE_ID } from '../fixtures/chat-data';
+import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
+import { COLLEAGUE_A, GROUP_CHANNEL, GROUP_NAME, ME, WORKSPACE_ID } from '../fixtures/chat-data';
 
 // The search screen (command palette): "Search anything", grouped results
 // from workspace_search_grouped + workspace_search_counts, the RECENT list on
@@ -150,5 +150,127 @@ test.describe('command palette on a laptop @desktop', () => {
     await openPalette(page);
     await page.getByPlaceholder('Search anything').press('Escape');
     await expect(dialog).toHaveCount(0);
+  });
+});
+
+// Search highlight + jump: a result lands on the exact item that matched, the
+// searched word coloured there (accent token, readable in light and dark), the
+// target tinted for 2s then fading (no animation under reduced motion). A chat
+// message older than the first page loads through the chat's own history
+// paging; a message that is gone opens the chat as usual, with no toast.
+
+const OLD_WORD = 'zanzibarlights';
+const OLD_ID = '0190e400-0000-7000-8000-000000000001';
+
+/** 60 group messages older than the first page; the oldest carries OLD_WORD. */
+function seedOlderHistory(network: HarnessNetwork): void {
+  const first = network.world.groupMessages[0];
+  const firstMs = Date.parse(String(first?.created_at));
+  const older = Array.from({ length: 60 }, (_, k) => ({
+    ...first,
+    id: `0190e400-0000-7000-8000-${String(k + 1).padStart(12, '0')}`,
+    sender_user_id: COLLEAGUE_A,
+    body: k === 0 ? `Remember the ${OLD_WORD} order` : `Old line ${k + 1}`,
+    attachment_asset_ids: null,
+    attachment_meta: null,
+    shared_post_ids: null,
+    created_at: new Date(firstMs - (60 - k) * 60_000).toISOString(),
+  }));
+  (network.world.tables.chat_messages ??= []).push(...older);
+}
+
+/** WCAG contrast ratio of two rgb() colours. */
+function contrast(a: string, b: string): number {
+  const lum = (c: string): number => {
+    const [r, g, bl] = (c.match(/\d+(\.\d+)?/g) ?? ['0', '0', '0']).slice(0, 3).map(Number);
+    const ch = (v: number): number => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * ch(r ?? 0) + 0.7152 * ch(g ?? 0) + 0.0722 * ch(bl ?? 0);
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
+}
+
+test.describe('search highlight and jump', () => {
+  test('a post result lands with the word coloured in the title @theme', async ({ page }) => {
+    await installHarnessNetwork(page);
+    await page.goto('/chat');
+    await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+    await openPalette(page);
+    await page.getByPlaceholder('Search anything').fill('monday');
+    const row = page.locator('[data-palette-group="Posts"] [data-palette-item]').first();
+    await expect(row.locator('[data-search-match]').first()).toHaveText(/monday/i);
+    await row.click();
+    await expect(page).toHaveURL(/[?&]q=monday/);
+    const mark = page.locator('h1 [data-search-match], h2 [data-search-match]').first();
+    await expect(mark).toHaveText(/monday/i);
+    // Readable in this theme: accent on the page fill, never a hardcoded colour.
+    const { fg, bg } = await mark.evaluate((el) => ({
+      fg: getComputedStyle(el).color,
+      bg: getComputedStyle(document.body).backgroundColor,
+    }));
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(3);
+  });
+
+  test('a chat message older than the first page loads, scrolls in, glows 2s, word stays coloured', async ({
+    page,
+  }) => {
+    const network = await installHarnessNetwork(page);
+    seedOlderHistory(network);
+    await page.goto('/chat');
+    await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+    await openPalette(page);
+    await page.getByPlaceholder('Search anything').fill(OLD_WORD);
+    const hit = page.locator('[data-palette-group="Chat"] [data-palette-item]').first();
+    await expect(hit).toBeVisible();
+    await hit.click();
+    const target = page.locator(`[data-msg-id="${OLD_ID}"]`);
+    await expect(target).toBeVisible({ timeout: 15_000 });
+    await expect(target).toHaveAttribute('data-search-glow', '');
+    await expect(target.locator('[data-search-match]').first()).toHaveText(OLD_WORD);
+    await expect(target).toBeInViewport();
+    // The tint clears after 2s (plus its fade); the word stays coloured.
+    await expect(target).not.toHaveAttribute('data-search-glow', '', { timeout: 5_000 });
+    await expect(target.locator('[data-search-match]').first()).toBeVisible();
+    await expect(page.getByText('Message is older than loaded history')).toHaveCount(0);
+  });
+
+  test('a message that is gone opens its chat as usual: no error, no toast', async ({ page }) => {
+    await installHarnessNetwork(page);
+    await page.goto(
+      `/chat?channel=${encodeURIComponent(GROUP_CHANNEL)}&message=0190e4ff-0000-7000-8000-000000000999&q=launch`,
+    );
+    await expect(page.locator('[data-msg-id]').first()).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(1_500);
+    await expect(page.getByText('Message is older than loaded history')).toHaveCount(0);
+    await expect(page.locator('[data-search-glow]')).toHaveCount(0);
+  });
+
+  test('a group result opens the chat with its name coloured', async ({ page }) => {
+    await installHarnessNetwork(page);
+    await page.goto('/chat');
+    await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+    await openPalette(page);
+    await page.getByPlaceholder('Search anything').fill('crew');
+    await page.locator('[data-palette-group="Groups"] [data-palette-item]').first().click();
+    await expect(page).toHaveURL(/[?&]q=crew/);
+    await expect(page.locator('[data-search-match]', { hasText: /crew/i }).first()).toBeVisible();
+  });
+
+  test('reduced motion: the tint appears without a transition and clears after 2s', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const network = await installHarnessNetwork(page);
+    seedOlderHistory(network);
+    await page.goto(
+      `/chat?channel=${encodeURIComponent(GROUP_CHANNEL)}&message=${OLD_ID}&q=${OLD_WORD}`,
+    );
+    const target = page.locator(`[data-msg-id="${OLD_ID}"]`);
+    await expect(target).toHaveAttribute('data-search-glow', '', { timeout: 15_000 });
+    expect(await target.evaluate((el) => (el as HTMLElement).style.transition)).toBe('none');
+    await expect(target).not.toHaveAttribute('data-search-glow', '', { timeout: 4_000 });
   });
 });

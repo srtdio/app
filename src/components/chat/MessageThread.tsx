@@ -300,7 +300,6 @@ import { applyEdit, applyReactionOp, markMessagesDeleted } from '@/lib/chat/thre
 import { generateTraceId } from '@/lib/trace';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
-import { matchRuns } from '@/lib/chat/search';
 import { InChatSearchBar, SearchHighlightContext } from '@/components/chat/InChatSearchBar';
 import type { ThreadReadState } from '@/lib/chat/use-chat-thread';
 import {
@@ -322,6 +321,8 @@ import {
   WhoReactedSheet,
   type WhoReactedLoad,
 } from '@/components/chat/ReadingLayer';
+import { highlightText, useSearchWords } from '@/components/ui/SearchHighlight';
+import { arriveAt, highlightRuns } from '@/lib/search/search-jump';
 
 interface MessageThreadProps {
   title: string;
@@ -1065,7 +1066,10 @@ export function ThreadHeaderIdentity(props: {
   onOpenContact?: () => void;
   /** Personal notes: the notes avatar (own photo + badge, or the notebook) in place of a photo. */
   notes?: boolean;
+  /** A search jump to a group: its words, coloured in the name. */
+  searchWords?: readonly string[];
 }): ReactElement {
+  const searchWords = props.searchWords ?? [];
   const photo =
     props.notes === true ? (
       <NotesAvatar size="header" src={props.avatarUrl} surface="panel" />
@@ -1086,7 +1090,7 @@ export function ThreadHeaderIdentity(props: {
   const text = (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
       <span className={cn('block truncate text-fg', sized(HEADER_NAME_TYPE, props.layout))}>
-        {props.title}
+        {highlightText(props.title, searchWords)}
       </span>
       {props.headerLine !== null ? (
         <span
@@ -1559,11 +1563,15 @@ export function renderMessageBody(
 /** A searched word in a bubble: the annotation fill, --fg ink on either side. */
 export const SEARCH_MARK_CLASS = 'rounded-sm bg-annotation-bg [color:var(--fg)]';
 
-/** Text with every word the in-chat search matched wrapped in a <mark>. Pure. */
+/**
+ * Text with every searched word (the in-chat search's, or a search jump's ?q=)
+ * wrapped in a <mark>: the shared highlight rule. The bubble keeps its own fill
+ * (readable on an own accent bubble and a peer one alike). Pure.
+ */
 export function markSearchWords(text: string, words: readonly string[]): ReactNode[] {
-  return matchRuns(text, words).map((run, i) =>
+  return highlightRuns(text, words).map((run, i) =>
     run.hit ? (
-      <mark key={i} data-search-mark="" className={SEARCH_MARK_CLASS}>
+      <mark key={i} data-search-mark="" data-search-match="" className={SEARCH_MARK_CLASS}>
         {run.text}
       </mark>
     ) : (
@@ -1648,7 +1656,7 @@ const MENTION_HIT =
 /**
  * The thread's mention name lookup: the batched profiles, then this
  * workspace's mention registry. A former member (read without an active
- * membership) resolves to nothing, so their mention reads "@Unknown member"
+ * membership) resolves to nothing, so their mention reads "@Former member" (once a read confirms it; nothing before)
  * and is inert; so does one whose membership read failed (unconfirmed), the
  * failed-read behaviour, until a read confirms them.
  */
@@ -1700,7 +1708,7 @@ export function renderBodyWithMentions(
     const tint = !mine && ctx.mentionedMe === true && (self || everyone);
     const label = mentionLabel(id, ctx.nameOf);
     const open = ctx.mentions;
-    // An unresolvable id ("@Unknown member") has no one to open a chat with.
+    // An unresolvable id ("@Former member" (once a read confirms it; nothing before)) has no one to open a chat with.
     const known = ctx.nameOf(id) !== undefined;
     if (open === undefined || self || everyone || !known || id === open.peerUserId) {
       return (
@@ -3161,8 +3169,12 @@ function ThreadBody(
     /** Menu "Delete" picked: selection mode with the message ticked; absent hides it. */
     onDeleteMessage?: (message: ThreadMessage) => void;
     onChangePriority?: (messageId: string) => void;
-    /** A jump-to request (seq makes a repeat of the same id fire again). */
-    jumpRequest: { id: string; seq: number } | null;
+    /**
+     * A jump-to request (seq makes a repeat of the same id fire again). quiet: a
+     * search jump, whose miss (a deleted or unreachable message) leaves the chat
+     * open as usual, with no toast.
+     */
+    jumpRequest: { id: string; seq: number; quiet?: boolean } | null;
     onEnsureLoaded?: (messageId: string) => Promise<FindOlderOutcome>;
     /** A message's KEY chip (undefined keeps its quote). */
     chipFor?: (message: ThreadMessage) => BubbleChip | undefined;
@@ -3466,22 +3478,24 @@ function ThreadBody(
     // A jump lets go of the bottom.
     stickRef.current = false;
     sourceRef.current = 'program';
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const flash = el.querySelector('[data-bubble]') ?? el;
-    const ring = ['ring-2', 'ring-accent', 'ring-inset'];
-    flash.classList.add(...ring);
-    window.setTimeout(() => flash.classList.remove(...ring), highlightMs);
+    // The shared arrival: the row centred and tinted for 2s, then it fades
+    // (instant under reduced motion). One glow at a time; unmount clears it.
+    glowRef.current?.();
+    if (el instanceof HTMLElement) glowRef.current = arriveAt(el, { ms: highlightMs });
     return true;
   }, []);
+  const glowRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => glowRef.current?.(), []);
   // Jump-to: reveal at once when loaded, else page older history (capped) and
   // reveal once the page carrying it renders.
   useEffect(() => {
     if (jumpRequest === null) return;
     const id = jumpRequest.id;
+    const quiet = jumpRequest.quiet === true;
     if (reveal(id, JUMP_HIGHLIGHT_MS)) return;
     const ensure = ensureLoadedRef.current;
     if (ensure === undefined) {
-      toastRef.current.show({ title: JUMP_NOT_LOADED_TOAST });
+      if (!quiet) toastRef.current.show({ title: JUMP_NOT_LOADED_TOAST });
       return;
     }
     pendingJumpRef.current = id;
@@ -3495,7 +3509,7 @@ function ThreadBody(
         pendingJumpRef.current = null;
         stickRef.current = miss.stick;
         if (miss.stick) pin();
-        toastRef.current.show({ title: miss.toast });
+        if (!quiet) toastRef.current.show({ title: miss.toast });
         return;
       }
       if (reveal(id, JUMP_HIGHLIGHT_MS)) pendingJumpRef.current = null;
@@ -4711,7 +4725,14 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     mode: 'mark' | 'change';
   } | null>(null);
   const [priorityBusy, setPriorityBusy] = useState(false);
-  const [jumpRequest, setJumpRequest] = useState<{ id: string; seq: number } | null>(null);
+  const [jumpRequest, setJumpRequest] = useState<{
+    id: string;
+    seq: number;
+    quiet?: boolean;
+  } | null>(null);
+  // A search jump's words (?q=): coloured in the bubbles until the chat is left,
+  // unless the in-chat search bar is marking its own.
+  const linkWords = useSearchWords();
   // The in-chat search bar (null: the header shows) and the words bubbles mark.
   const [chatSearch, setChatSearch] = useState<{
     query: string;
@@ -5038,9 +5059,9 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     if (id === null) return;
     if (!initialJumpDue({ messageId: id, done: initialJumpDone.current, bodyLoading })) return;
     initialJumpDone.current = true;
-    setJumpRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }));
+    setJumpRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1, quiet: linkWords.length > 0 }));
     onInitialJumpTaken?.();
-  }, [initialMessageId, bodyLoading, onInitialJumpTaken]);
+  }, [initialMessageId, bodyLoading, onInitialJumpTaken, linkWords]);
   // A message search hit: once the rows are on screen, jump to it (the same
   // jump and highlight as a deep link) and open the bar on its query.
   const searchRequest = props.searchRequest ?? null;
@@ -5715,6 +5736,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
             <ThreadHeaderIdentity
               isGroup={props.isGroup === true}
               title={props.title}
+              searchWords={linkWords}
               avatarUrl={props.avatarUrl ?? null}
               presence={headerAvatarPresence(props.presence)}
               headerLine={headerLine}
@@ -5799,7 +5821,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           locationKey={props.locationKey}
         />
       ) : null}
-      <SearchHighlightContext.Provider value={searchWords}>
+      <SearchHighlightContext.Provider value={searchWords.length > 0 ? searchWords : linkWords}>
         <ThreadBody
           {...bodyActions}
           jumpRequest={jumpRequest}

@@ -78,7 +78,9 @@ export function deriveMembers(params: {
       id: row.id,
       userId: row.user_id,
       role: row.role,
-      displayName: profile?.displayName ?? 'Unknown member',
+      // A member row is a current member: an unread profile shows no name
+      // (never "Former member", never a placeholder).
+      displayName: profile?.displayName ?? '',
       avatarUrl: profile?.avatarUrl ?? null,
       email: isSelf ? (selfEmail ?? null) : null,
       acceptedAt: row.accepted_at,

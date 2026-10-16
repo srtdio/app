@@ -96,7 +96,8 @@ describe('serialize / deserialize', () => {
 describe('render helpers', () => {
   it('resolves every token and never leaves a raw one', () => {
     const out = resolveMentionText(`@[${ANA}] and @[${GONE}]`, nameOf);
-    expect(out).toBe('@Ana Roy and @Former member');
+    // Not read yet: nothing (never a guessed "Former member").
+    expect(out).toBe('@Ana Roy and ');
     expect(out).not.toContain('@[');
   });
 

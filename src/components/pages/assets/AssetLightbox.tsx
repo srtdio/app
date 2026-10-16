@@ -21,6 +21,7 @@ import {
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
+import { highlightText, useSearchWords } from '@/components/ui/SearchHighlight';
 
 // The file card's action: a 44px target, colour change only on press (the
 // shared Button's height and press scale do not fit this rule).
@@ -147,6 +148,8 @@ export function AssetLightbox({
   onToast,
 }: AssetLightboxProps) {
   const item = items[index];
+  // A search jump to a file: the searched word coloured in its name.
+  const searchWords = useSearchWords();
   const [mediaSrc, setMediaSrc] = useState<string | null>(null);
   const [mediaFailed, setMediaFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -371,7 +374,9 @@ export function AssetLightbox({
     >
       {/* Top bar: name, counter, close. */}
       <div className="flex h-14 shrink-0 items-center gap-3 px-3 text-white">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+          {highlightText(name, searchWords)}
+        </span>
         <span className="shrink-0 text-xs tabular-nums text-white/70">
           {index + 1} / {items.length}
         </span>
@@ -430,7 +435,7 @@ export function AssetLightbox({
               {typeLabel(kind)}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{name}</p>
+              <p className="truncate text-sm font-medium">{highlightText(name, searchWords)}</p>
               <p className="mt-1 text-xs text-fg-3">{humanizeSize(item.sizeBytes)}</p>
               {mediaFailed ? (
                 <p className="mt-1 text-xs text-fg-3">This asset could not be loaded.</p>
@@ -492,7 +497,9 @@ export function AssetLightbox({
             className="relative max-h-[80%] w-full overflow-y-auto rounded-t-2xl border-t border-border bg-panel p-4 text-fg md:mx-auto md:mb-4 md:max-w-md md:rounded-2xl md:border"
           >
             <div className="flex items-center gap-2">
-              <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</h2>
+              <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+                {highlightText(name, searchWords)}
+              </h2>
               <IconButton label="Close details" onClick={() => setInfoOpen(false)}>
                 <IconX size={18} />
               </IconButton>

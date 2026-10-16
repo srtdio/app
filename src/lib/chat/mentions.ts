@@ -120,11 +120,17 @@ export function splitMentions(body: string): BodySegment[] {
   return segments;
 }
 
-/** "@Name" for a mention, or "@Former member" when the id does not resolve. */
+/**
+ * "@Name" for a mention; "@Former member" only when a successful read confirmed
+ * the id holds no current membership; nothing ('') while its name has not
+ * loaded, so a current member is never labelled before it resolves.
+ */
 export function mentionLabel(userId: string, nameOf: NameOf): string {
-  if (userId.toLowerCase() === ALL_MENTION) return `@${ALL_MENTION}`;
-  const name = nameOf(userId.toLowerCase());
-  return `@${name !== undefined && name !== '' ? name : UNKNOWN_MEMBER}`;
+  const id = userId.toLowerCase();
+  if (id === ALL_MENTION) return `@${ALL_MENTION}`;
+  const name = nameOf(id);
+  if (name !== undefined && name !== '') return `@${name}`;
+  return isKnownFormer(id) ? `@${FORMER_MEMBER}` : '';
 }
 
 /** The body as plain text: every token becomes "@Name". Other text is verbatim. */
@@ -512,6 +518,17 @@ export function isFormerMember(workspaceId: string | null, userId: string): bool
   return (
     workspaceId !== null && (registries.get(workspaceId)?.former.has(userId.toLowerCase()) ?? false)
   );
+}
+
+/**
+ * Whether any workspace's successful read found this id without an active
+ * membership. The label surfaces that carry no workspace use it; the registry
+ * clears on sign-out, so it only ever holds this account's reads.
+ */
+export function isKnownFormer(userId: string): boolean {
+  const id = userId.toLowerCase();
+  for (const registry of registries.values()) if (registry.former.has(id)) return true;
+  return false;
 }
 
 /** Whether this id's membership in this workspace is still unknown (its membership read failed). */

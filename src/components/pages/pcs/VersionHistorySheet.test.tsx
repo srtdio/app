@@ -66,11 +66,11 @@ function version(over: Partial<PostVersionView>): PostVersionView {
 }
 
 // A stand-in for the page's resolveAuthorName: prefers a current member, then the
-// legacy name, then (ex-member). The sheet must thread the legacy name through.
+// legacy name, then "Former member". The sheet must thread the legacy name through.
 function resolverWith(members: Record<string, string>) {
   return (userId: string | null, legacyName: string | null): string => {
-    if (userId === null || userId === '') return legacyName ?? '(ex-member)';
-    return members[userId] ?? legacyName ?? '(ex-member)';
+    if (userId === null || userId === '') return legacyName ?? 'Former member';
+    return members[userId] ?? legacyName ?? 'Former member';
   };
 }
 

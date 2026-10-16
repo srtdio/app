@@ -8,14 +8,6 @@ import { describe, expect, it } from 'vitest';
 const ROOT = join(__dirname, '..');
 const BANNED = /(['"`])[^'"`\n]*(?:\(ex-member\)|Unknown member)[^'"`\n]*\1/;
 
-// Outside this change's files (reported as follow-ups); every other file must be clean.
-const OUT_OF_SCOPE = new Set([
-  'components/comments/commentProfiles.ts',
-  'components/pages/BriefDetailPage.tsx',
-  'components/pages/settings/MembersPanel.tsx',
-  'components/pages/settings/members-data.ts',
-]);
-
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
@@ -29,10 +21,9 @@ function withoutComments(code: string): string {
 }
 
 describe('no placeholder member names in src', () => {
-  it('no "(ex-member)" or "Unknown member" literal renders anywhere', () => {
+  it('no "(ex-member)" or "Unknown member" literal anywhere in src (no exceptions)', () => {
     const offenders = sources(ROOT)
       .map((path) => relative(ROOT, path))
-      .filter((rel) => !OUT_OF_SCOPE.has(rel))
       .filter((rel) => BANNED.test(withoutComments(readFileSync(join(ROOT, rel), 'utf8'))));
     expect(offenders).toEqual([]);
   });

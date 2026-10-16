@@ -114,7 +114,8 @@ describe('deriveMembers', () => {
       profiles,
       currentUserId: null,
     });
-    expect(derived.agency[0]?.displayName).toBe('Unknown member');
+    // A member row is a current member: no profile yet shows no name, never "Former member".
+    expect(derived.agency[0]?.displayName).toBe('');
   });
 });
 

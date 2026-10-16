@@ -11,7 +11,6 @@ import {
   type InboxRow,
   type ToastUpdate,
 } from '@/lib/inbox/inbox-live';
-import { UNKNOWN_MEMBER } from '@/lib/chat/mentions';
 
 function row(over: Partial<InboxRow>): InboxRow {
   return {
@@ -214,7 +213,8 @@ describe('comment toast names and title', () => {
 
   it('renders an unknown id as the resolver does', () => {
     const spec = toastFromEnriched(comment({ body: `@[${GONE}] ping` }));
-    expect(spec?.description).toBe(`@${UNKNOWN_MEMBER} ping`);
+    // Not read: nothing renders for it (never a guessed label).
+    expect(spec?.description).toBe('ping');
   });
 
   it('drops line 2 when the name read failed, never showing a raw token', () => {

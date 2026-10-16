@@ -237,6 +237,8 @@ import {
   planWeekGroups,
   type PlanWeekGroup,
 } from '@/lib/plan-week';
+import { highlightText, useSearchWords } from '@/components/ui/SearchHighlight';
+import { arriveAt } from '@/lib/search/search-jump';
 
 // ---------------------------------------------------------------------------
 // Shared pieces
@@ -322,6 +324,7 @@ export function PlanPage(props: {
   const [entered, setEntered] = useState(false);
   const desktop = useMediaQuery(LAPTOP_QUERY);
   const pageRef = useRef<HTMLDivElement>(null);
+  const searchWords = useSearchWords();
   const onEnteredRef = useRef(props.onEntered);
   onEnteredRef.current = props.onEntered;
   const onBackRef = useRef(props.onBack);
@@ -463,7 +466,7 @@ export function PlanPage(props: {
         >
           {props.titleSlot ?? (
             <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">
-              {props.title}
+              {highlightText(props.title, searchWords)}
             </h2>
           )}
           {props.subtitle !== undefined ? (
@@ -879,6 +882,11 @@ export function PlanScreen(props: {
   initialItemId?: string;
   /** Outside a chat: the comment the entry item scrolls to and highlights. */
   highlightCommentId?: string;
+  /**
+   * Outside a chat (a search jump): the row the list scrolls to and tints once
+   * it is on screen. A row no longer in the plan is skipped: the plan opens as usual.
+   */
+  focusItemId?: string;
   /** Outside a chat: a plan of another workspace reads as not available. */
   onlyWorkspaceId?: string;
   onClose: () => void;
@@ -902,6 +910,10 @@ export function PlanScreen(props: {
   );
   const [itemId, setItemId] = useState<string | null>(props.initialItemId ?? null);
   const entryItemId = props.initialItemId ?? null;
+  const focusItemId = props.focusItemId ?? null;
+  const focusedRow = useRef(false);
+  const rowGlow = useRef<(() => void) | null>(null);
+  useEffect(() => () => rowGlow.current?.(), []);
   // Add: the sheet (its day; undefined = closed), the concept sheet, the picker.
   const [addFor, setAddFor] = useState<{ day: string | null } | null>(null);
   const [conceptFor, setConceptFor] = useState<{ day: string | null } | null>(null);
@@ -979,6 +991,17 @@ export function PlanScreen(props: {
   }, [props.open, planId, reload]);
 
   const readBundle = read.status === 'ready' ? read.data.bundle : null;
+  // A search jump to a plan item: once the list is on screen, its row scrolls
+  // to the middle and takes the arrival tint (once). Gone from the plan: skipped.
+  useEffect(() => {
+    if (focusItemId === null || focusedRow.current || readBundle === null || itemId !== null)
+      return;
+    focusedRow.current = true;
+    const row = bodyRef.current?.querySelector<HTMLElement>(
+      `[data-plan-row="${CSS.escape(focusItemId)}"]`,
+    );
+    if (row != null) rowGlow.current = arriveAt(row);
+  }, [focusItemId, readBundle, itemId]);
   const shownBundle =
     readBundle !== null &&
     props.onlyWorkspaceId !== undefined &&
@@ -2291,6 +2314,7 @@ function PlanTitleButton(props: {
   open: boolean;
   onToggle: () => void;
 }): ReactElement {
+  const searchWords = useSearchWords();
   return (
     <button
       type="button"
@@ -2304,7 +2328,9 @@ function PlanTitleButton(props: {
         NO_TOUCH_SELECT,
       )}
     >
-      <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">{props.title}</h2>
+      <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">
+        {highlightText(props.title, searchWords)}
+      </h2>
       <span aria-hidden="true" className="shrink-0 text-fg-3">
         <IconChevronDown size={16} />
       </span>
@@ -3234,6 +3260,7 @@ function PlanRow(props: {
   /** Agency on a laptop: grip, calendar and dustbin, right-click (no swipe). */
   desk?: PlanRowDesk;
 }): ReactElement {
+  const searchWords = useSearchWords();
   const onDragStart = props.onDragStart;
   const desk = props.desk;
   const zone = props.timeZone ?? 'UTC';
@@ -3320,7 +3347,7 @@ function PlanRow(props: {
             data-plan-row-title=""
             className="truncate text-[15px] font-semibold leading-5 text-fg-2"
           >
-            {title}
+            {highlightText(title, searchWords)}
           </span>
           <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-fg-3">
             <KindTag item={props.item} label={kindLabel} />
@@ -3372,7 +3399,7 @@ function PlanRow(props: {
           data-plan-row-title=""
           className="truncate text-[15px] font-semibold leading-5 text-fg"
         >
-          {title}
+          {highlightText(title, searchWords)}
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-fg-3">
           <KindTag item={props.item} label={kindLabel} />

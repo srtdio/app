@@ -33,7 +33,14 @@ describe('T5 who reacted', () => {
     expect(model.rows.filter((r) => r.mine)).toHaveLength(1);
   });
 
-  it('unresolved names read Former member', () => {
-    expect(model.rows.find((r) => r.userId === 'ghost')?.name).toBe('Former member');
+  it('an unread name renders nothing; only a confirmed former member reads "Former member"', () => {
+    expect(model.rows.find((r) => r.userId === 'ghost')?.name).toBe('');
+    const gone = groupReactors(
+      [{ userId: 'ghost', emoji: '👍', createdAt: '2026-10-01T00:00:00Z' }],
+      'me',
+      () => undefined,
+      (id) => id === 'ghost',
+    );
+    expect(gone.rows[0]?.name).toBe('Former member');
   });
 });

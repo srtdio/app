@@ -7,7 +7,7 @@ import type {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconSearch } from '@/components/ui/icons';
-import { boldMatches } from '@/components/chat/SearchResults';
+import { Highlight } from '@/components/ui/SearchHighlight';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
 import { DUR_BASE_MS } from '@/lib/motion';
@@ -23,7 +23,6 @@ import {
   resolveSearchMentionText,
   searchActorName,
   unresolvedMentionIds,
-  UNKNOWN_MEMBER,
 } from '@/lib/chat/mentions';
 import { notesChannelId } from '@/lib/chat/notes';
 import {
@@ -59,6 +58,7 @@ import {
   type WorkspaceHit,
   type WorkspaceKind,
 } from '@/lib/search/workspace-search';
+import { withSearchTerm } from '@/lib/search/search-jump';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -177,10 +177,13 @@ function workspaceRow(
   };
 }
 
-/** A chat hit's title: its sender ("Former member" once gone). Pure over the registry. */
+/**
+ * A chat hit's title: its sender, "Former member" only once a read confirmed
+ * they are gone, else (a name not read) the plain "Chat". Pure over the registry.
+ */
 export function chatSenderTitle(hit: SearchHit, workspaceId: string | null): string {
   if (hit.senderUserId === null) return 'Chat';
-  return searchActorName(workspaceId, hit.senderUserId) ?? UNKNOWN_MEMBER;
+  return searchActorName(workspaceId, hit.senderUserId) ?? 'Chat';
 }
 
 /**
@@ -348,7 +351,11 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
           {section.items.map((item) => {
             const index = flat.indexOf(item);
             const isActive = index === props.active;
-            const tone = isActive ? 'bg-panel-2 text-fg' : 'text-fg-2';
+            // The keyboard's row and a pressed row take the accent tint.
+            const tone = cn(
+              isActive ? 'bg-accent-soft text-fg' : 'text-fg-2',
+              'active:bg-accent-soft',
+            );
             const common = {
               type: 'button' as const,
               role: 'option',
@@ -366,7 +373,8 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                   className={cn(
                     ROW,
                     'font-medium',
-                    isActive ? 'bg-panel-2 text-fg' : 'text-accent',
+                    isActive ? 'bg-accent-soft text-fg' : 'text-accent',
+                    'active:bg-accent-soft',
                   )}
                 >
                   {`Show all (${item.count})`}
@@ -393,7 +401,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               >
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="min-w-0 flex-1 truncate font-medium text-fg">
-                    {boldMatches(item.title, words)}
+                    <Highlight text={item.title} words={words} />
                   </span>
                   {item.time !== '' ? (
                     <span className="shrink-0 text-xs text-fg-3">{item.time}</span>
@@ -401,7 +409,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                 </span>
                 {item.snippet !== '' ? (
                   <span className="truncate text-xs text-fg-3">
-                    {boldMatches(item.snippet, words)}
+                    <Highlight text={item.snippet} words={words} />
                   </span>
                 ) : null}
               </button>
@@ -564,10 +572,11 @@ export function CommandPalette({
     return null;
   }
 
-  function openTarget(target: HitTarget): void {
+  function openTarget(target: HitTarget, term: string): void {
     onClose();
     if ('path' in target) {
-      navigate(target.path);
+      // The one jump mechanism: the destination reads ?q= and colours the words.
+      navigate(withSearchTerm(target.path, term));
       return;
     }
     if (workspaceId === null) return;
@@ -594,7 +603,8 @@ export function CommandPalette({
       if (kind !== undefined) runnerRef.current?.expand(kind);
       return;
     }
-    openTarget(item.target);
+    // A recent was not searched for: it carries no term.
+    openTarget(item.target, item.type === 'result' ? normalizeQuery(query) : '');
   }
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {

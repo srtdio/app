@@ -105,7 +105,7 @@ import {
   knownMentionName,
   mentionIds,
   mentionTargets,
-  rememberMentionProfiles,
+  rememberMentionRead,
 } from '@/lib/chat/mentions';
 import { useToast } from '@/components/ui/toast';
 import { BellProvider } from '@/components/chat/BellContext';
@@ -206,9 +206,9 @@ export function profileIdsNeeded(input: {
 
 /**
  * Where the thread's profile reads left each id they asked about. `unknown`:
- * a read succeeded without it (an ex-member); it renders "@Unknown member" for
+ * a read succeeded without it (an ex-member); it renders "@Former member" (once a read confirms it; nothing before) for
  * good and is never read again. `failed`: its last read failed; it renders
- * "@Unknown member" inert for now and rides along on the next read.
+ * "@Former member" (once a read confirms it; nothing before) inert for now and rides along on the next read.
  */
 export interface NameReads {
   unknown: ReadonlySet<string>;
@@ -239,7 +239,7 @@ function ownSend(message: ThreadMessage): boolean {
 /**
  * The rows that may paint: each id a row names is known, or its read settled
  * (unknown or failed). A row still waiting on a read is held back, so a live
- * row or an older page never paints "@Unknown member" and then changes. A held
+ * row or an older page never paints "@Former member" (once a read confirms it; nothing before) and then changes. A held
  * row queues every later row behind it (they release together, in order), so
  * a row never lands above a newer one already on screen. Never held: a row
  * already painted (`painted`, so a switch or a retry never takes one away) and
@@ -1281,7 +1281,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // Resolve sender and @mention display info in one batched read per set of
   // new ids (no N+1). The first page of a chat is held until its names are in,
   // and a live row or an older page is held until the read for its names
-  // settles, so no mention ever paints as "@Unknown member" and then swaps.
+  // settles, so no mention ever paints as "@Former member" (once a read confirms it; nothing before) and then swaps.
   const firstPageIn = !thread.loading && threadCurrent && (!notesOpen || notesReady);
   const [nameReadState, setNameReadState] = useState<{ workspaceId: string; reads: NameReads }>(
     () => ({ workspaceId, reads: NO_NAME_READS }),
@@ -1346,7 +1346,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       if (!result.ok) {
         logger.warn('chat: profile read failed', { error: result.error.message });
       } else {
-        rememberMentionProfiles(forWorkspace, result.data);
+        // An asked id the read did not return has no visible profile: confirmed gone.
+        rememberMentionRead(forWorkspace, ids, result.data);
         setProfileState((prev) => {
           const next = new Map(prev.workspaceId === forWorkspace ? prev.profiles : undefined);
           for (const profile of result.data) next.set(profile.userId, profile);

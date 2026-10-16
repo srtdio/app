@@ -15,6 +15,7 @@
 // the plan alone, full page, as before.
 
 import { useCallback, useEffect, useRef } from 'react';
+import { SEARCH_TERM_PARAM } from '@/lib/search/search-jump';
 import type { ReactElement } from 'react';
 import {
   Outlet,
@@ -120,6 +121,9 @@ export function PlanPage(): ReactElement {
   const planId = shown !== null ? (shown.pathname.split('/')[2] ?? '') : params.planId;
   const itemId = (shown?.searchParams ?? search).get('item');
   const commentId = (shown?.searchParams ?? search).get('comment');
+  // A search jump (?q=) to an item lands on the plan with that row in view, not
+  // inside the item.
+  const searchJump = ((shown?.searchParams ?? search).get(SEARCH_TERM_PARAM) ?? '') !== '';
 
   const close = useCallback(() => {
     if (planPageBack(window.history.state).kind === 'pop') navigate(-1);
@@ -149,7 +153,8 @@ export function PlanPage(): ReactElement {
       key={`${planId}:${itemId ?? ''}`}
       open
       planId={planId}
-      {...(isPlanId(itemId) ? { initialItemId: itemId } : {})}
+      {...(isPlanId(itemId) && !searchJump ? { initialItemId: itemId } : {})}
+      {...(isPlanId(itemId) && searchJump ? { focusItemId: itemId } : {})}
       {...(isPlanId(itemId) && isPlanId(commentId) ? { highlightCommentId: commentId } : {})}
       {...(workspaceId !== null ? { onlyWorkspaceId: workspaceId } : {})}
       onClose={close}

@@ -230,7 +230,7 @@ export interface ComposerMentions {
   /**
    * True only for a person a successful member read confirmed has left: their
    * stored mention drops. Any other unresolved mention (a failed or timed-out
-   * read) stays a pick, shown as "@Unknown member", and still sends.
+   * read) stays a pick, shown as "@Former member" (once a read confirms it; nothing before), and still sends.
    */
   gone?: (userId: string) => boolean;
   selfId: string | null;

@@ -142,7 +142,7 @@ export function MembersPanel() {
           message={[
             `They lose access to ${workspaceLabel} the moment you confirm.`,
             'Signed out everywhere. Chat access ends immediately.',
-            'Their posts, comments and uploads stay, shown as “(ex-member)”.',
+            'Their posts, comments and uploads stay, shown as “Former member”.',
             'You can invite them back any time.',
           ].join(' • ')}
           confirmLabel="Remove member"

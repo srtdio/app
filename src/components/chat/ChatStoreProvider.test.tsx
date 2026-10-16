@@ -23,7 +23,7 @@ import {
 } from '@/components/chat/ChatStoreProvider';
 import { deleteEventExt, readEventExt, type ChatMessageRow } from '@/lib/chat/thread';
 import { ChannelCard, channelListContent, draftLine } from '@/components/chat/ChannelList';
-import { rememberMentionNames, resetMentionNames } from '@/lib/chat/mentions';
+import { rememberMentionNames, rememberMentionRead, resetMentionNames } from '@/lib/chat/mentions';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import {
@@ -501,6 +501,10 @@ describe('chat list mentions', () => {
     resetMentionNames();
     rememberMentionNames('w1', [{ userId: ANA, displayName: 'Ana' }]);
     expect(previewMentionText(`ok @[${ANA}]`, 'w1')).toBe('ok @Ana');
+    // Not read yet: nothing renders for it (never a guessed "Former member").
+    expect(draftLine(`draft @[${ANA}] @[${GONE}]`, 'w1')).toBe('draft @Ana ');
+    // Confirmed gone by a read: "@Former member".
+    rememberMentionRead('w1', [GONE], []);
     expect(draftLine(`draft @[${ANA}] @[${GONE}]`, 'w1')).toBe('draft @Ana @Former member');
     resetMentionNames();
   });

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 // The unit env is `node` with no DOM, so CommandPalette is invoked as a plain
 // function and its element tree walked (the Topbar test style). Hooks are
@@ -490,5 +491,33 @@ describe('CommandPalette', () => {
       (el) => (el.props as { 'aria-selected': boolean })['aria-selected'],
     );
     expect(selected).toEqual([false, true]);
+  });
+});
+
+describe('search highlight and jump', () => {
+  it('colours the matched word in titles and snippets, inside a rendered @username too', () => {
+    const search = ready(
+      'asha',
+      [wsHit('comment', 3, { snippet: `ping @[${ASHA}] about it`, title: 'Asha notes' })],
+      [],
+    );
+    const html = renderToStaticMarkup(<>{body('asha', search)}</>);
+    const marks = [...html.matchAll(/data-search-match=""[^>]*>([^<]*)</g)].map((m) => m[1]);
+    // The title, the actor and the rendered mention "@asha".
+    expect(marks.filter((m) => m?.toLowerCase() === 'asha').length).toBeGreaterThanOrEqual(3);
+    expect(html).toContain('@</span><mark data-search-match');
+    expect(html).toContain('text-accent');
+  });
+
+  it('the keyboard-selected row and a pressed row take the accent tint', () => {
+    const search = ready('diwali', [wsHit('post', 1), wsHit('post', 2)], []);
+    const html = renderToStaticMarkup(<>{body('diwali', search)}</>);
+    const rows = [...html.matchAll(/<button[^>]*data-palette-item="[^"]*"[^>]*>/g)].map(
+      (m) => m[0],
+    );
+    expect(rows[0]).toContain('bg-accent-soft');
+    expect(rows[0]).toContain('data-active');
+    expect(rows[1]).not.toMatch(/(^|\s)bg-accent-soft/);
+    for (const row of rows) expect(row).toContain('active:bg-accent-soft');
   });
 });

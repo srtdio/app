@@ -60,7 +60,7 @@ import {
   knownMentionName,
   mentionIds,
   mentionNamesIn,
-  rememberMentionProfiles,
+  rememberMentionRead,
   resolveMentionPreview,
 } from '@/lib/chat/mentions';
 import { SIGNOUT_EVENT } from '@/lib/events';
@@ -505,10 +505,11 @@ export function previewMentionText(text: string, workspaceId: string | null): st
  * Make sure every @mention in these bodies (and every sender in `senderIds`,
  * for group lines' first names) has a remembered name: one batched profile
  * read (with membership, same pass) for the ids not known yet (none when all
- * are). An id read without an active membership reads "@Unknown member". A
- * failed read (an error, a rejection or the 5s timeout) is logged; those
- * mentions then read "@Unknown member", never a raw token, and those senders
- * get no prefix. Never throws.
+ * are). An id a successful read found without an active membership (or did
+ * not return) reads "@Former member". A failed read (an error, a rejection or
+ * the 5s timeout) is logged; those mentions then render nothing (never a raw
+ * token, never a guessed "Former member"), and those senders get no prefix.
+ * Never throws.
  */
 export async function rememberBodyNames(
   bodies: readonly string[],
@@ -526,7 +527,8 @@ export async function rememberBodyNames(
     logger.warn('chat store: mention names read failed', { error: result.error.message });
     return;
   }
-  rememberMentionProfiles(workspaceId, result.data);
+  // An asked id the read did not return has no visible profile: confirmed gone.
+  rememberMentionRead(workspaceId, ids, result.data);
 }
 
 /**
@@ -605,7 +607,7 @@ async function readPreviews(
 
 /**
  * An edited row's list line: its new mentions are named first (one batched
- * read, 5s), so a current member never reads "@Unknown member". When the read
+ * read, 5s), so a current member never reads "@Former member" (once a read confirms it; nothing before). When the read
  * failed and a mention is still unnamed (membership unknown), null: the line
  * keeps what it shows rather than guess. Never throws.
  */
@@ -885,7 +887,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
 
   const editSeqRef = useRef(new Map<string, number>());
   // An edit's new mentions are named first (one batched read, 5s), so a current
-  // member never reads "@Unknown member" on the line. Only the channel's latest
+  // member never reads "@Former member" (once a read confirms it; nothing before) on the line. Only the channel's latest
   // message moves the line.
   const updateEditedMessage = useCallback(
     (row: ChatMessageRow) => {

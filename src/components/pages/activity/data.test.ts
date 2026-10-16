@@ -1334,7 +1334,7 @@ describe('chat mention rows', () => {
     const GONE = '99999999-9999-4999-8999-999999999999';
     const names = new Map([[ANA, 'Ana']]);
     expect(chatMentionPreview(`\n @[${ANA}] and @[${GONE}]\nmore`, (id) => names.get(id))).toBe(
-      '@Ana and @Former member',
+      '@Ana and',
     );
     expect(chatMentionPreview(null, () => undefined)).toBeNull();
   });

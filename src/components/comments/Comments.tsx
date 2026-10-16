@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
@@ -39,7 +39,6 @@ import type { CheckpointPoint } from '@/components/comments/SlotComposer';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { useMentionCandidates } from '@/components/comments/useMentionCandidates';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
-import { flashNode } from '@/components/comments/flash-node';
 import {
   resolveMentionHandle,
   resolveName,
@@ -52,6 +51,8 @@ import {
   type MentionPick,
 } from '@/lib/chat/mentions';
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
+import { highlightText, useSearchWords } from '@/components/ui/SearchHighlight';
+import { arriveAt } from '@/lib/search/search-jump';
 
 /**
  * A mention as it reads in a comment: "@username", or "@Former member" for
@@ -253,7 +254,15 @@ const URL_TRAILING = /[.,;:!?)\]}'"]+$/;
  * a current member renders "@Former member". Surrounding text is returned
  * verbatim so the caller's whitespace-pre-wrap preserves the original layout.
  */
-function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
+function pushBodyText(
+  nodes: ReactNode[],
+  text: string,
+  keyBase: string,
+  words: readonly string[] = [],
+): void {
+  // Plain runs take the searched-word colour (a search jump's ?q=); links never do.
+  const plain = (run: string, key: string): ReactNode =>
+    words.length > 0 ? <Fragment key={key}>{highlightText(run, words)}</Fragment> : run;
   let last = 0;
   let i = 0;
   for (const m of text.matchAll(URL_TOKEN)) {
@@ -262,7 +271,7 @@ function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
     const trail = href.match(URL_TRAILING);
     const suffix = trail !== null ? trail[0] : '';
     if (suffix !== '') href = href.slice(0, href.length - suffix.length);
-    if (start > last) nodes.push(text.slice(last, start));
+    if (start > last) nodes.push(plain(text.slice(last, start), `${keyBase}-p${i}`));
     // The raw URL never reaches the screen: LinkButton labels it with the domain
     // only. align-middle keeps the inline-flex button sitting on the text run's
     // baseline; it renders nothing at all when the token is not a usable URL.
@@ -271,30 +280,31 @@ function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
     i += 1;
     last = start + m[0].length;
   }
-  if (last < text.length) nodes.push(text.slice(last));
+  if (last < text.length) nodes.push(plain(text.slice(last), `${keyBase}-p${i}`));
 }
 
 export function renderCommentBody(
   body: string,
   nameOf: (id: string) => string | null,
+  words: readonly string[] = [],
 ): ReactNode[] {
   const nodes: ReactNode[] = [];
   let last = 0;
   let key = 0;
   for (const match of body.matchAll(MENTION_TOKEN)) {
     const start = match.index ?? 0;
-    if (start > last) pushBodyText(nodes, body.slice(last, start), `t${key}`);
+    if (start > last) pushBodyText(nodes, body.slice(last, start), `t${key}`, words);
     const id = (match[1] ?? '').toLowerCase();
     const name = nameOf(id);
     nodes.push(
       <span key={`m-${key}`} className="font-medium text-accent">
-        {mentionDisplay(name)}
+        {highlightText(mentionDisplay(name), words, 'tint')}
       </span>,
     );
     key += 1;
     last = start + match[0].length;
   }
-  if (last < body.length) pushBodyText(nodes, body.slice(last), `t${key}`);
+  if (last < body.length) pushBodyText(nodes, body.slice(last), `t${key}`, words);
   return nodes;
 }
 
@@ -948,13 +958,17 @@ export function Comments({
   // scroll to and flash its row exactly once per distinct id. Best-effort: an id
   // not present (wrong entity, deleted, or beyond page 0) simply never fires.
   const flashedCommentId = useRef<string | null>(null);
+  const glowCleanup = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (focusCommentId === undefined || focusCommentId === null || focusCommentId === '') return;
     if (flashedCommentId.current === focusCommentId) return;
     if (!merged.some((c) => c.id === focusCommentId)) return;
     flashedCommentId.current = focusCommentId;
-    flashNode(commentDomId(focusCommentId));
+    // The arrival: centred and tinted for 2s (the shared search-jump glow).
+    const node = document.getElementById(commentDomId(focusCommentId));
+    if (node !== null) glowCleanup.current = arriveAt(node);
   }, [merged, focusCommentId]);
+  useEffect(() => () => glowCleanup.current?.(), []);
 
   // Resolve author + mention names in one batched read through the shared name
   // registry (users + workspace_members, one .in() each): a current member reads
@@ -1031,6 +1045,8 @@ export function Comments({
   }, [noteForId, noteEntered]);
 
   const nameOf = useCallback((id: string): string | null => resolveName(profiles, id), [profiles]);
+  // A search jump's words (?q=): coloured in every body until the screen is left.
+  const searchWords = useSearchWords();
   // Mentions inside a body read as @username; author lines keep the full name.
   const handleOf = useCallback(
     (id: string): string | null => resolveMentionHandle(profiles, id),
@@ -1405,7 +1421,7 @@ export function Comments({
           <>
             {comment.body.trim() !== '' ? (
               <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
-                {renderCommentBody(comment.body, handleOf)}
+                {renderCommentBody(comment.body, handleOf, searchWords)}
               </p>
             ) : null}
             {attachments.length > 0 ? (
@@ -1636,7 +1652,7 @@ export function Comments({
                               state === 'confirmed' ? 'text-fg-2' : 'text-fg',
                             )}
                           >
-                            {renderCommentBody(comment.body, handleOf)}
+                            {renderCommentBody(comment.body, handleOf, searchWords)}
                             {editedMarker !== null ? (
                               <span className="ml-1.5 text-[11px] text-fg-3">{editedMarker}</span>
                             ) : null}

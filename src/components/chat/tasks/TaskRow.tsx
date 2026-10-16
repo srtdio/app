@@ -34,6 +34,7 @@ import {
   type TaskField,
   type TaskPriority,
 } from '@/lib/chat/tasks';
+import { highlightText, useSearchWords } from '@/components/ui/SearchHighlight';
 
 export const NOT_SAVED = 'Not saved';
 
@@ -323,6 +324,8 @@ export interface TaskRowProps {
 
 export function TaskRow(props: TaskRowProps): ReactElement {
   const { task, expanded, nowMs, timeZone } = props;
+  // A search jump to a task: the searched word coloured in its title.
+  const searchWords = useSearchWords();
   const closed = !isOpenStatus(task.status);
   const commitment = commitmentLine(task, props.nameOf, nowMs, timeZone);
   // The editor stays mounted through its collapse so it closes, not snaps.
@@ -371,7 +374,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
               task.status === 'rejected' && 'line-through',
             )}
           >
-            {task.title}
+            {highlightText(task.title, searchWords)}
           </span>
           {task.note !== null && task.note !== '' ? (
             <span className="text-[13px] leading-[17px] text-fg-2">{task.note}</span>

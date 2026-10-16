@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { highlightText, useSearchWords } from '@/components/ui/SearchHighlight';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -299,6 +300,8 @@ export function PostDetailPage({
   // stripped, preserving any sibling deep-link param.
   const [searchParams, setSearchParams] = useSearchParams();
   const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
+  // A search jump's words (?q=): coloured in the title and caption until the page is left.
+  const searchWords = useSearchWords();
   const handledCommentParam = useRef<string | null>(null);
   useEffect(() => {
     if (embedded) return;
@@ -383,7 +386,14 @@ export function PostDetailPage({
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const [role, setRole] = useState<string | null>(null);
-  const { options: memberOptions } = usePostMembers(workspaceId);
+  const {
+    options: memberOptions,
+    loading: membersLoading,
+    error: membersError,
+  } = usePostMembers(workspaceId);
+  // Only a members read that answered can say someone is no longer a member:
+  // until then an unlisted person shows no label (never a guessed "Former member").
+  const unlisted = !membersLoading && membersError === null ? FORMER_MEMBER : '';
   const { toasts, push, dismiss } = useToasts();
 
   const [showDetails, setShowDetails] = useState(false);
@@ -507,10 +517,10 @@ export function PostDetailPage({
       if (ownerUserId === null || ownerUserId === '')
         return { name: legacyName ?? 'Unassigned', avatarUrl: null };
       const option = memberById.get(ownerUserId);
-      if (option === undefined) return { name: legacyName ?? FORMER_MEMBER, avatarUrl: null };
+      if (option === undefined) return { name: legacyName ?? unlisted, avatarUrl: null };
       return { name: option.displayName, avatarUrl: option.avatarUrl };
     },
-    [memberById],
+    [memberById, unlisted],
   );
 
   // One presign setup for this page, built exactly as the Assets page does: the
@@ -649,9 +659,9 @@ export function PostDetailPage({
   const resolveAuthorName = useCallback(
     (authorUserId: string | null, legacyName: string | null): string => {
       if (authorUserId === null || authorUserId === '') return legacyName ?? FORMER_MEMBER;
-      return memberById.get(authorUserId)?.displayName ?? legacyName ?? FORMER_MEMBER;
+      return memberById.get(authorUserId)?.displayName ?? legacyName ?? unlisted;
     },
-    [memberById],
+    [memberById, unlisted],
   );
 
   // From the embedded annotations, build (a) the in-bounds current-version
@@ -1295,9 +1305,9 @@ export function PostDetailPage({
             />
           ) : (
             <h2 className="text-[28px] font-semibold leading-tight tracking-tight">
-              {titleHead !== '' ? `${titleHead} ` : ''}
+              {titleHead !== '' ? highlightText(`${titleHead} `, searchWords) : ''}
               <span className="whitespace-nowrap">
-                {titleLast}
+                {highlightText(titleLast, searchWords)}
                 <button
                   type="button"
                   aria-label="Edit title"
@@ -1312,7 +1322,9 @@ export function PostDetailPage({
             </h2>
           )
         ) : (
-          <h1 className="text-[28px] font-semibold leading-tight tracking-tight">{post.title}</h1>
+          <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+            {highlightText(post.title, searchWords)}
+          </h1>
         )}
 
         <button
