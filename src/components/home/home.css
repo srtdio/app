@@ -1259,6 +1259,16 @@ html:has(.home) body {
   opacity: 0.55;
   cursor: default;
 }
+.home .cal-out {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  color: var(--muted);
+  font: 400 15px var(--sans);
+  opacity: 0.45;
+  pointer-events: none;
+  user-select: none;
+}
 .home .cal-day[aria-current='date'] {
   border-color: var(--accent);
   opacity: 1;

@@ -1,9 +1,11 @@
 # Sorted
 
-> One place to chat, plan posts, share files and get approvals on record.
+> Free. One place for social media teams to chat, plan posts, share files and get approvals on record.
+
+Sorted is free: one workspace and 1 GB per account. More on request.
 
 ## Pages
 
-- [Home](https://srtd.io/): One place to chat, plan posts, share files and get approvals on record.
+- [Home](https://srtd.io/): Free. One place for social media teams to chat, plan posts, share files and get approvals on record.
 - [Privacy policy](https://srtd.io/legal/privacy-policy): Sorted's privacy policy.
 - [Terms and conditions](https://srtd.io/legal/terms-and-conditions): Sorted's terms and conditions.

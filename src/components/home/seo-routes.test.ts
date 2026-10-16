@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  FREE_LIMITS,
+  HOME_DESCRIPTION,
   ICON_LINKS,
   OG_IMAGE,
   PRERENDER_ATTR,
@@ -86,7 +88,25 @@ describe('seo routes', () => {
     expect(xml.match(/<lastmod>2026-10-16<\/lastmod>/g)).toHaveLength(3);
   });
 
-  it('puts JSON-LD on "/" only, with no offers, prices, ratings or reviews', () => {
+  it('describes "/" and /demo with the approved line, in every description tag', () => {
+    const D =
+      'Free. One place for social media teams to chat, plan posts, share files and get approvals on record.';
+    expect(HOME_DESCRIPTION).toBe(D);
+    for (const path of ['/', '/demo']) {
+      const route = SEO_ROUTES.find((r) => r.path === path);
+      expect(route?.description).toBe(D);
+      if (route === undefined) continue;
+      const head = routeHeadTags(route);
+      expect(head).toContain(`<meta name="description" content="${D}" />`);
+      expect(head).toContain(`<meta property="og:description" content="${D}" />`);
+      expect(head).toContain(`<meta name="twitter:description" content="${D}" />`);
+    }
+    for (const route of SEO_ROUTES.filter((r) => r.path.startsWith('/legal/'))) {
+      expect(route.description).not.toBe(D);
+    }
+  });
+
+  it('puts JSON-LD on "/" only: a free INR offer, no ratings or reviews', () => {
     for (const route of SEO_ROUTES) {
       expect(routeHeadTags(route).includes('application/ld+json')).toBe(route.path === '/');
     }
@@ -95,8 +115,17 @@ describe('seo routes', () => {
       'WebSite',
       'SoftwareApplication',
     ]);
-    const keys = homeJsonLd().flatMap((item) => Object.keys(item));
-    for (const banned of ['offers', 'price', 'aggregateRating', 'review']) {
+    const app = homeJsonLd()[2];
+    expect(app?.description).toBe(HOME_DESCRIPTION);
+    expect(app?.offers).toEqual({ '@type': 'Offer', price: '0', priceCurrency: 'INR' });
+    expect(homeJsonLd()[0]).not.toHaveProperty('offers');
+    expect(homeJsonLd()[1]).not.toHaveProperty('offers');
+    const keys: string[] = [];
+    JSON.stringify(homeJsonLd(), (key: string, value: unknown) => {
+      keys.push(key);
+      return value;
+    });
+    for (const banned of ['aggregateRating', 'review', 'reviews', 'reviewRating', 'ratingValue']) {
       expect(keys).not.toContain(banned);
     }
   });
@@ -148,8 +177,15 @@ describe('static files and shell', () => {
     expect(read('index.html')).not.toMatch(/pricing/);
   });
 
-  it('keeps llms.txt free of prices, plans and trials', () => {
-    expect(read('public/llms.txt')).not.toMatch(/price|pricing|plans|trial|free|₹|INR/i);
+  it('says Sorted is free in llms.txt, with its limits, and lists no prices, plans or trials', () => {
+    const llms = read('public/llms.txt');
+    expect(FREE_LIMITS).toBe(
+      'Sorted is free: one workspace and 1 GB per account. More on request.',
+    );
+    expect(llms).toContain(`> ${HOME_DESCRIPTION}\n\n${FREE_LIMITS}\n`);
+    expect(llms).toContain(`- [Home](${SITE_URL}/): ${HOME_DESCRIPTION}\n`);
+    expect(llms).not.toMatch(/price|pricing|plans|trial|₹|INR/i);
+    expect(llms).not.toMatch(/—/);
   });
 });
 

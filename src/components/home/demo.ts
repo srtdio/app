@@ -100,15 +100,22 @@ export function shiftMonth(month: CalendarDay, delta: number): CalendarDay {
   return { y: Math.floor(index / 12), m: (index % 12) + 1, d: 1 };
 }
 
-/** A month's days in Monday-first weeks; null pads the first and last week. */
-export function monthGrid(month: CalendarDay): (CalendarDay | null)[] {
+/** One calendar cell; `outside` marks a day of the previous or next month. */
+export interface GridCell {
+  day: CalendarDay;
+  outside: boolean;
+}
+
+/** Six Monday-first weeks (42 cells) holding `month`, with the adjacent months' days around it. */
+export const GRID_CELLS = 42;
+
+export function monthGrid(month: CalendarDay): GridCell[] {
   const first: CalendarDay = { y: month.y, m: month.m, d: 1 };
-  const lead = (weekday(first) + 6) % 7;
-  const length = new Date(Date.UTC(month.y, month.m, 0)).getUTCDate();
-  const cells: (CalendarDay | null)[] = Array.from({ length: lead }, () => null);
-  for (let d = 1; d <= length; d += 1) cells.push({ y: month.y, m: month.m, d });
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
+  const start = addDays(first, -((weekday(first) + 6) % 7));
+  return Array.from({ length: GRID_CELLS }, (_, i) => {
+    const day = addDays(start, i);
+    return { day, outside: day.m !== month.m };
+  });
 }
 
 export function monthTitle(month: CalendarDay): string {

@@ -1,4 +1,6 @@
-import { createElement } from 'react';
+// @vitest-environment jsdom
+import { act, createElement } from 'react';
+import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEMO } from './config';
@@ -59,9 +61,25 @@ describe('bookable dates (IST, weekdays, tomorrow to 30 days)', () => {
 
   it('the calendar is Monday first and spans the window', () => {
     const grid = monthGrid(day(2026, 10, 1));
-    // 1 Oct 2026 is a Thursday: three blanks (Mon to Wed) first.
-    expect(grid.slice(0, 4)).toEqual([null, null, null, day(2026, 10, 1)]);
-    expect(grid.length % 7).toBe(0);
+    // 1 Oct 2026 is a Thursday: Mon 28 to Wed 30 Sep lead, outside the month.
+    expect(grid.slice(0, 4)).toEqual([
+      { day: day(2026, 9, 28), outside: true },
+      { day: day(2026, 9, 29), outside: true },
+      { day: day(2026, 9, 30), outside: true },
+      { day: day(2026, 10, 1), outside: false },
+    ]);
+    expect(grid).toHaveLength(42);
+    // 31 Oct is a Saturday: Sun 1 Nov to Sun 8 Nov trail.
+    expect(grid.slice(33)).toEqual(
+      Array.from({ length: 9 }, (_, i) => ({
+        day: day(2026, 10 + (i === 0 ? 0 : 1), i === 0 ? 31 : i),
+        outside: i > 0,
+      })),
+    );
+    // Feb 2027 starts on a Monday (four weeks): two whole weeks of March trail.
+    const feb = monthGrid(day(2027, 2, 1));
+    expect(feb.filter((c) => !c.outside)).toHaveLength(28);
+    expect(feb.slice(28).every((c) => c.outside && c.day.m === 3)).toBe(true);
     expect(monthRange(today)).toEqual({ first: day(2026, 10, 1), last: day(2026, 11, 1) });
   });
 
@@ -140,5 +158,47 @@ describe('/demo server render', () => {
     expect(renderAt('2027-02-01T04:30:00Z')).toBe(october);
     expect(october).not.toMatch(/October 2026|data-day/);
     expect(october.match(/class="cal-pad"/g)).toHaveLength(42);
+    expect(october).not.toMatch(/cal-out/);
+  });
+});
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// After hydration every month fills all 42 cells: its own days as buttons, the
+// adjacent months' days as hidden, inert text, so no blank week row is left.
+describe('/demo calendar after hydration', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    ['a four-week month (Feb 2027)', '2027-02-01T04:30:00Z', 28],
+    ['a five-week month (Oct 2026)', '2026-10-14T04:30:00Z', 31],
+    ['a six-week month (Aug 2026)', '2026-07-31T04:30:00Z', 31],
+  ])('%s renders exactly 42 cells', async (_label, iso, days) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(iso));
+    const host = document.createElement('div');
+    host.innerHTML = renderToString(createElement(DemoPage));
+    let root: Root | undefined;
+    await act(async () => {
+      root = hydrateRoot(host, createElement(DemoPage));
+    });
+    const grid = host.querySelector('.cal-grid');
+    if (grid === null) throw new Error('no calendar grid');
+    const cells = [...grid.children].filter((el) => !el.classList.contains('cal-wd'));
+    expect(cells).toHaveLength(42);
+    const own = grid.querySelectorAll('button.cal-day');
+    expect(own).toHaveLength(days);
+    const outside = grid.querySelectorAll('.cal-out');
+    expect(outside).toHaveLength(42 - days);
+    for (const el of outside) {
+      expect(el.tagName).toBe('SPAN');
+      expect(el.getAttribute('aria-hidden')).toBe('true');
+      expect(el.hasAttribute('tabindex')).toBe(false);
+      expect(el.querySelector('button, a, [tabindex]')).toBeNull();
+    }
+    expect(grid.querySelectorAll('.cal-pad')).toHaveLength(0);
+    act(() => root?.unmount());
   });
 });
