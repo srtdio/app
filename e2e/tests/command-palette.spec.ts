@@ -22,7 +22,19 @@ async function openPalette(page: Page): Promise<void> {
     .filter({ visible: true })
     .first()
     .click();
-  await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Command palette' });
+  await expect(dialog).toBeVisible();
+  // Measure only once the enter transition (scale + fade) has settled.
+  await dialog.evaluate(
+    (el) =>
+      new Promise<void>((resolve) => {
+        const settled = (): void => {
+          if (el.className.includes('scale-100') && el.getAnimations().length === 0) resolve();
+          else requestAnimationFrame(settled);
+        };
+        settled();
+      }),
+  );
 }
 
 test.describe('command palette', () => {
@@ -295,7 +307,107 @@ test.describe('search result jump', () => {
       .locator('[data-palette-group="Posts"] [role="option"]', { hasText: 'Monday carousel' })
       .click();
     await expect(
-      page.locator('h1 mark[data-search-mark]', { hasText: /^carousel$/i }).first(),
+      page
+        .getByRole('heading', { name: /Monday carousel/ })
+        .locator('mark[data-search-mark]', { hasText: /^carousel$/i })
+        .first(),
     ).toBeVisible();
+  });
+});
+
+test.describe('search basics', () => {
+  test('one tap: the field has the cursor inside the tap itself (iOS keyboard)', async ({
+    page,
+  }) => {
+    await installHarnessNetwork(page);
+    await page.goto('/chat');
+    await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+    // Record what is focused when the tap's click finishes dispatching: iOS raises
+    // the keyboard only for a focus() that ran inside that handler.
+    await page.evaluate(() => {
+      window.addEventListener('click', () => {
+        const el = document.activeElement;
+        (window as unknown as { focusAtTap: string | null }).focusAtTap =
+          el?.getAttribute('aria-label') ?? null;
+      });
+    });
+    await page
+      .getByRole('button', { name: /^Search( ⌘K)?$/ })
+      .filter({ visible: true })
+      .first()
+      .tap();
+    const input = page.getByPlaceholder('Search anything');
+    await expect(input).toBeFocused();
+    expect(
+      await page.evaluate(() => (window as unknown as { focusAtTap: string | null }).focusAtTap),
+    ).toBe('Search this workspace');
+  });
+
+  test('Clear search empties the field and keeps the cursor there', async ({ page }) => {
+    await installHarnessNetwork(page);
+    await page.goto('/chat');
+    await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+    await openPalette(page);
+    const input = page.getByPlaceholder('Search anything');
+    const clear = page.getByRole('button', { name: 'Clear search' });
+    await expect(clear).toHaveCount(0);
+    await input.fill('crew');
+    await expect(clear).toBeVisible();
+    const box = await clear.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await expect(clear).toHaveText('');
+    await clear.tap();
+    await expect(input).toHaveValue('');
+    await expect(input).toBeFocused();
+    await expect(clear).toHaveCount(0);
+  });
+});
+
+test.describe('search basics on a laptop @desktop', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop only');
+
+  test('Ctrl/Cmd+K opens with the cursor ready, is ignored in other fields; Esc returns focus; Enter opens the first result', async ({
+    page,
+  }) => {
+    await installHarnessNetwork(page);
+    await page.goto('/chat');
+    await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+    const mod = await page.evaluate(() =>
+      /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent) ? 'Meta' : 'Control',
+    );
+    const dialog = page.getByRole('dialog', { name: 'Command palette' });
+
+    // Typing in another text field: the shortcut does nothing.
+    const other = page.getByPlaceholder('Search conversations');
+    await other.focus();
+    await page.keyboard.press(`${mod}+k`);
+    await expect(dialog).toHaveCount(0);
+    await expect(other).toBeFocused();
+
+    // From anywhere else it opens, the field ready to type in.
+    const from = page.getByRole('button', { name: 'Account menu' });
+    await from.focus();
+    await page.keyboard.press(`${mod}+k`);
+    await expect(dialog).toBeVisible();
+    const input = page.getByPlaceholder('Search anything');
+    await expect(input).toBeFocused();
+    await page.keyboard.type('crew');
+
+    // Esc closes and puts focus back where it was.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(from).toBeFocused();
+
+    // Enter opens the first (default selected) result.
+    await page.keyboard.press(`${mod}+k`);
+    await page.keyboard.type('crew');
+    const first = page.locator('[role="option"]').first();
+    await expect(first).toHaveAttribute('aria-selected', 'true');
+    const text = (await first.textContent()) ?? '';
+    await page.keyboard.press('Enter');
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(/channel=/);
+    expect(text).toMatch(/crew/i);
   });
 });

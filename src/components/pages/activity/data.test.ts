@@ -335,8 +335,18 @@ describe('resolveBodyMentions', () => {
     expect(resolveBodyMentions(`hey @[${id1}] welcome`, nameOf)).toBe('hey @Alice welcome');
   });
 
-  it('renders @Former member when nameOf returns null', () => {
-    expect(resolveBodyMentions(`@[${id2}] ping`, () => null)).toBe(`@${FORMER_MEMBER} ping`);
+  it('renders @Former member only when a read confirmed the id is not a current member', () => {
+    expect(
+      resolveBodyMentions(
+        `@[${id2}] ping`,
+        () => null,
+        (id) => id === id2,
+      ),
+    ).toBe(`@${FORMER_MEMBER} ping`);
+  });
+
+  it('an id not loaded yet (or a failed read) renders nothing extra, never Former member', () => {
+    expect(resolveBodyMentions(`@[${id2}] ping`, () => null)).toBe(' ping');
   });
 
   it('resolves multiple tokens and preserves surrounding text verbatim', () => {
@@ -734,6 +744,26 @@ describe('fetchActivityEntries enrichment', () => {
     if (!res.ok) throw new Error('load failed');
     expect(res.data[0]?.actorName).toBe(FORMER_MEMBER);
     expect(res.data[1]?.actorName).toBe('Nia Roy');
+  });
+
+  it('a current member whose name read failed is never "Former member" (actor or mention)', async () => {
+    const MEMBER = '44444444-4444-4444-8444-444444444444';
+    for (const broken of ['users', 'workspace_members'] as const) {
+      resetMentionNames();
+      const client = fakeClient({
+        inbox_entries: ok([
+          inboxRow({ id: 'e', event_type: 'comment', payload: { comment_id: 'c1' } }),
+        ]),
+        comments: ok([{ id: 'c1', author_user_id: MEMBER, body: `cc @[${MEMBER}]` }]),
+        users: ok([{ id: MEMBER, display_name: 'Mo Member', avatar_url: null }]),
+        [broken]: { data: null, error: { message: 'down' } },
+      });
+      const res = await fetchActivityEntries(client, 'w1');
+      if (!res.ok) throw new Error('load failed');
+      const entry = res.data[0] ?? item({});
+      expect(JSON.stringify(entry)).not.toContain(FORMER_MEMBER);
+      expect(entry.body).not.toContain('@[');
+    }
   });
 
   it('an on-behalf approval names both people: "{actor} approved for {client}"', async () => {

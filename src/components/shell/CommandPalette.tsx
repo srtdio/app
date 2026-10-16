@@ -4,9 +4,10 @@ import type {
   MouseEvent as ReactMouseEvent,
   ReactElement,
   ReactNode,
+  RefObject,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconSearch } from '@/components/ui/icons';
+import { IconSearch, IconX } from '@/components/ui/icons';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
@@ -59,9 +60,17 @@ import {
   type WorkspaceKind,
 } from '@/lib/search/workspace-search';
 
+/** Why the palette closed: a picked result moves on; anything else returns focus. */
+export type PaletteCloseReason = 'dismiss' | 'pick';
+
 interface CommandPaletteProps {
   open: boolean;
-  onClose: () => void;
+  onClose: (reason: PaletteCloseReason) => void;
+  /**
+   * The search field. The opener focuses it synchronously inside its own tap
+   * (iOS raises the keyboard only then), so it must exist on the open render.
+   */
+  inputRef?: RefObject<HTMLInputElement>;
   /** The active workspace: search runs only inside it. */
   workspaceId: string | null;
   /** The active workspace's short key, for post and brief links. */
@@ -450,12 +459,14 @@ const EXIT_MS = DUR_BASE_MS;
 export function CommandPalette({
   open,
   onClose,
+  inputRef: givenInputRef,
   workspaceId,
   workspaceKey,
   userId,
 }: CommandPaletteProps) {
   const navigate = useNavigate();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const ownInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = givenInputRef ?? ownInputRef;
   const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -553,13 +564,14 @@ export function CommandPalette({
   );
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 
+  // A fresh search on every open. The opener already focused the field inside
+  // its tap; this focus only covers an opener that could not (a no-op otherwise).
   useEffect(() => {
-    if (open) {
-      setQuery('');
-      setActive(0);
-      inputRef.current?.focus();
-    }
-  }, [open]);
+    // Both ways: a reopen during the close fade never shows the old text.
+    setQuery('');
+    setActive(0);
+    if (open && document.activeElement !== inputRef.current) inputRef.current?.focus();
+  }, [open, inputRef]);
 
   useEffect(() => {
     setActive(0);
@@ -571,12 +583,14 @@ export function CommandPalette({
     listRef.current?.querySelector('[data-active]')?.scrollIntoView?.({ block: 'nearest' });
   }, [active, flat]);
 
-  if (!rendered) {
+  // Open renders at once (not after an effect), so the opener's synchronous
+  // focus() finds the field in the same tap.
+  if (!open && !rendered) {
     return null;
   }
 
   function openTarget(target: HitTarget): void {
-    onClose();
+    onClose('pick');
     if ('path' in target) {
       navigate(target.path);
       return;
@@ -611,7 +625,7 @@ export function CommandPalette({
   function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
     if (event.key === 'Escape') {
       event.preventDefault();
-      onClose();
+      onClose('dismiss');
     } else if (event.key === 'ArrowDown') {
       event.preventDefault();
       setActive((value) => Math.min(value + 1, flat.length - 1));
@@ -626,7 +640,7 @@ export function CommandPalette({
 
   function onOverlayClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (event.target === event.currentTarget) {
-      onClose();
+      onClose('dismiss');
     }
   }
 
@@ -662,14 +676,31 @@ export function CommandPalette({
             onKeyDown={onKeyDown}
             placeholder="Search anything"
             aria-label="Search this workspace"
+            enterKeyHint="search"
             className="flex-1 min-w-0 h-12 bg-transparent outline-none text-base sm:text-sm placeholder:text-fg-3"
           />
+          {query !== '' ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              data-palette-clear=""
+              // The field keeps focus (and the phone keeps its keyboard).
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setQuery('');
+                inputRef.current?.focus({ preventScroll: true });
+              }}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-3 hover:bg-panel-2 hover:text-fg"
+            >
+              <IconX size={16} />
+            </button>
+          ) : null}
           <kbd className="hidden sm:inline text-[11px] text-fg-3 border border-border rounded px-1.5 py-0.5">
             Esc
           </kbd>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => onClose('dismiss')}
             className="sm:hidden min-h-[44px] min-w-[44px] text-sm font-medium text-accent"
           >
             Cancel

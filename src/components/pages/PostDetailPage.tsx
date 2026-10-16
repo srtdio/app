@@ -1313,9 +1313,9 @@ export function PostDetailPage({
             />
           ) : (
             <h2 className="text-[28px] font-semibold leading-tight tracking-tight">
-              {titleHead !== '' ? `${titleHead} ` : ''}
+              {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
               <span className="whitespace-nowrap">
-                {titleLast}
+                <Highlight text={titleLast} />
                 <button
                   type="button"
                   aria-label="Edit title"

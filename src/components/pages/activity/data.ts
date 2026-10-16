@@ -30,14 +30,22 @@ const MENTION_TOKEN = /@\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 
 /**
  * Resolve every `@[<uuid>]` mention token in a comment body to a plain `@handle`
- * label, exactly as the comment thread does. An id `nameOf` does not resolve to
- * a current member reads "@Former member"; all surrounding text is returned
- * verbatim. Plain text only: no React nodes, no JSX, no styling.
+ * label, exactly as the comment thread does. An id `nameOf` does not resolve
+ * reads "@Former member" only when `isFormer` says a successful read confirmed
+ * they are not a current member; otherwise (not loaded yet, or a failed read)
+ * it renders nothing extra. All surrounding text is returned verbatim. Plain
+ * text only: no React nodes, no JSX, no styling.
  */
-export function resolveBodyMentions(body: string, nameOf: (id: string) => string | null): string {
-  return body.replace(MENTION_TOKEN, (_match, id: string) => {
-    const name = nameOf(id.toLowerCase());
-    return `@${name ?? FORMER_MEMBER}`;
+export function resolveBodyMentions(
+  body: string,
+  nameOf: (id: string) => string | null,
+  isFormer: (id: string) => boolean = () => false,
+): string {
+  return body.replace(MENTION_TOKEN, (_match, raw: string) => {
+    const id = raw.toLowerCase();
+    const name = nameOf(id);
+    if (name !== null) return `@${name}`;
+    return isFormer(id) ? `@${FORMER_MEMBER}` : '';
   });
 }
 
@@ -183,7 +191,7 @@ export interface ActivityItem {
   welcome?: WelcomeInfo | null;
   /** stage_change approvals only: the client approved for (payload.on_behalf_of). */
   onBehalfOfId?: string | null;
-  /** The resolved full name for onBehalfOfId ("Former member" when gone). */
+  /** The resolved full name for onBehalfOfId ("Former member" once a read confirms they left). */
   onBehalfOfName?: string | null;
 }
 
@@ -1233,8 +1241,9 @@ export async function fetchActivityEntries(
 
   // WAVE 2: resolve every person the page names (comment authors, actorId,
   // on-behalf clients and every mentioned id) in one batched read through the
-  // shared name registry: users + workspace_members, one .in() each. A person
-  // without a current membership reads "Former member".
+  // shared name registry: users + workspace_members, one .in() each. A person a
+  // successful read found without a current membership reads "Former member";
+  // anyone not resolved (a failed read) names nobody, never "Former member".
   const userIds = unique([
     ...items
       .flatMap((item) =>

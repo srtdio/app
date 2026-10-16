@@ -31,7 +31,15 @@ import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
 import { newMessageId } from '@/lib/chat/message-id';
-import { mentionTargets, type NameOf } from '@/lib/chat/mentions';
+import {
+  isFormerMember,
+  mentionIds,
+  mentionTargets,
+  unresolvedPeopleIds,
+  withFormer,
+  type NameOf,
+} from '@/lib/chat/mentions';
+import { FORMER_MEMBER, personName, resolvePeople } from '@/lib/people-names';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import {
@@ -323,6 +331,40 @@ export function createBellActions(deps: BellActionDeps): BellActions {
   };
 }
 
+/** Every person a bell page names: actors, message senders and mentioned ids. Pure. */
+export function bellPeopleIds(data: BellData): string[] {
+  const bodies = [
+    ...[...data.messages.values()].map((m) => m.body ?? ''),
+    ...data.scheduled.map((r) => r.body ?? ''),
+    ...[...data.failed.values()].map((r) => r.body ?? ''),
+  ];
+  return [
+    ...new Set([
+      ...data.entries.flatMap((e) => (e.actorId !== null ? [e.actorId] : [])),
+      ...[...data.messages.values()].flatMap((m) =>
+        m.senderUserId != null ? [m.senderUserId] : [],
+      ),
+      ...bodies.flatMap((b) => mentionIds(b)),
+    ]),
+  ];
+}
+
+/**
+ * The bell's name lookup: "Former member" only for someone a successful read
+ * confirmed is not a current member; a current member's full name once read,
+ * else the open chat's loaded name; undefined while nothing is known, so a row
+ * names nobody yet (never "Former member" early). Pure over the registry.
+ */
+export function bellNameOf(
+  workspaceId: string | null,
+  chatNameOf: (userId: string) => string | undefined,
+): NameOf {
+  return withFormer((id) => {
+    if (isFormerMember(workspaceId, id)) return FORMER_MEMBER;
+    return personName(workspaceId, id) ?? chatNameOf(id);
+  }, workspaceId);
+}
+
 export function BellProvider(props: {
   workspaceId: string;
   currentUserId: string;
@@ -478,9 +520,26 @@ export function BellProvider(props: {
     (channelId: string | null): string => channelOf(channelId)?.title ?? 'Chat',
     [channelOf],
   );
-  const nameOf = useCallback<NameOf>(
-    (id) => dataRef.current.names.get(id) ?? nameOfRef.current(id),
-    [],
+  // Names through the shared people helper: one batched read (users +
+  // workspace_members) for the ids the bell shows that no read has resolved
+  // yet, then the registry. A tick re-renders the rows once it lands.
+  const [peopleTick, setPeopleTick] = useState(0);
+  useEffect(() => {
+    const ids = bellPeopleIds(data);
+    if (unresolvedPeopleIds(workspaceId, ids).length === 0) return;
+    let live = true;
+    void resolvePeople(supabase, workspaceId, ids).then(() => {
+      if (live) setPeopleTick((n) => n + 1);
+    });
+    return () => {
+      live = false;
+    };
+  }, [data, workspaceId]);
+  const nameOf = useMemo<NameOf>(
+    () => bellNameOf(workspaceId, (id) => nameOfRef.current(id)),
+    // peopleTick: a landed read is a new lookup, so every row re-reads its names.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspaceId, peopleTick],
   );
 
   const failed = useCallback(
