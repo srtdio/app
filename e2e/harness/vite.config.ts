@@ -20,6 +20,8 @@ export default defineConfig({
   // path themselves (see home-pages.spec.ts), so nothing is fetched for real.
   define: {
     'import.meta.env.VITE_SITE_MEDIA_URL': JSON.stringify('http://localhost:4178/site-media'),
+    // Link previews: e2e/fixtures/link-previews.ts stubs this Worker host.
+    'import.meta.env.VITE_LINK_PREVIEW_URL': JSON.stringify('https://link-preview.harness.test'),
   },
   resolve: {
     // Harness-only fixture aliases. Order matters: the exact-match stubs come

@@ -55,9 +55,11 @@ import {
   classify,
   currentOrigin,
   displayUrl,
+  firstExternalUrl,
   tokenize,
 } from '@/lib/chat/message-links';
 import { Avatar } from '@/components/ui/Avatar';
+import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
@@ -117,6 +119,7 @@ import {
   TYPING_ROW_TYPE,
   useChatLayout,
   type ChatLayout,
+  type ChatSize,
 } from '@/components/chat/chat-type';
 import {
   createSwipeReplyController,
@@ -1487,6 +1490,15 @@ export function tombstoneClass(shape: BubbleShape): string {
   );
 }
 
+/**
+ * A link card in a bubble sits 4px inside the bubble edge (the prototype), so it
+ * pulls out of BUBBLE_PAD; its 264px width widens a short message's bubble.
+ */
+const LINK_CARD_INSET: ChatSize = {
+  touch: '-mx-2 -mt-1 mb-1.5 w-[264px] max-w-[calc(100%+16px)]',
+  laptop: '-ml-[5px] -mr-[3px] -mt-[2px] mb-1.5 w-[264px] max-w-[calc(100%+8px)]',
+};
+
 /** Cancel the native default (the touch contextmenu on rows). */
 function preventDefault(event: { preventDefault: () => void }): void {
   event.preventDefault();
@@ -2141,6 +2153,18 @@ export function MessageBubble(props: {
       {spacer}
     </p>
   );
+  // Only the first external link gets a card (WhatsApp rule), above the text.
+  // Links to this app's own pages keep their in-app link and get no card.
+  const cardUrl = hasBody ? firstExternalUrl(message.body) : null;
+  const linkCard =
+    cardUrl !== null ? (
+      <LinkPreviewCard
+        key={cardUrl}
+        url={cardUrl}
+        tone={mine ? 'out' : 'in'}
+        className={sized(LINK_CARD_INSET, layout)}
+      />
+    ) : null;
   return (
     <li
       ref={props.rowRef}
@@ -2261,7 +2285,10 @@ export function MessageBubble(props: {
                 />
               ) : null}
               {textOnly ? (
-                body
+                <>
+                  {linkCard}
+                  {body}
+                </>
               ) : voiceOnly ? (
                 <MessageAttachments
                   attachments={message.attachments}
@@ -2301,6 +2328,7 @@ export function MessageBubble(props: {
                 </>
               ) : (
                 <>
+                  {hasBody ? linkCard : null}
                   {hasBody ? body : null}
                   <MessageAttachments
                     attachments={message.attachments}

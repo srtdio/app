@@ -83,7 +83,14 @@ import type { PostCardFields, Result } from '@srtdio/posts';
 // Deep import: the package index is outside this change; the read lives beside readPostsByIds.
 import { readPostIdsByNumbers } from '../../../packages/posts/src/reads';
 import { readBriefIdsByNumbers } from '@/lib/chat/briefs';
-import { APP_ENTITY_ROUTES, classify, currentOrigin, tokenize } from '@/lib/chat/message-links';
+import {
+  APP_ENTITY_ROUTES,
+  classify,
+  currentOrigin,
+  firstExternalUrl,
+  tokenize,
+} from '@/lib/chat/message-links';
+import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { clearDraft, EMPTY_DRAFT, getDraft, setDraft, type DraftFile } from '@/lib/chat/drafts';
@@ -215,6 +222,24 @@ export interface ComposerProps {
   mentions?: ComposerMentions | undefined;
   /** The placeholder in place of the chat's ("Reply in thread" in a thread view); editing keeps its own. */
   placeholder?: string | undefined;
+}
+
+/** The draft link card appears once typing has paused this long. */
+export const DRAFT_CARD_DEBOUNCE_MS = 600;
+
+/**
+ * The link the draft card previews: the draft's first external link, unless an
+ * edit is open or X dismissed that same link for this draft. Pure.
+ */
+export function draftCardUrlFor(
+  text: string,
+  dismissed: string | null,
+  editing: boolean,
+  origin: string | null = currentOrigin(),
+): string | null {
+  if (editing) return null;
+  const url = firstExternalUrl(text, origin);
+  return url !== null && url !== dismissed ? url : null;
 }
 
 /** What the composer needs for @ mentions. */
@@ -1044,6 +1069,16 @@ export function Composer(props: ComposerProps): ReactElement {
   const gone = props.mentions?.gone;
   const [restored] = useState(() => composerBodyFor(initial, namesReady, nameOf, gone));
   const [text, setText] = useState(restored.text);
+  // The draft's link card: shown once typing pauses (DRAFT_CARD_DEBOUNCE_MS).
+  // X dismisses it for this draft only; the link still sends as text. The
+  // choice is not stored with the message (no field carries it), so the sent
+  // bubble shows its card as usual.
+  const [cardText, setCardText] = useState(restored.text);
+  const [dismissedCardUrl, setDismissedCardUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setCardText(text), DRAFT_CARD_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
   const [picks, setPicks] = useState<MentionPick[]>(restored.picks);
   const [held, setHeld] = useState(restored.held);
   const [pending, setPending] = useState<Pending[]>(initial.pendingFiles);
@@ -1459,6 +1494,8 @@ export function Composer(props: ComposerProps): ReactElement {
       libraryDrafts.delete(channelId);
     }
     setText('');
+    setCardText('');
+    setDismissedCardUrl(null);
     setPicks([]);
     setCaret(0);
     setPending([]);
@@ -1808,6 +1845,8 @@ export function Composer(props: ComposerProps): ReactElement {
       />
     ) : null;
 
+  const draftCardUrl = draftCardUrlFor(cardText, dismissedCardUrl, editing !== undefined);
+
   return (
     <>
       {schedule !== null ? (
@@ -1927,6 +1966,15 @@ export function Composer(props: ComposerProps): ReactElement {
               />
             ))}
           </ul>
+        ) : null}
+
+        {draftCardUrl !== null ? (
+          <LinkPreviewCard
+            key={draftCardUrl}
+            url={draftCardUrl}
+            size="draft"
+            onRemove={() => setDismissedCardUrl(draftCardUrl)}
+          />
         ) : null}
 
         {scheduling ? (

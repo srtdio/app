@@ -96,3 +96,27 @@ export function currentOrigin(): string | null {
 export function displayUrl(url: string): string {
   return url.replace(/^https?:\/\//i, '');
 }
+
+/**
+ * The one link in a body that gets a preview card (WhatsApp rule): the first
+ * external url. Links to this app's own pages (post/brief refs and any other
+ * same-origin url) are skipped; they keep their in-app behaviour. Pure.
+ */
+export function firstExternalUrl(
+  body: string,
+  appOrigin: string | null = currentOrigin(),
+  routes: EntityRoutes = APP_ENTITY_ROUTES,
+): string | null {
+  for (const segment of tokenize(body)) {
+    if (segment.kind !== 'url') continue;
+    if (classify(segment.url, appOrigin, routes).kind !== 'external') continue;
+    let sameOrigin = false;
+    try {
+      sameOrigin = appOrigin !== null && new URL(segment.url).origin === appOrigin;
+    } catch {
+      continue;
+    }
+    if (!sameOrigin) return segment.url;
+  }
+  return null;
+}

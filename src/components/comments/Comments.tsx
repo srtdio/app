@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
+import { firstExternalUrl } from '@/lib/chat/message-links';
 import { glowById, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { IconCheck, IconCopy, IconMore } from '@/components/ui/icons';
 import { MenuPopover } from '@/components/shell/MenuPopover';
@@ -258,6 +260,7 @@ function pushBodyText(
   text: string,
   keyBase: string,
   words: readonly string[],
+  card: { url: string | null },
 ): void {
   // A search jump's words (the shared highlight); without them the runs stay plain strings.
   const plain = (run: string): ReactNode =>
@@ -278,7 +281,10 @@ function pushBodyText(
     // The raw URL never reaches the screen: LinkButton labels it with the domain
     // only. align-middle keeps the inline-flex button sitting on the text run's
     // baseline; it renders nothing at all when the token is not a usable URL.
-    nodes.push(<LinkButton key={`${keyBase}-u${i}`} url={href} className="align-middle" />);
+    // The link that gets the preview card (CommentLinkCard) is shown there
+    // instead, once; every other link stays a LinkButton.
+    if (card.url !== null && href === card.url) card.url = null;
+    else nodes.push(<LinkButton key={`${keyBase}-u${i}`} url={href} className="align-middle" />);
     if (suffix !== '') nodes.push(suffix);
     i += 1;
     last = start + m[0].length;
@@ -290,13 +296,15 @@ export function renderCommentBody(
   body: string,
   nameOf: (id: string) => string | null,
   words: readonly string[] = [],
+  cardUrl: string | null = null,
 ): ReactNode[] {
   const nodes: ReactNode[] = [];
+  const card = { url: cardUrl };
   let last = 0;
   let key = 0;
   for (const match of body.matchAll(MENTION_TOKEN)) {
     const start = match.index ?? 0;
-    if (start > last) pushBodyText(nodes, body.slice(last, start), `t${key}`, words);
+    if (start > last) pushBodyText(nodes, body.slice(last, start), `t${key}`, words, card);
     const id = (match[1] ?? '').toLowerCase();
     const label = mentionDisplay(nameOf(id));
     nodes.push(
@@ -307,8 +315,20 @@ export function renderCommentBody(
     key += 1;
     last = start + match[0].length;
   }
-  if (last < body.length) pushBodyText(nodes, body.slice(last), `t${key}`, words);
+  if (last < body.length) pushBodyText(nodes, body.slice(last), `t${key}`, words, card);
   return nodes;
+}
+
+/**
+ * The preview card for a comment's first external link (WhatsApp rule), below
+ * the text. Comments carry no per-comment flag, so there is no X: the card
+ * always shows. Links to this app's own pages get none.
+ */
+export function CommentLinkCard(props: { body: string }): ReactNode {
+  const url = firstExternalUrl(props.body);
+  return url !== null ? (
+    <LinkPreviewCard key={url} url={url} className="mt-1.5 w-full max-w-[360px]" />
+  ) : null;
 }
 
 /** The tombstone line for a soft-deleted root. Author-only delete means the
@@ -1430,9 +1450,15 @@ export function Comments({
           <>
             {comment.body.trim() !== '' ? (
               <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
-                {renderCommentBody(comment.body, handleOf, searchWords)}
+                {renderCommentBody(
+                  comment.body,
+                  handleOf,
+                  searchWords,
+                  firstExternalUrl(comment.body),
+                )}
               </p>
             ) : null}
+            <CommentLinkCard body={comment.body} />
             {attachments.length > 0 ? (
               <MessageAttachments
                 attachments={attachments}
@@ -1661,11 +1687,17 @@ export function Comments({
                               state === 'confirmed' ? 'text-fg-2' : 'text-fg',
                             )}
                           >
-                            {renderCommentBody(comment.body, handleOf, searchWords)}
+                            {renderCommentBody(
+                              comment.body,
+                              handleOf,
+                              searchWords,
+                              firstExternalUrl(comment.body),
+                            )}
                             {editedMarker !== null ? (
                               <span className="ml-1.5 text-[11px] text-fg-3">{editedMarker}</span>
                             ) : null}
                           </p>
+                          <CommentLinkCard body={comment.body} />
                           {attachments.length > 0 ? (
                             <MessageAttachments
                               attachments={attachments}
