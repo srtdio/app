@@ -18,6 +18,8 @@ interface SheetProps {
    * fills it. Phone and the default (content height) are unchanged.
    */
   fixedHeight?: boolean;
+  /** At lg+ the box widens to 960px so a side column fits beside the form. */
+  wide?: boolean;
 }
 
 // Exit transition length; mirrors --dur-base so the closing phase stays mounted
@@ -26,7 +28,7 @@ interface SheetProps {
 // so unmount always happens.
 const EXIT_MS = DUR_BASE_MS;
 
-export function Sheet({ open, onClose, title, children, footer, fixedHeight }: SheetProps) {
+export function Sheet({ open, onClose, title, children, footer, fixedHeight, wide }: SheetProps) {
   // `rendered` keeps the panel mounted through its exit; `entered` drives the
   // enter/exit transition (false = offscreen/faded, true = resting).
   const [rendered, setRendered] = useState(open);
@@ -82,6 +84,7 @@ export function Sheet({ open, onClose, title, children, footer, fixedHeight }: S
           // and crossfades. No X, no rotate.
           'flex w-full max-h-[90vh] flex-col overflow-hidden rounded-t-2xl border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
           fixedHeight === true && 'sm:h-[min(640px,84vh)]',
+          wide === true && 'lg:w-[960px]',
           entered
             ? 'translate-y-0 opacity-100 duration-slow ease-enter sm:duration-base'
             : 'translate-y-full opacity-100 duration-base ease-exit sm:translate-y-2 sm:opacity-0',

@@ -19,6 +19,13 @@ import { Tag, isTagDot } from '@/components/ui/Tag';
 import { IconPlay } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { useThumbnail } from '@/components/media/use-thumbnail';
+import {
+  CHAT_SHEET_FRAME_MAX_HEIGHT,
+  frameMediaClass,
+  galleryItemMedia,
+  PlatformFrame,
+} from '@/components/media/PlatformFrame';
+import { frameFor, type Frame } from '@/lib/platform-specs';
 import { SlotComposer } from '@/components/comments/SlotComposer';
 import type { CheckpointPoint } from '@/components/comments/SlotComposer';
 import { runCreateCommentBatch } from '@/components/comments/Comments';
@@ -67,9 +74,36 @@ export type SheetMode =
 
 /**
  * The strip: a 4:5 rail bled to the sheet's edges (the negative margins undo the
- * sheet body's padding; auto width then spans them). The skeleton is the same box.
+ * sheet body's padding; auto width then spans them), for a format with no
+ * platform frame. The skeleton is the same box.
  */
 export const STRIP_BOX = 'relative -mx-[18px] -mt-4 aspect-[4/5] overflow-hidden bg-panel-3';
+
+/** The bled rail a platform frame sits centred in. */
+const STRIP_RAIL = 'relative -mx-[18px] -mt-4 flex justify-center bg-panel-3';
+
+/**
+ * The strip's platform frame: the post's platform + format and its first slide
+ * (stored size when known), so it matches the post page. Pure.
+ */
+export function stripFrame(
+  platform: string,
+  format: string,
+  first: GalleryItem | undefined,
+): Frame | null {
+  return frameFor(
+    platform,
+    format,
+    first === undefined
+      ? null
+      : galleryItemMedia(
+          first,
+          first.width !== null && first.height !== null
+            ? { w: first.width, h: first.height }
+            : null,
+        ),
+  );
+}
 
 /** A small pill laid over a slide. */
 const STRIP_PILL =
@@ -114,9 +148,12 @@ function StripSlide(props: {
   index: number;
   cache: PresignCache;
   presignEnabled: boolean;
+  /** The platform frame the slide fills; null keeps the 4:5 cover crop. */
+  frame: Frame | null;
   onOpen: (index: number) => void;
 }): ReactElement {
-  const { item, index } = props;
+  const { item, index, frame } = props;
+  const fit = frame !== null ? frameMediaClass(frame) : 'h-full w-full object-cover';
   const thumb = useThumbnail<HTMLButtonElement>({
     assetVersionId: item.assetVersionId,
     cache: props.cache,
@@ -131,7 +168,10 @@ function StripSlide(props: {
       data-strip-slide=""
       aria-label={`Open slide ${index + 1}`}
       onClick={() => props.onOpen(index)}
-      className="relative h-full w-full shrink-0 snap-center overflow-hidden bg-panel-3"
+      className={cn(
+        'relative h-full w-full shrink-0 snap-center overflow-hidden',
+        frame === null && 'bg-panel-3',
+      )}
     >
       {ready && video ? (
         <video
@@ -140,7 +180,7 @@ function StripSlide(props: {
           muted
           playsInline
           onError={thumb.onError}
-          className="pointer-events-none h-full w-full object-cover"
+          className={cn('pointer-events-none', fit)}
         />
       ) : ready ? (
         <img
@@ -148,7 +188,7 @@ function StripSlide(props: {
           alt=""
           draggable={false}
           onError={thumb.onError}
-          className="h-full w-full object-cover"
+          className={fit}
         />
       ) : null}
       {video ? (
@@ -173,6 +213,7 @@ function StripSlide(props: {
 export function PostSheetMedia(props: {
   gallery: SheetGallery;
   mediaCount: number;
+  platform: string;
   format: string;
   active: number;
   cache: PresignCache;
@@ -183,14 +224,30 @@ export function PostSheetMedia(props: {
   const { gallery } = props;
   if (gallery.status === 'loading') {
     if (props.mediaCount <= 0) return null;
-    return <div data-strip-skeleton="" className={cn(STRIP_BOX, 'animate-pulse')} />;
+    const pending = stripFrame(props.platform, props.format, undefined);
+    return pending !== null ? (
+      <div data-strip-skeleton="" className={STRIP_RAIL}>
+        <PlatformFrame
+          frame={pending}
+          maxHeight={CHAT_SHEET_FRAME_MAX_HEIGHT}
+          bordered={false}
+          empty
+          className="animate-pulse"
+        >
+          {null}
+        </PlatformFrame>
+      </div>
+    ) : (
+      <div data-strip-skeleton="" className={cn(STRIP_BOX, 'animate-pulse')} />
+    );
   }
   const items = gallery.items;
   if (items.length === 0) return null;
   const count = items.length;
   const reel = reelLabel(props.format, items);
-  return (
-    <div data-strip="" className={STRIP_BOX}>
+  const frame = stripFrame(props.platform, props.format, items[0]);
+  const strip = (
+    <>
       <div
         onScroll={props.onScroll}
         aria-roledescription="carousel"
@@ -204,6 +261,7 @@ export function PostSheetMedia(props: {
             index={index}
             cache={props.cache}
             presignEnabled={props.presignEnabled}
+            frame={frame}
             onOpen={props.onOpen}
           />
         ))}
@@ -238,6 +296,17 @@ export function PostSheetMedia(props: {
           ))}
         </span>
       ) : null}
+    </>
+  );
+  return frame !== null ? (
+    <div data-strip="" className={STRIP_RAIL}>
+      <PlatformFrame frame={frame} maxHeight={CHAT_SHEET_FRAME_MAX_HEIGHT} bordered={false}>
+        {strip}
+      </PlatformFrame>
+    </div>
+  ) : (
+    <div data-strip="" className={STRIP_BOX}>
+      {strip}
     </div>
   );
 }
@@ -608,6 +677,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
               <PostSheetMedia
                 gallery={gallery}
                 mediaCount={post.mediaCount}
+                platform={post.platform}
                 format={post.format}
                 active={active}
                 cache={props.cache}

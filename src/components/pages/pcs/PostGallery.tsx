@@ -12,9 +12,9 @@ import { FileTile, storedThumbnailMeta } from '@/components/ui/FileTile';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { cn } from '@/lib/cn';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
-import { frameFor, PLATFORM_SPECS, type Frame, type FrameMedia } from '@/lib/platform-specs';
+import { frameFor, PLATFORM_SPECS, type Frame } from '@/lib/platform-specs';
+import { frameCutText, galleryItemMedia, PlatformFrame } from '@/components/media/PlatformFrame';
 import {
-  cutPercent,
   frameMap,
   frameToOriginal,
   IDENTITY_MAP,
@@ -305,15 +305,11 @@ export function galleryFrame(
   measured: MeasuredDimensions,
 ): Frame | null {
   const first = items[0];
-  const media: FrameMedia | null =
-    first === undefined
-      ? null
-      : {
-          kind: isImage(first) ? 'image' : isVideo(first) ? 'video' : 'other',
-          w: itemDims(first, measured)?.w ?? null,
-          h: itemDims(first, measured)?.h ?? null,
-        };
-  return frameFor(platform, format, media);
+  return frameFor(
+    platform,
+    format,
+    first === undefined ? null : galleryItemMedia(first, itemDims(first, measured)),
+  );
 }
 
 /** The frame's ratio (w / h) alone, or null. Pure. */
@@ -341,21 +337,10 @@ export function frameKindNote(platform: string, items: readonly GalleryItem[]): 
   return PLATFORM_SPECS[platform].imageUnsupported ?? null;
 }
 
-/**
- * The fixed frame box: full column width at the frame ratio, never taller than
- * the solo cap (a 9:16 frame narrows instead). Every slide uses it. Pure.
- */
-export function framedTileStyle(ratio: number): CSSProperties {
-  return {
-    width: `min(100%, calc(${SOLO_TILE_MAX_HEIGHT} * ${ratio}))`,
-    aspectRatio: String(ratio),
-  };
-}
-
 /** The line under the frame when it cuts the slide, or null when it fits. */
 export function frameCutLine(map: FrameMap, platformLabel: string): string | null {
-  const pct = cutPercent(map);
-  return pct > 0 ? `${pct}% outside the ${platformLabel} frame. Tap to see full image.` : null;
+  const text = frameCutText(map, platformLabel);
+  return text === null ? null : `${text} Tap to see full image.`;
 }
 
 const EDGE_SHIFT: Record<string, string> = {
@@ -626,7 +611,6 @@ export function galleryView({
     ) : null;
 
   if (frame !== null) {
-    const frameRatio = frame.ratio;
     // The platform frame: one fixed box for every slide, the media filling it
     // with the platform's centre crop. Slides swipe inside the same frame
     // (native X scrolling only). Pins map through each slide's shown window.
@@ -634,8 +618,6 @@ export function galleryView({
     const activeItem = items[active];
     const cutLine =
       activeItem !== undefined ? frameCutLine(mapFor(activeItem), platformLabel) : null;
-    const bandClass =
-      frame.bands === 'black' ? 'bg-black' : frame.bands === 'blur' ? 'bg-black' : 'bg-panel-2';
     return (
       <div>
         <div className="relative">
@@ -661,29 +643,19 @@ export function galleryView({
                   key={item.assetAttachmentId}
                   className="flex w-full shrink-0 snap-start justify-center"
                 >
-                  <div
-                    data-frame-ratio={frameRatio}
-                    data-frame-fit={frame.fit}
-                    data-frame-bands={frame.bands}
-                    style={framedTileStyle(frameRatio)}
-                    className={cn(
-                      'relative overflow-hidden rounded-xl border border-border',
-                      bandClass,
-                    )}
+                  <PlatformFrame
+                    frame={frame}
+                    maxHeight={SOLO_TILE_MAX_HEIGHT}
+                    className="rounded-xl"
+                    backdrop={
+                      <GalleryThumb
+                        item={item}
+                        cache={cache}
+                        presignEnabled={presignEnabled}
+                        fit="cover"
+                      />
+                    }
                   >
-                    {frame.bands === 'blur' ? (
-                      <div
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 scale-110 opacity-70 blur-xl"
-                      >
-                        <GalleryThumb
-                          item={item}
-                          cache={cache}
-                          presignEnabled={presignEnabled}
-                          fit="cover"
-                        />
-                      </div>
-                    ) : null}
                     <button
                       type="button"
                       aria-label={`View image ${index + 1}`}
@@ -721,7 +693,7 @@ export function galleryView({
                         {pinCount}
                       </span>
                     ) : null}
-                  </div>
+                  </PlatformFrame>
                 </div>
               );
             })}

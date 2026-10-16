@@ -229,11 +229,17 @@ function item(i: number, over: Partial<GalleryItem> = {}): GalleryItem {
   };
 }
 
-function media(gallery: SheetGallery, mediaCount: number, format = 'carousel'): string {
+function media(
+  gallery: SheetGallery,
+  mediaCount: number,
+  format = 'carousel',
+  platform = 'instagram',
+): string {
   return renderToStaticMarkup(
     <PostSheetMedia
       gallery={gallery}
       mediaCount={mediaCount}
+      platform={platform}
       format={format}
       active={0}
       cache={cache}
@@ -250,11 +256,25 @@ describe('PostSheetMedia', () => {
     expect(media({ status: 'ready', items: [] }, 0)).toBe('');
   });
 
-  it('loading with media: a skeleton the same box as the strip', () => {
+  it('loading with media: a skeleton in the format frame the strip will use', () => {
     const html = media({ status: 'loading' }, 3);
     expect(html).toContain('data-strip-skeleton');
-    expect(html).toContain('aspect-[4/5]');
+    expect(html).toContain('data-frame-ratio="0.8"');
+    expect(html).toContain('animate-pulse');
+  });
+
+  it('the strip takes the platform frame from the first slide; text keeps the 4:5 rail', () => {
+    const reel = media({ status: 'ready', items: [item(0)] }, 1, 'reel');
+    expect(reel).toContain('data-frame-ratio="0.5625"');
+    expect(reel).toContain('width:min(100%, calc(60vh * 0.5625))');
+    // A stored 1080 x 1350 first slide on an Instagram carousel: 4:5, cropped to fill.
+    const carousel = media({ status: 'ready', items: [item(0)] }, 1);
+    expect(carousel).toContain('data-frame-ratio="0.8"');
+    expect(carousel).toContain('data-frame-fit="cover"');
+    const text = media({ status: 'ready', items: [item(0)] }, 1, 'text', 'linkedin');
+    expect(text).not.toContain('data-frame-ratio');
     expect(STRIP_BOX).toContain('aspect-[4/5]');
+    expect(text).toContain('aspect-[4/5]');
   });
 
   it('several slides: one per width with the counter and dots', () => {

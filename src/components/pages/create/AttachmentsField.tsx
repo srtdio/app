@@ -8,13 +8,23 @@
 // onChange; only completed items carry a versionId. The list/version helpers and
 // the upload/link runners are pure so they unit-test with a fake uploader.
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
+import { ALLOWED_MIME_TYPES, isImageMime } from '@srtdio/storage';
+import { platformLabel } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { IconFile, IconLink, IconX } from '@/components/ui/icons';
 import { frameFor, type Frame, type FrameMedia } from '@/lib/platform-specs';
+import {
+  COMPOSER_FRAME_MAX_HEIGHT,
+  frameCutText,
+  frameMediaClass,
+  PlatformFrame,
+  PlatformFrameUpload,
+} from '@/components/media/PlatformFrame';
+import { frameMap } from '@/components/pages/pcs/pin-annotations';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
@@ -34,6 +44,11 @@ import {
   uploadChatAttachment,
   type ChatAttachmentUpload,
 } from '@/lib/chat/attachments';
+
+/** Photos and videos from the upload allowlist: what a post's creative is. */
+export const MEDIA_ACCEPT = ALLOWED_MIME_TYPES.filter(
+  (mime) => isImageMime(mime) || mime.startsWith('video/'),
+).join(',');
 
 /** One completed attachment: a stable asset VERSION id, its render branch, the
  *  display name, and (for images) a local object-URL preview. */
@@ -113,92 +128,39 @@ export async function runLinkAttachment(deps: LinkAttachmentDeps): Promise<Attac
 }
 
 /**
- * Render the completed items: images as removable thumbnail tiles, files and
- * links as removable rows (icon + name + remove). Pure so render + remove wiring
- * are unit-testable; ordering follows the items array.
+ * Render the completed items: images as removable square thumbnail tiles, files
+ * and links as removable rows (icon + name + remove). Pure so render + remove
+ * wiring are unit-testable; ordering follows the items array. A framed composer
+ * passes only its non-media items here (media sit in ComposerMediaFrame).
  */
 export function attachmentItemList(
   items: readonly AttachmentItem[],
   onRemove: (index: number) => void,
-  /**
-   * The post's platform frame (frameFor): its ratio, and whether the media is
-   * cropped to fill or fit with bands. null or absent keeps the small square tile.
-   */
-  frame?: Frame | null,
-  /** Report a media tile's intrinsic size once it decodes (the first one sets the frame). */
-  onMeasure?: (versionId: string, w: number, h: number) => void,
 ): ReactElement[] {
-  const framed = frame !== null && frame !== undefined;
-  const ratio = frame?.ratio ?? 1;
-  const fitClass =
-    frame?.fit === 'contain' ? 'h-full w-full object-contain' : 'h-full w-full object-cover';
   return items.map((item, index) => {
-    const isVideo = item.mime?.startsWith('video/') === true && item.previewUrl !== undefined;
-    if (item.kind === 'image' || isVideo) {
+    if (isMediaItem(item)) {
       return (
         <li
           key={`${item.versionId}-${index}`}
-          data-frame-ratio={ratio}
-          data-frame-fit={frame?.fit ?? 'cover'}
-          className={cn(
-            'relative shrink-0 overflow-hidden rounded-md border border-border',
-            framed ? 'h-40' : 'h-20',
-            frame !== null && frame !== undefined && frame.bands !== 'none'
-              ? 'bg-black'
-              : 'bg-panel-3',
-          )}
-          style={{ aspectRatio: String(ratio), minWidth: '44px', maxWidth: '100%' }}
+          className="relative aspect-square h-20 shrink-0 overflow-hidden rounded-md border border-border bg-panel-3"
         >
-          {frame?.bands === 'blur' && item.previewUrl !== undefined && !isVideo ? (
-            <img
-              src={item.previewUrl}
-              alt=""
-              aria-hidden
-              className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-lg"
-            />
-          ) : null}
-          {isVideo ? (
+          {item.previewUrl === undefined ? (
+            <span className="flex h-full w-full items-center justify-center text-fg-3">
+              <IconFile size={20} />
+            </span>
+          ) : item.kind === 'image' ? (
+            <img src={item.previewUrl} alt={item.name} className="h-full w-full object-cover" />
+          ) : (
             <video
               src={item.previewUrl}
               muted
               playsInline
               preload="metadata"
               aria-label={item.name}
-              className={cn('relative', fitClass)}
-              onLoadedMetadata={(event) =>
-                onMeasure?.(
-                  item.versionId,
-                  event.currentTarget.videoWidth,
-                  event.currentTarget.videoHeight,
-                )
-              }
+              className="h-full w-full object-cover"
             />
-          ) : item.previewUrl !== undefined ? (
-            <img
-              src={item.previewUrl}
-              alt={item.name}
-              className={cn('relative', fitClass)}
-              onLoad={(event) =>
-                onMeasure?.(
-                  item.versionId,
-                  event.currentTarget.naturalWidth,
-                  event.currentTarget.naturalHeight,
-                )
-              }
-            />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center text-fg-3">
-              <IconFile size={20} />
-            </span>
           )}
-          <button
-            type="button"
-            aria-label={`Remove ${item.name}`}
-            onClick={() => onRemove(index)}
-            className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white"
-          >
-            <IconX size={14} />
-          </button>
+          <RemoveButton label={`Remove ${item.name}`} onRemove={() => onRemove(index)} />
         </li>
       );
     }
@@ -219,6 +181,175 @@ export function attachmentItemList(
       </li>
     );
   });
+}
+
+/** True for a photo, or a video with a local preview: what a frame can show. */
+export function isMediaItem(item: AttachmentItem): boolean {
+  return item.kind === 'image' || item.mime?.startsWith('video/') === true;
+}
+
+/** A 44x44 remove control laid over a tile's corner. */
+function RemoveButton({ label, onRemove }: { label: string; onRemove: () => void }): ReactElement {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onRemove}
+      className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white"
+    >
+      <IconX size={14} />
+    </button>
+  );
+}
+
+/** One local photo or video drawn in the post's platform frame. */
+function FramedMediaTile({
+  item,
+  frame,
+  removeLabel,
+  onRemove,
+  onMeasure,
+}: {
+  item: AttachmentItem;
+  frame: Frame;
+  removeLabel: string;
+  onRemove: () => void;
+  onMeasure: (versionId: string, w: number, h: number) => void;
+}): ReactElement {
+  const video = item.mime?.startsWith('video/') === true;
+  const src = item.previewUrl;
+  return (
+    <PlatformFrame
+      frame={frame}
+      maxHeight={COMPOSER_FRAME_MAX_HEIGHT}
+      className="rounded-xl"
+      backdrop={
+        src !== undefined && !video ? (
+          <img src={src} alt="" className="h-full w-full object-cover" />
+        ) : undefined
+      }
+    >
+      {src === undefined ? (
+        <span className="relative flex h-full w-full items-center justify-center text-fg-3">
+          <IconFile size={22} />
+        </span>
+      ) : video ? (
+        <video
+          src={src}
+          muted
+          playsInline
+          preload="metadata"
+          aria-label={item.name}
+          className={cn('relative', frameMediaClass(frame))}
+          onLoadedMetadata={(event) =>
+            onMeasure(
+              item.versionId,
+              event.currentTarget.videoWidth,
+              event.currentTarget.videoHeight,
+            )
+          }
+        />
+      ) : (
+        <img
+          src={src}
+          alt={item.name}
+          className={cn('relative', frameMediaClass(frame))}
+          onLoad={(event) =>
+            onMeasure(
+              item.versionId,
+              event.currentTarget.naturalWidth,
+              event.currentTarget.naturalHeight,
+            )
+          }
+        />
+      )}
+      <RemoveButton label={removeLabel} onRemove={onRemove} />
+    </PlatformFrame>
+  );
+}
+
+/**
+ * The composer's media in the post's platform frame. No media yet: the empty
+ * frame at the format's shape is the upload target. With media: each photo or
+ * video fills the same frame (slides swipe on the X axis, as on the post page),
+ * and the line under it says how much of the first photo the platform cuts.
+ */
+export function ComposerMediaFrame({
+  frame,
+  platform,
+  items,
+  measured,
+  onMeasure,
+  onRemove,
+  removeLabel,
+  pickLabel,
+  pickDisabled = false,
+  onPick,
+}: {
+  frame: Frame;
+  platform: string;
+  /** Every attachment; only photos and videos are drawn. onRemove gets the index here. */
+  items: readonly AttachmentItem[];
+  measured: Record<string, { w: number; h: number }>;
+  onMeasure: (versionId: string, w: number, h: number) => void;
+  onRemove: (index: number) => void;
+  removeLabel: (item: AttachmentItem) => string;
+  pickLabel: string;
+  pickDisabled?: boolean;
+  onPick: () => void;
+}): ReactElement {
+  const media = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => isMediaItem(item));
+  const first = media[0]?.item;
+  if (first === undefined) {
+    return (
+      <div className="flex justify-center">
+        <PlatformFrameUpload
+          frame={frame}
+          maxHeight={COMPOSER_FRAME_MAX_HEIGHT}
+          label={pickLabel}
+          disabled={pickDisabled}
+          onPick={onPick}
+        />
+      </div>
+    );
+  }
+  const cut =
+    first.kind === 'image'
+      ? frameCutText(
+          frameMap(measured[first.versionId] ?? null, frame.ratio, frame.fit),
+          platformLabel(platform),
+        )
+      : null;
+  return (
+    <div className="flex flex-col gap-1">
+      <ul
+        aria-roledescription="carousel"
+        className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain"
+      >
+        {media.map(({ item, index }) => (
+          <li
+            key={`${item.versionId}-${index}`}
+            className="flex w-full shrink-0 snap-start justify-center"
+          >
+            <FramedMediaTile
+              item={item}
+              frame={frame}
+              removeLabel={removeLabel(item)}
+              onRemove={() => onRemove(index)}
+              onMeasure={onMeasure}
+            />
+          </li>
+        ))}
+      </ul>
+      {cut !== null ? (
+        <p data-frame-cut className="text-[13px] text-fg-2">
+          {cut}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 /** Resolve an asset's current version id via a plain RLS-scoped select. */
@@ -247,8 +378,9 @@ interface AttachmentsFieldProps {
   value: AttachmentItem[];
   onChange: (items: AttachmentItem[]) => void;
   /**
-   * The post's platform and format: media tiles render in the same platform
-   * frame the post page shows (frameFor). Absent (briefs): small square tiles.
+   * The post's platform and format: media render in the same platform frame the
+   * post page shows (frameFor), and with no media yet the empty frame is the
+   * upload target. Absent (briefs), or a format with no frame: square tiles.
    */
   frame?: { platform: string; format: string } | null;
 }
@@ -271,6 +403,16 @@ export function AttachmentsField({
   const [measured, setMeasured] = useState<Record<string, { w: number; h: number }>>({});
   const photoInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  // An upload that finishes after the sheet closed frees its preview instead of
+  // handing it to a form that is gone.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   // value is a prop, so a sequential add loop reads the latest through this ref
   // rather than a stale closure capture.
@@ -333,6 +475,10 @@ export function AttachmentsField({
         { id, name: file.name, kind: isImage ? 'image' : 'file', previewUrl, error: null },
       ]);
       const result = await runFileAttachment(file, isPhoto, uploadFile);
+      if (!alive.current) {
+        if (previewUrl !== null) URL.revokeObjectURL(previewUrl);
+        return;
+      }
       setPending((prev) => prev.filter((item) => item.id !== id));
       if (result.ok) {
         onChange([
@@ -399,6 +545,10 @@ export function AttachmentsField({
     frame !== null && frame !== undefined
       ? frameFor(frame.platform, frame.format, firstMedia(value, measured))
       : null;
+  // Framed: media sit in the frame, files and links list below it.
+  const listed = value
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => postFrame === null || !isMediaItem(item));
   function measure(versionId: string, w: number, h: number): void {
     if (w <= 0 || h <= 0) return;
     setMeasured((prev) =>
@@ -456,9 +606,29 @@ export function AttachmentsField({
         </div>
       ) : null}
 
-      {value.length > 0 ? (
+      {postFrame !== null && frame !== null && frame !== undefined ? (
+        <ComposerMediaFrame
+          frame={postFrame}
+          platform={frame.platform}
+          items={value}
+          measured={measured}
+          onMeasure={measure}
+          onRemove={removeCompleted}
+          removeLabel={(item) => `Remove ${item.name}`}
+          pickLabel="Add a photo or video"
+          onPick={() => mediaInputRef.current?.click()}
+        />
+      ) : null}
+
+      {listed.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
-          {attachmentItemList(value, removeCompleted, postFrame, measure)}
+          {attachmentItemList(
+            listed.map(({ item }) => item),
+            (index) => {
+              const at = listed[index];
+              if (at !== undefined) removeCompleted(at.index);
+            },
+          )}
         </ul>
       ) : null}
 
@@ -498,6 +668,17 @@ export function AttachmentsField({
         }}
       />
       <input
+        ref={mediaInputRef}
+        type="file"
+        accept={MEDIA_ACCEPT}
+        className="sr-only"
+        aria-label="Add a photo or video"
+        onChange={(event) => {
+          void addFiles(event.target.files, false);
+          event.target.value = '';
+        }}
+      />
+      <input
         ref={docInputRef}
         type="file"
         accept={UPLOAD_ACCEPT}
@@ -516,9 +697,7 @@ export function firstMedia(
   items: readonly AttachmentItem[],
   measured: Record<string, { w: number; h: number }>,
 ): FrameMedia | null {
-  const first = items.find(
-    (item) => item.kind === 'image' || item.mime?.startsWith('video/') === true,
-  );
+  const first = items.find(isMediaItem);
   if (first === undefined) return null;
   const dims = measured[first.versionId];
   return {

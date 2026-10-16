@@ -11,14 +11,23 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import {
   AttachmentsField,
   attachmentVersionIds,
+  isMediaItem,
   type AttachmentItem,
 } from '@/components/pages/create/AttachmentsField';
+import {
+  PlatformPreviewPanel,
+  PreviewBody,
+  PreviewChip,
+  previewChipLabel,
+  type PreviewBodyProps,
+} from '@/components/preview/PlatformPreviewPanel';
 import { FilePromptSheet } from '@/components/pages/create/FilePromptSheet';
 import { fileKindOf, filePrompt, mismatchedFiles } from '@/components/pages/create/file-kind';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
 import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
+import { useWorkspace } from '@/lib/workspace-context';
 import { listBuckets, type BucketOption } from '@/lib/buckets';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { postCreate, gallerySet, stageTransition, type Client, type Result } from '@srtdio/rpc';
@@ -41,6 +50,7 @@ import {
   PostCreatePayloadSchema,
   formatLabel,
   platformLabel,
+  type GalleryItem,
   type PostPlatform,
 } from '@srtdio/posts';
 import { listBriefs, type BriefWithThumbnail } from '@srtdio/briefs';
@@ -116,6 +126,60 @@ export function postCreateErrorMessage(message: string, platform: PostPlatform):
   return message === 'invalid_format'
     ? `That format is not available on ${platformLabel(platform)}.`
     : message;
+}
+
+/**
+ * The draft's first photo or video as the preview's first media. It is already
+ * uploaded (a version id) but shown from its local object URL, so the preview
+ * never waits on a presign. Pure.
+ */
+export function draftGalleryItem(item: AttachmentItem): GalleryItem {
+  const video = item.mime?.startsWith('video/') === true;
+  return {
+    assetAttachmentId: item.versionId,
+    assetVersionId: item.versionId,
+    assetId: '',
+    position: 0,
+    filename: item.name,
+    mimeType: item.mime ?? null,
+    kind: video ? 'video' : 'image',
+    width: null,
+    height: null,
+    durationMs: null,
+    pageCount: null,
+    r2Key: null,
+    externalUrl: null,
+  };
+}
+
+/**
+ * The live preview's input from the unsaved form: platform, format, caption and
+ * the first local photo or video. null until the platform and format resolve.
+ */
+export function draftPreview(input: {
+  platform: PostPlatform | null;
+  format: string;
+  caption: string;
+  handle: string;
+  attachments: readonly AttachmentItem[];
+}): PreviewBodyProps | null {
+  if (input.platform === null || input.format === '') return null;
+  const first = input.attachments.find(isMediaItem);
+  return {
+    platform: input.platform,
+    format: input.format,
+    caption: input.caption,
+    handle: input.handle,
+    firstMedia: first !== undefined ? draftGalleryItem(first) : null,
+    localUrl: first?.previewUrl ?? null,
+  };
+}
+
+/** Free every local preview the draft holds. */
+function revokePreviews(items: readonly AttachmentItem[]): void {
+  for (const item of items) {
+    if (item.previewUrl !== undefined) URL.revokeObjectURL(item.previewUrl);
+  }
 }
 
 type OriginValue = 'none' | 'brief';
@@ -276,6 +340,9 @@ export function CreatePostSheet({
   const { options: memberOptions } = usePostMembers(open ? workspaceId : null);
   // One workspace = one platform: the format list is that platform's own.
   const workspacePlatform = useWorkspacePlatform(open ? workspaceId : null);
+  const { workspaceName } = useWorkspace();
+  // Below lg the preview opens from a chip; at lg+ it sits beside the form.
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const [form, setForm] = useState<CreateFormState>(() =>
     initialCreateState({
@@ -353,8 +420,11 @@ export function CreatePostSheet({
   // Reset the form each time the sheet opens so a prior draft never lingers. The
   // owner is left empty here and defaulted to the current user by the effect
   // below, so the reset never depends on the (possibly still-resolving) session.
+  // The prior draft's local previews are freed here, not on close, so the
+  // closing sheet never flashes a revoked image.
   useEffect(() => {
     if (!open) return;
+    revokePreviews(formRef.current.attachments);
     setForm(
       initialCreateState({
         defaultFormat: '',
@@ -371,7 +441,11 @@ export function CreatePostSheet({
     setShare(true);
     setMediaBusy(false);
     setPromptIds([]);
+    setPreviewOpen(false);
   }, [open, initialTargetDate]);
+
+  // Unmounting frees whatever local previews the draft still holds.
+  useEffect(() => () => revokePreviews(formRef.current.attachments), []);
 
   // Default the format to the platform's first one, and keep it inside the
   // platform's list (the platform resolves with the workspace). Runs after the
@@ -599,6 +673,14 @@ export function CreatePostSheet({
     onCreated(result.postId);
   }
 
+  const preview = draftPreview({
+    platform: workspacePlatform,
+    format: form.format,
+    caption: form.caption,
+    handle: workspaceName ?? '',
+    attachments: form.attachments,
+  });
+
   function gridError(key: string): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
       <p className="mt-1.5 text-[11px] text-bad">{fieldErrors[key]}</p>
@@ -609,6 +691,7 @@ export function CreatePostSheet({
     <Sheet
       open={open}
       onClose={onClose}
+      wide
       title="New post"
       footer={
         <>
@@ -633,140 +716,169 @@ export function CreatePostSheet({
         </>
       }
     >
-      <div className="flex flex-col gap-4 overflow-x-hidden">
-        {preset !== undefined ? (
-          <PresetFields
-            preset={preset}
-            form={form}
-            patch={patch}
-            formatOptions={formatOptions}
-            workspaceId={workspaceId}
-            share={share}
-            onShareChange={setShare}
-            onMediaBusyChange={setMediaBusy}
-            captionError={gridError('caption')}
-          />
-        ) : (
-          <>
-            <Field label="Title" htmlFor="post-title" required>
-              <Input
-                id="post-title"
-                value={form.title}
-                onChange={(event) => patch({ title: event.target.value })}
-                placeholder="Post title"
-              />
-              {gridError('title')}
-            </Field>
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:items-start lg:gap-6">
+        <div className="flex flex-col gap-4 overflow-x-hidden">
+          {preview !== null ? (
+            <div className="-my-2 lg:hidden">
+              <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
+            </div>
+          ) : null}
+          {preset !== undefined ? (
+            <PresetFields
+              preset={preset}
+              form={form}
+              patch={patch}
+              onFormatChange={onFormatChange}
+              onAttachmentsChange={onAttachmentsChange}
+              platform={workspacePlatform}
+              formatOptions={formatOptions}
+              workspaceId={workspaceId}
+              share={share}
+              onShareChange={setShare}
+              onMediaBusyChange={setMediaBusy}
+              captionError={gridError('caption')}
+            />
+          ) : (
+            <>
+              <Field label="Title" htmlFor="post-title" required>
+                <Input
+                  id="post-title"
+                  value={form.title}
+                  onChange={(event) => patch({ title: event.target.value })}
+                  placeholder="Post title"
+                />
+                {gridError('title')}
+              </Field>
 
-            <Field label="Caption" htmlFor="post-caption" required>
-              <Textarea
-                id="post-caption"
-                value={form.caption}
-                onChange={(event) => patch({ caption: event.target.value })}
-                placeholder="Write the caption"
-              />
-              {gridError('caption')}
-            </Field>
+              <Field label="Caption" htmlFor="post-caption" required>
+                <Textarea
+                  id="post-caption"
+                  value={form.caption}
+                  onChange={(event) => patch({ caption: event.target.value })}
+                  placeholder="Write the caption"
+                />
+                {gridError('caption')}
+              </Field>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="min-w-0">
-                <Field label="Format">
-                  <Select
-                    label="Format"
-                    value={form.format}
-                    options={formatOptions}
-                    onChange={onFormatChange}
-                  />
-                </Field>
-              </div>
-
-              <div className="min-w-0">
-                <Field label="Bucket">
-                  <Select
-                    label="Bucket"
-                    value={form.bucketId}
-                    options={bucketOptions}
-                    onChange={(value) => patch({ bucketId: value })}
-                    placeholder="No bucket"
-                  />
-                </Field>
-              </div>
-
-              <div className="min-w-0">
-                <Field label="Owner">
-                  <Select
-                    label="Owner"
-                    value={form.ownerUserId}
-                    options={ownerOptions}
-                    onChange={(value) => patch({ ownerUserId: value })}
-                    placeholder="Choose an owner"
-                  />
-                </Field>
-              </div>
-
-              <div className="min-w-0">
-                <Field label="Target date">
-                  <DatePicker
-                    label="Target date"
-                    value={form.targetDate}
-                    onChange={(value) => patch({ targetDate: value })}
-                  />
-                </Field>
-              </div>
-
-              <div className="min-w-0">
-                <Field label="Origin">
-                  <Select
-                    label="Origin"
-                    value={form.origin}
-                    options={originOptions}
-                    onChange={(value) =>
-                      patch({
-                        origin: value as OriginValue,
-                        ...(value === 'none' ? { briefId: '' } : {}),
-                      })
-                    }
-                  />
-                </Field>
-              </div>
-
-              {form.origin === 'brief' ? (
-                <div className="col-span-2 min-w-0">
-                  <Field label="Brief" required>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="min-w-0">
+                  <Field label="Format">
                     <Select
-                      label="Brief"
-                      value={form.briefId}
-                      options={briefOptions}
-                      onChange={(value) => patch({ briefId: value })}
-                      placeholder="Choose a brief"
+                      label="Format"
+                      value={form.format}
+                      options={formatOptions}
+                      onChange={onFormatChange}
                     />
-                    {gridError('briefId')}
                   </Field>
                 </div>
-              ) : null}
+
+                <div className="min-w-0">
+                  <Field label="Bucket">
+                    <Select
+                      label="Bucket"
+                      value={form.bucketId}
+                      options={bucketOptions}
+                      onChange={(value) => patch({ bucketId: value })}
+                      placeholder="No bucket"
+                    />
+                  </Field>
+                </div>
+
+                <div className="min-w-0">
+                  <Field label="Owner">
+                    <Select
+                      label="Owner"
+                      value={form.ownerUserId}
+                      options={ownerOptions}
+                      onChange={(value) => patch({ ownerUserId: value })}
+                      placeholder="Choose an owner"
+                    />
+                  </Field>
+                </div>
+
+                <div className="min-w-0">
+                  <Field label="Target date">
+                    <DatePicker
+                      label="Target date"
+                      value={form.targetDate}
+                      onChange={(value) => patch({ targetDate: value })}
+                    />
+                  </Field>
+                </div>
+
+                <div className="min-w-0">
+                  <Field label="Origin">
+                    <Select
+                      label="Origin"
+                      value={form.origin}
+                      options={originOptions}
+                      onChange={(value) =>
+                        patch({
+                          origin: value as OriginValue,
+                          ...(value === 'none' ? { briefId: '' } : {}),
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+
+                {form.origin === 'brief' ? (
+                  <div className="col-span-2 min-w-0">
+                    <Field label="Brief" required>
+                      <Select
+                        label="Brief"
+                        value={form.briefId}
+                        options={briefOptions}
+                        onChange={(value) => patch({ briefId: value })}
+                        placeholder="Choose a brief"
+                      />
+                      {gridError('briefId')}
+                    </Field>
+                  </div>
+                ) : null}
+              </div>
+
+              <Field label="Attachments">
+                <AttachmentsField
+                  workspaceId={workspaceId}
+                  value={form.attachments}
+                  onChange={onAttachmentsChange}
+                  frame={
+                    workspacePlatform !== null
+                      ? { platform: workspacePlatform, format: form.format }
+                      : null
+                  }
+                />
+              </Field>
+            </>
+          )}
+
+          {submitError !== null ? (
+            <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
+              {submitError}
             </div>
-
-            <Field label="Attachments">
-              <AttachmentsField
-                workspaceId={workspaceId}
-                value={form.attachments}
-                onChange={onAttachmentsChange}
-                frame={
-                  workspacePlatform !== null
-                    ? { platform: workspacePlatform, format: form.format }
-                    : null
-                }
-              />
-            </Field>
-          </>
-        )}
-
-        {submitError !== null ? (
-          <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
-            {submitError}
-          </div>
+          ) : null}
+        </div>
+        {preview !== null ? (
+          <aside
+            data-composer-preview=""
+            aria-label={previewChipLabel(preview.platform)}
+            className="hidden lg:sticky lg:top-0 lg:flex lg:flex-col lg:gap-3"
+          >
+            <h3 className="text-[13px] font-semibold text-fg-2">
+              {previewChipLabel(preview.platform)}
+            </h3>
+            <PreviewBody {...preview} />
+          </aside>
         ) : null}
       </div>
+      {preview !== null ? (
+        <PlatformPreviewPanel
+          open={open && previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          {...preview}
+        />
+      ) : null}
       {open && activePrompt !== null ? (
         <FilePromptSheet
           prompt={activePrompt}
@@ -783,6 +895,9 @@ function PresetFields(props: {
   preset: PostSheetPreset;
   form: CreateFormState;
   patch: (next: Partial<CreateFormState>) => void;
+  onFormatChange: (format: string) => void;
+  onAttachmentsChange: (attachments: AttachmentItem[]) => void;
+  platform: PostPlatform | null;
   formatOptions: SelectOption[];
   workspaceId: string | null;
   share: boolean;
@@ -810,7 +925,7 @@ function PresetFields(props: {
               label="Format"
               value={form.format}
               options={props.formatOptions}
-              onChange={(value) => patch({ format: value })}
+              onChange={props.onFormatChange}
             />
           </Field>
         </div>
@@ -829,9 +944,10 @@ function PresetFields(props: {
         <PresetMediaField
           workspaceId={props.workspaceId}
           value={form.attachments}
-          onChange={(attachments) => patch({ attachments })}
+          onChange={props.onAttachmentsChange}
           required={formatNeedsMedia(form.format)}
           onBusyChange={props.onMediaBusyChange}
+          frame={props.platform !== null ? { platform: props.platform, format: form.format } : null}
         />
       </Field>
 
