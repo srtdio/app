@@ -6,8 +6,8 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 // brand name and a platform, confirms that both are final, and sends it
 // to workspace_create; the shell then names the workspace "<Client> - <Platform>"
 // and New post offers only that platform's formats. Tagged @theme (phone, light
-// and dark) and @desktop (laptop). The viewer is the fixture owner, a maker
-// role, so the create menu has no New brief. Fixture names are fictional.
+// and dark) and @desktop (laptop). The top bar carries no Create menu; posts
+// start from the Pipeline page-head button. Fixture names are fictional.
 
 function isLaptop(page: Page): boolean {
   return (page.viewportSize()?.width ?? 0) >= 768;
@@ -34,12 +34,8 @@ test('create a workspace with a platform, then post in its formats @theme @deskt
   const label = workspaceLabel(page);
   await expect(label).toContainText('Harness Studio - LinkedIn', { timeout: 15_000 });
 
-  // A maker role: the create menu offers New post only.
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await expect(page.getByText('New post', { exact: true })).toBeVisible();
-  await expect(page.getByText('New brief', { exact: true })).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await page.mouse.click(5, 300);
+  // The top bar has no Create menu.
+  await expect(page.getByRole('button', { name: 'Create', exact: true })).toHaveCount(0);
 
   await label.click();
   const dialog = page.getByRole('dialog');
@@ -71,8 +67,7 @@ test('create a workspace with a platform, then post in its formats @theme @deskt
   expect(create?.args.p_payload).toMatchObject({ name: 'Kite', platform: 'instagram' });
 
   // New post: no Platform field, and only Instagram's formats.
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await page.getByText('New post', { exact: true }).click();
+  await page.getByRole('button', { name: 'Create post' }).click();
   const format = page.getByRole('button', { name: 'Format' });
   await expect(format).toContainText('Reel');
   await expect(page.getByRole('button', { name: 'Platform' })).toHaveCount(0);
