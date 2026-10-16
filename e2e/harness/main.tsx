@@ -24,7 +24,7 @@ if (window.location.pathname === '/') {
     </StrictMode>,
   );
 } else if (isHomeBundlePath(window.location.pathname)) {
-  // /pricing and /demo: the home bundle's own root, as src/main.tsx boots it.
+  // /demo: the home bundle's own root, as src/main.tsx boots it.
   void import('@/components/home/HomeEntry').then(({ HomeEntry }) => {
     root.render(
       <StrictMode>

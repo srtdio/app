@@ -1,0 +1,66 @@
+# noindex everywhere on srtd.io except the public pages, the files bots and
+# link previews read, link previews (/og/*) and hashed build assets (/assets/*).
+# Detach rules name the host, so every other host (pages.dev previews and the
+# test site) keeps noindex on every path.
+/*
+  X-Robots-Tag: noindex
+
+https://srtd.io/
+  ! X-Robots-Tag
+
+https://srtd.io/legal/privacy-policy
+  ! X-Robots-Tag
+
+https://srtd.io/legal/terms-and-conditions
+  ! X-Robots-Tag
+
+https://srtd.io/demo
+  ! X-Robots-Tag
+
+https://srtd.io/robots.txt
+  ! X-Robots-Tag
+
+https://srtd.io/sitemap.xml
+  ! X-Robots-Tag
+
+https://srtd.io/llms.txt
+  ! X-Robots-Tag
+
+https://srtd.io/favicon.ico
+  ! X-Robots-Tag
+
+https://srtd.io/favicon.svg
+  ! X-Robots-Tag
+
+https://srtd.io/apple-touch-icon.png
+  ! X-Robots-Tag
+
+https://srtd.io/icon-192.png
+  ! X-Robots-Tag
+
+https://srtd.io/icon-512.png
+  ! X-Robots-Tag
+
+https://srtd.io/site.webmanifest
+  ! X-Robots-Tag
+
+https://srtd.io/og-image.png
+  ! X-Robots-Tag
+
+https://srtd.io/og/*
+  ! X-Robots-Tag
+
+https://srtd.io/assets/*
+  ! X-Robots-Tag
+
+/robots.txt
+  Content-Type: text/plain; charset=utf-8
+
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+
+/sitemap.xml
+  Content-Type: application/xml; charset=utf-8
+
+/site.webmanifest
+  Content-Type: application/manifest+json

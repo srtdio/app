@@ -16,9 +16,33 @@
         } catch (e) {
           hasSession = false;
         }
+        // "/" is served prerendered homepage markup (scripts/prerender.ts). A
+        // signed-in visit boots the app instead, so that markup and its
+        // stylesheet are removed as the parser inserts them: observer callbacks
+        // run before the browser can paint, so not one frame of it shows. The
+        // CSS rule below hides it too, should a callback ever come late.
+        function dropPrerenderedHome() {
+          document.documentElement.classList.add('boot-app');
+          var clear = function () {
+            var root = document.querySelector('#root[data-prerender="home"]');
+            if (root) root.textContent = '';
+            document.querySelectorAll('link[data-prerender-css]').forEach(function (el) {
+              el.remove();
+            });
+            return root;
+          };
+          var observer = new MutationObserver(clear);
+          observer.observe(document.documentElement, { childList: true, subtree: true });
+          document.addEventListener('DOMContentLoaded', function () {
+            observer.disconnect();
+            var root = clear();
+            if (root) root.removeAttribute('data-prerender');
+            document.documentElement.classList.remove('boot-app');
+          });
+        }
         var callback = /(?:^|[?&#])(?:code|type)=|access_token|refresh_token|error_description/;
-        // isHomeBundlePath: /pricing and /demo are light for everyone.
-        var homeBundlePath = location.pathname === '/pricing' || location.pathname === '/demo';
+        // isHomeBundlePath: /demo is light for everyone.
+        var homeBundlePath = location.pathname === '/demo';
         if (
           !homeBundlePath &&
           (location.pathname !== '/' ||
@@ -26,6 +50,7 @@
             callback.test(location.search) ||
             callback.test(location.hash))
         ) {
+          if (location.pathname === '/') dropPrerenderedHome();
           return;
         }
         var white = '#ffffff'; /* homepage background, src/components/home/home.css */
@@ -55,11 +80,19 @@
       html.pre-dark {
         background-color: #0c0d10; /* --bg dark, src/index.css .dark */
       }
+      html.boot-app #root[data-prerender='home'] {
+        display: none;
+      }
     </style>
     <script>
       try {
         if (localStorage.getItem('sorted-theme') === 'dark') {
           document.documentElement.classList.add('pre-dark');
+          // Prerendered legal pages paint app markup before the app boots, so
+          // theme it now; src/lib/theme.ts sets the same class once it runs.
+          if (location.pathname.indexOf('/legal/') === 0) {
+            document.documentElement.classList.add('dark');
+          }
         }
       } catch (e) {
         /* storage blocked: stay light */
@@ -75,6 +108,10 @@
     <meta name="theme-color" content="#f7f8f9" />
     <!-- content = --bg light, src/index.css :root; a dark choice is synced by src/lib/theme.ts -->
     <title>Sorted</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
   </head>
   <body>
     <div id="root"></div>

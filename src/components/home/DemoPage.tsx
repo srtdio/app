@@ -1,4 +1,13 @@
-import { useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import '@fontsource/inter/latin-400.css';
 import '@fontsource/inter/latin-500.css';
 import '@fontsource/inter/latin-600.css';
@@ -45,6 +54,14 @@ function FieldError({ id, message }: { id: string; message: string | undefined }
   );
 }
 
+// The page is prerendered at build time (scripts/prerender.ts) and hydrated, so
+// nothing date-dependent may be in the first render: the month, its days and
+// the arrows fill in after mount. The grid always holds six week rows (42
+// cells) so its height never depends on the month or on mounting.
+const GRID_CELLS = 42;
+const FILLER: CSSProperties = { minHeight: 44 };
+const HIDDEN: CSSProperties = { visibility: 'hidden' };
+
 function Calendar({
   today,
   value,
@@ -67,6 +84,10 @@ function Calendar({
   const [month, setMonth] = useState<CalendarDay>({ y: firstBookable.y, m: firstBookable.m, d: 1 });
   const atFirst = sameDay(month, range.first);
   const atLast = sameDay(month, range.last);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const cells = mounted ? monthGrid(month) : [];
+  const fillers = Array.from({ length: GRID_CELLS - cells.length }, (_, i) => i);
 
   return (
     <div
@@ -80,7 +101,8 @@ function Calendar({
           type="button"
           className="icon-btn"
           aria-label="Previous month"
-          disabled={atFirst}
+          disabled={!mounted || atFirst}
+          style={mounted ? undefined : HIDDEN}
           onClick={() => setMonth((m) => shiftMonth(m, -1))}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -88,13 +110,14 @@ function Calendar({
           </svg>
         </button>
         <span className="cal-title" aria-live="polite">
-          {monthTitle(month)}
+          {mounted ? monthTitle(month) : '\u00a0'}
         </span>
         <button
           type="button"
           className="icon-btn"
           aria-label="Next month"
-          disabled={atLast}
+          disabled={!mounted || atLast}
+          style={mounted ? undefined : HIDDEN}
           onClick={() => setMonth((m) => shiftMonth(m, 1))}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -108,7 +131,7 @@ function Calendar({
             {name}
           </span>
         ))}
-        {monthGrid(month).map((day, i) =>
+        {cells.map((day, i) =>
           day === null ? (
             <span key={`pad-${i}`} className="cal-pad" />
           ) : (
@@ -127,6 +150,9 @@ function Calendar({
             </button>
           ),
         )}
+        {fillers.map((i) => (
+          <span key={`fill-${i}`} className="cal-pad" aria-hidden="true" style={FILLER} />
+        ))}
       </div>
     </div>
   );

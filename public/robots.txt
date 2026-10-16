@@ -1,0 +1,35 @@
+# Every crawler, search and AI alike, may read the public pages. App screens
+# are signed-in only and are kept out. /assets/ (build files) and /og/ (link
+# previews) stay open: the longest matching rule wins.
+
+User-agent: *
+User-agent: Googlebot
+User-agent: Bingbot
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: PerplexityBot
+User-agent: Google-Extended
+User-agent: Applebot
+Allow: /
+Allow: /assets/
+Disallow: /pipeline
+Disallow: /posts/
+Disallow: /p/
+Disallow: /briefs
+Disallow: /b/
+Disallow: /chat
+Disallow: /activity
+Disallow: /plans/
+Disallow: /assets
+Disallow: /settings
+Disallow: /help
+Disallow: /deleted
+Disallow: /invite/
+Disallow: /auth/
+Disallow: /signin
+Disallow: /signup
+
+Sitemap: https://srtd.io/sitemap.xml

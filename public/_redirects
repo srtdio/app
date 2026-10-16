@@ -1,3 +1,9 @@
+# "/" serves the prerendered homepage (scripts/prerender.ts). A 200 rewrite is
+# applied before asset matching, so it wins over dist/index.html, which stays
+# the empty app shell. Every other path with no file of its own falls through
+# to Pages' SPA fallback (no top-level 404.html), which serves /index.html.
+# A "/* /index.html 200" line would be ignored by Pages as an infinite loop.
+# Rules are matched top to bottom; the /pricing redirects sit above the rewrite.
 /pricing / 301
 /pricing/ / 301
-/* /index.html 200
+/ /prerender/home 200
