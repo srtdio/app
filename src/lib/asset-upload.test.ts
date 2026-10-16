@@ -26,7 +26,9 @@ import {
   type RenameFolderConfig,
   type RenameConfig,
   type UploadConfig,
+  type UploadCompleteDetail,
   type UploadFetcher,
+  UPLOAD_COMPLETE_EVENT,
   xhrPost,
 } from '@/lib/asset-upload';
 
@@ -233,6 +235,28 @@ describe('uploadAssetFile', () => {
     const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
     const out = await uploadAssetFile(fakeFile('a.png', 'image/png', 1), baseConfig(fetcher));
     expect(out).toEqual({ ok: false, message: "Couldn't upload. Try again." });
+  });
+  it('announces a successful upload for its workspace, and only a successful one', async () => {
+    const target = new EventTarget();
+    vi.stubGlobal('window', target);
+    const seen: string[] = [];
+    target.addEventListener(UPLOAD_COMPLETE_EVENT, (event) => {
+      seen.push((event as CustomEvent<UploadCompleteDetail>).detail.workspaceId);
+    });
+    try {
+      const ok = vi
+        .fn()
+        .mockResolvedValue(jsonResponse(201, { asset: { assetId: 'a-1', reused: false } }));
+      await uploadAssetFile(fakeFile('a.png', 'image/png', 1), baseConfig(ok));
+      expect(seen).toEqual(['ws-1']);
+      const failed = vi
+        .fn()
+        .mockResolvedValue(jsonResponse(413, { error: { code: 'file_too_large', message: 'x' } }));
+      await uploadAssetFile(fakeFile('a.png', 'image/png', 1), baseConfig(failed));
+      expect(seen).toEqual(['ws-1']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

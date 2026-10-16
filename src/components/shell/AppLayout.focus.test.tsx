@@ -12,8 +12,16 @@ interface WorkspaceState {
   workspaces: Array<{ id: string; name: string; platform: string }>;
 }
 
-const { state, mounts, passthrough, nothing } = vi.hoisted(() => ({
+const { state, storage, mounts, passthrough, nothing } = vi.hoisted(() => ({
   state: { current: null as WorkspaceState | null },
+  storage: {
+    usage: null as {
+      usedBytes: number;
+      warnAtBytes: number;
+      warn: boolean;
+      exempt: boolean;
+    } | null,
+  },
   mounts: { count: 0 },
   passthrough: ({ children }: { children?: ReactNode }): ReactNode => children,
   nothing: (): null => null,
@@ -39,6 +47,9 @@ vi.mock('@/components/induction/useInductionData', () => ({
     state: { step: null, done: true },
     setStep: vi.fn(),
   }),
+}));
+vi.mock('@/components/storage/useStorageWarning', () => ({
+  useStorageWarning: () => ({ usage: storage.usage, dismissed: false, dismiss: vi.fn() }),
 }));
 vi.mock('@/lib/workspace-context-capability', () => ({ useWorkspaceCapability: () => true }));
 vi.mock('@/lib/use-current-profile', () => ({
@@ -115,6 +126,7 @@ const text = (): string => host?.textContent ?? '';
 
 beforeEach(() => {
   mounts.count = 0;
+  storage.usage = null;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -170,5 +182,21 @@ describe('AppLayout across workspace re-lists', () => {
     render({ loading: true, loaded: false, error: null, workspaces: ROWS });
 
     expect(text()).toBe('Loading');
+  });
+
+  it('shows the storage banner above the page without remounting the Outlet or Loading', () => {
+    render({ loading: false, loaded: true, error: null, workspaces: ROWS });
+    typeDraft('keep me too');
+    expect(host?.querySelector('[role="status"]')).toBeNull();
+
+    storage.usage = { usedBytes: 820 * 1024 * 1024, warnAtBytes: 1, warn: true, exempt: false };
+    render({ loading: false, loaded: true, error: null, workspaces: ROWS });
+
+    const banner = host?.querySelector('[role="status"]');
+    expect(banner?.textContent).toContain('Deleted files still count toward storage.');
+    expect(banner?.closest('main')).toBeNull();
+    expect(text()).not.toBe('Loading');
+    expect(mounts.count).toBe(1);
+    expect(draftValue()).toBe('keep me too');
   });
 });

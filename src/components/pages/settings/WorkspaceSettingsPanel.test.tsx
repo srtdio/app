@@ -57,12 +57,8 @@ vi.mock('@/lib/fetch', () => ({ fetchWithTrace: mockFetch }));
 
 import {
   CLIENT_NAME_FIXED_LINE,
-  parseStorageUsage,
   PLATFORM_FIXED_LINE,
-  readWarningDismissed,
-  storageWarningCopy,
   WorkspaceSettingsPanel,
-  writeWarningDismissed,
 } from './WorkspaceSettingsPanel';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -200,7 +196,7 @@ describe('WorkspaceSettingsPanel', () => {
   });
 });
 
-describe('storage warning', () => {
+describe('storage figure', () => {
   const MB = 1024 * 1024;
 
   async function settle(): Promise<void> {
@@ -209,75 +205,36 @@ describe('storage warning', () => {
     });
   }
 
-  function usageResponse(usedBytes: number, warn: boolean): Response {
-    return Response.json({ usedBytes, warnAtBytes: 800 * MB, warn, exempt: false });
+  function usageResponse(usedBytes: number, warn: boolean, exempt = false): Response {
+    return Response.json({ usedBytes, warnAtBytes: 800 * MB, warn, exempt });
   }
 
-  it('words the one warning in whole MB of the 1 GB', () => {
-    expect(storageWarningCopy(820 * MB + 12345)).toBe(
-      'This workspace has used 820 MB of its 1 GB.',
-    );
-  });
-
-  it('accepts only a well-formed usage body', () => {
-    expect(parseStorageUsage({ usedBytes: 1, warnAtBytes: 2, warn: false, exempt: true })).toEqual({
-      usedBytes: 1,
-      warnAtBytes: 2,
-      warn: false,
-      exempt: true,
-    });
-    expect(parseStorageUsage({ error: { code: 'usage_unavailable' } })).toBeNull();
-  });
-
-  it('keeps dismissal per viewer and survives blocked storage', () => {
-    writeWarningDismissed('ws-1', 'user-owner');
-    expect(readWarningDismissed('ws-1', 'user-owner')).toBe(true);
-    expect(readWarningDismissed('ws-1', 'user-admin')).toBe(false);
-    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('blocked');
-    });
-    expect(readWarningDismissed('ws-1', 'user-owner')).toBe(false);
-    spy.mockRestore();
-  });
-
-  it('shows a dismissible banner to an owner or admin at 800 MB', async () => {
-    state.canEdit = true;
-    state.userId = 'user-owner';
-    mockFetch.mockImplementation(async () => usageResponse(820 * MB, true));
+  it('shows any member the usage figure, with no second dismissible banner', async () => {
+    state.canEdit = false;
+    state.userId = 'user-member';
+    mockFetch.mockImplementation(async () => usageResponse(820 * MB + 12345, true));
     await render();
     await settle();
     expect(mockFetch.mock.calls[0]![0]).toBe('https://upload.test/usage?workspace_id=ws-1');
-    const banner = document.querySelector('[role="status"]');
-    expect(banner?.textContent).toContain('This workspace has used 820 MB of its 1 GB.');
-    const close = banner!.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!;
-    expect(close.className).toContain('h-11 w-11');
-    await act(async () => close.click());
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('820 MB of 1 GB used');
+    expect(text).toContain('Deleted files still count toward storage.');
     expect(document.querySelector('[role="status"]')).toBeNull();
-    expect(readWarningDismissed('ws-1', 'user-owner')).toBe(true);
+    expect(document.querySelector('button[aria-label="Dismiss"]')).toBeNull();
   });
 
-  it('shows nothing under 800 MB or when usage is unavailable', async () => {
+  it('shows no figure for an exempt workspace or when usage is unavailable', async () => {
     state.canEdit = true;
     state.userId = 'user-owner';
-    mockFetch.mockImplementation(async () => usageResponse(100 * MB, false));
+    mockFetch.mockImplementation(async () => usageResponse(900 * MB, false, true));
     await render();
     await settle();
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(document.querySelector('[role="status"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('of 1 GB used');
     act(() => root?.unmount());
     document.body.innerHTML = '';
     mockFetch.mockImplementation(async () => new Response('{}', { status: 503 }));
     await render();
     await settle();
-    expect(document.querySelector('[role="status"]')).toBeNull();
-  });
-
-  it('never reads usage for a creator or approver', async () => {
-    state.canEdit = false;
-    state.userId = 'user-member';
-    await render();
-    await settle();
-    expect(mockFetch).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="status"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('of 1 GB used');
   });
 });

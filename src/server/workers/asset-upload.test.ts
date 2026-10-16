@@ -1687,6 +1687,13 @@ describe('asset-upload GET /usage', () => {
     expect(res.status).toBe(403);
   });
 
+  it('refuses a member of one workspace asking for another workspace', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const token = await mintToken(USER);
+    const res = await worker.fetch(usageRequest(token, OTHER_WORKSPACE), env);
+    expect(res.status).toBe(403);
+  });
+
   it('returns usage with warn at 800 MB for a member', async () => {
     state.members.add(`${USER}:${WORKSPACE}`);
     usageState.bytes = 800 * MB;

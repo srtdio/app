@@ -261,6 +261,25 @@ async function postUpload(
 }
 
 /**
+ * Window event fired after every successful upload (library, chat, post
+ * composer: they all go through uploadAssetFile), so the shell can re-read
+ * storage usage without importing any upload surface.
+ */
+export const UPLOAD_COMPLETE_EVENT = 'sorted:upload-complete';
+
+export interface UploadCompleteDetail {
+  workspaceId: string;
+}
+
+function dispatchUploadComplete(workspaceId: string): void {
+  // No window outside the browser (node-run tests): nothing is listening there.
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent<UploadCompleteDetail>(UPLOAD_COMPLETE_EVENT, { detail: { workspaceId } }),
+  );
+}
+
+/**
  * POST one file as multipart {file, workspace_id} (plus an optional display_name
  * and folder_id) with a Bearer token, over the config's transport (XHR when the
  * caller wants progress). Never throws: a transport failure or a
@@ -323,6 +342,7 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   // assetVersionId is the version the gallery add flow pins; include the key only
   // when the worker returned it, so callers that ignore it are unaffected.
   const thumbnail = thumbnailField(response.body);
+  dispatchUploadComplete(config.workspaceId);
   return {
     ok: true,
     reused: asset.reused,
