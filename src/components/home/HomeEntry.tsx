@@ -1,4 +1,5 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
+import { loadAdTags } from './ad-tags';
 import DemoPage from './DemoPage';
 import HomePage from './HomePage';
 import PricingPage from './PricingPage';
@@ -49,6 +50,8 @@ const PAGES = { home: HomePage, pricing: PricingPage, demo: DemoPage };
 
 export function HomeEntry() {
   const Page = PAGES[homePageFor(window.location.pathname)];
+  // After the first commit; loadAdTags then waits for idle and runs once.
+  useEffect(loadAdTags, []);
   return (
     <HomeErrorBoundary>
       <Page />
