@@ -5,14 +5,12 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PLANS } from './config';
 import { DEMO_NOTICE } from './demo';
 import DemoPage from './DemoPage';
 import { FEATURES, FEATURE_KEYS, featureFromHash, featureId } from './features';
 import { isHomeBundlePath } from './guest-path';
 import { homePageFor } from './HomeEntry';
 import HomePage from './HomePage';
-import PricingPage from './PricingPage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -34,18 +32,25 @@ afterEach(() => {
 });
 
 describe('routes', () => {
-  it('/pricing and /demo are home-bundle paths; nothing else is', () => {
-    expect(isHomeBundlePath('/pricing')).toBe(true);
+  it('/demo is the only home-bundle path', () => {
     expect(isHomeBundlePath('/demo')).toBe(true);
-    for (const path of ['/', '/pipeline', '/pricing/x', '/stories', '/Demo']) {
+    for (const path of ['/', '/pipeline', '/pricing', '/stories', '/Demo']) {
       expect(isHomeBundlePath(path)).toBe(false);
     }
   });
 
   it('HomeEntry picks the page by path', () => {
-    expect(homePageFor('/pricing')).toBe('pricing');
     expect(homePageFor('/demo')).toBe('demo');
     expect(homePageFor('/')).toBe('home');
+  });
+
+  it('/pricing is no page of its own, and no home page shows a price or a trial', () => {
+    expect(homePageFor('/pricing')).toBe('home');
+    for (const html of [renderToStaticMarkup(<HomePage />), renderToStaticMarkup(<DemoPage />)]) {
+      expect(html).not.toContain('₹');
+      expect(html).not.toContain('15 days');
+      expect(html).not.toContain('/pricing');
+    }
   });
 });
 
@@ -91,15 +96,11 @@ describe('sidebar', () => {
     expect(FEATURES.map((f) => f.key)).toEqual([...FEATURE_KEYS]);
   });
 
-  it('on /pricing and /demo the tiles load "/#feature-<key>"', () => {
-    for (const html of [
-      renderToStaticMarkup(<PricingPage />),
-      renderToStaticMarkup(<DemoPage />),
-    ]) {
-      expect(attrs(html, /href="([^"]+)" data-feature-tile/g)).toEqual(
-        FEATURE_KEYS.map((key) => `/#${featureId(key)}`),
-      );
-    }
+  it('on /demo the tiles load "/#feature-<key>"', () => {
+    const html = renderToStaticMarkup(<DemoPage />);
+    expect(attrs(html, /href="([^"]+)" data-feature-tile/g)).toEqual(
+      FEATURE_KEYS.map((key) => `/#${featureId(key)}`),
+    );
   });
 
   it('reads a tile hash back to its key', () => {
@@ -108,31 +109,16 @@ describe('sidebar', () => {
     expect(featureFromHash('#features')).toBeNull();
   });
 
-  it('Pricing and Book a demo rows, once each; stories are not links or buttons', () => {
+  it('one Book a demo row and no Pricing row; stories are not links or buttons', () => {
     const html = renderToStaticMarkup(<HomePage />);
     const nav = html.slice(html.indexOf('class="nav-main"'), html.indexOf('class="foot"'));
-    expect(nav.match(/href="\/pricing"/g)).toHaveLength(1);
-    expect(nav).toContain('from ₹499');
+    expect(nav).not.toContain('Pricing');
     expect(nav.match(/href="\/demo"/g)).toHaveLength(1);
     const stories = nav.slice(nav.indexOf('class="stories"'));
     expect(stories).not.toMatch(/<a\b|<button\b|tabindex|role="link"|role="button"/);
     expect(stories.match(/Coming soon/g)).toHaveLength(3);
     expect(stories).toContain('Why every agency has a file called final_FINAL_v3');
     expect(html).not.toContain('/stories');
-  });
-});
-
-describe('/pricing', () => {
-  it('renders one card per plan from the config, with its CTA', () => {
-    const html = renderToStaticMarkup(<PricingPage />);
-    expect(attrs(html, /data-plan="([^"]+)"/g)).toEqual(PLANS.map((p) => p.name));
-    for (const plan of PLANS) {
-      expect(html).toContain(plan.price);
-      expect(html).toContain(`href="${plan.cta.href}">${plan.cta.label}</a>`);
-    }
-    expect(html).toContain('One price per client. Clients are free.');
-    expect(html).toContain('href="/">');
-    expect(html).toContain('Back to home');
   });
 });
 

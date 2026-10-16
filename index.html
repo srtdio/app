@@ -41,8 +41,8 @@
           });
         }
         var callback = /(?:^|[?&#])(?:code|type)=|access_token|refresh_token|error_description/;
-        // isHomeBundlePath: /pricing and /demo are light for everyone.
-        var homeBundlePath = location.pathname === '/pricing' || location.pathname === '/demo';
+        // isHomeBundlePath: /demo is light for everyone.
+        var homeBundlePath = location.pathname === '/demo';
         if (
           !homeBundlePath &&
           (location.pathname !== '/' ||

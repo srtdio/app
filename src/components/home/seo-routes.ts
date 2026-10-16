@@ -65,14 +65,6 @@ export const SEO_ROUTES: readonly SeoRoute[] = [
     file: 'legal/terms-and-conditions.html',
   },
   {
-    path: '/pricing',
-    title: 'Pricing | Sorted',
-    description: HOME_DESCRIPTION,
-    indexable: false,
-    bundle: 'home',
-    file: 'pricing.html',
-  },
-  {
     path: '/demo',
     title: 'Demo | Sorted',
     description: HOME_DESCRIPTION,

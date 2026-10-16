@@ -6,7 +6,7 @@
 //   dist/index.html                 empty app shell, untouched: Pages serves it
 //                                   for every path with no file (SPA fallback)
 //   dist/prerender/home.html        "/" (public/_redirects rewrites / to it)
-//   dist/pricing.html, demo.html    /pricing, /demo
+//   dist/demo.html                  /demo
 //   dist/legal/<policy>.html        /legal/privacy-policy, /legal/terms-and-conditions
 //   dist/sitemap.xml                the indexable routes, lastmod = build date
 //
@@ -14,14 +14,17 @@
 // shell is not empty, so a broken prerender fails the build.
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { build, type Plugin } from 'vite';
 import viteConfig from '../vite.config.ts';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
-const dist = join(repoRoot, 'dist');
+// `--dist <dir>` prerenders another build output (the e2e first-paint specs
+// build into their own folder); the default is dist/.
+const distArg = process.argv.indexOf('--dist');
+const dist = distArg > 0 ? resolve(process.argv[distArg + 1] ?? 'dist') : join(repoRoot, 'dist');
 // Inside the repo so the SSR bundle resolves react and friends from node_modules.
 const ssrOut = join(repoRoot, 'node_modules', '.cache', 'srtd-prerender');
 
@@ -140,7 +143,7 @@ async function main(): Promise<void> {
     const out = join(dist, route.file);
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, html);
-    process.stdout.write(`prerender: ${route.path} -> dist/${route.file}\n`);
+    process.stdout.write(`prerender: ${route.path} -> ${out}\n`);
   }
 
   const lastmod = new Date().toISOString().slice(0, 10);

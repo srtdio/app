@@ -35,7 +35,6 @@ describe('seo routes', () => {
       '/',
       '/legal/privacy-policy',
       '/legal/terms-and-conditions',
-      '/pricing',
       '/demo',
     ]);
     for (const route of SEO_ROUTES) {
@@ -64,11 +63,11 @@ describe('seo routes', () => {
     }
   });
 
-  it('marks /pricing and /demo noindex and nothing else', () => {
+  it('marks /demo noindex and nothing else', () => {
     const noindex = SEO_ROUTES.filter((r) =>
       routeHeadTags(r).includes('<meta name="robots" content="noindex" />'),
     );
-    expect(noindex.map((r) => r.path)).toEqual(['/pricing', '/demo']);
+    expect(noindex.map((r) => r.path)).toEqual(['/demo']);
   });
 
   it('lists exactly the three indexable routes in the sitemap', () => {
@@ -143,6 +142,12 @@ describe('static files and shell', () => {
     expect(read('public/_headers')).not.toMatch(/Content-Security-Policy/i);
   });
 
+  it('has no /pricing page: no route, no header exception (it 301s to /)', () => {
+    expect(SEO_ROUTES.some((r) => r.path === '/pricing')).toBe(false);
+    expect(read('public/_headers')).not.toMatch(/pricing/);
+    expect(read('index.html')).not.toMatch(/pricing/);
+  });
+
   it('keeps llms.txt free of prices, plans and trials', () => {
     expect(read('public/llms.txt')).not.toMatch(/price|pricing|plans|trial|free|₹|INR/i);
   });
@@ -158,6 +163,10 @@ describe.runIf(existsSync(join(repo, 'dist', 'prerender', 'home.html')))('build 
       expect(bodyText(html).length).toBeGreaterThan(400);
       expect(html).not.toMatch(/fbevents|googletagmanager|licdn/);
     }
+  });
+
+  it('writes no /pricing page', () => {
+    expect(existsSync(join(repo, 'dist', 'pricing.html'))).toBe(false);
   });
 
   it('leaves the app fallback shell with an empty #root', () => {

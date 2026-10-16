@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { DEMO, PLANS } from './config';
+import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DEMO } from './config';
+import DemoPage from './DemoPage';
 import {
   DEMO_ERRORS,
   addDays,
@@ -117,14 +120,25 @@ describe('demo form errors', () => {
   });
 });
 
-describe('plans config', () => {
-  it('four plans, approved prices, Enterprise books a demo', () => {
-    expect(PLANS.map((p) => [p.name, p.price])).toEqual([
-      ['Solo', '₹499'],
-      ['Studio', '₹749'],
-      ['Agency', '₹999'],
-      ['Enterprise', 'Custom'],
-    ]);
-    expect(PLANS.map((p) => p.cta.href)).toEqual(['/signup', '/signup', '/signup', '/demo']);
+// /demo is prerendered once at build time and hydrated on any later day, so
+// its server HTML must not depend on the date (no hydration mismatch).
+describe('/demo server render', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const renderAt = (iso: string): string => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(iso));
+    return renderToString(createElement(DemoPage));
+  };
+
+  it('is identical on different dates, months and month lengths', () => {
+    const october = renderAt('2026-10-14T04:30:00Z');
+    expect(renderAt('2027-01-29T04:30:00Z')).toBe(october);
+    // February 2027 starts on a Monday: a four-week month.
+    expect(renderAt('2027-02-01T04:30:00Z')).toBe(october);
+    expect(october).not.toMatch(/October 2026|data-day/);
+    expect(october.match(/class="cal-pad"/g)).toHaveLength(42);
   });
 });

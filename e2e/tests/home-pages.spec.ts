@@ -1,11 +1,12 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { SEO_ROUTES, prerenderDocument } from '../../src/components/home/seo-routes';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
-// Homepage, /pricing and /demo (home bundle, light only). The harness keeps "/"
-// as its smoke page, so "/" is served the homepage fixture (home.html) here.
-// /pricing and /demo route to HomeEntry in the harness itself. Every project
+// Homepage and /demo (home bundle, light only). The harness keeps "/" as its
+// smoke page, so "/" is served the homepage fixture (home.html) here. /demo
+// routes to HomeEntry in the harness itself. Every project
 // emulates its colour scheme; iphone-webkit is dark, so "stays light" is
 // checked on a dark-mode device. Linux WebKit approximates iOS WebKit.
 
@@ -98,24 +99,23 @@ test.describe('phone', () => {
     }
   });
 
-  test('from /pricing a tile loads the homepage on that card', async ({ page }) => {
+  test('from /demo a tile loads the homepage on that card', async ({ page }) => {
     await serveHome(page);
     for (const key of ['plan', 'briefs'] as const) {
-      await page.goto('/pricing');
+      await page.goto('/demo');
       await tapTile(page, key);
       await page.waitForURL(`**/#feature-${key}`);
       await expectCardInView(page, key);
     }
   });
 
-  test('sidebar: Pricing and Book a demo rows, stories are not links', async ({ page }) => {
+  test('sidebar: a Book a demo row, no Pricing row, stories are not links', async ({ page }) => {
     await serveHome(page);
     await page.goto('/');
     await page.getByRole('button', { name: 'Open menu' }).click();
     const menu = page.locator('#home-menu');
-    const pricing = menu.getByRole('link', { name: /Pricing/ });
-    await expect(pricing).toHaveAttribute('href', '/pricing');
-    await expect(pricing).toContainText('from ₹499');
+    await expect(menu.getByRole('link', { name: /Pricing/ })).toHaveCount(0);
+    await expect(page.locator('a[href="/pricing"]')).toHaveCount(0);
     await expect(menu.getByRole('link', { name: /Book a demo/ })).toHaveAttribute('href', '/demo');
     const stories = menu.locator('.stories .story');
     await expect(stories).toHaveCount(3);
@@ -131,29 +131,13 @@ test.describe('phone', () => {
     }
   });
 
-  test('/pricing and /demo load directly and from links; Back to home', async ({ page }) => {
+  test('/demo loads directly and from the menu; Back to home', async ({ page }) => {
     await serveHome(page);
-    await page.goto('/pricing');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-      'One price per client. Clients are free.',
-    );
-    await expectLight(page);
-    await expect(page.locator('.plan')).toHaveCount(4);
-    for (const cta of await page.locator('.plan .btn').all()) {
-      expectMinTouchTarget(await cta.boundingBox());
-    }
-
-    // From the homepage menu to /pricing, then the Enterprise card to /demo.
     await page.goto('/');
     await page.getByRole('button', { name: 'Open menu' }).click();
     await page
       .locator('#home-menu')
-      .getByRole('link', { name: /Pricing/ })
-      .click();
-    await page.waitForURL('**/pricing');
-    await page
-      .locator('[data-plan="Enterprise"]')
-      .getByRole('link', { name: 'Book a demo' })
+      .getByRole('link', { name: /Book a demo/ })
       .click();
     await page.waitForURL('**/demo');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
@@ -305,18 +289,7 @@ test.describe('desktop: one thing per screen @desktop', () => {
         for (const height of m.benefits) expect(height).toBeLessThanOrEqual(m.screen);
       });
 
-      test('pricing: four equal cards in one row; demo fits beside its intro', async ({ page }) => {
-        await page.goto('/pricing');
-        await expect(page.locator('.plan')).toHaveCount(4);
-        const boxes = await page.locator('.plan').evaluateAll((els) =>
-          els.map((el) => {
-            const r = el.getBoundingClientRect();
-            return { top: Math.round(r.top), h: Math.round(r.height) };
-          }),
-        );
-        expect(boxes).toHaveLength(4);
-        expect(new Set(boxes.map((b) => b.top)).size).toBe(1);
-        expect(new Set(boxes.map((b) => b.h)).size).toBe(1);
+      test('demo fits beside its intro', async ({ page }) => {
         await page.goto('/demo');
         await expect(page.locator('.demo-form')).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
@@ -327,46 +300,75 @@ test.describe('desktop: one thing per screen @desktop', () => {
   }
 });
 
-// "/" is served prerendered homepage markup (scripts/prerender.ts). The inline
-// head script in index.html must keep a signed-in visitor from ever seeing it:
-// not one frame, and no light canvas in dark mode. This serves the real
-// index.html, filled the way the build fills it, with the app entry removed so
-// only the inline scripts run. Every animation frame from before first paint
-// records the DOM; screenshots stay off.
+// Zero flash on the REAL build. "/" ships prerendered homepage markup
+// (scripts/prerender.ts); the inline head script in index.html must keep a
+// signed-in visitor from ever seeing it: not one frame, and no light canvas in
+// dark mode. This builds the app once (vite build + prerender, into its own
+// folder) and serves that output the way Cloudflare Pages does (public/
+// _redirects rewrites "/" to the prerendered page; files by path, then .html;
+// anything else gets the empty shell). Every animation frame from before first
+// paint records the DOM; screenshots stay off.
 
-const HOME_CSS = '/__prerender-home.css';
-// The rule from home.css that would turn the canvas white if .home stayed in the DOM.
-const HOME_CSS_BODY = ':root{--srtd-home:1}html:has(.home){background:#ffffff}';
-const MARKUP = '<div class="home"><main><h1 class="d">Social media teams</h1></main></div>';
+// Under node_modules/.cache so lint, format and git all skip it.
+const BUILT = resolve('node_modules/.cache/srtd-first-paint-dist');
+const ORIGIN = 'http://srtd.test';
 const DARK = 'rgb(12, 13, 16)';
 const LIGHT = 'rgb(247, 248, 249)';
+const WHITE_CANVAS = 'rgb(255, 255, 255)';
+const MIME: Record<string, string> = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.woff2': 'font/woff2',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+};
+
+/**
+ * A stored session the app accepts without a network call (Supabase reads it
+ * from storage; it is not refreshed before expires_at), so the app routes the
+ * visitor as signed in, the way production does.
+ */
+function signedIn(): Record<string, string> {
+  const session = {
+    access_token: 'e2e',
+    refresh_token: 'e2e',
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    user: { id: '00000000-0000-0000-0000-000000000000', aud: 'authenticated' },
+  };
+  return { 'sb-e2e-auth-token': JSON.stringify(session) };
+}
 
 interface Frame {
   home: boolean;
+  /** Prerendered homepage markup on screen (the app has not taken #root yet). */
+  prerendered: boolean;
   rootChildren: number;
   bg: string;
 }
 
-function prerenderedHome(): string {
-  const route = SEO_ROUTES.find((r) => r.path === '/');
-  if (route === undefined) throw new Error('no "/" route');
-  const shell = readFileSync('index.html', 'utf8').replace(
-    /<script type="module"[^>]*><\/script>/,
-    '',
-  );
-  return prerenderDocument({ template: shell, route, markup: MARKUP, stylesheets: [HOME_CSS] });
+/** The built file Pages would serve for a path (see public/_redirects). */
+function builtFile(pathname: string): string {
+  if (pathname === '/') return join(BUILT, 'prerender', 'home.html');
+  const direct = join(BUILT, pathname);
+  if (existsSync(direct) && extname(direct) !== '') return direct;
+  if (existsSync(`${direct}.html`)) return `${direct}.html`;
+  return join(BUILT, 'index.html');
 }
 
-async function serve(page: Page): Promise<void> {
-  const html = prerenderedHome();
-  await page.route(
-    (url) => url.pathname === '/',
-    (route) => route.fulfill({ contentType: 'text/html', body: html }),
-  );
-  await page.route(
-    (url) => url.pathname === HOME_CSS,
-    (route) => route.fulfill({ contentType: 'text/css', body: HOME_CSS_BODY }),
-  );
+async function serveBuild(page: Page): Promise<void> {
+  // Only the built site answers; the app's own calls after boot go nowhere.
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin !== ORIGIN) return route.abort();
+    const file = builtFile(url.pathname);
+    return route.fulfill({
+      contentType: MIME[extname(file)] ?? 'application/octet-stream',
+      body: readFileSync(file),
+    });
+  });
 }
 
 /** Records every frame from the first one, before anything paints. */
@@ -378,10 +380,11 @@ async function recordFrames(page: Page, storage: Record<string, string>): Promis
     const tick = (): void => {
       frames.push({
         home: document.querySelector('.home') !== null,
+        prerendered: document.querySelector('#root[data-prerender="home"] .home') !== null,
         rootChildren: document.getElementById('root')?.childElementCount ?? -1,
         bg: getComputedStyle(document.documentElement).backgroundColor,
       });
-      if (frames.length < 30) requestAnimationFrame(tick);
+      if (frames.length < 40) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   }, storage);
@@ -390,34 +393,55 @@ async function recordFrames(page: Page, storage: Record<string, string>): Promis
 async function framesOf(page: Page): Promise<Frame[]> {
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __frames: Frame[] }).__frames.length))
-    .toBeGreaterThanOrEqual(30);
+    .toBeGreaterThanOrEqual(40);
   return page.evaluate(() => (window as unknown as { __frames: Frame[] }).__frames);
 }
 
-test.describe('prerendered "/" first paint', () => {
+test.describe('prerendered "/" first paint, built output', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeAll(() => {
+    test.setTimeout(300_000);
+    // CI unset: the Sentry upload plugin is for the deploy build only.
+    const env = {
+      ...process.env,
+      CI: '',
+      VITE_SUPABASE_URL: 'https://e2e.supabase.test',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_e2e_000000000000',
+    };
+    const vite = resolve('node_modules/vite/bin/vite.js');
+    execFileSync(
+      process.execPath,
+      [vite, 'build', '--outDir', BUILT, '--emptyOutDir', '--logLevel', 'warn'],
+      {
+        env,
+        stdio: 'inherit',
+      },
+    );
+    execFileSync(
+      process.execPath,
+      ['--experimental-strip-types', '--no-warnings', 'scripts/prerender.ts', '--dist', BUILT],
+      { env, stdio: 'inherit' },
+    );
+  });
+
   test('a signed-in dark-mode visitor never sees the homepage or a light frame', async ({
     page,
   }) => {
-    await serve(page);
-    await recordFrames(page, {
-      'sb-e2e-auth-token': '{}',
-      'sorted-theme': 'dark',
-    });
-    await page.goto('/');
-    const frames = await framesOf(page);
-    for (const frame of frames) {
+    await serveBuild(page);
+    await recordFrames(page, { ...signedIn(), 'sorted-theme': 'dark' });
+    await page.goto(`${ORIGIN}/`);
+    for (const frame of await framesOf(page)) {
       expect(frame.home).toBe(false);
       expect(frame.bg).toBe(DARK);
     }
-    await expect(page.locator('#root')).toBeEmpty();
     await expect(page.locator('link[data-prerender-css]')).toHaveCount(0);
-    expect(await page.locator('#root').getAttribute('data-prerender')).toBeNull();
   });
 
   test('a signed-in light-mode visitor never sees the homepage', async ({ page }) => {
-    await serve(page);
-    await recordFrames(page, { 'sb-e2e-auth-token': '{}' });
-    await page.goto('/');
+    await serveBuild(page);
+    await recordFrames(page, signedIn());
+    await page.goto(`${ORIGIN}/`);
     for (const frame of await framesOf(page)) {
       expect(frame.home).toBe(false);
       expect(frame.bg).toBe(LIGHT);
@@ -425,23 +449,35 @@ test.describe('prerendered "/" first paint', () => {
   });
 
   test('an auth callback on "/" never shows the homepage', async ({ page }) => {
-    await serve(page);
+    await serveBuild(page);
     await recordFrames(page, {});
-    await page.goto('/?code=abc');
-    for (const frame of await framesOf(page)) expect(frame.home).toBe(false);
+    await page.goto(`${ORIGIN}/?code=abc`);
+    // The failed code exchange (no network here) leaves a guest, whom the app
+    // itself then shows the homepage; the prerendered copy must never show.
+    for (const frame of await framesOf(page)) expect(frame.prerendered).toBe(false);
   });
 
   test('a guest sees the homepage from first paint, on a white canvas', async ({ page }) => {
-    await serve(page);
+    await serveBuild(page);
     await recordFrames(page, { 'sorted-theme': 'dark' });
-    await page.goto('/');
+    await page.goto(`${ORIGIN}/`);
     // Any frame with markup in #root is the homepage; the canvas is white throughout.
     const frames = await framesOf(page);
     expect(frames.some((frame) => frame.home)).toBe(true);
     for (const frame of frames) {
       if (frame.rootChildren > 0) expect(frame.home).toBe(true);
-      expect(frame.bg).toBe('rgb(255, 255, 255)');
+      expect(frame.bg).toBe(WHITE_CANVAS);
     }
-    await expect(page.getByRole('heading', { name: 'Social media teams' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Social media teams/ })).toBeVisible();
+  });
+
+  test('an app route gets the empty shell, dark from the first frame', async ({ page }) => {
+    await serveBuild(page);
+    await recordFrames(page, { ...signedIn(), 'sorted-theme': 'dark' });
+    await page.goto(`${ORIGIN}/pipeline`);
+    for (const frame of await framesOf(page)) {
+      expect(frame.home).toBe(false);
+      expect(frame.bg).toBe(DARK);
+    }
   });
 });
