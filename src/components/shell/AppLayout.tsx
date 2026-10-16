@@ -22,6 +22,9 @@ import { dispatchSorted } from '@/lib/events';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { useCurrentProfile } from '@/lib/use-current-profile';
+import { useSession } from '@/lib/session-context';
+import { useRecentRecorder } from '@/lib/recent-items';
+import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
 
@@ -73,7 +76,9 @@ export function AppLayout() {
     refetch: refetchProfile,
   } = useCurrentProfile();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
   const chrome = shellChrome(isThreadRoute(pathname, searchParams));
   const [paletteOpen, setPaletteOpen] = useState(false);
   // Induction tailors its brief steps to whether the role holds brief.create.
@@ -109,6 +114,17 @@ export function AppLayout() {
     wParam !== '' &&
     workspaces.some((x) => x.id === wParam) &&
     wParam !== workspaceId;
+
+  // The palette's recents: this is the one place opens are recorded.
+  useRecentRecorder({
+    client: supabase,
+    pathname,
+    search,
+    workspaceId,
+    workspaceKey,
+    userId,
+    paused: loading || switchPending,
+  });
 
   // The induction: induction_state for the active workspace (null before one
   // exists). With no workspace yet, the stored step decides between the
@@ -296,6 +312,7 @@ export function AppLayout() {
                 onClose={() => setPaletteOpen(false)}
                 workspaceId={workspaceId}
                 workspaceKey={workspaceKey}
+                userId={userId}
               />
               <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
               <WorkspaceSwitcher />

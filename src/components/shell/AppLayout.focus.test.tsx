@@ -28,6 +28,9 @@ const { state, storage, mounts, passthrough, nothing } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+vi.mock('@/lib/session-context', () => ({
+  useSession: () => ({ session: null, loading: false }),
+}));
 vi.mock('@/components/shell/Sidebar', () => ({ Sidebar: nothing }));
 vi.mock('@/components/shell/BottomTabs', () => ({ BottomTabs: nothing }));
 vi.mock('@/components/shell/Topbar', () => ({ Topbar: nothing }));

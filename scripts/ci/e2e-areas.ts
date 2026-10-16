@@ -57,6 +57,8 @@ const CHAT_SPECS = [
   'chat-thread',
   'chat-tray',
   'chat-username-mentions',
+  // The search screen (command palette), opened over the chat home.
+  'command-palette',
   // Start on /chat and open plans, files or the onboarding over it.
   'plan-add-move',
   'plan-desktop',

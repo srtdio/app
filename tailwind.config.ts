@@ -44,6 +44,7 @@ export default {
         'overlay-surface': 'var(--overlay-surface)',
         'overlay-line': 'var(--overlay-line)',
         'overlay-dot': 'var(--overlay-dot)',
+        scrim: 'var(--scrim)',
       },
       fontFamily: {
         sans: [

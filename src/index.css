@@ -35,6 +35,8 @@
   --tick-read: #a5f3fc;
   --media-meta-bg: rgba(0, 0, 0, 0.55);
   --media-meta-fg: #ffffff;
+  /* The dim behind a modal surface (the command palette). */
+  --scrim: rgba(20, 22, 30, 0.45);
   --good: #3e7d54;
   --warn: #b8772b;
   --bad: #c2392b;
@@ -93,6 +95,8 @@
   --tick-read: #a5f3fc;
   --media-meta-bg: rgba(0, 0, 0, 0.55);
   --media-meta-fg: #ffffff;
+  /* Darker in dark mode so the panel still lifts off the page. */
+  --scrim: rgba(0, 0, 0, 0.6);
   --good: #5fb07d;
   --warn: #d59a4a;
   --bad: #e0685a;
