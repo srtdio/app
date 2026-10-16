@@ -3242,11 +3242,11 @@ describe('@mentions in bubbles', () => {
     );
   }
 
-  it('turns every token into "@Name", unknown into "@Unknown member", never a raw token', () => {
+  it('turns every token into "@Name", unknown into "@Former member", never a raw token', () => {
     const html = markup(false);
     expect(html).toContain('@Ben');
     expect(html).toContain('@Me Person');
-    expect(html).toContain('@Unknown member');
+    expect(html).toContain('@Former member');
     expect(html).not.toContain('@[');
   });
 
@@ -3318,7 +3318,7 @@ describe('@mentions in bubbles', () => {
   });
 
   it('copy to clipboard reads "@Name"', () => {
-    expect(resolveMentionText(body, nameOf)).toBe('hi @Ben, @Me Person and @Unknown member');
+    expect(resolveMentionText(body, nameOf)).toBe('hi @Ben, @Me Person and @Former member');
   });
 
   it('a body with no mention renders exactly as before', () => {

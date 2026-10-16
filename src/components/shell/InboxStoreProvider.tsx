@@ -41,6 +41,7 @@ import {
 import { enrichNewRows, fetchInboxSince, fetchInboxUnreadCount } from '@/lib/inbox/inbox-reads';
 import { readProfiles } from '@/lib/chat-reads';
 import { requestBellRefresh } from '@/lib/chat/bell';
+import { listenForNameSignout, resetMentionNames } from '@/lib/chat/mentions';
 import { BellRing } from '@/components/chat/BellRing';
 
 /** The slice the nav reads: the actionable unread count for the active workspace. */
@@ -109,20 +110,26 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
         logger.warn('inbox store: since fetch failed', { error: sinceRes.error.message });
         return;
       }
-      const summary = summarizeNew(sinceRes.data, sinceMs);
+      const summary = summarizeNew(sinceRes.data.rows, sinceMs);
       highWaterRef.current = summary.nextHighWaterMs;
       const { activity: newRows, chatMentions } = splitNewRows(summary.newRows);
       const elsewhere = chatMentions.filter((r) => r.entity_id !== openChatRef.current);
       if (elsewhere.length > 0) void toastMentions(elsewhere);
       if (newRows.length === 0) return;
 
-      const enriched = await enrichNewRows(supabase, newRows);
+      // The count is exact (bell rows are filtered before the cap), not the page size.
+      const enriched = await enrichNewRows(
+        supabase,
+        newRows,
+        undefined,
+        sinceRes.data.activityCount,
+      );
       const spec = toastFromEnriched(enriched);
       if (spec === null) return;
 
       const newest = pickNewest(newRows);
       const href =
-        newRows.length === 1 && newest !== null
+        enriched.count === 1 && newest !== null
           ? (entityHref(mapEntry(newest)) ?? '/activity')
           : '/activity';
       toast.show({
@@ -171,6 +178,15 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       onPress: () => navigate(spec.href),
     });
   };
+
+  // Sign-out, and a different signed-in user on this tab, clear the shared name
+  // registry, so a second account never sees the first account's names.
+  useEffect(() => listenForNameSignout(window), []);
+  const namesUserRef = useRef<string | null>(userId);
+  if (namesUserRef.current !== userId) {
+    if (namesUserRef.current !== null) resetMentionNames();
+    namesUserRef.current = userId;
+  }
 
   // Mount + workspace/user switch: reset the high-water mark to now (the backlog
   // must not toast) and seed the count. A null tenant clears the count to zero.

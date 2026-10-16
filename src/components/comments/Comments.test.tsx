@@ -30,6 +30,7 @@ import {
   commentActions,
   commentCopyText,
   commentDomId,
+  editableBody,
   isPointFrozen,
   mergeCheckpoints,
   parseBatchRows,
@@ -440,10 +441,10 @@ describe('checkpoint state + feed controls', () => {
     expect(showCheckpointWithdrawal(clientTurn)).toBe(false);
   });
 
-  it('names the withdrawing member, falling back to the ex-member label', () => {
+  it('names the withdrawing member, falling back to "Former member"', () => {
     expect(checkpointWithdrawalText(WITHDRAWN, 'Ada')).toMatch(/^Confirmation withdrawn by Ada · /);
     expect(checkpointWithdrawalText(WITHDRAWN, null)).toMatch(
-      /^Confirmation withdrawn by \(ex-member\) · /,
+      /^Confirmation withdrawn by Former member · /,
     );
   });
 
@@ -609,9 +610,15 @@ describe('renderCommentBody (author + mention resolution)', () => {
     expect((span.props as { className: string }).className).toContain('text-accent');
   });
 
-  it('renders an unresolved mention as @(ex-member)', () => {
+  it('renders nothing for a not-yet-read mention: no placeholder, never a raw token', () => {
     const tree = renderCommentBody(`ping @[${UUID_B}]`, () => null);
-    expect(text(tree)).toContain('@(ex-member)');
+    expect(text(tree)).not.toContain('@[');
+    expect(text(tree)).not.toMatch(/Unknown member|ex-member/);
+  });
+
+  it('renders a former member mention as "@Former member" (no real name)', () => {
+    const tree = renderCommentBody(`ping @[${UUID_B}]`, () => 'Former member');
+    expect(text(tree)).toContain('@Former member');
   });
 
   it('resolves an author id to a display name (not the raw uuid)', () => {
@@ -1110,5 +1117,31 @@ describe('renderReplyList (replies are permanently open)', () => {
 
   it('renders nothing (no empty list container) when there are no replies', () => {
     expect(renderReplyList([], renderReply)).toBeNull();
+  });
+});
+
+describe('comment edit box mentions', () => {
+  it('shows @username instead of @[uuid] and saves the token back', async () => {
+    const { serializeMentions } = await import('@/lib/chat/mentions');
+    const body = `hi @[${UUID_A}] and @[${UUID_B}] ok`;
+    const shown = editableBody(body, (id) => (id === UUID_A ? 'ada.k' : 'Former member'));
+    expect(shown.text).toBe('hi @ada.k and @Former member ok');
+    expect(shown.text).not.toContain('@[');
+    expect(serializeMentions(shown.text, shown.picks)).toBe(body);
+    // An edit around the mention keeps the token.
+    expect(serializeMentions(`${shown.text} thanks`, shown.picks)).toBe(`${body} thanks`);
+  });
+
+  it('keeps an unresolved mention as a pick so an edit never drops it', async () => {
+    const { serializeMentions } = await import('@/lib/chat/mentions');
+    const body = `ping @[${UUID_B}]`;
+    const shown = editableBody(body, () => null);
+    expect(shown.text).not.toContain('@[');
+    expect(serializeMentions(shown.text, shown.picks)).toBe(body);
+  });
+
+  it('the copy text reads a former member as "@Former member"', () => {
+    expect(commentCopyText(`cc @[${UUID_A}]`, () => 'Former member')).toBe('cc @Former member');
+    expect(commentCopyText(`cc @[${UUID_A}]`, () => 'ada.k')).toBe('cc @ada.k');
   });
 });

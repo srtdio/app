@@ -33,7 +33,7 @@ describe('T5 who reacted', () => {
     expect(model.rows.filter((r) => r.mine)).toHaveLength(1);
   });
 
-  it('unresolved names read Unknown member', () => {
-    expect(model.rows.find((r) => r.userId === 'ghost')?.name).toBe('Unknown member');
+  it('unresolved names read Former member', () => {
+    expect(model.rows.find((r) => r.userId === 'ghost')?.name).toBe('Former member');
   });
 });

@@ -106,6 +106,8 @@ import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
+import { mentionIds, resolvePersonMentionText } from '@/lib/chat/mentions';
+import { resolvePeople } from '@/lib/people-names';
 
 // Loaded on first post item open: the post view's graph (PCS, the chat SDK)
 // stays out of the chat bundle and out of node imports of this module.
@@ -257,6 +259,26 @@ export function PlanItemScreen(props: {
     item.id,
     (signal) => readItemScreen(supabase, item, (ids, s) => readProfiles(supabase, ids, s), signal),
   );
+  // Hand-typed mention tokens resolve through the shared batched name read
+  // (users + workspace_members, one .in() each); the tick re-renders once it lands.
+  const [, setNamesTick] = useState(0);
+  const mentionedIds = useMemo(
+    () =>
+      read.status === 'ready'
+        ? [...new Set(read.data.comments.flatMap((c: PlanCommentRow) => mentionIds(c.body)))]
+        : [],
+    [read],
+  );
+  useEffect(() => {
+    if (mentionedIds.length === 0) return;
+    let active = true;
+    void resolvePeople(supabase, workspaceId, mentionedIds).then(() => {
+      if (active) setNamesTick((n) => n + 1);
+    });
+    return () => {
+      active = false;
+    };
+  }, [mentionedIds, workspaceId]);
   const [overrides, setOverrides] = useState<Partial<Record<ReviewSide, ReviewStatus>>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -858,12 +880,18 @@ export function PlanItemScreen(props: {
                     <CommentRow
                       key={c.id}
                       comment={c}
+                      workspaceId={workspaceId}
                       timeZone={timeZone}
                       highlighted={highlighted === c.id}
                       rowRef={highlightRef}
                     />
                   ) : (
-                    <CommentRow key={c.id} comment={c} timeZone={timeZone} />
+                    <CommentRow
+                      key={c.id}
+                      comment={c}
+                      workspaceId={workspaceId}
+                      timeZone={timeZone}
+                    />
                   ),
                 )
               )}
@@ -997,6 +1025,7 @@ const HIGHLIGHT_MS = 2400;
 
 function CommentRow(props: {
   comment: ShownComment;
+  workspaceId: string | null;
   timeZone: string;
   highlighted?: boolean;
   rowRef?: RefObject<HTMLDivElement>;
@@ -1028,7 +1057,10 @@ function CommentRow(props: {
           {formatClockTime(c.createdAt, props.timeZone)}
         </time>
       </div>
-      <p className="whitespace-pre-wrap text-[15px] leading-[21px] text-fg">{c.body}</p>
+      {/* No mention picker here, but a typed token reads "@username" (or "@Former member"), never raw. */}
+      <p className="whitespace-pre-wrap text-[15px] leading-[21px] text-fg">
+        {resolvePersonMentionText(c.body, props.workspaceId)}
+      </p>
     </div>
   );
 }

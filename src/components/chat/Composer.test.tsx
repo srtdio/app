@@ -699,7 +699,7 @@ describe('H2 a failed member read never drops a mention', () => {
   const BEN = '22222222-2222-4222-8222-222222222222';
   const EX = '33333333-3333-4333-8333-333333333333';
 
-  it('H2 failed read keeps the mention (shown "@Unknown member") and sends it', async () => {
+  it('H2 failed read keeps the mention (shown "@Former member") and sends it', async () => {
     const stored = `hi @[${ANA}] and @[${BEN}] `;
     // The member read failed: nothing is confirmed gone, no names resolved.
     const shown = composerBodyFor(
@@ -708,7 +708,7 @@ describe('H2 a failed member read never drops a mention', () => {
       () => undefined,
       () => false,
     );
-    expect(shown.text).toBe('hi @Unknown member and @Unknown member ');
+    expect(shown.text).toBe('hi @Former member and @Former member ');
     expect(shown.picks).toHaveLength(2);
     const body = serializeMentions(shown.text, shown.picks);
     expect(body).toBe(stored);

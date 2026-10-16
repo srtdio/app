@@ -1,6 +1,6 @@
 // The PCS version-history sheet: every immutable version, newest first. Each row
 // shows v{n}, the author display name (resolved by the page from the same members
-// read PCS already uses, falling back to (ex-member)), and a localized timestamp.
+// read PCS already uses, falling back to "Former member"), and a localized timestamp.
 // The current version carries a marker and just closes the sheet on tap; tapping
 // any older row asks the page to enter the read-only old-version view. When there
 // are two or more versions, each row also gains a leading select control: pick any
@@ -21,7 +21,7 @@ interface VersionHistorySheetProps {
   /** The current (highest) version number, or null when there are none. */
   currentVersionNumber: number | null;
   /** Resolve a createdBy uuid (with its legacy author name) to a display name,
-   *  falling back to the legacy name then (ex-member). */
+   *  falling back to the legacy name then "Former member". */
   resolveAuthor: (userId: string | null, legacyName: string | null) => string;
   /** Enter the read-only view for a non-current version. */
   onSelectVersion: (id: string) => void;

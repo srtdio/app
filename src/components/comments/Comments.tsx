@@ -41,12 +41,26 @@ import { useMentionCandidates } from '@/components/comments/useMentionCandidates
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 import { flashNode } from '@/components/comments/flash-node';
 import {
-  EX_MEMBER_LABEL,
-  fetchCommentProfiles,
   resolveMentionHandle,
   resolveName,
   type CommentProfile,
 } from '@/components/comments/commentProfiles';
+import {
+  deserializeMentions,
+  knownMentionName,
+  serializeMentions,
+  type MentionPick,
+} from '@/lib/chat/mentions';
+import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
+
+/**
+ * A mention as it reads in a comment: "@username", or "@Former member" for
+ * someone who is not a current member. Nothing renders for it until the batched
+ * name read answers (null), so no placeholder ever paints. Never a raw token.
+ */
+function mentionDisplay(name: string | null): string {
+  return name === null ? '' : `@${name}`;
+}
 import {
   buildResolveArgs,
   friendlyAcceptError,
@@ -235,8 +249,8 @@ const URL_TRAILING = /[.,;:!?)\]}'"]+$/;
 
 /**
  * Render a comment body, replacing every @[uuid] mention token with an inline,
- * accent-styled "@Name" run (the bare uuid is never shown). An id that no longer
- * resolves to a member renders "@(ex-member)". Surrounding text is returned
+ * accent-styled "@username" run (the bare uuid is never shown). An id that is not
+ * a current member renders "@Former member". Surrounding text is returned
  * verbatim so the caller's whitespace-pre-wrap preserves the original layout.
  */
 function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
@@ -274,7 +288,7 @@ export function renderCommentBody(
     const name = nameOf(id);
     nodes.push(
       <span key={`m-${key}`} className="font-medium text-accent">
-        @{name ?? EX_MEMBER_LABEL}
+        {mentionDisplay(name)}
       </span>,
     );
     key += 1;
@@ -453,10 +467,10 @@ export function showCheckpointWithdrawal(
 }
 
 /** The one-line withdrawal record, naming the withdrawing member through the same
- *  chain the rest of the file uses (ex-member fallback when the id no longer
- *  resolves to a member). */
+ *  chain the rest of the file uses ("Former member" when the id is not a
+ *  current member). */
 export function checkpointWithdrawalText(unacceptedAt: string, name: string | null): string {
-  return `Confirmation withdrawn by ${name ?? EX_MEMBER_LABEL} · ${relativeLong(
+  return `Confirmation withdrawn by ${name ?? FORMER_MEMBER} · ${relativeLong(
     unacceptedAt,
     new Date(),
   )}`;
@@ -564,12 +578,28 @@ export function pointEditedMarker(editedAt: string | null, now: Date): string | 
 }
 
 /** The plain text copied to the clipboard: the stored body with each @[uuid]
- *  token resolved to its "@Name" display form (or "@(ex-member)"), reusing the
- *  profile map already built for rendering. */
+ *  token resolved to its "@username" display form (or "@Former member"), reusing
+ *  the profile map already built for rendering. */
 export function commentCopyText(body: string, nameOf: (id: string) => string | null): string {
-  return body.replace(
-    MENTION_TOKEN,
-    (_match, id: string) => `@${nameOf(id.toLowerCase()) ?? EX_MEMBER_LABEL}`,
+  return body.replace(MENTION_TOKEN, (_match, id: string) =>
+    mentionDisplay(nameOf(id.toLowerCase())),
+  );
+}
+
+/**
+ * A stored body as the edit box shows it: every `@[uuid]` token reads "@username"
+ * (never a raw token) and becomes a pick, so serializeMentions turns it back into
+ * the same token on save. A token whose id does not resolve stays a pick too, so
+ * an edit never drops a mention.
+ */
+export function editableBody(
+  body: string,
+  handleOf: (id: string) => string | null,
+): { text: string; picks: MentionPick[] } {
+  return deserializeMentions(
+    body,
+    (id) => handleOf(id) ?? undefined,
+    () => false,
   );
 }
 
@@ -800,6 +830,8 @@ export function Comments({
   const [replyOpen, setReplyOpen] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
+  // The edit box shows "@username"; these picks turn each back into its token on save.
+  const [editPicks, setEditPicks] = useState<MentionPick[]>([]);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // The comment (thread root or checkpoint) whose resolve/accept request is in
@@ -924,8 +956,10 @@ export function Comments({
     flashNode(commentDomId(focusCommentId));
   }, [merged, focusCommentId]);
 
-  // Resolve author + mention display names in one batched read. The attempted
-  // set dedupes ids and stops a missing (ex-member) id from refetching forever.
+  // Resolve author + mention names in one batched read through the shared name
+  // registry (users + workspace_members, one .in() each): a current member reads
+  // their full name (@username in a mention), anyone else "Former member". The
+  // attempted set dedupes ids; a failed read clears them so the next pass retries.
   const attemptedProfiles = useRef<Set<string>>(new Set());
   useEffect(() => {
     const needed: string[] = [];
@@ -943,7 +977,18 @@ export function Comments({
     }
     if (needed.length === 0) return;
     let active = true;
-    void fetchCommentProfiles(supabase, needed).then((fetched) => {
+    void resolvePeople(supabase, workspaceId, needed).then((ok) => {
+      if (!ok) for (const id of needed) attemptedProfiles.current.delete(id);
+      const fetched = new Map<string, CommentProfile>();
+      for (const id of needed) {
+        const name = personName(workspaceId, id);
+        if (name === undefined) continue;
+        fetched.set(id, {
+          displayName: name,
+          avatarUrl: personAvatar(workspaceId, id),
+          username: name === FORMER_MEMBER ? null : (knownMentionName(workspaceId, id) ?? null),
+        });
+      }
       if (active && fetched.size > 0) {
         setProfiles((prev) => new Map([...prev, ...fetched]));
       }
@@ -951,7 +996,7 @@ export function Comments({
     return () => {
       active = false;
     };
-  }, [merged]);
+  }, [merged, workspaceId]);
 
   // Resolve attachment mimes in one batched read (image vs file dispatch).
   const attemptedMime = useRef<Set<string>>(new Set());
@@ -1066,7 +1111,12 @@ export function Comments({
       setRowError({ id: commentId, message: `Points are limited to ${POINT_WORD_CAP} words.` });
       return;
     }
-    const result = await runEditComment(supabase, commentId, editBody, newTrace());
+    const result = await runEditComment(
+      supabase,
+      commentId,
+      serializeMentions(editBody, editPicks),
+      newTrace(),
+    );
     if (!result.ok) {
       setRowError({
         id: commentId,
@@ -1212,7 +1262,9 @@ export function Comments({
 
   function startEdit(comment: CommentRow): void {
     setEditingId(comment.id);
-    setEditBody(comment.body);
+    const shown = editableBody(comment.body, handleOf);
+    setEditBody(shown.text);
+    setEditPicks(shown.picks);
     setRowError(null);
   }
 
@@ -1261,7 +1313,8 @@ export function Comments({
     const actions = commentActions(comment, currentUserId, false);
     const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
     const authorName =
-      comment.legacy_author_name ?? nameOf(comment.author_user_id) ?? EX_MEMBER_LABEL;
+      // '' only until the batched read answers (a gone person reads "Former member").
+      comment.legacy_author_name ?? nameOf(comment.author_user_id) ?? '';
     const authorAvatarUrl =
       comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
     const editing = editingId === comment.id;
@@ -1504,7 +1557,7 @@ export function Comments({
   function renderBatchItem(group: { authorId: string; threads: ThreadRoot[] }): ReactNode {
     const first = group.threads[0]?.comment;
     if (first === undefined) return null;
-    const authorName = first.legacy_author_name ?? nameOf(first.author_user_id) ?? EX_MEMBER_LABEL;
+    const authorName = first.legacy_author_name ?? nameOf(first.author_user_id) ?? '';
     const authorAvatarUrl =
       first.legacy_author_name !== null ? null : avatarOf(first.author_user_id);
     return (

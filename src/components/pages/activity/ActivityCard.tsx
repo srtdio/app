@@ -146,6 +146,8 @@ function pointsPhrase(n: number): string {
 function actorLine(item: ActivityItem, who: string | null): string {
   // A chat mention's title already reads "<who> mentioned you ...": the top line is the name.
   if (isChatMention(item)) return who ?? 'New mention';
+  // A deleted post: "<who> deleted" over the post title (no body line).
+  if (item.eventType === 'post_deleted') return `${who ?? UNKNOWN_ACTOR} deleted`;
   // Actor rows (approve, reject, park, review, deletes): the body line says who
   // did what, so the top line is the actor's name.
   if (ACTOR_ROW_EVENTS.has(item.eventType)) return who ?? UNKNOWN_ACTOR;
@@ -167,26 +169,13 @@ function actorLine(item: ActivityItem, who: string | null): string {
     case 'checkpoint_reopened':
       return who !== null ? `${who} reopened a point` : 'Point reopened';
     case 'post_ready':
-      return 'Ready for review';
+      return who !== null ? `${who} sent for review` : 'Ready for review';
     case 'plan_comment':
       return who !== null ? `${who} commented` : 'New comment';
     case 'plan_review':
       return who ?? UNKNOWN_ACTOR;
     default:
       return who !== null ? who : activityLine(item);
-  }
-}
-
-/**
- * The active workspace key for KEY-N refs, or null outside a WorkspaceProvider
- * (the card is also rendered standalone): refs then read "post N". useWorkspace
- * always calls useContext before it throws, so the hook order is stable.
- */
-function useWorkspaceKey(): string | null {
-  try {
-    return useWorkspace().workspaceKey;
-  } catch {
-    return null;
   }
 }
 
@@ -197,6 +186,35 @@ function useWorkspaceBrand(): string | null {
   } catch {
     return null;
   }
+}
+
+/** The newest entry of a group, whatever the sort direction (ties keep the first). */
+export function newestEntry(group: readonly ActivityItem[]): ActivityItem | undefined {
+  let newest: ActivityItem | undefined;
+  let newestMs = Number.NEGATIVE_INFINITY;
+  for (const entry of group) {
+    const ms = Date.parse(entry.createdAt);
+    if (newest === undefined || (!Number.isNaN(ms) && ms > newestMs)) {
+      newest = entry;
+      if (!Number.isNaN(ms)) newestMs = ms;
+    }
+  }
+  return newest;
+}
+
+/** One expanded row's author: their photo and full name above the row's text. */
+function EntryAuthor({ entry }: { entry: ActivityItem }) {
+  if (entry.actorName === null) return null;
+  return (
+    <div data-activity-entry-author="" className="mb-0.5 flex items-center gap-1.5">
+      <Avatar
+        name={entry.actorName}
+        {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
+        size="sm"
+      />
+      <span className="truncate text-xs font-medium text-fg-3">{entry.actorName}</span>
+    </div>
+  );
 }
 
 /** A deleted post has nowhere to open: its entries are not tappable. */
@@ -222,7 +240,6 @@ export function ActivityCard({
   selfName,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const workspaceKey = useWorkspaceKey();
   const brand = useWorkspaceBrand();
 
   const lead = group[0];
@@ -238,18 +255,16 @@ export function ActivityCard({
   const assetsDeleted = lead.eventType === 'assets_deleted';
   // The welcome row: its title names the workspace, the body says what lands here.
   const welcome = isWelcome(lead);
-  const showsBody = hasEntity || assetsDeleted || welcome;
+  // A deleted post's card is "<who> deleted" over its title: no body line repeats it.
+  const showsBody = (hasEntity || assetsDeleted || welcome) && lead.eventType !== 'post_deleted';
   const title =
-    hasEntity || welcome
-      ? cardTitle(lead)
-      : assetsDeleted
-        ? 'Assets'
-        : activityLine(lead, workspaceKey, brand);
+    hasEntity || welcome ? cardTitle(lead) : assetsDeleted ? 'Assets' : activityLine(lead, brand);
   const leadTappable = !opensNothing(lead);
   const tag = SCOPE_TAG[lead.scope];
-  const actorEntry = group.find((entry) => entry.actorName !== null) ?? null;
-  const actorName = actorEntry?.actorName ?? null;
-  const actorAvatarUrl = actorEntry?.actorAvatarUrl ?? null;
+  // The header names the newest entry's actor (never an older row's).
+  const actorEntry = newestEntry(group) ?? lead;
+  const actorName = actorEntry.actorName;
+  const actorAvatarUrl = actorEntry.actorAvatarUrl;
   const tone = leadTone(lead);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
@@ -297,7 +312,7 @@ export function ActivityCard({
                 />
               ) : null}
               <span className="truncate text-xs font-medium text-fg-3">
-                {actorLine(lead, actorName)}
+                {actorLine(actorEntry, actorName)}
               </span>
               {unread ? (
                 <span
@@ -312,7 +327,7 @@ export function ActivityCard({
 
             {showsBody ? (
               <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2">
-                {cardBodyLine(lead, workspaceKey, brand)}
+                {cardBodyLine(lead, brand)}
               </p>
             ) : null}
 
@@ -394,13 +409,15 @@ export function ActivityCard({
                 )}
               >
                 <div className="min-w-0 flex-1">
+                  <EntryAuthor entry={entry} />
                   <p
                     className={cn(
                       'line-clamp-2 text-sm',
                       entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
                     )}
                   >
-                    {cardBodyLine(entry, workspaceKey, brand)}
+                    {/* The author line above already names who: the text never repeats it. */}
+                    {cardBodyLine(entry, brand, { name: entry.actorName === null })}
                   </p>
                   <p className="mt-0.5 text-xs text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
                 </div>

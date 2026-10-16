@@ -46,7 +46,9 @@ test('PCS: agency approves with the on-behalf line in the confirm', async ({ pag
   expectNoBlocked(network);
 });
 
-test('Activity: "<Name> approved KEY-N on behalf of <Brand>"', async ({ page }) => {
+test('Activity: "<Name> approved on behalf of <Brand>" under the title, never KEY-N', async ({
+  page,
+}) => {
   const network = await installHarnessNetwork(page);
   withKey(network);
   const now = new Date().toISOString();
@@ -90,11 +92,12 @@ test('Activity: "<Name> approved KEY-N on behalf of <Brand>"', async ({ page }) 
   );
   await page.goto('/activity');
 
-  await expect(
-    page.getByText('Leo Martins approved HS-101 on behalf of Harness Studio'),
-  ).toBeVisible({
+  // The title shows once, in the card header; the line keeps the stage change only.
+  await expect(page.getByText('Leo Martins approved on behalf of Harness Studio')).toBeVisible({
     timeout: 15_000,
   });
+  await expect(page.getByText('Monday carousel', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('HS-101', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Leo Martins deleted 3 assets', { exact: true })).toBeVisible();
   await expect(page.getByText('Moved to', { exact: false })).toHaveCount(0);
   expectNoBlocked(network);
