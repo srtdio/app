@@ -8,7 +8,7 @@ export const SITE_URL = 'https://srtd.io';
 export const SITE_NAME = 'Sorted';
 
 /** "/" <title>, og:title and twitter:title. */
-export const HOME_TITLE = 'Sorted | Free approvals and chat for social media teams';
+export const HOME_TITLE = 'Sorted (free) | Approvals and chat for social media teams';
 
 /** "/" and /demo description, og:description and twitter:description; also the llms.txt summary. */
 export const HOME_DESCRIPTION =

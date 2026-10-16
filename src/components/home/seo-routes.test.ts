@@ -89,7 +89,7 @@ describe('seo routes', () => {
   });
 
   it('titles "/" with the approved line; /demo and legal keep their titles', () => {
-    const T = 'Sorted | Free approvals and chat for social media teams';
+    const T = 'Sorted (free) | Approvals and chat for social media teams';
     expect(HOME_TITLE).toBe(T);
     const home = SEO_ROUTES.find((r) => r.path === '/');
     expect(home?.title).toBe(T);
