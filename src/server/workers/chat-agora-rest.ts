@@ -18,8 +18,11 @@ import { tracedFetch } from '@/server/traced-fetch';
 /** App-token TTL for REST auth: one hour is ample for a single call. */
 const APP_TOKEN_TTL_SECONDS = 3_600;
 
-/** Default ceiling for a freshly created Agora group. */
-const DEFAULT_MAX_USERS = 2_000;
+/**
+ * Member ceiling for a freshly created Agora group: Agora's own default. A
+ * workspace group is a small team; the plan ceiling is unverified.
+ */
+const GROUP_MAX_USERS = 200;
 
 /** Agora's per-request ceiling for bulk user registration. */
 export const REGISTER_BATCH_SIZE = 60;
@@ -233,8 +236,13 @@ export function createAgoraGroupApi(
           body: JSON.stringify({
             groupname: args.name,
             desc: args.name,
-            public: true,
-            maxusers: DEFAULT_MAX_USERS,
+            // Private and owner-invite only: chat-token issues tokens for one
+            // shared Agora app, so a public group could be searched for and
+            // joined from another workspace. membersonly is not sent; Agora
+            // applies it to public groups only.
+            public: false,
+            allowinvites: false,
+            maxusers: GROUP_MAX_USERS,
             owner: args.ownerUsername,
             // Agora auto-adds the owner; send the rest as the initial roster.
             members: args.memberUsernames.filter((u) => u !== args.ownerUsername),
