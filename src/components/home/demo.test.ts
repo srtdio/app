@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEMO, PLANS } from './config';
+import { DEMO } from './config';
 import {
   DEMO_ERRORS,
   addDays,
@@ -114,17 +114,5 @@ describe('demo form errors', () => {
     const errors = validateDemo({ name: '', email: '', mobile: '', day: null, slot: null });
     expect(Object.keys(errors)).toEqual(['name', 'email', 'mobile', 'day', 'slot']);
     expect(Object.values(errors)).toEqual(Object.values(DEMO_ERRORS));
-  });
-});
-
-describe('plans config', () => {
-  it('four plans, approved prices, Enterprise books a demo', () => {
-    expect(PLANS.map((p) => [p.name, p.price])).toEqual([
-      ['Solo', '₹499'],
-      ['Studio', '₹749'],
-      ['Agency', '₹999'],
-      ['Enterprise', 'Custom'],
-    ]);
-    expect(PLANS.map((p) => p.cta.href)).toEqual(['/signup', '/signup', '/signup', '/demo']);
   });
 });

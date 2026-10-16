@@ -1076,7 +1076,7 @@ html:has(.home) body {
   }
 }
 
-/* /pricing and /demo */
+/* /demo */
 .home .page {
   padding-block: 24px 72px;
   text-align: left;
@@ -1109,125 +1109,14 @@ html:has(.home) body {
 .home .cal-head svg {
   stroke: var(--ink);
 }
-.home .page-head {
-  text-align: center;
-  margin: 20px auto 40px;
-}
-.home .page-head h1 {
-  font-size: clamp(38px, 5.6vw, 76px);
-  line-height: 1;
-}
-.home .page-head p {
-  margin: 16px auto 0;
-  max-width: 52ch;
-  font-size: 18px;
-  color: var(--ink-2);
-}
-.home .plans {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-}
-@media (min-width: 640px) {
-  .home .plans {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (min-width: 1024px) {
-  .home .plans {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-.home .plan {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: var(--bg);
-  box-shadow: var(--shadow);
-}
-.home .plan h2 {
-  font-family: var(--display);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-.home .plan .aud {
-  margin: 0;
-  font-size: 15px;
-  color: var(--muted);
-}
-.home .plan .price {
-  margin: 8px 0 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-}
-.home .plan .amt {
-  font-family: var(--display);
-  font-size: 40px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-}
-.home .plan .unit {
-  font-size: 14px;
-  color: var(--muted);
-}
-.home .plan .incl {
-  list-style: none;
-  margin: 8px 0 16px;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-  font-size: 15px;
-  color: var(--ink-2);
-}
-.home .plan .incl li,
 .home .points li {
   display: flex;
   gap: 10px;
   align-items: flex-start;
 }
-.home .plan .incl .tick,
 .home .points .tick {
   margin-top: 4px;
   color: var(--accent);
-}
-/* Equal heights per row: the button sits at the bottom of every card. */
-.home .plan .btn {
-  margin-top: auto;
-  width: 100%;
-  min-width: 0;
-}
-.home .plans-note {
-  margin: 24px auto 0;
-  max-width: 60ch;
-  text-align: center;
-  font-size: 14px;
-  color: var(--muted);
-}
-.home .page-close {
-  border-top: 1px solid var(--line);
-  padding-block: 72px 88px;
-}
-.home .page-close h2 {
-  font-size: clamp(32px, 4.4vw, 56px);
-}
-.home .page-close .sub {
-  margin: 14px auto 0;
-  max-width: 52ch;
-  font-size: 17px;
-  color: var(--ink-2);
-}
-.home .page-close .cta {
-  margin-top: 26px;
 }
 
 .home .demo-grid {

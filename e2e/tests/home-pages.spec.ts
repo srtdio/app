@@ -1,9 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
-// Homepage, /pricing and /demo (home bundle, light only). The harness keeps "/"
-// as its smoke page, so "/" is served the homepage fixture (home.html) here.
-// /pricing and /demo route to HomeEntry in the harness itself. Every project
+// Homepage and /demo (home bundle, light only). The harness keeps "/" as its
+// smoke page, so "/" is served the homepage fixture (home.html) here. /demo
+// routes to HomeEntry in the harness itself. Every project
 // emulates its colour scheme; iphone-webkit is dark, so "stays light" is
 // checked on a dark-mode device. Linux WebKit approximates iOS WebKit.
 
@@ -27,6 +28,16 @@ async function expectLight(page: Page): Promise<void> {
   expect(bg).toBe(WHITE);
   const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(body).toBe(WHITE);
+}
+
+/** The Pages rule for a path in public/_redirects (the harness never applies it). */
+function redirectFor(path: string): { to: string; status: number } | null {
+  const rules = readFileSync(new URL('../../public/_redirects', import.meta.url), 'utf8');
+  for (const line of rules.split('\n')) {
+    const [from, to, status] = line.trim().split(/\s+/);
+    if (from === path && to !== undefined) return { to, status: Number(status) };
+  }
+  return null;
 }
 
 /** Open the sidebar and tap a feature tile. */
@@ -96,24 +107,23 @@ test.describe('phone', () => {
     }
   });
 
-  test('from /pricing a tile loads the homepage on that card', async ({ page }) => {
+  test('from /demo a tile loads the homepage on that card', async ({ page }) => {
     await serveHome(page);
     for (const key of ['plan', 'briefs'] as const) {
-      await page.goto('/pricing');
+      await page.goto('/demo');
       await tapTile(page, key);
       await page.waitForURL(`**/#feature-${key}`);
       await expectCardInView(page, key);
     }
   });
 
-  test('sidebar: Pricing and Book a demo rows, stories are not links', async ({ page }) => {
+  test('sidebar: a Book a demo row, no Pricing row, stories are not links', async ({ page }) => {
     await serveHome(page);
     await page.goto('/');
     await page.getByRole('button', { name: 'Open menu' }).click();
     const menu = page.locator('#home-menu');
-    const pricing = menu.getByRole('link', { name: /Pricing/ });
-    await expect(pricing).toHaveAttribute('href', '/pricing');
-    await expect(pricing).toContainText('from ₹499');
+    await expect(menu.getByRole('link', { name: /Pricing/ })).toHaveCount(0);
+    await expect(page.locator('a[href="/pricing"]')).toHaveCount(0);
     await expect(menu.getByRole('link', { name: /Book a demo/ })).toHaveAttribute('href', '/demo');
     const stories = menu.locator('.stories .story');
     await expect(stories).toHaveCount(3);
@@ -129,29 +139,28 @@ test.describe('phone', () => {
     }
   });
 
-  test('/pricing and /demo load directly and from links; Back to home', async ({ page }) => {
+  test('/pricing ends on the homepage', async ({ page }) => {
+    const rule = redirectFor('/pricing');
+    expect(rule).toEqual({ to: '/', status: 301 });
+    await page.route(
+      (url) => url.pathname === '/pricing',
+      (route) => route.fulfill({ status: 301, headers: { location: rule?.to ?? '' } }),
+    );
     await serveHome(page);
     await page.goto('/pricing');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-      'One price per client. Clients are free.',
-    );
-    await expectLight(page);
-    await expect(page.locator('.plan')).toHaveCount(4);
-    for (const cta of await page.locator('.plan .btn').all()) {
-      expectMinTouchTarget(await cta.boundingBox());
-    }
+    expect(new URL(page.url()).pathname).toBe('/');
+    // A followed redirect skips page.route, so reload to get the homepage fixture.
+    await page.reload();
+    await expect(page.locator('.home .hero')).toBeVisible();
+  });
 
-    // From the homepage menu to /pricing, then the Enterprise card to /demo.
+  test('/demo loads directly and from the menu; Back to home', async ({ page }) => {
+    await serveHome(page);
     await page.goto('/');
     await page.getByRole('button', { name: 'Open menu' }).click();
     await page
       .locator('#home-menu')
-      .getByRole('link', { name: /Pricing/ })
-      .click();
-    await page.waitForURL('**/pricing');
-    await page
-      .locator('[data-plan="Enterprise"]')
-      .getByRole('link', { name: 'Book a demo' })
+      .getByRole('link', { name: /Book a demo/ })
       .click();
     await page.waitForURL('**/demo');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
@@ -303,18 +312,7 @@ test.describe('desktop: one thing per screen @desktop', () => {
         for (const height of m.benefits) expect(height).toBeLessThanOrEqual(m.screen);
       });
 
-      test('pricing: four equal cards in one row; demo fits beside its intro', async ({ page }) => {
-        await page.goto('/pricing');
-        await expect(page.locator('.plan')).toHaveCount(4);
-        const boxes = await page.locator('.plan').evaluateAll((els) =>
-          els.map((el) => {
-            const r = el.getBoundingClientRect();
-            return { top: Math.round(r.top), h: Math.round(r.height) };
-          }),
-        );
-        expect(boxes).toHaveLength(4);
-        expect(new Set(boxes.map((b) => b.top)).size).toBe(1);
-        expect(new Set(boxes.map((b) => b.h)).size).toBe(1);
+      test('demo fits beside its intro', async ({ page }) => {
         await page.goto('/demo');
         await expect(page.locator('.demo-form')).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
