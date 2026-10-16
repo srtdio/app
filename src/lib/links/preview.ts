@@ -197,15 +197,20 @@ export function createPreviewClient(deps: PreviewClientDeps) {
         `${deps.endpoint}/preview?url=${encodeURIComponent(key)}`,
         { headers: { authorization: `Bearer ${token}` }, signal: controller.signal },
       );
-      // A failed answer is remembered too: one request per URL per session.
-      const preview = response.ok ? parsePreview(await response.json(), url) : barePreview(url);
-      done.set(key, preview);
-      return preview;
+      if (response.ok) {
+        const preview = parsePreview(await response.json(), url);
+        done.set(key, preview);
+        return preview;
+      }
+      // A definite "no preview" (4xx/5xx) is remembered: one request per URL
+      // per session. Over the rate cap (429) or a token that just expired
+      // (401) may pass, so those show bare now and ask again next time.
+      const bare = barePreview(url);
+      if (response.status !== 429 && response.status !== 401) done.set(key, bare);
+      return bare;
     } catch {
       if (controller.signal.aborted) throw abortError();
-      const bare = barePreview(url);
-      done.set(key, bare);
-      return bare;
+      return barePreview(url);
     } finally {
       release();
       if (pending.get(key)?.controller === controller) pending.delete(key);

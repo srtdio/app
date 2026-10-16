@@ -5,6 +5,9 @@ import { Textarea } from '@/components/ui/Textarea';
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
+import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
+import { checkLink } from '@/lib/links/safety';
+import { parseExternalLink } from '@/lib/links';
 import { firstExternalUrl } from '@/lib/chat/message-links';
 import { glowById, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { IconCheck, IconCopy, IconMore } from '@/components/ui/icons';
@@ -284,12 +287,29 @@ function pushBodyText(
     // The link that gets the preview card (CommentLinkCard) is shown there
     // instead, once; every other link stays a LinkButton.
     if (card.url !== null && href === card.url) card.url = null;
-    else nodes.push(<LinkButton key={`${keyBase}-u${i}`} url={href} className="align-middle" />);
+    else nodes.push(<CommentLink key={`${keyBase}-u${i}`} url={href} />);
     if (suffix !== '') nodes.push(suffix);
     i += 1;
     last = start + m[0].length;
   }
   if (last < text.length) nodes.push(plain(text.slice(last)));
+}
+
+/** One inline comment link: LinkButton, or the warning button when it is unsafe. */
+function CommentLink(props: { url: string }): ReactNode {
+  const verdict = checkLink(props.url);
+  const link = parseExternalLink(props.url);
+  if (verdict.verdict === 'unsafe' && link !== null) {
+    return (
+      <UnsafeLinkButton
+        url={link.href}
+        reasons={verdict.reasons}
+        domain={link.domain}
+        className="align-middle"
+      />
+    );
+  }
+  return <LinkButton url={props.url} className="align-middle" />;
 }
 
 export function renderCommentBody(

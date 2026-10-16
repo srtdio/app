@@ -136,6 +136,14 @@ describe('preview client', () => {
     // Remembered for the session: no second request.
     await client.request('https://example.com/down');
     expect(calls).toHaveLength(1);
+    // Over the cap (429): bare now, asked again later.
+    const limited = client.request('https://example.com/busy');
+    await flush();
+    calls[1]?.resolve(new Response('', { status: 429 }));
+    expect((await limited).type).toBe('bare');
+    void client.request('https://example.com/busy');
+    await flush();
+    expect(calls).toHaveLength(3);
   });
 
   it('internal app links bypass previews', async () => {

@@ -1657,6 +1657,8 @@ export function Composer(props: ComposerProps): ReactElement {
       return;
     }
     setText('');
+    setCardText('');
+    setDismissedCardUrl(null);
     setPicks([]);
     setCaret(0);
     setPending([]);

@@ -24,6 +24,13 @@ describe('comment link card', () => {
     expect(html(<CommentLinkCard body="https://example.com/x" />)).not.toContain('Remove preview');
   });
 
+  it('a later unsafe link is a warning button, not a live link', () => {
+    const body = 'see https://a.com/x and http://192.168.1.1/admin';
+    const text = html(renderCommentBody(body, () => null, [], 'https://a.com/x'));
+    expect(text).toContain('data-unsafe-link=""');
+    expect(text).not.toContain('href="http://192.168.1.1/admin"');
+  });
+
   it('without a card url every link stays a LinkButton (unchanged)', () => {
     const text = html(renderCommentBody('go https://a.com/x', () => null));
     expect(text).toContain('href="https://a.com/x"');

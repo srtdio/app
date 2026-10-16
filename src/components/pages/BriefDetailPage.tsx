@@ -13,6 +13,8 @@ import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
 import { EntityRefChip } from '@/components/refs/EntityRefChip';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
+import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
+import { checkLink } from '@/lib/links/safety';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
@@ -403,6 +405,13 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
                     {/* The first link gets the preview card; the rest stay buttons. */}
                     {index === 0 ? (
                       <LinkPreviewCard url={link.href} className="w-full max-w-[420px]" />
+                    ) : checkLink(link.href).verdict === 'unsafe' ? (
+                      <UnsafeLinkButton
+                        url={link.href}
+                        reasons={checkLink(link.href).reasons}
+                        domain={link.domain}
+                        className="w-full"
+                      />
                     ) : (
                       <LinkButton url={link.href} className="w-full" />
                     )}

@@ -85,5 +85,8 @@ describe('MessageBubble link card', () => {
     const html = bubble('pls see http://g00gle-docs-share.top:8080/login', true);
     expect(html).toContain('data-card-type="unsafe"');
     expect(html).toContain('This link may be unsafe');
+    // The link text opens the check sheet too, never the site directly.
+    expect(html).toContain('data-unsafe-link=""');
+    expect(html).not.toContain('href="http://g00gle-docs-share.top:8080/login"');
   });
 });

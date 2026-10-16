@@ -60,6 +60,8 @@ import {
 } from '@/lib/chat/message-links';
 import { Avatar } from '@/components/ui/Avatar';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
+import { UnsafeLinkText } from '@/components/ui/UnsafeLinkSheet';
+import { checkLink } from '@/lib/links/safety';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
@@ -1563,6 +1565,20 @@ export function renderMessageBody(
     }
     const target = classify(segment.url, origin, APP_ENTITY_ROUTES);
     const label = displayUrl(segment.url);
+    // An unsafe link opens the check sheet, never the site (its card warns too).
+    const verdict = target.kind === 'external' ? checkLink(segment.url) : null;
+    if (verdict !== null && verdict.verdict === 'unsafe') {
+      return (
+        <UnsafeLinkText
+          key={i}
+          url={segment.url}
+          reasons={verdict.reasons}
+          className={cn('inline', className)}
+        >
+          {label}
+        </UnsafeLinkText>
+      );
+    }
     return target.kind === 'external' ? (
       <a
         key={i}

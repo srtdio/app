@@ -71,7 +71,6 @@ const SUBSTRING_BRANDS: ReadonlySet<string> = new Set([
   'google',
   'gmail',
   'microsoft',
-  'icloud',
   'paypal',
   'whatsapp',
   'instagram',
@@ -141,10 +140,19 @@ const OFFICIAL_DOMAINS: ReadonlySet<string> = new Set([
   'axisbank.com',
   'kotak.com',
   'kotaksecurities.com',
+  'paytmmall.com',
+  'media-amazon.com',
+  'ssl-images-amazon.com',
+  'amazon-adsystem.com',
+  'canva.site',
+  'canva.link',
 ]);
 
 /** Two-label public suffixes we know about. Everything else is a one-label TLD. */
 const MULTI_LABEL_SUFFIXES: ReadonlySet<string> = new Set([
+  // India's bank-only and finance-only zones (RBI): sbi.bank.in, hdfc.bank.in.
+  'bank.in',
+  'fin.in',
   'co.in',
   'org.in',
   'gov.in',
@@ -184,6 +192,12 @@ const MULTI_LABEL_SUFFIXES: ReadonlySet<string> = new Set([
   'com.np',
   'co.ae',
   'com.sa',
+  'com.hk',
+  'co.kr',
+  'co.th',
+  'com.tw',
+  'co.il',
+  'com.cn',
 ]);
 
 /** Downloads that install or run code. Matched on the last path segment. */
@@ -205,6 +219,9 @@ const RISKY_EXTENSIONS = [
   'lnk',
   'iso',
 ] as const;
+
+/** Sites that show code files as pages; their .js / .ps1 paths are not downloads. */
+const CODE_HOSTS: ReadonlySet<string> = new Set(['github.com', 'gitlab.com', 'bitbucket.org']);
 
 /** Link shorteners resolved server-side ("bit.ly → canva.com"). */
 export const SHORTENERS: ReadonlySet<string> = new Set([
@@ -290,18 +307,40 @@ function brandVerdict(host: string): 'lookalike' | 'brand' | null {
   let found: 'lookalike' | 'brand' | null = null;
   for (const word of words) {
     const folded = foldLookalike(word);
+    const hasDigit = /\d/.test(word);
     for (const { brand, folded: foldedBrand } of FOLDED_BRANDS) {
-      const whole = folded === foldedBrand;
-      const inside = SUBSTRING_BRANDS.has(brand) && folded.includes(foldedBrand);
-      if (!whole && !inside) continue;
-      // A swapped spelling (g00gle) is a lookalike; the real spelling on
-      // someone else's domain is a borrowed brand.
-      const literal = whole ? word === brand : word.includes(brand);
-      if (!literal) return 'lookalike';
-      if (!COMMON_WORD_BRANDS.has(brand)) found = 'brand';
+      if (folded === foldedBrand) {
+        // A swapped spelling (g00gle) is a lookalike; the real spelling on
+        // someone else's domain is a borrowed brand.
+        if (word !== brand) return 'lookalike';
+        if (!COMMON_WORD_BRANDS.has(brand)) found = 'brand';
+        continue;
+      }
+      if (!SUBSTRING_BRANDS.has(brand)) continue;
+      if (word.includes(brand)) {
+        found = 'brand';
+      } else if (hasDigit && folded.includes(foldedBrand)) {
+        // Inside a longer word, only a digit swap (g00gledocs) counts: letter
+        // folds alone misread ordinary words (shoppingmall -> "gmail").
+        return 'lookalike';
+      }
     }
   }
   return found;
+}
+
+/**
+ * A brand's bare name on an unusual ending (paypal.top, sbi.help) is not the
+ * brand: the brands use .com, .net, .org or a country ending.
+ */
+function brandOnOddEnding(host: string): boolean {
+  const registrable = registrableDomain(host);
+  if (OFFICIAL_DOMAINS.has(registrable)) return false;
+  const label = siteLabel(registrable);
+  if (!(BRANDS as readonly string[]).includes(label) || COMMON_WORD_BRANDS.has(label)) return false;
+  const suffix = registrable.slice(label.length + 1);
+  if (suffix.includes('.')) return false;
+  return suffix.length > 2 && !['com', 'net', 'org', 'sbi'].includes(suffix);
 }
 
 function isLocalHost(host: string): boolean {
@@ -356,8 +395,12 @@ export function checkLink(raw: string): LinkVerdict {
   if (!keys.has('ip') && !keys.has('local')) {
     const brand = brandVerdict(host);
     if (brand !== null) keys.add(brand);
+    else if (brandOnOddEnding(host)) keys.add('brand');
   }
-  if (hasRiskyDownload(url.pathname)) keys.add('download');
+  // Code hosts show source files (index.js) as web pages, not downloads.
+  if (!CODE_HOSTS.has(registrableDomain(host)) && hasRiskyDownload(url.pathname)) {
+    keys.add('download');
+  }
 
   const reasons = (Object.keys(REASONS) as ReasonKey[])
     .filter((key) => keys.has(key))

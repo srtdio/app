@@ -9,7 +9,7 @@
 // only, so light and dark parity comes from the theme.
 
 import { useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, PointerEvent, ReactElement } from 'react';
+import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { IconAlertTriangle } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -129,27 +129,34 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         role="dialog"
         aria-modal="true"
         aria-labelledby="unsafe-link-title"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerEnd}
-        onPointerCancel={onPointerEnd}
         style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
         className={cn(
-          'flex max-h-[90vh] w-full max-w-[480px] touch-pan-x flex-col gap-3 overflow-y-auto rounded-t-[22px] border border-border-strong bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg shadow-2xl will-change-transform',
+          'flex max-h-[90vh] w-full max-w-[480px] touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-[22px] border border-border-strong bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg shadow-2xl will-change-transform',
           drag > 0 ? 'transition-none' : 'transition-transform',
           entered
             ? 'translate-y-0 duration-slow ease-enter'
             : 'translate-y-full duration-base ease-exit',
         )}
       >
-        <div aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 rounded-sm bg-border-strong" />
-        <h2
-          id="unsafe-link-title"
-          className="flex items-center gap-2 text-[17px] font-semibold text-[color:var(--warn-ink)]"
+        {/* The swipe-down handle: grabber + title. The rest of the sheet
+            scrolls normally when it is taller than the screen. */}
+        <div
+          data-sheet-drag=""
+          className="flex touch-none flex-col gap-3"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerEnd}
+          onPointerCancel={onPointerEnd}
         >
-          <IconAlertTriangle size={22} />
-          Check before opening
-        </h2>
+          <div aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 rounded-sm bg-border-strong" />
+          <h2
+            id="unsafe-link-title"
+            className="flex items-center gap-2 text-[17px] font-semibold text-[color:var(--warn-ink)]"
+          >
+            <IconAlertTriangle size={22} />
+            Check before opening
+          </h2>
+        </div>
         <p
           data-unsafe-url=""
           className="break-all rounded-[10px] border border-border bg-panel-2 px-2.5 py-2 font-mono text-xs text-fg"
@@ -193,5 +200,66 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
       </div>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * An unsafe link inside running text (a chat body, a comment, a brief's other
+ * links): looks like the surrounding link text, but a tap opens the check
+ * sheet instead of the site, so the warning card cannot be bypassed.
+ */
+export function UnsafeLinkText(props: {
+  url: string;
+  reasons: readonly string[];
+  className?: string;
+  children: ReactNode;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        data-unsafe-link=""
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen(true);
+        }}
+        className={cn('break-all text-left', props.className ?? 'inline')}
+      >
+        {props.children}
+      </button>
+      <UnsafeLinkSheet
+        open={open}
+        url={props.url}
+        reasons={props.reasons}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+}
+
+/**
+ * LinkButton's place for an unsafe link (comments, brief links): the same 44px
+ * button shape in the warning colours, labelled with the domain only, opening
+ * the check sheet.
+ */
+export function UnsafeLinkButton(props: {
+  url: string;
+  reasons: readonly string[];
+  domain: string;
+  className?: string;
+}): ReactElement {
+  return (
+    <UnsafeLinkText
+      url={props.url}
+      reasons={props.reasons}
+      className={cn(
+        'inline-flex min-h-[44px] max-w-full items-center gap-2 rounded-md border border-[color:var(--warn-line)] bg-warn-soft px-3 text-sm text-[color:var(--warn-ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        props.className,
+      )}
+    >
+      <IconAlertTriangle size={16} className="shrink-0" />
+      <span className="min-w-0 truncate">{props.domain}</span>
+    </UnsafeLinkText>
   );
 }

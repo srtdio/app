@@ -73,8 +73,12 @@ describe('UnsafeLinkSheet', () => {
     const { dialog, onClose } = await open();
     expect(dialog.className).toContain('translate-y-0');
     expect(dialog.className).not.toMatch(/rotate|translate-x|scale-/);
+    const handle = dialog.querySelector('[data-sheet-drag]');
+    if (handle === null) throw new Error('no handle');
+    expect(dialog.className).toContain('touch-pan-y');
+    expect(dialog.className).toContain('overflow-y-auto');
     const fire = (type: string, y: number) =>
-      dialog.dispatchEvent(Object.assign(new Event(type, { bubbles: true }), { clientY: y }));
+      handle.dispatchEvent(Object.assign(new Event(type, { bubbles: true }), { clientY: y }));
     await act(async () => {
       fire('pointerdown', 100);
       fire('pointermove', 100 + SWIPE_CLOSE_PX + 10);

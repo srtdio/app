@@ -152,3 +152,39 @@ describe('helpers', () => {
     expect(foldLookalike('vvhatsapp')).toBe(foldLookalike('whatsapp'));
   });
 });
+
+describe('real-world domains (audit round 2)', () => {
+  it.each([
+    'https://sbi.bank.in/',
+    'https://www.hdfc.bank.in/',
+    'https://icici.bank.in/',
+    'https://kotak.bank.in/',
+    'https://m.media-amazon.com/images/I/a.jpg',
+    'https://shoppingmall.com/',
+    'https://bigmall.in/',
+    'https://intelcloud.com/',
+    'https://apicloud.com/',
+    'https://paytmmall.com/',
+    'https://github.com/x/y/blob/main/index.js',
+    'https://www.google.com.hk/',
+    'https://www.google.co.kr/',
+    'https://mybrand.canva.site/',
+    'https://www.icloud.com/',
+    'https://maps.app.goo.gl/abc',
+  ])('%s is ok', (url) => {
+    expect(checkLink(url)).toEqual({ verdict: 'ok', reasons: [] });
+  });
+
+  it.each([
+    'https://paypal.top/',
+    'https://icici.xyz/',
+    'https://sbi.help/',
+    'https://g00gledocs.com/',
+  ])('%s is unsafe', (url) => {
+    expect(checkLink(url).verdict).toBe('unsafe');
+  });
+
+  it('raw code downloads stay flagged', () => {
+    expect(checkLink('https://raw.githubusercontent.com/x/y/main/run.ps1').verdict).toBe('unsafe');
+  });
+});
