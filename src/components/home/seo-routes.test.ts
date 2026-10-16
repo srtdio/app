@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   HOME_DESCRIPTION,
+  HOME_TITLE,
   ICON_LINKS,
   OG_IMAGE,
   PRERENDER_ATTR,
@@ -85,6 +86,27 @@ describe('seo routes', () => {
       'https://srtd.io/legal/terms-and-conditions',
     ]);
     expect(xml.match(/<lastmod>2026-10-16<\/lastmod>/g)).toHaveLength(3);
+  });
+
+  it('titles "/" with the approved line; /demo and legal keep their titles', () => {
+    const T = 'Sorted | Free approvals and chat for social media teams';
+    expect(HOME_TITLE).toBe(T);
+    const home = SEO_ROUTES.find((r) => r.path === '/');
+    expect(home?.title).toBe(T);
+    if (home === undefined) throw new Error('no "/" route');
+    const head = routeHeadTags(home);
+    expect(head).toContain(`<meta property="og:title" content="${T}" />`);
+    expect(head).toContain(`<meta name="twitter:title" content="${T}" />`);
+    expect(SEO_ROUTES.filter((r) => r.path !== '/').map((r) => [r.path, r.title])).toEqual([
+      ['/legal/privacy-policy', 'Privacy policy | Sorted'],
+      ['/legal/terms-and-conditions', 'Terms and conditions | Sorted'],
+      ['/demo', 'Demo | Sorted'],
+    ]);
+    for (const route of SEO_ROUTES) {
+      expect(routeHeadTags(route)).toContain(
+        `<meta name="twitter:title" content="${route.title}" />`,
+      );
+    }
   });
 
   it('describes "/" and /demo with the approved line, in every description tag', () => {
