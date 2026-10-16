@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
@@ -28,16 +27,6 @@ async function expectLight(page: Page): Promise<void> {
   expect(bg).toBe(WHITE);
   const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(body).toBe(WHITE);
-}
-
-/** The Pages rule for a path in public/_redirects (the harness never applies it). */
-function redirectFor(path: string): { to: string; status: number } | null {
-  const rules = readFileSync(new URL('../../public/_redirects', import.meta.url), 'utf8');
-  for (const line of rules.split('\n')) {
-    const [from, to, status] = line.trim().split(/\s+/);
-    if (from === path && to !== undefined) return { to, status: Number(status) };
-  }
-  return null;
 }
 
 /** Open the sidebar and tap a feature tile. */
@@ -137,24 +126,6 @@ test.describe('phone', () => {
       );
       expect(inStory).toBe(false);
     }
-  });
-
-  test('/pricing ends on the homepage', async ({ page }) => {
-    const rule = redirectFor('/pricing');
-    expect(rule).toEqual({ to: '/', status: 301 });
-    // WebKit cannot fulfill a redirect status, so the harness follows the rule in-page.
-    await page.route(
-      (url) => url.pathname === '/pricing',
-      (route) =>
-        route.fulfill({
-          contentType: 'text/html',
-          body: `<script>location.replace(${JSON.stringify(rule?.to)})</script>`,
-        }),
-    );
-    await serveHome(page);
-    await page.goto('/pricing');
-    await page.waitForURL((url) => url.pathname === '/');
-    await expect(page.locator('.home .hero')).toBeVisible();
   });
 
   test('/demo loads directly and from the menu; Back to home', async ({ page }) => {

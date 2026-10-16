@@ -981,6 +981,9 @@ html:has(.home) body {
 }
 .home footer .logo {
   font-size: 22px;
+  /* 44px wide tap area; the negative margin keeps the row where it was. */
+  padding-right: 4px;
+  margin-right: -4px;
 }
 .home footer ul {
   list-style: none;
@@ -994,6 +997,9 @@ html:has(.home) body {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  /* 44px wide tap area for short words (Terms); the row does not move. */
+  padding-inline: 4px;
+  margin-inline: -4px;
   text-decoration: none;
   color: var(--muted);
 }
