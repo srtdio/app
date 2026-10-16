@@ -48,6 +48,7 @@ import type {
   ReactNode,
   RefObject,
 } from 'react';
+import { glowTarget, Highlight } from '@/components/ui/SearchHighlight';
 import { createPortal } from 'react-dom';
 import type { Result } from '@srtdio/rpc';
 import {
@@ -463,7 +464,7 @@ export function PlanPage(props: {
         >
           {props.titleSlot ?? (
             <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">
-              {props.title}
+              <Highlight text={props.title} />
             </h2>
           )}
           {props.subtitle !== undefined ? (
@@ -879,6 +880,12 @@ export function PlanScreen(props: {
   initialItemId?: string;
   /** Outside a chat: the comment the entry item scrolls to and highlights. */
   highlightCommentId?: string;
+  /**
+   * Outside a chat: a search jump's plan item. Once the list paints, its row
+   * comes to the centre with the arrival tint; an item no longer in the plan
+   * opens the plan as usual, with no error.
+   */
+  jumpItemId?: string;
   /** Outside a chat: a plan of another workspace reads as not available. */
   onlyWorkspaceId?: string;
   onClose: () => void;
@@ -1026,6 +1033,29 @@ export function PlanScreen(props: {
         )
       : ticked;
   }, [shownBundle, gone, slot, slotOverrides, moveOverlay, timeZone]);
+  // A search jump's item: scrolled to and tinted once, when its row is on screen.
+  const jumpItemId = props.jumpItemId ?? null;
+  const jumpedRef = useRef<string | null>(null);
+  const hasJumpRow =
+    jumpItemId !== null && (bundle?.items.some((i) => i.id === jumpItemId) ?? false);
+  useEffect(() => {
+    if (!props.open || jumpItemId === null || !hasJumpRow || jumpedRef.current === jumpItemId) {
+      return;
+    }
+    let clear: (() => void) | null = null;
+    const raf = requestAnimationFrame(() => {
+      const row = bodyRef.current?.querySelector<HTMLElement>(
+        `[data-plan-row="${CSS.escape(jumpItemId)}"]`,
+      );
+      if (row == null) return;
+      jumpedRef.current = jumpItemId;
+      clear = glowTarget(row);
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      clear?.();
+    };
+  }, [props.open, jumpItemId, hasJumpRow]);
   const groups = useMemo(
     () => (bundle !== null ? planListGroups(bundle, timeZone, side) : []),
     [bundle, timeZone, side],
@@ -3320,7 +3350,7 @@ function PlanRow(props: {
             data-plan-row-title=""
             className="truncate text-[15px] font-semibold leading-5 text-fg-2"
           >
-            {title}
+            <Highlight text={title} />
           </span>
           <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-fg-3">
             <KindTag item={props.item} label={kindLabel} />
@@ -3372,7 +3402,7 @@ function PlanRow(props: {
           data-plan-row-title=""
           className="truncate text-[15px] font-semibold leading-5 text-fg"
         >
-          {title}
+          <Highlight text={title} />
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-fg-3">
           <KindTag item={props.item} label={kindLabel} />

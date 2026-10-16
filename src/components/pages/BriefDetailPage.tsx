@@ -1,3 +1,6 @@
+import { FORMER_MEMBER } from '@/lib/people-names';
+import { useSearchJump } from '@/lib/search/jump';
+import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -105,16 +108,22 @@ function friendlyCloseError(error: DomainError): string {
 }
 
 // Resolve a brief's "Created by" to a display name: prefer the current member
-// name for created_by, then the ETL-frozen legacy author name, then "(ex-member)"
-// for a creator who is no longer a workspace member and has no legacy name. Pure
-// so the precedence is unit-tested without rendering.
+// name for created_by, then the ETL-frozen legacy author name, then the shared
+// "Former member" label for a creator confirmed not to be a current member (no
+// creator at all, or the loaded member list does not have them). While that
+// list has not loaded, a creator id renders nothing extra (never "Former member"
+// early). Pure so the precedence is unit-tested without rendering.
 export function briefAuthorLabel(
   createdBy: string | null,
   legacyAuthorName: string | null,
   memberName: (id: string) => string | null,
+  membersLoaded = true,
 ): string {
-  const member = createdBy !== null && createdBy !== '' ? memberName(createdBy) : null;
-  return member ?? legacyAuthorName ?? '(ex-member)';
+  const hasCreator = createdBy !== null && createdBy !== '';
+  const member = hasCreator ? memberName(createdBy) : null;
+  if (member !== null) return member;
+  if (legacyAuthorName !== null) return legacyAuthorName;
+  return hasCreator && !membersLoaded ? '' : FORMER_MEMBER;
 }
 
 export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } = {}) {
@@ -136,7 +145,13 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   // Resolve created_by to a current member's display name, never a raw uuid.
   // Reuses the post detail page's member hook unchanged; the map is the resolver
   // behind briefAuthorLabel below.
-  const { options: memberOptions } = usePostMembers(workspaceId);
+  const {
+    options: memberOptions,
+    loading: membersLoading,
+    error: membersError,
+  } = usePostMembers(workspaceId);
+  // Only a list that loaded proves someone is not a current member.
+  const membersLoaded = !membersLoading && membersError === null;
   const memberById = useMemo(
     () => new Map(memberOptions.map((o) => [o.userId, o.displayName])),
     [memberOptions],
@@ -147,6 +162,9 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   // owns the scroll-to-and-flash. Fired once per distinct id; only 'comment' is
   // stripped, preserving any sibling deep-link param.
   const [searchParams, setSearchParams] = useSearchParams();
+  // A search jump's words: coloured in the title, objective and comments until
+  // this page unmounts (the target comment comes through ?comment= below).
+  const searchJump = useSearchJump();
   const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
   const handledCommentParam = useRef<string | null>(null);
   useEffect(() => {
@@ -310,10 +328,12 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const mediaItems = briefMediaItems(gallery);
 
   return (
-    <>
+    <SearchWordsContext.Provider value={searchJump.words}>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
         {backButton}
-        <h1 className="min-w-0 flex-1 text-[15px] font-semibold truncate">{brief.title}</h1>
+        <h1 className="min-w-0 flex-1 text-[15px] font-semibold truncate">
+          <Highlight text={brief.title} />
+        </h1>
         {workspaceKey !== null ? (
           <EntityRefChip
             kind="brief"
@@ -355,7 +375,9 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
               Objective
             </div>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">{brief.objective}</p>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">
+              <Highlight text={brief.objective} />
+            </p>
           </section>
 
           {brief.brand_requirements !== null && brief.brand_requirements.trim() !== '' ? (
@@ -474,6 +496,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
                     brief.created_by,
                     brief.legacy_author_name,
                     (id) => memberById.get(id) ?? null,
+                    membersLoaded,
                   )}
                 </dd>
               </div>
@@ -482,6 +505,6 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
         </aside>
       </div>
       <Toasts toasts={toasts} onDismiss={dismiss} />
-    </>
+    </SearchWordsContext.Provider>
   );
 }

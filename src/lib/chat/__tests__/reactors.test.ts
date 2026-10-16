@@ -33,7 +33,13 @@ describe('T5 who reacted', () => {
     expect(model.rows.filter((r) => r.mine)).toHaveLength(1);
   });
 
-  it('unresolved names read Former member', () => {
-    expect(model.rows.find((r) => r.userId === 'ghost')?.name).toBe('Former member');
+  it('a reactor whose name has not loaded renders nothing extra, never Former member', () => {
+    expect(model.rows.find((r) => r.userId === 'ghost')?.name).toBe('');
+  });
+
+  it('only a reactor a read confirmed is not a current member reads Former member', () => {
+    const gone = groupReactors(rows, 'me', profileOf, (id) => id === 'ghost');
+    expect(gone.rows.find((r) => r.userId === 'ghost')?.name).toBe('Former member');
+    expect(gone.rows.find((r) => r.userId === 'a')?.name).toBe('Asha');
   });
 });

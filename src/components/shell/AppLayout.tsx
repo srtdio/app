@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { BottomTabs } from '@/components/shell/BottomTabs';
 import { Topbar } from '@/components/shell/Topbar';
-import { CommandPalette } from '@/components/shell/CommandPalette';
+import { CommandPalette, type PaletteCloseReason } from '@/components/shell/CommandPalette';
+import { isPaletteShortcut, isTextEntry, usesCmdKey } from '@/lib/search/palette-keys';
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
@@ -81,6 +83,29 @@ export function AppLayout() {
   const userId = session?.user.id ?? null;
   const chrome = shellChrome(isThreadRoute(pathname, searchParams));
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const paletteOpenRef = useRef(false);
+  paletteOpenRef.current = paletteOpen;
+  const paletteInputRef = useRef<HTMLInputElement>(null);
+  // Where the user was when search opened: Cancel / Esc puts focus back there.
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  // One tap opens search with the cursor in the field: the palette renders
+  // inside this handler (flushSync) and its field is focused right here, in
+  // the tap, the only place iOS Safari (and the installed app) raises the keyboard.
+  const openPalette = useCallback((): void => {
+    const was = document.activeElement;
+    returnFocusRef.current = was instanceof HTMLElement && was !== document.body ? was : null;
+    flushSync(() => setPaletteOpen(true));
+    paletteInputRef.current?.focus({ preventScroll: true });
+  }, []);
+  const closePalette = useCallback((reason: PaletteCloseReason): void => {
+    setPaletteOpen(false);
+    const back = returnFocusRef.current;
+    returnFocusRef.current = null;
+    // A picked result moves on to its target; a dismiss returns where the user was.
+    if (reason === 'dismiss' && back !== null && back.isConnected) {
+      back.focus({ preventScroll: true });
+    }
+  }, []);
   // Induction tailors its brief steps to whether the role holds brief.create.
   const briefCreate = useWorkspaceCapability('brief.create');
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -174,18 +199,23 @@ export function AppLayout() {
     navigate(to, { replace: true });
   }, [flow, loading, profileLoading, profile, profileError, workspaceError, navigate]);
 
+  // Cmd+K (Apple) / Ctrl+K (others) opens search from anywhere, and closes it
+  // from its own field; typing in any other text field never triggers it.
   useEffect(() => {
+    const cmdKey = usesCmdKey(navigator.platform || navigator.userAgent);
     function onKeyDown(event: KeyboardEvent): void {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setPaletteOpen((value) => !value);
-      }
+      if (!isPaletteShortcut(event, cmdKey)) return;
+      const inPalette = event.target !== null && event.target === paletteInputRef.current;
+      if (!inPalette && isTextEntry(event.target)) return;
+      event.preventDefault();
+      if (paletteOpenRef.current) closePalette('dismiss');
+      else openPalette();
     }
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, []);
+  }, [openPalette, closePalette]);
 
   // Onboarding gate: an unfinished profile or no workspace opens OnboardingFlow
   // full screen, before any chrome. It is opened in render (no shell frame first)
@@ -297,7 +327,7 @@ export function AppLayout() {
                     workspaceName={workspaceDisplayName}
                     {...(profile !== null ? { currentUserName: profile.display_name } : {})}
                     currentUserAvatarUrl={profile?.avatar_url ?? null}
-                    onOpenPalette={() => setPaletteOpen(true)}
+                    onOpenPalette={openPalette}
                     onOpenAvatar={() => setAvatarOpen(true)}
                   />
                 </div>
@@ -309,7 +339,8 @@ export function AppLayout() {
               <ToastViewport />
               <CommandPalette
                 open={paletteOpen}
-                onClose={() => setPaletteOpen(false)}
+                onClose={closePalette}
+                inputRef={paletteInputRef}
                 workspaceId={workspaceId}
                 workspaceKey={workspaceKey}
                 userId={userId}

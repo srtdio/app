@@ -11,6 +11,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { IconAlarmClock, IconCalendar, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
+import { Highlight } from '@/components/ui/SearchHighlight';
 import { cn } from '@/lib/cn';
 import { DUR_BASE_MS } from '@/lib/motion';
 import { civilDay } from '@/lib/chat/time-format';
@@ -371,7 +372,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
               task.status === 'rejected' && 'line-through',
             )}
           >
-            {task.title}
+            <Highlight text={task.title} />
           </span>
           {task.note !== null && task.note !== '' ? (
             <span className="text-[13px] leading-[17px] text-fg-2">{task.note}</span>

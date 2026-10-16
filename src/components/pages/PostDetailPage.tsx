@@ -11,6 +11,8 @@ import { Comments, writeClipboard } from '@/components/comments/Comments';
 import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
+import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
+import { useSearchJump } from '@/lib/search/jump';
 import {
   PCS_TAB_PARAM,
   parsePcsTab,
@@ -298,6 +300,9 @@ export function PostDetailPage({
   // flashes it once the row loads. Fired once per distinct id; only 'comment' is
   // stripped, preserving any sibling deep-link param.
   const [searchParams, setSearchParams] = useSearchParams();
+  // A search jump's words: coloured in the title, caption and comments until
+  // this page unmounts (the target comment comes through ?comment= below).
+  const searchJump = useSearchJump(!embedded);
   const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
   const handledCommentParam = useRef<string | null>(null);
   useEffect(() => {
@@ -383,7 +388,14 @@ export function PostDetailPage({
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const [role, setRole] = useState<string | null>(null);
-  const { options: memberOptions } = usePostMembers(workspaceId);
+  const {
+    options: memberOptions,
+    loading: membersLoading,
+    error: membersError,
+  } = usePostMembers(workspaceId);
+  // Only a list that loaded proves someone is not a current member: until then a
+  // person not in it renders nothing extra, never "Former member".
+  const membersLoaded = !membersLoading && membersError === null;
   const { toasts, push, dismiss } = useToasts();
 
   const [showDetails, setShowDetails] = useState(false);
@@ -507,10 +519,12 @@ export function PostDetailPage({
       if (ownerUserId === null || ownerUserId === '')
         return { name: legacyName ?? 'Unassigned', avatarUrl: null };
       const option = memberById.get(ownerUserId);
-      if (option === undefined) return { name: legacyName ?? FORMER_MEMBER, avatarUrl: null };
+      if (option === undefined) {
+        return { name: legacyName ?? (membersLoaded ? FORMER_MEMBER : ''), avatarUrl: null };
+      }
       return { name: option.displayName, avatarUrl: option.avatarUrl };
     },
-    [memberById],
+    [memberById, membersLoaded],
   );
 
   // One presign setup for this page, built exactly as the Assets page does: the
@@ -649,9 +663,13 @@ export function PostDetailPage({
   const resolveAuthorName = useCallback(
     (authorUserId: string | null, legacyName: string | null): string => {
       if (authorUserId === null || authorUserId === '') return legacyName ?? FORMER_MEMBER;
-      return memberById.get(authorUserId)?.displayName ?? legacyName ?? FORMER_MEMBER;
+      return (
+        memberById.get(authorUserId)?.displayName ??
+        legacyName ??
+        (membersLoaded ? FORMER_MEMBER : '')
+      );
     },
-    [memberById],
+    [memberById, membersLoaded],
   );
 
   // From the embedded annotations, build (a) the in-bounds current-version
@@ -1215,7 +1233,7 @@ export function PostDetailPage({
   );
 
   return (
-    <>
+    <SearchWordsContext.Provider value={searchJump.words}>
       {embedded ? null : (
         <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
           {backButton}
@@ -1295,9 +1313,9 @@ export function PostDetailPage({
             />
           ) : (
             <h2 className="text-[28px] font-semibold leading-tight tracking-tight">
-              {titleHead !== '' ? `${titleHead} ` : ''}
+              {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
               <span className="whitespace-nowrap">
-                {titleLast}
+                <Highlight text={titleLast} />
                 <button
                   type="button"
                   aria-label="Edit title"
@@ -1312,7 +1330,9 @@ export function PostDetailPage({
             </h2>
           )
         ) : (
-          <h1 className="text-[28px] font-semibold leading-tight tracking-tight">{post.title}</h1>
+          <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+            <Highlight text={post.title} />
+          </h1>
         )}
 
         <button
@@ -1737,6 +1757,6 @@ export function PostDetailPage({
       ) : null}
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
-    </>
+    </SearchWordsContext.Provider>
   );
 }

@@ -65,8 +65,8 @@ async function runSearchFlow(page: Page): Promise<void> {
   await box.fill(QUERY);
   await expect(firstHit).toBeVisible();
   await firstHit.click();
-  // The jump ring is a 2s flash: check it first, before the slower bar checks.
-  await expect(page.locator('[data-bubble].ring-2').first()).toBeVisible();
+  // The arrival tint is a 2s glow on the row: check it first, before the slower bar checks.
+  await expect(page.locator('[data-msg-id][data-jump-glow]').first()).toBeVisible();
   const bar = page.locator('[data-chat-search-bar]');
   await expect(bar).toBeVisible();
   await expect(bar.locator('input')).toHaveValue(QUERY);

@@ -185,7 +185,7 @@ test('chat stars: star, list everywhere, jump, unstar from Edit', async ({ page 
   await noCallout(page, '[data-starred-row]');
   await sheetRow.click();
   await expect(sheet).toHaveCount(0);
-  await expect(page.locator('[data-bubble].ring-2', { hasText: PEER_LINE })).toBeVisible();
+  await expect(page.locator('[data-msg-id][data-jump-glow]', { hasText: PEER_LINE })).toBeVisible();
 
   // Contact sheet: the Starred tab lists it.
   await page.locator('[data-contact-open]').click();
@@ -343,6 +343,8 @@ test(
     // A tap still opens the chat at that message.
     await row.click();
     await expect(home).toHaveCount(0);
-    await expect(page.locator('[data-bubble].ring-2', { hasText: LONG_LAST })).toBeVisible();
+    await expect(
+      page.locator('[data-msg-id][data-jump-glow]', { hasText: LONG_LAST }),
+    ).toBeVisible();
   },
 );

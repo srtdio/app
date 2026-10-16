@@ -5,8 +5,8 @@
 // pulls in the chat read surface. The panel collects every author id plus every
 // @[uuid] mention id and resolves them in ONE IN-clause read (no N+1). Read-only
 // under RLS; a caller supplies no trust. A user who no longer resolves to a
-// member is simply absent from the map, and the UI falls back to the app's
-// "(ex-member)" convention rather than the helper ever throwing.
+// member is simply absent from the map, and the UI falls back to the shared
+// name helper (src/lib/people-names.ts) rather than the helper ever throwing.
 
 import type { Client } from '@srtdio/comments';
 
@@ -18,14 +18,11 @@ export interface CommentProfile {
   username?: string | null;
 }
 
-/** Shown for any author or @mention id that no longer resolves to a member. */
-export const EX_MEMBER_LABEL = '(ex-member)';
-
 /**
  * Resolve display info for a set of user ids. Ids are de-duplicated and empties
  * dropped; an empty set short-circuits to an empty map with no round-trip. A
  * transport error resolves to whatever was read (empty on total failure) so the
- * panel degrades to "(ex-member)" labels instead of throwing.
+ * panel degrades to the shared name helper's labels instead of throwing.
  */
 export async function fetchCommentProfiles(
   client: Client,

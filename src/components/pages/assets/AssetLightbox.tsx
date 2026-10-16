@@ -14,6 +14,7 @@ import {
   typeLabel,
 } from '@/components/pages/assets/media';
 import { downloadFile } from '@/components/pages/assets/openExternal';
+import { Highlight } from '@/components/ui/SearchHighlight';
 import {
   FileViewer,
   remoteFileSource,
@@ -371,7 +372,9 @@ export function AssetLightbox({
     >
       {/* Top bar: name, counter, close. */}
       <div className="flex h-14 shrink-0 items-center gap-3 px-3 text-white">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+          <Highlight text={name} />
+        </span>
         <span className="shrink-0 text-xs tabular-nums text-white/70">
           {index + 1} / {items.length}
         </span>
@@ -430,7 +433,9 @@ export function AssetLightbox({
               {typeLabel(kind)}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{name}</p>
+              <p className="truncate text-sm font-medium">
+                <Highlight text={name} />
+              </p>
               <p className="mt-1 text-xs text-fg-3">{humanizeSize(item.sizeBytes)}</p>
               {mediaFailed ? (
                 <p className="mt-1 text-xs text-fg-3">This asset could not be loaded.</p>

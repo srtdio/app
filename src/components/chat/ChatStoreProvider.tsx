@@ -61,6 +61,7 @@ import {
   mentionIds,
   mentionNamesIn,
   rememberMentionProfiles,
+  rememberMentionRead,
   resolveMentionPreview,
 } from '@/lib/chat/mentions';
 import { SIGNOUT_EVENT } from '@/lib/events';
@@ -526,7 +527,10 @@ export async function rememberBodyNames(
     logger.warn('chat store: mention names read failed', { error: result.error.message });
     return;
   }
-  rememberMentionProfiles(workspaceId, result.data);
+  // With membership known, an asked id the read did not return is a confirmed
+  // former member; otherwise nobody is marked former (never labelled early).
+  if (result.data.some((p) => p.member === null)) rememberMentionProfiles(workspaceId, result.data);
+  else rememberMentionRead(workspaceId, ids, result.data);
 }
 
 /**

@@ -7,6 +7,8 @@ import { SectionHeader } from '@/components/shell/SectionHeader';
 import { IconAssets, IconChevronRight, IconUpload } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
+import { SearchWordsContext } from '@/components/ui/SearchHighlight';
+import { useSearchJump } from '@/lib/search/jump';
 import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
 import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
@@ -94,6 +96,8 @@ export function AssetsPage() {
   const [search, setSearch] = useState('');
   const [folderId, setFolderId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<ViewerState | null>(null);
+  // A search jump's words: the viewer's file name keeps them coloured until this page unmounts.
+  const searchJump = useSearchJump();
   const [actionItem, setActionItem] = useState<AssetListItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
@@ -785,22 +789,24 @@ export function AssetsPage() {
       </div>
 
       {viewer !== null && viewerItem !== undefined ? (
-        <AssetLightbox
-          items={navigable}
-          index={viewer.index}
-          presignEnabled={presignEnabled}
-          cache={cache}
-          requestDownloadUrl={requestDownloadUrl}
-          initialInfoOpen={viewer.infoOpen}
-          onIndexChange={(index) =>
-            setViewer((prev) => (prev === null ? prev : { ...prev, index }))
-          }
-          onClose={() => setViewer(null)}
-          onDelete={deleteOne}
-          canRename={canRename}
-          onRename={handleRename}
-          onToast={push}
-        />
+        <SearchWordsContext.Provider value={searchJump.words}>
+          <AssetLightbox
+            items={navigable}
+            index={viewer.index}
+            presignEnabled={presignEnabled}
+            cache={cache}
+            requestDownloadUrl={requestDownloadUrl}
+            initialInfoOpen={viewer.infoOpen}
+            onIndexChange={(index) =>
+              setViewer((prev) => (prev === null ? prev : { ...prev, index }))
+            }
+            onClose={() => setViewer(null)}
+            onDelete={deleteOne}
+            canRename={canRename}
+            onRename={handleRename}
+            onToast={push}
+          />
+        </SearchWordsContext.Provider>
       ) : null}
 
       {actionItem !== null ? (

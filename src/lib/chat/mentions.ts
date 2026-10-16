@@ -56,8 +56,27 @@ export function mentionsAfterRefusal(
   return mentions.filter((id) => id === ALL_MENTION || members.has(id));
 }
 
-/** Resolve a user id to a display name; undefined when unknown. */
-export type NameOf = (userId: string) => string | undefined;
+/**
+ * Resolve a user id to a display name; undefined when unknown. A workspace-aware
+ * lookup (mentionNamesIn, the chat's profileNameOf) also says which unknown ids a
+ * read confirmed are not current members (`former`): only those read "Former
+ * member"; any other unknown id (its name not loaded yet, or its read failed)
+ * renders nothing extra. A plain lookup without `former` keeps the old reading
+ * (every unknown id is a former member).
+ */
+export type NameOf = ((userId: string) => string | undefined) & {
+  former?: (userId: string) => boolean;
+};
+
+/** A name lookup that knows this workspace's confirmed former members. */
+export function withFormer(
+  nameOf: (userId: string) => string | undefined,
+  workspaceId: string | null,
+): NameOf {
+  return Object.assign((userId: string) => nameOf(userId), {
+    former: (userId: string) => isFormerMember(workspaceId, userId),
+  });
+}
 
 /** One run of a body: plain text, or a mention token's user id. */
 export type BodySegment = { kind: 'text'; text: string } | { kind: 'mention'; userId: string };
@@ -66,10 +85,22 @@ export type BodySegment = { kind: 'text'; text: string } | { kind: 'mention'; us
 export const FORMER_MEMBER = 'Former member';
 
 /**
- * The label an unresolvable mention renders as (after the "@"). It is the same
- * "Former member" label: no surface ever renders "Unknown member".
+ * What a mention a plain lookup cannot name reads as (after the "@"), and what a
+ * confirmed former member's mention reads as: the same "Former member" label.
  */
 export const UNKNOWN_MEMBER = FORMER_MEMBER;
+
+/**
+ * The pick label of a mention whose name is not known and who is not confirmed
+ * gone (a failed read) in the edit box: an invisible word joiner after the "@",
+ * so the token survives a save and nothing is labelled before it resolves.
+ */
+const PENDING_PICK = '\u2060';
+
+/** Whether an unknown id reads "Former member" under this lookup (see NameOf). */
+function readsFormer(nameOf: NameOf, userId: string): boolean {
+  return nameOf.former === undefined || nameOf.former(userId);
+}
 
 /**
  * The everyone mention: the body token `@[all]`, and the string p_mentions
@@ -120,11 +151,16 @@ export function splitMentions(body: string): BodySegment[] {
   return segments;
 }
 
-/** "@Name" for a mention, or "@Former member" when the id does not resolve. */
+/**
+ * "@Name" for a mention; "@Former member" for an id the lookup knows is not a
+ * current member; nothing for an id whose name is not known yet.
+ */
 export function mentionLabel(userId: string, nameOf: NameOf): string {
   if (userId.toLowerCase() === ALL_MENTION) return `@${ALL_MENTION}`;
-  const name = nameOf(userId.toLowerCase());
-  return `@${name !== undefined && name !== '' ? name : UNKNOWN_MEMBER}`;
+  const id = userId.toLowerCase();
+  const name = nameOf(id);
+  if (name !== undefined && name !== '') return `@${name}`;
+  return readsFormer(nameOf, id) ? `@${FORMER_MEMBER}` : '';
 }
 
 /** The body as plain text: every token becomes "@Name". Other text is verbatim. */
@@ -194,8 +230,11 @@ export function deserializeMentions(
     }
     const name = nameOf(userId);
     if (name === undefined || name === '') {
-      if (!gone(userId)) picks = [...picks, { userId, name: UNKNOWN_MEMBER }];
-      return `@${UNKNOWN_MEMBER}`;
+      // A confirmed former member reads "Former member"; an id not resolved yet
+      // keeps an invisible pick label, never a placeholder name.
+      const label = readsFormer(nameOf, userId) ? FORMER_MEMBER : PENDING_PICK;
+      if (!gone(userId)) picks = [...picks, { userId, name: label }];
+      return `@${label}`;
     }
     picks = addPick(picks, { userId, name });
     return `@${name}`;
@@ -530,7 +569,7 @@ export function knownMentionName(workspaceId: string | null, userId: string): st
 
 /** The registry's name lookup for one workspace. */
 export function mentionNamesIn(workspaceId: string | null): NameOf {
-  return (userId) => knownMentionName(workspaceId, userId);
+  return withFormer((userId) => knownMentionName(workspaceId, userId), workspaceId);
 }
 
 // --- search surfaces -----------------------------------------------------------

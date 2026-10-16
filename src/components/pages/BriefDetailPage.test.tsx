@@ -49,12 +49,17 @@ describe('briefAuthorLabel', () => {
     expect(briefAuthorLabel(null, 'Old Name', memberName)).toBe('Old Name');
   });
 
-  it('returns (ex-member) when created_by is unresolved and there is no legacy name', () => {
-    expect(briefAuthorLabel('u404', null, memberName)).toBe('(ex-member)');
+  it('returns Former member when the loaded members do not have created_by and there is no legacy name', () => {
+    expect(briefAuthorLabel('u404', null, memberName)).toBe('Former member');
   });
 
-  it('returns (ex-member) when created_by is null and there is no legacy name', () => {
-    expect(briefAuthorLabel(null, null, memberName)).toBe('(ex-member)');
+  it('returns Former member when created_by is null and there is no legacy name', () => {
+    expect(briefAuthorLabel(null, null, memberName)).toBe('Former member');
+  });
+
+  it('never labels a creator before the member list loads: nothing extra renders', () => {
+    expect(briefAuthorLabel('u404', null, memberName, false)).toBe('');
+    expect(briefAuthorLabel('u404', 'Old Name', memberName, false)).toBe('Old Name');
   });
 
   it('treats an empty created_by string as no member and falls back', () => {
