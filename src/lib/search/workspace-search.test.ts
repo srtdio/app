@@ -198,7 +198,7 @@ describe('workspaceHitTarget', () => {
     });
     expect(
       workspaceHitTarget(hit({ kind: 'plan_item', id: 'i1', parentId: 'pl1' }), 'GBL'),
-    ).toEqual({ path: '/plans/pl1?item=i1' });
+    ).toEqual({ path: '/plans/pl1?at=i1' });
     expect(
       workspaceHitTarget(hit({ kind: 'task', id: 't1', channelId: 'group__w__g' }), 'GBL'),
     ).toEqual({ path: '/chat?channel=group__w__g&task=t1' });
@@ -211,6 +211,30 @@ describe('workspaceHitTarget', () => {
   it('chat hits open the chat at the message', () => {
     expect(chatHitPath({ channelId: 'group__a__b', id: 'm1' })).toBe(
       '/chat?channel=group__a__b&message=m1',
+    );
+  });
+
+  it('every kind but a person carries the searched words through the one jump helper', () => {
+    expect(workspaceHitTarget(base, 'GBL', ' Launch ')).toEqual({ path: '/p/gbl-7?q=Launch' });
+    expect(
+      workspaceHitTarget(
+        hit({ kind: 'comment', id: 'c1', entityType: 'post', parentId: 'p1', number: 3 }),
+        'GBL',
+        'hello',
+      ),
+    ).toEqual({ path: '/p/gbl-3?comment=c1&q=hello' });
+    expect(
+      workspaceHitTarget(hit({ kind: 'plan_item', id: 'i1', parentId: 'pl1' }), 'GBL', 'reel'),
+    ).toEqual({ path: '/plans/pl1?q=reel&at=i1' });
+    expect(
+      workspaceHitTarget(hit({ kind: 'task', id: 't1', channelId: 'group__w__g' }), 'GBL', 'fix'),
+    ).toEqual({ path: '/chat?channel=group__w__g&task=t1&q=fix' });
+    expect(workspaceHitTarget(hit({ kind: 'file', id: 'a1' }), 'GBL', 'logo')).toEqual({
+      path: '/assets?asset=a1&q=logo',
+    });
+    expect(workspaceHitTarget(hit({ kind: 'person', id: U }), 'GBL', 'ana')).toEqual({ person: U });
+    expect(chatHitPath({ channelId: 'group__a__b', id: 'm1' }, 'see you')).toBe(
+      '/chat?channel=group__a__b&message=m1&q=see+you',
     );
   });
 });

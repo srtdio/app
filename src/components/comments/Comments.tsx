@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { glowById, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { IconCheck, IconCopy, IconMore } from '@/components/ui/icons';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
@@ -39,7 +40,6 @@ import type { CheckpointPoint } from '@/components/comments/SlotComposer';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { useMentionCandidates } from '@/components/comments/useMentionCandidates';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
-import { flashNode } from '@/components/comments/flash-node';
 import {
   resolveMentionHandle,
   resolveName,
@@ -253,7 +253,19 @@ const URL_TRAILING = /[.,;:!?)\]}'"]+$/;
  * a current member renders "@Former member". Surrounding text is returned
  * verbatim so the caller's whitespace-pre-wrap preserves the original layout.
  */
-function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
+function pushBodyText(
+  nodes: ReactNode[],
+  text: string,
+  keyBase: string,
+  words: readonly string[],
+): void {
+  // A search jump's words (the shared highlight); without them the runs stay plain strings.
+  const plain = (run: string): ReactNode =>
+    words.length === 0 ? (
+      run
+    ) : (
+      <Fragment key={`${keyBase}-h${nodes.length}`}>{highlightNodes(run, words)}</Fragment>
+    );
   let last = 0;
   let i = 0;
   for (const m of text.matchAll(URL_TOKEN)) {
@@ -262,7 +274,7 @@ function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
     const trail = href.match(URL_TRAILING);
     const suffix = trail !== null ? trail[0] : '';
     if (suffix !== '') href = href.slice(0, href.length - suffix.length);
-    if (start > last) nodes.push(text.slice(last, start));
+    if (start > last) nodes.push(plain(text.slice(last, start)));
     // The raw URL never reaches the screen: LinkButton labels it with the domain
     // only. align-middle keeps the inline-flex button sitting on the text run's
     // baseline; it renders nothing at all when the token is not a usable URL.
@@ -271,30 +283,31 @@ function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
     i += 1;
     last = start + m[0].length;
   }
-  if (last < text.length) nodes.push(text.slice(last));
+  if (last < text.length) nodes.push(plain(text.slice(last)));
 }
 
 export function renderCommentBody(
   body: string,
   nameOf: (id: string) => string | null,
+  words: readonly string[] = [],
 ): ReactNode[] {
   const nodes: ReactNode[] = [];
   let last = 0;
   let key = 0;
   for (const match of body.matchAll(MENTION_TOKEN)) {
     const start = match.index ?? 0;
-    if (start > last) pushBodyText(nodes, body.slice(last, start), `t${key}`);
+    if (start > last) pushBodyText(nodes, body.slice(last, start), `t${key}`, words);
     const id = (match[1] ?? '').toLowerCase();
-    const name = nameOf(id);
+    const label = mentionDisplay(nameOf(id));
     nodes.push(
       <span key={`m-${key}`} className="font-medium text-accent">
-        {mentionDisplay(name)}
+        {words.length === 0 ? label : highlightNodes(label, words)}
       </span>,
     );
     key += 1;
     last = start + match[0].length;
   }
-  if (last < body.length) pushBodyText(nodes, body.slice(last), `t${key}`);
+  if (last < body.length) pushBodyText(nodes, body.slice(last), `t${key}`, words);
   return nodes;
 }
 
@@ -467,9 +480,15 @@ export function showCheckpointWithdrawal(
 }
 
 /** The one-line withdrawal record, naming the withdrawing member through the same
- *  chain the rest of the file uses ("Former member" when the id is not a
- *  current member). */
-export function checkpointWithdrawalText(unacceptedAt: string, name: string | null): string {
+ *  chain the rest of the file uses ("Former member" only once a read confirmed
+ *  the id is not a current member; a deleted withdrawer, null, is gone). While
+ *  the name is still loading (undefined) the line keeps its height and shows
+ *  nothing, so it never names anyone early and never jumps. */
+export function checkpointWithdrawalText(
+  unacceptedAt: string,
+  name: string | null | undefined,
+): string {
+  if (name === undefined) return '\u00a0';
   return `Confirmation withdrawn by ${name ?? FORMER_MEMBER} · ${relativeLong(
     unacceptedAt,
     new Date(),
@@ -944,17 +963,23 @@ export function Comments({
     void loadPage(0);
   }, [refreshSignal, loadPage]);
 
-  // Email deep-link focus: once the targeted comment lands in the loaded list,
-  // scroll to and flash its row exactly once per distinct id. Best-effort: an id
-  // not present (wrong entity, deleted, or beyond page 0) simply never fires.
+  // Deep-link focus (email, search): once the targeted comment lands in the
+  // loaded list, scroll it to the centre and tint it for 2s, exactly once per
+  // distinct id. Best-effort: an id not present (wrong entity, deleted, or
+  // beyond page 0) simply never fires, so the parent opens with no error.
   const flashedCommentId = useRef<string | null>(null);
+  const glowCleanup = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (focusCommentId === undefined || focusCommentId === null || focusCommentId === '') return;
     if (flashedCommentId.current === focusCommentId) return;
     if (!merged.some((c) => c.id === focusCommentId)) return;
     flashedCommentId.current = focusCommentId;
-    flashNode(commentDomId(focusCommentId));
+    glowCleanup.current?.();
+    glowCleanup.current = glowById(commentDomId(focusCommentId));
   }, [merged, focusCommentId]);
+  useEffect(() => () => glowCleanup.current?.(), []);
+  // A search jump's words: coloured in every comment body until the screen unmounts.
+  const searchWords = useContext(SearchWordsContext);
 
   // Resolve author + mention names in one batched read through the shared name
   // registry (users + workspace_members, one .in() each): a current member reads
@@ -1405,7 +1430,7 @@ export function Comments({
           <>
             {comment.body.trim() !== '' ? (
               <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
-                {renderCommentBody(comment.body, handleOf)}
+                {renderCommentBody(comment.body, handleOf, searchWords)}
               </p>
             ) : null}
             {attachments.length > 0 ? (
@@ -1636,7 +1661,7 @@ export function Comments({
                               state === 'confirmed' ? 'text-fg-2' : 'text-fg',
                             )}
                           >
-                            {renderCommentBody(comment.body, handleOf)}
+                            {renderCommentBody(comment.body, handleOf, searchWords)}
                             {editedMarker !== null ? (
                               <span className="ml-1.5 text-[11px] text-fg-3">{editedMarker}</span>
                             ) : null}
@@ -1790,7 +1815,9 @@ export function Comments({
                     <p className="pl-7 text-xs text-fg-3">
                       {checkpointWithdrawalText(
                         comment.unaccepted_at,
-                        comment.unaccepted_by !== null ? nameOf(comment.unaccepted_by) : null,
+                        comment.unaccepted_by !== null
+                          ? (nameOf(comment.unaccepted_by) ?? undefined)
+                          : null,
                       )}
                     </p>
                   ) : null}

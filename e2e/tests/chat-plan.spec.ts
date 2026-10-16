@@ -272,9 +272,7 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(plan).toBeHidden();
   const card = page.locator(`[data-plan-card="${planId}"]`);
   await expect(card).toBeInViewport();
-  await expect(
-    page.locator('[data-msg-id]').filter({ has: card }).locator('.ring-accent'),
-  ).toHaveCount(1);
+  await expect(page.locator('[data-msg-id][data-jump-glow]').filter({ has: card })).toHaveCount(1);
   await expect(card.getByText('1 concept')).toBeVisible();
   await expect(card.getByText('1 post')).toBeVisible();
   await expect(card.locator('[data-plan-progress]')).toHaveText('Approved 0 of 2');

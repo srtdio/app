@@ -19,6 +19,7 @@ import {
 } from '@/lib/chat/search';
 import { entityUrlPath } from '@/lib/entityRef';
 import { chatMessageHref, chatTaskHref, planHref } from '@/lib/inbox/bell-types';
+import { withSearchJump } from '@/lib/search/jump';
 import { generateTraceId } from '@/lib/trace';
 
 type GroupedFn = Database['public']['Functions']['workspace_search_grouped'];
@@ -217,38 +218,46 @@ function entityPath(type: string, id: string, n: number | null, key: string | nu
 }
 
 /**
- * Where a hit opens, through the existing routes: a post or brief its page; a
- * comment its parent at the comment (?comment=); a file the viewer
- * (?asset=); a plan its page; a plan item its plan at the item (?item=); a
- * task its chat's task sheet; a group its chat; a person their DM. Pure.
+ * Where a hit opens, through the existing routes, carrying the searched words
+ * (withSearchJump, the one jump mechanism): a post or brief its page; a
+ * comment its parent at the comment (?comment=); a file the viewer (?asset=);
+ * a plan its page; a plan item its plan, scrolled to the item (at=); a task its
+ * chat's task sheet; a group its chat; a person their DM (no words). Pure.
  */
-export function workspaceHitTarget(hit: WorkspaceHit, workspaceKey: string | null): HitTarget {
+export function workspaceHitTarget(
+  hit: WorkspaceHit,
+  workspaceKey: string | null,
+  query = '',
+): HitTarget {
+  const jump = (path: string, targetId: string | null = null): HitTarget => ({
+    path: withSearchJump(path, query, targetId),
+  });
   switch (hit.kind) {
     case 'post':
     case 'brief':
-      return { path: entityPath(hit.kind, hit.id, hit.number, workspaceKey) };
+      return jump(entityPath(hit.kind, hit.id, hit.number, workspaceKey));
     case 'comment': {
       const parent = entityPath(hit.entityType, hit.parentId ?? '', hit.number, workspaceKey);
-      return { path: `${parent}?comment=${encodeURIComponent(hit.id)}` };
+      return jump(`${parent}?comment=${encodeURIComponent(hit.id)}`);
     }
     case 'file':
-      return { path: `/assets?asset=${encodeURIComponent(hit.id)}` };
+      return jump(`/assets?asset=${encodeURIComponent(hit.id)}`);
     case 'plan':
-      return { path: planHref(hit.id, null) };
+      return jump(planHref(hit.id, null));
     case 'plan_item':
-      return { path: planHref(hit.parentId ?? '', hit.id) };
+      return jump(planHref(hit.parentId ?? '', null), hit.id);
     case 'task':
-      return { path: chatTaskHref(hit.channelId ?? '', hit.id) };
+      return jump(chatTaskHref(hit.channelId ?? '', hit.id));
     case 'chat_group':
-      return { path: chatMessageHref(hit.channelId ?? '', null) };
+      return jump(chatMessageHref(hit.channelId ?? '', null));
     case 'person':
       return { person: hit.id };
   }
 }
 
-/** A chat hit opens its chat at the message (the chat search's deep link). Pure. */
-export function chatHitPath(hit: Pick<SearchHit, 'channelId' | 'id'>): string {
-  return chatMessageHref(hit.channelId, hit.id);
+/** A chat hit opens its chat at the message, with the searched words. Pure. */
+export function chatHitPath(hit: Pick<SearchHit, 'channelId' | 'id'>, query = ''): string {
+  return withSearchJump(chatMessageHref(hit.channelId, hit.id), query);
 }
 
 /** What the palette draws for a query. */

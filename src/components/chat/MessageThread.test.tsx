@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // MessageThread's import graph pulls the message factory, which imports the real
 // agora-chat browser SDK. Mock it so importing the module in node never touches
@@ -85,6 +85,8 @@ import {
 import {
   ALL_MARK,
   mentionPickerRows,
+  rememberMentionRead,
+  resetMentionNames,
   resolveMentionText,
   type MentionMember,
 } from '@/lib/chat/mentions';
@@ -3229,6 +3231,9 @@ describe('@mentions in bubbles', () => {
   ]);
   const nameOf = profileNameOf(names, 'w1');
   const body = `hi @[${BEN}], @[${ME}] and @[${GONE}]`;
+  // GONE: a successful read confirmed they are not a current member.
+  beforeAll(() => rememberMentionRead('w1', [GONE], []));
+  afterAll(() => resetMentionNames());
 
   function markup(mine: boolean, onOpen = vi.fn(), peerUserId: string | null = null): string {
     return renderStrip(
@@ -3319,6 +3324,29 @@ describe('@mentions in bubbles', () => {
 
   it('copy to clipboard reads "@Name"', () => {
     expect(resolveMentionText(body, nameOf)).toBe('hi @Ben, @Me Person and @Former member');
+  });
+
+  it('a current member whose name has not loaded is never "@Former member": nothing extra renders', () => {
+    const PENDING = '33333333-3333-4333-8333-333333333333';
+    const html = renderStrip(
+      <p>{renderBodyWithMentions(`hi @[${PENDING}]`, false, { nameOf, viewerUserId: ME })}</p>,
+    );
+    expect(html).not.toContain('Former member');
+    expect(html).not.toContain('@[');
+    expect(resolveMentionText(`hi @[${PENDING}]`, nameOf)).toBe('hi ');
+  });
+
+  it('a searched word is marked inside a rendered @mention', () => {
+    const html = renderStrip(
+      <p>
+        {renderBodyWithMentions(`hi @[${BEN}]`, false, {
+          nameOf,
+          viewerUserId: ME,
+          highlight: ['ben'],
+        })}
+      </p>,
+    );
+    expect(html).toMatch(/<mark data-search-mark=""[^>]*>Ben<\/mark>/);
   });
 
   it('a body with no mention renders exactly as before', () => {

@@ -7,7 +7,7 @@ import type {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconSearch } from '@/components/ui/icons';
-import { boldMatches } from '@/components/chat/SearchResults';
+import { highlightNodes } from '@/components/ui/SearchHighlight';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
 import { DUR_BASE_MS } from '@/lib/motion';
@@ -23,7 +23,6 @@ import {
   resolveSearchMentionText,
   searchActorName,
   unresolvedMentionIds,
-  UNKNOWN_MEMBER,
 } from '@/lib/chat/mentions';
 import { notesChannelId } from '@/lib/chat/notes';
 import {
@@ -151,7 +150,12 @@ function lineOf(body: string, words: readonly string[], workspaceId: string | nu
 /** A workspace hit as a row. Pure over the name registry. */
 function workspaceRow(
   hit: WorkspaceHit,
-  ctx: { words: readonly string[]; workspaceId: string | null; workspaceKey: string | null },
+  ctx: {
+    query: string;
+    words: readonly string[];
+    workspaceId: string | null;
+    workspaceKey: string | null;
+  },
   time: string,
 ): PaletteItem {
   let snippet = '';
@@ -173,14 +177,17 @@ function workspaceRow(
     title: hit.title,
     snippet,
     time: hit.kind === 'person' ? '' : time,
-    target: workspaceHitTarget(hit, ctx.workspaceKey),
+    target: workspaceHitTarget(hit, ctx.workspaceKey, ctx.query),
   };
 }
 
-/** A chat hit's title: its sender ("Former member" once gone). Pure over the registry. */
+/**
+ * A chat hit's title: its sender, "Former member" only once a read confirmed
+ * they left, and nothing while their name is not known yet. Pure over the registry.
+ */
 export function chatSenderTitle(hit: SearchHit, workspaceId: string | null): string {
   if (hit.senderUserId === null) return 'Chat';
-  return searchActorName(workspaceId, hit.senderUserId) ?? UNKNOWN_MEMBER;
+  return searchActorName(workspaceId, hit.senderUserId) ?? '';
 }
 
 /**
@@ -222,7 +229,12 @@ export function paletteSections(input: {
     const ts = Date.parse(createdAt);
     return Number.isNaN(ts) ? '' : formatRelativeTime(ts, input.nowMs, input.timeZone);
   };
-  const ctx = { words, workspaceId: input.workspaceId, workspaceKey: input.workspaceKey };
+  const ctx = {
+    query: search.query,
+    words,
+    workspaceId: input.workspaceId,
+    workspaceKey: input.workspaceKey,
+  };
   const byGroup = new Map<ResultGroup, PaletteItem[]>(RESULT_GROUPS.map((g) => [g, []]));
   for (const hit of search.workspace) {
     byGroup.get(KIND_GROUP[hit.kind])?.push(workspaceRow(hit, ctx, time(hit.createdAt)));
@@ -238,7 +250,7 @@ export function paletteSections(input: {
           ? hit.mediaLine
           : lineOf(hit.body, words, input.workspaceId),
       time: time(hit.createdAt),
-      target: { path: chatHitPath(hit) },
+      target: { path: chatHitPath(hit, search.query) },
     });
   }
   const sections: PaletteSection[] = [];
@@ -282,7 +294,10 @@ export function namesNeeded(
 }
 
 const ROW =
-  'flex w-full items-center min-h-[44px] px-2 rounded-md text-sm text-left transition-colors';
+  'flex w-full items-center min-h-[44px] px-2 rounded-md text-sm text-left transition-colors active:bg-accent-soft';
+
+/** The keyboard-selected (or hovered) row: the accent tint, the pressed row's tint too. */
+const ACTIVE_ROW = 'bg-accent-soft text-fg';
 
 export interface PaletteBodyProps {
   query: string;
@@ -348,7 +363,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
           {section.items.map((item) => {
             const index = flat.indexOf(item);
             const isActive = index === props.active;
-            const tone = isActive ? 'bg-panel-2 text-fg' : 'text-fg-2';
+            const tone = isActive ? ACTIVE_ROW : 'text-fg-2';
             const common = {
               type: 'button' as const,
               role: 'option',
@@ -363,11 +378,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                 <button
                   key={item.id}
                   {...common}
-                  className={cn(
-                    ROW,
-                    'font-medium',
-                    isActive ? 'bg-panel-2 text-fg' : 'text-accent',
-                  )}
+                  className={cn(ROW, 'font-medium', isActive ? ACTIVE_ROW : 'text-accent')}
                 >
                   {`Show all (${item.count})`}
                 </button>
@@ -393,7 +404,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               >
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="min-w-0 flex-1 truncate font-medium text-fg">
-                    {boldMatches(item.title, words)}
+                    {highlightNodes(item.title, words)}
                   </span>
                   {item.time !== '' ? (
                     <span className="shrink-0 text-xs text-fg-3">{item.time}</span>
@@ -401,7 +412,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                 </span>
                 {item.snippet !== '' ? (
                   <span className="truncate text-xs text-fg-3">
-                    {boldMatches(item.snippet, words)}
+                    {highlightNodes(item.snippet, words)}
                   </span>
                 ) : null}
               </button>

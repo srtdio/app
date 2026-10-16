@@ -114,7 +114,7 @@ describe('deriveMembers', () => {
       profiles,
       currentUserId: null,
     });
-    expect(derived.agency[0]?.displayName).toBe('Unknown member');
+    expect(derived.agency[0]?.displayName).toBe('');
   });
 });
 

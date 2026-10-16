@@ -98,6 +98,7 @@ import {
   openedFromList,
   useHistoryStep,
 } from '@/lib/chat/use-history-step';
+import { hasSearchJump, readSearchJump, withoutSearchJump } from '@/lib/search/jump';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { mentionGone, useChannelMembersState } from '@/components/chat/use-channel-members';
 import { channelHasClient } from '@/components/chat/ComposerTray';
@@ -106,6 +107,7 @@ import {
   mentionIds,
   mentionTargets,
   rememberMentionProfiles,
+  rememberMentionRead,
 } from '@/lib/chat/mentions';
 import { useToast } from '@/components/ui/toast';
 import { BellProvider } from '@/components/chat/BellContext';
@@ -206,9 +208,9 @@ export function profileIdsNeeded(input: {
 
 /**
  * Where the thread's profile reads left each id they asked about. `unknown`:
- * a read succeeded without it (an ex-member); it renders "@Unknown member" for
+ * a read succeeded without it (an ex-member); it renders "@Former member" for
  * good and is never read again. `failed`: its last read failed; it renders
- * "@Unknown member" inert for now and rides along on the next read.
+ * nothing extra (inert) for now and rides along on the next read.
  */
 export interface NameReads {
   unknown: ReadonlySet<string>;
@@ -596,6 +598,12 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const [pendingJump, setPendingJump] = useState<{ channelId: string; messageId: string } | null>(
     null,
   );
+  // A search jump's words for the chat it opens (the message, a task or the
+  // group itself): the thread takes them once and keeps them until it closes.
+  const [pendingWords, setPendingWords] = useState<{
+    channelId: string;
+    words: readonly string[];
+  } | null>(null);
   // The first page paints once its names (senders and @mentions) are in.
   const [namesSettled, setNamesSettled] = useState<string | null>(null);
   const toast = useToast();
@@ -712,6 +720,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     query: string;
     seq: number;
     jumpOnly?: boolean;
+    /** A search jump: a message that is gone opens the chat with no toast. */
+    quiet?: boolean;
   } | null>(null);
   // Leave the chat's entry for the list without a dead or duplicate step:
   // pop to the bare list it was opened from, else replace it with the list.
@@ -779,7 +789,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const stripMessageParam = useCallback(() => {
     setSearchParams(
       (prev) => {
-        const next = new URLSearchParams(prev);
+        // The search jump's own keys go with it (taken once, like ?message=).
+        const next = withoutSearchJump(prev);
         next.delete('message');
         return next;
       },
@@ -819,9 +830,12 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       selectedFromParam.current = null;
       return;
     }
+    // A search jump's words (q=) ride along with the link; the thread marks them.
+    const jumpWords = readSearchJump(searchParams).words;
+    const carriesWords = hasSearchJump(searchParams);
     if (selectedFromParam.current === channel) {
-      // The open chat's own link with a ?message= (a toast for this chat):
-      // jump to it in place, then drop the param; no step added.
+      // The open chat's own link with a ?message= (a toast for this chat, or a
+      // search result in it): jump to it in place, then drop the param; no step added.
       const messageId = searchParams.get('message');
       if (messageId !== null && messageId !== '' && selectedRef.current?.channelId === channel) {
         searchSeqRef.current += 1;
@@ -831,18 +845,24 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
           query: '',
           seq: searchSeqRef.current,
           jumpOnly: true,
+          quiet: jumpWords.length > 0,
         });
+        stripMessageParam();
+      }
+      if (carriesWords) {
+        setPendingWords({ channelId: channel, words: jumpWords });
         stripMessageParam();
       }
       return;
     }
     selectedFromParam.current = channel;
+    setPendingWords(carriesWords ? { channelId: channel, words: jumpWords } : null);
     const step = deepLinkStep(searchParams, chatRoster);
     const linkParams = new URLSearchParams(searchParams);
     // ?message= is consumed once: the thread takes it, the url drops it. A link
     // to a chat not (yet) in my list keeps no earlier jump.
     setPendingJump(step.jump);
-    if (searchParams.has('message')) stripMessageParam();
+    if (searchParams.has('message') || carriesWords) stripMessageParam();
     if (selectedRef.current?.channelId === channel) return;
     if (step.open !== null) {
       setSelected(step.open);
@@ -1346,7 +1366,13 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       if (!result.ok) {
         logger.warn('chat: profile read failed', { error: result.error.message });
       } else {
-        rememberMentionProfiles(forWorkspace, result.data);
+        // With membership known, an asked id the read did not return is a
+        // confirmed former member (the only case that reads "Former member").
+        if (result.data.some((p) => p.member === null)) {
+          rememberMentionProfiles(forWorkspace, result.data);
+        } else {
+          rememberMentionRead(forWorkspace, ids, result.data);
+        }
         setProfileState((prev) => {
           const next = new Map(prev.workspaceId === forWorkspace ? prev.profiles : undefined);
           for (const profile of result.data) next.set(profile.userId, profile);
@@ -2038,6 +2064,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                         searchRequest?.channelId === selected.channelId ? searchRequest : null
                       }
                       onSearchRequestTaken={() => setSearchRequest(null)}
+                      initialSearchWords={
+                        pendingWords?.channelId === selected.channelId ? pendingWords.words : null
+                      }
+                      onInitialSearchWordsTaken={() => setPendingWords(null)}
                       showTicks={selected.channelType === 'dm'}
                       {...(threadCurrent && !notesOpen ? { readState: thread.readState } : {})}
                       peerUserId={

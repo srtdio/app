@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
+import { glowTarget } from '@/components/ui/SearchHighlight';
 import { ForwardPicker } from '@/components/chat/ForwardPicker';
 import { IconCheck, IconForward } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -197,15 +198,20 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
     return () => clearInterval(timer);
   }, [props.open]);
 
-  // The row it opened for comes into view.
+  // The row it opened for comes to the centre with the arrival tint (the shared glow).
   useEffect(() => {
     if (!props.open || focusTaskId === null) return;
+    let clear: (() => void) | null = null;
     const raf = requestAnimationFrame(() => {
-      bodyRef.current
-        ?.querySelector(`[data-task-row-id="${focusTaskId}"]`)
-        ?.scrollIntoView({ block: 'nearest' });
+      const row = bodyRef.current?.querySelector<HTMLElement>(
+        `[data-task-row-id="${focusTaskId}"]`,
+      );
+      if (row != null) clear = glowTarget(row);
     });
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      clear?.();
+    };
   }, [props.open, focusTaskId]);
 
   const preview = nextNumberPreview([...tasks.tasks, ...tasks.pending]);

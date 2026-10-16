@@ -48,6 +48,7 @@ import {
   isUnconfirmedMember,
   knownMentionName,
   rememberMentionProfiles,
+  rememberMentionRead,
   resetMentionNames,
   resolveMentionText,
   serializeMentions,
@@ -229,6 +230,14 @@ async function readOnce(
   const result = await read(asked);
   const next = new Map(profiles);
   if (result.ok) for (const p of result.data) next.set(p.userId, p);
+  // As the component does: with membership known, an asked id not returned is former.
+  if (result.ok) {
+    rememberMentionRead(
+      'w1',
+      asked,
+      result.data.map((p) => ({ ...p, member: true })),
+    );
+  }
   return { asked, profiles: next, reads: applyProfileRead(reads, asked, result) };
 }
 
@@ -321,10 +330,11 @@ describe('F3 a failed profile read is not cached as unknown', () => {
     expect(one.asked).toEqual([ANA]);
     expect(one.reads.unknown.has(ANA)).toBe(false);
     expect(one.reads.failed.has(ANA)).toBe(true);
-    // Unresolved after a failure: the row paints, the mention is inert "@Former member".
+    // Unresolved after a failure: the row paints, the mention is inert and names
+    // nobody (never "@Former member" for someone not confirmed gone).
     expect(paint([first], one.profiles, one.reads).map((m) => m.id)).toEqual(['m1']);
     const inert = bubbleHtml(first, one.profiles);
-    expect(inert).toContain('@Former member');
+    expect(inert).not.toContain('Former member');
     expect(inert).not.toContain('<button');
     // No retry loop on its own.
     expect(
@@ -436,7 +446,7 @@ describe('H1 hanging or throwing name reads settle as failed', () => {
       const reads = applyProfileRead(NO_NAME_READS, asked, result);
       expect(paint(messages, known, reads).map((m) => m.id)).toEqual(['m1', 'm2']);
       const html = bubbleHtml(live, known);
-      expect(html).toContain('@Former member');
+      expect(html).not.toContain('Former member');
       expect(html).not.toContain('<button');
     } finally {
       vi.useRealTimers();
@@ -468,7 +478,7 @@ describe('H3 own sends are never held', () => {
     const painted = paint([message({ id: 'm1', body: 'hi' }), own], new Map(), NO_NAME_READS);
     expect(painted.map((m) => m.id)).toEqual(['m1', 'local-1']);
     const html = bubbleHtml(own, new Map());
-    expect(html).toContain('@Former member');
+    expect(html).not.toContain('Former member');
     expect(html).not.toContain('<button');
   });
 });
@@ -492,9 +502,9 @@ describe('J1 an own send releases the rows held ahead of it', () => {
       'n',
       'local-1',
     ]);
-    // The released row draws its unresolved name inert.
+    // The released row draws its unresolved name inert, naming nobody yet.
     const html = bubbleHtml(n, known);
-    expect(html).toContain('@Former member');
+    expect(html).not.toContain('Former member');
     expect(html).not.toContain('<button');
   });
 });
@@ -1019,8 +1029,8 @@ describe('W1 mention state is per workspace', () => {
     await rememberBodyNames([body], readA, 'wa');
     expect(readA).not.toHaveBeenCalled();
     expect(previewMentionText(body, 'wa')).toBe('hi @Ana');
-    // A workspace never read knows nothing from A or B.
-    expect(previewMentionText(body, 'wc')).toBe('hi @Former member');
+    // A workspace never read knows nothing from A or B: nothing extra, never "Former member".
+    expect(previewMentionText(body, 'wc')).toBe('hi ');
     expect(isFormerMember('wc', ANA)).toBe(false);
   });
 });
@@ -1069,7 +1079,7 @@ describe('W4 a failed membership half keeps the profiles', () => {
         const row = message({ id: 'w4', body: `ping @[${ANA}]` });
         expect(paint([row], profiles, reads)).toEqual([row]);
         const html = bubbleIn(row.body, profiles, 'w1');
-        expect(html).toContain('@Former member');
+        expect(html).not.toContain('Former member');
         expect(html).not.toContain('<button');
         // The composer keeps the mention and still sends it.
         const shown = composerBodyFor(

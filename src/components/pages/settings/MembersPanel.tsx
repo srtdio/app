@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { memberRemove } from '@srtdio/rpc';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/toast';
+import { FORMER_MEMBER } from '@/lib/people-names';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -142,7 +143,7 @@ export function MembersPanel() {
           message={[
             `They lose access to ${workspaceLabel} the moment you confirm.`,
             'Signed out everywhere. Chat access ends immediately.',
-            'Their posts, comments and uploads stay, shown as “(ex-member)”.',
+            `Their posts, comments and uploads stay, shown as “${FORMER_MEMBER}”.`,
             'You can invite them back any time.',
           ].join(' • ')}
           confirmLabel="Remove member"

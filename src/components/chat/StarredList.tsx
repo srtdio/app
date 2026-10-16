@@ -25,7 +25,7 @@ import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-reads';
-import { knownMentionName, resolveMentionText } from '@/lib/chat/mentions';
+import { knownMentionName, resolveMentionText, withFormer } from '@/lib/chat/mentions';
 import { searchDateLabel } from '@/lib/chat/search';
 import { safeTimeZone } from '@/lib/chat/time-format';
 import type { Result } from '@srtdio/rpc';
@@ -400,11 +400,15 @@ export function StarredList(props: StarredListProps): ReactElement {
   const [read, setRead] = useState<Map<string, ChatProfile>>(() => new Map());
   const asked = useRef(new Set<string>());
   const profiles = props.profiles;
-  const nameOf = useCallback(
-    (userId: string): string | undefined =>
-      profiles?.get(userId)?.displayName ??
-      read.get(userId)?.displayName ??
-      knownMentionName(workspaceId, userId),
+  const nameOf = useMemo(
+    () =>
+      withFormer(
+        (userId: string): string | undefined =>
+          profiles?.get(userId)?.displayName ??
+          read.get(userId)?.displayName ??
+          knownMentionName(workspaceId, userId),
+        workspaceId,
+      ),
     [profiles, read, workspaceId],
   );
   // One batched read per page for senders nobody has loaded.

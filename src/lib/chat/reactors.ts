@@ -6,13 +6,16 @@
 import type { Client, Result } from '@srtdio/rpc';
 import { readMentionProfiles, withReadTimeout, type ChatProfile } from '@/lib/chat-reads';
 import { loadMessageReactors, type ReactorRow } from '@/lib/chat/history';
-import { UNKNOWN_MEMBER } from '@/lib/chat/mentions';
+import { FORMER_MEMBER } from '@/lib/chat/mentions';
 
 /** One person's reaction, ready to render. */
 export interface ReactorEntry {
   userId: string;
   emoji: string;
-  /** The display name; "You" for the viewer, "Unknown member" when unresolved. */
+  /**
+   * The display name; "You" for the viewer, "Former member" only for someone a
+   * read confirmed is not a current member, empty while a name is not loaded.
+   */
   name: string;
   avatarUrl: string | null;
   mine: boolean;
@@ -46,6 +49,7 @@ export function groupReactors(
   rows: readonly ReactorRow[],
   viewerId: string | null,
   profileOf: (userId: string) => Pick<ChatProfile, 'displayName' | 'avatarUrl'> | undefined,
+  isFormer: (userId: string) => boolean = () => false,
 ): WhoReacted {
   const counts = new Map<string, number>();
   for (const row of rows) counts.set(row.emoji, (counts.get(row.emoji) ?? 0) + 1);
@@ -55,12 +59,13 @@ export function groupReactors(
   ];
   const entries = rows.map((row): ReactorEntry => {
     const mine = viewerId !== null && row.userId === viewerId;
-    const profile = profileOf(row.userId);
+    const former = !mine && isFormer(row.userId);
+    const profile = former ? undefined : profileOf(row.userId);
     const known = profile !== undefined && profile.displayName !== '';
     return {
       userId: row.userId,
       emoji: row.emoji,
-      name: mine ? YOU_LABEL : known ? profile.displayName : UNKNOWN_MEMBER,
+      name: mine ? YOU_LABEL : known ? profile.displayName : former ? FORMER_MEMBER : '',
       avatarUrl: profile?.avatarUrl ?? null,
       mine,
     };
@@ -86,11 +91,15 @@ export function loadWhoReacted(
     workspaceId: string | null;
     known: (userId: string) => ChatProfile | undefined;
   },
-): Promise<Result<{ rows: ReactorRow[]; profiles: Map<string, ChatProfile> }>> {
+): Promise<
+  Result<{ rows: ReactorRow[]; profiles: Map<string, ChatProfile>; former: Set<string> }>
+> {
   return withReadTimeout(async (signal) => {
     const reactors = await loadMessageReactors(client, params.messageId, signal);
     if (!reactors.ok) return reactors;
     const profiles = new Map<string, ChatProfile>();
+    // Reactors a successful read confirmed are not current members.
+    const former = new Set<string>();
     const missing: string[] = [];
     for (const row of reactors.data) {
       const hit = params.known(row.userId);
@@ -103,9 +112,16 @@ export function loadWhoReacted(
         userIds: missing,
         signal,
       });
-      // A failed name read still shows the reactions, unnamed.
-      if (read.ok) for (const p of read.data) profiles.set(p.userId, p);
+      // A failed name read still shows the reactions, unnamed (never "Former member").
+      if (read.ok) {
+        const returned = new Set(read.data.map((p) => p.userId));
+        for (const p of read.data) {
+          if (p.member === false) former.add(p.userId);
+          else profiles.set(p.userId, p);
+        }
+        for (const id of missing) if (!returned.has(id)) former.add(id);
+      }
     }
-    return { ok: true, data: { rows: reactors.data, profiles } };
+    return { ok: true, data: { rows: reactors.data, profiles, former } };
   });
 }

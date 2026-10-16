@@ -20,7 +20,7 @@ import { formatClockTime, civilDay } from '@/lib/chat/time-format';
 import { dayPillLabel } from '@/components/chat/day-separators';
 import { BUBBLE_META_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { RailThrough } from '@/components/chat/ThreadRail';
-import { UNKNOWN_MEMBER, type MentionMember } from '@/lib/chat/mentions';
+import type { MentionMember } from '@/lib/chat/mentions';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { ReactorRow } from '@/lib/chat/history';
 import { unreadLabel, type ReadPosition } from '@/lib/chat/read-receipts';
@@ -267,7 +267,8 @@ export function MessageInfoSheet(props: {
   const byId = new Map(props.members.map((m) => [m.userId, m] as const));
   const nameOf = (id: string): string => {
     const name = byId.get(id)?.displayName;
-    return name !== undefined && name !== '' ? name : UNKNOWN_MEMBER;
+    // Everyone listed is a current channel member: a name not loaded yet renders nothing.
+    return name ?? '';
   };
   return (
     <Sheet open={props.open} onClose={props.onClose} title="Message info">
@@ -312,9 +313,14 @@ export function MessageInfoSheet(props: {
 }
 
 /** The who-reacted read: rows plus profiles for the reactors it had to name. */
-export type WhoReactedLoad = (
-  messageId: string,
-) => Promise<Result<{ rows: ReactorRow[]; profiles: Map<string, ChatProfile> }>>;
+export type WhoReactedLoad = (messageId: string) => Promise<
+  Result<{
+    rows: ReactorRow[];
+    profiles: Map<string, ChatProfile>;
+    /** Reactors a successful read confirmed are not current members; absent: none known. */
+    former?: ReadonlySet<string>;
+  }>
+>;
 
 /** The default reader: one select plus one batched profile read, 5s. */
 export function defaultWhoReactedLoad(
@@ -354,10 +360,16 @@ export function WhoReactedSheet(props: {
         setState({ kind: 'failed' });
         return;
       }
-      const profiles = result.data.profiles;
+      const { profiles } = result.data;
+      const former = result.data.former ?? new Set<string>();
       setState({
         kind: 'ready',
-        model: groupReactors(result.data.rows, viewerId, (id) => profiles.get(id)),
+        model: groupReactors(
+          result.data.rows,
+          viewerId,
+          (id) => profiles.get(id),
+          (id) => former.has(id),
+        ),
       });
     });
     return () => {

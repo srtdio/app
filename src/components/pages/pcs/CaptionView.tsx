@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconChat } from '@/components/ui/icons';
+import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 
 // F4 caption-highlight annotations: render a post caption with its caption_span
 // annotations as amber highlights, and let a fresh text selection start a new
@@ -138,6 +139,8 @@ interface CaptionViewModel {
   caption: string;
   annotations: CaptionAnnotationView[];
   onHighlightClick: (commentId: string) => void;
+  /** A search jump's words, coloured in the plain runs (the shared highlight). */
+  searchWords?: readonly string[];
 }
 
 /**
@@ -152,7 +155,10 @@ export function captionView({
   caption,
   annotations,
   onHighlightClick,
+  searchWords = [],
 }: CaptionViewModel): ReactNode {
+  const marked = (text: string): ReactNode =>
+    searchWords.length === 0 ? text : highlightNodes(text, searchWords);
   const valid = annotations
     .filter(
       (a) => a.captionStart >= 0 && a.captionEnd <= caption.length && a.captionStart < a.captionEnd,
@@ -164,7 +170,7 @@ export function captionView({
   for (const a of valid) {
     if (a.captionStart < cursor) continue; // overlap: keep the earlier highlight
     if (a.captionStart > cursor) {
-      out.push(<span key={`t-${cursor}`}>{caption.slice(cursor, a.captionStart)}</span>);
+      out.push(<span key={`t-${cursor}`}>{marked(caption.slice(cursor, a.captionStart))}</span>);
     }
     const quote = caption.slice(a.captionStart, a.captionEnd);
     out.push(
@@ -196,7 +202,7 @@ export function captionView({
     cursor = a.captionEnd;
   }
   if (cursor < caption.length) {
-    out.push(<span key={`t-${cursor}`}>{caption.slice(cursor)}</span>);
+    out.push(<span key={`t-${cursor}`}>{marked(caption.slice(cursor))}</span>);
   }
   return out;
 }
@@ -215,6 +221,7 @@ export function CaptionView({
   readOnly = false,
 }: CaptionViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchWords = useContext(SearchWordsContext);
   const [pending, setPending] = useState<{ start: number; end: number; quote: string } | null>(
     null,
   );
@@ -239,7 +246,7 @@ export function CaptionView({
         onTouchEnd={captureSelection}
         className="text-sm leading-relaxed whitespace-pre-wrap text-fg"
       >
-        {captionView({ caption, annotations, onHighlightClick })}
+        {captionView({ caption, annotations, onHighlightClick, searchWords })}
       </div>
       {!readOnly && pending !== null ? (
         <div className="mt-2">

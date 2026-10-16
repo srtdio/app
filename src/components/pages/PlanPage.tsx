@@ -26,6 +26,8 @@ import {
   useSearchParams,
 } from 'react-router-dom';
 import { IconPlan } from '@/components/ui/icons';
+import { SearchWordsContext } from '@/components/ui/SearchHighlight';
+import { readSearchJump } from '@/lib/search/jump';
 import { PLAN_NOT_AVAILABLE } from '@/components/chat/plan-card';
 import { ActivityPage } from '@/components/pages/ActivityPage';
 import { PlanScreen, PlanPage as PlanFrame } from '@/components/chat/PlanScreen';
@@ -120,6 +122,10 @@ export function PlanPage(): ReactElement {
   const planId = shown !== null ? (shown.pathname.split('/')[2] ?? '') : params.planId;
   const itemId = (shown?.searchParams ?? search).get('item');
   const commentId = (shown?.searchParams ?? search).get('comment');
+  // A search jump (the shared jump params): the item to scroll to and the words
+  // to colour. Read from the url, never stripped: this page's own back logic
+  // reads its entries, and the words go when the plan's entry does.
+  const searchJump = readSearchJump(shown?.searchParams ?? search);
 
   const close = useCallback(() => {
     if (planPageBack(window.history.state).kind === 'pop') navigate(-1);
@@ -145,14 +151,17 @@ export function PlanPage(): ReactElement {
   }
 
   return (
-    <PlanScreen
-      key={`${planId}:${itemId ?? ''}`}
-      open
-      planId={planId}
-      {...(isPlanId(itemId) ? { initialItemId: itemId } : {})}
-      {...(isPlanId(itemId) && isPlanId(commentId) ? { highlightCommentId: commentId } : {})}
-      {...(workspaceId !== null ? { onlyWorkspaceId: workspaceId } : {})}
-      onClose={close}
-    />
+    <SearchWordsContext.Provider value={searchJump.words}>
+      <PlanScreen
+        key={`${planId}:${itemId ?? ''}`}
+        open
+        planId={planId}
+        {...(isPlanId(itemId) ? { initialItemId: itemId } : {})}
+        {...(isPlanId(itemId) && isPlanId(commentId) ? { highlightCommentId: commentId } : {})}
+        {...(isPlanId(searchJump.targetId) ? { jumpItemId: searchJump.targetId } : {})}
+        {...(workspaceId !== null ? { onlyWorkspaceId: workspaceId } : {})}
+        onClose={close}
+      />
+    </SearchWordsContext.Provider>
   );
 }

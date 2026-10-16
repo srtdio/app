@@ -305,7 +305,7 @@ describe('CommandPalette', () => {
     expect(chat?.items.at(-1)).toMatchObject({ type: 'more', count: 12 });
   });
 
-  it('each kind opens through its existing route', () => {
+  it('each kind lands on its target through the one jump helper, with the searched words', () => {
     const search = ready(
       'diwali',
       [
@@ -331,16 +331,16 @@ describe('CommandPalette', () => {
     }
     expect(picked).toEqual([
       { person: ASHA },
-      { path: '/p/gbl-1' },
-      { path: '/b/gbl-2' },
-      { path: '/p/gbl-3?comment=comment3' },
-      { path: '/b/gbl-4?comment=comment4' },
-      { path: '/assets?asset=file5' },
-      { path: '/plans/plan6' },
-      { path: '/plans/plan1?item=plan_item7' },
-      { path: '/chat?channel=group__w__g&task=task8' },
-      { path: '/chat?channel=group__w__g' },
-      { path: '/chat?channel=group__w__g&message=m1' },
+      { path: '/p/gbl-1?q=diwali' },
+      { path: '/b/gbl-2?q=diwali' },
+      { path: '/p/gbl-3?comment=comment3&q=diwali' },
+      { path: '/b/gbl-4?comment=comment4&q=diwali' },
+      { path: '/assets?asset=file5&q=diwali' },
+      { path: '/plans/plan6?q=diwali' },
+      { path: '/plans/plan1?q=diwali&at=plan_item7' },
+      { path: '/chat?channel=group__w__g&task=task8&q=diwali' },
+      { path: '/chat?channel=group__w__g&q=diwali' },
+      { path: '/chat?channel=group__w__g&message=m1&q=diwali' },
     ]);
   });
 
@@ -352,8 +352,8 @@ describe('CommandPalette', () => {
       title: 'asha',
     });
     expect(all).toContain('30m');
-    const bold = findAll(tree, 'data-search-match').map((el) => texts(el).join(''));
-    expect(bold).toContain('diwali');
+    const marked = findAll(tree, 'data-search-mark').map((el) => texts(el).join(''));
+    expect(marked).toContain('diwali');
   });
 
   it('never renders a raw mention token; mentions show @username', () => {
@@ -490,5 +490,45 @@ describe('CommandPalette', () => {
       (el) => (el.props as { 'aria-selected': boolean })['aria-selected'],
     );
     expect(selected).toEqual([false, true]);
+    // The keyboard-selected row carries the accent tint; every row tints while pressed.
+    const classes = findAll(tree, 'data-palette-item').map(
+      (el) => (el.props as { className: string }).className,
+    );
+    expect(classes[1]).toContain('bg-accent-soft');
+    expect(classes[0]).not.toMatch(/(^|\s)bg-accent-soft/);
+    for (const cls of classes) expect(cls).toContain('active:bg-accent-soft');
+  });
+
+  it('marks every matched word, inside a rendered @username too', () => {
+    rememberMentionNames(WS, [{ userId: ASHA, displayName: 'Asha Rao', username: 'ashadiwali' }]);
+    const search = ready(
+      'diwali',
+      [wsHit('post', 1, { snippet: `Diwali ask @[${ASHA}] now` })],
+      [],
+    );
+    const tree = body('diwali', search);
+    const marked = findAll(tree, 'data-search-mark').map((el) => texts(el).join(''));
+    // Word-prefix rule: "Diwali" marks in the title and the snippet (case kept).
+    expect(marked).toContain('Diwali');
+    const mention = ready('asha', [wsHit('post', 2, { snippet: `ping @[${ASHA}] now` })], []);
+    const mentionMarks = findAll(body('asha', mention), 'data-search-mark').map((el) =>
+      texts(el).join(''),
+    );
+    expect(mentionMarks).toContain('ashadiwali');
+  });
+
+  it('a current member whose name has not loaded is never "Former member"', async () => {
+    const failed = vi.fn(async () => ({
+      ok: false as const,
+      error: { code: 'unknown' as const, message: 'timeout' },
+    }));
+    const hits = [wsHit('post', 1, { snippet: `diwali @[${NEW}]` })];
+    const chat = [{ ...chatHit, senderUserId: NEW, body: `diwali @[${NEW}]` }];
+    await resolvePaletteNames(WS, namesNeeded(hits, chat), failed);
+    const rows = sections('diwali', ready('diwali', hits, chat)).flatMap((sec) => sec.items);
+    const all = texts(body('diwali', ready('diwali', hits, chat))).join('\n');
+    expect(all).not.toContain('Former member');
+    expect(all).not.toMatch(RAW_TOKEN);
+    expect(rows.find((r) => r.id === 'chat-m1')).toMatchObject({ title: '' });
   });
 });

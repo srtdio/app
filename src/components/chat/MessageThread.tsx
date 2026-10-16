@@ -21,6 +21,7 @@ import {
   ALL_MENTION,
   isFormerMember,
   isUnconfirmedMember,
+  withFormer,
   knownMentionName,
   mentionHandle,
   mentionIds,
@@ -300,7 +301,7 @@ import { applyEdit, applyReactionOp, markMessagesDeleted } from '@/lib/chat/thre
 import { generateTraceId } from '@/lib/trace';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
-import { matchRuns } from '@/lib/chat/search';
+import { glowTarget, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { InChatSearchBar, SearchHighlightContext } from '@/components/chat/InChatSearchBar';
 import type { ThreadReadState } from '@/lib/chat/use-chat-thread';
 import {
@@ -473,9 +474,18 @@ interface MessageThreadProps {
     seq: number;
     /** A starred row: the jump and its highlight only, no in-chat bar. */
     jumpOnly?: boolean;
+    /** A search jump: a message that is gone opens the chat with no toast. */
+    quiet?: boolean;
   } | null;
   /** The thread took searchRequest: the caller drops it. */
   onSearchRequestTaken?: () => void;
+  /**
+   * A search jump's words (the palette): marked in the bubbles and the header's
+   * name until the chat closes, with no in-chat bar. Taken once on mount.
+   */
+  initialSearchWords?: readonly string[] | null;
+  /** The thread took initialSearchWords: the caller drops them. */
+  onInitialSearchWordsTaken?: () => void;
   /** The channel's read cursors (Seen, Read by, the unread divider); absent: none of them. */
   readState?: ThreadReadState;
   /** The DM peer whose cursor drives the Seen line; absent or null for groups. */
@@ -1065,6 +1075,8 @@ export function ThreadHeaderIdentity(props: {
   onOpenContact?: () => void;
   /** Personal notes: the notes avatar (own photo + badge, or the notebook) in place of a photo. */
   notes?: boolean;
+  /** A search jump's words, marked in the name (the shared highlight). */
+  searchWords?: readonly string[];
 }): ReactElement {
   const photo =
     props.notes === true ? (
@@ -1086,7 +1098,9 @@ export function ThreadHeaderIdentity(props: {
   const text = (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
       <span className={cn('block truncate text-fg', sized(HEADER_NAME_TYPE, props.layout))}>
-        {props.title}
+        {(props.searchWords ?? []).length > 0
+          ? highlightNodes(props.title, props.searchWords ?? [])
+          : props.title}
       </span>
       {props.headerLine !== null ? (
         <span
@@ -1556,21 +1570,9 @@ export function renderMessageBody(
   });
 }
 
-/** A searched word in a bubble: the annotation fill, --fg ink on either side. */
-export const SEARCH_MARK_CLASS = 'rounded-sm bg-annotation-bg [color:var(--fg)]';
-
-/** Text with every word the in-chat search matched wrapped in a <mark>. Pure. */
-export function markSearchWords(text: string, words: readonly string[]): ReactNode[] {
-  return matchRuns(text, words).map((run, i) =>
-    run.hit ? (
-      <mark key={i} data-search-mark="" className={SEARCH_MARK_CLASS}>
-        {run.text}
-      </mark>
-    ) : (
-      run.text
-    ),
-  );
-}
+/** A searched word in a bubble: the shared search highlight (SearchHighlight.tsx). */
+export { SEARCH_MARK_CLASS } from '@/components/ui/SearchHighlight';
+export const markSearchWords = highlightNodes;
 
 /**
  * Whether the thread takes its initial (Activity) jump now: there is one, it
@@ -1648,9 +1650,9 @@ const MENTION_HIT =
 /**
  * The thread's mention name lookup: the batched profiles, then this
  * workspace's mention registry. A former member (read without an active
- * membership) resolves to nothing, so their mention reads "@Unknown member"
- * and is inert; so does one whose membership read failed (unconfirmed), the
- * failed-read behaviour, until a read confirms them.
+ * membership) resolves to nothing, so their mention reads "@Former member"
+ * and is inert; one whose membership read failed (unconfirmed) or whose name is
+ * not loaded yet renders nothing extra, until a read confirms them.
  */
 /** A loaded profile's mention handle (@username, else name); undefined when not loaded. */
 function mentionHandleOf(profile: ChatProfile | undefined): string | undefined {
@@ -1661,10 +1663,13 @@ export function profileNameOf(
   profiles: Map<string, ChatProfile>,
   workspaceId: string | null,
 ): NameOf {
-  return (userId) =>
-    isFormerMember(workspaceId, userId) || isUnconfirmedMember(workspaceId, userId)
-      ? undefined
-      : (mentionHandleOf(profiles.get(userId)) ?? knownMentionName(workspaceId, userId));
+  return withFormer(
+    (userId) =>
+      isFormerMember(workspaceId, userId) || isUnconfirmedMember(workspaceId, userId)
+        ? undefined
+        : (mentionHandleOf(profiles.get(userId)) ?? knownMentionName(workspaceId, userId)),
+    workspaceId,
+  );
 }
 
 /**
@@ -1698,9 +1703,11 @@ export function renderBodyWithMentions(
     // The tint follows the stored mentions (mentionedMe), never the token alone:
     // "@all" or my name is a mention of me only when the message mentions me.
     const tint = !mine && ctx.mentionedMe === true && (self || everyone);
-    const label = mentionLabel(id, ctx.nameOf);
+    const name = mentionLabel(id, ctx.nameOf);
+    // A searched word inside the mention is marked too (the shared highlight).
+    const label = highlight.length > 0 ? highlightNodes(name, highlight) : name;
     const open = ctx.mentions;
-    // An unresolvable id ("@Unknown member") has no one to open a chat with.
+    // An unresolvable id ("@Former member", or not loaded yet) has no one to open a chat with.
     const known = ctx.nameOf(id) !== undefined;
     if (open === undefined || self || everyone || !known || id === open.peerUserId) {
       return (
@@ -3162,7 +3169,8 @@ function ThreadBody(
     onDeleteMessage?: (message: ThreadMessage) => void;
     onChangePriority?: (messageId: string) => void;
     /** A jump-to request (seq makes a repeat of the same id fire again). */
-    jumpRequest: { id: string; seq: number } | null;
+    /** quiet: a search jump whose message is gone opens the chat with no toast. */
+    jumpRequest: { id: string; seq: number; quiet?: boolean } | null;
     onEnsureLoaded?: (messageId: string) => Promise<FindOlderOutcome>;
     /** A message's KEY chip (undefined keeps its quote). */
     chipFor?: (message: ThreadMessage) => BubbleChip | undefined;
@@ -3459,18 +3467,23 @@ function ThreadBody(
   ensureLoadedRef.current = props.onEnsureLoaded;
   const toastRef = useRef(toast);
   toastRef.current = toast;
-  /** Scroll a loaded message into view and ring it; false when it is not rendered. */
+  // The arrival tint on the jumped-to row (the shared glow): cleared on the next
+  // jump and on unmount, so no timer outlives the thread.
+  const glowCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => glowCleanupRef.current?.(), []);
+  /**
+   * Scroll a loaded message to the centre and tint its row for JUMP_HIGHLIGHT_MS
+   * (the shared glow: a fade after, none under reduced motion); false when it is
+   * not rendered.
+   */
   const reveal = useCallback((id: string, highlightMs: number): boolean => {
-    const el = listRef.current?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`);
     if (el == null) return false;
     // A jump lets go of the bottom.
     stickRef.current = false;
     sourceRef.current = 'program';
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const flash = el.querySelector('[data-bubble]') ?? el;
-    const ring = ['ring-2', 'ring-accent', 'ring-inset'];
-    flash.classList.add(...ring);
-    window.setTimeout(() => flash.classList.remove(...ring), highlightMs);
+    glowCleanupRef.current?.();
+    glowCleanupRef.current = highlightMs > 0 ? glowTarget(el) : null;
     return true;
   }, []);
   // Jump-to: reveal at once when loaded, else page older history (capped) and
@@ -3478,10 +3491,11 @@ function ThreadBody(
   useEffect(() => {
     if (jumpRequest === null) return;
     const id = jumpRequest.id;
+    const quiet = jumpRequest.quiet === true;
     if (reveal(id, JUMP_HIGHLIGHT_MS)) return;
     const ensure = ensureLoadedRef.current;
     if (ensure === undefined) {
-      toastRef.current.show({ title: JUMP_NOT_LOADED_TOAST });
+      if (!quiet) toastRef.current.show({ title: JUMP_NOT_LOADED_TOAST });
       return;
     }
     pendingJumpRef.current = id;
@@ -3495,7 +3509,8 @@ function ThreadBody(
         pendingJumpRef.current = null;
         stickRef.current = miss.stick;
         if (miss.stick) pin();
-        toastRef.current.show({ title: miss.toast });
+        // A search jump to a message that is gone opens the chat as usual, no error.
+        if (!quiet) toastRef.current.show({ title: miss.toast });
         return;
       }
       if (reveal(id, JUMP_HIGHLIGHT_MS)) pendingJumpRef.current = null;
@@ -4711,7 +4726,11 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     mode: 'mark' | 'change';
   } | null>(null);
   const [priorityBusy, setPriorityBusy] = useState(false);
-  const [jumpRequest, setJumpRequest] = useState<{ id: string; seq: number } | null>(null);
+  const [jumpRequest, setJumpRequest] = useState<{
+    id: string;
+    seq: number;
+    quiet?: boolean;
+  } | null>(null);
   // The in-chat search bar (null: the header shows) and the words bubbles mark.
   const [chatSearch, setChatSearch] = useState<{
     query: string;
@@ -4721,6 +4740,8 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     manual: boolean;
   } | null>(null);
   const [searchWords, setSearchWords] = useState<readonly string[]>([]);
+  // A palette jump's words on the header's name (a group found by name), until the chat closes.
+  const [headerWords, setHeaderWords] = useState<readonly string[]>([]);
   const [forwardFor, setForwardFor] = useState<ThreadMessage[] | null>(null);
   // The own message being edited in the composer.
   const [editing, setEditing] = useState<EditingDraft | null>(null);
@@ -5033,14 +5054,28 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     setJumpRequest((prev) => ({ id: cardJump.messageId, seq: (prev?.seq ?? 0) + 1 }));
   }, [cardJump, bodyLoading]);
   const onInitialJumpTaken = props.onInitialJumpTaken;
+  // A search jump's words: marked in the bubbles (and the header's name) until
+  // this chat closes; the jump to its message is quiet when the message is gone.
+  const initialSearchWords = props.initialSearchWords ?? null;
+  const onInitialSearchWordsTaken = props.onInitialSearchWordsTaken;
+  // Latched: the caller drops the words once taken, the jump may still be waiting on the page.
+  const fromSearchRef = useRef(false);
+  useEffect(() => {
+    if (initialSearchWords === null) return;
+    if (initialSearchWords.length > 0) fromSearchRef.current = true;
+    setSearchWords(initialSearchWords);
+    setHeaderWords(initialSearchWords);
+    onInitialSearchWordsTaken?.();
+  }, [initialSearchWords, onInitialSearchWordsTaken]);
   useEffect(() => {
     const id = initialMessageId;
     if (id === null) return;
     if (!initialJumpDue({ messageId: id, done: initialJumpDone.current, bodyLoading })) return;
     initialJumpDone.current = true;
-    setJumpRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }));
+    const quiet = fromSearchRef.current || (initialSearchWords?.length ?? 0) > 0;
+    setJumpRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1, quiet }));
     onInitialJumpTaken?.();
-  }, [initialMessageId, bodyLoading, onInitialJumpTaken]);
+  }, [initialMessageId, bodyLoading, onInitialJumpTaken, initialSearchWords]);
   // A message search hit: once the rows are on screen, jump to it (the same
   // jump and highlight as a deep link) and open the bar on its query.
   const searchRequest = props.searchRequest ?? null;
@@ -5053,7 +5088,8 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     const { messageId, query, seq } = searchRequest;
     if (searchRequest.jumpOnly !== true)
       setChatSearch({ query, anchor: messageId, key: seq, manual: false });
-    setJumpRequest((prev) => ({ id: messageId, seq: (prev?.seq ?? 0) + 1 }));
+    const quiet = searchRequest.quiet === true;
+    setJumpRequest((prev) => ({ id: messageId, seq: (prev?.seq ?? 0) + 1, quiet }));
     onSearchRequestTaken?.();
   }, [searchRequest, bodyLoading, onSearchRequestTaken]);
   const closeChatSearch = useCallback(() => {
@@ -5720,6 +5756,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
               headerLine={headerLine}
               layout={layout}
               notes={notes}
+              searchWords={headerWords}
               {...(canOpenContact
                 ? { onOpenContact: () => setContactOpen(true) }
                 : props.isGroup === true && props.onOpenInfo !== undefined
@@ -6000,34 +6037,36 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
         />
       ) : null}
       {taskChannel !== null ? (
-        <TaskSheet
-          open={taskSheet.open}
-          onClose={() => setTaskSheet((prev) => (prev.open ? { ...prev, open: false } : prev))}
-          tasks={chatTasks}
-          timeZone={props.timeZone}
-          focusTaskId={taskSheet.focus}
-          {...(onForward !== undefined && forwardChannels !== undefined
-            ? {
-                share: {
-                  channels: forwardChannels,
-                  openChannelId: taskChannel,
-                  messages: props.messages,
-                  // The plain composer send (outbox): never the about quote.
-                  send: (text: string) => props.onSend(text, [], [], null, []),
-                  // The long-press Forward's own function.
-                  forward: onForward,
-                  snapshot: () =>
-                    shareSnapshot({
-                      chatName: props.title,
-                      tasks: chatTasks.tasks,
-                      nowMs: Date.now(),
-                      timeZone: props.timeZone,
-                    }),
-                  onShared: jumpTo,
-                },
-              }
-            : {})}
-        />
+        <SearchWordsContext.Provider value={headerWords}>
+          <TaskSheet
+            open={taskSheet.open}
+            onClose={() => setTaskSheet((prev) => (prev.open ? { ...prev, open: false } : prev))}
+            tasks={chatTasks}
+            timeZone={props.timeZone}
+            focusTaskId={taskSheet.focus}
+            {...(onForward !== undefined && forwardChannels !== undefined
+              ? {
+                  share: {
+                    channels: forwardChannels,
+                    openChannelId: taskChannel,
+                    messages: props.messages,
+                    // The plain composer send (outbox): never the about quote.
+                    send: (text: string) => props.onSend(text, [], [], null, []),
+                    // The long-press Forward's own function.
+                    forward: onForward,
+                    snapshot: () =>
+                      shareSnapshot({
+                        chatName: props.title,
+                        tasks: chatTasks.tasks,
+                        nowMs: Date.now(),
+                        timeZone: props.timeZone,
+                      }),
+                    onShared: jumpTo,
+                  },
+                }
+              : {})}
+          />
+        </SearchWordsContext.Provider>
       ) : null}
       <PrioritySheet
         open={priorityFor !== null}
