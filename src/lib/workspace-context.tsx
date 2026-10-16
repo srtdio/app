@@ -17,6 +17,7 @@ import { platformLabel } from '@srtdio/posts';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session-context';
 import { useNewTrace } from '@/lib/trace-context';
+import { getCurrentTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
 import { primeWorkspacePlatforms } from '@/lib/workspace-context-platform';
 
@@ -169,6 +170,12 @@ interface WorkspaceContextValue {
   workspaceKey: string | null;
   workspaces: WorkspaceRow[];
   loading: boolean;
+  /**
+   * True once a workspace list has loaded for the current user. Before that,
+   * `loading` is the initial load (the shell shows its full-screen state);
+   * after it, a re-list keeps the shell mounted.
+   */
+  loaded: boolean;
   error: string | null;
   setActiveWorkspaceId: (id: string) => void;
   refreshWorkspaces: () => Promise<void>;
@@ -192,11 +199,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Attempt the create-on-first-load once per mount; survives the repeated
   // onAuthStateChange that flips `session` to a new (but equivalent) object.
   const bootstrapGuard = useRef(false);
   const userId = session?.user.id ?? null;
+  // The latest session, read by the bootstrap without keying on it: a token
+  // refresh for the same user hands over a new session object, which must not
+  // re-list workspaces (that remounted the whole shell on tab focus).
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
   const [isOperator, setIsOperator] = useState<boolean | null>(null);
 
   // Exemption from the one-workspace rule, read once per user under RLS.
@@ -218,13 +233,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
   }, [userId]);
 
+  // Keyed on the user id: a new user (or a sign-in after sign-out) re-runs the
+  // full bootstrap; a token refresh for the same user does not.
   useEffect(() => {
-    if (!session) return;
+    const current = sessionRef.current;
+    if (userId === null || current === null) return;
     let active = true;
     setLoading(true);
+    setLoaded(false);
     setError(null);
 
-    bootstrapWorkspaces(supabase, session, bootstrapGuard, newTrace)
+    bootstrapWorkspaces(supabase, current, bootstrapGuard, newTrace)
       .then((res) => {
         if (!active) return;
         if (res.error !== null) {
@@ -240,6 +259,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
               ? prev
               : (res.workspaces[0]?.id ?? null),
           );
+          setLoaded(true);
         }
         setLoading(false);
       })
@@ -255,7 +275,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [session, newTrace]);
+  }, [userId, newTrace]);
 
   const setActiveWorkspaceId = useCallback((id: string) => {
     setActiveId(id);
@@ -263,17 +283,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   // Re-run the same list bootstrap on demand (e.g. after a workspace is created
   // elsewhere), reusing the active-id default behavior: keep the current
-  // selection if it still exists, otherwise fall back to the first row.
+  // selection if it still exists, otherwise fall back to the first row. Only
+  // reachable from the loaded shell, so a failure keeps the rows already shown
+  // and is logged; it never swaps the shell for the error screen.
   const refreshWorkspaces = useCallback(async () => {
-    if (!session) return;
+    const current = sessionRef.current;
+    if (!current) return;
     setLoading(true);
-    setError(null);
     try {
-      const res = await bootstrapWorkspaces(supabase, session, bootstrapGuard, newTrace);
+      const res = await bootstrapWorkspaces(supabase, current, bootstrapGuard, newTrace);
       if (res.error !== null) {
-        setError(res.error);
-        setWorkspaces([]);
-        setActiveId(null);
+        logger.error('workspace refresh failed', {
+          error: res.error,
+          trace_id: getCurrentTraceId(),
+        });
       } else {
         setWorkspaces(res.workspaces);
         setActiveId((prev) =>
@@ -283,14 +306,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         );
       }
     } catch (err: unknown) {
-      logger.error('workspace refresh failed', { error: String(err) });
-      setError(String(err));
-      setWorkspaces([]);
-      setActiveId(null);
+      logger.error('workspace refresh failed', {
+        error: String(err),
+        trace_id: getCurrentTraceId(),
+      });
     } finally {
       setLoading(false);
     }
-  }, [session, newTrace]);
+  }, [newTrace]);
 
   const applyWorkspacePatch = useCallback((id: string, patch: WorkspacePatch) => {
     setWorkspaces((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -319,6 +342,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       workspaceKey: activeWorkspace?.key ?? null,
       workspaces,
       loading,
+      loaded,
       error,
       setActiveWorkspaceId,
       refreshWorkspaces,
@@ -329,6 +353,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       activeWorkspace,
       workspaces,
       loading,
+      loaded,
       error,
       setActiveWorkspaceId,
       refreshWorkspaces,
