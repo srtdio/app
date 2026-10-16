@@ -1,0 +1,26 @@
+name = "catchup-send"
+main = "../../src/server/cron/catchup-send.ts"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+# Every 30 min: sends the 10:30 and 15:30 local weekday catch-up emails.
+# Handler: src/server/cron/catchup-send.ts.
+[triggers]
+crons = ["*/30 * * * *"]
+
+# Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
+# srtdio-logs (see docs/cloudflare-logpush-setup.md).
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# All values are supplied as Worker secrets (wrangler secret put / CI), never
+# committed. Only binding names live here:
+#   SUPABASE_URL               - project URL for inbox, user, post, brief and chat cursor reads
+#   SUPABASE_SECRET_KEY        - service role: reads unsent activity, stamps email_sent_at
+#   RESEND_API_KEY             - Resend API key used to send the catch-up emails
+#   APP_BASE_URL               - app origin for deep links and the unsubscribe link
+#   CATCHUP_FROM_ADDRESS       - sender address on the catch-up emails
+#   UNSUBSCRIBE_SIGNING_SECRET - HMAC secret that signs one-click unsubscribe tokens
+#   CATCHUP_MODE               - "trial" or "live"; nothing sends until set
+#   CATCHUP_TRIAL_USER_IDS     - comma-separated user ids that receive email in trial mode

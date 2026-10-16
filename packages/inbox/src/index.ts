@@ -16,15 +16,40 @@ export { createSupabaseReader, resolveActingMember } from './reader';
 export { createActingClient, mintServiceRoleToken } from './acting';
 export { isActionable, stageChanged, resolvedFlipped, briefClosed, stageTier } from './transitions';
 
-// --- catch-up email core (pure render + helpers; no I/O) --------------------
+// --- catch-up email: render, unsubscribe token, frozen contracts ----------
+export { renderCatchupEmail, buildCatchupUrls, buildCatchupSubject, dmPreview } from './catchup';
 export {
-  summarizeCatchup,
-  renderCatchupEmail,
-  buildCatchupUrls,
-  isInSendWindow,
-  shouldShowCounts,
-  countCells,
-} from './catchup';
+  signUnsubscribeToken,
+  verifyUnsubscribeToken,
+  buildUnsubscribePageUrl,
+  buildOneClickUrl,
+} from './unsubscribe-token';
+export {
+  CATCHUP_SLOTS,
+  SECTION_ROW_CAP,
+  DM_PREVIEW_MAX,
+  UNSUBSCRIBE_TEST_VECTOR,
+  UNSUBSCRIBE_FUNCTION_NAME,
+  ONE_CLICK_BODY,
+} from './catchup-contracts';
+export type {
+  Slot,
+  LocalSlotDate,
+  PreviousSlot,
+  CatchupAudience,
+  PostItem,
+  CommentItem,
+  StageItem,
+  DmItem,
+  Section,
+  DigestCounts,
+  RecipientDigest,
+  RenderedEmail,
+  DigestRenderer,
+  UnsubscribeTokenApi,
+  UnsubscribeStatus,
+  UnsubscribeJsonRequest,
+} from './catchup-contracts';
 
 export type { RecipientReader } from './recipients';
 export type { RpcClient, InboxEntryInput } from './write';
@@ -49,12 +74,4 @@ export type {
 } from './types';
 export { AGENCY_ROLES, ADMIN_ROLES, WORKER_INBOX_EVENT_TYPES } from './types';
 
-export type {
-  CatchupRow,
-  ChatRow,
-  CatchupData,
-  StageKind,
-  CatchupUrlBuilders,
-  CatchupCountCell,
-  CatchupEmail,
-} from './catchup';
+export type { CatchupUrlBuilders } from './catchup';
