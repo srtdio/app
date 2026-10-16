@@ -9698,6 +9698,27 @@ export type Database = {
           title: string
         }[]
       }
+      workspace_search_grouped: {
+        Args: {
+          p_per_kind?: number
+          p_query: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          actor_is_member: boolean
+          actor_user_id: string
+          channel_id: string
+          created_at: string
+          entity_type: string
+          id: string
+          kind: string
+          number: number
+          parent_id: string
+          snippet: string
+          title: string
+        }[]
+      }
       workspace_update: {
         Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
         Returns: undefined
