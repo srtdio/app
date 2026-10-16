@@ -21,8 +21,6 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'chat_thread_reply_counts', // Read-only STABLE invoker count: writes nothing, so nothing to log.
   // Read-only STABLE invoker search (20261003170000): writes nothing, so nothing to log.
   'chat_message_search',
-  // Read-only STABLE invoker search (20261016190000): writes nothing, so nothing to log.
-  'workspace_search',
   // Read-only STABLE invoker search (20261016204500): writes nothing, so nothing to log.
   'workspace_search_grouped',
   // Read-only STABLE invoker count (20261016213000): writes nothing, so nothing to log.

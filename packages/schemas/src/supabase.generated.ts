@@ -9680,24 +9680,6 @@ export type Database = {
         Returns: string
       }
       workspace_id: { Args: never; Returns: string }
-      workspace_search: {
-        Args: {
-          p_limit?: number
-          p_query: string
-          p_trace_id: string
-          p_workspace_id: string
-        }
-        Returns: {
-          created_at: string
-          entity_id: string
-          entity_number: number
-          entity_type: string
-          id: string
-          kind: string
-          snippet: string
-          title: string
-        }[]
-      }
       workspace_search_counts: {
         Args: { p_query: string; p_trace_id: string; p_workspace_id: string }
         Returns: {
