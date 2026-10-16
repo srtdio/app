@@ -22,6 +22,7 @@ import {
   POST_CARD,
   SHARED_CARD,
   SharedPostCardList,
+  cardFrame,
   loadPostCardBatch,
   readApproverRoles,
   type CardContext,
@@ -111,14 +112,16 @@ describe('SharedPostCardList', () => {
   it('no thumbnail: no media box, the KEY sits inline before the title', () => {
     const html = render(['p1'], [cardRow('p1', { title: 'Launch teaser' })]);
     expect(html).not.toContain('data-card-media');
-    expect(html).not.toContain('aspect-[4/3]');
+    expect(html).not.toContain('data-frame-ratio');
     expect(html).toMatch(/data-card-ref=""[^>]*>GBL-12<\/span>Launch teaser/);
   });
 
-  it('thumbnail: 4:3 media box with KEY, format and slides pills; no inline KEY', () => {
+  it('thumbnail: platform-framed media box with KEY, format and slides pills; no inline KEY', () => {
     const html = render(['p1'], [cardRow('p1', { thumbnailAssetVersionId: 'v1', mediaCount: 3 })]);
     expect(html).toContain('data-card-media');
-    expect(html).toContain('aspect-[4/3]');
+    // Instagram carousel before any size is known: the 4:5 portrait default.
+    expect(html).toContain('data-frame-ratio="0.8"');
+    expect(html).toContain('width:min(100%, calc(320px * 0.8))');
     expect(html).toContain('GBL-12');
     expect(html).not.toContain('data-card-ref');
     expect(html).toContain('Carousel');
@@ -469,5 +472,52 @@ describe('readApproverRoles', () => {
     const from = vi.fn();
     await readApproverRoles({ from } as unknown as Client, 'ws', []);
     expect(from).not.toHaveBeenCalled();
+  });
+});
+
+describe('chat post card platform frame', () => {
+  it('the ratio follows the platform and format, 240px wide and capped at 320px tall', () => {
+    expect(cardFrame({ platform: 'instagram', format: 'reel' })?.ratio).toBeCloseTo(9 / 16);
+    expect(cardFrame({ platform: 'instagram', format: 'single_image' })?.ratio).toBeCloseTo(0.8);
+    expect(cardFrame({ platform: 'x', format: 'single_image' })?.ratio).toBeCloseTo(16 / 9);
+    const reel = render(
+      ['p1'],
+      [cardRow('p1', { format: 'reel', thumbnailAssetVersionId: 'v1', mediaCount: 1 })],
+    );
+    // 9:16 hits the 320px cap: 320 x 0.5625 = 180px wide inside the 240px card.
+    expect(reel).toContain('width:min(100%, calc(320px * 0.5625))');
+    expect(reel).toContain('w-[240px]');
+    const shorts = render(
+      ['p1'],
+      [
+        cardRow('p1', {
+          platform: 'youtube_shorts',
+          format: 'short',
+          thumbnailAssetVersionId: 'v1',
+          mediaCount: 1,
+        }),
+      ],
+    );
+    expect(shorts).toContain('data-frame-bands="blur"');
+    expect(shorts).toContain('bg-black');
+  });
+
+  it('a text or link post keeps the non-media card even with an attachment', () => {
+    for (const format of ['text', 'link']) {
+      expect(cardFrame({ platform: 'linkedin', format })).toBeNull();
+      const html = render(
+        ['p1'],
+        [
+          cardRow('p1', {
+            platform: 'linkedin',
+            format,
+            thumbnailAssetVersionId: 'v1',
+            mediaCount: 1,
+          }),
+        ],
+      );
+      expect(html).not.toContain('data-card-media');
+      expect(html).toMatch(/data-card-ref=""[^>]*>GBL-12<\/span>/);
+    }
   });
 });

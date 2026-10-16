@@ -39,6 +39,12 @@ import { Tag, isTagDot } from '@/components/ui/Tag';
 import { IconCheck, IconPlay } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui';
 import { useThumbnail } from '@/components/media/use-thumbnail';
+import {
+  CHAT_CARD_FRAME_MAX_HEIGHT,
+  frameMediaClass,
+  PlatformFrame,
+} from '@/components/media/PlatformFrame';
+import { frameFor, type Frame } from '@/lib/platform-specs';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { READ_TIMEOUT_MS, readProfiles } from '@/lib/chat-reads';
 import { readBriefsByIds, type BriefCardFields } from '@/lib/chat/briefs';
@@ -784,6 +790,7 @@ export function PostCardItem(
     timeZone,
   );
   const target = post.target_date !== null ? formatShortDate(post.target_date, timeZone) : '';
+  const frame = cardFrame(post);
   // The sheet mounts on first open and stays mounted so its exit can animate.
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMounted, setSheetMounted] = useState(false);
@@ -860,9 +867,10 @@ export function PostCardItem(
         onKeyDown={tap.onKeyDown}
         className={cn(POST_CARD, 'cursor-pointer transition-colors hover:bg-panel-2')}
       >
-        {post.thumbnailAssetVersionId !== null ? (
+        {post.thumbnailAssetVersionId !== null && frame !== null ? (
           <CardMedia
             post={post}
+            frame={frame}
             assetVersionId={post.thumbnailAssetVersionId}
             entityRef={ref}
             onKeyTap={keyTap}
@@ -874,7 +882,7 @@ export function PostCardItem(
             className={cn('line-clamp-2 text-fg', sized(POST_CARD_TITLE_TYPE, layout))}
             title={post.title}
           >
-            {post.thumbnailAssetVersionId === null && ref !== null ? (
+            {(post.thumbnailAssetVersionId === null || frame === null) && ref !== null ? (
               <CardRef
                 label={ref}
                 className="relative mr-1.5 font-mono text-fg-3"
@@ -956,32 +964,67 @@ function SheetBoundary({ children }: { children: ReactNode }): ReactElement {
   );
 }
 
-/** The 4:3 cover with its corner pills; presigns lazily when scrolled into view. */
+/**
+ * The card's media frame: the post's platform + format shape (frameFor, before
+ * any size is known, so the format's default size). null for a format with no
+ * media box (text, link): the card stays a non-media card. Pure.
+ */
+export function cardFrame(post: Pick<PostCardRow, 'platform' | 'format'>): Frame | null {
+  return frameFor(post.platform, post.format, null);
+}
+
+/**
+ * The cover in the post's platform frame, 240px wide and at most 320px tall (a
+ * tall frame narrows), with its corner pills; presigns lazily when scrolled
+ * into view.
+ */
 function CardMedia(props: {
   post: PostCardRow;
+  frame: Frame;
   assetVersionId: string;
   entityRef: string | null;
   onKeyTap?: ((e: { stopPropagation: () => void }) => void) | undefined;
 }): ReactElement {
-  const { post, assetVersionId, entityRef: ref } = props;
+  const { post, frame, assetVersionId, entityRef: ref } = props;
   const thumb = useThumbnail<HTMLDivElement>({
     assetVersionId,
     cache: sharedCardPresignCache(),
     enabled: PRESIGN_ENABLED,
   });
   const pills = mediaPills(post);
+  const ready = thumb.url !== null && !thumb.failed;
   return (
-    <div ref={thumb.ref} data-card-media="" className="relative aspect-[4/3] w-full bg-panel-3">
-      {thumb.url !== null && !thumb.failed ? (
-        <img
-          src={thumb.url}
-          alt=""
-          loading="lazy"
-          onError={thumb.onError}
-          draggable={false}
-          className="h-full w-full object-cover"
-        />
-      ) : null}
+    <div
+      ref={thumb.ref}
+      data-card-media=""
+      className="relative flex w-full justify-center bg-panel-3"
+    >
+      <PlatformFrame
+        frame={frame}
+        maxHeight={CHAT_CARD_FRAME_MAX_HEIGHT}
+        bordered={false}
+        backdrop={
+          ready ? (
+            <img
+              src={thumb.url ?? undefined}
+              alt=""
+              draggable={false}
+              className="h-full w-full object-cover"
+            />
+          ) : undefined
+        }
+      >
+        {ready ? (
+          <img
+            src={thumb.url ?? undefined}
+            alt=""
+            loading="lazy"
+            onError={thumb.onError}
+            draggable={false}
+            className={cn('relative', frameMediaClass(frame))}
+          />
+        ) : null}
+      </PlatformFrame>
       {ref !== null ? (
         <CardRef
           label={ref}

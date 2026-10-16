@@ -66,6 +66,7 @@ describe('PresetMediaField', () => {
           onChange={onChange}
           required
           onBusyChange={() => {}}
+          frame={null}
         />,
       );
     });
@@ -79,7 +80,13 @@ describe('PresetMediaField', () => {
     await act(async () => finish({ ok: true, reused: false, versionId: 'v-1' }));
     expect(document.querySelector('[role="progressbar"]')).toBeNull();
     expect(onChange).toHaveBeenCalledWith([
-      { versionId: 'v-1', kind: 'image', name: 'IMG_4821.HEIC.png', previewUrl: 'blob:photo' },
+      {
+        versionId: 'v-1',
+        kind: 'image',
+        name: 'IMG_4821.HEIC.png',
+        previewUrl: 'blob:photo',
+        mime: 'image/png',
+      },
     ]);
   });
 
@@ -94,6 +101,7 @@ describe('PresetMediaField', () => {
           onChange={() => {}}
           required
           onBusyChange={() => {}}
+          frame={null}
         />,
       );
     });
@@ -107,5 +115,64 @@ describe('PresetMediaField', () => {
     expect(sendingPercent(1)).toBe(90);
     expect(uploadLine(90, false)).toBe('Almost done, saving your photo');
     expect(uploadLine(10, true)).toBe('The connection dropped. Trying again, 10%');
+  });
+
+  it('regression: an Instagram Reel with no media shows the empty 9:16 frame as the upload target', async () => {
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+    root = createRoot(host!);
+    await act(async () => {
+      root!.render(
+        <PresetMediaField
+          workspaceId="ws-1"
+          value={[]}
+          onChange={() => {}}
+          required
+          onBusyChange={() => {}}
+          frame={{ platform: 'instagram', format: 'reel' }}
+        />,
+      );
+    });
+    const empty = document.querySelector<HTMLElement>('[data-frame-empty]');
+    expect(empty).not.toBeNull();
+    expect(Number(empty!.getAttribute('data-frame-ratio'))).toBeCloseTo(9 / 16);
+    expect(empty!.style.width).toBe('min(100%, 33.75vh)');
+    expect(empty!.className).toContain('bg-panel-2');
+    const target = empty!.querySelector('button')!;
+    expect(target.textContent).toBe('Add a photo or video');
+    await act(async () => target.click());
+    expect(click).toHaveBeenCalledTimes(1);
+    click.mockRestore();
+  });
+
+  it('is no longer a fixed square: media fill the platform frame, and a format change re-shapes it', async () => {
+    const photo = {
+      versionId: 'v-1',
+      kind: 'image' as const,
+      name: 'p.png',
+      previewUrl: 'blob:p',
+      mime: 'image/png',
+    };
+    const view = (format: string) => (
+      <PresetMediaField
+        workspaceId="ws-1"
+        value={[photo]}
+        onChange={() => {}}
+        required
+        onBusyChange={() => {}}
+        frame={{ platform: 'instagram', format }}
+      />
+    );
+    root = createRoot(host!);
+    await act(async () => root!.render(view('single_image')));
+    const framed = () => document.querySelector<HTMLElement>('[data-frame-ratio]');
+    expect(document.querySelector('.h-20.w-20')).toBeNull();
+    expect(framed()?.hasAttribute('data-frame-empty')).toBe(false);
+    expect(Number(framed()?.getAttribute('data-frame-ratio'))).toBeCloseTo(4 / 5);
+    expect(framed()?.querySelector('img')?.className).toContain('object-cover');
+    expect(document.querySelector('button[aria-label="Remove photo"]')?.className).toContain(
+      'h-11 w-11',
+    );
+    await act(async () => root!.render(view('story')));
+    expect(Number(framed()?.getAttribute('data-frame-ratio'))).toBeCloseTo(9 / 16);
   });
 });

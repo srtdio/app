@@ -1,15 +1,17 @@
-// The "{Platform} preview" side panel on the post detail page. It shows the
-// post's first media and caption framed the way the workspace's platform frames
-// them (sizes from src/lib/platform-specs.ts), then the original with the part
-// that is shown. Dimensions come from asset_versions width/height when present,
-// else are measured in the browser once the media loads. Presentation only: no
+// The "{Platform} preview" side panel on the post detail page and in the post
+// composer. It shows the post's first media and caption framed the way the
+// workspace's platform frames them (sizes from src/lib/platform-specs.ts), then
+// the original with the part that is shown. Dimensions come from asset_versions
+// width/height when present, else are measured in the browser once the media
+// loads. The post page resolves saved media through its presign cache; the
+// composer passes the unsaved draft's local object URL. Presentation only: no
 // server change, no backfill.
 
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconFile, IconX } from '@/components/ui/icons';
+import { IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { DUR_BASE_MS } from '@/lib/motion';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -47,17 +49,46 @@ export function previewChipLabel(platform: string): string {
   return `${platformLabel(platform)} preview`;
 }
 
-interface PlatformPreviewPanelProps {
-  open: boolean;
-  onClose: () => void;
+/** The chip that opens the panel: a 44px tap target around a small pill. */
+export function PreviewChip({
+  platform,
+  onClick,
+}: {
+  platform: string;
+  onClick: () => void;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group inline-flex h-11 items-center focus:outline-none"
+    >
+      <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg transition-colors group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent motion-reduce:transition-none">
+        <IconEye size={14} />
+        {previewChipLabel(platform)}
+      </span>
+    </button>
+  );
+}
+
+/** What the preview draws: the post (or the composer's draft) and its first media. */
+export interface PreviewBodyProps {
   platform: string;
   format: string;
   caption: string;
   /** The account shown on the mock: the workspace name. */
   handle: string;
   firstMedia: GalleryItem | null;
-  cache: PresignCache;
-  presignEnabled: boolean;
+  /** Saved media: resolved through the page's presign cache. */
+  cache?: PresignCache;
+  presignEnabled?: boolean;
+  /** The draft's local object URL for firstMedia; used as-is, never presigned. */
+  localUrl?: string | null;
+}
+
+interface PlatformPreviewPanelProps extends PreviewBodyProps {
+  open: boolean;
+  onClose: () => void;
 }
 
 const FOCUSABLE =
@@ -152,15 +183,21 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
   );
 }
 
-/** Resolve the media's inline URL through the page's presign cache. */
+/** The media's inline URL: the draft's local URL, else resolved through the presign cache. */
 function useMediaUrl(
   item: GalleryItem | null,
   kind: PreviewMediaKind,
-  cache: PresignCache,
+  cache: PresignCache | undefined,
   enabled: boolean,
+  localUrl: string | null,
 ): string | null {
   const versionId = item?.assetVersionId ?? '';
-  const renderable = enabled && versionId !== '' && (kind === 'image' || kind === 'video');
+  const renderable =
+    localUrl === null &&
+    cache !== undefined &&
+    enabled &&
+    versionId !== '' &&
+    (kind === 'image' || kind === 'video');
   const [url, setUrl] = useState<string | null>(() =>
     renderable ? (cache.peek(versionId)?.url ?? null) : null,
   );
@@ -171,7 +208,7 @@ function useMediaUrl(
     }
     let live = true;
     cache
-      .resolve(versionId)
+      ?.resolve(versionId)
       .then((presigned) => {
         if (live) setUrl(presigned.url);
       })
@@ -182,10 +219,10 @@ function useMediaUrl(
       live = false;
     };
   }, [renderable, versionId, cache]);
-  return url;
+  return localUrl ?? url;
 }
 
-export function PreviewBody(props: PlatformPreviewPanelProps): ReactElement {
+export function PreviewBody(props: PreviewBodyProps): ReactElement {
   const { platform, format, firstMedia } = props;
   const kind = previewMediaKind(firstMedia);
   const spec = specFor(platform);
@@ -218,7 +255,13 @@ export function PreviewBody(props: PlatformPreviewPanelProps): ReactElement {
     setLabel(fallback?.label ?? null);
   }, [fallback?.label]);
   const size = sizes.find((s) => s.label === label) ?? fallback;
-  const url = useMediaUrl(firstMedia, kind, props.cache, props.presignEnabled);
+  const url = useMediaUrl(
+    firstMedia,
+    kind,
+    props.cache,
+    props.presignEnabled === true,
+    props.localUrl ?? null,
+  );
 
   function measure(w: number, h: number): void {
     if (stored === null && w > 0 && h > 0) setMeasured({ w, h });

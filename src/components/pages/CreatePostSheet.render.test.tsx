@@ -14,6 +14,7 @@ vi.mock('@/lib/workspace-context-platform', () => ({
   useWorkspacePlatform: (id: string | null) =>
     id === 'ws-1' ? mockWorkspace.workspacePlatform : null,
 }));
+vi.mock('@/lib/workspace-context', () => ({ useWorkspace: () => ({ workspaceName: 'Kite' }) }));
 vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
@@ -23,7 +24,10 @@ vi.mock('@/components/pages/pcs/use-post-members', () => ({
   usePostMembers: () => ({ options: [] }),
 }));
 vi.mock('@/components/pages/create/AttachmentsField', () => ({
-  AttachmentsField: () => null,
+  AttachmentsField: (props: { frame: { platform: string; format: string } | null }) => (
+    <span data-attachments-frame={props.frame === null ? 'none' : props.frame.format} />
+  ),
+  isMediaItem: (item: { kind: string }) => item.kind === 'image',
   attachmentVersionIds: () => [],
 }));
 vi.mock('@/components/ui/DatePicker', () => ({ DatePicker: () => null }));
@@ -122,5 +126,32 @@ describe('CreatePostSheet', () => {
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(
       'That format is not available on TikTok.',
     );
+  });
+
+  it('frames the attachments by format and re-shapes on a format change', async () => {
+    await renderSheet('instagram');
+    const frame = () =>
+      document.querySelector('[data-attachments-frame]')?.getAttribute('data-attachments-frame');
+    expect(frame()).toBe('reel');
+    await openFormats();
+    const story = [...document.querySelectorAll('[role="option"]')].find(
+      (o) => o.textContent === 'Story',
+    ) as HTMLElement;
+    await act(async () => story.click());
+    expect(frame()).toBe('story');
+  });
+
+  it('the live preview follows the draft caption and opens from the chip', async () => {
+    await renderSheet('linkedin');
+    await act(async () => {
+      setValue(document.querySelector<HTMLTextAreaElement>('#post-caption')!, 'Quarterly results');
+    });
+    const preview = document.querySelector('[data-composer-preview]');
+    expect(preview?.textContent).toContain('Quarterly results');
+    const chip = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent === 'LinkedIn preview',
+    );
+    await act(async () => chip!.click());
+    expect(document.querySelector('[role="dialog"][aria-label="LinkedIn preview"]')).not.toBeNull();
   });
 });

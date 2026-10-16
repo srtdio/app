@@ -37,8 +37,6 @@ function item(over: Partial<GalleryItem>): GalleryItem {
 function body(platform: string, format: string, media: GalleryItem | null): string {
   return renderToStaticMarkup(
     <PreviewBody
-      open
-      onClose={() => undefined}
       platform={platform}
       format={format}
       caption="Hello there"
@@ -101,5 +99,39 @@ describe('the preview names and sizes the post platform', () => {
     const html = body('instagram', 'carousel', item({ kind: 'image', width: 1080, height: 1350 }));
     expect(html).toContain('1080 x 566 · 1.91:1');
     expect(html).not.toContain('1200 x 627');
+  });
+});
+
+describe('PreviewBody on a composer draft', () => {
+  it('draws the unsaved caption and the local file, never presigning', () => {
+    const html = renderToStaticMarkup(
+      <PreviewBody
+        platform="instagram"
+        format="single_image"
+        caption="Draft caption"
+        handle="Kite"
+        firstMedia={item({ kind: 'image', mimeType: 'image/png' })}
+        localUrl="blob:local-photo"
+      />,
+    );
+    expect(html).toContain('Draft caption');
+    expect(html).toContain('src="blob:local-photo"');
+    expect(html).toContain('Feed preview');
+  });
+
+  it('a draft Reel with no media yet opens on the 9:16 full-screen frame', () => {
+    const html = renderToStaticMarkup(
+      <PreviewBody
+        platform="instagram"
+        format="reel"
+        caption="Soon"
+        handle="Kite"
+        firstMedia={null}
+        localUrl={null}
+      />,
+    );
+    expect(html).toContain('Full-screen preview');
+    expect(html).toContain('No media yet');
+    expect(html).toContain('Soon');
   });
 });

@@ -7,24 +7,23 @@
 // happens here. Chunked background upload is a later backend PR.
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { ALLOWED_MIME_TYPES, isImageMime } from '@srtdio/storage';
+import { isImageMime } from '@srtdio/storage';
 import { Button } from '@/components/ui/Button';
 import { IconVideo, IconX } from '@/components/ui/icons';
 import {
+  ComposerMediaFrame,
+  firstMedia,
+  MEDIA_ACCEPT,
   removeAttachmentAt,
   type AttachmentItem,
 } from '@/components/pages/create/AttachmentsField';
+import { frameFor } from '@/lib/platform-specs';
 import { precheckFile } from '@/lib/asset-upload';
 import { uploadChatAttachment } from '@/lib/chat/attachments';
 import { env } from '@/lib/env';
 import { UPLOAD_RETRIES, uploadFailedReason, withRetries } from '@/lib/induction';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
-
-/** Photos and videos from the upload allowlist: what a post's creative is. */
-const MEDIA_ACCEPT = ALLOWED_MIME_TYPES.filter(
-  (mime) => isImageMime(mime) || mime.startsWith('video/'),
-).join(',');
 
 /** The upload path itself is not set up (no endpoint or session): nothing was sent. */
 const NOT_STARTED = "We couldn't start the upload. Try again in a moment.";
@@ -40,16 +39,24 @@ export function PresetMediaField({
   onChange,
   required,
   onBusyChange,
+  frame,
 }: {
   workspaceId: string | null;
   value: AttachmentItem[];
   onChange: (items: AttachmentItem[]) => void;
   required: boolean;
   onBusyChange: (busy: boolean) => void;
+  /**
+   * The post's platform and format: the empty frame at the format's shape is
+   * the upload target and media fill it, as on the post page. null, or a format
+   * with no frame: small square tiles.
+   */
+  frame: { platform: string; format: string } | null;
 }): ReactElement {
   const newTrace = useNewTrace();
   const inputRef = useRef<HTMLInputElement>(null);
   const [upload, setUpload] = useState<Upload>({ phase: 'idle' });
+  const [measured, setMeasured] = useState<Record<string, { w: number; h: number }>>({});
   const valueRef = useRef(value);
   valueRef.current = value;
   const alive = useRef(true);
@@ -88,7 +95,10 @@ export function PresetMediaField({
       return;
     }
     setUpload({ phase: 'idle' });
-    const previewUrl = isImageMime(file.type) ? URL.createObjectURL(file) : undefined;
+    const previewUrl =
+      isImageMime(file.type) || file.type.startsWith('video/')
+        ? URL.createObjectURL(file)
+        : undefined;
     onChange([
       ...valueRef.current,
       {
@@ -96,6 +106,7 @@ export function PresetMediaField({
         kind: isImageMime(file.type) ? 'image' : 'file',
         name: file.name,
         ...(previewUrl !== undefined ? { previewUrl } : {}),
+        ...(file.type !== '' ? { mime: file.type } : {}),
       },
     ]);
   }
@@ -132,10 +143,32 @@ export function PresetMediaField({
     onChange(removeAttachmentAt(value, index));
   }
 
+  function measure(versionId: string, w: number, h: number): void {
+    if (w <= 0 || h <= 0) return;
+    setMeasured((prev) =>
+      prev[versionId] !== undefined ? prev : { ...prev, [versionId]: { w, h } },
+    );
+  }
+
   const sending = upload.phase === 'sending';
+  const postFrame =
+    frame !== null ? frameFor(frame.platform, frame.format, firstMedia(value, measured)) : null;
   return (
     <div className="flex flex-col gap-3">
-      {value.length > 0 ? (
+      {postFrame !== null && frame !== null ? (
+        <ComposerMediaFrame
+          frame={postFrame}
+          platform={frame.platform}
+          items={value}
+          measured={measured}
+          onMeasure={measure}
+          onRemove={remove}
+          removeLabel={(item) => (item.kind === 'image' ? 'Remove photo' : 'Remove video')}
+          pickLabel="Add a photo or video"
+          pickDisabled={sending}
+          onPick={() => inputRef.current?.click()}
+        />
+      ) : value.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {value.map((item, index) => (
             <MediaTile

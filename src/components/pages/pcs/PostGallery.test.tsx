@@ -20,6 +20,8 @@ import {
 } from '@/components/pages/pcs/PostGallery';
 import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
 import { IDENTITY_MAP } from '@/components/pages/pcs/pin-annotations';
+import { PlatformFrame } from '@/components/media/PlatformFrame';
+import type { Frame } from '@/lib/platform-specs';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
 import { createLongPressController } from '@/components/ui/useLongPress';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -640,10 +642,10 @@ describe('file tiles (T8)', () => {
 describe('galleryView on the platform frame', () => {
   const wide = (n: number): GalleryItem => ({ ...item(n), width: 1920, height: 1080 });
   const tall = (n: number): GalleryItem => ({ ...item(n), width: 1080, height: 1920 });
-  const framesOf = (tree: ReactNode) =>
-    elements(tree).filter(
-      (el) => (el.props as Record<string, unknown>)['data-frame-ratio'] !== undefined,
-    );
+  // Every slide's box is the shared PlatformFrame; its frame prop sets the ratio.
+  const framesOf = (tree: ReactNode) => elements(tree).filter((el) => el.type === PlatformFrame);
+  const frameProp = (el: ReactElement | undefined) =>
+    (el?.props as { frame: Frame; maxHeight: string } | undefined)?.frame;
   const cutOf = (tree: ReactNode) =>
     elements(tree).find(
       (el) => (el.props as Record<string, unknown>)['data-frame-cut'] !== undefined,
@@ -664,9 +666,8 @@ describe('galleryView on the platform frame', () => {
     const frames = framesOf(tree);
     expect(frames).toHaveLength(2);
     for (const f of frames) {
-      expect((f.props as { style: { aspectRatio: string } }).style.aspectRatio).toBe(
-        String(frame?.ratio),
-      );
+      expect(frameProp(f)).toBe(frame);
+      expect((f.props as { maxHeight: string }).maxHeight).toBe('78vh');
     }
     const thumbs = elements(tree).filter((el) => (el.props as { fit?: string }).fit !== undefined);
     expect(thumbs.every((el) => (el.props as { fit: string }).fit === 'cover')).toBe(true);
@@ -710,8 +711,8 @@ describe('galleryView on the platform frame', () => {
         platformLabel: 'P',
       });
       const f = framesOf(tree)[0];
-      expect((f?.props as Record<string, unknown>)['data-frame-ratio']).toBeCloseTo(9 / 16);
-      expect((f?.props as Record<string, unknown>)['data-frame-bands']).toBe(bands);
+      expect(frameProp(f)?.ratio).toBeCloseTo(9 / 16);
+      expect(frameProp(f)?.bands).toBe(bands);
       expect(cutOf(tree)).toBeUndefined();
       const fits = elements(tree)
         .filter((el) => (el.props as { fit?: string }).fit !== undefined)

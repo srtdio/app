@@ -131,20 +131,14 @@ describe('AttachmentsField upload origin', () => {
   });
 });
 
-describe('attachmentItemList frame', () => {
-  it('frames image tiles at the format ratio, square when absent', () => {
+describe('attachmentItemList (no frame)', () => {
+  it('keeps the small square tile for media when there is no platform frame', () => {
     const img: AttachmentItem[] = [
       { versionId: 'v', kind: 'image', name: 'p.png', previewUrl: 'blob:p', mime: 'image/png' },
     ];
-    const framed = attachmentItemList(img, () => undefined, {
-      ratio: 9 / 16,
-      source: 'fixed',
-      fit: 'contain',
-      bands: 'black',
-    })[0];
-    expect(framed?.props['data-frame-fit']).toBe('contain');
-    expect(framed?.props['data-frame-ratio']).toBeCloseTo(9 / 16);
-    expect(attachmentItemList(img, () => undefined)[0]?.props['data-frame-ratio']).toBe(1);
+    const tile = attachmentItemList(img, () => undefined)[0];
+    expect(tile?.props.className).toContain('aspect-square');
+    expect(tile?.props.className).toContain('bg-panel-3');
   });
 });
 

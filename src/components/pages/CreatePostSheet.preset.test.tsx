@@ -19,6 +19,7 @@ vi.mock('@/lib/workspace-context-platform', () => ({
   useWorkspacePlatform: (id: string | null) =>
     id === 'ws-1' ? mockWorkspace.workspacePlatform : null,
 }));
+vi.mock('@/lib/workspace-context', () => ({ useWorkspace: () => ({ workspaceName: 'Kite' }) }));
 vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => newTrace }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
@@ -28,7 +29,10 @@ vi.mock('@/components/pages/pcs/use-post-members', () => ({
   usePostMembers: () => ({ options: [] }),
 }));
 vi.mock('@/components/pages/create/AttachmentsField', () => ({
-  AttachmentsField: () => null,
+  AttachmentsField: (props: { frame: { platform: string; format: string } | null }) => (
+    <span data-attachments-frame={props.frame === null ? 'none' : props.frame.format} />
+  ),
+  isMediaItem: (item: { kind: string }) => item.kind === 'image',
   attachmentVersionIds: (items: { versionId: string }[]) => items.map((i) => i.versionId),
 }));
 vi.mock('@/components/ui/DatePicker', () => ({ DatePicker: () => null }));
@@ -42,11 +46,13 @@ vi.mock('@/lib/chat/share-post', () => ({ sharePostToChannel: mockShare }));
 vi.mock('@/components/induction/PresetMediaField', () => ({
   PresetMediaField: (props: {
     required: boolean;
+    frame: { platform: string; format: string } | null;
     onChange: (items: { versionId: string; kind: 'image'; name: string }[]) => void;
   }) => (
     <button
       type="button"
       data-required={props.required ? 'yes' : 'no'}
+      data-frame={props.frame === null ? 'none' : `${props.frame.platform}:${props.frame.format}`}
       onClick={() => props.onChange([{ versionId: 'v-1', kind: 'image', name: 'hero.png' }])}
     >
       Fake upload
@@ -227,5 +233,27 @@ describe('preset helpers', () => {
     expect(presetCanSubmit({ ...base, format: 'text' })).toBe(true);
     expect(presetCanSubmit({ ...base, format: 'text', caption: ' ' })).toBe(false);
     expect(presetCanSubmit({ ...base, attachments: 1, busy: true })).toBe(false);
+  });
+
+  it('hands the media field the platform frame, and a format change re-shapes it', async () => {
+    await renderSheet('instagram', SEND);
+    expect(button('Fake upload').getAttribute('data-frame')).toBe('instagram:reel');
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Format"]')!.click();
+    });
+    const single = [...document.querySelectorAll('[role="option"]')].find(
+      (o) => o.textContent === 'Single image',
+    ) as HTMLElement;
+    await act(async () => single.click());
+    expect(button('Fake upload').getAttribute('data-frame')).toBe('instagram:single_image');
+  });
+
+  it('the live preview shows the draft caption as it is typed', async () => {
+    await renderSheet('instagram', SEND);
+    const preview = document.querySelector('[data-composer-preview]');
+    expect(preview?.getAttribute('aria-label')).toBe('Instagram preview');
+    await typeCaption('Diwali drop is here');
+    expect(preview?.textContent).toContain('Diwali drop is here');
+    expect(button('Instagram preview')).toBeDefined();
   });
 });
