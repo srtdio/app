@@ -231,3 +231,39 @@ describe('audit round 3', () => {
     expect(checkLink(url).verdict).toBe('unsafe');
   });
 });
+
+describe('audit round 4', () => {
+  it.each([
+    'https://www.hdfclife.com/',
+    'https://www.hdfcergo.com/',
+    'https://www.icicipru.com/',
+    'https://www.icicilombard.com/',
+    'https://www.kotak811.com/',
+    'https://hdfcbank.bank.in/',
+    'https://axisbank.bank.in/',
+    'https://withgoogle.com/',
+    'https://googleads.g.doubleclick.net/',
+    'https://www.facebookblueprint.com/',
+    'https://www.microsoftstore.com/',
+    'https://sbl.co.in/',
+    'https://gmall.in/',
+    'https://best-office-chairs.in/',
+  ])('%s is ok', (url) => {
+    expect(checkLink(url)).toEqual({ verdict: 'ok', reasons: [] });
+  });
+
+  it.each([
+    'https://apple.com-verify.info/',
+    'https://apple-verify.com/',
+    'https://secure-apple.com/',
+    'https://meta-verify.com/',
+    'https://meta-business-support.com/',
+    'https://metabusinesshelp.com/',
+    'https://outlook-web.net/',
+    'https://amazonindia-offer.com/',
+    'https://hdfcbank-kyc.com/',
+    'https://app1e.com/',
+  ])('%s is unsafe', (url) => {
+    expect(checkLink(url).verdict).toBe('unsafe');
+  });
+});

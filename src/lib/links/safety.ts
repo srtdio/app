@@ -81,9 +81,42 @@ const SUBSTRING_BRANDS: ReadonlySet<string> = new Set([
   'flipkart',
   'phonepe',
   'paytm',
-  'hdfc',
-  'icici',
-  'kotak',
+  'amazon',
+]);
+
+/**
+ * Words phishing pairs with a brand (apple-verify, meta-business-support). An
+ * everyday-word brand next to one of these is flagged after all.
+ */
+const LURE_WORDS: ReadonlySet<string> = new Set([
+  'verify',
+  'verification',
+  'login',
+  'signin',
+  'support',
+  'secure',
+  'security',
+  'kyc',
+  'update',
+  'account',
+  'help',
+  'helpdesk',
+  'offer',
+  'offers',
+  'reward',
+  'rewards',
+  'refund',
+  'wallet',
+  'unlock',
+  'alert',
+  'billing',
+  'payment',
+  'id',
+  'web',
+  'recovery',
+  'business',
+  'appeal',
+  'com',
 ]);
 
 /**
@@ -103,6 +136,12 @@ const BRAND_COMPOUNDS = [
   'yonosbi',
   'sbionline',
   'axisbank',
+  'hdfcbank',
+  'icicibank',
+  'kotakbank',
+  'metabusiness',
+  'metasupport',
+  'metaverify',
 ] as const;
 
 /**
@@ -213,6 +252,18 @@ const OFFICIAL_DOMAINS: ReadonlySet<string> = new Set([
   'googlemail.com',
   'googledrive.com',
   'youtubekids.com',
+  'withgoogle.com',
+  'thinkwithgoogle.com',
+  'googleplex.com',
+  'googlesyndication.com',
+  'googleadservices.com',
+  'doubleclick.net',
+  'facebookmail.com',
+  'facebookblueprint.com',
+  'dropboxforum.com',
+  'microsoftstore.com',
+  'youtubeeducation.com',
+  'googlepay.app',
   'media-amazon.com',
   'ssl-images-amazon.com',
   'amazon-adsystem.com',
@@ -364,6 +415,8 @@ function siteLabel(registrable: string): string {
 function brandVerdict(host: string): 'lookalike' | 'brand' | null {
   const registrable = registrableDomain(host);
   if (OFFICIAL_DOMAINS.has(registrable)) return null;
+  // Only RBI-registered banks can hold a bank.in name (hdfcbank.bank.in).
+  if (registrable.endsWith('.bank.in')) return null;
   const label = siteLabel(registrable);
   if ((BRANDS as readonly string[]).includes(label)) return null;
 
@@ -383,9 +436,15 @@ function brandVerdict(host: string): 'lookalike' | 'brand' | null {
     for (const { brand, folded: foldedBrand } of FOLDED_BRANDS) {
       if (folded === foldedBrand) {
         // A swapped spelling (g00gle) is a lookalike; the real spelling on
-        // someone else's domain is a borrowed brand.
-        if (word !== brand) return 'lookalike';
-        if (!COMMON_WORD_BRANDS.has(brand)) found = 'brand';
+        // someone else's domain is a borrowed brand. Short brands only count a
+        // digit or rn/vv swap: an i/l fold alone misreads real names (sbl, gmall).
+        if (word !== brand) {
+          if (brand.length >= 6 || /\d|rn|vv/.test(word)) return 'lookalike';
+          continue;
+        }
+        if (!COMMON_WORD_BRANDS.has(brand) || words.some((w) => LURE_WORDS.has(w))) {
+          found = 'brand';
+        }
         continue;
       }
       if (!SUBSTRING_BRANDS.has(brand)) continue;
