@@ -8,6 +8,7 @@ import {
   toastFromEnriched,
   type EnrichedNew,
   type InboxRow,
+  type ToastUpdate,
 } from '@/lib/inbox/inbox-live';
 import { UNKNOWN_MEMBER } from '@/lib/chat/mentions';
 
@@ -184,7 +185,7 @@ describe('comment toast names and title', () => {
     const spec = toastFromEnriched(
       comment({
         body: `@[${MANISHA}] can we post this today`,
-        mentionNames: new Map([[MANISHA, 'Manisha']]),
+        mentionNames: new Map([[MANISHA, '@Manisha']]),
       }),
     );
     expect(spec?.title).toBe('Chitra commented on Ethyl Acetate - The Ferrari Story');
@@ -202,8 +203,8 @@ describe('comment toast names and title', () => {
       comment({
         body: `@[${MANISHA}] and @[${RAHUL}] please check`,
         mentionNames: new Map([
-          [MANISHA, 'Manisha'],
-          [RAHUL, 'Rahul'],
+          [MANISHA, '@Manisha'],
+          [RAHUL, '@Rahul'],
         ]),
       }),
     );
@@ -260,7 +261,7 @@ describe('comment toast names and title', () => {
   it('truncates after resolving names', () => {
     const tail = 'x'.repeat(200);
     const spec = toastFromEnriched(
-      comment({ body: `@[${MANISHA}] ${tail}`, mentionNames: new Map([[MANISHA, 'Manisha']]) }),
+      comment({ body: `@[${MANISHA}] ${tail}`, mentionNames: new Map([[MANISHA, '@Manisha']]) }),
     );
     const expected = `@Manisha ${tail}`.slice(0, 100);
     expect(spec?.description).toBe(`${expected}\u2026`);
@@ -384,5 +385,96 @@ describe('live toast labels for approve, reject, park and deletes', () => {
     const split = splitNewRows(rows);
     expect(split.activity).toHaveLength(2);
     expect(split.chatMentions).toHaveLength(0);
+  });
+});
+
+describe('grouped toast wording', () => {
+  const up = (actorId: string | null, entityKey: string | null, action: string): ToastUpdate => ({
+    actorId,
+    entityKey,
+    action,
+  });
+  const lead = (over: Partial<NonNullable<EnrichedNew['lead']>> = {}): EnrichedNew['lead'] => ({
+    eventType: 'comment',
+    actorName: 'Asha Rao',
+    actorAvatarUrl: 'https://cdn/asha.png',
+    body: null,
+    title: 'Q3 Launch',
+    mentionNames: new Map(),
+    verb: 'commented',
+    ...over,
+  });
+  const spec = (count: number, updates: ToastUpdate[], l = lead()) =>
+    toastFromEnriched({ count, lead: l, updates });
+
+  it('one update: "{Name} {verb} on {post title}"', () => {
+    expect(spec(1, [up('a', 'post:p1', 'comment')])?.title).toBe('Asha Rao commented on Q3 Launch');
+    const approved = lead({ eventType: 'stage_change', toStage: 'approved', verb: 'approved' });
+    expect(spec(1, [up('a', 'post:p1', 'stage_change:approved')], approved)?.title).toBe(
+      'Asha Rao approved on Q3 Launch',
+    );
+  });
+
+  it('same post and action, different people: "and N others" (1 other)', () => {
+    expect(spec(2, [up('a', 'post:p1', 'comment'), up('b', 'post:p1', 'comment')])?.title).toBe(
+      'Asha Rao and 1 other commented on Q3 Launch',
+    );
+    expect(
+      spec(4, [
+        up('a', 'post:p1', 'comment'),
+        up('b', 'post:p1', 'comment'),
+        up('c', 'post:p1', 'comment'),
+        up('b', 'post:p1', 'comment'),
+      ])?.title,
+    ).toBe('Asha Rao and 2 others commented on Q3 Launch');
+  });
+
+  it('same person, post and action, repeated: "{Name} {verb} N times on {title}"', () => {
+    expect(
+      spec(3, [
+        up('a', 'post:p1', 'comment'),
+        up('a', 'post:p1', 'comment'),
+        up('a', 'post:p1', 'comment'),
+      ])?.title,
+    ).toBe('Asha Rao commented 3 times on Q3 Launch');
+  });
+
+  it('same person, different posts or actions: "{Name}: N new updates"', () => {
+    expect(spec(2, [up('a', 'post:p1', 'comment'), up('a', 'post:p2', 'comment')])?.title).toBe(
+      'Asha Rao: 2 new updates',
+    );
+    expect(
+      spec(2, [up('a', 'post:p1', 'comment'), up('a', 'post:p1', 'stage_change:approved')])?.title,
+    ).toBe('Asha Rao: 2 new updates');
+  });
+
+  it('different people, different posts or actions: "{Name} and N others: M new updates"', () => {
+    expect(spec(2, [up('a', 'post:p1', 'comment'), up('b', 'post:p2', 'comment')])?.title).toBe(
+      'Asha Rao and 1 other: 2 new updates',
+    );
+    expect(
+      spec(5, [
+        up('a', 'post:p1', 'comment'),
+        up('b', 'post:p2', 'mention'),
+        up('c', 'post:p2', 'comment'),
+      ])?.title,
+    ).toBe('Asha Rao and 2 others: 5 new updates');
+  });
+
+  it('the count is the exact total, beyond the rows read', () => {
+    const ten = Array.from({ length: 10 }, () => up('a', 'post:p1', 'comment'));
+    expect(spec(14, ten)?.title).toBe('Asha Rao commented 14 times on Q3 Launch');
+  });
+
+  it('the toast avatar is the newest update actor; a former member reads "Former member"', () => {
+    const s1 = spec(2, [up('a', 'post:p1', 'comment'), up('b', 'post:p1', 'comment')]);
+    expect(s1?.actorName).toBe('Asha Rao');
+    expect(s1?.actorAvatarUrl).toBe('https://cdn/asha.png');
+    const gone = spec(
+      1,
+      [up('x', 'post:p1', 'comment')],
+      lead({ actorName: 'Former member', actorAvatarUrl: null }),
+    );
+    expect(gone?.title).toBe('Former member commented on Q3 Launch');
   });
 });

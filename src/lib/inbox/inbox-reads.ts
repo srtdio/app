@@ -3,14 +3,23 @@
 // These are plain RLS-scoped PostgREST selects (each member sees only their own
 // rows), NOT @srtdio/rpc procs, so no p_trace_id is involved. Enrichment is
 // batched (no N+1) and degrades each field to null on a failed sub-query, exactly
-// like the Activity page's own loader, and reuses readProfiles for author display.
+// like the Activity page's own loader, and names people through the shared name
+// registry (people-names.ts): full name, or "Former member".
 
 import type { Client, Result } from '@srtdio/rpc';
 import { MENTION_EVENT_TYPE, mapEntry } from '@/components/pages/activity/data';
-import { READ_TIMEOUT_MS, readProfiles, withReadTimeout } from '@/lib/chat-reads';
+import { READ_TIMEOUT_MS, readMentionProfiles } from '@/lib/chat-reads';
 import { mentionIds } from '@/lib/chat/mentions';
-import { pickNewest, type EnrichedNew, type InboxRow } from '@/lib/inbox/inbox-live';
-import { withoutBellEntries } from '@/lib/inbox/bell-types';
+import {
+  actionKey,
+  eventVerb,
+  pickNewest,
+  type EnrichedNew,
+  type InboxRow,
+  type ToastUpdate,
+} from '@/lib/inbox/inbox-live';
+import { BELL_CHAT_ENTITY, BELL_MENTION_EVENT, withoutBellEntries } from '@/lib/inbox/bell-types';
+import { personAvatar, personMentionLabel, personName, resolvePeople } from '@/lib/people-names';
 
 const SELECT_COLS =
   'id, workspace_id, user_id, actor_user_id, event_type, entity_type, entity_id, scope, tier, created_at, read_at, snoozed_until, payload';
@@ -71,43 +80,80 @@ export async function fetchUnreadMentionCount(
   return { ok: true, data: res.count ?? 0 };
 }
 
+/** How many new Activity rows one poll reads to word the toast (the count is exact regardless). */
+export const SINCE_ACTIVITY_LIMIT = 50;
+
+/** How many new chat mention rows one poll reads for the bell's toast. */
+export const SINCE_MENTION_LIMIT = 10;
+
+/** One poll's new rows: Activity's and the bell's chat mentions, plus Activity's exact count. */
+export interface InboxSince {
+  /** Every row read, newest first (Activity rows and chat mentions). */
+  rows: InboxRow[];
+  /** The exact number of new Activity rows, counted after the bell rows are left out. */
+  activityCount: number;
+}
+
 /**
- * The caller's inbox rows created strictly after `sinceIso`, newest first, capped
- * at `limit` (default 10). Soft-deleted rows are excluded. Returns the raw rows so
- * the pure layer can diff them against the high-water mark.
+ * The caller's inbox rows created strictly after `sinceIso`. Bell rows are
+ * filtered out BEFORE the Activity cap and count, so the count is exact however
+ * many arrive (the cap only bounds the rows read for wording): one Activity read
+ * with an exact count, and one chat mention read for the bell's toast, in
+ * parallel. Soft-deleted rows are excluded.
  */
 export async function fetchInboxSince(
   client: Client,
   params: { workspaceId: string; userId: string; sinceIso: string; limit?: number },
-): Promise<Result<InboxRow[]>> {
-  const limit = params.limit ?? 10;
-  const res = await client
-    .from('inbox_entries')
-    .select(SELECT_COLS)
-    .eq('workspace_id', params.workspaceId)
-    .eq('user_id', params.userId)
-    .is('deleted_at', null)
-    .gt('created_at', params.sinceIso)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (res.error) return fail(`fetchInboxSince: ${res.error.message}`);
-  return { ok: true, data: (res.data ?? []).map((row) => row as InboxRow) };
+): Promise<Result<InboxSince>> {
+  const base = () =>
+    client
+      .from('inbox_entries')
+      .select(SELECT_COLS, { count: 'exact' })
+      .eq('workspace_id', params.workspaceId)
+      .eq('user_id', params.userId)
+      .is('deleted_at', null)
+      .gt('created_at', params.sinceIso);
+  const [activityRes, mentionRes] = await Promise.all([
+    withoutBellEntries(base())
+      .order('created_at', { ascending: false })
+      .limit(params.limit ?? SINCE_ACTIVITY_LIMIT),
+    base()
+      .eq('event_type', BELL_MENTION_EVENT)
+      .eq('entity_type', BELL_CHAT_ENTITY)
+      .order('created_at', { ascending: false })
+      .limit(SINCE_MENTION_LIMIT),
+  ]);
+  if (activityRes.error) return fail(`fetchInboxSince: ${activityRes.error.message}`);
+  if (mentionRes.error) return fail(`fetchInboxSince: ${mentionRes.error.message}`);
+  const activity = (activityRes.data ?? []).map((row) => row as InboxRow);
+  const mentions = (mentionRes.data ?? []).map((row) => row as InboxRow);
+  return {
+    ok: true,
+    data: {
+      rows: [...activity, ...mentions].sort(
+        (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+      ),
+      activityCount: Math.max(activityRes.count ?? activity.length, activity.length),
+    },
+  };
 }
 
 /**
- * Reduce a batch of new rows to a count plus its enriched lead (the newest row).
- * Batched only: one comments read, one posts read, one briefs read and one
- * batched profile read (comment authors plus the ids the lead's body mentions)
- * regardless of row count. The profile read is capped at `nameTimeoutMs`. Each
- * sub-query is best-effort, so a failure leaves its field null rather than
- * failing the batch. Never throws.
+ * Reduce a batch of new rows to a count plus its enriched lead (the newest row)
+ * and every row's grouping key (actor, post, action). Batched only: one comments
+ * read, one posts read, one briefs read and one shared name read (users +
+ * workspace_members, one .in() each, through the name registry) regardless of
+ * row count. The name read is capped at `nameTimeoutMs`. Each sub-query is
+ * best-effort, so a failure leaves its field null rather than failing the batch.
+ * `total` is the exact new-row count when the rows are a capped page. Never throws.
  */
 export async function enrichNewRows(
   client: Client,
   newRows: readonly InboxRow[],
   nameTimeoutMs: number = READ_TIMEOUT_MS,
+  total: number = newRows.length,
 ): Promise<EnrichedNew> {
-  const count = newRows.length;
+  const count = Math.max(total, newRows.length);
   const newest = pickNewest(newRows);
   if (newest === null) return { count, lead: null };
 
@@ -149,6 +195,10 @@ export async function enrichNewRows(
     for (const r of briefsRes.data ?? []) briefTitles.set(r.id, r.title);
   }
 
+  // Each row's actor: the comment's author for comment rows, else the row's own.
+  const actorOf = (item: ReturnType<typeof mapEntry>): string | null =>
+    (item.commentId !== null ? (commentAuthors.get(item.commentId) ?? null) : null) ?? item.actorId;
+
   const leadItem = mapEntry(newest);
   const body =
     leadItem.eventType === 'comment' && leadItem.commentId !== null
@@ -156,45 +206,47 @@ export async function enrichNewRows(
       : null;
   const mentioned = body !== null ? mentionIds(body) : [];
 
-  const profileIds = unique([...commentAuthors.values(), ...mentioned]);
-  const names = new Map<string, string>();
-  const avatars = new Map<string, string>();
-  let namesRead = profileIds.length === 0;
-  if (profileIds.length > 0) {
-    const profiles = await withReadTimeout(
-      (signal) => readProfiles(client, profileIds, signal),
-      nameTimeoutMs,
-    );
-    if (profiles.ok) {
-      namesRead = true;
-      for (const p of profiles.data) {
-        names.set(p.userId.toLowerCase(), p.displayName);
-        if (p.avatarUrl !== null) avatars.set(p.userId.toLowerCase(), p.avatarUrl);
-      }
-    }
-  }
+  const workspaceId = newest.workspace_id;
+  const profileIds = unique([
+    ...items.flatMap((i) => {
+      const id = actorOf(i);
+      return id !== null ? [id] : [];
+    }),
+    ...mentioned,
+  ]);
+  const namesRead = await resolvePeople(client, workspaceId, profileIds, (userIds) =>
+    readMentionProfiles(client, { workspaceId, userIds, timeoutMs: nameTimeoutMs }),
+  );
 
-  const authorId =
-    leadItem.commentId !== null ? (commentAuthors.get(leadItem.commentId) ?? null) : null;
-  const actorName = authorId !== null ? (names.get(authorId.toLowerCase()) ?? null) : null;
-  const actorAvatarUrl = authorId !== null ? (avatars.get(authorId.toLowerCase()) ?? null) : null;
+  const authorId = actorOf(leadItem);
+  const actorName = authorId !== null ? (personName(workspaceId, authorId) ?? null) : null;
+  const actorAvatarUrl = authorId !== null ? personAvatar(workspaceId, authorId) : null;
   let mentionNames: Map<string, string> | null = null;
   if (namesRead) {
     mentionNames = new Map<string, string>();
-    for (const id of mentioned) {
-      const name = names.get(id);
-      if (name !== undefined) mentionNames.set(id, name);
-    }
+    // Each mentioned id's full label: "@username", or "Former member".
+    for (const id of mentioned) mentionNames.set(id, personMentionLabel(workspaceId, id));
   }
-  const title =
-    leadItem.entityType === 'post' && leadItem.entityId !== null
-      ? (postTitles.get(leadItem.entityId) ?? null)
-      : leadItem.entityType === 'brief' && leadItem.entityId !== null
-        ? (briefTitles.get(leadItem.entityId) ?? null)
+  const titleOf = (item: ReturnType<typeof mapEntry>): string | null =>
+    item.entityType === 'post' && item.entityId !== null
+      ? (postTitles.get(item.entityId) ?? null)
+      : item.entityType === 'brief' && item.entityId !== null
+        ? (briefTitles.get(item.entityId) ?? null)
         : null;
+  const title =
+    titleOf(leadItem) ?? (leadItem.eventType === 'post_deleted' ? leadItem.title : null);
+
+  const byNewest = [...items].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const updates: ToastUpdate[] = byNewest.map((i) => ({
+    actorId: actorOf(i),
+    entityKey:
+      i.entityType !== null && i.entityId !== null ? `${i.entityType}:${i.entityId}` : null,
+    action: actionKey(i),
+  }));
 
   return {
     count,
+    updates,
     lead: {
       eventType: leadItem.eventType,
       actorName,
@@ -205,6 +257,7 @@ export async function enrichNewRows(
       toStage: leadItem.toStage,
       reviewWithdrawn: leadItem.reviewWithdrawn ?? false,
       reviewPrevious: leadItem.reviewPrevious ?? null,
+      verb: eventVerb(leadItem),
     },
   };
 }

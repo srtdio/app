@@ -118,10 +118,10 @@ describe('ActivityCard', () => {
     // A single bordered, rounded card shell, laid out as a flex row with a rail.
     expect(html).toContain('rounded-xl');
     expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
-    // Title appears exactly once (the header row), never repeated per event line.
-    expect(count(html, 'Q3 Launch')).toBe(1);
-    // The lead names who did what without repeating the title.
-    expect(html).toContain('Someone sent a post for review');
+    // The header carries the title; the stage line names the post by title, never KEY-N.
+    expect(count(html, 'Q3 Launch')).toBe(2);
+    expect(html).toContain('Someone sent Q3 Launch for review');
+    expect(html).not.toMatch(/GBL-\d/);
   });
 
   it('threads a group of >1 behind a "+N more" toggle, collapsed by default', () => {
@@ -379,7 +379,7 @@ describe('A3 @all in the Activity preview', () => {
 });
 
 describe('ActivityCard actor rows', () => {
-  it('stage_change: "<Name> approved KEY-N on behalf of the approvers" with the avatar', () => {
+  it('stage_change: "<Name> approved <title> on behalf of the approvers" with the avatar', () => {
     const html = renderCard([
       item({
         id: 'a',
@@ -391,7 +391,7 @@ describe('ActivityCard actor rows', () => {
         actorRole: 'agency',
       }),
     ]);
-    expect(html).toContain('Chitra approved GBL-12 on behalf of the approvers');
+    expect(html).toContain('Chitra approved Diwali teaser on behalf of the approvers');
     expect(html).not.toContain('Moved to');
     expect(html).toContain('role="button"');
   });
@@ -403,11 +403,12 @@ describe('ActivityCard actor rows', () => {
           eventType: 'stage_change',
           toStage: 'rejected',
           number: 3,
+          title: 'Promo',
           actorName: 'Asha',
           actorRole,
         }),
       ]);
-      expect(html).toContain('Asha rejected GBL-3');
+      expect(html).toContain('Asha rejected Promo');
       expect(html).not.toContain('on behalf of the approvers');
     }
   });
@@ -422,7 +423,11 @@ describe('ActivityCard actor rows', () => {
         actorRole: 'agency',
       }),
     ]);
-    expect(html).toContain('Chitra deleted GBL-9 Old teaser');
+    // Header "<who> deleted", the title once, no body line, no KEY-N.
+    expect(html).toContain('Chitra deleted<');
+    expect(count(html, 'Old teaser')).toBe(1);
+    expect(html).not.toContain('Chitra deleted Old teaser');
+    expect(html).not.toMatch(/GBL-\d/);
     expect(html).not.toContain('on behalf of the approvers');
     expect(html).not.toContain('role="button"');
     expect(html).not.toContain('cursor-pointer');
@@ -532,5 +537,122 @@ describe('ActivityCard: the system welcome row', () => {
   it('renders any other system kind as the generic row', () => {
     const html = renderCard([item({ eventType: 'system', entityType: null, entityId: null })]);
     expect(html).not.toContain('is ready.');
+  });
+});
+
+describe('ActivityCard names', () => {
+  it('the header uses the actor full name (never a username)', () => {
+    const html = renderCard([
+      item({ eventType: 'comment', title: 'Q3', actorName: 'Chitra Rao', actorId: 'u-c' }),
+    ]);
+    expect(html).toContain('Chitra Rao commented');
+  });
+
+  it('a grouped header names the newest entry actor, whatever the order', () => {
+    const older = item({
+      id: 'old',
+      title: 'Q3',
+      eventType: 'comment',
+      actorName: 'Asha',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+    const newer = item({
+      id: 'new',
+      title: 'Q3',
+      eventType: 'comment',
+      actorName: 'Bina',
+      createdAt: '2026-06-14T00:30:00.000Z',
+    });
+    expect(renderCard([older, newer])).toContain('Bina commented');
+    expect(renderCard([older, newer])).not.toContain('Asha commented');
+    expect(renderCard([newer, older])).toContain('Bina commented');
+  });
+
+  it('a newest entry with no actor never borrows an older row actor', () => {
+    const html = renderCard([
+      item({ id: 'n', title: 'Q3', eventType: 'comment', createdAt: '2026-06-14T00:30:00.000Z' }),
+      item({ id: 'o', title: 'Q3', eventType: 'comment', actorName: 'Asha' }),
+    ]);
+    expect(html).toContain('New comment');
+    expect(html).not.toContain('Asha commented');
+  });
+
+  it('every expanded row shows its own author photo and full name above the text', () => {
+    hooks.forceExpand = true;
+    try {
+      const html = renderCard([
+        item({
+          id: 'a',
+          title: 'Q3',
+          eventType: 'comment',
+          actorName: 'Asha',
+          createdAt: '2026-06-14T00:50:00.000Z',
+        }),
+        item({
+          id: 'b',
+          title: 'Q3',
+          eventType: 'comment_resolved',
+          actorName: 'Bina',
+          actorAvatarUrl: 'https://cdn/bina.png',
+        }),
+        item({
+          id: 'c',
+          title: 'Q3',
+          eventType: 'checkpoint_reopened',
+          actorName: 'Former member',
+        }),
+      ]);
+      // The useState shim also flips the photo's error flag, so faces render as initials here;
+      // the photo url path is covered by the header test below.
+      expect(count(html, 'data-activity-entry-author')).toBe(2);
+      expect(html).toMatch(/data-activity-entry-author=""[^>]*><div[^>]*>B<\/div>/);
+      expect(html).toMatch(/data-activity-entry-author[\s\S]*Bina[\s\S]*Thread resolved/);
+      expect(html).toMatch(/data-activity-entry-author[\s\S]*Former member[\s\S]*Point reopened/);
+    } finally {
+      hooks.forceExpand = false;
+    }
+  });
+
+  it('checkpoint, resolved, ready, asset and brief rows carry their own actor in the header', () => {
+    const cases: Array<[Partial<ActivityItem>, string]> = [
+      [{ eventType: 'comment_resolved' }, 'Dev resolved a thread'],
+      [{ eventType: 'checkpoint_asked' }, 'Dev asked a question'],
+      [{ eventType: 'checkpoint_reopened' }, 'Dev reopened a point'],
+      [{ eventType: 'brief_created', entityType: 'brief' }, '>Dev<'],
+      [{ eventType: 'brief_closed', entityType: 'brief' }, '>Dev<'],
+      [{ eventType: 'asset_uploaded', entityType: null, entityId: null }, '>Dev<'],
+    ];
+    for (const [over, text] of cases) {
+      const html = renderCard([
+        item({ title: 'Q3', actorName: 'Dev', actorAvatarUrl: 'https://cdn/dev.png', ...over }),
+      ]);
+      expect(html).toContain(text);
+      expect(html).toContain('https://cdn/dev.png');
+    }
+    const ready = renderCard([item({ title: 'Q3', eventType: 'post_ready', actorName: 'Dev' })]);
+    expect(ready).toContain('Ready for review');
+    expect(ready).toMatch(/>D<\/div>/);
+  });
+
+  it('checkpoint rows never read "Activity" as their body', () => {
+    const html = renderCard([item({ title: 'Q3', eventType: 'checkpoint_reopened' })]);
+    expect(html).toContain('Point reopened');
+    expect(html).not.toContain('>Activity<');
+  });
+
+  it('an on-behalf approval reads "<actor> approved for <client>"', () => {
+    const html = renderCard([
+      item({
+        title: 'Q3',
+        eventType: 'stage_change',
+        toStage: 'approved',
+        actorName: 'Chitra',
+        actorRole: 'agency',
+        onBehalfOfId: 'u-k',
+        onBehalfOfName: 'Kiran Shah',
+      }),
+    ]);
+    expect(html).toContain('Chitra approved for Kiran Shah');
+    expect(html).not.toContain('on behalf of the approvers');
   });
 });

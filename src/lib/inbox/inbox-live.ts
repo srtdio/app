@@ -10,7 +10,7 @@ import {
   chatMessageHref,
   isBellRow,
 } from '@/lib/inbox/bell-types';
-import { resolveMentionText } from '@/lib/chat/mentions';
+import { resolveMentionText, splitMentions } from '@/lib/chat/mentions';
 
 /** The raw inbox_entries row, reused from the generated schema (never redefined). */
 export type InboxRow = Database['public']['Tables']['inbox_entries']['Row'];
@@ -32,8 +32,8 @@ interface EnrichedLead {
   body: string | null;
   title: string | null;
   /**
-   * Display names for the ids mentioned in `body`, from the same batched read as
-   * the actor. Null when that read failed or timed out: the toast then shows no
+   * Full labels ("@username", or "Former member") for the ids mentioned in
+   * `body`, from the same batched read as the actor. Null when that read failed or timed out: the toast then shows no
    * line 2 at all, never a raw token.
    */
   mentionNames: ReadonlyMap<string, string> | null;
@@ -43,12 +43,148 @@ interface EnrichedLead {
   reviewWithdrawn?: boolean;
   /** plan_review withdrawal only: the status withdrawn (payload.previous). */
   reviewPrevious?: string | null;
+  /** The event's existing verb ("commented", "approved"); null when it has none. */
+  verb?: string | null;
+}
+
+/** One new update, reduced to what the toast groups on. */
+export interface ToastUpdate {
+  /** The acting person's id; null when the row names none. */
+  actorId: string | null;
+  /** The entity the update is on ("post:<id>"); null for an entity-less row. */
+  entityKey: string | null;
+  /** The action: event type plus its outcome (a stage or a review status). */
+  action: string;
 }
 
 /** A batch of new rows reduced to a count plus its enriched lead. */
 export interface EnrichedNew {
+  /** The exact number of new Activity updates (never capped by the read's page size). */
   count: number;
   lead: EnrichedLead | null;
+  /** The new updates the read returned, newest first, for the grouped wording. */
+  updates?: readonly ToastUpdate[];
+}
+
+/** The verb-bearing slice of an Activity item. */
+export interface VerbSource {
+  eventType: string;
+  toStage?: string | null;
+  reviewStatus?: string | null;
+  reviewWithdrawn?: boolean;
+  reviewPrevious?: string | null;
+}
+
+/**
+ * The event's existing verb, as its Activity line already says it: "commented",
+ * "approved", "resolved a thread". Null for an event whose line has no actor
+ * verb (the ready ping, the welcome row, anything unknown). Pure.
+ */
+export function eventVerb(item: VerbSource): string | null {
+  switch (item.eventType) {
+    case 'comment':
+    case 'plan_comment':
+      return 'commented';
+    case 'mention':
+      return 'mentioned you';
+    case 'comment_resolved':
+      return 'resolved a thread';
+    case 'checkpoints_added':
+      return 'sent points';
+    case 'checkpoint_asked':
+      return 'asked a question';
+    case 'checkpoint_reopened':
+      return 'reopened a point';
+    case 'stage_change':
+      switch (item.toStage) {
+        case 'approved':
+          return 'approved';
+        case 'rejected':
+          return 'rejected';
+        case 'parked':
+          return 'parked';
+        case 'review':
+          return 'sent for review';
+        default:
+          return 'moved';
+      }
+    case 'post_deleted':
+    case 'assets_deleted':
+      return 'deleted';
+    case 'brief_created':
+      return 'created';
+    case 'brief_closed':
+      return 'closed';
+    case 'asset_uploaded':
+      return 'uploaded an asset';
+    case 'asset_version_added':
+      return 'added an asset version';
+    case 'invite':
+      return 'invited a new member';
+    case 'plan_review':
+      if (item.reviewWithdrawn === true) {
+        return item.reviewPrevious === 'changes'
+          ? 'withdrew their changes request'
+          : 'withdrew slot approval';
+      }
+      return item.reviewStatus === 'approved'
+        ? 'approved'
+        : item.reviewStatus === 'changes'
+          ? 'asked changes'
+          : 'reviewed';
+    default:
+      return null;
+  }
+}
+
+/** The action key the toast groups on: the event type plus its outcome. Pure. */
+export function actionKey(item: VerbSource): string {
+  if (item.eventType === 'stage_change') return `stage_change:${item.toStage ?? ''}`;
+  if (item.eventType === 'plan_review') {
+    return `plan_review:${item.reviewWithdrawn === true ? 'withdrawn' : (item.reviewStatus ?? '')}`;
+  }
+  return item.eventType;
+}
+
+/** "1 other" / "N others". */
+function othersPhrase(n: number): string {
+  return `${n} ${n === 1 ? 'other' : 'others'}`;
+}
+
+/**
+ * The grouped title for several updates, or null when the wording cannot be
+ * built (no name for the newest actor). {Name} is the newest update's actor;
+ * {verb} its existing verb; counts are exact:
+ *   same post + action, different people: "{Name} and {N} others {verb} on {title}"
+ *   same person + post + action, repeated: "{Name} {verb} {N} times on {title}"
+ *   same person, different posts or actions: "{Name}: {N} new updates"
+ *   different people, different posts or actions: "{Name} and {N} others: {M} new updates"
+ */
+export function groupedToastTitle(
+  updates: readonly ToastUpdate[],
+  total: number,
+  lead: { actorName: string | null; verb?: string | null; title: string | null },
+): string | null {
+  const name = lead.actorName;
+  if (name === null || updates.length === 0) return null;
+  const people = new Set(updates.map((u) => u.actorId ?? ''));
+  const others = people.size - 1;
+  const first = updates[0];
+  const samePost =
+    first !== undefined &&
+    first.entityKey !== null &&
+    updates.every((u) => u.entityKey === first.entityKey);
+  const sameAction = first !== undefined && updates.every((u) => u.action === first.action);
+  const verb = lead.verb ?? null;
+  const title = lead.title !== null && lead.title.trim() !== '' ? lead.title.trim() : null;
+  if (samePost && sameAction && verb !== null && title !== null) {
+    return others === 0
+      ? `${name} ${verb} ${total} times on ${title}`
+      : `${name} and ${othersPhrase(others)} ${verb} on ${title}`;
+  }
+  return others === 0
+    ? `${name}: ${total} new updates`
+    : `${name} and ${othersPhrase(others)}: ${total} new updates`;
 }
 
 /** The toast content derived from an enriched batch, before it is rendered. */
@@ -197,7 +333,16 @@ function commentSnippet(
   if (body === null || body.trim().length === 0) return null;
   // The name read failed or timed out: no body line at all (never a raw token).
   if (names === null) return null;
-  return trimSnippet(resolveMentionText(body, (id) => names.get(id)));
+  // Each value is the whole label ("@username" or "Former member"); an id the read
+  // did not return reads as resolveMentionText's "@Unknown member".
+  const text = splitMentions(body)
+    .map((seg) =>
+      seg.kind === 'text'
+        ? seg.text
+        : (names.get(seg.userId) ?? resolveMentionText(`@[${seg.userId}]`, () => undefined)),
+    )
+    .join('');
+  return trimSnippet(text);
 }
 
 /**
@@ -212,6 +357,14 @@ function commentSnippet(
 export function toastFromEnriched(enriched: EnrichedNew): ToastSpec | null {
   if (enriched.count === 0) return null;
   if (enriched.count > 1) {
+    const lead = enriched.lead;
+    const grouped =
+      lead !== null && enriched.updates !== undefined
+        ? groupedToastTitle(enriched.updates, enriched.count, lead)
+        : null;
+    if (lead !== null && grouped !== null) {
+      return { title: grouped, actorName: lead.actorName, actorAvatarUrl: lead.actorAvatarUrl };
+    }
     return {
       title: `${spellCount(enriched.count)} new updates`,
       actorName: null,
@@ -224,6 +377,17 @@ export function toastFromEnriched(enriched: EnrichedNew): ToastSpec | null {
   }
   const snippet = commentSnippet(lead.body, lead.mentionNames);
   const isComment = lead.eventType === 'comment';
+  const leadVerb = lead.verb ?? null;
+  // Any other named event with a verb: "{Name} {verb} on {title}" ("{Name} {verb}" with no title).
+  if (!isComment && lead.actorName !== null && leadVerb !== null) {
+    const onTitle =
+      lead.title !== null && lead.title.trim().length > 0 ? ` on ${lead.title.trim()}` : '';
+    return {
+      title: `${lead.actorName} ${leadVerb}${onTitle}`,
+      actorName: lead.actorName,
+      actorAvatarUrl: lead.actorAvatarUrl,
+    };
+  }
   const named = isComment && lead.actorName !== null;
   // The name read failed or timed out: the actor is unknown and no body shows.
   const namesFailed = isComment && lead.mentionNames === null;

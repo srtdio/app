@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Database } from '@srtdio/schemas';
 import {
   enrichNewRows,
@@ -7,6 +7,9 @@ import {
   fetchUnreadMentionCount,
 } from '@/lib/inbox/inbox-reads';
 import { toastFromEnriched, type InboxRow } from '@/lib/inbox/inbox-live';
+import { resetMentionNames } from '@/lib/chat/mentions';
+
+beforeEach(() => resetMentionNames());
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -73,9 +76,15 @@ function builder(result: QueryResult): FakeBuilder {
   return self;
 }
 
+// Every readable profile is a current member unless the test says otherwise.
 function fakeClient(tables: Record<string, QueryResult>): Parameters<typeof fetchInboxSince>[0] {
+  const members: QueryResult = tables.workspace_members ?? {
+    data: (tables.users?.data ?? []).map((u) => ({ user_id: u.id, role: 'agency' })),
+    error: null,
+  };
   const client = {
     from(table: string): FakeBuilder {
+      if (table === 'workspace_members') return builder(members);
       return builder(tables[table] ?? { data: [], error: null });
     },
   };
@@ -169,9 +178,67 @@ describe('fetchInboxSince', () => {
     });
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data).toHaveLength(1);
-      expect(res.data[0]?.id).toBe('e-new');
+      expect(res.data.rows.map((r) => r.id)).toContain('e-new');
+      expect(res.data.activityCount).toBe(1);
     }
+  });
+
+  it('filters bell rows before the cap and counts exactly beyond 10', async () => {
+    const calls: {
+      ors: string[];
+      nots: unknown[];
+      eqs: [string, unknown][];
+      limit: number | null;
+      opts: unknown;
+    }[] = [];
+    const activity = Array.from({ length: 10 }, (_, i) =>
+      inboxRow({ id: `a${i}`, created_at: `2026-06-14T01:00:${String(10 + i)}.000Z` }),
+    );
+    const client = {
+      from() {
+        const call = {
+          ors: [] as string[],
+          nots: [] as unknown[],
+          eqs: [] as [string, unknown][],
+          limit: null as number | null,
+          opts: null as unknown,
+        };
+        calls.push(call);
+        const self = {
+          select: (_c: string, opts?: unknown) => ((call.opts = opts), self),
+          eq: (c: string, v: unknown) => (call.eqs.push([c, v]), self),
+          is: () => self,
+          gt: () => self,
+          or: (f: string) => (call.ors.push(f), self),
+          not: (...a: unknown[]) => (call.nots.push(a), self),
+          order: () => self,
+          limit: (n: number) => ((call.limit = n), self),
+          then(onfulfilled: (v: QueryResult) => unknown) {
+            const bell = call.eqs.some(([c, v]) => c === 'entity_type' && v === 'chat_channel');
+            return Promise.resolve(
+              bell
+                ? {
+                    data: [
+                      inboxRow({ id: 'm1', event_type: 'mention', entity_type: 'chat_channel' }),
+                    ],
+                    error: null,
+                  }
+                : { data: activity, count: 37, error: null },
+            ).then(onfulfilled);
+          },
+        };
+        return self;
+      },
+    } as unknown as Parameters<typeof fetchInboxSince>[0];
+    const res = await fetchInboxSince(client, { workspaceId: 'w1', userId: 'u1', sinceIso: 'x' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.activityCount).toBe(37);
+    expect(res.data.rows).toHaveLength(11);
+    // The Activity read drops bell rows in the query itself, before its limit.
+    const act = calls.find((c) => c.nots.length > 0);
+    expect(act?.ors.length).toBeGreaterThan(0);
+    expect(act?.opts).toEqual({ count: 'exact' });
   });
 
   it('fails closed on a query error', async () => {
@@ -215,6 +282,7 @@ describe('enrichNewRows', () => {
       toStage: null,
       reviewWithdrawn: false,
       reviewPrevious: null,
+      verb: 'commented',
     });
   });
 
@@ -231,8 +299,8 @@ describe('enrichNewRows', () => {
     ]);
     expect(res.lead?.reviewWithdrawn).toBe(true);
     expect(res.lead?.reviewPrevious).toBe('approved');
-    // The live reader resolves no actor for plan rows: the name-free wording.
-    expect(toastFromEnriched(res)?.title).toBe('Slot approval withdrawn');
+    // The actor has no readable profile: a former member, never a raw id.
+    expect(toastFromEnriched(res)?.title).toBe('Former member withdrew slot approval');
   });
 
   it('carries a stage_change lead toStage so the toast names the outcome', async () => {
@@ -279,6 +347,13 @@ describe('enrichNewRows', () => {
         if (table === 'comments')
           return builder(okData([{ id: 'c1', author_user_id: 'u-alice', body: mentionBody }]));
         if (table === 'posts') return builder(okData([{ id: 'p1', title: 'Q3 Launch' }]));
+        if (table === 'workspace_members')
+          return builder(
+            okData([
+              { user_id: 'u-alice', role: 'agency' },
+              { user_id: MANISHA, role: 'client' },
+            ]),
+          );
         return builder(okData([]));
       },
     } as unknown as Parameters<typeof enrichNewRows>[0];
@@ -286,10 +361,11 @@ describe('enrichNewRows', () => {
     expect(users).toHaveLength(1);
     expect(users[0]?.ids).toEqual(['u-alice', MANISHA, RAHUL]);
     expect(res.lead?.actorName).toBe('Alice');
+    // Rahul's profile reads but he is no longer a member: "Former member".
     expect(res.lead?.mentionNames).toEqual(
       new Map([
-        [MANISHA, 'Manisha'],
-        [RAHUL, 'Rahul'],
+        [MANISHA, '@Manisha'],
+        [RAHUL, 'Former member'],
       ]),
     );
   });
@@ -338,6 +414,61 @@ describe('enrichNewRows', () => {
   it('returns a null lead for an empty batch', async () => {
     const res = await enrichNewRows(fakeClient({}), []);
     expect(res).toEqual({ count: 0, lead: null });
+  });
+
+  it('a removed member reads "Former member" in the toast, never their real name', async () => {
+    const client = fakeClient({
+      comments: okData([{ id: 'c1', author_user_id: 'u-gone', body: 'hi' }]),
+      posts: okData([{ id: 'p1', title: 'Q3 Launch' }]),
+      users: okData([{ id: 'u-gone', display_name: 'Eve Real', avatar_url: 'https://cdn/e.png' }]),
+      workspace_members: okData([]),
+    });
+    const res = await enrichNewRows(client, newRows);
+    const spec = toastFromEnriched(res);
+    expect(spec?.title).toBe('Former member commented on Q3 Launch');
+    expect(spec?.actorAvatarUrl).toBeNull();
+    expect(JSON.stringify(spec)).not.toContain('Eve');
+  });
+
+  it('an uncached current member resolves by the batched read (no placeholder)', async () => {
+    const client = fakeClient({
+      comments: okData([{ id: 'c1', author_user_id: 'u-new', body: 'hi' }]),
+      posts: okData([{ id: 'p1', title: 'Q3 Launch' }]),
+      users: okData([{ id: 'u-new', display_name: 'Nia Roy', avatar_url: null }]),
+    });
+    expect(toastFromEnriched(await enrichNewRows(client, newRows))?.title).toBe(
+      'Nia Roy commented on Q3 Launch',
+    );
+  });
+
+  it('counts exactly from total and groups every row by its own actor', async () => {
+    const rows: InboxRow[] = [
+      row({
+        id: 'r1',
+        event_type: 'stage_change',
+        actor_user_id: 'u-a',
+        payload: { to: 'approved' },
+        created_at: '2026-06-14T02:00:00.000Z',
+      }),
+      row({
+        id: 'r2',
+        event_type: 'stage_change',
+        actor_user_id: 'u-b',
+        payload: { to: 'approved' },
+        created_at: '2026-06-14T01:00:00.000Z',
+      }),
+    ];
+    const client = fakeClient({
+      posts: okData([{ id: 'p1', title: 'Q3 Launch' }]),
+      users: okData([
+        { id: 'u-a', display_name: 'Asha Rao', avatar_url: 'https://cdn/a.png' },
+        { id: 'u-b', display_name: 'Bina', avatar_url: null },
+      ]),
+    });
+    const res = await enrichNewRows(client, rows, undefined, 2);
+    const spec = toastFromEnriched(res);
+    expect(spec?.title).toBe('Asha Rao and 1 other approved on Q3 Launch');
+    expect(spec?.actorAvatarUrl).toBe('https://cdn/a.png');
   });
 });
 

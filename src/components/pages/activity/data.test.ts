@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Database } from '@srtdio/schemas';
 import {
   activityLine,
@@ -27,7 +27,7 @@ import {
   WELCOME_BODY,
   type ActivityItem,
 } from '@/components/pages/activity/data';
-import { EX_MEMBER_LABEL } from '@/components/comments/commentProfiles';
+import { FORMER_MEMBER, resetMentionNames } from '@/lib/chat/mentions';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -335,8 +335,8 @@ describe('resolveBodyMentions', () => {
     expect(resolveBodyMentions(`hey @[${id1}] welcome`, nameOf)).toBe('hey @Alice welcome');
   });
 
-  it('renders @(ex-member) when nameOf returns null', () => {
-    expect(resolveBodyMentions(`@[${id2}] ping`, () => null)).toBe(`@${EX_MEMBER_LABEL} ping`);
+  it('renders Former member when nameOf returns null', () => {
+    expect(resolveBodyMentions(`@[${id2}] ping`, () => null)).toBe(`${FORMER_MEMBER} ping`);
   });
 
   it('resolves multiple tokens and preserves surrounding text verbatim', () => {
@@ -612,14 +612,155 @@ describe('fetchActivityEntries enrichment', () => {
     return self;
   }
 
+  // Every readable profile is a current member unless the test says otherwise.
   function fakeClient(tables: Record<string, QueryResult>): FakeClient {
+    const members: QueryResult = tables.workspace_members ?? {
+      data: (tables.users?.data ?? []).map((u) => ({ user_id: u.id, role: 'agency' })),
+      error: null,
+    };
     const client = {
       from(table: string): FakeBuilder {
+        if (table === 'workspace_members') return builder(members);
         return builder(tables[table] ?? { data: [], error: null });
       },
     };
     return client as unknown as FakeClient;
   }
+
+  beforeEach(() => resetMentionNames());
+
+  it('reads the actor from actor_user_id for resolved, checkpoint, ready, asset and brief rows', async () => {
+    const types: Array<[string, string | null, string | null]> = [
+      ['comment_resolved', 'post', 'p1'],
+      ['checkpoint_asked', 'post', 'p1'],
+      ['checkpoint_reopened', 'post', 'p1'],
+      ['post_ready', 'post', 'p1'],
+      ['asset_uploaded', null, null],
+      ['brief_created', 'brief', 'b1'],
+      ['brief_closed', 'brief', 'b1'],
+    ];
+    const client = fakeClient({
+      inbox_entries: ok(
+        types.map(([event_type, entity_type, entity_id], i) =>
+          inboxRow({
+            id: `e${i}`,
+            event_type,
+            entity_type,
+            entity_id,
+            actor_user_id: 'u-closer',
+            // The brief writer's payload names the creator: never the closer.
+            payload: { created_by: 'u-creator', comment_id: 'c1' },
+          }),
+        ),
+      ),
+      users: ok([
+        { id: 'u-closer', display_name: 'Dev Closer', avatar_url: 'https://cdn/d.png' },
+        { id: 'u-creator', display_name: 'Cy Creator', avatar_url: null },
+      ]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    for (const entry of res.data) {
+      expect(entry.actorName).toBe('Dev Closer');
+      expect(entry.actorAvatarUrl).toBe('https://cdn/d.png');
+    }
+    expect(cardBodyLine(res.data[1] ?? item({}))).toBe('Question asked');
+    expect(cardBodyLine(res.data[2] ?? item({}))).toBe('Point reopened');
+  });
+
+  it('an old brief_created row without actor_user_id falls back to payload.created_by; brief_closed never does', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'c',
+          event_type: 'brief_created',
+          entity_type: 'brief',
+          payload: { created_by: 'u-cy' },
+        }),
+        inboxRow({
+          id: 'x',
+          event_type: 'brief_closed',
+          entity_type: 'brief',
+          payload: { created_by: 'u-cy' },
+        }),
+      ]),
+      users: ok([{ id: 'u-cy', display_name: 'Cy', avatar_url: null }]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    if (!res.ok) throw new Error('load failed');
+    expect(res.data[0]?.actorName).toBe('Cy');
+    expect(res.data[1]?.actorName).toBeNull();
+  });
+
+  it('a removed member reads "Former member" (actor, avatar and mention), never their real name', async () => {
+    const GONE = '33333333-3333-4333-8333-333333333333';
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({ id: 'e', event_type: 'comment', payload: { comment_id: 'c1' } }),
+      ]),
+      comments: ok([{ id: 'c1', author_user_id: GONE, body: `cc @[${GONE}]` }]),
+      users: ok([{ id: GONE, display_name: 'Eve Real', avatar_url: 'https://cdn/e.png' }]),
+      workspace_members: ok([]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    if (!res.ok) throw new Error('load failed');
+    const entry = res.data[0] ?? item({});
+    expect(entry.actorName).toBe(FORMER_MEMBER);
+    expect(entry.actorAvatarUrl).toBeNull();
+    expect(entry.body).toBe(`cc ${FORMER_MEMBER}`);
+    expect(JSON.stringify(entry)).not.toContain('Eve');
+  });
+
+  it('a deleted user (no readable profile) reads "Former member"; an uncached member resolves', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'a',
+          event_type: 'stage_change',
+          actor_user_id: 'u-deleted',
+          payload: { to: 'parked' },
+        }),
+        inboxRow({
+          id: 'b',
+          event_type: 'stage_change',
+          actor_user_id: 'u-new',
+          payload: { to: 'parked' },
+        }),
+      ]),
+      users: ok([{ id: 'u-new', display_name: 'Nia Roy', avatar_url: null }]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    if (!res.ok) throw new Error('load failed');
+    expect(res.data[0]?.actorName).toBe(FORMER_MEMBER);
+    expect(res.data[1]?.actorName).toBe('Nia Roy');
+  });
+
+  it('an on-behalf approval names both people: "{actor} approved for {client}"', async () => {
+    const client = fakeClient({
+      inbox_entries: ok([
+        inboxRow({
+          id: 'e',
+          event_type: 'stage_change',
+          actor_user_id: 'u-chitra',
+          payload: {
+            from: 'review',
+            to: 'approved',
+            actor_role: 'agency',
+            on_behalf_of: 'u-kiran',
+          },
+        }),
+      ]),
+      posts: ok([{ id: 'p1', title: 'Q3 Launch', number: 12 }]),
+      users: ok([
+        { id: 'u-chitra', display_name: 'Chitra Rao', avatar_url: null },
+        { id: 'u-kiran', display_name: 'Kiran Shah', avatar_url: null },
+      ]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    if (!res.ok) throw new Error('load failed');
+    expect(activityLine(res.data[0] ?? item({}))).toBe('Chitra Rao approved for Kiran Shah');
+  });
 
   const ok = (data: Record<string, unknown>[]): QueryResult => ({ data, error: null });
   const err = (message: string): QueryResult => ({ data: null, error: { message } });
@@ -648,7 +789,10 @@ describe('fetchActivityEntries enrichment', () => {
         { id: 'u-bob', display_name: 'Bob', avatar_url: null },
         { id: ANA, display_name: 'Ana', avatar_url: null },
       ]),
-      workspace_members: ok([{ user_id: ANA, role: 'client' }]),
+      workspace_members: ok([
+        { user_id: ANA, role: 'client' },
+        { user_id: 'u-bob', role: 'agency' },
+      ]),
     });
     const res = await fetchActivityEntries(client, 'w1');
     expect(res.ok).toBe(true);
@@ -686,7 +830,10 @@ describe('fetchActivityEntries enrichment', () => {
         { id: EX, display_name: 'Eve', avatar_url: null },
       ]),
       // ...but only Ana has an active, non-removed membership.
-      workspace_members: ok([{ user_id: ANA, role: 'client' }]),
+      workspace_members: ok([
+        { user_id: ANA, role: 'client' },
+        { user_id: 'u-bob', role: 'agency' },
+      ]),
     });
     const res = await fetchActivityEntries(client, 'w1');
     expect(res.ok).toBe(true);
@@ -813,7 +960,7 @@ describe('fetchActivityEntries enrichment', () => {
       const row = res.data[0]!;
       expect(row.actorName).toBe('Chitra');
       expect(row.actorAvatarUrl).toBe('https://a/c.png');
-      expect(activityLine(row, 'key')).toBe('Chitra approved KEY-12 on behalf of the approvers');
+      expect(activityLine(row)).toBe('Chitra approved Q3 Launch on behalf of the approvers');
     }
   });
 
@@ -838,7 +985,7 @@ describe('fetchActivityEntries enrichment', () => {
       const row = res.data[0]!;
       expect(row.number).toBe(9);
       expect(row.title).toBe('Old teaser');
-      expect(activityLine(row, 'key')).toBe('Chitra deleted KEY-9 Old teaser');
+      expect(activityLine(row)).toBe('Chitra deleted Old teaser');
       expect(entityHref(row, 'key')).toBeNull();
     }
   });
@@ -862,7 +1009,7 @@ describe('fetchActivityEntries enrichment', () => {
     expect(res.ok).toBe(true);
     if (res.ok) {
       const row = res.data[0]!;
-      expect(activityLine(row, 'key')).toBe('Asha deleted 3 assets');
+      expect(activityLine(row)).toBe('Asha deleted 3 assets');
       expect(entityHref(row, 'key')).toBe('/assets');
     }
   });
@@ -1213,56 +1360,57 @@ describe('chat mention rows', () => {
 
 describe('actor rows: who did what (approve, reject, park, review, deletes)', () => {
   const stage = (to: string, over: Partial<ActivityItem> = {}): ActivityItem =>
-    item({ eventType: 'stage_change', toStage: to, number: 12, actorName: 'Chitra', ...over });
+    item({
+      eventType: 'stage_change',
+      toStage: to,
+      number: 12,
+      title: 'Q3 Launch',
+      actorName: 'Chitra',
+      ...over,
+    });
 
-  it('stage_change lines name the actor and KEY-N', () => {
-    expect(activityLine(stage('approved', { actorRole: 'client' }), 'gbl')).toBe(
-      'Chitra approved GBL-12',
+  it('stage_change lines name the actor and the post title, never KEY-N', () => {
+    expect(activityLine(stage('approved', { actorRole: 'client' }))).toBe(
+      'Chitra approved Q3 Launch',
     );
-    expect(activityLine(stage('rejected', { actorRole: 'client' }), 'gbl')).toBe(
-      'Chitra rejected GBL-12',
+    expect(activityLine(stage('rejected', { actorRole: 'client' }))).toBe(
+      'Chitra rejected Q3 Launch',
     );
-    expect(activityLine(stage('parked', { actorRole: 'client' }), 'gbl')).toBe(
-      'Chitra parked GBL-12',
-    );
-    expect(activityLine(stage('review', { actorRole: 'client' }), 'gbl')).toBe(
-      'Chitra sent GBL-12 for review',
+    expect(activityLine(stage('parked', { actorRole: 'client' }))).toBe('Chitra parked Q3 Launch');
+    expect(activityLine(stage('review', { actorRole: 'client' }))).toBe(
+      'Chitra sent Q3 Launch for review',
     );
   });
 
   it('send for review is plain even for an agency-side actor', () => {
-    expect(activityLine(stage('review', { actorRole: 'agency' }), 'gbl')).toBe(
-      'Chitra sent GBL-12 for review',
+    expect(activityLine(stage('review', { actorRole: 'agency' }))).toBe(
+      'Chitra sent Q3 Launch for review',
     );
   });
 
   it('an agency-side approve, reject or park adds "on behalf of the approvers"; never a workspace name', () => {
-    expect(activityLine(stage('parked', { actorRole: 'agency' }), 'gbl')).toBe(
-      'Chitra parked GBL-12 on behalf of the approvers',
+    expect(activityLine(stage('parked', { actorRole: 'agency' }))).toBe(
+      'Chitra parked Q3 Launch on behalf of the approvers',
     );
     for (const role of ['agency', 'admin', 'owner']) {
-      const line = activityLine(stage('approved', { actorRole: role }), 'gbl');
-      expect(line).toBe('Chitra approved GBL-12 on behalf of the approvers');
+      const line = activityLine(stage('approved', { actorRole: role }));
+      expect(line).toBe('Chitra approved Q3 Launch on behalf of the approvers');
     }
-    expect(activityLine(stage('rejected', { actorRole: 'agency' }), 'gbl')).toBe(
-      'Chitra rejected GBL-12 on behalf of the approvers',
+    expect(activityLine(stage('rejected', { actorRole: 'agency' }))).toBe(
+      'Chitra rejected Q3 Launch on behalf of the approvers',
     );
   });
 
   it('an old row with no actor_role: name only, no suffix', () => {
-    expect(activityLine(stage('approved', { actorRole: null }), 'gbl')).toBe(
-      'Chitra approved GBL-12',
-    );
-    expect(activityLine(stage('approved'), 'gbl')).toBe('Chitra approved GBL-12');
+    expect(activityLine(stage('approved', { actorRole: null }))).toBe('Chitra approved Q3 Launch');
+    expect(activityLine(stage('approved'))).toBe('Chitra approved Q3 Launch');
   });
 
   it('a missing actor reads "Someone"', () => {
-    expect(activityLine(stage('approved', { actorName: null }), 'gbl')).toBe(
-      'Someone approved GBL-12',
-    );
+    expect(activityLine(stage('approved', { actorName: null }))).toBe('Someone approved Q3 Launch');
   });
 
-  it('post_deleted: "<Name> deleted KEY-N <title>", plain even for agency; not tappable', () => {
+  it('post_deleted: "<Name> deleted <title>" (no KEY-N), plain even for agency; not tappable', () => {
     const del = item({
       eventType: 'post_deleted',
       number: 7,
@@ -1270,8 +1418,8 @@ describe('actor rows: who did what (approve, reject, park, review, deletes)', ()
       actorName: 'Chitra',
       actorRole: 'agency',
     });
-    expect(activityLine(del, 'gbl')).toBe('Chitra deleted GBL-7 Diwali teaser');
-    expect(cardBodyLine(del, 'gbl')).toBe('Chitra deleted GBL-7 Diwali teaser');
+    expect(activityLine(del)).toBe('Chitra deleted Diwali teaser');
+    expect(cardBodyLine(del)).toBe('Chitra deleted Diwali teaser');
     expect(entityHref(del, 'gbl')).toBeNull();
   });
 
@@ -1321,6 +1469,7 @@ describe('actor rows: who did what (approve, reject, park, review, deletes)', ()
 });
 
 describe('plan comments and approvals', () => {
+  beforeEach(() => resetMentionNames());
   type QueryResult = { data: Record<string, unknown>[] | null; error: { message: string } | null };
   type FakeClient = Parameters<typeof fetchActivityEntries>[0];
   const PLAN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -1336,7 +1485,12 @@ describe('plan comments and approvals', () => {
     const ins: { table: string; col: string; vals: unknown[] }[] = [];
     const client = {
       from(table: string) {
-        const result = tables[table] ?? { data: [], error: null };
+        const members: QueryResult = {
+          data: (tables.users?.data ?? []).map((u) => ({ user_id: u.id, role: 'agency' })),
+          error: null,
+        };
+        const result =
+          tables[table] ?? (table === 'workspace_members' ? members : { data: [], error: null });
         const self = {
           select: () => self,
           eq: () => self,

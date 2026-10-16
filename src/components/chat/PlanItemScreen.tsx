@@ -106,6 +106,7 @@ import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
+import { resolveSearchMentionText } from '@/lib/chat/mentions';
 
 // Loaded on first post item open: the post view's graph (PCS, the chat SDK)
 // stays out of the chat bundle and out of node imports of this module.
@@ -425,7 +426,8 @@ export function PlanItemScreen(props: {
                 ? 'You'
                 : ((c.author_user_id !== null ? read.data.names[c.author_user_id] : undefined) ??
                   'Member'),
-            body: c.body,
+            // No mention picker here, but a typed token never renders raw.
+            body: resolveSearchMentionText(c.body, workspaceId),
             visibility: c.visibility,
             createdAt: c.created_at,
             pending: false,
@@ -433,7 +435,7 @@ export function PlanItemScreen(props: {
         : [];
     const ids = new Set(recorded.map((c) => c.id));
     return [...recorded, ...pending.filter((p) => !ids.has(p.id))];
-  }, [read, pending, me]);
+  }, [read, pending, me, workspaceId]);
 
   const send = async (event: FormEvent): Promise<void> => {
     event.preventDefault();

@@ -10,6 +10,7 @@ import { useToasts } from '@/components/pages/assets/useToasts';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
+import { mentionHandle } from '@/lib/chat/mentions';
 import {
   ACTIVITY_PAGE_SIZE,
   MENTION_EVENT_TYPE,
@@ -71,7 +72,11 @@ export function ActivityPage() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const { profile } = useCurrentProfile();
-  const selfName = profile?.display_name ?? null;
+  // Mentions render @username, so my own accent matches my handle (name when none).
+  const selfName =
+    profile != null
+      ? mentionHandle({ displayName: profile.display_name, username: profile.username })
+      : null;
 
   const [state, setState] = useState<ActivityState>('all');
   const [scope, setScope] = useState<ActivityScope>('everything');
