@@ -119,7 +119,6 @@ function Menu({
           </button>
         </div>
 
-        <div className="lbl first">Product</div>
         <div className="nav-feat">
           {FEATURES.map((feature) => (
             <a
@@ -135,7 +134,6 @@ function Menu({
           ))}
         </div>
 
-        <div className="lbl">Company</div>
         <div className="nav-main">
           <a href={homeHref(surface, '#why')}>Why Sorted</a>
           <a href={DEMO_HREF}>
@@ -143,7 +141,6 @@ function Menu({
           </a>
         </div>
 
-        <div className="lbl">Stories</div>
         <ul className="stories">
           {STORIES.map((story) => (
             <li key={story.badge} className="story">

@@ -103,8 +103,10 @@ export interface ClipPlayer {
  * The video is revealed only once it has a decoded frame, so an undecoded
  * (blank) video box is never shown.
  */
-export function useClipPlayer(): ClipPlayer {
+export function useClipPlayer(held = false): ClipPlayer {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const heldRef = useRef(held);
+  const visibleRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [preload, setPreload] = useState<ClipPreload>('metadata');
 
@@ -144,7 +146,7 @@ export function useClipPlayer(): ClipPlayer {
       for (const type of GESTURES) window.addEventListener(type, onGesture, { passive: true });
     };
     function play(): void {
-      if (!video) return;
+      if (!video || heldRef.current) return;
       video.play().catch((err: unknown) => {
         if (err instanceof DOMException && err.name === 'NotAllowedError') waitForGesture();
       });
@@ -160,6 +162,7 @@ export function useClipPlayer(): ClipPlayer {
     };
 
     if (!hasIO) {
+      visibleRef.current = true;
       stack.setVisible(true, true);
       play();
       return cleanup;
@@ -168,6 +171,7 @@ export function useClipPlayer(): ClipPlayer {
       (entries) => {
         for (const entry of entries) {
           visible = entry.isIntersecting && entry.intersectionRatio >= VISIBLE_RATIO;
+          visibleRef.current = visible;
           stack.setVisible(visible, entry.isIntersecting);
           if (visible) play();
           else video.pause();
@@ -181,6 +185,15 @@ export function useClipPlayer(): ClipPlayer {
       cleanup();
     };
   }, []);
+
+  // Held clips pause; a released clip resumes if it is on screen.
+  useEffect(() => {
+    heldRef.current = held;
+    const video = videoRef.current;
+    if (!video) return;
+    if (held) video.pause();
+    else if (visibleRef.current) video.play().catch(() => undefined);
+  }, [held]);
 
   return { videoRef, ready, preload };
 }
