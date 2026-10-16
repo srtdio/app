@@ -192,7 +192,7 @@ function FeatureRail() {
 }
 
 export default function HomePage() {
-  // Arriving on "/#feature-<key>" (a sidebar tile on /pricing or /demo): land
+  // Arriving on "/#feature-<key>" (a sidebar tile on /demo): land
   // on that card once it is laid out, and again once the fonts settle.
   useEffect(() => {
     const key = featureFromHash(window.location.hash);

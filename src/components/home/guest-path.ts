@@ -34,9 +34,9 @@ export function isGuestHome(input: GuestPathInput): boolean {
 }
 
 /** Pages the home bundle serves to everyone, signed in or not (no redirect). */
-const HOME_BUNDLE_PATHS: readonly string[] = ['/pricing', '/demo'];
+const HOME_BUNDLE_PATHS: readonly string[] = ['/demo'];
 
-/** True for /pricing and /demo: the home bundle renders them for guests and members. */
+/** True for /demo: the home bundle renders it for guests and members. */
 export function isHomeBundlePath(pathname: string): boolean {
   return HOME_BUNDLE_PATHS.includes(pathname);
 }

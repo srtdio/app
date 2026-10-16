@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
-import { DEMO_HREF, PRICING_HINT, PRICING_HREF } from './config';
+import { DEMO_HREF } from './config';
 import { FEATURES, featureId, showFeature, type FeatureKey } from './features';
 import { Wordmark } from './Wordmark';
 
-// The header, sidebar and footer shared by /, /pricing and /demo. There is no
+// The header, sidebar and footer shared by / and /demo. There is no
 // router on the home bundle, so every link is a plain anchor: on / the sidebar
 // tiles scroll in place, elsewhere they load "/#feature-<key>".
 
-export type HomeSurface = 'home' | 'pricing' | 'demo';
-
-export const NOTE = '15 days free. No card. Clients join at no cost.';
+export type HomeSurface = 'home' | 'demo';
 
 interface Story {
   badge: string;
@@ -45,7 +43,7 @@ export function Tick() {
   );
 }
 
-/** /pricing and /demo: back to "/" (the app, for a signed-in visitor). */
+/** /demo: back to "/" (the app, for a signed-in visitor). */
 export function BackHome() {
   return (
     <a className="back" href="/">
@@ -140,9 +138,6 @@ function Menu({
         <div className="lbl">Company</div>
         <div className="nav-main">
           <a href={homeHref(surface, '#why')}>Why Sorted</a>
-          <a href={PRICING_HREF}>
-            Pricing <span>{PRICING_HINT}</span>
-          </a>
           <a href={DEMO_HREF}>
             Book a demo <span>30 min</span>
           </a>
