@@ -23,6 +23,8 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'chat_message_search',
   // Read-only STABLE invoker search (20261016190000): writes nothing, so nothing to log.
   'workspace_search',
+  // Read-only STABLE invoker search (20261016204500): writes nothing, so nothing to log.
+  'workspace_search_grouped',
   // Read-only STABLE invoker list (20261004050000): writes nothing, so nothing to log.
   'chat_message_starred_list',
   // Read-only STABLE username check during onboarding (20261014140000): writes nothing.
