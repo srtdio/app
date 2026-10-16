@@ -7,6 +7,9 @@
 export const SITE_URL = 'https://srtd.io';
 export const SITE_NAME = 'Sorted';
 
+/** "/" <title>, og:title and twitter:title. */
+export const HOME_TITLE = 'Sorted | Free approvals and chat for social media teams';
+
 /** "/" and /demo description, og:description and twitter:description; also the llms.txt summary. */
 export const HOME_DESCRIPTION =
   'Free. One place for social media teams to chat, plan posts, share files and get approvals on record.';
@@ -44,7 +47,7 @@ export interface SeoRoute {
 export const SEO_ROUTES: readonly SeoRoute[] = [
   {
     path: '/',
-    title: 'Sorted | Chat, plan posts, share files and get approvals',
+    title: HOME_TITLE,
     description: HOME_DESCRIPTION,
     indexable: true,
     bundle: 'home',
@@ -141,6 +144,7 @@ export function routeHeadTags(route: SeoRoute): string {
     meta('property', 'og:image:height', String(OG_IMAGE.height)),
     meta('property', 'og:image:alt', OG_IMAGE.alt),
     meta('name', 'twitter:card', 'summary_large_image'),
+    meta('name', 'twitter:title', route.title),
     meta('name', 'twitter:description', route.description),
   ];
   if (route.path === '/') {
