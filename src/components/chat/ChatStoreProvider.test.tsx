@@ -490,7 +490,7 @@ describe('chat list mentions', () => {
     expect(readNames).toHaveBeenCalledWith([ANA, GONE], expect.any(AbortSignal));
     expect(result.ok && result.data.map((p) => p.body)).toEqual([
       'hi @Ana',
-      'and @Unknown member @Ana',
+      'and @Former member @Ana',
     ]);
     // Known names need no second read.
     await resolvePreviewMentions({ ok: true, data: [preview(`@[${ANA}]`)] }, readNames, 'w1', 'x');
@@ -501,7 +501,7 @@ describe('chat list mentions', () => {
     resetMentionNames();
     rememberMentionNames('w1', [{ userId: ANA, displayName: 'Ana' }]);
     expect(previewMentionText(`ok @[${ANA}]`, 'w1')).toBe('ok @Ana');
-    expect(draftLine(`draft @[${ANA}] @[${GONE}]`, 'w1')).toBe('draft @Ana @Unknown member');
+    expect(draftLine(`draft @[${ANA}] @[${GONE}]`, 'w1')).toBe('draft @Ana @Former member');
     resetMentionNames();
   });
 });

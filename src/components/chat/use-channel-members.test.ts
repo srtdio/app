@@ -101,7 +101,7 @@ describe('H1 member-list reads time out and settle as failed', () => {
         mentionGone(load, ME, 'w'),
       );
       expect(shown.held).toBe(false);
-      expect(shown.text).toBe('hi @Unknown member ');
+      expect(shown.text).toBe('hi @Former member ');
       expect(mentionIds(serializeMentions(shown.text, shown.picks))).toEqual([ANA]);
     } finally {
       vi.useRealTimers();

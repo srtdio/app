@@ -167,7 +167,7 @@ describe('searchResultsView', () => {
       ]),
     );
     expect(html).not.toContain('@[');
-    expect(html).toContain('@Unknown member');
+    expect(html).toContain('@Former member');
   });
 });
 

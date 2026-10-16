@@ -118,9 +118,9 @@ describe('ActivityCard', () => {
     // A single bordered, rounded card shell, laid out as a flex row with a rail.
     expect(html).toContain('rounded-xl');
     expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
-    // The header carries the title; the stage line names the post by title, never KEY-N.
-    expect(count(html, 'Q3 Launch')).toBe(2);
-    expect(html).toContain('Someone sent Q3 Launch for review');
+    // The title appears once, in the header; the stage line never repeats it or a KEY-N.
+    expect(count(html, 'Q3 Launch')).toBe(1);
+    expect(html).toContain('Someone sent for review');
     expect(html).not.toMatch(/GBL-\d/);
   });
 
@@ -391,7 +391,7 @@ describe('ActivityCard actor rows', () => {
         actorRole: 'agency',
       }),
     ]);
-    expect(html).toContain('Chitra approved Diwali teaser on behalf of the approvers');
+    expect(html).toContain('Chitra approved on behalf of the approvers');
     expect(html).not.toContain('Moved to');
     expect(html).toContain('role="button"');
   });
@@ -408,7 +408,8 @@ describe('ActivityCard actor rows', () => {
           actorRole,
         }),
       ]);
-      expect(html).toContain('Asha rejected Promo');
+      expect(html).toContain('Asha rejected<');
+      expect(count(html, 'Promo')).toBe(1);
       expect(html).not.toContain('on behalf of the approvers');
     }
   });
@@ -608,6 +609,27 @@ describe('ActivityCard names', () => {
       expect(html).toMatch(/data-activity-entry-author=""[^>]*><div[^>]*>B<\/div>/);
       expect(html).toMatch(/data-activity-entry-author[\s\S]*Bina[\s\S]*Thread resolved/);
       expect(html).toMatch(/data-activity-entry-author[\s\S]*Former member[\s\S]*Point reopened/);
+    } finally {
+      hooks.forceExpand = false;
+    }
+  });
+
+  it('an expanded actor row shows the name once, in its author line', () => {
+    hooks.forceExpand = true;
+    try {
+      const html = renderCard([
+        item({ id: 'a', title: 'Q3', eventType: 'comment', createdAt: '2026-06-14T00:50:00.000Z' }),
+        item({
+          id: 'b',
+          title: 'Q3',
+          eventType: 'stage_change',
+          toStage: 'approved',
+          actorName: 'Bina Shah',
+        }),
+      ]);
+      expect(count(html, 'Bina Shah')).toBe(1);
+      expect(html).toContain('>approved<');
+      expect(count(html, 'Q3')).toBe(1);
     } finally {
       hooks.forceExpand = false;
     }

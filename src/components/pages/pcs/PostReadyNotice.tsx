@@ -11,12 +11,9 @@ import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { relativeLong } from '@/lib/relative-time';
 import { supabase } from '@/lib/supabase';
+import { personName, resolvePeople } from '@/lib/people-names';
 import { useNewTrace } from '@/lib/trace-context';
-import {
-  fetchCommentProfiles,
-  resolveName,
-  type CommentProfile,
-} from '@/components/comments/commentProfiles';
+import { resolveName, type CommentProfile } from '@/components/comments/commentProfiles';
 import { DOMAIN_ERROR_CODES } from '@srtdio/rpc';
 import type { Client, DomainErrorCode, Result } from '@srtdio/rpc';
 import type { Stage } from '@srtdio/posts';
@@ -166,7 +163,14 @@ export function PostReadyNotice({
     const notifs = data ?? [];
     const needed = collectProfileIds(notifs);
     if (needed.length > 0) {
-      const fetched = await fetchCommentProfiles(supabase, needed);
+      // The shared name read (users + workspace_members): a sender who is no
+      // longer a current member reads "Former member", never their real name.
+      await resolvePeople(supabase, workspaceId, needed);
+      const fetched = new Map<string, CommentProfile>();
+      for (const id of needed) {
+        const name = personName(workspaceId, id);
+        if (name !== undefined) fetched.set(id, { displayName: name, avatarUrl: null });
+      }
       if (fetched.size > 0) setProfiles((prev) => new Map([...prev, ...fetched]));
     }
     setNotifications(notifs);

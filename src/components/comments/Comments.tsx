@@ -46,7 +46,6 @@ import {
   type CommentProfile,
 } from '@/components/comments/commentProfiles';
 import {
-  UNKNOWN_MEMBER,
   deserializeMentions,
   knownMentionName,
   serializeMentions,
@@ -55,13 +54,12 @@ import {
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
 
 /**
- * A mention as it reads in a comment: "@username", "Former member" (no "@") for
- * someone who is not a current member, and "@Unknown member" only while the
- * batched read has not answered. Never a raw token.
+ * A mention as it reads in a comment: "@username", or "@Former member" for
+ * someone who is not a current member. Nothing renders for it until the batched
+ * name read answers (null), so no placeholder ever paints. Never a raw token.
  */
 function mentionDisplay(name: string | null): string {
-  if (name === FORMER_MEMBER) return FORMER_MEMBER;
-  return `@${name ?? UNKNOWN_MEMBER}`;
+  return name === null ? '' : `@${name}`;
 }
 import {
   buildResolveArgs,
@@ -252,7 +250,7 @@ const URL_TRAILING = /[.,;:!?)\]}'"]+$/;
 /**
  * Render a comment body, replacing every @[uuid] mention token with an inline,
  * accent-styled "@username" run (the bare uuid is never shown). An id that is not
- * a current member renders "Former member". Surrounding text is returned
+ * a current member renders "@Former member". Surrounding text is returned
  * verbatim so the caller's whitespace-pre-wrap preserves the original layout.
  */
 function pushBodyText(nodes: ReactNode[], text: string, keyBase: string): void {
@@ -580,7 +578,7 @@ export function pointEditedMarker(editedAt: string | null, now: Date): string | 
 }
 
 /** The plain text copied to the clipboard: the stored body with each @[uuid]
- *  token resolved to its "@username" display form (or "Former member"), reusing
+ *  token resolved to its "@username" display form (or "@Former member"), reusing
  *  the profile map already built for rendering. */
 export function commentCopyText(body: string, nameOf: (id: string) => string | null): string {
   return body.replace(MENTION_TOKEN, (_match, id: string) =>

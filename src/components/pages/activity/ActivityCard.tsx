@@ -169,7 +169,7 @@ function actorLine(item: ActivityItem, who: string | null): string {
     case 'checkpoint_reopened':
       return who !== null ? `${who} reopened a point` : 'Point reopened';
     case 'post_ready':
-      return 'Ready for review';
+      return who !== null ? `${who} sent for review` : 'Ready for review';
     case 'plan_comment':
       return who !== null ? `${who} commented` : 'New comment';
     case 'plan_review':
@@ -416,7 +416,8 @@ export function ActivityCard({
                       entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
                     )}
                   >
-                    {cardBodyLine(entry, brand)}
+                    {/* The author line above already names who: the text never repeats it. */}
+                    {cardBodyLine(entry, brand, { name: entry.actorName === null })}
                   </p>
                   <p className="mt-0.5 text-xs text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
                 </div>

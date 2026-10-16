@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   eventLabel,
+  eventVerb,
   stageChangeLabel,
   pickNewest,
   splitNewRows,
@@ -476,5 +477,59 @@ describe('grouped toast wording', () => {
       lead({ actorName: 'Former member', actorAvatarUrl: null }),
     );
     expect(gone?.title).toBe('Former member commented on Q3 Launch');
+  });
+});
+
+describe('send for review wording', () => {
+  const up = (actorId: string): ToastUpdate => ({
+    actorId,
+    entityKey: 'post:p1',
+    action: 'stage_change:review',
+  });
+  const lead = (eventType: string): EnrichedNew['lead'] => ({
+    eventType,
+    actorName: 'Asha Rao',
+    actorAvatarUrl: null,
+    body: null,
+    title: 'Q3 Launch',
+    mentionNames: new Map(),
+    verb: eventVerb({ eventType, toStage: 'review' }),
+  });
+
+  it('one update: "{Name} sent {title} for review" (stage change and ready ping)', () => {
+    for (const type of ['stage_change', 'post_ready']) {
+      expect(toastFromEnriched({ count: 1, lead: lead(type), updates: [up('a')] })?.title).toBe(
+        'Asha Rao sent Q3 Launch for review',
+      );
+    }
+  });
+
+  it('grouped: "{Name} and N others sent {title} for review"', () => {
+    const spec = toastFromEnriched({
+      count: 3,
+      lead: lead('stage_change'),
+      updates: [up('a'), up('b'), up('c')],
+    });
+    expect(spec?.title).toBe('Asha Rao and 2 others sent Q3 Launch for review');
+    const one = toastFromEnriched({
+      count: 2,
+      lead: lead('post_ready'),
+      updates: [up('a'), up('b')],
+    });
+    expect(one?.title).toBe('Asha Rao and 1 other sent Q3 Launch for review');
+  });
+
+  it('repeat: "{Name} sent {title} for review N times"', () => {
+    const spec = toastFromEnriched({
+      count: 3,
+      lead: lead('stage_change'),
+      updates: [up('a'), up('a'), up('a')],
+    });
+    expect(spec?.title).toBe('Asha Rao sent Q3 Launch for review 3 times');
+  });
+
+  it('never "sent for review on"', () => {
+    const spec = toastFromEnriched({ count: 1, lead: lead('post_ready'), updates: [up('a')] });
+    expect(spec?.title).not.toContain('for review on');
   });
 });

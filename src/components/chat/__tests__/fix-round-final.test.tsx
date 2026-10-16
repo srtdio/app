@@ -229,7 +229,7 @@ describe('E4: history failure with pending sends', () => {
 });
 
 describe('E6: an edit that adds a mention names it first', () => {
-  it('reads the new name, then the line says "@Ana" (never "@Unknown member")', async () => {
+  it('reads the new name, then the line says "@Ana" (never "@Former member")', async () => {
     resetMentionNames();
     const readNames = vi.fn(async (ids: string[]) => ({
       ok: true as const,

@@ -610,16 +610,15 @@ describe('renderCommentBody (author + mention resolution)', () => {
     expect((span.props as { className: string }).className).toContain('text-accent');
   });
 
-  it('renders a not-yet-read mention as @Unknown member, never a raw token', () => {
+  it('renders nothing for a not-yet-read mention: no placeholder, never a raw token', () => {
     const tree = renderCommentBody(`ping @[${UUID_B}]`, () => null);
-    expect(text(tree)).toContain('@Unknown member');
     expect(text(tree)).not.toContain('@[');
+    expect(text(tree)).not.toMatch(/Unknown member|ex-member/);
   });
 
-  it('renders a former member mention as "Former member" (no @, no real name)', () => {
+  it('renders a former member mention as "@Former member" (no real name)', () => {
     const tree = renderCommentBody(`ping @[${UUID_B}]`, () => 'Former member');
-    expect(text(tree)).toContain('Former member');
-    expect(text(tree)).not.toContain('@Former');
+    expect(text(tree)).toContain('@Former member');
   });
 
   it('resolves an author id to a display name (not the raw uuid)', () => {
@@ -1141,8 +1140,8 @@ describe('comment edit box mentions', () => {
     expect(serializeMentions(shown.text, shown.picks)).toBe(body);
   });
 
-  it('the copy text reads a former member as "Former member"', () => {
-    expect(commentCopyText(`cc @[${UUID_A}]`, () => 'Former member')).toBe('cc Former member');
+  it('the copy text reads a former member as "@Former member"', () => {
+    expect(commentCopyText(`cc @[${UUID_A}]`, () => 'Former member')).toBe('cc @Former member');
     expect(commentCopyText(`cc @[${UUID_A}]`, () => 'ada.k')).toBe('cc @ada.k');
   });
 });

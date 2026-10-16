@@ -365,7 +365,7 @@ describe('enrichNewRows', () => {
     expect(res.lead?.mentionNames).toEqual(
       new Map([
         [MANISHA, '@Manisha'],
-        [RAHUL, 'Former member'],
+        [RAHUL, '@Former member'],
       ]),
     );
   });

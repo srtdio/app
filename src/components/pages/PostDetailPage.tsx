@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FORMER_MEMBER } from '@/lib/people-names';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ApproveConfirm, approveRef, approveTargetDate } from '@/components/ui/ApproveConfirm';
@@ -493,7 +494,7 @@ export function PostDetailPage({
   const canDelete = canDeletePost(role);
 
   // Resolve the post owner to a display name + avatar from the active members,
-  // never a raw uuid: an owner who is no longer a current member reads "(ex-member)".
+  // never a raw uuid: an owner who is no longer a current member reads "Former member".
   const memberById = useMemo(
     () => new Map(memberOptions.map((option) => [option.userId, option])),
     [memberOptions],
@@ -506,7 +507,7 @@ export function PostDetailPage({
       if (ownerUserId === null || ownerUserId === '')
         return { name: legacyName ?? 'Unassigned', avatarUrl: null };
       const option = memberById.get(ownerUserId);
-      if (option === undefined) return { name: legacyName ?? '(ex-member)', avatarUrl: null };
+      if (option === undefined) return { name: legacyName ?? FORMER_MEMBER, avatarUrl: null };
       return { name: option.displayName, avatarUrl: option.avatarUrl };
     },
     [memberById],
@@ -644,11 +645,11 @@ export function PostDetailPage({
 
   // Resolve a version's createdBy to a display name via the same members read PCS
   // already uses; a null author or one who is no longer a current member reads
-  // (ex-member), never a raw uuid.
+  // "Former member", never a raw uuid.
   const resolveAuthorName = useCallback(
     (authorUserId: string | null, legacyName: string | null): string => {
-      if (authorUserId === null || authorUserId === '') return legacyName ?? '(ex-member)';
-      return memberById.get(authorUserId)?.displayName ?? legacyName ?? '(ex-member)';
+      if (authorUserId === null || authorUserId === '') return legacyName ?? FORMER_MEMBER;
+      return memberById.get(authorUserId)?.displayName ?? legacyName ?? FORMER_MEMBER;
     },
     [memberById],
   );

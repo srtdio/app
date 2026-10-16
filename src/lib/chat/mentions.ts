@@ -10,7 +10,7 @@
 // a persisted outbox entry (which keeps the body) resends its mentions.
 //
 // Rendering never shows a raw token: every token resolves to "@Name", or
-// "@Unknown member" when the id is not a known profile. Names come from the
+// "@Former member" when the id is not a known profile. Names come from the
 // batched profile reads that already hydrate the thread and the chat list; this
 // module also keeps a small in-memory name registry (like the drafts map) so a
 // draft's tokens resolve in the chat list's "Draft:" line.
@@ -62,8 +62,14 @@ export type NameOf = (userId: string) => string | undefined;
 /** One run of a body: plain text, or a mention token's user id. */
 export type BodySegment = { kind: 'text'; text: string } | { kind: 'mention'; userId: string };
 
-/** The label an unresolvable mention renders as (after the "@"). */
-export const UNKNOWN_MEMBER = 'Unknown member';
+/** What a person who is not a current member of the workspace reads as. */
+export const FORMER_MEMBER = 'Former member';
+
+/**
+ * The label an unresolvable mention renders as (after the "@"). It is the same
+ * "Former member" label: no surface ever renders "Unknown member".
+ */
+export const UNKNOWN_MEMBER = FORMER_MEMBER;
 
 /**
  * The everyone mention: the body token `@[all]`, and the string p_mentions
@@ -114,7 +120,7 @@ export function splitMentions(body: string): BodySegment[] {
   return segments;
 }
 
-/** "@Name" for a mention, or "@Unknown member" when the id does not resolve. */
+/** "@Name" for a mention, or "@Former member" when the id does not resolve. */
 export function mentionLabel(userId: string, nameOf: NameOf): string {
   if (userId.toLowerCase() === ALL_MENTION) return `@${ALL_MENTION}`;
   const name = nameOf(userId.toLowerCase());
@@ -143,7 +149,7 @@ function pickPattern(name: string): RegExp {
  * The textarea text as the body the server stores: each pick whose "@Name" is
  * still intact becomes `@[uuid]`. Longer names go first so a name that is a
  * prefix of another never splits it. A damaged "@Name" is left as typed.
- * Picks sharing one label (several "@Unknown member" kept after a failed read)
+ * Picks sharing one label (several "@Former member" kept after a failed read)
  * take their occurrences in order; extra occurrences reuse the last pick.
  */
 export function serializeMentions(text: string, picks: readonly MentionPick[]): string {
@@ -169,7 +175,7 @@ export function serializeMentions(text: string, picks: readonly MentionPick[]): 
 /**
  * A stored body back as textarea text plus its picks (the edit box and a
  * restored draft): every token becomes "@Name" and a pick. A token whose id does
- * not resolve reads "@Unknown member"; it drops on save only when `gone` says a
+ * not resolve reads "@Former member"; it drops on save only when `gone` says a
  * successful read confirmed the person left (the default treats every
  * unresolved id so). Otherwise (a failed read) it stays a pick under that label,
  * one per occurrence, so it still serializes back and still sends.
@@ -416,7 +422,7 @@ export function displayCaret(body: string, caret: number, nameOf: NameOf): numbe
 interface MentionRegistry {
   names: Map<string, string>;
   // Ids a successful read found without an active workspace membership: their
-  // mentions read "@Unknown member" (inert) even though their profile resolves.
+  // mentions read "@Former member" (inert) even though their profile resolves.
   former: Set<string>;
   // Ids whose profile read but whose membership read failed: nothing is known
   // yet, so their mentions keep the failed-read behaviour (inert, retried).
@@ -470,7 +476,7 @@ export function rememberMentionNames(
 /**
  * Remember a mention profile read in one workspace: a current member's name
  * is kept; a confirmed non-member is marked former, so their mentions read
- * "@Unknown member". Membership unknown (null: its read failed) marks nobody
+ * "@Former member". Membership unknown (null: its read failed) marks nobody
  * former and drops nothing already known.
  */
 export function rememberMentionProfiles(
@@ -533,9 +539,6 @@ export function mentionNamesIn(workspaceId: string | null): NameOf {
 // each one .in() call) for the ids it does not know yet, then renders through
 // the registry above. A person without a current membership reads "Former
 // member"; a current member reads their @username.
-
-/** What a person who is not a current member of the workspace reads as. */
-export const FORMER_MEMBER = 'Former member';
 
 /** The ids that still need a read in this workspace: no remembered name and not known former. */
 export function unresolvedMentionIds(workspaceId: string | null, ids: Iterable<string>): string[] {
@@ -654,13 +657,29 @@ export function personAvatar(workspaceId: string | null, userId: string): string
 
 /**
  * A mention inside a body outside chat: "@username" for a current member,
- * "Former member" for a person who is not, and "@Unknown member" only while no
- * read has resolved the id. Never a raw token.
+ * "@Former member" for a person who is not; null while no read has resolved the
+ * id (the caller renders nothing for it until the batched read lands). Never a
+ * raw token.
  */
-export function personMentionLabel(workspaceId: string | null, userId: string): string {
+export function personMentionLabel(workspaceId: string | null, userId: string): string | null {
   if (userId.toLowerCase() === ALL_MENTION) return `@${ALL_MENTION}`;
-  if (isFormerMember(workspaceId, userId)) return FORMER_MEMBER;
-  return mentionLabel(userId, mentionNamesIn(workspaceId));
+  if (isFormerMember(workspaceId, userId)) return `@${FORMER_MEMBER}`;
+  const handle = knownMentionName(workspaceId, userId);
+  if (handle !== undefined) return `@${handle}`;
+  // Membership unknown (its read failed): the profile's name, never a placeholder.
+  const person =
+    workspaceId !== null
+      ? registries.get(workspaceId)?.people.get(userId.toLowerCase())
+      : undefined;
+  return person !== undefined ? `@${person.name}` : null;
+}
+
+/** A body with every token as personMentionLabel reads it (an unresolved one renders nothing). */
+export function resolvePersonMentionText(body: string, workspaceId: string | null): string {
+  return body.replace(
+    tokenPattern(),
+    (_match, id: string) => personMentionLabel(workspaceId, id) ?? '',
+  );
 }
 
 /** Forget every remembered name in every workspace (sign-out, user change, tests). */

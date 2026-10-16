@@ -87,7 +87,7 @@ describe('forward rule (item 4)', () => {
   it('a Draft plan into a chat known to have a client is refused before any write', () => {
     expect(forwardBlocked('team', true)).toBe(true);
     expect(forwardBlocked('team', false)).toBe(false);
-    // Unknown members: sent, and the server's refusal says the same.
+    // Former members: sent, and the server's refusal says the same.
     expect(forwardBlocked('team', null)).toBe(false);
     expect(forwardBlocked('client', true)).toBe(false);
     expect(OPEN_FOR_CLIENT_FIRST).toBe('Open the plan for approvers first.');

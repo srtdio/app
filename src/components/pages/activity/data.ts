@@ -13,14 +13,12 @@ import { parseMentions } from '@srtdio/comments';
 import { entityUrlPath } from '@/lib/entityRef';
 import { onBehalfSuffix } from '@/components/pages/pcs/roles';
 import { logger } from '@/lib/logger';
-import { mentionNamesIn, resolveMentionPreview } from '@/lib/chat/mentions';
 import {
-  FORMER_MEMBER,
-  personAvatar,
-  personMentionLabel,
-  personName,
-  resolvePeople,
-} from '@/lib/people-names';
+  mentionNamesIn,
+  resolveMentionPreview,
+  resolvePersonMentionText,
+} from '@/lib/chat/mentions';
+import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
 import { chatMessageHref, withoutBellEntries } from '@/lib/inbox/bell-types';
 import { isPostPlatform } from '@srtdio/posts';
 import { workspaceDisplayName } from '@/lib/workspace-context';
@@ -33,13 +31,13 @@ const MENTION_TOKEN = /@\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 /**
  * Resolve every `@[<uuid>]` mention token in a comment body to a plain `@handle`
  * label, exactly as the comment thread does. An id `nameOf` does not resolve to
- * a current member reads "Former member"; all surrounding text is returned
+ * a current member reads "@Former member"; all surrounding text is returned
  * verbatim. Plain text only: no React nodes, no JSX, no styling.
  */
 export function resolveBodyMentions(body: string, nameOf: (id: string) => string | null): string {
   return body.replace(MENTION_TOKEN, (_match, id: string) => {
     const name = nameOf(id.toLowerCase());
-    return name !== null ? `@${name}` : FORMER_MEMBER;
+    return `@${name ?? FORMER_MEMBER}`;
   });
 }
 
@@ -453,19 +451,30 @@ function postRef(item: ActivityItem): string {
 }
 
 /** The stage verb phrase: "approved <title>", "sent <title> for review". */
-function stagePhrase(toStage: string | null, ref: string): string {
+function stagePhrase(toStage: string | null, ref: string | null): string {
+  const at = ref !== null ? ` ${ref}` : '';
   switch (toStage) {
     case 'approved':
-      return `approved ${ref}`;
+      return `approved${at}`;
     case 'rejected':
-      return `rejected ${ref}`;
+      return `rejected${at}`;
     case 'parked':
-      return `parked ${ref}`;
+      return `parked${at}`;
     case 'review':
-      return `sent ${ref} for review`;
+      return `sent${at} for review`;
     default:
-      return toStage !== null ? `moved ${ref} to ${toStage}` : `moved ${ref}`;
+      return toStage !== null ? `moved${at} to ${toStage}` : `moved${at}`;
   }
+}
+
+/**
+ * What an actor-row line carries: `title` false inside a card, whose header
+ * already shows the post title; `name` false in an expanded row, whose author
+ * line already shows the name.
+ */
+export interface ActorLineParts {
+  title?: boolean;
+  name?: boolean;
 }
 
 /** The client's own decisions: only these carry "on behalf of client" (decision 136). */
@@ -481,29 +490,34 @@ const ON_BEHALF_STAGES: ReadonlySet<string> = new Set(['approved', 'rejected', '
  * review and the deletes are always plain. A missing name reads "Someone". Null
  * for any other event type. Never a KEY-N code.
  */
-export function actorRowLine(item: ActivityItem, brand: string | null = null): string | null {
+export function actorRowLine(
+  item: ActivityItem,
+  brand: string | null = null,
+  parts: ActorLineParts = {},
+): string | null {
   if (!ACTOR_ROW_EVENTS.has(item.eventType)) return null;
-  const who = item.actorName ?? UNKNOWN_ACTOR;
+  const withTitle = parts.title !== false;
+  const lead = parts.name !== false ? `${item.actorName ?? UNKNOWN_ACTOR} ` : '';
   if (item.eventType === 'stage_change') {
     if (item.toStage === 'approved' && item.onBehalfOfName != null) {
-      return `${who} approved for ${item.onBehalfOfName}`;
+      return `${lead}approved for ${item.onBehalfOfName}`;
     }
     const suffix =
       item.toStage !== null && ON_BEHALF_STAGES.has(item.toStage)
         ? onBehalfSuffix(item.actorRole, brand)
         : '';
-    return `${who} ${stagePhrase(item.toStage, postRef(item))}${suffix}`;
+    return `${lead}${stagePhrase(item.toStage, withTitle ? postRef(item) : null)}${suffix}`;
   }
   if (item.eventType === 'post_deleted') {
-    const title = item.title !== null && item.title !== '' ? ` ${item.title}` : '';
-    return `${who} deleted${title}`;
+    const title = withTitle && item.title !== null && item.title !== '' ? ` ${item.title}` : '';
+    return `${lead}deleted${title}`;
   }
   const filenames = item.filenames ?? [];
   const count = item.assetCount ?? filenames.length;
   const first = filenames[0];
   const what =
     count === 1 && first !== undefined ? first : count === 1 ? 'an asset' : `${count} assets`;
-  return `${who} deleted ${what}`;
+  return `${lead}deleted ${what}`;
 }
 
 /**
@@ -553,7 +567,7 @@ export function activityLine(item: ActivityItem, brand: string | null = null): s
         ? `${who} sent ${pointsLabel(item.pointsAdded)} on ${target}`
         : `${pointsLabel(item.pointsAdded)} sent on ${target}`;
     case 'post_ready':
-      return `${target} is ready for review`;
+      return who !== null ? `${who} sent ${target} for review` : `${target} is ready for review`;
     default:
       return target;
   }
@@ -580,9 +594,14 @@ export function cardTitle(item: ActivityItem): string {
  * (approve, reject, park, review, deletes) are the exception: who did it IS the
  * event, so they read the full who-did-what line.
  */
-export function shortLine(item: ActivityItem, brand: string | null = null): string {
+export function shortLine(
+  item: ActivityItem,
+  brand: string | null = null,
+  parts: { name?: boolean } = {},
+): string {
   if (isWelcome(item)) return WELCOME_BODY;
-  const actorRow = actorRowLine(item, brand);
+  // Inside a card the header already carries the post title: never repeat it.
+  const actorRow = actorRowLine(item, brand, { title: false, name: parts.name !== false });
   if (actorRow !== null) return actorRow;
   const planLine = planEventLine(item);
   if (planLine !== null) return planLine;
@@ -628,7 +647,11 @@ function trimBody(text: string): string {
  * an empty/missing body) it falls back to the existing generic short line. Never
  * throws and never renders an empty string for a comment that has text.
  */
-export function cardBodyLine(item: ActivityItem, brand: string | null = null): string {
+export function cardBodyLine(
+  item: ActivityItem,
+  brand: string | null = null,
+  parts: { name?: boolean } = {},
+): string {
   const showsBody =
     item.eventType === 'comment' ||
     item.eventType === 'checkpoints_added' ||
@@ -636,7 +659,7 @@ export function cardBodyLine(item: ActivityItem, brand: string | null = null): s
   if (showsBody && item.body !== null && item.body.trim().length > 0) {
     return trimBody(item.body);
   }
-  return shortLine(item, brand);
+  return shortLine(item, brand, parts);
 }
 
 /**
@@ -1239,8 +1262,7 @@ export async function fetchActivityEntries(
   ]);
   const nameOf = (id: string): string | null => personName(workspaceId, id) ?? null;
   // What a mention inside a body reads as: "@username", or "Former member".
-  const mentionOf = (body: string): string =>
-    body.replace(MENTION_TOKEN, (_match, id: string) => personMentionLabel(workspaceId, id));
+  const mentionOf = (body: string): string => resolvePersonMentionText(body, workspaceId);
 
   // STITCH: fill actorName and the resolved entity title from the joins above.
   items.forEach((item, idx) => {

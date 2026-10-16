@@ -222,7 +222,7 @@ describe('shortLine', () => {
     );
     expect(shortLine(item({ eventType: 'mention', title: 'Q3' }))).toBe('New mention');
     expect(shortLine(item({ eventType: 'stage_change', toStage: 'approved' }))).toBe(
-      'Someone approved a post',
+      'Someone approved',
     );
     expect(shortLine(item({ eventType: 'brief_closed' }))).toBe('Brief closed');
   });
@@ -315,7 +315,7 @@ describe('cardBodyLine', () => {
   it('keeps the generic label for a non-comment event even when a body is set', () => {
     expect(
       cardBodyLine(item({ eventType: 'stage_change', toStage: 'approved', body: 'ignored' })),
-    ).toBe('Someone approved a post');
+    ).toBe('Someone approved');
     expect(cardBodyLine(item({ eventType: 'mention', body: 'still generic' }))).toBe('New mention');
   });
 
@@ -335,8 +335,8 @@ describe('resolveBodyMentions', () => {
     expect(resolveBodyMentions(`hey @[${id1}] welcome`, nameOf)).toBe('hey @Alice welcome');
   });
 
-  it('renders Former member when nameOf returns null', () => {
-    expect(resolveBodyMentions(`@[${id2}] ping`, () => null)).toBe(`${FORMER_MEMBER} ping`);
+  it('renders @Former member when nameOf returns null', () => {
+    expect(resolveBodyMentions(`@[${id2}] ping`, () => null)).toBe(`@${FORMER_MEMBER} ping`);
   });
 
   it('resolves multiple tokens and preserves surrounding text verbatim', () => {
@@ -708,7 +708,7 @@ describe('fetchActivityEntries enrichment', () => {
     const entry = res.data[0] ?? item({});
     expect(entry.actorName).toBe(FORMER_MEMBER);
     expect(entry.actorAvatarUrl).toBeNull();
-    expect(entry.body).toBe(`cc ${FORMER_MEMBER}`);
+    expect(entry.body).toBe(`cc @${FORMER_MEMBER}`);
     expect(JSON.stringify(entry)).not.toContain('Eve');
   });
 
@@ -805,7 +805,7 @@ describe('fetchActivityEntries enrichment', () => {
     expect(entityHref(chat)).toBe('/chat?channel=chan-g&message=msg-1');
   });
 
-  it('B1 a removed member with a readable profile reads "@Unknown member" in Activity; an active one is unchanged', async () => {
+  it('B1 a removed member with a readable profile reads "@Former member" in Activity; an active one is unchanged', async () => {
     const ANA = '11111111-1111-4111-8111-111111111111';
     const EX = '22222222-2222-4222-8222-222222222222';
     const client = fakeClient({
@@ -839,7 +839,7 @@ describe('fetchActivityEntries enrichment', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const chat = res.data[0] ?? item({});
-    expect(chat.body).toBe('hey @Ana and @Unknown member');
+    expect(chat.body).toBe('hey @Ana and @Former member');
     expect(chat.body).not.toContain('Eve');
   });
 
@@ -1334,7 +1334,7 @@ describe('chat mention rows', () => {
     const GONE = '99999999-9999-4999-8999-999999999999';
     const names = new Map([[ANA, 'Ana']]);
     expect(chatMentionPreview(`\n @[${ANA}] and @[${GONE}]\nmore`, (id) => names.get(id))).toBe(
-      '@Ana and @Unknown member',
+      '@Ana and @Former member',
     );
     expect(chatMentionPreview(null, () => undefined)).toBeNull();
   });
@@ -1419,7 +1419,9 @@ describe('actor rows: who did what (approve, reject, park, review, deletes)', ()
       actorRole: 'agency',
     });
     expect(activityLine(del)).toBe('Chitra deleted Diwali teaser');
-    expect(cardBodyLine(del)).toBe('Chitra deleted Diwali teaser');
+    // Inside the card the header carries the title: the line never repeats it.
+    expect(cardBodyLine(del)).toBe('Chitra deleted');
+    expect(cardBodyLine(del, null, { name: false })).toBe('deleted');
     expect(entityHref(del, 'gbl')).toBeNull();
   });
 
@@ -1791,5 +1793,35 @@ describe('the system welcome row', () => {
     const mapped = mapEntry(row({ event_type: 'system', payload: { kind: 'notice' } }));
     expect(mapped.welcome).toBeNull();
     expect(isWelcome(mapped)).toBe(false);
+  });
+});
+
+describe('send for review wording in Activity lines', () => {
+  const base = { entityType: 'post', entityId: 'p1', title: 'Q3 Launch', actorName: 'Chitra' };
+  it('stage change and the ready ping read "{Name} sent {title} for review"', () => {
+    expect(activityLine(item({ ...base, eventType: 'stage_change', toStage: 'review' }))).toBe(
+      'Chitra sent Q3 Launch for review',
+    );
+    expect(activityLine(item({ ...base, eventType: 'post_ready' }))).toBe(
+      'Chitra sent Q3 Launch for review',
+    );
+  });
+  it('inside a card the line keeps the stage change without the title or a KEY-N', () => {
+    const line = cardBodyLine(
+      item({ ...base, eventType: 'stage_change', toStage: 'review', number: 4 }),
+    );
+    expect(line).toBe('Chitra sent for review');
+    expect(line).not.toMatch(/Q3 Launch|[A-Z]+-\d/);
+  });
+  it('an expanded row drops the name (its author line carries it)', () => {
+    const it2 = item({ ...base, eventType: 'stage_change', toStage: 'approved' });
+    expect(cardBodyLine(it2, null, { name: false })).toBe('approved');
+    const behalf = item({
+      ...base,
+      eventType: 'stage_change',
+      toStage: 'approved',
+      onBehalfOfName: 'Kiran',
+    });
+    expect(cardBodyLine(behalf, null, { name: false })).toBe('approved for Kiran');
   });
 });

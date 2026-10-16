@@ -63,7 +63,7 @@ describe('the roster reader has its own 5s; a late roster still wins', () => {
 });
 
 describe('an edit whose new mention cannot be named keeps the line', () => {
-  it('a failed name read returns null (never "@Unknown member" for a member)', async () => {
+  it('a failed name read returns null (never "@Former member" for a member)', async () => {
     resetMentionNames();
     const id = '11111111-1111-4111-8111-111111111111';
     const failed = async (): Promise<Result<MentionProfile[]>> => ({

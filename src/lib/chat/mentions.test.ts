@@ -86,7 +86,7 @@ describe('serialize / deserialize', () => {
     expect(serializeMentions('@Ana Roy', picks)).toBe(`@[${ANA}]`);
   });
 
-  it('an unresolvable token reads "@Unknown member" and is not a pick', () => {
+  it('an unresolvable token reads "@Former member" and is not a pick', () => {
     const back = deserializeMentions(`hi @[${GONE}]`, nameOf);
     expect(back.text).toBe(`hi @${UNKNOWN_MEMBER}`);
     expect(back.picks).toEqual([]);
@@ -96,7 +96,7 @@ describe('serialize / deserialize', () => {
 describe('render helpers', () => {
   it('resolves every token and never leaves a raw one', () => {
     const out = resolveMentionText(`@[${ANA}] and @[${GONE}]`, nameOf);
-    expect(out).toBe('@Ana Roy and @Unknown member');
+    expect(out).toBe('@Ana Roy and @Former member');
     expect(out).not.toContain('@[');
   });
 

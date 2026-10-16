@@ -225,7 +225,10 @@ export async function enrichNewRows(
   if (namesRead) {
     mentionNames = new Map<string, string>();
     // Each mentioned id's full label: "@username", or "Former member".
-    for (const id of mentioned) mentionNames.set(id, personMentionLabel(workspaceId, id));
+    for (const id of mentioned) {
+      const label = personMentionLabel(workspaceId, id);
+      if (label !== null) mentionNames.set(id, label);
+    }
   }
   const titleOf = (item: ReturnType<typeof mapEntry>): string | null =>
     item.entityType === 'post' && item.entityId !== null

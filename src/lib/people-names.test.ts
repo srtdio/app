@@ -6,6 +6,8 @@ import {
   personMentionLabel,
   personName,
   resetMentionNames,
+  mentionIds,
+  resolvePersonMentionText,
 } from '@/lib/chat/mentions';
 import { resolvePeople, type PeopleRead } from '@/lib/people-names';
 import { SIGNOUT_EVENT } from '@/lib/events';
@@ -51,7 +53,7 @@ describe('shared people names', () => {
     await resolvePeople(client, 'w1', [B], read([{ id: B, name: 'Eve Real', member: false }]));
     expect(personName('w1', B)).toBe(FORMER_MEMBER);
     expect(personAvatar('w1', B)).toBeNull();
-    expect(personMentionLabel('w1', B)).toBe(FORMER_MEMBER);
+    expect(personMentionLabel('w1', B)).toBe(`@${FORMER_MEMBER}`);
   });
 
   it('a deleted user (no profile returned) reads "Former member"', async () => {
@@ -101,5 +103,25 @@ describe('shared people names', () => {
     await resolvePeople(client, 'w1', [A], read([{ id: A, name: 'Ada', member: false }]));
     expect(personName('w1', A)).toBe(FORMER_MEMBER);
     off();
+  });
+});
+
+describe('hand-typed tokens (PlanItemScreen)', () => {
+  it('resolve to @username after one batched read; a former member reads "@Former member"', async () => {
+    const spy = vi.fn(
+      read([
+        { id: A, name: 'Ada King', member: true, username: 'ada.k' },
+        { id: B, name: 'Eve Real', member: false },
+      ]),
+    );
+    const body = `hi @[${A}] and @[${B}]`;
+    await resolvePeople(client, 'w1', mentionIds(body), spy);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(resolvePersonMentionText(body, 'w1')).toBe('hi @ada.k and @Former member');
+  });
+
+  it('never renders "Unknown member" or a raw token, even before the read', () => {
+    const out = resolvePersonMentionText(`hi @[${A}]`, 'w1');
+    expect(out).not.toMatch(/Unknown member|@\[/);
   });
 });

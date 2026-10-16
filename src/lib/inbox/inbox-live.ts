@@ -32,7 +32,7 @@ interface EnrichedLead {
   body: string | null;
   title: string | null;
   /**
-   * Full labels ("@username", or "Former member") for the ids mentioned in
+   * Full labels ("@username", or "@Former member") for the ids mentioned in
    * `body`, from the same batched read as the actor. Null when that read failed or timed out: the toast then shows no
    * line 2 at all, never a raw token.
    */
@@ -95,6 +95,8 @@ export function eventVerb(item: VerbSource): string | null {
       return 'asked a question';
     case 'checkpoint_reopened':
       return 'reopened a point';
+    case 'post_ready':
+      return REVIEW_VERB;
     case 'stage_change':
       switch (item.toStage) {
         case 'approved':
@@ -104,7 +106,7 @@ export function eventVerb(item: VerbSource): string | null {
         case 'parked':
           return 'parked';
         case 'review':
-          return 'sent for review';
+          return REVIEW_VERB;
         default:
           return 'moved';
       }
@@ -146,6 +148,17 @@ export function actionKey(item: VerbSource): string {
   return item.eventType;
 }
 
+/** The send-for-review verb: it wraps the title ("sent {title} for review"). */
+export const REVIEW_VERB = 'sent for review';
+
+/** "{verb} on {title}", or "sent {title} for review"; `times` adds the repeat count. */
+function verbOnTitle(verb: string, title: string, times?: number): string {
+  const repeat = times !== undefined ? ` ${times} times` : '';
+  return verb === REVIEW_VERB
+    ? `sent ${title} for review${repeat}`
+    : `${verb}${repeat} on ${title}`;
+}
+
 /** "1 other" / "N others". */
 function othersPhrase(n: number): string {
   return `${n} ${n === 1 ? 'other' : 'others'}`;
@@ -157,6 +170,7 @@ function othersPhrase(n: number): string {
  * {verb} its existing verb; counts are exact:
  *   same post + action, different people: "{Name} and {N} others {verb} on {title}"
  *   same person + post + action, repeated: "{Name} {verb} {N} times on {title}"
+ *   (send for review wraps the title: "{Name} sent {title} for review [{N} times]")
  *   same person, different posts or actions: "{Name}: {N} new updates"
  *   different people, different posts or actions: "{Name} and {N} others: {M} new updates"
  */
@@ -179,8 +193,8 @@ export function groupedToastTitle(
   const title = lead.title !== null && lead.title.trim() !== '' ? lead.title.trim() : null;
   if (samePost && sameAction && verb !== null && title !== null) {
     return others === 0
-      ? `${name} ${verb} ${total} times on ${title}`
-      : `${name} and ${othersPhrase(others)} ${verb} on ${title}`;
+      ? `${name} ${verbOnTitle(verb, title, total)}`
+      : `${name} and ${othersPhrase(others)} ${verbOnTitle(verb, title)}`;
   }
   return others === 0
     ? `${name}: ${total} new updates`
@@ -322,7 +336,7 @@ function trimSnippet(text: string): string {
 
 /**
  * The toast's line 2 for a comment body: every mention token becomes "@Name"
- * (an unknown id reads as resolveMentionText's "@Unknown member"), then the text
+ * (an unknown id reads as resolveMentionText's "@Former member"), then the text
  * is trimmed, so the cut never lands inside a token. Null for an empty body, or
  * whenever the name read failed or timed out (no raw token is ever shown).
  */
@@ -333,8 +347,8 @@ function commentSnippet(
   if (body === null || body.trim().length === 0) return null;
   // The name read failed or timed out: no body line at all (never a raw token).
   if (names === null) return null;
-  // Each value is the whole label ("@username" or "Former member"); an id the read
-  // did not return reads as resolveMentionText's "@Unknown member".
+  // Each value is the whole label ("@username" or "@Former member"); an id the read
+  // did not return reads as resolveMentionText's "@Former member".
   const text = splitMentions(body)
     .map((seg) =>
       seg.kind === 'text'
@@ -380,10 +394,10 @@ export function toastFromEnriched(enriched: EnrichedNew): ToastSpec | null {
   const leadVerb = lead.verb ?? null;
   // Any other named event with a verb: "{Name} {verb} on {title}" ("{Name} {verb}" with no title).
   if (!isComment && lead.actorName !== null && leadVerb !== null) {
-    const onTitle =
-      lead.title !== null && lead.title.trim().length > 0 ? ` on ${lead.title.trim()}` : '';
+    const leadTitle =
+      lead.title !== null && lead.title.trim().length > 0 ? lead.title.trim() : null;
     return {
-      title: `${lead.actorName} ${leadVerb}${onTitle}`,
+      title: `${lead.actorName} ${leadTitle !== null ? verbOnTitle(leadVerb, leadTitle) : leadVerb}`,
       actorName: lead.actorName,
       actorAvatarUrl: lead.actorAvatarUrl,
     };
