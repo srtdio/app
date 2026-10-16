@@ -109,9 +109,12 @@ describe('sidebar', () => {
     expect(featureFromHash('#features')).toBeNull();
   });
 
-  it('one Book a demo row and no Pricing row; stories are not links or buttons', () => {
+  it('no section labels; one Book a demo row and no Pricing row; stories are not links', () => {
     const html = renderToStaticMarkup(<HomePage />);
-    const nav = html.slice(html.indexOf('class="nav-main"'), html.indexOf('class="foot"'));
+    const panel = html.slice(html.indexOf('class="panel"'), html.indexOf('class="foot"'));
+    expect(panel).not.toContain('class="lbl');
+    for (const word of ['>Product<', '>Company<', '>Stories<']) expect(panel).not.toContain(word);
+    const nav = panel.slice(panel.indexOf('class="nav-main"'));
     expect(nav).not.toContain('Pricing');
     expect(nav.match(/href="\/demo"/g)).toHaveLength(1);
     const stories = nav.slice(nav.indexOf('class="stories"'));

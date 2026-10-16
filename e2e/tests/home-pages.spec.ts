@@ -13,8 +13,13 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 const FEATURE_KEYS = ['chat', 'plan', 'pipeline', 'assets', 'briefs'] as const;
 const WHITE = 'rgb(255, 255, 255)';
 
-/** Serve the homepage fixture for "/" (any hash), like the guest path boots it. */
+/**
+ * Serve the homepage fixture for "/" (any hash), like the guest path boots it.
+ * Clip requests (the harness media base) get an empty 404, so the rail renders
+ * its video elements without downloading anything.
+ */
 async function serveHome(page: Page): Promise<void> {
+  await page.route('**/site-media/**', (route) => route.fulfill({ status: 404, body: '' }));
   await page.route(
     (url) => url.pathname === '/',
     async (route) => {
@@ -23,6 +28,45 @@ async function serveHome(page: Page): Promise<void> {
       await route.fulfill({ response });
     },
   );
+}
+
+/**
+ * The active rail card: the one at its snap position once scrolling settled,
+ * the only one whose clip plays. Also checks it sits at the rail's snap edge.
+ */
+async function railIndex(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const rail = document.querySelector('.home .rail');
+    if (rail === null) return -1;
+    const cards = [...rail.querySelectorAll('.card')];
+    const active = cards.findIndex((card) => card.hasAttribute('data-active'));
+    if (active < 0) return -1;
+    const pad = parseFloat(getComputedStyle(rail).scrollPaddingLeft) || 0;
+    const left = rail.getBoundingClientRect().left + pad;
+    const offset = Math.abs(cards[active]!.getBoundingClientRect().left - left);
+    return offset <= 2 ? active : -2;
+  });
+}
+
+/** End the clip on card `index`, as the browser would when it finishes. */
+async function endClip(page: Page, index: number): Promise<void> {
+  await page.evaluate((i) => {
+    const video = document.querySelectorAll('.home .rail .card video')[i];
+    if (!video) throw new Error(`no clip on card ${i}`);
+    video.dispatchEvent(new Event('ended'));
+  }, index);
+}
+
+/** The rail moves on when a clip ends, and from the last card back to the first. */
+async function expectAutoAdvance(page: Page): Promise<void> {
+  await page.locator('.home .rail').scrollIntoViewIfNeeded();
+  await expect.poll(() => railIndex(page)).toBe(0);
+  for (let i = 0; i < FEATURE_KEYS.length; i += 1) {
+    await endClip(page, i);
+    await expect
+      .poll(() => railIndex(page), { timeout: 5_000 })
+      .toBe((i + 1) % FEATURE_KEYS.length);
+  }
 }
 
 async function expectLight(page: Page): Promise<void> {
@@ -88,6 +132,23 @@ test.describe('phone', () => {
     expect(await page.locator('a[href^="mailto:"]').count()).toBe(0);
   });
 
+  test('cards: the clip ending moves the rail on; 3 seconds on a card nudges once', async ({
+    page,
+  }) => {
+    await serveHome(page);
+    await page.goto('/');
+    await expect(page.locator('.home .rail .card video')).toHaveCount(5);
+    await page.locator('.home .rail').scrollIntoViewIfNeeded();
+    // The nudge: once, within about a second of the 3s mark, then the class clears.
+    await expect(page.locator('.home .rail.nudging')).toHaveCount(1, { timeout: 4_500 });
+    await expect(page.locator('.home .rail.nudging')).toHaveCount(0, { timeout: 3_000 });
+    expect(await railIndex(page)).toBe(0);
+    await expectAutoAdvance(page);
+    // Back on the first card after a full loop: it was nudged already, so no second nudge.
+    await page.waitForTimeout(3_600);
+    await expect(page.locator('.home .rail.nudging')).toHaveCount(0);
+  });
+
   test('every sidebar tile lands on its own card', async ({ page }) => {
     await serveHome(page);
     await page.goto('/');
@@ -109,14 +170,31 @@ test.describe('phone', () => {
     }
   });
 
-  test('sidebar: a Book a demo row, no Pricing row, stories are not links', async ({ page }) => {
+  test('sidebar: no section labels, tiles then rows then stories; stories are not links', async ({
+    page,
+  }) => {
     await serveHome(page);
     await page.goto('/');
     await page.getByRole('button', { name: 'Open menu' }).click();
     const menu = page.locator('#home-menu');
     await expect(menu.getByRole('link', { name: /Pricing/ })).toHaveCount(0);
     await expect(page.locator('a[href="/pricing"]')).toHaveCount(0);
+    await expect(menu.locator('.lbl')).toHaveCount(0);
+    for (const word of ['Product', 'Company', 'Stories']) {
+      await expect(menu.getByText(word, { exact: true })).toHaveCount(0);
+    }
+    await expect(menu.getByRole('link', { name: 'Why Sorted' })).toHaveAttribute('href', '#why');
     await expect(menu.getByRole('link', { name: /Book a demo/ })).toHaveAttribute('href', '/demo');
+    // Order and rhythm: tiles, rows, stories, each group 24px below the last.
+    const gaps = await page.evaluate(() => {
+      const bottom = (sel: string) => document.querySelector(sel)!.getBoundingClientRect().bottom;
+      const top = (sel: string) => document.querySelector(sel)!.getBoundingClientRect().top;
+      return [
+        Math.round(top('#home-menu .nav-main') - bottom('#home-menu .nav-feat')),
+        Math.round(top('#home-menu .stories') - bottom('#home-menu .nav-main')),
+      ];
+    });
+    expect(gaps).toEqual([24, 24]);
     const stories = menu.locator('.stories .story');
     await expect(stories).toHaveCount(3);
     await expect(stories.getByText('Coming soon')).toHaveCount(3);
@@ -283,10 +361,40 @@ test.describe('desktop: one thing per screen @desktop', () => {
         expect(m.cards).toHaveLength(5);
         for (const card of m.cards) {
           expect(card.h).toBeLessThanOrEqual(m.screen);
-          // One card per screen: the rail card takes the full content width.
-          expect(Math.abs(card.w - m.content)).toBeLessThanOrEqual(1);
+          // A card is 75% of the screen, so part of the next card shows.
+          expect(Math.abs(card.w - m.vw * 0.75)).toBeLessThanOrEqual(1);
         }
+        expect(m.content).toBeGreaterThan(m.vw * 0.75);
+        const peek = await page.evaluate(() => {
+          const cards = document.querySelectorAll('.home .rail .card');
+          const first = cards[0]?.getBoundingClientRect();
+          const second = cards[1]?.getBoundingClientRect();
+          if (!first || !second) return null;
+          return { firstRight: first.right, secondLeft: second.left };
+        });
+        expect(peek).not.toBeNull();
+        expect(peek!.secondLeft).toBeLessThan(viewport.width - 100);
+        // The clip fills its box: same edges, no gap on either side.
+        const fit = await page.evaluate(() => {
+          const box = document.querySelector('.home .rail .card .clipbox');
+          const clip = box?.querySelector('video');
+          if (!box || !clip) return null;
+          const b = box.getBoundingClientRect();
+          const c = clip.getBoundingClientRect();
+          return Math.max(
+            Math.abs(b.left - c.left),
+            Math.abs(b.right - c.right),
+            Math.abs(b.top - c.top),
+            Math.abs(b.bottom - c.bottom),
+          );
+        });
+        expect(fit).not.toBeNull();
+        expect(fit!).toBeLessThanOrEqual(1);
         for (const height of m.benefits) expect(height).toBeLessThanOrEqual(m.screen);
+        await expectAutoAdvance(page);
+        // Desktop never nudges: the next card already shows.
+        await page.waitForTimeout(3_600);
+        await expect(page.locator('.home .rail.nudging')).toHaveCount(0);
       });
 
       test('demo fits beside its intro', async ({ page }) => {

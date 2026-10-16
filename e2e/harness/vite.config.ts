@@ -16,6 +16,11 @@ export default defineConfig({
   envDir: harnessRoot,
   envPrefix: 'HARNESS_',
   plugins: [react()],
+  // The homepage renders its clips only with a media base. Specs route this
+  // path themselves (see home-pages.spec.ts), so nothing is fetched for real.
+  define: {
+    'import.meta.env.VITE_SITE_MEDIA_URL': JSON.stringify('http://localhost:4178/site-media'),
+  },
   resolve: {
     // Harness-only fixture aliases. Order matters: the exact-match stubs come
     // before the '@' prefix alias. Never mirrored in vitest.

@@ -127,17 +127,145 @@ function SignupBand() {
   );
 }
 
-/** The feature rail: one card per key, each with its own id for the sidebar tiles. */
+// After this long on one card, the row nudges left once to show there is more.
+const NUDGE_AFTER_MS = 3000;
+// Manual swipes after which the nudge stops for the visit.
+const NUDGE_SWIPE_LIMIT = 2;
+// Scroll is treated as settled after this long without a scroll event.
+const SETTLE_MS = 140;
+// Phones and tablets: below the desktop breakpoint in home.css.
+const MOBILE_QUERY = '(max-width: 959.98px), (max-height: 639.98px)';
+
+/** The rail scrollLeft at which the card sits at its snap position. */
+function cardLeft(rail: HTMLElement, card: HTMLElement): number {
+  const pad = parseFloat(getComputedStyle(rail).scrollPaddingLeft) || 0;
+  const offset = card.getBoundingClientRect().left - rail.getBoundingClientRect().left;
+  return rail.scrollLeft + offset - pad;
+}
+
+/**
+ * The feature rail: one card per key, each with its own id for the sidebar
+ * tiles. Only the card in view plays its clip; when the clip ends the rail
+ * moves to the next card, and from the last card back to the first. On
+ * phones, a card left in view for 3 seconds nudges the row left once.
+ * Reduced motion: clips loop in place, no auto-advance, no nudge.
+ */
 function FeatureRail() {
   const railRef = useRef<HTMLDivElement>(null);
+  const [current, setCurrent] = useState(0);
+  const [nudging, setNudging] = useState(false);
+  const currentRef = useRef(0);
+  const touchingRef = useRef(false);
+  const autoRef = useRef(false);
+  const swipesRef = useRef(0);
+  const nudgedRef = useRef(new Set<number>());
+  const [reduced] = useState(
+    () =>
+      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
 
-  // Desktop: one card per screen, so the arrows move one card at a time.
+  const cards = (): HTMLElement[] =>
+    Array.from(railRef.current?.querySelectorAll<HTMLElement>('.card') ?? []);
+
+  const goTo = (index: number): void => {
+    const rail = railRef.current;
+    const card = cards()[index];
+    if (!rail || !card) return;
+    autoRef.current = true;
+    rail.scrollTo({ left: cardLeft(rail, card), behavior: 'smooth' });
+  };
+
+  // Desktop arrows: one card at a time.
   const step = (direction: 1 | -1): void => {
     const rail = railRef.current;
     const card = rail?.querySelector<HTMLElement>('.card');
     if (!rail || !card) return;
     const gap = parseFloat(getComputedStyle(rail).columnGap) || 0;
     rail.scrollBy({ left: direction * (card.offsetWidth + gap), behavior: 'smooth' });
+  };
+
+  // Track the card in view once scrolling settles.
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return undefined;
+    let timer = 0;
+    const onScroll = (): void => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const list = cards();
+        let best = 0;
+        let bestDistance = Number.POSITIVE_INFINITY;
+        list.forEach((card, i) => {
+          const distance = Math.abs(cardLeft(rail, card) - rail.scrollLeft);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = i;
+          }
+        });
+        if (best !== currentRef.current) {
+          if (!autoRef.current) swipesRef.current += 1;
+          currentRef.current = best;
+          setCurrent(best);
+        }
+        autoRef.current = false;
+      }, SETTLE_MS);
+    };
+    const onTouchStart = (): void => {
+      touchingRef.current = true;
+      autoRef.current = false;
+      setNudging(false);
+    };
+    const onTouchEnd = (): void => {
+      touchingRef.current = false;
+    };
+    rail.addEventListener('scroll', onScroll, { passive: true });
+    rail.addEventListener('pointerdown', onTouchStart, { passive: true });
+    rail.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('pointerup', onTouchEnd, { passive: true });
+    rail.addEventListener('touchend', onTouchEnd, { passive: true });
+    rail.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      rail.removeEventListener('scroll', onScroll);
+      rail.removeEventListener('pointerdown', onTouchStart);
+      rail.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('pointerup', onTouchEnd);
+      rail.removeEventListener('touchend', onTouchEnd);
+      rail.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, []);
+
+  // The card coming into view starts its clip from the beginning.
+  useEffect(() => {
+    const video = cards()[current]?.querySelector('video');
+    if (video) video.currentTime = 0;
+  }, [current]);
+
+  // Phones: nudge once per card after 3 seconds, never on the last card.
+  useEffect(() => {
+    if (reduced) return undefined;
+    const timer = window.setTimeout(() => {
+      if (!matchMedia(MOBILE_QUERY).matches) return;
+      if (touchingRef.current || swipesRef.current >= NUDGE_SWIPE_LIMIT) return;
+      if (current >= FEATURES.length - 1 || nudgedRef.current.has(current)) return;
+      nudgedRef.current.add(current);
+      setNudging(true);
+    }, NUDGE_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, [current, reduced]);
+
+  const onClipEnded = (index: number): void => {
+    if (index !== currentRef.current) return;
+    const video = cards()[index]?.querySelector('video');
+    if (touchingRef.current) {
+      // A finger is on the cards: replay and wait.
+      if (video) {
+        video.currentTime = 0;
+        void video.play().catch(() => undefined);
+      }
+      return;
+    }
+    goTo((index + 1) % FEATURES.length);
   };
 
   return (
@@ -164,14 +292,19 @@ function FeatureRail() {
           </svg>
         </button>
       </div>
-      <div className="rail" ref={railRef}>
-        {FEATURES.map((feature) => {
+      <div
+        className={nudging ? 'rail nudging' : 'rail'}
+        ref={railRef}
+        onAnimationEnd={() => setNudging(false)}
+      >
+        {FEATURES.map((feature, index) => {
           const clip = clipFor(HOME_MEDIA_BASE, feature.clip);
           return (
             <article
               key={feature.key}
               id={featureId(feature.key)}
               className={`card ${feature.tone}`}
+              data-active={index === current ? '' : undefined}
             >
               <div className="k">{feature.name}</div>
               <h3>{feature.title}</h3>
@@ -179,7 +312,14 @@ function FeatureRail() {
               {clip ? (
                 <div className="mock">
                   <div className="clipbox">
-                    <ClipVideo clip={clip} label={feature.label} className="shot clip" />
+                    <ClipVideo
+                      clip={clip}
+                      label={feature.label}
+                      className="shot clip"
+                      loop={reduced}
+                      held={index !== current}
+                      onEnded={() => onClipEnded(index)}
+                    />
                   </div>
                 </div>
               ) : null}

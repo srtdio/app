@@ -315,16 +315,8 @@ html:has(.home) body {
   height: 48px;
   margin-bottom: 14px;
 }
-.home .panel .lbl {
-  font: 500 11px var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 18px 0 8px;
-}
-.home .panel .lbl.first {
-  margin-top: 0;
-}
+/* No section labels: the three groups (feature tiles, rows, stories) are set
+   apart by one 24px gap each and a hairline above the rows and the stories. */
 .home .nav-feat {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -350,6 +342,9 @@ html:has(.home) body {
   grid-column: 1 / -1;
 }
 .home .nav-main {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
   display: grid;
   gap: 2px;
 }
@@ -387,8 +382,9 @@ html:has(.home) body {
 /* sidebar stories: coming soon, display only */
 .home .stories {
   list-style: none;
-  margin: 0;
-  padding: 0;
+  margin: 24px 0 0;
+  padding: 24px 0 0;
+  border-top: 1px solid var(--line);
   display: grid;
   gap: 8px;
 }
@@ -549,8 +545,10 @@ html:has(.home) body {
 
 /* feature rail: scrolls on X only */
 .home .rail {
+  --card-w: min(430px, 84vw);
+  --rail-gap: 18px;
   display: flex;
-  gap: 18px;
+  gap: var(--rail-gap);
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
@@ -563,6 +561,12 @@ html:has(.home) body {
 .home .rail::-webkit-scrollbar {
   display: none;
 }
+/* End spacer: lets the last card scroll to the same snap position as the
+   others, so every card lands aligned to the left gutter. */
+.home .rail::after {
+  content: '';
+  flex: 0 0 max(0px, calc(100vw - 2 * var(--g) - var(--card-w) - var(--rail-gap)));
+}
 .home .card {
   --card-pad: 26px;
   /* Mockup width cap: the design's 280px, or the card's inner width if less. */
@@ -572,7 +576,7 @@ html:has(.home) body {
      recording reads as a grey block, so the page scrolls instead. */
   --mock-min-h: calc(var(--mock-max-h) * 0.4);
   --fit-gap: 16px;
-  flex: 0 0 min(430px, 84vw);
+  flex: 0 0 var(--card-w);
   scroll-snap-align: start;
   /* A sidebar tile lands the card just below the sticky header. */
   scroll-margin-top: calc(var(--top-h) + var(--fit-gap) + env(safe-area-inset-top, 0px));
@@ -672,12 +676,45 @@ html:has(.home) body {
   aspect-ratio: 390 / 720;
   object-fit: cover;
 }
+.home .clipbox {
+  overflow: hidden;
+}
+/* The clip fills its box exactly: no width cap, no border of its own. */
 .home .clipbox .clip {
+  display: block;
+  width: 100%;
   height: 100%;
+  border: 0;
+  border-radius: inherit;
   box-shadow: none;
 }
 
-/* rail arrows: desktop only, where one card fills the screen */
+/* Phones: after 3s on a card the row slides left 40px once and settles back.
+   translateX only: no Y, no rotate. */
+@keyframes home-rail-nudge {
+  0% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.33, 0, 0.2, 1);
+  }
+  45%,
+  58% {
+    transform: translateX(-40px);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+.home .rail.nudging .card {
+  animation: home-rail-nudge 1.2s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home .rail.nudging .card {
+    animation: none;
+  }
+}
+
+/* rail arrows: desktop only */
 .home .rail-nav {
   display: none;
 }
@@ -1040,14 +1077,17 @@ html:has(.home) body {
   .home .rail-nav svg {
     stroke-linejoin: round;
   }
+  /* 75% of the screen per card, so the next card shows on the right. */
+  .home .rail {
+    --card-w: 75vw;
+  }
   .home .card {
     --card-pad: clamp(32px, 4vw, 64px);
-    flex: 0 0 100%;
     height: calc(var(--screen) - 2 * var(--fit-gap));
     max-height: none;
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: 1fr auto auto auto 1fr;
-    column-gap: clamp(32px, 5vw, 96px);
+    column-gap: clamp(32px, 4vw, 64px);
     row-gap: 18px;
     align-content: stretch;
   }
