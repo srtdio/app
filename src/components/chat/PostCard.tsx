@@ -32,6 +32,7 @@ import type {
   PointerEvent,
   ReactElement,
   ReactNode,
+  RefObject,
   SyntheticEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -39,6 +40,7 @@ import { Tag, isTagDot } from '@/components/ui/Tag';
 import { IconCheck, IconPlay } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui';
 import { useThumbnail } from '@/components/media/use-thumbnail';
+import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
 import {
   CHAT_CARD_FRAME_MAX_HEIGHT,
   frameMediaClass,
@@ -71,7 +73,11 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import type { Client } from '@srtdio/rpc';
 import { PostSheet } from '@/components/chat/PostSheet';
-import { readPostCards, type PostCardRow } from '../../../packages/posts/src/reads';
+import {
+  readPostCards,
+  type CardFirstMedia,
+  type PostCardRow,
+} from '../../../packages/posts/src/reads';
 import {
   NOT_VISIBLE_BODY,
   NOT_VISIBLE_TITLE,
@@ -791,6 +797,8 @@ export function PostCardItem(
   );
   const target = post.target_date !== null ? formatShortDate(post.target_date, timeZone) : '';
   const frame = cardFrame(post);
+  // The card shows media only when it has a first photo or video AND a frame.
+  const media = frame !== null ? post.firstMedia : null;
   // The sheet mounts on first open and stays mounted so its exit can animate.
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMounted, setSheetMounted] = useState(false);
@@ -867,14 +875,8 @@ export function PostCardItem(
         onKeyDown={tap.onKeyDown}
         className={cn(POST_CARD, 'cursor-pointer transition-colors hover:bg-panel-2')}
       >
-        {post.thumbnailAssetVersionId !== null && frame !== null ? (
-          <CardMedia
-            post={post}
-            frame={frame}
-            assetVersionId={post.thumbnailAssetVersionId}
-            entityRef={ref}
-            onKeyTap={keyTap}
-          />
+        {media !== null && frame !== null ? (
+          <CardMedia post={post} frame={frame} media={media} entityRef={ref} onKeyTap={keyTap} />
         ) : null}
         <div className="flex flex-col gap-1.5 px-3 py-2.5">
           <span
@@ -882,7 +884,7 @@ export function PostCardItem(
             className={cn('line-clamp-2 text-fg', sized(POST_CARD_TITLE_TYPE, layout))}
             title={post.title}
           >
-            {(post.thumbnailAssetVersionId === null || frame === null) && ref !== null ? (
+            {media === null && ref !== null ? (
               <CardRef
                 label={ref}
                 className="relative mr-1.5 font-mono text-fg-3"
@@ -965,37 +967,168 @@ function SheetBoundary({ children }: { children: ReactNode }): ReactElement {
 }
 
 /**
- * The card's media frame: the post's platform + format shape (frameFor, before
- * any size is known, so the format's default size). null for a format with no
- * media box (text, link): the card stays a non-media card. Pure.
+ * The card's media frame: the post's platform + format shape (frameFor) fed the
+ * first photo or video with its stored size, so the frame follows the real
+ * media within the platform's rules; a size not stored (older uploads) falls
+ * back to the format's default. null for a format with no media box (text,
+ * link) and for a media-optional format with no media (thread): the card stays
+ * a non-media card. Pure.
  */
-export function cardFrame(post: Pick<PostCardRow, 'platform' | 'format'>): Frame | null {
-  return frameFor(post.platform, post.format, null);
+export function cardFrame(
+  post: Pick<PostCardRow, 'platform' | 'format' | 'firstMedia'>,
+): Frame | null {
+  const first = post.firstMedia;
+  return frameFor(
+    post.platform,
+    post.format,
+    first === null ? null : { kind: first.kind, w: first.width, h: first.height },
+  );
 }
 
-/**
- * The cover in the post's platform frame, 240px wide and at most 320px tall (a
- * tall frame narrows), with its corner pills; presigns lazily when scrolled
- * into view.
- */
-function CardMedia(props: {
+interface CardMediaProps {
   post: PostCardRow;
   frame: Frame;
-  assetVersionId: string;
+  media: CardFirstMedia;
   entityRef: string | null;
   onKeyTap?: ((e: { stopPropagation: () => void }) => void) | undefined;
-}): ReactElement {
-  const { post, frame, assetVersionId, entityRef: ref } = props;
+}
+
+/** The first photo or video in the post's platform frame. */
+function CardMedia(props: CardMediaProps): ReactElement {
+  return props.media.kind === 'video' ? <CardVideo {...props} /> : <CardImage {...props} />;
+}
+
+/** A photo cover: the version itself, presigned lazily when scrolled into view. */
+function CardImage(props: CardMediaProps): ReactElement {
   const thumb = useThumbnail<HTMLDivElement>({
-    assetVersionId,
+    assetVersionId: props.media.assetVersionId,
     cache: sharedCardPresignCache(),
     enabled: PRESIGN_ENABLED,
   });
+  const url = thumb.failed ? null : thumb.url;
+  return (
+    <CardMediaBox
+      {...props}
+      boxRef={thumb.ref}
+      backdrop={url !== null ? <CoverImage src={url} /> : undefined}
+    >
+      {url !== null ? (
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          onError={thumb.onError}
+          draggable={false}
+          className={cn('relative', frameMediaClass(props.frame))}
+        />
+      ) : null}
+    </CardMediaBox>
+  );
+}
+
+/**
+ * A video cover: its stored thumbnail rendition (the route FileTile uses), asked
+ * for once near the viewport. A version with none (older uploads) or a broken
+ * one falls back to the video itself at its first frame.
+ */
+function CardVideo(props: CardMediaProps): ReactElement {
+  const { media, frame } = props;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const near = useNearViewport(boxRef);
+  const stored = useStoredThumbnail(
+    media.assetVersionId,
+    sharedCardPresignCache(),
+    PRESIGN_ENABLED && near,
+  );
+  // A broken image drops only that version's thumbnail, never a newer one's.
+  const [failedVersion, setFailedVersion] = useState<string | null>(null);
+  const cover = failedVersion === media.assetVersionId ? null : stored.url;
+  const fallback = stored.missing || failedVersion === media.assetVersionId;
+  return (
+    <CardMediaBox
+      {...props}
+      boxRef={boxRef}
+      backdrop={cover !== null ? <CoverImage src={cover} /> : undefined}
+    >
+      {cover !== null ? (
+        <img
+          data-card-video-thumb=""
+          src={cover}
+          alt=""
+          onError={() => setFailedVersion(media.assetVersionId)}
+          draggable={false}
+          className={cn('relative', frameMediaClass(frame))}
+        />
+      ) : fallback ? (
+        <CardVideoFrame assetVersionId={media.assetVersionId} frame={frame} />
+      ) : null}
+      <span
+        data-card-play=""
+        className="pointer-events-none absolute inset-0 flex items-center justify-center"
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg">
+          <IconPlay size={16} />
+        </span>
+      </span>
+    </CardMediaBox>
+  );
+}
+
+/**
+ * The presigned video URL with a media fragment of t=0.1, so WebKit paints a
+ * frame instead of a blank box while preload stays metadata. Pure.
+ */
+export function firstFrameSrc(url: string): string {
+  const src = new URL(url);
+  src.hash = 't=0.1';
+  return src.href;
+}
+
+/** A video with no stored thumbnail: the file itself, paused on its first frame. */
+function CardVideoFrame(props: { assetVersionId: string; frame: Frame }): ReactElement {
+  const thumb = useThumbnail<HTMLSpanElement>({
+    assetVersionId: props.assetVersionId,
+    cache: sharedCardPresignCache(),
+    enabled: PRESIGN_ENABLED,
+  });
+  return (
+    <span ref={thumb.ref} className="relative block h-full w-full">
+      {thumb.url !== null && !thumb.failed ? (
+        <video
+          data-card-video=""
+          src={firstFrameSrc(thumb.url)}
+          preload="metadata"
+          muted
+          playsInline
+          onError={thumb.onError}
+          className={cn('pointer-events-none', frameMediaClass(props.frame))}
+        />
+      ) : null}
+    </span>
+  );
+}
+
+/** The cover again, cropped to fill, behind the frame for blurred bands. */
+function CoverImage(props: { src: string }): ReactElement {
+  return <img src={props.src} alt="" draggable={false} className="h-full w-full object-cover" />;
+}
+
+/**
+ * The frame box, 240px wide and at most 320px tall (a tall frame narrows), with
+ * its corner pills.
+ */
+function CardMediaBox(
+  props: CardMediaProps & {
+    boxRef: RefObject<HTMLDivElement>;
+    backdrop: ReactNode;
+    children: ReactNode;
+  },
+): ReactElement {
+  const { post, frame, entityRef: ref } = props;
   const pills = mediaPills(post);
-  const ready = thumb.url !== null && !thumb.failed;
   return (
     <div
-      ref={thumb.ref}
+      ref={props.boxRef}
       data-card-media=""
       className="relative flex w-full justify-center bg-panel-3"
     >
@@ -1003,27 +1136,9 @@ function CardMedia(props: {
         frame={frame}
         maxHeight={CHAT_CARD_FRAME_MAX_HEIGHT}
         bordered={false}
-        backdrop={
-          ready ? (
-            <img
-              src={thumb.url ?? undefined}
-              alt=""
-              draggable={false}
-              className="h-full w-full object-cover"
-            />
-          ) : undefined
-        }
+        backdrop={props.backdrop}
       >
-        {ready ? (
-          <img
-            src={thumb.url ?? undefined}
-            alt=""
-            loading="lazy"
-            onError={thumb.onError}
-            draggable={false}
-            className={cn('relative', frameMediaClass(frame))}
-          />
-        ) : null}
+        {props.children}
       </PlatformFrame>
       {ref !== null ? (
         <CardRef

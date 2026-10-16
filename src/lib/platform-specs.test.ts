@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FORMATS_BY_PLATFORM, POST_PLATFORMS } from '@srtdio/posts';
 import { frameFor, formatDefaultSize, type FrameMedia } from '@/lib/platform-specs';
+import { formatNeedsMedia } from '@/lib/induction';
 import { cutPercent, frameMap } from '@/components/pages/pcs/pin-annotations';
 
 const img = (w: number | null, h: number | null): FrameMedia => ({ kind: 'image', w, h });
@@ -149,14 +150,24 @@ describe('frameFor: platform behaviour', () => {
     });
     expect(frameFor('threads', 'carousel', img(null, null))).toMatchObject({ fit: 'contain' });
   });
-  it('every offered media format resolves to a frame', () => {
+  it('every offered media format resolves to a frame (media-optional ones once media is attached)', () => {
     for (const p of POST_PLATFORMS) {
       for (const f of FORMATS_BY_PLATFORM[p]) {
         if (f === 'text' || f === 'link') continue;
-        expect(frameFor(p, f, null), `${p}/${f}`).not.toBeNull();
+        const first = formatNeedsMedia(f) ? null : img(null, null);
+        expect(frameFor(p, f, first), `${p}/${f}`).not.toBeNull();
         expect(formatDefaultSize(p, f), `${p}/${f}`).not.toBeNull();
       }
     }
+  });
+  it('A3: a media-optional format (X thread) has no frame until a photo or video is attached', () => {
+    expect(frameFor('x', 'thread', null)).toBeNull();
+    expect(frameFor('x', 'thread', { kind: 'other', w: null, h: null })).toBeNull();
+    expect(frameFor('x', 'thread', img(null, null))).not.toBeNull();
+    expect(frameFor('x', 'thread', vid(1080, 1080))?.ratio).toBeCloseTo(1);
+    // Formats that need media keep the empty upload frame before any is attached.
+    expect(frameFor('x', 'single_image', null)).not.toBeNull();
+    expect(frameFor('instagram', 'reel', null)?.ratio).toBeCloseTo(9 / 16);
   });
   it('unknown keys have no frame', () => {
     expect(frameFor('twitter', 'single_image', null)).toBeNull();

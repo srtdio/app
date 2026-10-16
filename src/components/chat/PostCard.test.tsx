@@ -9,7 +9,7 @@ vi.mock('react-router-dom', async (importOriginal) => ({
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import type { Client } from '@srtdio/rpc';
-import type { PostCardRow } from '../../../packages/posts/src/reads';
+import type { CardFirstMedia, PostCardRow } from '../../../packages/posts/src/reads';
 import { createLongPressController } from '@/components/ui/useLongPress';
 import { ACTION_SOFT, PostSheetActions, talkAboutLabel } from '@/components/chat/PostSheet';
 import { sheetActions } from '@/components/chat/post-sheet';
@@ -73,6 +73,9 @@ describe('NotVisibleCard', () => {
   });
 });
 
+/** A photo first media with no stored size (an older upload). */
+const IMAGE: CardFirstMedia = { assetVersionId: 'v1', kind: 'image', width: null, height: null };
+
 function cardRow(id: string, over: Partial<PostCardRow> = {}): PostCardRow {
   return {
     id,
@@ -86,6 +89,7 @@ function cardRow(id: string, over: Partial<PostCardRow> = {}): PostCardRow {
     approved_by: null,
     approved_at: null,
     thumbnailAssetVersionId: null,
+    firstMedia: null,
     mediaCount: 0,
     hasVideo: false,
     ...over,
@@ -117,7 +121,10 @@ describe('SharedPostCardList', () => {
   });
 
   it('thumbnail: platform-framed media box with KEY, format and slides pills; no inline KEY', () => {
-    const html = render(['p1'], [cardRow('p1', { thumbnailAssetVersionId: 'v1', mediaCount: 3 })]);
+    const html = render(
+      ['p1'],
+      [cardRow('p1', { thumbnailAssetVersionId: 'v1', firstMedia: IMAGE, mediaCount: 3 })],
+    );
     expect(html).toContain('data-card-media');
     // Instagram carousel before any size is known: the 4:5 portrait default.
     expect(html).toContain('data-frame-ratio="0.8"');
@@ -135,6 +142,7 @@ describe('SharedPostCardList', () => {
       [
         cardRow('p1', {
           thumbnailAssetVersionId: 'v1',
+          firstMedia: IMAGE,
           mediaCount: 1,
           hasVideo: true,
           format: 'video',
@@ -477,12 +485,25 @@ describe('readApproverRoles', () => {
 
 describe('chat post card platform frame', () => {
   it('the ratio follows the platform and format, 240px wide and capped at 320px tall', () => {
-    expect(cardFrame({ platform: 'instagram', format: 'reel' })?.ratio).toBeCloseTo(9 / 16);
-    expect(cardFrame({ platform: 'instagram', format: 'single_image' })?.ratio).toBeCloseTo(0.8);
-    expect(cardFrame({ platform: 'x', format: 'single_image' })?.ratio).toBeCloseTo(16 / 9);
+    expect(
+      cardFrame({ platform: 'instagram', format: 'reel', firstMedia: null })?.ratio,
+    ).toBeCloseTo(9 / 16);
+    expect(
+      cardFrame({ platform: 'instagram', format: 'single_image', firstMedia: null })?.ratio,
+    ).toBeCloseTo(0.8);
+    expect(
+      cardFrame({ platform: 'x', format: 'single_image', firstMedia: null })?.ratio,
+    ).toBeCloseTo(16 / 9);
     const reel = render(
       ['p1'],
-      [cardRow('p1', { format: 'reel', thumbnailAssetVersionId: 'v1', mediaCount: 1 })],
+      [
+        cardRow('p1', {
+          format: 'reel',
+          thumbnailAssetVersionId: 'v1',
+          firstMedia: IMAGE,
+          mediaCount: 1,
+        }),
+      ],
     );
     // 9:16 hits the 320px cap: 320 x 0.5625 = 180px wide inside the 240px card.
     expect(reel).toContain('width:min(100%, calc(320px * 0.5625))');
@@ -494,6 +515,7 @@ describe('chat post card platform frame', () => {
           platform: 'youtube_shorts',
           format: 'short',
           thumbnailAssetVersionId: 'v1',
+          firstMedia: IMAGE,
           mediaCount: 1,
         }),
       ],
@@ -504,7 +526,7 @@ describe('chat post card platform frame', () => {
 
   it('a text or link post keeps the non-media card even with an attachment', () => {
     for (const format of ['text', 'link']) {
-      expect(cardFrame({ platform: 'linkedin', format })).toBeNull();
+      expect(cardFrame({ platform: 'linkedin', format, firstMedia: IMAGE })).toBeNull();
       const html = render(
         ['p1'],
         [
@@ -512,6 +534,7 @@ describe('chat post card platform frame', () => {
             platform: 'linkedin',
             format,
             thumbnailAssetVersionId: 'v1',
+            firstMedia: IMAGE,
             mediaCount: 1,
           }),
         ],

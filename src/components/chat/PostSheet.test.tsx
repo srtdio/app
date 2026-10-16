@@ -28,6 +28,7 @@ function row(over: Partial<PostCardRow> = {}): PostCardRow {
     approved_by: null,
     approved_at: null,
     thumbnailAssetVersionId: null,
+    firstMedia: null,
     mediaCount: 0,
     hasVideo: false,
     ...over,
@@ -275,6 +276,23 @@ describe('PostSheetMedia', () => {
     expect(text).not.toContain('data-frame-ratio');
     expect(STRIP_BOX).toContain('aspect-[4/5]');
     expect(text).toContain('aspect-[4/5]');
+  });
+
+  it('A4: YouTube Shorts draws the slide behind the frame as the blurred bands', () => {
+    const shorts = media({ status: 'ready', items: [item(0)] }, 1, 'short', 'youtube_shorts');
+    expect(shorts).toContain('data-frame-bands="blur"');
+    expect(shorts).toContain('blur-xl');
+    expect(shorts).toContain('data-strip-backdrop');
+    // Other platforms have no blurred bands, so no backdrop is drawn.
+    const reel = media({ status: 'ready', items: [item(0)] }, 1, 'reel');
+    expect(reel).not.toContain('data-strip-backdrop');
+  });
+
+  it('A3: an X thread with media is framed; without media there is no box at all', () => {
+    expect(media({ status: 'ready', items: [item(0)] }, 1, 'thread', 'x')).toContain(
+      'data-frame-ratio',
+    );
+    expect(media({ status: 'ready', items: [] }, 0, 'thread', 'x')).toBe('');
   });
 
   it('several slides: one per width with the counter and dots', () => {
