@@ -17,6 +17,7 @@ import { DEMO, type DemoSlot } from './config';
 import {
   DEMO_FIELDS,
   DEMO_NOTICE,
+  GRID_CELLS,
   WEEK_HEADERS,
   addDays,
   bookingSummary,
@@ -57,8 +58,8 @@ function FieldError({ id, message }: { id: string; message: string | undefined }
 // The page is prerendered at build time (scripts/prerender.ts) and hydrated, so
 // nothing date-dependent may be in the first render: the month, its days and
 // the arrows fill in after mount. The grid always holds six week rows (42
-// cells) so its height never depends on the month or on mounting.
-const GRID_CELLS = 42;
+// cells) so its height never depends on the month or on mounting: empty
+// placeholders before mount, then the month with the adjacent months' days.
 const FILLER: CSSProperties = { minHeight: 44 };
 const HIDDEN: CSSProperties = { visibility: 'hidden' };
 
@@ -87,8 +88,7 @@ function Calendar({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const cells = mounted ? monthGrid(month) : [];
-  const fillers = Array.from({ length: GRID_CELLS - cells.length }, (_, i) => i);
-
+  const fillers = mounted ? [] : Array.from({ length: GRID_CELLS }, (_, i) => i);
   return (
     <div
       className="cal"
@@ -131,9 +131,11 @@ function Calendar({
             {name}
           </span>
         ))}
-        {cells.map((day, i) =>
-          day === null ? (
-            <span key={`pad-${i}`} className="cal-pad" />
+        {cells.map(({ day, outside }) =>
+          outside ? (
+            <span key={`${day.m}-${day.d}`} className="cal-out" aria-hidden="true">
+              {day.d}
+            </span>
           ) : (
             <button
               key={day.d}
