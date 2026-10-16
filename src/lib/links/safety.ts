@@ -385,11 +385,16 @@ export function normalizeUrl(raw: string): string | null {
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
   url.hash = '';
-  for (const key of [...url.searchParams.keys()]) {
-    if (TRACKING_PARAMS.test(key)) url.searchParams.delete(key);
+  const keys = [...url.searchParams.keys()];
+  // Only rewrite the query when there is something to strip: rewriting
+  // re-encodes it (%20 becomes +), which some sites read differently.
+  if (keys.some((key) => TRACKING_PARAMS.test(key))) {
+    for (const key of keys) {
+      if (TRACKING_PARAMS.test(key)) url.searchParams.delete(key);
+    }
+    // Keep a bare "?" out when every param was tracking.
+    if ([...url.searchParams.keys()].length === 0) url.search = '';
   }
-  // Keep a bare "?" out when every param was tracking.
-  if ([...url.searchParams.keys()].length === 0) url.search = '';
   return url.toString();
 }
 

@@ -97,6 +97,8 @@ export const DESCRIPTION_CAP = 400;
 export const RATE_LIMIT = 120;
 export const RATE_WINDOW_MS = 10 * 60 * 1000;
 const MAX_URL_LENGTH = 2048;
+/** In-memory cache budget per isolate: previews plus a few images, far below 128 MB. */
+export const MEMORY_LAYER_BYTES = 16 * 1024 * 1024;
 
 const TTL_SUCCESS_S = 86_400;
 const TTL_FAILURE_S = 3_600;
@@ -118,7 +120,7 @@ const CORS_MAX_AGE_SECONDS = 86_400;
 // URL helpers
 
 const LOGIN_PATH =
-  /(^|\/)(log-?in|sign-?in|signin|sign_in|accounts?|auth|sso|oauth2?|servicelogin)(\/|$|\.|\?)/i;
+  /(^|\/)(log-?in|sign-?in|signin|sign_in|auth|sso|oauth2?|servicelogin)(\/|$|\.|\?)/i;
 const LOGIN_HOST = /^(accounts?|login|signin|auth|sso)\./i;
 
 /** True when a redirect target looks like a sign-in page. */
@@ -461,10 +463,16 @@ export class MemoryLayer implements PreviewCache {
     string,
     { body: ArrayBuffer; headers: [string, string][]; status: number; expires: number }
   >();
+  private bytes = 0;
 
+  /**
+   * @param maxBytes total body bytes kept in isolate memory (Workers isolates
+   *   have 128 MB); the oldest entries go first. Larger single bodies are not
+   *   kept here at all, only passed to the edge cache.
+   */
   constructor(
     private readonly inner: PreviewCache | null,
-    private readonly maxEntries = 500,
+    private readonly maxBytes = MEMORY_LAYER_BYTES,
     private readonly now: () => number = Date.now,
   ) {}
 
@@ -473,7 +481,7 @@ export class MemoryLayer implements PreviewCache {
     if (hit !== undefined && hit.expires > this.now()) {
       return new Response(hit.body.slice(0), { status: hit.status, headers: hit.headers });
     }
-    if (hit !== undefined) this.entries.delete(key);
+    if (hit !== undefined) this.drop(key);
     return this.inner !== null ? this.inner.match(key) : undefined;
   }
 
@@ -483,17 +491,34 @@ export class MemoryLayer implements PreviewCache {
     );
     const copy = this.inner !== null ? response.clone() : null;
     const body = await response.arrayBuffer();
-    if (this.entries.size >= this.maxEntries) {
-      const oldest = this.entries.keys().next().value;
-      if (oldest !== undefined) this.entries.delete(oldest);
+    this.drop(key);
+    if (body.byteLength <= this.maxBytes / 4) {
+      while (this.bytes + body.byteLength > this.maxBytes) {
+        const oldest = this.entries.keys().next().value;
+        if (oldest === undefined) break;
+        this.drop(oldest);
+      }
+      this.entries.set(key, {
+        body,
+        headers: [...response.headers.entries()],
+        status: response.status,
+        expires: this.now() + maxAge * 1000,
+      });
+      this.bytes += body.byteLength;
     }
-    this.entries.set(key, {
-      body,
-      headers: [...response.headers.entries()],
-      status: response.status,
-      expires: this.now() + maxAge * 1000,
-    });
     if (this.inner !== null && copy !== null) await this.inner.put(key, copy);
+  }
+
+  /** Bytes held now (tests). */
+  size(): number {
+    return this.bytes;
+  }
+
+  private drop(key: string): void {
+    const entry = this.entries.get(key);
+    if (entry === undefined) return;
+    this.bytes -= entry.body.byteLength;
+    this.entries.delete(key);
   }
 }
 

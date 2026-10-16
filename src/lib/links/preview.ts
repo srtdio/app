@@ -197,13 +197,15 @@ export function createPreviewClient(deps: PreviewClientDeps) {
         `${deps.endpoint}/preview?url=${encodeURIComponent(key)}`,
         { headers: { authorization: `Bearer ${token}` }, signal: controller.signal },
       );
-      if (!response.ok) return barePreview(url);
-      const preview = parsePreview(await response.json(), url);
+      // A failed answer is remembered too: one request per URL per session.
+      const preview = response.ok ? parsePreview(await response.json(), url) : barePreview(url);
       done.set(key, preview);
       return preview;
     } catch {
       if (controller.signal.aborted) throw abortError();
-      return barePreview(url);
+      const bare = barePreview(url);
+      done.set(key, bare);
+      return bare;
     } finally {
       release();
       if (pending.get(key)?.controller === controller) pending.delete(key);

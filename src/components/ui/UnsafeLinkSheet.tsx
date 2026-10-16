@@ -135,7 +135,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         onPointerCancel={onPointerEnd}
         style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
         className={cn(
-          'flex w-full max-w-[480px] touch-pan-x flex-col gap-3 rounded-t-[22px] border border-border-strong bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg shadow-2xl will-change-transform',
+          'flex max-h-[90vh] w-full max-w-[480px] touch-pan-x flex-col gap-3 overflow-y-auto rounded-t-[22px] border border-border-strong bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg shadow-2xl will-change-transform',
           drag > 0 ? 'transition-none' : 'transition-transform',
           entered
             ? 'translate-y-0 duration-slow ease-enter'

@@ -133,6 +133,9 @@ describe('preview client', () => {
     await flush();
     calls[0]?.resolve(new Response('no', { status: 500 }));
     expect((await p).type).toBe('bare');
+    // Remembered for the session: no second request.
+    await client.request('https://example.com/down');
+    expect(calls).toHaveLength(1);
   });
 
   it('internal app links bypass previews', async () => {

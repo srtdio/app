@@ -452,3 +452,35 @@ describe('link-preview worker: source hygiene', () => {
     expect(src).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
   });
 });
+
+describe('link-preview worker: memory and login edges', () => {
+  it('keeps the in-memory layer under its byte budget', async () => {
+    const layer = new MemoryLayer(null, 1000);
+    for (let i = 0; i < 20; i += 1) {
+      await layer.put(
+        `k${i}`,
+        new Response(new Uint8Array(200), { headers: { 'cache-control': 'max-age=60' } }),
+      );
+    }
+    expect(layer.size()).toBeLessThanOrEqual(1000);
+    // A body over a quarter of the budget is never held in memory.
+    await layer.put(
+      'big',
+      new Response(new Uint8Array(600), { headers: { 'cache-control': 'max-age=60' } }),
+    );
+    expect(await layer.match('big')).toBeUndefined();
+  });
+
+  it('a redirect to an /account page is not a sign-in page', async () => {
+    const t = setup((url) =>
+      url.endsWith('/x')
+        ? redirect('/account/settings')
+        : html('<head><title>Settings</title></head>'),
+    );
+    expect((await t.preview('https://example.com/x')).type).toBe('text');
+  });
+
+  it('leaves a query without tracking params byte-for-byte', () => {
+    expect(normalizeUrl('https://example.com/s?q=a%20b')).toBe('https://example.com/s?q=a%20b');
+  });
+});
