@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  FREE_LIMITS,
   HOME_DESCRIPTION,
   ICON_LINKS,
   OG_IMAGE,
@@ -177,15 +176,21 @@ describe('static files and shell', () => {
     expect(read('index.html')).not.toMatch(/pricing/);
   });
 
-  it('says Sorted is free in llms.txt, with its limits, and lists no prices, plans or trials', () => {
-    const llms = read('public/llms.txt');
-    expect(FREE_LIMITS).toBe(
-      'Sorted is free: one workspace and 1 GB per account. More on request.',
+  it('llms.txt carries the approved line as its summary and Home description, nothing more', () => {
+    expect(read('public/llms.txt')).toBe(
+      [
+        '# Sorted',
+        '',
+        `> ${HOME_DESCRIPTION}`,
+        '',
+        '## Pages',
+        '',
+        `- [Home](${SITE_URL}/): ${HOME_DESCRIPTION}`,
+        `- [Privacy policy](${SITE_URL}/legal/privacy-policy): Sorted's privacy policy.`,
+        `- [Terms and conditions](${SITE_URL}/legal/terms-and-conditions): Sorted's terms and conditions.`,
+        '',
+      ].join('\n'),
     );
-    expect(llms).toContain(`> ${HOME_DESCRIPTION}\n\n${FREE_LIMITS}\n`);
-    expect(llms).toContain(`- [Home](${SITE_URL}/): ${HOME_DESCRIPTION}\n`);
-    expect(llms).not.toMatch(/price|pricing|plans|trial|₹|INR/i);
-    expect(llms).not.toMatch(/—/);
   });
 });
 

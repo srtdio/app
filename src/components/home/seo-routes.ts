@@ -10,8 +10,6 @@ export const SITE_NAME = 'Sorted';
 /** "/" and /demo description, og:description and twitter:description; also the llms.txt summary. */
 export const HOME_DESCRIPTION =
   'Free. One place for social media teams to chat, plan posts, share files and get approvals on record.';
-/** What "free" covers; the line under the llms.txt summary. */
-export const FREE_LIMITS = 'Sorted is free: one workspace and 1 GB per account. More on request.';
 
 /** The og:image file, 1200x630, committed in public/. */
 export const OG_IMAGE = {
