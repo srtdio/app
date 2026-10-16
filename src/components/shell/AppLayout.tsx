@@ -60,6 +60,7 @@ export function AppLayout() {
     loading,
     loaded,
     workspaceId,
+    workspaceKey,
     setActiveWorkspaceId,
     refreshWorkspaces,
     error: workspaceError,
@@ -290,7 +291,12 @@ export function AppLayout() {
               </div>
               {chrome.showBottomTabs ? <BottomTabs /> : null}
               <ToastViewport />
-              <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+              <CommandPalette
+                open={paletteOpen}
+                onClose={() => setPaletteOpen(false)}
+                workspaceId={workspaceId}
+                workspaceKey={workspaceKey}
+              />
               <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
               <WorkspaceSwitcher />
               <InductionGuide tabsShown={chrome.showBottomTabs} />
