@@ -1,775 +1,803 @@
-// Catch-up email cron Worker. Every 30 minutes it reads unsent inbox activity,
-// gates each candidate recipient (local send window + inactivity), assembles a
-// per-recipient digest from the pure @srtdio/inbox core, sends it through the
-// reused @srtdio/workspace Resend sender, then stamps the included rows.
+// Catch-up email cron Worker (G2): reads, tenant scoping and digest assembly.
 //
-// Mirrors src/server/cron/idempotency-cleanup.ts: the testable logic lives in
-// exported functions and the Worker entry is `export default { scheduled }`.
-// runCatchup is pure of direct I/O (every read/write goes through injected
-// gateways) so it is unit-testable with fakes; handleScheduled wires the real
-// service-role Supabase client and Resend sender.
+// Every 30 minutes the Worker reads recent unsent inbox activity and unread DM
+// messages, asks the schedule whether each (recipient, workspace) pair is at a
+// 10:30 or 15:30 local slot, and sends one email per user per workspace per
+// slot covering only activity inside that slot's window.
+//
+// Tenant rule: the service-role client bypasses RLS, so this file enforces
+// isolation itself. Every read is scoped to the recipient's own inbox_entries
+// and to workspaces where they are an active member; post and brief titles,
+// review lists and DMs come only from that workspace. Draft posts are never
+// selected (every posts query carries .neq('stage', 'draft')).
+//
+// Query shape: no N+1. Every lookup is one batched IN read across all
+// candidates (chunked), or a time-bounded paged read; per-recipient work is in
+// memory except getEmail and deliver. The client surface is CatchupDbClient's
+// documented subset (no .or, .rpc or .single).
+//
+// Transactions: none. PostgREST has no multi-statement transactions, and none
+// is needed: the deliverer sends first and stamps email_sent_at only after
+// Resend accepts. A crash between send and stamp leaves the entries unstamped;
+// a re-run of the same slot reuses the same Idempotency-Key, so Resend treats
+// it as a no-op inside its 24h idempotency window instead of sending twice.
 
 import { v7 as uuidv7 } from 'uuid';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import {
+  AGENCY_ROLES,
   buildCatchupUrls,
-  isInSendWindow,
+  buildOneClickUrl,
+  buildUnsubscribePageUrl,
   renderCatchupEmail,
-  type CatchupData,
-  type CatchupRow,
-  type ChatRow,
-  type StageKind,
+  signUnsubscribeToken,
+  type Role,
 } from '@srtdio/inbox';
-import { createResendSender, type EmailSender } from '@srtdio/workspace';
-import { withTraceLogger } from '@/server/trace';
+import { TRACE_ID_HEADER, withTraceLogger } from '@/server/trace';
+import { decideSlot } from './catchup-schedule';
+import {
+  buildIdempotencyKey,
+  buildUnsubscribeHeaders,
+  createDeliverer,
+  createSupabaseDeliveryStore,
+  resolveCatchupGate,
+} from './catchup-deliver';
+import type {
+  CatchupDbClient,
+  CatchupEnv,
+  CatchupTickResult,
+  CommentItem,
+  DmItem,
+  PostItem,
+  RecipientDigest,
+  RunCatchupDeps,
+  SlotDecision,
+  StageItem,
+} from './catchup-contracts';
 
-// --- (A) env ----------------------------------------------------------------
+// inbox_entries event types that can trigger a catch-up. Each maps to a
+// rendered section or summary count: comment and mention to Comments,
+// stage_change to Approved / the parked count, brief_created to the new briefs
+// count. Must stay a subset of INBOX_EVENT_TYPES (event-types.test.ts).
+export const CATCHUP_EVENT_TYPES = ['comment', 'mention', 'stage_change', 'brief_created'] as const;
 
-interface CatchupEnv {
-  SUPABASE_URL: string;
-  SUPABASE_SECRET_KEY: string;
-  RESEND_API_KEY: string;
-  APP_BASE_URL: string;
-  CATCHUP_FROM_ADDRESS: string;
-}
+/** Bounds the longest window (Fri 15:30 to Mon 10:30 is 67h, plus DST slack). */
+const LOOKBACK_MS = 80 * 60 * 60 * 1000;
+const PAGE_SIZE = 1000;
+const ID_CHUNK = 200;
+/** Review posts listed per digest; the renderer shows at most SECTION_ROW_CAP. */
+const REVIEW_ITEM_LIMIT = 25;
+const MENTION_TOKEN = /@\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
+const UNKNOWN_NAME = 'Someone';
 
-// --- constants --------------------------------------------------------------
+// --- row shapes (the service-role client has no Database generic) ----------
 
-// inbox_entries event types that turn into catch-up rows. A deliberate SUBSET of
-// the canonical INBOX_EVENT_TYPES (@srtdio/schemas): points/ready (checkpoints_
-// added / post_ready) and the account events (invite / trial_warning /
-// billing_failure / system) intentionally do not generate a catch-up digest.
-// post_deleted and assets_deleted are deliberately left out too: they are
-// Activity-only, never emailed.
-// event-types.test.ts asserts this stays a subset so a value the DB rejects can
-// never be read here.
-export const CATCHUP_EVENT_TYPES = [
-  'comment',
-  'mention',
-  'comment_resolved',
-  'stage_change',
-  'brief_created',
-  'brief_closed',
-  'asset_uploaded',
-  'asset_version_added',
-] as const;
-type CatchupEventType = (typeof CATCHUP_EVENT_TYPES)[number];
-
-// delivery_attempts.template_key for catch-up sends. Doubles as the chat dedupe
-// floor: chat has no inbox rows to stamp, so the per-recipient last catch-up
-// sent_at is what bounds the next slot's DM counts.
-const CATCHUP_TEMPLATE_KEY = 'catchup';
-
-const SLOT_MS = 30 * 60 * 1000;
-const INACTIVITY_MS = 5 * 60 * 1000;
-const DM_FLOOR_FALLBACK_MS = 24 * 60 * 60 * 1000;
-const READ_BATCH = 1000;
-
-// --- (B) gateway boundary ---------------------------------------------------
-
-interface UserInfo {
-  displayName: string;
-  timezone: string | null;
-}
-interface WorkspaceInfo {
-  name: string;
-  timezone: string | null;
-}
-interface AssetInfo {
-  filename: string;
-  uploadedBy: string | null;
-}
-export interface UnsentEntry {
-  id: string;
-  userId: string;
-  workspaceId: string;
-  eventType: CatchupEventType;
-  entityType: string | null;
-  entityId: string | null;
-  payload: Record<string, unknown>;
-  createdAt: string;
-}
-export interface DmCount {
-  peerUserId: string;
-  count: number;
-  channelId: string;
-}
-export interface DeliveryRecord {
-  workspace_id: string;
-  user_id: string;
-  channel: 'email';
-  template_key: string;
-  provider: 'resend';
-  provider_message_id: string | null;
-  status: 'sent' | 'failed';
-  sent_at: string | null;
-  error: string | null;
-  email_thread_id: null;
-}
-
-// Reuse the sender's message shape verbatim (do not redefine the sender).
-type SendMessage = Parameters<EmailSender['send']>[0];
-
-export interface CatchupGateways {
-  /** Deep-link base (env.APP_BASE_URL); never hardcoded. */
-  baseUrl: string;
-  /** Verified Resend sender identity (env.CATCHUP_FROM_ADDRESS). */
-  fromAddress: string;
-  readUnsentEntries(): Promise<UnsentEntry[]>;
-  resolveUsers(ids: string[]): Promise<Map<string, UserInfo>>;
-  resolveWorkspaces(ids: string[]): Promise<Map<string, WorkspaceInfo>>;
-  resolvePosts(ids: string[]): Promise<Map<string, string>>;
-  resolveBriefs(ids: string[]): Promise<Map<string, string>>;
-  resolveAssets(ids: string[]): Promise<Map<string, AssetInfo>>;
-  latestSeenAt(userIds: string[]): Promise<Map<string, string | null>>;
-  lastCatchupAt(userIds: string[]): Promise<Map<string, string | null>>;
-  dmCountsSince(userIds: string[], floors: Map<string, string>): Promise<Map<string, DmCount[]>>;
-  emailsFor(userIds: string[]): Promise<Map<string, string>>;
-  send(message: SendMessage): Promise<{ id: string }>;
-  stampSent(entryIds: string[], atIso: string): Promise<void>;
-  recordDelivery(row: DeliveryRecord): Promise<void>;
-}
-
-// --- small pure helpers -----------------------------------------------------
-
-function pstr(payload: Record<string, unknown>, key: string): string | undefined {
-  const v = payload[key];
-  return typeof v === 'string' ? v : undefined;
-}
-
-const STAGE_KINDS = new Set<StageKind>(['approved', 'rejected', 'review', 'parked']);
-function toStageKind(v: string | undefined): StageKind | undefined {
-  return v !== undefined && STAGE_KINDS.has(v as StageKind) ? (v as StageKind) : undefined;
-}
-
-// Comment/mention and brief_created carry their actor in the payload;
-// stage_change, brief_closed and comment_resolved are actor-less; asset actors
-// come from the resolved assets.uploaded_by (handled at the call site).
-function payloadActorId(e: UnsentEntry): string | undefined {
-  switch (e.eventType) {
-    case 'comment':
-    case 'mention':
-      return pstr(e.payload, 'author_user_id');
-    case 'brief_created':
-      return pstr(e.payload, 'created_by');
-    default:
-      return undefined;
-  }
-}
-
-function entityKind(e: UnsentEntry): 'post' | 'brief' | 'asset' | null {
-  switch (e.eventType) {
-    case 'stage_change':
-      return 'post';
-    case 'brief_created':
-    case 'brief_closed':
-      return 'brief';
-    case 'asset_uploaded':
-    case 'asset_version_added':
-      return 'asset';
-    case 'comment':
-    case 'mention':
-    case 'comment_resolved':
-      return e.entityType === 'brief' ? 'brief' : 'post';
-    default:
-      return null;
-  }
-}
-
-function floorToSlotIso(now: Date): string {
-  return new Date(Math.floor(now.getTime() / SLOT_MS) * SLOT_MS).toISOString();
-}
-
-function formatTime(iso: string, timezone: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(iso));
-}
-
-function formatSinceLabel(iso: string, timezone: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    weekday: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(iso));
-}
-
-function unique(ids: string[]): string[] {
-  return [...new Set(ids)];
-}
-
-// --- (B/D/F/G/H) the pure orchestration -------------------------------------
-
-export async function runCatchup(
-  g: CatchupGateways,
-  now: Date,
-): Promise<{ sent: number; skipped: number }> {
-  const entries = await g.readUnsentEntries();
-  if (entries.length === 0) return { sent: 0, skipped: 0 };
-
-  // (C) one candidate email per (recipient, workspace).
-  const candidates = new Map<
-    string,
-    { userId: string; workspaceId: string; entries: UnsentEntry[] }
-  >();
-  for (const e of entries) {
-    const key = `${e.userId}::${e.workspaceId}`;
-    const c = candidates.get(key) ?? { userId: e.userId, workspaceId: e.workspaceId, entries: [] };
-    c.entries.push(e);
-    candidates.set(key, c);
-  }
-
-  // (D) collect every id once, then resolve each kind in ONE batched read.
-  const postIds = new Set<string>();
-  const briefIds = new Set<string>();
-  const assetIds = new Set<string>();
-  for (const e of entries) {
-    if (e.entityId === null) continue;
-    const kind = entityKind(e);
-    if (kind === 'post') postIds.add(e.entityId);
-    else if (kind === 'brief') briefIds.add(e.entityId);
-    else if (kind === 'asset') assetIds.add(e.entityId);
-  }
-
-  // Assets first: their uploaded_by feeds the actor id set.
-  const assets = await g.resolveAssets([...assetIds]);
-
-  const actorIds = new Set<string>();
-  for (const e of entries) {
-    const a = payloadActorId(e);
-    if (a !== undefined) actorIds.add(a);
-    if (
-      (e.eventType === 'asset_uploaded' || e.eventType === 'asset_version_added') &&
-      e.entityId !== null
-    ) {
-      const up = assets.get(e.entityId)?.uploadedBy;
-      if (up) actorIds.add(up);
-    }
-  }
-
-  const [posts, briefs] = await Promise.all([
-    g.resolvePosts([...postIds]),
-    g.resolveBriefs([...briefIds]),
-  ]);
-
-  const recipientIds = unique([...candidates.values()].map((c) => c.userId));
-  const lastCatchup = await g.lastCatchupAt(recipientIds);
-
-  // (F) per-recipient DM floor = their last catch-up, else now-24h.
-  const fallbackFloor = new Date(now.getTime() - DM_FLOOR_FALLBACK_MS).toISOString();
-  const floors = new Map<string, string>();
-  for (const id of recipientIds) floors.set(id, lastCatchup.get(id) ?? fallbackFloor);
-
-  const dm = await g.dmCountsSince(recipientIds, floors);
-  const latestSeen = await g.latestSeenAt(recipientIds);
-  const emails = await g.emailsFor(recipientIds);
-
-  const peerIds = new Set<string>();
-  for (const list of dm.values()) for (const d of list) peerIds.add(d.peerUserId);
-
-  const users = await g.resolveUsers(unique([...recipientIds, ...actorIds, ...peerIds]));
-  const workspaces = await g.resolveWorkspaces(
-    unique([...candidates.values()].map((c) => c.workspaceId)),
-  );
-
-  const slotIso = floorToSlotIso(now);
-  const nowIso = now.toISOString();
-
-  let sent = 0;
-  let skipped = 0;
-
-  for (const c of candidates.values()) {
-    const user = users.get(c.userId);
-    const workspace = workspaces.get(c.workspaceId);
-    const timezone = user?.timezone ?? workspace?.timezone ?? null;
-
-    // (G) Gate 1: must be inside the recipient's local send window. Gate 2:
-    // inactive for >= 5 min, or no device row at all. A failed gate skips the
-    // recipient: no send, no stamp, so the entries roll to the next slot.
-    if (timezone === null || !isInSendWindow(timezone, now)) {
-      skipped++;
-      continue;
-    }
-    const seen = latestSeen.get(c.userId) ?? null;
-    if (seen !== null && now.getTime() - new Date(seen).getTime() < INACTIVITY_MS) {
-      skipped++;
-      continue;
-    }
-
-    const email = emails.get(c.userId);
-    if (email === undefined) {
-      skipped++;
-      continue;
-    }
-
-    const urls = buildCatchupUrls(g.baseUrl, c.workspaceId);
-    const stages: CatchupRow[] = [];
-    const comments: CatchupRow[] = [];
-    const briefRows: CatchupRow[] = [];
-    const assetRows: CatchupRow[] = [];
-    const includedEntryIds: string[] = [];
-
-    const actorName = (id: string | undefined): string =>
-      (id !== undefined ? users.get(id)?.displayName : undefined) ?? 'Someone';
-
-    for (const e of c.entries) {
-      if (e.entityId === null) continue;
-      const time = formatTime(e.createdAt, timezone);
-
-      switch (e.eventType) {
-        case 'comment':
-        case 'mention':
-        case 'comment_resolved': {
-          const et: 'post' | 'brief' = e.entityType === 'brief' ? 'brief' : 'post';
-          const title =
-            (et === 'brief' ? briefs.get(e.entityId) : posts.get(e.entityId)) ?? 'Untitled';
-          const verb =
-            e.eventType === 'comment'
-              ? 'commented on'
-              : e.eventType === 'mention'
-                ? 'mentioned you on'
-                : 'resolved a comment thread on';
-          comments.push({
-            who: actorName(pstr(e.payload, 'author_user_id')),
-            verb,
-            target: title,
-            time,
-            url: urls.comment(et, e.entityId, pstr(e.payload, 'comment_id') ?? ''),
-          });
-          includedEntryIds.push(e.id);
-          break;
-        }
-        case 'stage_change': {
-          // Actor-less, state-led: target = post title, coloured by stage.
-          const stage = toStageKind(pstr(e.payload, 'to_stage'));
-          const stageRow: CatchupRow = {
-            verb: stage ? '' : 'stage updated',
-            target: posts.get(e.entityId) ?? 'Untitled',
-            time,
-            url: urls.post(e.entityId),
-          };
-          if (stage !== undefined) stageRow.stage = stage;
-          stages.push(stageRow);
-          includedEntryIds.push(e.id);
-          break;
-        }
-        case 'brief_created': {
-          briefRows.push({
-            who: actorName(pstr(e.payload, 'created_by')),
-            verb: 'opened a brief:',
-            target: pstr(e.payload, 'title') ?? briefs.get(e.entityId) ?? 'Untitled',
-            time,
-            url: urls.brief(e.entityId),
-          });
-          includedEntryIds.push(e.id);
-          break;
-        }
-        case 'brief_closed': {
-          // Actor-less: "Brief closed: {title}".
-          briefRows.push({
-            verb: 'Brief closed:',
-            target: briefs.get(e.entityId) ?? pstr(e.payload, 'title') ?? 'Untitled',
-            time,
-            url: urls.brief(e.entityId),
-          });
-          includedEntryIds.push(e.id);
-          break;
-        }
-        case 'asset_uploaded':
-        case 'asset_version_added': {
-          const asset = assets.get(e.entityId);
-          if (asset === undefined) continue;
-          assetRows.push({
-            who: actorName(asset.uploadedBy ?? undefined),
-            verb: e.eventType === 'asset_uploaded' ? 'added' : 'added a new version of',
-            target: asset.filename,
-            time,
-            url: urls.asset(e.entityId),
-          });
-          includedEntryIds.push(e.id);
-          break;
-        }
-      }
-    }
-
-    const chats: ChatRow[] = (dm.get(c.userId) ?? [])
-      .filter((d) => d.count > 0)
-      .map((d) => ({
-        who: users.get(d.peerUserId)?.displayName ?? 'Someone',
-        count: d.count,
-        url: urls.chat(d.channelId),
-      }));
-
-    const rowCount = stages.length + comments.length + briefRows.length + assetRows.length;
-    if (rowCount === 0 && chats.length === 0) {
-      skipped++;
-      continue;
-    }
-
-    const floor = floors.get(c.userId) ?? fallbackFloor;
-    const data: CatchupData = {
-      workspaceId: c.workspaceId,
-      workspaceName: workspace?.name ?? 'Workspace',
-      recipientUserId: c.userId,
-      sinceLabel: formatSinceLabel(floor, timezone),
-      stages,
-      comments,
-      briefs: briefRows,
-      assets: assetRows,
-      chats,
-    };
-
-    const { subject, html, text, messageId } = renderCatchupEmail(data);
-
-    // (H) Send THEN stamp. A crash between the two risks at most one duplicate
-    // at the next slot, which is acceptable per the PR spec. On send failure we
-    // record the attempt as failed and do NOT stamp, so the rows retry next slot.
-    let providerMessageId: string;
-    try {
-      const res = await g.send({
-        to: email,
-        from: g.fromAddress,
-        subject,
-        messageId: messageId(slotIso),
-        html,
-        text,
-      });
-      providerMessageId = res.id;
-    } catch (err) {
-      await g.recordDelivery({
-        workspace_id: c.workspaceId,
-        user_id: c.userId,
-        channel: 'email',
-        template_key: CATCHUP_TEMPLATE_KEY,
-        provider: 'resend',
-        provider_message_id: null,
-        status: 'failed',
-        sent_at: null,
-        error: err instanceof Error ? err.message : String(err),
-        email_thread_id: null,
-      });
-      skipped++;
-      continue;
-    }
-
-    await g.stampSent(includedEntryIds, nowIso);
-    // recordDelivery runs for every successful send: it is the chat dedupe floor
-    // (chat has no inbox rows to stamp).
-    await g.recordDelivery({
-      workspace_id: c.workspaceId,
-      user_id: c.userId,
-      channel: 'email',
-      template_key: CATCHUP_TEMPLATE_KEY,
-      provider: 'resend',
-      provider_message_id: providerMessageId,
-      status: 'sent',
-      sent_at: nowIso,
-      error: null,
-      email_thread_id: null,
-    });
-    sent++;
-  }
-
-  return { sent, skipped };
-}
-
-// --- real Supabase-backed gateways ------------------------------------------
-
-// Row shapes for casts. The service-role client is built without the Database
-// generic (like idempotency-cleanup's store); each select casts to these.
-interface InboxEntryRow {
+interface InboxRow {
   id: string;
   user_id: string;
   workspace_id: string;
   event_type: string;
   entity_type: string | null;
   entity_id: string | null;
+  actor_user_id: string | null;
   payload: unknown;
+  snoozed_until: string | null;
   created_at: string;
+}
+interface ChannelRow {
+  channel_id: string;
+  workspace_id: string;
+  dm_user_a: string | null;
+  dm_user_b: string | null;
+}
+interface MessageRow {
+  id: string;
+  channel_id: string;
+  sender_user_id: string | null;
+  body: string | null;
+  created_at: string;
+}
+interface CursorRow {
+  channel_id: string;
+  user_id: string;
+  last_read_at: string | null;
 }
 interface UserRow {
   id: string;
   display_name: string;
   timezone: string | null;
+  email_opt_in: boolean;
+  deleted_at: string | null;
 }
 interface WorkspaceRow {
   id: string;
   name: string;
   timezone: string | null;
 }
-interface TitleRow {
+interface MemberRow {
+  user_id: string;
+  workspace_id: string;
+  role: string;
+}
+interface PostRow {
   id: string;
+  workspace_id: string;
+  title: string;
+  stage: string;
+  stage_entered_at: string;
+}
+interface BriefRow {
+  id: string;
+  workspace_id: string;
   title: string;
 }
-interface AssetRow {
-  id: string;
-  filename: string;
-  uploaded_by: string | null;
+
+interface Candidate {
+  userId: string;
+  workspaceId: string;
+  entries: InboxRow[];
+  channels: ChannelRow[];
 }
-interface SeenRow {
-  user_id: string;
-  last_seen_at: string | null;
+
+interface DueCandidate extends Candidate {
+  decision: Extract<SlotDecision, { send: true }>;
+  workspaceName: string;
+  role: Role;
 }
-interface AttemptRow {
-  user_id: string | null;
-  sent_at: string | null;
+
+// --- read helpers -----------------------------------------------------------
+
+type QueryResult = PromiseLike<{ data: unknown; error: { message: string } | null }>;
+
+function chunks(ids: readonly string[]): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += ID_CHUNK) out.push(ids.slice(i, i + ID_CHUNK));
+  return out;
 }
-interface DmChannelRow {
-  channel_id: string;
-  dm_user_a: string | null;
-  dm_user_b: string | null;
+
+/** Reads every page of one query (.range paging; callers order by a unique key). */
+async function readPaged<T>(what: string, build: (from: number, to: number) => QueryResult) {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await build(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(`catch-up read ${what} failed: ${error.message}`);
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE_SIZE) return out;
+  }
 }
-interface DmMessageRow {
-  channel_id: string;
-  sender_user_id: string | null;
-  created_at: string;
+
+/** Paged read per chunk of ids; an empty id list reads nothing. */
+async function readByIds<T>(
+  what: string,
+  ids: readonly string[],
+  build: (chunk: string[], from: number, to: number) => QueryResult,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (const chunk of chunks(ids)) {
+    out.push(...(await readPaged<T>(what, (from, to) => build(chunk, from, to))));
+  }
+  return out;
+}
+
+/** Paged read per (chunk of a, chunk of b); empty when either list is empty. */
+async function readByIdPairs<T>(
+  what: string,
+  aIds: readonly string[],
+  bIds: readonly string[],
+  build: (a: string[], b: string[], from: number, to: number) => QueryResult,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (const a of chunks(aIds)) {
+    for (const b of chunks(bIds)) {
+      out.push(...(await readPaged<T>(what, (from, to) => build(a, b, from, to))));
+    }
+  }
+  return out;
+}
+
+// --- small pure helpers -----------------------------------------------------
+
+function pairKey(a: string, b: string): string {
+  return `${a}|${b}`;
+}
+
+function ms(iso: string): number {
+  return Date.parse(iso);
+}
+
+function payloadString(payload: unknown, key: string): string | undefined {
+  if (payload === null || typeof payload !== 'object') return undefined;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
+
+function commentActorId(entry: InboxRow): string | null {
+  return payloadString(entry.payload, 'author_user_id') ?? entry.actor_user_id;
+}
+
+function mentionIds(body: string | null): string[] {
+  if (body === null) return [];
+  return [...body.matchAll(MENTION_TOKEN)].map((m) => (m[1] ?? '').toLowerCase());
+}
+
+function newestFirst<T>(items: T[], at: (item: T) => string): T[] {
+  return items.sort((x, y) => ms(at(y)) - ms(at(x)));
+}
+
+function isAgency(role: Role): boolean {
+  return AGENCY_ROLES.includes(role);
+}
+
+// --- reads ------------------------------------------------------------------
+
+async function readCandidateEntries(
+  client: CatchupDbClient,
+  trialIds: string[] | null,
+  sinceIso: string,
+  nowIso: string,
+  now: Date,
+): Promise<InboxRow[]> {
+  const cols =
+    'id,user_id,workspace_id,event_type,entity_type,entity_id,actor_user_id,payload,snoozed_until,created_at';
+  const base = () =>
+    client
+      .from('inbox_entries')
+      .select(cols)
+      .gte('created_at', sinceIso)
+      .lt('created_at', nowIso)
+      .is('read_at', null)
+      .is('deleted_at', null)
+      .is('email_sent_at', null)
+      .in('event_type', [...CATCHUP_EVENT_TYPES]);
+  const rows =
+    trialIds === null
+      ? await readPaged<InboxRow>('inbox_entries', (from, to) => base().order('id').range(from, to))
+      : await readByIds<InboxRow>('inbox_entries', trialIds, (chunk, from, to) =>
+          base().in('user_id', chunk).order('id').range(from, to),
+        );
+  return rows.filter((r) => r.snoozed_until === null || ms(r.snoozed_until) <= now.getTime());
+}
+
+interface DmData {
+  channels: ChannelRow[];
+  messages: MessageRow[];
 }
 
 /**
- * Connection/transaction choice: ONE service-role client for the whole run with
- * no explicit transaction. Every resolution below is a single batched IN read
- * (no N+1); stamping is a single bulk UPDATE ... WHERE id IN (...). The
- * send-then-stamp ordering (see runCatchup) accepts at most one duplicate on a
- * mid-flight crash.
+ * DM channels with at least one message in [since, now), and those messages.
+ * Live: discovered from the time-bounded message read. Trial: only channels
+ * where a trial user is dm_user_a or dm_user_b (two queries, no .or).
  */
-function createCatchupGateways(
-  client: SupabaseClient,
-  sender: EmailSender,
-  env: CatchupEnv,
-  now: Date,
-): CatchupGateways {
-  const nowIso = now.toISOString();
+async function readDmData(
+  client: CatchupDbClient,
+  trialIds: string[] | null,
+  sinceIso: string,
+  nowIso: string,
+): Promise<DmData> {
+  const msgCols = 'id,channel_id,sender_user_id,body,created_at';
+  const chanCols = 'channel_id,workspace_id,dm_user_a,dm_user_b';
+  const messagesBase = () =>
+    client
+      .from('chat_messages')
+      .select(msgCols)
+      .gte('created_at', sinceIso)
+      .lt('created_at', nowIso)
+      .is('deleted_at', null)
+      .not('sender_user_id', 'is', null);
+
+  let channels: ChannelRow[];
+  let messages: MessageRow[];
+  if (trialIds === null) {
+    messages = await readPaged<MessageRow>('chat_messages', (from, to) =>
+      messagesBase().order('id').range(from, to),
+    );
+    const channelIds = [...new Set(messages.map((m) => m.channel_id))];
+    channels = await readByIds<ChannelRow>('chat_channels', channelIds, (chunk, from, to) =>
+      client
+        .from('chat_channels')
+        .select(chanCols)
+        .eq('channel_type', 'dm')
+        .in('channel_id', chunk)
+        .order('channel_id')
+        .range(from, to),
+    );
+  } else {
+    const byColumn = (column: 'dm_user_a' | 'dm_user_b') =>
+      readByIds<ChannelRow>('chat_channels', trialIds, (chunk, from, to) =>
+        client
+          .from('chat_channels')
+          .select(chanCols)
+          .eq('channel_type', 'dm')
+          .in(column, chunk)
+          .order('channel_id')
+          .range(from, to),
+      );
+    const all = [...(await byColumn('dm_user_a')), ...(await byColumn('dm_user_b'))];
+    channels = [...new Map(all.map((c) => [c.channel_id, c])).values()];
+    messages = await readByIds<MessageRow>(
+      'chat_messages',
+      channels.map((c) => c.channel_id),
+      (chunk, from, to) => messagesBase().in('channel_id', chunk).order('id').range(from, to),
+    );
+  }
+  const dmIds = new Set(channels.map((c) => c.channel_id));
+  return { channels, messages: messages.filter((m) => dmIds.has(m.channel_id)) };
+}
+
+// --- digest assembly --------------------------------------------------------
+
+interface Lookups {
+  names: Map<string, string>;
+  posts: Map<string, PostRow>;
+  briefs: Map<string, BriefRow>;
+  reviewByWorkspace: Map<string, PostRow[]>;
+  messagesByChannel: Map<string, MessageRow[]>;
+  cursors: Map<string, string | null>;
+  activeMembers: Set<string>;
+}
+
+interface Assembled {
+  digest: Omit<RecipientDigest, 'unsubscribeUrl'>;
+  entryIds: string[];
+}
+
+function assembleDigest(c: DueCandidate, look: Lookups, appBaseUrl: string): Assembled | null {
+  const urls = buildCatchupUrls(appBaseUrl, c.workspaceId);
+  const { window } = c.decision;
+  const name = (id: string | null): string =>
+    (id !== null ? look.names.get(id) : undefined) ?? UNKNOWN_NAME;
+  const postIn = (id: string | null): PostRow | undefined => {
+    const post = id !== null ? look.posts.get(id) : undefined;
+    return post?.workspace_id === c.workspaceId ? post : undefined;
+  };
+  const briefIn = (id: string | null): BriefRow | undefined => {
+    const brief = id !== null ? look.briefs.get(id) : undefined;
+    return brief?.workspace_id === c.workspaceId ? brief : undefined;
+  };
+
+  const comments: CommentItem[] = [];
+  const approved: StageItem[] = [];
+  let parked = 0;
+  let newBriefs = 0;
+  const entryIds: string[] = [];
+
+  for (const e of c.entries) {
+    if (e.event_type === 'comment' || e.event_type === 'mention') {
+      const entityType =
+        e.entity_type === 'post' || e.entity_type === 'brief' ? e.entity_type : null;
+      const target = entityType === 'post' ? postIn(e.entity_id) : briefIn(e.entity_id);
+      if (entityType === null || target === undefined) continue;
+      const commentId = payloadString(e.payload, 'comment_id');
+      comments.push({
+        actorName: name(commentActorId(e)),
+        targetTitle: target.title,
+        entityType,
+        entityId: target.id,
+        url:
+          commentId !== undefined
+            ? urls.comment(entityType, target.id, commentId)
+            : entityType === 'post'
+              ? urls.post(target.id)
+              : urls.brief(target.id),
+        createdAt: e.created_at,
+        mention: e.event_type === 'mention',
+      });
+      entryIds.push(e.id);
+    } else if (e.event_type === 'stage_change') {
+      const post = postIn(e.entity_id);
+      const toStage = payloadString(e.payload, 'to_stage');
+      if (post === undefined) continue;
+      if (toStage === 'approved') {
+        approved.push({
+          postId: post.id,
+          title: post.title,
+          url: urls.post(post.id),
+          toStage,
+          createdAt: e.created_at,
+        });
+      } else if (toStage === 'parked') {
+        parked++;
+      } else {
+        continue;
+      }
+      entryIds.push(e.id);
+    } else if (e.event_type === 'brief_created') {
+      if (briefIn(e.entity_id) === undefined) continue;
+      newBriefs++;
+      entryIds.push(e.id);
+    }
+  }
+
+  const dms: DmItem[] = [];
+  const latestAt = new Map<string, string>();
+  let dmInWindow = false;
+  for (const ch of c.channels) {
+    const cursor = look.cursors.get(pairKey(ch.channel_id, c.userId)) ?? null;
+    // After the read cursor when one exists; otherwise the half-open window
+    // start, so a message at exactly window.start is not lost between slots.
+    const afterFloor = (iso: string): boolean =>
+      cursor !== null ? ms(iso) > ms(cursor) : ms(iso) >= ms(window.start);
+    const unread = (look.messagesByChannel.get(ch.channel_id) ?? []).filter(
+      (m) =>
+        m.sender_user_id !== null &&
+        m.sender_user_id !== c.userId &&
+        afterFloor(m.created_at) &&
+        ms(m.created_at) < ms(window.end),
+    );
+    const latest = newestFirst(unread, (m) => m.created_at)[0];
+    if (latest === undefined || latest.sender_user_id === null) continue;
+    if (unread.some((m) => ms(m.created_at) >= ms(window.start))) dmInWindow = true;
+    dms.push({
+      channelId: ch.channel_id,
+      senderUserId: latest.sender_user_id,
+      senderName: name(latest.sender_user_id),
+      unreadCount: unread.length,
+      latestBody: latest.body,
+      url: urls.chat(ch.channel_id),
+    });
+    latestAt.set(ch.channel_id, latest.created_at);
+  }
+
+  if (entryIds.length === 0 && !dmInWindow) return null;
+
+  newestFirst(comments, (i) => i.createdAt);
+  newestFirst(approved, (i) => i.createdAt);
+  newestFirst(dms, (d) => latestAt.get(d.channelId) ?? window.start);
+
+  const mentionNames: Record<string, string> = {};
+  for (const dm of dms) {
+    for (const id of mentionIds(dm.latestBody)) {
+      const display = look.names.get(id);
+      if (display !== undefined && look.activeMembers.has(pairKey(id, c.workspaceId))) {
+        mentionNames[id] = display;
+      }
+    }
+  }
+
+  const audience = isAgency(c.role) ? 'agency' : 'client';
+  const reviewRows = [...(look.reviewByWorkspace.get(c.workspaceId) ?? [])];
+  reviewRows.sort((x, y) =>
+    audience === 'client'
+      ? ms(y.stage_entered_at) - ms(x.stage_entered_at)
+      : ms(x.stage_entered_at) - ms(y.stage_entered_at),
+  );
+  const review: PostItem[] = reviewRows.slice(0, REVIEW_ITEM_LIMIT).map((p) => ({
+    postId: p.id,
+    title: p.title,
+    url: urls.post(p.id),
+    stageEnteredAt: p.stage_entered_at,
+  }));
 
   return {
-    baseUrl: env.APP_BASE_URL,
-    fromAddress: env.CATCHUP_FROM_ADDRESS,
-
-    async readUnsentEntries() {
-      const out: UnsentEntry[] = [];
-      for (let from = 0; ; from += READ_BATCH) {
-        const { data, error } = await client
-          .from('inbox_entries')
-          .select('id,user_id,workspace_id,event_type,entity_type,entity_id,payload,created_at')
-          .is('email_sent_at', null)
-          .is('deleted_at', null)
-          .or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
-          .in('event_type', [...CATCHUP_EVENT_TYPES])
-          .order('created_at', { ascending: true })
-          .range(from, from + READ_BATCH - 1);
-        if (error) throw error;
-        const rows = (data ?? []) as InboxEntryRow[];
-        for (const r of rows) {
-          out.push({
-            id: r.id,
-            userId: r.user_id,
-            workspaceId: r.workspace_id,
-            eventType: r.event_type as CatchupEventType,
-            entityType: r.entity_type,
-            entityId: r.entity_id,
-            payload:
-              r.payload !== null && typeof r.payload === 'object'
-                ? (r.payload as Record<string, unknown>)
-                : {},
-            createdAt: r.created_at,
-          });
-        }
-        if (rows.length < READ_BATCH) break;
-      }
-      return out;
-    },
-
-    async resolveUsers(ids) {
-      const m = new Map<string, UserInfo>();
-      if (ids.length === 0) return m;
-      const { data, error } = await client
-        .from('users')
-        .select('id,display_name,timezone')
-        .in('id', ids);
-      if (error) throw error;
-      for (const r of (data ?? []) as UserRow[])
-        m.set(r.id, { displayName: r.display_name, timezone: r.timezone });
-      return m;
-    },
-
-    async resolveWorkspaces(ids) {
-      const m = new Map<string, WorkspaceInfo>();
-      if (ids.length === 0) return m;
-      const { data, error } = await client
-        .from('workspaces')
-        .select('id,name,timezone')
-        .in('id', ids);
-      if (error) throw error;
-      for (const r of (data ?? []) as WorkspaceRow[])
-        m.set(r.id, { name: r.name, timezone: r.timezone });
-      return m;
-    },
-
-    async resolvePosts(ids) {
-      const m = new Map<string, string>();
-      if (ids.length === 0) return m;
-      const { data, error } = await client.from('posts').select('id,title').in('id', ids);
-      if (error) throw error;
-      for (const r of (data ?? []) as TitleRow[]) m.set(r.id, r.title);
-      return m;
-    },
-
-    async resolveBriefs(ids) {
-      const m = new Map<string, string>();
-      if (ids.length === 0) return m;
-      const { data, error } = await client.from('briefs').select('id,title').in('id', ids);
-      if (error) throw error;
-      for (const r of (data ?? []) as TitleRow[]) m.set(r.id, r.title);
-      return m;
-    },
-
-    async resolveAssets(ids) {
-      const m = new Map<string, AssetInfo>();
-      if (ids.length === 0) return m;
-      const { data, error } = await client
-        .from('assets')
-        .select('id,filename,uploaded_by')
-        .in('id', ids);
-      if (error) throw error;
-      for (const r of (data ?? []) as AssetRow[])
-        m.set(r.id, { filename: r.filename, uploadedBy: r.uploaded_by });
-      return m;
-    },
-
-    async latestSeenAt(userIds) {
-      const m = new Map<string, string | null>();
-      if (userIds.length === 0) return m;
-      const { data, error } = await client
-        .from('session_devices')
-        .select('user_id,last_seen_at')
-        .is('revoked_at', null)
-        .in('user_id', userIds);
-      if (error) throw error;
-      for (const r of (data ?? []) as SeenRow[]) {
-        if (r.last_seen_at === null) continue;
-        const prev = m.get(r.user_id) ?? null;
-        if (prev === null || r.last_seen_at > prev) m.set(r.user_id, r.last_seen_at);
-      }
-      return m;
-    },
-
-    async lastCatchupAt(userIds) {
-      const m = new Map<string, string | null>();
-      if (userIds.length === 0) return m;
-      const { data, error } = await client
-        .from('delivery_attempts')
-        .select('user_id,sent_at')
-        .eq('template_key', CATCHUP_TEMPLATE_KEY)
-        .eq('status', 'sent')
-        .in('user_id', userIds);
-      if (error) throw error;
-      for (const r of (data ?? []) as AttemptRow[]) {
-        if (r.user_id === null || r.sent_at === null) continue;
-        const prev = m.get(r.user_id) ?? null;
-        if (prev === null || r.sent_at > prev) m.set(r.user_id, r.sent_at);
-      }
-      return m;
-    },
-
-    async dmCountsSince(userIds, floors) {
-      const result = new Map<string, DmCount[]>();
-      if (userIds.length === 0) return result;
-      // Two batched IN reads (channels, then their messages), reduced in memory.
-      // Constant query count regardless of recipient count: no N+1.
-      const idList = userIds.join(',');
-      const { data: chData, error: chErr } = await client
-        .from('chat_channels')
-        .select('channel_id,dm_user_a,dm_user_b')
-        .eq('channel_type', 'dm')
-        .or(`dm_user_a.in.(${idList}),dm_user_b.in.(${idList})`);
-      if (chErr) throw chErr;
-      const channels = (chData ?? []) as DmChannelRow[];
-      if (channels.length === 0) return result;
-
-      const byChannel = new Map<string, DmChannelRow>();
-      for (const ch of channels) byChannel.set(ch.channel_id, ch);
-      const recipientSet = new Set(userIds);
-
-      let minFloor: string | null = null;
-      for (const id of userIds) {
-        const f = floors.get(id);
-        if (f !== undefined && (minFloor === null || f < minFloor)) minFloor = f;
-      }
-
-      let msgQuery = client
-        .from('chat_messages')
-        .select('channel_id,sender_user_id,created_at')
-        .is('deleted_at', null)
-        .in('channel_id', [...byChannel.keys()]);
-      if (minFloor !== null) msgQuery = msgQuery.gt('created_at', minFloor);
-      const { data: msgData, error: msgErr } = await msgQuery;
-      if (msgErr) throw msgErr;
-      const messages = (msgData ?? []) as DmMessageRow[];
-
-      const acc = new Map<string, Map<string, { count: number; channelId: string }>>();
-      for (const msg of messages) {
-        const ch = byChannel.get(msg.channel_id);
-        if (!ch || ch.dm_user_a === null || ch.dm_user_b === null) continue;
-        for (const recipient of [ch.dm_user_a, ch.dm_user_b]) {
-          if (!recipientSet.has(recipient)) continue;
-          if (msg.sender_user_id === null || msg.sender_user_id === recipient) continue;
-          const floor = floors.get(recipient);
-          if (floor !== undefined && !(msg.created_at > floor)) continue;
-          const peer = ch.dm_user_a === recipient ? ch.dm_user_b : ch.dm_user_a;
-          const peerMap =
-            acc.get(recipient) ?? new Map<string, { count: number; channelId: string }>();
-          const cell = peerMap.get(peer) ?? { count: 0, channelId: ch.channel_id };
-          cell.count += 1;
-          peerMap.set(peer, cell);
-          acc.set(recipient, peerMap);
-        }
-      }
-      for (const [recipient, peerMap] of acc) {
-        const list: DmCount[] = [];
-        for (const [peerUserId, cell] of peerMap)
-          list.push({ peerUserId, count: cell.count, channelId: cell.channelId });
-        result.set(recipient, list);
-      }
-      return result;
-    },
-
-    async emailsFor(userIds) {
-      const m = new Map<string, string>();
-      if (userIds.length === 0) return m;
-      const want = new Set(userIds);
-      const perPage = 1000;
-      for (let page = 1; ; page++) {
-        const { data, error } = await client.auth.admin.listUsers({ page, perPage });
-        if (error) throw error;
-        const list = data.users;
-        for (const u of list) {
-          if (u.email !== undefined && u.email.length > 0 && want.has(u.id)) m.set(u.id, u.email);
-        }
-        if (list.length < perPage) break;
-      }
-      return m;
-    },
-
-    async send(message) {
-      return sender.send(message);
-    },
-
-    async stampSent(entryIds, atIso) {
-      if (entryIds.length === 0) return;
-      const { error } = await client
-        .from('inbox_entries')
-        .update({ email_sent_at: atIso })
-        .in('id', entryIds);
-      if (error) throw error;
-    },
-
-    async recordDelivery(row) {
-      const { error } = await client.from('delivery_attempts').insert(row);
-      if (error) throw error;
+    entryIds,
+    digest: {
+      userId: c.userId,
+      workspaceId: c.workspaceId,
+      workspaceName: c.workspaceName,
+      role: c.role,
+      audience,
+      slot: c.decision.slot,
+      local: c.decision.local,
+      previous: c.decision.previous,
+      appBaseUrl,
+      mentionNames,
+      counts: {
+        inReview: reviewRows.length,
+        unreadMessages: dms.reduce((sum, d) => sum + d.unreadCount, 0),
+        comments: comments.length,
+        approved: approved.length,
+        parked,
+        newBriefs,
+      },
+      review: { items: review, total: reviewRows.length },
+      comments: { items: comments, total: comments.length },
+      approved: { items: approved, total: approved.length },
+      dms: { items: dms, total: dms.length },
     },
   };
+}
+
+// --- orchestration ----------------------------------------------------------
+
+export async function runCatchup(deps: RunCatchupDeps): Promise<CatchupTickResult> {
+  const { client, env, gate, deliverer, getEmail, now, log } = deps;
+  const nowIso = now.toISOString();
+  const sinceIso = new Date(now.getTime() - LOOKBACK_MS).toISOString();
+  const trialIds = gate.mode === 'trial' ? [...gate.userIds] : null;
+  const allowed = (userId: string) => gate.mode === 'live' || gate.userIds.has(userId);
+
+  // 1. Candidates: (recipient, workspace) pairs with unsent entries or DMs.
+  const entries = await readCandidateEntries(client, trialIds, sinceIso, nowIso, now);
+  const dm = await readDmData(client, trialIds, sinceIso, nowIso);
+
+  const candidates = new Map<string, Candidate>();
+  const candidate = (userId: string, workspaceId: string): Candidate => {
+    const key = pairKey(userId, workspaceId);
+    const existing = candidates.get(key);
+    if (existing !== undefined) return existing;
+    const created: Candidate = { userId, workspaceId, entries: [], channels: [] };
+    candidates.set(key, created);
+    return created;
+  };
+  for (const e of entries) {
+    if (allowed(e.user_id)) candidate(e.user_id, e.workspace_id).entries.push(e);
+  }
+
+  const messagesByChannel = new Map<string, MessageRow[]>();
+  for (const m of dm.messages) {
+    const list = messagesByChannel.get(m.channel_id) ?? [];
+    list.push(m);
+    messagesByChannel.set(m.channel_id, list);
+  }
+  for (const ch of dm.channels) {
+    const msgs = messagesByChannel.get(ch.channel_id) ?? [];
+    for (const participant of [ch.dm_user_a, ch.dm_user_b]) {
+      if (participant === null || !allowed(participant)) continue;
+      if (msgs.some((m) => m.sender_user_id !== null && m.sender_user_id !== participant)) {
+        candidate(participant, ch.workspace_id).channels.push(ch);
+      }
+    }
+  }
+  if (candidates.size === 0) return { sent: 0, failed: 0, skipped: 0 };
+
+  // 2. Batched lookups across every candidate.
+  const recipientIds = [...new Set([...candidates.values()].map((c) => c.userId))];
+  const workspaceIds = [...new Set([...candidates.values()].map((c) => c.workspaceId))];
+  const mentioned = new Set<string>();
+  const nameIds = new Set<string>(recipientIds);
+  for (const c of candidates.values()) {
+    for (const e of c.entries) {
+      const actor = commentActorId(e);
+      if (actor !== null) nameIds.add(actor);
+    }
+  }
+  for (const m of dm.messages) {
+    if (m.sender_user_id !== null) nameIds.add(m.sender_user_id);
+    for (const id of mentionIds(m.body)) mentioned.add(id);
+  }
+  for (const id of mentioned) nameIds.add(id);
+
+  const users = new Map<string, UserRow>();
+  for (const u of await readByIds<UserRow>('users', [...nameIds], (chunk, from, to) =>
+    client
+      .from('users')
+      .select('id,display_name,timezone,email_opt_in,deleted_at')
+      .in('id', chunk)
+      .order('id')
+      .range(from, to),
+  )) {
+    users.set(u.id, u);
+  }
+
+  const workspaces = new Map<string, WorkspaceRow>();
+  for (const w of await readByIds<WorkspaceRow>('workspaces', workspaceIds, (chunk, from, to) =>
+    client
+      .from('workspaces')
+      .select('id,name,timezone')
+      .in('id', chunk)
+      .is('deleted_at', null)
+      .order('id')
+      .range(from, to),
+  )) {
+    workspaces.set(w.id, w);
+  }
+
+  const memberUserIds = [...new Set([...recipientIds, ...mentioned])];
+  const roles = new Map<string, string>();
+  for (const m of await readByIdPairs<MemberRow>(
+    'workspace_members',
+    memberUserIds,
+    workspaceIds,
+    (userChunk, wsChunk, from, to) =>
+      client
+        .from('workspace_members')
+        .select('id,user_id,workspace_id,role')
+        .in('user_id', userChunk)
+        .in('workspace_id', wsChunk)
+        .eq('active', true)
+        .is('removed_at', null)
+        .order('id')
+        .range(from, to),
+  )) {
+    roles.set(pairKey(m.user_id, m.workspace_id), m.role);
+  }
+
+  // 3. Per-candidate gating: opt-in, membership, slot, window.
+  let skipped = 0;
+  const due: DueCandidate[] = [];
+  for (const c of candidates.values()) {
+    const user = users.get(c.userId);
+    const workspace = workspaces.get(c.workspaceId);
+    const role = roles.get(pairKey(c.userId, c.workspaceId));
+    if (
+      user === undefined ||
+      user.deleted_at !== null ||
+      !user.email_opt_in ||
+      workspace === undefined ||
+      role === undefined
+    ) {
+      skipped++;
+      continue;
+    }
+    const decision = decideSlot(user.timezone ?? workspace.timezone ?? null, now);
+    if (!decision.send) {
+      if (decision.reason === 'no_timezone' || decision.reason === 'invalid_timezone') {
+        log.warn('catch-up skipped: no usable timezone', {
+          user_id: c.userId,
+          workspace_id: c.workspaceId,
+          reason: decision.reason,
+        });
+      }
+      skipped++;
+      continue;
+    }
+    const start = ms(decision.window.start);
+    const end = ms(decision.window.end);
+    due.push({
+      ...c,
+      entries: c.entries.filter((e) => ms(e.created_at) >= start && ms(e.created_at) < end),
+      decision,
+      workspaceName: workspace.name,
+      // workspace_members.role is CHECK-constrained to the Role values.
+      role: role as Role,
+    });
+  }
+
+  // 4. Content lookups for due candidates only, scoped to their workspaces.
+  const dueWorkspaceIds = [...new Set(due.map((c) => c.workspaceId))];
+  const dueUserIds = [...new Set(due.map((c) => c.userId))];
+  const postIds = new Set<string>();
+  const briefIds = new Set<string>();
+  for (const c of due) {
+    for (const e of c.entries) {
+      if (e.entity_id === null) continue;
+      if (e.event_type === 'stage_change' || e.entity_type === 'post') postIds.add(e.entity_id);
+      else if (e.event_type === 'brief_created' || e.entity_type === 'brief')
+        briefIds.add(e.entity_id);
+    }
+  }
+
+  const postCols = 'id,workspace_id,title,stage,stage_entered_at';
+  const posts = new Map<string, PostRow>();
+  for (const p of await readByIdPairs<PostRow>(
+    'posts',
+    [...postIds],
+    dueWorkspaceIds,
+    (idChunk, wsChunk, from, to) =>
+      client
+        .from('posts')
+        .select(postCols)
+        .in('id', idChunk)
+        .in('workspace_id', wsChunk)
+        .neq('stage', 'draft')
+        .is('deleted_at', null)
+        .order('id')
+        .range(from, to),
+  )) {
+    posts.set(p.id, p);
+  }
+
+  const briefs = new Map<string, BriefRow>();
+  for (const b of await readByIdPairs<BriefRow>(
+    'briefs',
+    [...briefIds],
+    dueWorkspaceIds,
+    (idChunk, wsChunk, from, to) =>
+      client
+        .from('briefs')
+        .select('id,workspace_id,title')
+        .in('id', idChunk)
+        .in('workspace_id', wsChunk)
+        .is('deleted_at', null)
+        .order('id')
+        .range(from, to),
+  )) {
+    briefs.set(b.id, b);
+  }
+
+  const reviewByWorkspace = new Map<string, PostRow[]>();
+  for (const p of await readByIds<PostRow>('review posts', dueWorkspaceIds, (chunk, from, to) =>
+    client
+      .from('posts')
+      .select(postCols)
+      .in('workspace_id', chunk)
+      .eq('stage', 'review')
+      .neq('stage', 'draft')
+      .is('deleted_at', null)
+      .order('id')
+      .range(from, to),
+  )) {
+    const list = reviewByWorkspace.get(p.workspace_id) ?? [];
+    list.push(p);
+    reviewByWorkspace.set(p.workspace_id, list);
+  }
+
+  const dueChannelIds = [...new Set(due.flatMap((c) => c.channels.map((ch) => ch.channel_id)))];
+  const cursors = new Map<string, string | null>();
+  for (const r of await readByIdPairs<CursorRow>(
+    'chat_read_cursors',
+    dueChannelIds,
+    dueUserIds,
+    (chChunk, userChunk, from, to) =>
+      client
+        .from('chat_read_cursors')
+        .select('channel_id,user_id,last_read_at')
+        .in('channel_id', chChunk)
+        .in('user_id', userChunk)
+        .order('channel_id')
+        .order('user_id')
+        .range(from, to),
+  )) {
+    cursors.set(pairKey(r.channel_id, r.user_id), r.last_read_at);
+  }
+
+  const names = new Map<string, string>();
+  for (const [id, u] of users) names.set(id, u.display_name);
+  const look: Lookups = {
+    names,
+    posts,
+    briefs,
+    reviewByWorkspace,
+    messagesByChannel,
+    cursors,
+    activeMembers: new Set(roles.keys()),
+  };
+
+  // 5. Assemble, render and deliver: one email per user per workspace per slot.
+  let sent = 0;
+  let failed = 0;
+  const tokens = new Map<string, string>();
+  for (const c of due) {
+    const assembled = assembleDigest(c, look, env.APP_BASE_URL);
+    if (assembled === null) {
+      skipped++;
+      continue;
+    }
+    try {
+      const to = await getEmail(c.userId);
+      if (to === null) {
+        skipped++;
+        continue;
+      }
+      const token =
+        tokens.get(c.userId) ??
+        (await signUnsubscribeToken(c.userId, env.UNSUBSCRIBE_SIGNING_SECRET));
+      tokens.set(c.userId, token);
+      const digest: RecipientDigest = {
+        ...assembled.digest,
+        unsubscribeUrl: buildUnsubscribePageUrl(env.APP_BASE_URL, c.userId, token),
+      };
+      const result = await deliverer.deliver({
+        userId: c.userId,
+        workspaceId: c.workspaceId,
+        email: {
+          to,
+          from: env.CATCHUP_FROM_ADDRESS,
+          rendered: renderCatchupEmail(digest),
+          idempotencyKey: buildIdempotencyKey(
+            c.userId,
+            c.workspaceId,
+            c.decision.local.isoDate,
+            c.decision.slot,
+          ),
+          headers: buildUnsubscribeHeaders(buildOneClickUrl(env.SUPABASE_URL, c.userId, token)),
+        },
+        entryIds: assembled.entryIds,
+      });
+      if (result.ok) sent++;
+      else failed++;
+    } catch (err) {
+      failed++;
+      log.error('catch-up delivery threw', {
+        user_id: c.userId,
+        workspace_id: c.workspaceId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return { sent, failed, skipped };
 }
 
 // --- entry points -----------------------------------------------------------
@@ -777,20 +805,32 @@ function createCatchupGateways(
 export async function handleScheduled(
   env: CatchupEnv,
   now: Date = new Date(),
-): Promise<{ sent: number; skipped: number }> {
+): Promise<CatchupTickResult> {
   const traceId = uuidv7();
   const log = withTraceLogger(traceId);
-  const client: SupabaseClient = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+  const gate = resolveCatchupGate(env);
+  const client = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { [TRACE_ID_HEADER]: traceId } },
   });
-  const sender = createResendSender({ apiKey: env.RESEND_API_KEY });
-  try {
-    const result = await runCatchup(createCatchupGateways(client, sender, env, now), now);
-    log.info('catch-up send complete', result);
-    return result;
-  } finally {
-    await client.removeAllChannels();
-  }
+  const deliverer = createDeliverer({
+    env,
+    store: createSupabaseDeliveryStore(client),
+    traceId,
+    log,
+  });
+  const getEmail = async (userId: string): Promise<string | null> => {
+    const { data, error } = await client.auth.admin.getUserById(userId);
+    if (error) {
+      log.warn('catch-up email lookup failed', { user_id: userId, error: error.message });
+      return null;
+    }
+    const email = data.user.email;
+    return email !== undefined && email !== '' ? email : null;
+  };
+  const result = await runCatchup({ client, env, gate, deliverer, getEmail, now, log });
+  log.info('catch-up tick complete', { mode: gate.mode, ...result });
+  return result;
 }
 
 export default {
