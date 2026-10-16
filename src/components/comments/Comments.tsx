@@ -834,10 +834,24 @@ export function Comments({
     };
   }, []);
 
+  // Stale-response guard: each page-0 load takes a new sequence number and only
+  // the latest one applies, so overlapping refetches never resolve
+  // last-write-wins. Unmount stops every in-flight load from setting state.
+  const page0Seq = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   // Fetch a single page. page 0 replaces the list (mount + post-submit refetch);
   // later pages append. A full page (exactly PAGE_SIZE) implies there may be more.
   const loadPage = useCallback(
     async (nextPage: number): Promise<void> => {
+      const seq = nextPage === 0 ? ++page0Seq.current : null;
+      const stale = (): boolean => !mounted.current || (seq !== null && seq !== page0Seq.current);
       if (nextPage === 0) {
         setLoading(true);
         setLoadError(null);
@@ -850,6 +864,7 @@ export function Comments({
         entity_id: entityId,
         page: nextPage,
       });
+      if (stale()) return;
       if (!result.ok) {
         if (nextPage === 0) {
           setLoading(false);
@@ -865,6 +880,7 @@ export function Comments({
       // a brief); a failed read keeps whatever was already shown.
       if (nextPage === 0 && entityType === 'post') {
         const checkpointRows = await fetchCheckpoints(supabase, workspaceId, entityId);
+        if (stale()) return;
         setCheckpoints(checkpointRows);
       }
       setComments((prev) => (nextPage === 0 ? result.data : [...prev, ...result.data]));

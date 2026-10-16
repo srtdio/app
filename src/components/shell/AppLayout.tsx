@@ -57,6 +57,7 @@ export function AppLayout() {
     workspaceDisplayName,
     workspaces,
     loading,
+    loaded,
     workspaceId,
     setActiveWorkspaceId,
     refreshWorkspaces,
@@ -112,7 +113,11 @@ export function AppLayout() {
   // exists). With no workspace yet, the stored step decides between the
   // Creator's shell (make the workspace) and the approver's screens.
   const induction = useInductionData(workspaceId);
-  const noWorkspace = !loading && workspaceError === null && workspaces.length === 0;
+  // Only the first list blocks the shell. A later re-list (e.g. after creating a
+  // workspace) keeps the shell and the Outlet mounted, so comments, drafts and
+  // scroll survive it.
+  const initialLoading = loading && !loaded;
+  const noWorkspace = !initialLoading && workspaceError === null && workspaces.length === 0;
   const inductionPending = noWorkspace && induction.status === 'loading';
   const approverStage: ApproverStage = noWorkspace ? approverStageOf(induction.state) : 'none';
 
@@ -170,7 +175,7 @@ export function AppLayout() {
   // and its workspace context is frozen at open, then it stays mounted until the
   // finish refetch shows a complete profile and a workspace, so the flow never
   // remounts mid-way or flashes the shell.
-  if (flow === null && (profileLoading || loading || inductionPending)) {
+  if (flow === null && (profileLoading || initialLoading || inductionPending)) {
     return (
       <div className="min-h-full w-full grid place-items-center bg-bg">
         <span className="text-sm text-fg-3">Loading</span>
@@ -211,8 +216,9 @@ export function AppLayout() {
     logger.error('onboarding gate: profile load failed, falling through to app');
   }
 
-  // A failed workspace list is not "no workspace": say so instead of a shell.
-  if (!loading && workspaceError !== null && workspaces.length === 0) {
+  // A failed initial workspace list is not "no workspace": say so instead of a
+  // shell. A failed re-list after that keeps the loaded shell.
+  if (!loaded && !loading && workspaceError !== null) {
     return (
       <div className="grid h-full w-full place-items-center bg-bg px-6">
         <EmptyState
