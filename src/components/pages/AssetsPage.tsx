@@ -18,11 +18,6 @@ import { FolderRenameSheet } from '@/components/pages/assets/FolderRenameSheet';
 import { NewFolderSheet } from '@/components/pages/assets/NewFolderSheet';
 import { MoveToFolderSheet } from '@/components/pages/assets/MoveToFolderSheet';
 import { Toasts } from '@/components/pages/assets/Toasts';
-import {
-  StorageWarningBanner,
-  storageWarningCopy,
-  useStorageWarning,
-} from '@/components/pages/settings/WorkspaceSettingsPanel';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { openLinkInNewTab } from '@/components/pages/assets/openExternal';
 import { supabase } from '@/lib/supabase';
@@ -113,9 +108,6 @@ export function AssetsPage() {
   const [role, setRole] = useState<string | null>(null);
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   const { toasts, push, dismiss } = useToasts();
-  // Owner/admin storage warning: banner on the page, toast after an upload.
-  const storage = useStorageWarning();
-  const { refresh: refreshStorage } = storage;
   const [searchParams, setSearchParams] = useSearchParams();
   const openedAssetParam = useRef<string | null>(null);
 
@@ -432,12 +424,6 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, newTrace],
   );
 
-  // After a fully successful upload run, re-read usage; at 800 MB toast once.
-  const checkStorageAfterUpload = useCallback(async (): Promise<void> => {
-    const next = await refreshStorage();
-    if (next !== null && next.warn) push(storageWarningCopy(next.usedBytes));
-  }, [refreshStorage, push]);
-
   // Add a link asset: POST {workspace_id, url, name} to the worker's /links
   // route. The grid is refreshed by the sheet (onAdded) so the new link shows
   // with the existing link-card rendering.
@@ -715,8 +701,6 @@ export function AssetsPage() {
         )}
       </SectionHeader>
 
-      <StorageWarningBanner {...storage} className="mx-4 mt-4 md:mx-6" />
-
       {!searching && !selectMode && currentFolders.length > 0 ? (
         <div className="px-4 md:px-6 mt-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
@@ -843,7 +827,6 @@ export function AssetsPage() {
         onToast={push}
         onUploaded={() => {
           void loadAssets();
-          void checkStorageAfterUpload();
         }}
         folderId={folderId}
         folderName={currentFolderName}

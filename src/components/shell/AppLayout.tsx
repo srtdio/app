@@ -7,6 +7,7 @@ import { CommandPalette } from '@/components/shell/CommandPalette';
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
+import { StorageWarningBanner } from '@/components/storage/StorageWarningBanner';
 import { ChatStoreProvider } from '@/components/chat/ChatStoreProvider';
 import { ChatTabSignals } from '@/components/chat/ChatTabSignals';
 import { InboxStoreProvider } from '@/components/shell/InboxStoreProvider';
@@ -285,6 +286,8 @@ export function AppLayout() {
                     onOpenAvatar={() => setAvatarOpen(true)}
                   />
                 </div>
+                {/* Its own sibling above main: showing it never remounts the Outlet. */}
+                <StorageWarningBanner />
                 <main className={chrome.mainClassName}>{switchPending ? null : <Outlet />}</main>
               </div>
               {chrome.showBottomTabs ? <BottomTabs /> : null}
