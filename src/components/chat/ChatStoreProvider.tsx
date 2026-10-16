@@ -77,6 +77,11 @@ import { createTextMessage } from '@/lib/chat/message-factory';
 import { sendMessageRecord } from '@/lib/chat/record';
 import { createOutboxSender, runSend, type OutboxSender } from '@/lib/chat/send-flow';
 import { isNotesChannelId } from '@/lib/chat/notes';
+import {
+  createGroupSyncCheck,
+  readGroupSyncRows,
+  type GroupSyncCheck,
+} from '@/lib/chat/group-sync-check';
 import { userIdFromAgoraUsername } from '@/lib/chat/agora-identity';
 import {
   chatKey,
@@ -178,7 +183,7 @@ export interface ChatStoreContextValue {
   updateOwnMessage: (channelId: string, text: string, ts: number, messageId?: string) => void;
   /** An edit landed (own or verified live): the line updates when it shows that message. */
   updateEditedMessage: (row: ChatMessageRow) => void;
-  /** Re-read chat_unread_counts now (after a catch-up). */
+  /** After a catch-up: re-read chat_unread_counts and check groups awaiting their Agora group. */
   refreshUnreadCounts: () => void;
   /** Re-read the last-line previews (after messages were deleted for everyone). */
   refreshPreviews: () => void;
@@ -1119,6 +1124,33 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     return result.data;
   }, [scope, workspaceId, currentUserId, groupMembers]);
 
+  // Groups still waiting on their Agora group: checked on each thread catch-up
+  // (60s interval, tab visible, online, connected). Zero reads while every
+  // group is synced; one IN read otherwise, and a synced id reloads the roster
+  // through the live reloader. Rebuilt per scope; teardown drops a late answer.
+  const groupSyncRef = useRef<GroupSyncCheck | null>(null);
+  useEffect(() => {
+    if (scope === null) return;
+    const check = createGroupSyncCheck({
+      roster: () => summariesRef.current.values(),
+      read: (ids) => readGroupSyncRows(supabase, ids),
+      reload: () => reloaderRef.current?.request(),
+      onError: (context) => logger.warn('chat store: group sync check failed', context),
+    });
+    groupSyncRef.current = check;
+    return () => {
+      check.dispose();
+      if (groupSyncRef.current === check) groupSyncRef.current = null;
+    };
+  }, [scope]);
+
+  // What the thread calls after each catch-up: the unread counts, plus the
+  // unsynced groups check.
+  const refreshAfterCatchUp = useCallback(() => {
+    refreshUnreadCounts();
+    void groupSyncRef.current?.run();
+  }, [refreshUnreadCounts]);
+
   // Drafts persist for this user and workspace; teardown writes what is pending.
   useEffect(() => {
     if (!workspaceId || currentUserId === null) return;
@@ -1599,7 +1631,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       markConversationRead,
       updateOwnMessage,
       updateEditedMessage,
-      refreshUnreadCounts,
+      refreshUnreadCounts: refreshAfterCatchUp,
       refreshPreviews,
       requestOpen,
       clearPendingOpen,
@@ -1621,7 +1653,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       markConversationRead,
       updateOwnMessage,
       updateEditedMessage,
-      refreshUnreadCounts,
+      refreshAfterCatchUp,
       refreshPreviews,
       requestOpen,
       clearPendingOpen,
