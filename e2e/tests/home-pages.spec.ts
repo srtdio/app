@@ -142,15 +142,18 @@ test.describe('phone', () => {
   test('/pricing ends on the homepage', async ({ page }) => {
     const rule = redirectFor('/pricing');
     expect(rule).toEqual({ to: '/', status: 301 });
+    // WebKit cannot fulfill a redirect status, so the harness follows the rule in-page.
     await page.route(
       (url) => url.pathname === '/pricing',
-      (route) => route.fulfill({ status: 301, headers: { location: rule?.to ?? '' } }),
+      (route) =>
+        route.fulfill({
+          contentType: 'text/html',
+          body: `<script>location.replace(${JSON.stringify(rule?.to)})</script>`,
+        }),
     );
     await serveHome(page);
     await page.goto('/pricing');
-    expect(new URL(page.url()).pathname).toBe('/');
-    // A followed redirect skips page.route, so reload to get the homepage fixture.
-    await page.reload();
+    await page.waitForURL((url) => url.pathname === '/');
     await expect(page.locator('.home .hero')).toBeVisible();
   });
 
