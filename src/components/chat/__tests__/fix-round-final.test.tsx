@@ -275,6 +275,7 @@ describe('E11 + T5: card footer and the failed card', () => {
     stage_entered_at: '2026-09-29T10:00:00Z',
     format: 'carousel',
     thumbnailAssetVersionId: null,
+    firstMedia: null,
     mediaCount: 0,
     hasVideo: false,
   };

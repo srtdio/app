@@ -79,6 +79,22 @@ describe('AttachmentsField platform frame (standard composer)', () => {
     expect(frameEl()).toBeNull();
   });
 
+  it('A3: an X thread has no empty frame; a photo brings the frame', async () => {
+    await show({ platform: 'x', format: 'thread' });
+    expect(frameEl()).toBeNull();
+    expect(document.querySelector('[data-frame-empty]')).toBeNull();
+    const photo: AttachmentItem = {
+      versionId: 't',
+      kind: 'image',
+      name: 't.png',
+      previewUrl: 'blob:t',
+      mime: 'image/png',
+    };
+    await show({ platform: 'x', format: 'thread' }, [photo]);
+    expect(frameEl()).not.toBeNull();
+    expect(frameEl()?.hasAttribute('data-frame-empty')).toBe(false);
+  });
+
   it('YouTube Shorts frames a video 9:16 with bands, never cropped', async () => {
     const clip: AttachmentItem = {
       versionId: 'c',

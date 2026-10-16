@@ -23,6 +23,7 @@ function cardRow(id: string, number: number): PostCardRow {
     approved_by: null,
     approved_at: null,
     thumbnailAssetVersionId: null,
+    firstMedia: null,
     mediaCount: 0,
     hasVideo: false,
   };

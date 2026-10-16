@@ -57,8 +57,17 @@ function post(id: string) {
   };
 }
 
-function attachment(entityId: string, versionId: string, mime: string) {
-  return { entity_id: entityId, asset_version_id: versionId, asset_versions: { mime_type: mime } };
+function attachment(
+  entityId: string,
+  versionId: string,
+  mime: string,
+  size: { width: number; height: number } | null = null,
+) {
+  return {
+    entity_id: entityId,
+    asset_version_id: versionId,
+    asset_versions: { mime_type: mime, width: size?.width ?? null, height: size?.height ?? null },
+  };
 }
 
 const ok = (data: unknown): TableResult => ({ data, error: null });
@@ -94,7 +103,8 @@ describe('readPostCards', () => {
     expect(att).toContainEqual({
       table: 'asset_attachments',
       method: 'select',
-      args: ['entity_id, asset_version_id, asset_versions!inner(mime_type)'],
+      // The first media's stored size rides the same batched read (no N+1).
+      args: ['entity_id, asset_version_id, asset_versions!inner(mime_type, width, height)'],
     });
     expect(att).toContainEqual({
       table: 'asset_attachments',
@@ -170,6 +180,45 @@ describe('readPostCards', () => {
   });
 });
 
+describe('readPostCards first media (A1 / A2)', () => {
+  it('returns the first image or video in display order with its stored width and height', async () => {
+    const { client } = makeClient({
+      posts: ok([post('p1'), post('p2'), post('p3'), post('p4')]),
+      asset_attachments: ok([
+        attachment('p1', 'v-doc', 'application/pdf'),
+        attachment('p1', 'v-square', 'image/jpeg', { width: 1080, height: 1080 }),
+        attachment('p1', 'v-later', 'video/mp4', { width: 1080, height: 1920 }),
+        attachment('p2', 'v-reel', 'video/mp4', { width: 1080, height: 1920 }),
+        attachment('p2', 'v-after', 'image/png', { width: 100, height: 100 }),
+        attachment('p3', 'v-old', 'image/png'),
+      ]),
+    });
+    const result = await readPostCards(client, { workspaceId: WS, ids: ['p1', 'p2', 'p3', 'p4'] });
+    const byId = new Map((result.ok ? result.data : []).map((r) => [r.id, r]));
+    expect(byId.get('p1')?.firstMedia).toEqual({
+      assetVersionId: 'v-square',
+      kind: 'image',
+      width: 1080,
+      height: 1080,
+    });
+    // Mixed image + video: the first media item in display order decides.
+    expect(byId.get('p2')?.firstMedia).toEqual({
+      assetVersionId: 'v-reel',
+      kind: 'video',
+      width: 1080,
+      height: 1920,
+    });
+    // An older upload with no stored size: null dims (the card falls back).
+    expect(byId.get('p3')?.firstMedia).toEqual({
+      assetVersionId: 'v-old',
+      kind: 'image',
+      width: null,
+      height: null,
+    });
+    expect(byId.get('p4')?.firstMedia).toBeNull();
+  });
+});
+
 describe('mediaSummaryByPost', () => {
   it('ignores rows with no embedded version mime for thumbnail and video, but counts them', () => {
     const map = mediaSummaryByPost([
@@ -178,6 +227,7 @@ describe('mediaSummaryByPost', () => {
     ]);
     expect(map.get('p1')).toEqual({
       thumbnailAssetVersionId: 'v2',
+      firstMedia: { assetVersionId: 'v2', kind: 'image', width: null, height: null },
       mediaCount: 2,
       hasVideo: false,
     });

@@ -363,10 +363,27 @@ function firstImageFromRows(rows: readonly FirstImageRow[]): Map<string, string>
   return firstByPost;
 }
 
+// One row of the card's batched media read: a FirstImageRow whose embedded
+// version also carries its stored size (null for uploads that predate it).
+export interface CardMediaRow extends FirstImageRow {
+  asset_versions: { mime_type: string | null; width: number | null; height: number | null } | null;
+}
+
+/** A post's first photo or video in display order: the card's frame and cover. */
+export interface CardFirstMedia {
+  assetVersionId: string;
+  kind: 'image' | 'video';
+  /** The stored size; null when the version has none (older uploads). */
+  width: number | null;
+  height: number | null;
+}
+
 /** Per-post media summary for the chat post card. */
 export interface PostMediaSummary {
-  /** The first image attachment's version id (the card cover), or null. */
+  /** The first image attachment's version id (the post's chip thumbnail), or null. */
   thumbnailAssetVersionId: string | null;
+  /** The first image or video attachment (display order), or null. */
+  firstMedia: CardFirstMedia | null;
   /** Live (non-deleted) attachments on the post. */
   mediaCount: number;
   /** Whether any live attachment's version is a video. */
@@ -377,20 +394,38 @@ export interface PostMediaSummary {
  * Fold live attachment rows (ordered as {@link firstImageFromRows} expects) into
  * one media summary per post. Pure; posts with no rows are absent from the map.
  */
-export function mediaSummaryByPost(rows: readonly FirstImageRow[]): Map<string, PostMediaSummary> {
+export function mediaSummaryByPost(rows: readonly CardMediaRow[]): Map<string, PostMediaSummary> {
   const firstImage = firstImageFromRows(rows);
   const summary = new Map<string, PostMediaSummary>();
   for (const row of rows) {
     const current = summary.get(row.entity_id) ?? {
       thumbnailAssetVersionId: firstImage.get(row.entity_id) ?? null,
+      firstMedia: null,
       mediaCount: 0,
       hasVideo: false,
     };
     current.mediaCount += 1;
-    if (row.asset_versions?.mime_type?.startsWith('video/') === true) current.hasVideo = true;
+    const version = row.asset_versions;
+    const kind = mediaKind(version?.mime_type ?? null);
+    if (kind === 'video') current.hasVideo = true;
+    if (current.firstMedia === null && kind !== null) {
+      current.firstMedia = {
+        assetVersionId: row.asset_version_id,
+        kind,
+        width: version?.width ?? null,
+        height: version?.height ?? null,
+      };
+    }
     summary.set(row.entity_id, current);
   }
   return summary;
+}
+
+/** 'image' / 'video' from a stored mime; null for files, links and unknown. Pure. */
+function mediaKind(mime: string | null): CardFirstMedia['kind'] | null {
+  if (mime?.startsWith('image/') === true) return 'image';
+  if (mime?.startsWith('video/') === true) return 'video';
+  return null;
 }
 
 /**
@@ -420,8 +455,9 @@ export const POST_CARD_ROW_COLUMNS =
  * Batched resolve of shared posts for the live chat post card: at most TWO
  * queries for the whole batch, never one per post. (1) One RLS-scoped posts IN
  * read over every id. (2) One asset_attachments IN read over the posts that came
- * back (live rows, version mime embedded), folded into the first image, the live
- * attachment count and a has-video flag per post. A post the viewer cannot see
+ * back (live rows, version mime and stored size embedded), folded into the first
+ * image, the first image or video, the live attachment count and a has-video
+ * flag per post. A post the viewer cannot see
  * or that is deleted does not come back, and its attachments are never read.
  * Returns [] for no ids without a round trip; the second read is skipped when no
  * post came back. Rows arrive in the database's order; the caller orders them.
@@ -445,7 +481,7 @@ export async function readPostCards(
 
   const media = await client
     .from('asset_attachments')
-    .select('entity_id, asset_version_id, asset_versions!inner(mime_type)')
+    .select('entity_id, asset_version_id, asset_versions!inner(mime_type, width, height)')
     .eq('entity_type', 'post')
     .in(
       'entity_id',
@@ -457,12 +493,17 @@ export async function readPostCards(
     .order('attached_at', { ascending: true });
   if (media.error) return { ok: false, error: transportError(media.error.message) };
 
-  const byPost = mediaSummaryByPost((media.data ?? []) as unknown as FirstImageRow[]);
+  const byPost = mediaSummaryByPost((media.data ?? []) as unknown as CardMediaRow[]);
   return {
     ok: true,
     data: posts.map((post) => ({
       ...post,
-      ...(byPost.get(post.id) ?? { thumbnailAssetVersionId: null, mediaCount: 0, hasVideo: false }),
+      ...(byPost.get(post.id) ?? {
+        thumbnailAssetVersionId: null,
+        firstMedia: null,
+        mediaCount: 0,
+        hasVideo: false,
+      }),
     })),
   };
 }

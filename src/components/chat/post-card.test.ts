@@ -46,6 +46,7 @@ function cardRow(id: string, over: Partial<PostCardRow> = {}): PostCardRow {
     approved_by: null,
     approved_at: null,
     thumbnailAssetVersionId: null,
+    firstMedia: null,
     mediaCount: 0,
     hasVideo: false,
     ...over,

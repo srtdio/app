@@ -206,6 +206,45 @@ function StripSlide(props: {
 }
 
 /**
+ * The slide on show again, cropped to fill, behind the frame for blurred bands
+ * (YouTube Shorts); the same presigned URL as its slide, so no extra request.
+ */
+function StripBackdrop(props: {
+  item: GalleryItem;
+  cache: PresignCache;
+  presignEnabled: boolean;
+}): ReactElement {
+  const thumb = useThumbnail<HTMLSpanElement>({
+    assetVersionId: props.item.assetVersionId,
+    cache: props.cache,
+    enabled: props.presignEnabled,
+  });
+  const ready = thumb.url !== null && !thumb.failed;
+  return (
+    <span ref={thumb.ref} data-strip-backdrop="" className="block h-full w-full">
+      {ready && isVideoItem(props.item) ? (
+        <video
+          src={thumb.url ?? undefined}
+          preload="metadata"
+          muted
+          playsInline
+          onError={thumb.onError}
+          className="h-full w-full object-cover"
+        />
+      ) : ready ? (
+        <img
+          src={thumb.url ?? undefined}
+          alt=""
+          draggable={false}
+          onError={thumb.onError}
+          className="h-full w-full object-cover"
+        />
+      ) : null}
+    </span>
+  );
+}
+
+/**
  * The media strip, or nothing. While the gallery loads it is a skeleton of the
  * same box, shown only when the card row says the post has media; a post with no
  * media renders no box at all, before or after the read.
@@ -242,10 +281,11 @@ export function PostSheetMedia(props: {
     );
   }
   const items = gallery.items;
-  if (items.length === 0) return null;
+  const first = items[0];
+  if (first === undefined) return null;
   const count = items.length;
   const reel = reelLabel(props.format, items);
-  const frame = stripFrame(props.platform, props.format, items[0]);
+  const frame = stripFrame(props.platform, props.format, first);
   const strip = (
     <>
       <div
@@ -300,7 +340,18 @@ export function PostSheetMedia(props: {
   );
   return frame !== null ? (
     <div data-strip="" className={STRIP_RAIL}>
-      <PlatformFrame frame={frame} maxHeight={CHAT_SHEET_FRAME_MAX_HEIGHT} bordered={false}>
+      <PlatformFrame
+        frame={frame}
+        maxHeight={CHAT_SHEET_FRAME_MAX_HEIGHT}
+        bordered={false}
+        backdrop={
+          <StripBackdrop
+            item={items[props.active] ?? first}
+            cache={props.cache}
+            presignEnabled={props.presignEnabled}
+          />
+        }
+      >
         {strip}
       </PlatformFrame>
     </div>

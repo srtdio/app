@@ -7,6 +7,7 @@
 // src/components/preview/preview-math.ts.
 
 import { isPostPlatform, POST_FORMATS, type PostFormat, type PostPlatform } from '@srtdio/posts';
+import { formatNeedsMedia } from '@/lib/induction';
 
 /**
  * How the platform frames the media:
@@ -257,6 +258,8 @@ const VERTICAL = VERTICAL_FRAME.w / VERTICAL_FRAME.h;
  * The one frame rule, shared by the post page gallery, the create sheet and
  * the preview panel.
  * - text / link: null (no media box).
+ * - Media-optional formats (formatNeedsMedia false, e.g. thread): null until a
+ *   photo or video is attached, so there is never an empty frame for them.
  * - TikTok and YouTube Shorts: always 9:16; other ratios are fit inside with
  *   bands (black / blurred), never cropped.
  * - reel / story / short elsewhere: 9:16, cropped to fill.
@@ -270,6 +273,7 @@ const VERTICAL = VERTICAL_FRAME.w / VERTICAL_FRAME.h;
 export function frameFor(platform: string, format: string, first: FrameMedia | null): Frame | null {
   if (!isPostPlatform(platform) || !isPostFormat(format)) return null;
   if (FORMAT_DEFAULT_SIZE[format] === null) return null;
+  if (!formatNeedsMedia(format) && (first === null || first.kind === 'other')) return null;
   const spec = PLATFORM_SPECS[platform];
   if (spec.verticalBands !== undefined) {
     return { ratio: VERTICAL, source: 'fixed', fit: 'contain', bands: spec.verticalBands };
