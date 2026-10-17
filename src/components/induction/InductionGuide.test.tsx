@@ -510,10 +510,11 @@ describe('completion', () => {
     expect(d.setStep).toHaveBeenCalledWith('c_post_create');
   });
 
-  it('finishes when its own control disappears', async () => {
+  it('finishes when its own control disappears after a tap on it', async () => {
     const c = control('pipeline-approved-chip', CHIP);
     const d = await mount({ step: 'c_approved_chip' });
     await act(async () => {
+      c.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
       c.el.remove();
     });
     await wait(40);
@@ -800,3 +801,15 @@ function placeRouteFor(step: Step): string {
   if (step.place === 'shell') return '/pipeline';
   return `/${step.place}`;
 }
+
+describe('dismissing a control', () => {
+  it('keeps the step when its control goes away with no tap (a sheet closed by Escape)', async () => {
+    const c = control('pipeline-approved-chip', CHIP);
+    const d = await mount({ step: 'c_approved_chip' });
+    await act(async () => {
+      c.el.remove();
+    });
+    await wait(40);
+    expect(d.setStep).not.toHaveBeenCalled();
+  });
+});

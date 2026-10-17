@@ -45,10 +45,18 @@ export function useLiveTick(el: HTMLElement | undefined): boolean {
     let settle = 0;
     let last = signature(el);
     const bump = (): void => setTick((t) => t + 1);
+    // Re-render once the control has held still for SETTLE_MS. A timer can
+    // land early (WebKit's 1 ms clock), so re-arm until the render will read
+    // "not moving".
+    const settleCheck = (): void => {
+      const elapsed = performance.now() - changedAt.current.at;
+      if (elapsed < SETTLE_MS) settle = window.setTimeout(settleCheck, SETTLE_MS - elapsed + 2);
+      else bump();
+    };
     const moved = (): void => {
       changedAt.current = { el, at: performance.now() };
       window.clearTimeout(settle);
-      settle = window.setTimeout(bump, SETTLE_MS);
+      settle = window.setTimeout(settleCheck, SETTLE_MS);
       bump();
     };
     const frame = (): void => {
@@ -71,7 +79,7 @@ export function useLiveTick(el: HTMLElement | undefined): boolean {
       wake();
     };
     raf = requestAnimationFrame(frame);
-    settle = window.setTimeout(bump, SETTLE_MS);
+    settle = window.setTimeout(settleCheck, SETTLE_MS);
     const mutations = new MutationObserver((records) => {
       if (records.some((record) => !inLayer(record.target))) poke();
     });

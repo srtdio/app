@@ -51,6 +51,11 @@ export function freshSeen(key: string): Seen {
   return { key, done: false, found: false, nextAbsent: false, tappedAt: 0, tappedWhere: '' };
 }
 
+/** Whether a tap on the control is still waiting for confirmation. */
+function tapPending(now: Seen): boolean {
+  return now.tappedAt > 0 && performance.now() - now.tappedAt <= TAP_CONFIRM_MS;
+}
+
 /** Whether a pending tap is confirmed: the next control on screen, no next step here, or the location moved. */
 function tapConfirmed(now: Seen, input: CompletionInput): boolean {
   if (now.tappedAt === 0) return false;
@@ -65,7 +70,9 @@ function tapConfirmed(now: Seen, input: CompletionInput): boolean {
 export function domConfirms(now: Seen, input: CompletionInput): boolean {
   const { el, nextEl } = input;
   if (el !== undefined) now.found = true;
-  else if (now.found) return true;
+  // The control going away counts only after a tap on it: a sheet closed by
+  // its backdrop, Cancel or Escape leaves the step up.
+  else if (now.found) return tapPending(now);
   // Until this step's own control has shown, the next control appearing
   // means nothing: a sheet mounts its fields a frame after it opens.
   if (!now.found) return false;
@@ -76,7 +83,7 @@ export function domConfirms(now: Seen, input: CompletionInput): boolean {
 
 /**
  * Calls onComplete once per step when the DOM shows the person did it: this
- * control disappearing (or a modal covering it) after it showed, the next
+ * control disappearing (or a modal covering it) after a tap on it, the next
  * step's control appearing after being absent, or, after a tap on the
  * control, the next step's control on screen within TAP_CONFIRM_MS (a tap
  * whose action failed leaves the step up). A field finishes when it holds
