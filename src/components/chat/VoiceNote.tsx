@@ -340,6 +340,7 @@ function TranscribeLink(props: {
         <button
           type="button"
           data-voice-link="transcribe"
+          data-induction={INDUCTION_KEYS.chatTranscript}
           onClick={onTranscribe}
           className={LINK_BUTTON}
         >

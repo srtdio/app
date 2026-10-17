@@ -112,20 +112,24 @@ export function PostCard({ post, cache, presignEnabled, workspaceKey = null }: P
         onClick={() => navigate(href)}
         className="absolute inset-0 rounded-lg"
       />
-      <Thumbnail
-        assetVersionId={post.thumbnailAssetVersionId}
-        cache={cache}
-        presignEnabled={presignEnabled}
-        aspect="square"
-        fallback={postFallback(post)}
-        alt={post.title}
-      >
-        {post.format === 'carousel' ? (
-          <CarouselBadge />
-        ) : post.format === 'video' && hasPoster ? (
-          <PlayBadge />
-        ) : null}
-      </Thumbnail>
+      {/* The tile is relative, so it would paint over the absolute Open post button;
+          pointer-events-none lets a tap on the thumbnail reach the button. */}
+      <div data-post-card-thumb="" className="pointer-events-none">
+        <Thumbnail
+          assetVersionId={post.thumbnailAssetVersionId}
+          cache={cache}
+          presignEnabled={presignEnabled}
+          aspect="square"
+          fallback={postFallback(post)}
+          alt={post.title}
+        >
+          {post.format === 'carousel' ? (
+            <CarouselBadge />
+          ) : post.format === 'video' && hasPoster ? (
+            <PlayBadge />
+          ) : null}
+        </Thumbnail>
+      </div>
       <div className="flex flex-col gap-2 p-3">
         <div className="truncate text-sm font-medium leading-snug">{post.title}</div>
         {/* One quiet meta line: the platform mark, the format glyph, and the date
