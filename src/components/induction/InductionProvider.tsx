@@ -6,9 +6,18 @@
 // useInductionPostPreset; both are safe without a provider (tests, screens
 // outside the shell).
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   approverStageOf,
+  dispatchInductionRefresh,
   INDUCTION_KEYS,
   INDUCTION_REFRESH_EVENT,
   isGated,
@@ -27,7 +36,15 @@ import type { CopyContext, InductionFacts, Route, RouteScript, Step } from '@/li
 import { ROUTE_SCRIPTS, routeFor } from '@/lib/induction-routes';
 import { supabase } from '@/lib/supabase';
 import type { InductionData } from './useInductionData';
-import { readGuideFacts, type GuideFactsRead } from './induction-data';
+import { generateTraceId as newTraceId } from '@/lib/trace';
+import {
+  clearSampleWeek,
+  NO_SAMPLE,
+  readGuideFacts,
+  seedSampleWeek,
+  type GuideFactsRead,
+  type SampleWeek,
+} from './induction-data';
 import type { Qualifiers } from './guide-dom';
 
 export interface InductionContextValue {
@@ -48,6 +65,12 @@ export interface InductionContextValue {
   start: () => void;
   /** Done on the closing card. */
   finish: () => void;
+  /** The creator's sample week (Kestrel & Rowe) in this workspace. */
+  sample: SampleWeek;
+  /** Clear it on the clear card: every sample row and person goes, the person's own work stays. */
+  clearSample: () => Promise<void>;
+  /** Epoch ms the look-around started on this device (the clear card's time); null when unknown. */
+  startedAt: number | null;
 }
 
 const InductionContext = createContext<InductionContextValue | null>(null);
@@ -100,6 +123,9 @@ export function InductionProvider({
     script !== undefined &&
     approverStageOf(state) === 'none';
   const read = useGuideFacts({ active, workspaceId, route, state });
+  // The approver's post leaves Review once approved; the closing card still names it.
+  const lastReviewTitle = useRef('');
+  if (read.facts.reviewPost?.title) lastReviewTitle.current = read.facts.reviewPost.title;
   const known = !hasWorkspace || read.workspaceId === workspaceId;
   const facts = useMemo<InductionFacts>(
     () => ({
@@ -121,6 +147,18 @@ export function InductionProvider({
   );
 
   useStoredStepSync(resolution, data);
+  useSampleSeed({
+    // Every first tour runs in a lived-in workspace: the creator's from the setup
+    // steps (once the workspace exists), an invited member's from their first screen.
+    on:
+      active &&
+      workspaceId !== null &&
+      known &&
+      resolution.kind !== 'off' &&
+      resolution.kind !== 'closing' &&
+      !read.facts.sample.seeded,
+    workspaceId,
+  });
   const { setPolling } = data;
   const gated = resolution.kind === 'step' && isGated(resolution.step);
   useEffect(() => {
@@ -132,12 +170,57 @@ export function InductionProvider({
       buildValue({
         base: { route, script, resolution },
         read: read.facts,
-        env: { state, facts, workspaceLabel, data },
+        env: {
+          state,
+          facts,
+          workspaceLabel,
+          data,
+          workspaceId,
+          reviewTitle: lastReviewTitle.current,
+        },
       }),
-    [route, script, resolution, read.facts, state, facts, workspaceLabel, data],
+    [route, script, resolution, read.facts, state, facts, workspaceLabel, data, workspaceId],
   );
 
   return <InductionContext.Provider value={value}>{children}</InductionContext.Provider>;
+}
+
+/**
+ * A new owner's workspace fills with the sample week while they are still in
+ * the setup steps (the prototype's pipeline is full from Step 2). One call per
+ * workspace per page load; the proc itself refuses a second seed and any seed
+ * after a clear, so a reload or another device never brings it back.
+ */
+function useSampleSeed(input: { on: boolean; workspaceId: string | null }): void {
+  const asked = useRef<string | null>(null);
+  const { on, workspaceId } = input;
+  useEffect(() => {
+    if (!on || workspaceId === null || asked.current === workspaceId) return;
+    asked.current = workspaceId;
+    void seedSampleWeek(supabase, { workspaceId, traceId: newTraceId() }).then((seeded) => {
+      if (seeded) dispatchInductionRefresh();
+    });
+  }, [on, workspaceId]);
+}
+
+const STARTED_KEY = 'srtdio.induction.lookAroundStartedAt';
+
+function readStartedAt(): number | null {
+  try {
+    const raw = window.sessionStorage.getItem(STARTED_KEY);
+    const n = raw === null ? Number.NaN : Number(raw);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function markStarted(): void {
+  try {
+    window.sessionStorage.setItem(STARTED_KEY, String(Date.now()));
+  } catch {
+    // Storage off: the clear card shows its time without it.
+  }
 }
 
 /** When the data moved the guide (or an old id resolved), store the step it landed on. */
@@ -158,6 +241,8 @@ function buildValue(input: {
     facts: InductionFacts;
     workspaceLabel: string;
     data: InductionData;
+    workspaceId: string | null;
+    reviewTitle: string;
   };
 }): InductionContextValue {
   const { base, read, env } = input;
@@ -197,14 +282,15 @@ function buildValue(input: {
   return {
     ...base,
     place: {
-      postId: approver ? reviewId : env.state.postId,
+      // The creator's Review chapter comments on the sample week's post while it is there.
+      postId: approver ? reviewId : (read.sample.reviewPostId ?? env.state.postId),
       groupChannelId: group?.channelId ?? null,
     },
     qualifiers,
     copy: {
       brand,
       platform,
-      post: approver ? (read.reviewPost?.title ?? '') : read.ownPostTitle,
+      post: approver ? (read.reviewPost?.title ?? env.reviewTitle) : read.ownPostTitle,
       creator: approver ? (read.reviewPost?.creatorName ?? '') : '',
       inviter: '',
       email: '',
@@ -224,9 +310,27 @@ function buildValue(input: {
     moveTo,
     start: () => {
       if (resolution.kind !== 'intro') return;
+      markStarted();
       void env.data.setStep(resolution.steps[resolution.index]?.id ?? resolution.card.id);
     },
-    finish: env.data.finish,
+    // Done clears what is left of the sample (the creator cleared theirs on the clear card).
+    finish: () => {
+      const ws = env.workspaceId;
+      if (ws !== null && read.sample.seeded) {
+        void clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() }).then(() =>
+          dispatchInductionRefresh(),
+        );
+      }
+      env.data.finish();
+    },
+    sample: read.sample,
+    clearSample: async () => {
+      const ws = env.workspaceId;
+      if (ws === null) return;
+      await clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() });
+      dispatchInductionRefresh();
+    },
+    startedAt: readStartedAt(),
   };
 }
 
@@ -237,6 +341,7 @@ const EMPTY_FACTS: GuideFactsRead = {
   hasPlan: false,
   hasVoiceNote: false,
   ownPostTitle: '',
+  sample: NO_SAMPLE,
 };
 
 interface FactsState {

@@ -474,6 +474,7 @@ export function VoiceNote({
   nextVoiceId,
   meta,
   onTranscribe,
+  storedTranscript,
 }: {
   url: string | null;
   name: string;
@@ -497,6 +498,12 @@ export function VoiceNote({
   meta?: ReactNode;
   /** Received, recorded notes only: run the tap-to-transcribe flow. */
   onTranscribe?: (() => void) | undefined;
+  /**
+   * A transcript stored on the message itself (attachment_meta), as the
+   * onboarding sample week's voice note carries: shown folded until tapped,
+   * with no transcription call.
+   */
+  storedTranscript?: string | undefined;
 }): ReactElement {
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveRef = useRef<HTMLDivElement>(null);
@@ -699,7 +706,11 @@ export function VoiceNote({
     },
   };
 
-  const view = transcriptView(record, pending);
+  const withStored =
+    storedTranscript !== undefined && storedTranscript !== '' && record?.transcript === undefined
+      ? { ...record, transcript: storedTranscript, collapsed: record?.collapsed ?? true }
+      : record;
+  const view = transcriptView(withStored, pending);
   const received = !mine;
   const link =
     received && messageId !== undefined ? (

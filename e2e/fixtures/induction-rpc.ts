@@ -39,7 +39,13 @@ export const INDUCTION_RPC: Record<string, RpcHandler> = {
     const row = privateRow(tables);
     const ws = args.p_workspace_id;
     const members = (tables.workspace_members ?? []).filter((m) => m.workspace_id === ws);
-    const live = members.filter((m) => m.removed_at == null);
+    // The sample week's people never count as invited (induction_state does the same).
+    const sample = new Set(
+      (tables.induction_sample_rows ?? [])
+        .filter((r) => r.workspace_id === ws && r.kind === 'member')
+        .map((r) => String(r.row_id)),
+    );
+    const live = members.filter((m) => m.removed_at == null && !sample.has(String(m.user_id)));
     const sent = (tables.posts ?? [])
       .filter(
         (p) =>
@@ -57,6 +63,14 @@ export const INDUCTION_RPC: Record<string, RpcHandler> = {
       client_invited: live.some((m) => m.role === 'client'),
       team_invited: live.some((m) => AGENCY_SIDE.has(String(m.role))),
     };
+  },
+  // The sample week: the harness has none unless a spec seeds induction_sample_rows itself.
+  induction_sample_seed: () => ({ seeded: false }),
+  induction_sample_clear: (args, tables) => {
+    tables.induction_sample_rows = (tables.induction_sample_rows ?? []).filter(
+      (r) => r.workspace_id !== args.p_workspace_id,
+    );
+    return { cleared: true };
   },
   induction_step_set: (args, tables) => {
     privateRow(tables).induction_step = args.p_step;

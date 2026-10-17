@@ -187,14 +187,18 @@ async function readDisplayName(client: Client, userId: string | null): Promise<s
 export async function readOldestReviewPost(
   client: Client,
   workspaceId: string,
+  samplePostIds: readonly string[] = [],
 ): Promise<ReviewPost | undefined> {
   try {
-    const { data, error } = await client
+    // The sample week's posts never stand in for the real one the approver reviews.
+    let query = client
       .from('posts')
       .select('id, title, created_by')
       .eq('workspace_id', workspaceId)
       .eq('stage', 'review')
-      .is('deleted_at', null)
+      .is('deleted_at', null);
+    if (samplePostIds.length > 0) query = query.not('id', 'in', `(${samplePostIds.join(',')})`);
+    const { data, error } = await query
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -286,8 +290,82 @@ export async function readHasVoiceNote(client: Client, channelId: string): Promi
   }
 }
 
+/**
+ * The onboarding sample week (Kestrel & Rowe) in this workspace, from its
+ * markers (owner-readable): whether it is there, and the post the Review
+ * chapter comments on. Absent markers read as no sample.
+ */
+export interface SampleWeek {
+  seeded: boolean;
+  reviewPostId: string | null;
+  /** Every sample post, so a real post is never mistaken for one (and the reverse). */
+  postIds: readonly string[];
+}
+
+export const NO_SAMPLE: SampleWeek = { seeded: false, reviewPostId: null, postIds: [] };
+
+export async function readSampleWeek(client: Client, workspaceId: string): Promise<SampleWeek> {
+  try {
+    const { data, error } = await client
+      .from('induction_sample_rows')
+      .select('kind,row_id,tag')
+      .eq('workspace_id', workspaceId)
+      .in('kind', ['post', 'member'])
+      .limit(200);
+    if (error || data === null || data.length === 0) return NO_SAMPLE;
+    const review = data.find((row) => row.tag === 'review_post');
+    return {
+      seeded: true,
+      reviewPostId: review !== undefined ? String(review.row_id) : null,
+      postIds: data.filter((row) => row.kind === 'post').map((row) => String(row.row_id)),
+    };
+  } catch {
+    return NO_SAMPLE;
+  }
+}
+
+/** induction_sample_seed: fills a new owner's workspace with the sample week (a no-op once seeded or cleared). */
+export async function seedSampleWeek(
+  client: Client,
+  input: { workspaceId: string; traceId: string },
+): Promise<boolean> {
+  try {
+    const args = { p_workspace_id: input.workspaceId, p_trace_id: input.traceId };
+    const { error } = await client.rpc('induction_sample_seed', args);
+    if (error) {
+      logger.warn('sample week seed failed', { error: error.message, trace_id: input.traceId });
+      return false;
+    }
+    return true;
+  } catch (err: unknown) {
+    logger.warn('sample week seed threw', { error: String(err), trace_id: input.traceId });
+    return false;
+  }
+}
+
+/** induction_sample_clear: removes every sample row and person; the person's own work stays. */
+export async function clearSampleWeek(
+  client: Client,
+  input: { workspaceId: string; traceId: string },
+): Promise<boolean> {
+  try {
+    const args = { p_workspace_id: input.workspaceId, p_trace_id: input.traceId };
+    const { error } = await client.rpc('induction_sample_clear', args);
+    if (error) {
+      logger.warn('sample week clear failed', { error: error.message, trace_id: input.traceId });
+      return false;
+    }
+    return true;
+  } catch (err: unknown) {
+    logger.warn('sample week clear threw', { error: String(err), trace_id: input.traceId });
+    return false;
+  }
+}
+
 /** What the guide reads about the workspace while it runs; every field fails soft. */
 export interface GuideFactsRead {
+  /** The sample week in this workspace (any route's tour seeds it). */
+  sample: SampleWeek;
   group: DefaultGroup | undefined;
   /** Approver route only. */
   reviewPost: ReviewPost | undefined;
@@ -304,9 +382,12 @@ export async function readGuideFacts(
   input: { workspaceId: string; approver: boolean; postId: string | null },
 ): Promise<GuideFactsRead> {
   const { workspaceId, approver, postId } = input;
+  const sample = await readSampleWeek(client, workspaceId);
   const [group, reviewPost, hasBrief, ownPostTitle] = await Promise.all([
     readDefaultGroup(client, workspaceId),
-    approver ? readOldestReviewPost(client, workspaceId) : Promise.resolve(undefined),
+    approver
+      ? readOldestReviewPost(client, workspaceId, sample.postIds)
+      : Promise.resolve(undefined),
     readHasBrief(client, workspaceId),
     postId !== null ? readPostTitle(client, postId) : Promise.resolve(''),
   ]);
@@ -317,5 +398,5 @@ export async function readGuideFacts(
           readHasPlanCard(client, group.channelId),
           readHasVoiceNote(client, group.channelId),
         ]);
-  return { group, reviewPost, hasBrief, hasPlan, hasVoiceNote, ownPostTitle };
+  return { group, reviewPost, hasBrief, hasPlan, hasVoiceNote, ownPostTitle, sample };
 }

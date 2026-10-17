@@ -9,7 +9,11 @@ const { mockWorkspaceCreate, mockRefresh, mockSetActive, mockClearDeleted, mockS
     mockRefresh: vi.fn(async () => {}),
     mockSetActive: vi.fn(),
     mockClearDeleted: vi.fn(),
-    mockState: { createBlocked: false, deletedWorkspace: null as { name: string } | null },
+    mockState: {
+      createBlocked: false,
+      deletedWorkspace: null as { name: string } | null,
+      workspaces: [{ id: 'ws-1', name: 'Acme', platform: 'linkedin' }],
+    },
   }),
 );
 
@@ -25,7 +29,7 @@ vi.mock('@/lib/workspace-context', async (importOriginal) => {
     ...actual,
     useWorkspace: () => ({
       workspaceId: 'ws-1',
-      workspaces: [{ id: 'ws-1', name: 'Acme', platform: 'linkedin' }],
+      workspaces: mockState.workspaces,
       loading: false,
       error: null,
       setActiveWorkspaceId: mockSetActive,
@@ -58,6 +62,7 @@ async function mount(): Promise<void> {
 beforeEach(async () => {
   mockState.createBlocked = false;
   mockState.deletedWorkspace = null;
+  mockState.workspaces = [{ id: 'ws-1', name: 'Acme', platform: 'linkedin' }];
   mockClearDeleted.mockReset();
   mockSetActive.mockReset();
   mockWorkspaceCreate.mockReset();
@@ -95,6 +100,15 @@ async function typeName(value: string): Promise<void> {
 describe('WorkspaceSwitcher', () => {
   it('lists each workspace as "<Client> - <Platform>"', () => {
     expect(document.body.textContent).toContain('Acme - LinkedIn');
+  });
+
+  it('opens straight on the create form when there is no workspace yet', async () => {
+    act(() => root?.unmount());
+    document.body.innerHTML = '';
+    mockState.workspaces = [];
+    await mount();
+    expect(dialogTitle()).toBe('Create workspace');
+    expect(button('Continue').getAttribute('data-induction')).toBe('workspace-create-continue');
   });
 
   it('requires a platform, confirms, then sends the platform to workspace_create', async () => {

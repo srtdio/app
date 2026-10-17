@@ -274,6 +274,7 @@ function AttachmentItem({
             name={view.name}
             durationMs={view.durationMs}
             peaks={attachment.peaks}
+            storedTranscript={attachment.transcript}
             {...(onCancelUpload !== undefined && attachment.local !== undefined
               ? {
                   upload: {

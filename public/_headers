@@ -64,3 +64,7 @@ https://srtd.io/assets/*
 
 /site.webmanifest
   Content-Type: application/manifest+json
+
+# The onboarding sample week's photos and PDFs: cached at the edge and on the device.
+/induction-sample/*
+  Cache-Control: public, max-age=2592000

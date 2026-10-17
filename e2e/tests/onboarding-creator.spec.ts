@@ -18,8 +18,8 @@ import {
 } from '../helpers/guide';
 
 // The creator route of onboarding v13 (the owner who signed up; the pre-app
-// screens are onboarding.spec.ts): Step 1 the workspace (the top bar slot, then
-// Create), Step 2 the Approved chip, Step 3 the first post (open the sheet, then
+// screens are onboarding.spec.ts): Step 1 the workspace (the top bar slot, the
+// form's Continue, then Create), Step 2 the Approved chip, Step 3 the first post (open the sheet, then
 // a tap each fills the caption, picks Single image and attaches the sample
 // photo, then send for review), Step 4 the approver
 // invite (a gate) and the optional team invite ("It's just me for now"), the
@@ -116,15 +116,19 @@ test('creator: workspace, first post, approver invite, then the look-around', as
 
   await page.goto('/pipeline');
 
-  // Step 1: the workspace. The slot, then the form (no control boxed while the
-  // person types), then Create, which only the data finishes.
+  // Step 1: the workspace. The slot opens the sheet straight on the form
+  // (there is no workspace to list); Continue is boxed while its form takes
+  // taps, then Create, which only the data finishes.
   await check('c_workspace', false, '01-first-step');
   await expect(page.locator('[data-induction-bar]')).toContainText('Step 1');
   await tapControl(page, step('c_workspace'));
-  await page.getByRole('button', { name: 'Create workspace' }).click();
+  await check('c_workspace_continue');
+  await expect(page.locator('[data-induction-bar]')).toContainText('Step 1');
   await page.getByLabel('Brand name').fill('Kite');
   await page.getByRole('radio', { name: 'LinkedIn' }).click();
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await tapControl(page, step('c_workspace_continue'));
+  // The finished step's box turns green with a tick before the next one shows.
+  await expect(page.locator('[data-induction-result]')).toHaveCount(1);
   await check('c_workspace_create');
   await tapControl(page, step('c_workspace_create'));
 

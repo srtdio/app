@@ -5,6 +5,7 @@ export const INDUCTION_KEYS = {
   onboardingNameContinue: 'onboarding-name-continue',
   onboardingRoleContinue: 'onboarding-role-continue',
   topbarWorkspaceSlot: 'topbar-workspace-slot',
+  workspaceCreateContinue: 'workspace-create-continue',
   workspaceCreateSubmit: 'workspace-create-submit',
   pipelineStageRow: 'pipeline-stage-row',
   pipelineApprovedChip: 'pipeline-approved-chip',

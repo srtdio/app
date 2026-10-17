@@ -138,7 +138,7 @@ describe('entry screen copy is unchanged', () => {
 describe('cards', () => {
   it('fill to the expected lines', () => {
     const { creator, invited, approver } = routes.ROUTE_SCRIPTS;
-    expect(fillCopy(creator.intro.eyebrow ?? '', FULL)).toBe('BLOOM');
+    expect(fillCopy(creator.intro.eyebrow ?? '', FULL)).toBe('KESTREL & ROWE · SAMPLE WEEK');
     expect(fillCopy(approver.intro.title, FULL)).toBe('Launch day is waiting for you');
     expect(fillCopy(invited.closing.body, FULL)).toBe("Bloom's approvers have it.");
     expect(creator.intro.button).toBe('Start');

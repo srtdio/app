@@ -136,6 +136,35 @@ export interface AssetReadStore {
 /** The single forbidden error for every denied read, chat or library alike. */
 const FORBIDDEN: ReadError = { code: 'forbidden', message: 'Not a member of this workspace.' };
 
+/**
+ * The onboarding sample week's files (photos, PDFs) ship with the app under
+ * public/induction-sample/ and are served by Pages from the caller's own site.
+ * A version whose r2_key carries this prefix is never in any workspace's
+ * bucket, so it uses none of the workspace's storage; it reads through the
+ * same membership gate as every other version.
+ */
+export const SAMPLE_KEY_PREFIX = 'induction-sample/';
+
+export function isSampleKey(key: string | null): boolean {
+  return key !== null && key.startsWith(SAMPLE_KEY_PREFIX);
+}
+
+/** The small copy of a sample file: thumb/<name>, a PDF's being its cover image. */
+export function sampleThumbKey(key: string): string {
+  const name = key.slice(key.lastIndexOf('/') + 1).replace(/\.pdf$/i, '.jpg');
+  return `${SAMPLE_KEY_PREFIX}thumb/${name}`;
+}
+
+/** Signs sample keys as the site's own static URL; everything else goes to the inner signer. */
+export function withSampleFiles(inner: PresignedUrlSigner, siteOrigin: string): PresignedUrlSigner {
+  return {
+    presignGetUrl: (input) =>
+      isSampleKey(input.key)
+        ? Promise.resolve(`${siteOrigin.replace(/\/$/, '')}/${input.key}`)
+        : inner.presignGetUrl(input),
+  };
+}
+
 /** Mints a presigned GET URL for an object. Implemented by R2StorageClient. */
 export interface PresignedUrlSigner {
   presignGetUrl(input: {
@@ -257,6 +286,9 @@ export async function authorizeVersion(
   if (version.kind === 'link' || version.r2Key === null) {
     return err({ code: 'not_a_stored_file', message: 'Asset version has no stored file to sign.' });
   }
+  if (isSampleKey(version.r2Key)) {
+    return ok({ version, bucket: version.bucket ?? '', r2Key: version.r2Key });
+  }
   if (version.bucket === null) {
     throw new Error(`workspace ${version.workspaceId} is missing asset_bucket`);
   }
@@ -309,7 +341,11 @@ export async function authorizeAndSignRendition(
   if (!readable.ok) {
     return readable;
   }
-  const rendition = await deps.renditions.findRendition(input.assetVersionId, 'thumbnail');
+  // A sample file's thumbnail is its small copy (induction-sample/thumb/), kept light
+  // for slow networks; every other version uses its stored rendition.
+  const rendition = isSampleKey(readable.value.r2Key)
+    ? { r2Key: sampleThumbKey(readable.value.r2Key) }
+    : await deps.renditions.findRendition(input.assetVersionId, 'thumbnail');
   if (rendition === null) {
     return err('no_rendition');
   }
@@ -651,13 +687,16 @@ async function handlePost(
   }
 
   const store = createSupabaseAssetReadStore(env, traceId);
-  const signer = new R2StorageClient(
-    {
-      CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
-      CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
-      CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-    },
-    tracedFetch,
+  const signer = withSampleFiles(
+    new R2StorageClient(
+      {
+        CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
+        CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+        CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+      },
+      tracedFetch,
+    ),
+    acao ?? allowedOrigins(env)[0] ?? DEFAULT_ALLOWED_ORIGINS[0],
   );
   const target = { userId: caller.value, assetVersionId: parsed.value.assetVersionId };
   const denied = (error: ReadError): Response => {

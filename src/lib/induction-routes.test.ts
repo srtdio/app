@@ -54,6 +54,7 @@ describe('route order', () => {
     expect(ids(ROUTE_SCRIPTS.creator.steps)).toEqual(
       [
         'workspace',
+        'workspace_continue',
         'workspace_create',
         'approved_chip',
         ...FIRST_POST,

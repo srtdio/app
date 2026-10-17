@@ -30,6 +30,9 @@ export function dispatchInductionRefresh(): void {
 /** The 4 s poll, only while a data-finished step is active. */
 export const INDUCTION_POLL_MS = 4000;
 
+/** How long the green result tick holds after a step finishes, before the next step shows. */
+export const RESULT_HOLD_MS = 480;
+
 /** How long a step's control may stay off screen before the guide moves on. */
 export const ABSENT_SKIP_MS = 4000;
 
@@ -313,7 +316,10 @@ function sectionOf(step: Step): string {
  * next step on the same screen (same place, same chapter or phase) whose
  * control is visible, never past an open gate; else back within its own
  * group; else simply the next step, whose place then opens and gets its own
- * 4 s. A gate only ever goes back within its group, otherwise it stays.
+ * 4 s. A gate only ever goes back within its group, otherwise it stays. The
+ * last setup step of an open group stays too: past it, the data would pull the
+ * guide back to the group's first step (the top bar slot, under the open
+ * workspace sheet).
  */
 export function skipTarget(steps: readonly Step[], index: number, probe: StepProbe): number {
   const here = steps[index];
@@ -326,7 +332,9 @@ export function skipTarget(steps: readonly Step[], index: number, probe: StepPro
     if (probe.visible(step)) return j;
     if (isGated(step) && !probe.done(step)) break;
   }
-  return back >= 0 ? back : index + 1;
+  if (back >= 0) return back;
+  const lastOfGroup = steps[index + 1]?.dataDone !== here.dataDone;
+  return here.kind === 'setup' && lastOfGroup && !probe.done(here) ? index : index + 1;
 }
 
 /** The fill: (entry taps + steps behind) over (entry taps + every applicable step). */

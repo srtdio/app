@@ -1,6 +1,7 @@
 // The guide's pieces, presentational only: the amber hairline around the one
 // real control (its outer shadow is the soft dim), the hand that presses it,
-// the label pill beside it, the guide bar, and the intro and closing cards.
+// the label pill beside it, the green result tick, the guide bar, and the
+// intro and closing cards.
 // None of the overlay pieces takes a pointer; the guard in InductionGuide
 // decides which taps reach the app. Colours are tokens only (light and dark).
 
@@ -41,7 +42,18 @@ const GUIDE_STYLE = `
 [data-guide-hand-svg] { transform-origin: 17px 1px; animation: sorted-guide-press 1.3s ease-in-out infinite; }
 [data-guide-ripple] { animation: sorted-guide-ripple 1.3s ease-out infinite; }
 [data-guide-nudge="on"] { animation: sorted-guide-nudge 300ms ease-in-out; }
+@keyframes sorted-guide-result {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sorted-guide-tick {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: none; }
+}
+[data-induction-result] { animation: sorted-guide-result 220ms cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+[data-guide-tick] { animation: sorted-guide-tick 240ms cubic-bezier(0.34, 1.4, 0.64, 1) 60ms both; }
 @media (prefers-reduced-motion: reduce) {
+  [data-induction-result], [data-guide-tick] { animation: none; }
   [data-guide-hand-svg] { animation: none; }
   [data-guide-ripple] { animation: none; transform: scale(0.8); opacity: 0.9; }
   [data-guide-nudge="on"] { animation: none; }
@@ -72,6 +84,47 @@ export function GuideBox({ rect, radius }: { rect: Rect; radius: number }): Reac
         borderRadius: radius,
       }}
     />
+  );
+}
+
+/**
+ * The result: when a step finishes by its tap or its data, the hairline turns
+ * green (2px) with a small tick on its corner for a moment before the next
+ * step shows. No dim. `rect` is in page coordinates, taken when the step
+ * finished, so it stays where the control was.
+ */
+export function GuideResult({ rect, radius }: { rect: Rect; radius: number }): ReactElement {
+  return (
+    <div
+      data-induction-result=""
+      aria-hidden="true"
+      className={`pointer-events-none absolute ${GUIDE_Z} border-2 border-good`}
+      style={{
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+        borderRadius: radius,
+      }}
+    >
+      <span
+        data-guide-tick=""
+        className="absolute -right-[11px] -top-[11px] grid h-[22px] w-[22px] place-items-center rounded-full bg-good text-panel shadow-md"
+      >
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M5 12.5l4.5 4.5L19 7.5" />
+        </svg>
+      </span>
+    </div>
   );
 }
 
@@ -246,7 +299,8 @@ function PhaseRow({ copy }: { copy: BarCopy }): ReactElement {
         <span
           key={name}
           aria-hidden="true"
-          className={`h-1.5 w-1.5 rounded-full ${i === current ? AMBER_BG : i < current ? 'bg-fg-3' : 'bg-panel-3'}`}
+          data-induction-chapter={i === current ? 'current' : i < current ? 'done' : 'upcoming'}
+          className={`h-1.5 w-1.5 rounded-full ${i === current ? AMBER_BG : i < current ? 'bg-good' : 'bg-border-strong'}`}
         />
       ))}
       <span className="font-semibold text-fg-2">{names[current] ?? ''}</span>
@@ -283,6 +337,8 @@ export interface CardCopy {
   body: string;
   pills: readonly string[];
   button: string;
+  /** The clear card's two figures (things done, time taken). */
+  stats?: readonly { value: string; label: string }[];
 }
 
 /** The intro (hero, indigo, chapter pills, Start) or closing (plain, Done) card, docked like the bar. */
@@ -292,7 +348,7 @@ export function GuideCard({
   onPress,
   dock,
 }: {
-  kind: 'intro' | 'closing';
+  kind: 'intro' | 'closing' | 'clear';
   copy: CardCopy;
   onPress: () => void;
   dock: DockAt;
@@ -321,6 +377,16 @@ export function GuideCard({
       >
         {copy.body}
       </p>
+      {copy.stats !== undefined && copy.stats.length > 0 ? (
+        <div className="mt-3 flex gap-3">
+          {copy.stats.map((stat) => (
+            <div key={stat.label} className="flex-1 rounded-lg bg-panel-2 px-3 py-2.5">
+              <p className="text-[20px] font-semibold tabular-nums text-accent">{stat.value}</p>
+              <p className="text-[12px] text-fg-2">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {copy.pills.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {copy.pills.map((pill) => (

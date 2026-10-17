@@ -7459,6 +7459,100 @@ export type Database = {
         }
         Relationships: []
       }
+      induction_sample_rows: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          kind: string
+          row_created_at: string | null
+          row_id: string
+          tag: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          kind: string
+          row_created_at?: string | null
+          row_id: string
+          tag?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          kind?: string
+          row_created_at?: string | null
+          row_id?: string
+          tag?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "induction_sample_rows_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "induction_sample_rows_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      induction_sample_seeds: {
+        Row: {
+          clear_reason: string | null
+          cleared_at: string | null
+          cleared_by: string | null
+          seeded_at: string
+          seeded_by: string
+          workspace_id: string
+        }
+        Insert: {
+          clear_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          seeded_at?: string
+          seeded_by: string
+          workspace_id: string
+        }
+        Update: {
+          clear_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          seeded_at?: string
+          seeded_by?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "induction_sample_seeds_cleared_by_fkey"
+            columns: ["cleared_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "induction_sample_seeds_seeded_by_fkey"
+            columns: ["seeded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "induction_sample_seeds_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       intent_ledger: {
         Row: {
           action: string
@@ -8693,6 +8787,87 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _induction_sample_asset: {
+        Args: {
+          p_at: string
+          p_by: string
+          p_display_name: string
+          p_duration_ms: number
+          p_file: string
+          p_filename: string
+          p_height: number
+          p_kind: string
+          p_mime: string
+          p_origin: string
+          p_pages: number
+          p_size: number
+          p_width: number
+          p_workspace_id: string
+        }
+        Returns: Record<string, unknown>
+      }
+      _induction_sample_attach: {
+        Args: {
+          p_asset_id: string
+          p_at: string
+          p_by: string
+          p_entity_id: string
+          p_entity_type: string
+          p_position: number
+          p_version_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      _induction_sample_clear: {
+        Args: { p_reason: string; p_trace_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      _induction_sample_cursor: {
+        Args: {
+          p_channel_id: string
+          p_message_id: string
+          p_read_at: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
+      _induction_sample_expire: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: boolean
+      }
+      _induction_sample_mark: {
+        Args: {
+          p_kind: string
+          p_row_created_at?: string
+          p_row_id: string
+          p_tag?: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
+      _induction_sample_member_lock: {
+        Args: { p_workspace_id: string }
+        Returns: string
+      }
+      _induction_sample_msg: {
+        Args: {
+          p_at: string
+          p_attachment_asset_ids?: string[]
+          p_attachment_meta?: Json
+          p_body: string
+          p_channel_id: string
+          p_sender: string
+          p_shared_plan_ids?: string[]
+          p_shared_post_ids?: string[]
+          p_tag?: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      _induction_sample_people: { Args: never; Returns: string[] }
+      _induction_sample_uuid_at: { Args: { p_at: string }; Returns: string }
       _plan_attach_versions: {
         Args: {
           p_item_id: string
@@ -9429,6 +9604,14 @@ export type Database = {
         Returns: undefined
       }
       induction_finish: { Args: { p_trace_id: string }; Returns: undefined }
+      induction_sample_clear: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      induction_sample_seed: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: Json
+      }
       induction_state: {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: Json

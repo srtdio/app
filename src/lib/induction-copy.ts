@@ -101,7 +101,7 @@ export const GUIDE_CHROME = {
 
 /** What a tap fills on the first post (the sheet's fill on tap). The photo ships in public/. */
 export const FIRST_POST_SAMPLE = {
-  caption: 'Launch day\nOur first post on Sorted. More to come this week.',
+  caption: 'Launch day\nThe new range is here.',
   photoPath: '/induction/first-post.jpg',
   photoName: 'first-post.jpg',
 } as const;
@@ -117,6 +117,7 @@ interface StepCopy {
 /** The pill and the why line per step, keyed by the step id without its route prefix. */
 export const STEP_COPY = {
   workspace: { label: 'Tap Create your workspace', why: '' },
+  workspace_continue: { label: 'Tap Continue', why: '' },
   workspace_create: { label: 'Tap Create', why: '' },
   approved_chip: { label: 'Tap Approved to filter', why: 'Every post sits in one of five stages.' },
   post_create: { label: 'Tap to create a post', why: 'Your first post starts here.' },
@@ -148,12 +149,23 @@ export const STEP_COPY = {
 
 // ---------- cards ----------
 
+/** The card after the creator's look-around, before the closing card: the sample week clears. */
+export const CLEAR_CARD_COPY = {
+  eyebrow: 'ALL THREE CHAPTERS DONE',
+  title: "That was Kestrel & Rowe's week",
+  body: 'Clearing it now. Your post stays.',
+  button: 'Clear it',
+  thingsDone: 'things you did',
+  timeTaken: 'to see it all',
+  clearing: 'Clearing',
+} as const;
+
 /** Intro and closing cards per route. Pills come from GUIDE_CHROME.chapters. */
 export const CARD_COPY = {
   creatorIntro: {
-    eyebrow: '{BRAND}',
+    eyebrow: 'KESTREL & ROWE · SAMPLE WEEK',
     title: 'Have a look around',
-    body: 'Your briefs, comments and chat. About a minute, all taps.',
+    body: "About a minute, all taps. It clears when you're done.",
     button: 'Start',
   },
   invitedIntro: {
