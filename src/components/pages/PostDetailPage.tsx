@@ -204,6 +204,17 @@ export function StageButtons(props: {
 }
 
 /**
+ * The shared ApproveConfirm renders its own buttons, so the induction key is set
+ * on the rendered confirm in the same dialog from here (attribute only). A stable
+ * callback ref keeps PcsApproveConfirm hookless.
+ */
+function markApproveConfirm(el: HTMLParagraphElement | null): void {
+  el?.closest('[role="dialog"]')
+    ?.querySelector('[data-approve-confirm-button]')
+    ?.setAttribute('data-induction', INDUCTION_KEYS.postApproveConfirm);
+}
+
+/**
  * The approve confirm (decision 22): the shared Sheet (translateY axis) with the
  * post's title and the chat-matching confirm in its footer, as the pipeline
  * board shows it. Open while the approve waits on a confirm or is in flight;
@@ -245,7 +256,11 @@ export function PcsApproveConfirm(props: {
         />
       }
     >
-      <p data-approve-title="" className="truncate text-sm font-medium text-fg">
+      <p
+        ref={markApproveConfirm}
+        data-approve-title=""
+        className="truncate text-sm font-medium text-fg"
+      >
         {props.title}
       </p>
       {props.onBehalf ? (
@@ -1519,7 +1534,7 @@ export function PostDetailPage({
                 </div>
               ) : hasCaption ? (
                 <>
-                  <div className="mt-3">
+                  <div className="mt-3" data-induction={INDUCTION_KEYS.postCaptionText}>
                     <CaptionView
                       caption={post.caption ?? ''}
                       annotations={highlights}

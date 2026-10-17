@@ -21,7 +21,7 @@ import { frameFor } from '@/lib/platform-specs';
 import { precheckFile } from '@/lib/asset-upload';
 import { uploadChatAttachment } from '@/lib/chat/attachments';
 import { env } from '@/lib/env';
-import { UPLOAD_RETRIES, uploadFailedReason, withRetries } from '@/lib/induction';
+import { INDUCTION_KEYS, UPLOAD_RETRIES, uploadFailedReason, withRetries } from '@/lib/induction';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 
@@ -185,6 +185,7 @@ export function PresetMediaField({
           type="button"
           size="lg"
           disabled={sending}
+          data-induction={INDUCTION_KEYS.postSheetMedia}
           onClick={() => inputRef.current?.click()}
         >
           {value.length > 0 ? 'Add another' : 'Add a photo or video'}

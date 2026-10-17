@@ -1,184 +1,94 @@
-// The guide layer on top of the real app: an accent box around the one control
-// that matters and a small card that never covers it (or, inside an open sheet
-// or dialog, a one-line strip under its title). The control is found by its
-// data-induction key and its rect is read live in every render; useLiveTick
-// re-renders on resize, scroll, the control's own size, DOM changes and while a
-// sheet slides. Nothing positional is stored.
+// The guide layer on top of the real app. On a step: a soft dim with the one
+// real control left clear inside a thin amber hairline, a hand pressing it, a
+// label pill beside it, and the guide bar (progress, phase or chapter, the why
+// line, Back, Skip). Only the control takes taps; the step finishes by the tap,
+// the DOM or the data and the guide moves on by itself. While the app moves
+// (route change, a sheet sliding in, the control not found yet) only the bar
+// shows. The intro and closing cards dock where the bar does.
 //
-// It also keeps the person on track: a new step opens its screen, and leaving
-// a hard gate's screen brings them back to it.
+// The control is found by its data-induction key and its rect is read live in
+// every render; useLiveTick re-renders whenever it could have moved. A new step
+// opens its screen, and leaving a gate's screen brings the person back to it.
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  boxRadius,
+  backIndex,
+  barSide,
   boxRect,
+  chapterOrder,
   clampToViewport,
+  completesByUi,
+  DOCK_GAP,
+  guideRadius,
+  handPoint,
   onPlace,
-  placeCard,
+  placeLabel,
   placeRoute,
-  stepButtons,
-  stepCopy,
-  stepCountLabel,
-  stripRect,
-  type InductionResolution,
+  progressOf,
+  skipTarget,
   type Rect,
+  type Resolution,
+  type StepProbe,
 } from '@/lib/induction';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { fillCopy, GUIDE_CHROME, GUIDE_LEGEND } from '@/lib/induction-copy';
+import type { RouteScript, Step } from '@/lib/induction-model';
+import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useInduction, type InductionContextValue } from './InductionProvider';
-import { GuideBox, GuideCard, GuideStrip, type GuideCopy } from './GuideParts';
-import { dialogTitleRect, findTarget, LAYER_ATTR, radiusOf, rectOf, topDialog } from './guide-dom';
+import {
+  GuideBar,
+  GuideBox,
+  GuideCard,
+  GuideHand,
+  GuideLabel,
+  GuideStyle,
+  type BarCopy,
+  type DockAt,
+} from './GuideParts';
+import { findVisible, formOf, LAYER_ATTR, radiusOf, rectOf, textFieldOf } from './guide-dom';
+import {
+  useAbsentSkip,
+  useElementSize,
+  useLegend,
+  useStepCompletion,
+  useTapGuard,
+} from './guide-hooks';
 import { useLiveTick } from './useLiveTick';
 
-const LAPTOP_QUERY = '(min-width: 768px)';
-const CARD_WIDTH = 320;
 const PHONE_TAB_BAR = 56;
+
+type StepResolution = Extract<Resolution, { kind: 'step' }>;
+type CardResolution = Extract<Resolution, { kind: 'intro' | 'closing' }>;
 
 export function InductionGuide({ tabsShown }: { tabsShown: boolean }): ReactElement | null {
   const ctx = useInduction();
-  if (ctx === null || ctx.resolution.kind === 'off') return null;
-  return <ActiveGuide ctx={ctx} tabsShown={tabsShown} />;
+  if (ctx === null || ctx.resolution.kind === 'off' || ctx.script === undefined) return null;
+  return <ActiveGuide ctx={ctx} script={ctx.script} tabsShown={tabsShown} />;
 }
 
 function ActiveGuide({
   ctx,
+  script,
   tabsShown,
 }: {
   ctx: InductionContextValue;
+  script: RouteScript;
   tabsShown: boolean;
 }): ReactElement | null {
-  const { resolution } = ctx;
-  useStepNavigation(ctx);
-  useFinishAtEnd(resolution, ctx.finish);
-  if (resolution.kind !== 'step') return null;
-  return <GuideLayer ctx={ctx} resolution={resolution} tabsShown={tabsShown} />;
-}
-
-/** A new step opens its screen; a hard gate's screen cannot be left. */
-function useStepNavigation(ctx: InductionContextValue): void {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { resolution, place } = ctx;
-  const step = resolution.kind === 'step' ? resolution.step : null;
-  const stepId = step?.id ?? '';
-  const opened = useRef('');
-
-  useEffect(() => {
-    if (step === null) return;
-    const here = onPlace(step.place, location, place);
-    const firstTime = opened.current !== stepId;
-    opened.current = stepId;
-    if (here) return;
-    if (firstTime || step.kind === 'gate') {
-      navigate(placeRoute(step.place, place), { replace: !firstTime });
-    }
-  }, [step, stepId, location, place, navigate]);
-}
-
-/** Past the last step (or every remaining step done by the data): stamp it done once. */
-function useFinishAtEnd(resolution: InductionResolution, finish: () => void): void {
-  const done = useRef(false);
-  useEffect(() => {
-    if (resolution.kind !== 'finish' || done.current) return;
-    done.current = true;
-    finish();
-  }, [resolution, finish]);
-}
-
-function GuideLayer({
-  ctx,
-  resolution,
-  tabsShown,
-}: {
-  ctx: InductionContextValue;
-  resolution: Extract<InductionResolution, { kind: 'step' }>;
-  tabsShown: boolean;
-}): ReactElement {
   const laptop = useMediaQuery(LAPTOP_QUERY);
-  const { step } = resolution;
-  const target = findTarget(step.targets);
-  const el = target.found ? target.el : undefined;
-  useLiveTick(el);
-  useBringIntoView(step.id, el);
-
+  useStepNavigation(ctx);
   const safeTop = useRef<HTMLDivElement>(null);
   const safeBottom = useRef<HTMLDivElement>(null);
-  // The card's own height (its copy wraps), so the placement can keep it clear of the box.
-  const [cardEl, setCardEl] = useState<HTMLElement | null>(null);
-  const [cardHeight, setCardHeight] = useState(140);
-  useLayoutEffect(() => {
-    if (cardEl === null) return;
-    const measure = (): void => {
-      if (cardEl.offsetHeight > 0) setCardHeight(cardEl.offsetHeight);
-    };
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const sizes = new ResizeObserver(measure);
-    sizes.observe(cardEl);
-    return () => sizes.disconnect();
-  }, [cardEl]);
-
-  const buttons = stepButtons(step);
-  const words = stepCopy(step, ctx.workspaceLabel);
-  const copy: GuideCopy = {
-    count: stepCountLabel(resolution.part, resolution.parts),
-    title: words.title,
-    body: words.body,
-    next: buttons.next,
-    later: buttons.later,
-    laterLabel: step.laterLabel ?? 'Later',
+  const insets = {
+    top: safeTop.current?.offsetHeight ?? 0,
+    bottom: (safeBottom.current?.offsetHeight ?? 0) + (tabsShown && !laptop ? PHONE_TAB_BAR : 0),
   };
-  const actions = { onNext: ctx.next, onLater: ctx.later };
-
-  const dialog = topDialog();
-  const control: Rect | undefined = el !== undefined ? rectOf(el) : undefined;
-  const insideDialog = dialog.open && el !== undefined && dialog.el.contains(el);
-  // An open sheet that does not hold the control covers it: no box, the strip says what to do.
-  const box = control !== undefined && (!dialog.open || insideDialog) ? control : undefined;
-
-  const viewport = { width: window.innerWidth, height: window.innerHeight };
-  const cardWidth = laptop ? CARD_WIDTH : viewport.width - 32;
-  let overlay: ReactElement;
-  if (dialog.open) {
-    overlay = (
-      <GuideStrip
-        copy={copy}
-        actions={actions}
-        rect={stripRect(dialogTitleRect(dialog.el), rectOf(dialog.el))}
-      />
-    );
-  } else {
-    const insets = {
-      top: safeTop.current?.offsetHeight ?? 0,
-      bottom: (safeBottom.current?.offsetHeight ?? 0) + (tabsShown && !laptop ? PHONE_TAB_BAR : 0),
-    };
-    // No control on screen yet: an anchor in the corner docks the card at the
-    // bottom on a phone and bottom right on a laptop.
-    const anchor =
-      box ??
-      (laptop
-        ? { top: viewport.height, left: viewport.width, width: 0, height: 0 }
-        : { top: 0, left: 0, width: 0, height: 0 });
-    const at = placeCard({
-      target: anchor,
-      card: { width: cardWidth, height: cardHeight },
-      viewport,
-      phone: !laptop,
-      insets,
-    });
-    overlay = (
-      <GuideCard
-        ref={setCardEl}
-        copy={copy}
-        actions={actions}
-        at={{ top: at.top, left: at.left, width: cardWidth }}
-      />
-    );
-  }
-
+  const { resolution } = ctx;
+  if (resolution.kind === 'off') return null;
   return createPortal(
-    <div {...{ [LAYER_ATTR]: '' }} data-induction-step={step.id}>
+    <div {...{ [LAYER_ATTR]: '' }} data-induction-step={stepIdOf(resolution)}>
+      <GuideStyle />
       <div
         ref={safeTop}
         aria-hidden="true"
@@ -189,12 +99,237 @@ function GuideLayer({
         aria-hidden="true"
         className="pointer-events-none invisible fixed bottom-0 left-0 h-[env(safe-area-inset-bottom)] w-0"
       />
-      {box !== undefined && el !== undefined ? (
-        <GuideBox rect={clampToViewport(boxRect(box), viewport)} radius={boxRadius(radiusOf(el))} />
-      ) : null}
-      {overlay}
+      {resolution.kind === 'step' ? (
+        <StepLayer ctx={ctx} script={script} resolution={resolution} frame={{ laptop, insets }} />
+      ) : (
+        <CardLayer ctx={ctx} resolution={resolution} dock={{ side: 'bottom', laptop, insets }} />
+      )}
     </div>,
     document.body,
+  );
+}
+
+function stepIdOf(resolution: Exclude<Resolution, { kind: 'off' }>): string {
+  if (resolution.kind === 'step') return resolution.step.id;
+  return resolution.card.id;
+}
+
+/**
+ * A new step opens its screen, and keeps opening it until the person has been
+ * on it once (a tapped control's own navigation can land after the step
+ * changed). After that the person's own moves win, except on a gate, whose
+ * screen cannot be left.
+ */
+function useStepNavigation(ctx: InductionContextValue): void {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { resolution, place } = ctx;
+  const step = resolution.kind === 'step' ? resolution.step : undefined;
+  const opened = useRef({ id: '', arrived: false, navigated: false });
+
+  useEffect(() => {
+    if (step === undefined) return;
+    if (opened.current.id !== step.id) {
+      opened.current = { id: step.id, arrived: false, navigated: false };
+    }
+    const now = opened.current;
+    if (onPlace(step.place, location, place)) {
+      now.arrived = true;
+      return;
+    }
+    if (now.arrived && step.kind !== 'gate') return;
+    navigate(placeRoute(step.place, place), { replace: now.navigated });
+    now.navigated = true;
+  }, [step, location, place, navigate]);
+}
+
+function CardLayer({
+  ctx,
+  resolution,
+  dock,
+}: {
+  ctx: InductionContextValue;
+  resolution: CardResolution;
+  dock: DockAt;
+}): ReactElement {
+  const { card } = resolution;
+  const fill = (text: string): string => fillCopy(text, ctx.copy);
+  return (
+    <GuideCard
+      kind={card.kind}
+      copy={{
+        eyebrow: fill(card.eyebrow ?? ''),
+        title: fill(card.title),
+        body: fill(card.body),
+        pills: card.pills ?? [],
+        button: card.button,
+      }}
+      onPress={card.kind === 'intro' ? ctx.start : ctx.finish}
+      dock={dock}
+    />
+  );
+}
+
+interface Frame {
+  laptop: boolean;
+  insets: { top: number; bottom: number };
+}
+
+/** The live probe the pure rules read: is a step's control on screen, did the data finish it. */
+function probeOf(ctx: InductionContextValue): StepProbe {
+  return {
+    visible: (step: Step) => findVisible(step.targets, ctx.qualifiers).found,
+    done: ctx.isDone,
+  };
+}
+
+function StepLayer({
+  ctx,
+  script,
+  resolution,
+  frame,
+}: {
+  ctx: InductionContextValue;
+  script: RouteScript;
+  resolution: StepResolution;
+  frame: Frame;
+}): ReactElement {
+  const { step, steps, index } = resolution;
+  const probe = probeOf(ctx);
+  const [barEl, setBarEl] = useState<HTMLElement | null>(null);
+  const bar = useElementSize(barEl, BAR_FALLBACK);
+  // A control covered by a modal that does not hold it counts as not on screen.
+  const target = findVisible(step.targets, ctx.qualifiers);
+  const el = target.found ? target.el : undefined;
+  const moving = useLiveTick(el);
+  useBringIntoView(step.id, el);
+  const next = steps[index + 1];
+  const nextFound = next !== undefined ? findVisible(next.targets, ctx.qualifiers) : undefined;
+  const nextEl = nextFound?.found === true ? nextFound.el : undefined;
+
+  const boxed = el !== undefined && !moving ? el : undefined;
+  const field = el !== undefined ? textFieldOf(el) : undefined;
+
+  const location = useLocation();
+  useStepCompletion(
+    {
+      stepKey: step.id,
+      enabled: completesByUi(steps, index),
+      el,
+      nextEl,
+      nextElsewhere: next === undefined || next.place !== step.place,
+      where: `${location.pathname}${location.search}`,
+    },
+    () => ctx.moveTo(index + 1),
+  );
+  useAbsentSkip({ stepKey: step.id, found: el !== undefined }, () => {
+    if (ctx.isDone(step)) return;
+    const to = skipTarget(steps, index, probe);
+    if (to !== index) ctx.moveTo(to);
+  });
+  const nudge = useTapGuard(boxed, {
+    next: field !== undefined ? nextEl : undefined,
+    form: boxed !== undefined ? formOf(boxed, step.kind === 'gate') : undefined,
+  });
+  const legend = useLegend(script.route, step.id);
+
+  const control = boxed !== undefined ? rectOf(boxed) : undefined;
+  const back = index === 0 ? -1 : backIndex(steps, index, probe);
+  const order = chapterOrder(steps);
+  const copy: BarCopy = {
+    phase: step.phase ?? '',
+    chapters: {
+      names: order.map((chapter) => GUIDE_CHROME.chapters[chapter]),
+      current: step.chapter !== undefined ? order.indexOf(step.chapter) : -1,
+    },
+    why: fillCopy(step.why, ctx.copy),
+    legend: legend ? GUIDE_LEGEND : '',
+    back: GUIDE_CHROME.back,
+    skip: GUIDE_CHROME.skip,
+    later: step.laterLabel ?? '',
+    aria: {
+      bar: GUIDE_CHROME.barAria,
+      progress: GUIDE_CHROME.progressAria,
+      back: GUIDE_CHROME.backAria,
+      skip: GUIDE_CHROME.skipAria,
+    },
+  };
+  const dock: DockAt = {
+    side: barSide(control !== undefined ? boxRect(control) : undefined, {
+      viewportHeight: window.innerHeight,
+      insets: frame.insets,
+      barHeight: bar.height,
+    }),
+    laptop: frame.laptop,
+    insets: frame.insets,
+  };
+  return (
+    <>
+      {control !== undefined && boxed !== undefined ? (
+        <Spotlight
+          control={control}
+          radius={guideRadius(radiusOf(boxed))}
+          label={fillCopy(step.label, ctx.copy)}
+          frame={{
+            dock,
+            nudge,
+            barHeight: bar.height,
+            barRect: barEl !== null ? rectOf(barEl) : undefined,
+          }}
+        />
+      ) : null}
+      <GuideBar
+        ref={setBarEl}
+        copy={copy}
+        progress={progressOf(script, resolution)}
+        dock={dock}
+        actions={{
+          onBack: back >= 0 ? () => ctx.moveTo(back) : undefined,
+          onSkip: ctx.finish,
+          onLater:
+            step.kind === 'optional' && step.laterLabel !== undefined
+              ? () => ctx.moveTo(index + 1)
+              : undefined,
+        }}
+      />
+    </>
+  );
+}
+
+const BAR_FALLBACK = { width: 0, height: 72 };
+const LABEL_FALLBACK = { width: 180, height: 32 };
+
+function Spotlight({
+  control,
+  radius,
+  label,
+  frame,
+}: {
+  control: Rect;
+  radius: number;
+  label: string;
+  frame: { dock: DockAt; nudge: number; barHeight: number; barRect: Rect | undefined };
+}): ReactElement {
+  const [labelEl, setLabelEl] = useState<HTMLDivElement | null>(null);
+  const size = useElementSize(labelEl, LABEL_FALLBACK);
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  const box = boxRect(control);
+  const { dock } = frame;
+  const barRoom = dock.laptop ? 0 : frame.barHeight + DOCK_GAP;
+  const area = {
+    top: dock.insets.top + (dock.side === 'top' ? barRoom : 0),
+    bottom: viewport.height - (dock.side === 'bottom' ? dock.insets.bottom + barRoom : 0),
+    width: viewport.width,
+    viewportHeight: viewport.height,
+    ...(frame.barRect !== undefined ? { obstacle: frame.barRect } : {}),
+  };
+  const at = placeLabel({ box, label: size, area });
+  return (
+    <>
+      <GuideBox rect={clampToViewport(box, viewport)} radius={radius} />
+      <GuideHand tip={handPoint(control)} nudge={frame.nudge} />
+      <GuideLabel ref={setLabelEl} text={label} at={at} nudge={frame.nudge} />
+    </>
   );
 }
 
@@ -203,9 +338,8 @@ const BRING_WINDOW_MS = 1500;
 
 /**
  * When a step starts, scroll its control into view if it sits off screen, and
- * keep doing so for a moment while the page settles (a chat thread scrolls to
- * its newest message after it loads). After that the person's own scrolling wins.
- * Instant, so reduced motion holds.
+ * keep doing so for a moment while the page settles. After that the person's
+ * own scrolling wins. Instant, so reduced motion holds.
  */
 function useBringIntoView(stepId: string, el: HTMLElement | undefined): void {
   const since = useRef({ key: '', at: 0 });

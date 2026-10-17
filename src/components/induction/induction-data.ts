@@ -131,6 +131,17 @@ export async function readDefaultGroup(
   client: Client,
   workspaceId: string,
 ): Promise<DefaultGroup | undefined> {
+  try {
+    return await readDefaultGroupRows(client, workspaceId);
+  } catch {
+    return undefined;
+  }
+}
+
+async function readDefaultGroupRows(
+  client: Client,
+  workspaceId: string,
+): Promise<DefaultGroup | undefined> {
   const group = await client
     .from('groups')
     .select('id, name')
@@ -150,20 +161,161 @@ export async function readDefaultGroup(
   return { name: group.data.name, channelId: channel.data.channel_id };
 }
 
-/** The oldest post waiting in review, for the approver's post steps. */
+export interface ReviewPost {
+  id: string;
+  title: string;
+  /** The display name of the person who made the post; '' when unknown. */
+  creatorName: string;
+}
+
+/** A user's display name ('' when unreadable). */
+async function readDisplayName(client: Client, userId: string | null): Promise<string> {
+  if (userId === null) return '';
+  try {
+    const { data, error } = await client
+      .from('users')
+      .select('display_name')
+      .eq('id', userId)
+      .maybeSingle();
+    return error || data === null ? '' : data.display_name;
+  } catch {
+    return '';
+  }
+}
+
+/** The oldest post waiting in review, for the approver's review steps, with its title and creator. */
 export async function readOldestReviewPost(
   client: Client,
   workspaceId: string,
-): Promise<string | undefined> {
-  const { data, error } = await client
-    .from('posts')
-    .select('id')
-    .eq('workspace_id', workspaceId)
-    .eq('stage', 'review')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error || data === null) return undefined;
-  return data.id;
+): Promise<ReviewPost | undefined> {
+  try {
+    const { data, error } = await client
+      .from('posts')
+      .select('id, title, created_by')
+      .eq('workspace_id', workspaceId)
+      .eq('stage', 'review')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error || data === null) return undefined;
+    const creatorName = await readDisplayName(client, data.created_by);
+    return { id: data.id, title: data.title, creatorName };
+  } catch {
+    return undefined;
+  }
+}
+
+/** One post's title ('' when unreadable): the creator's own first post for the copy. */
+export async function readPostTitle(client: Client, postId: string): Promise<string> {
+  try {
+    const { data, error } = await client
+      .from('posts')
+      .select('title')
+      .eq('id', postId)
+      .maybeSingle();
+    return error || data === null ? '' : data.title;
+  } catch {
+    return '';
+  }
+}
+
+/** Whether the workspace holds any brief that is not deleted. */
+export async function readHasBrief(client: Client, workspaceId: string): Promise<boolean> {
+  try {
+    const { data, error } = await client
+      .from('briefs')
+      .select('id')
+      .eq('workspace_id', workspaceId)
+      .is('deleted_at', null)
+      .limit(1);
+    return !error && (data ?? []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a plan card sits in the default group's chat (a chat_messages row
+ * carrying shared_plan_ids): the plan step boxes that card's Open plan.
+ */
+export async function readHasPlanCard(client: Client, channelId: string): Promise<boolean> {
+  try {
+    const { data, error } = await client
+      .from('chat_messages')
+      .select('id')
+      .eq('channel_id', channelId)
+      .is('deleted_at', null)
+      .not('shared_plan_ids', 'is', null)
+      .limit(1);
+    return !error && (data ?? []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** True when one attachment_meta entry is a voice note: an audio mime or a recorded length. */
+function metaHasVoice(meta: unknown): boolean {
+  if (typeof meta !== 'object' || meta === null) return false;
+  return Object.values(meta as Record<string, unknown>).some((entry) => {
+    if (typeof entry !== 'object' || entry === null) return false;
+    const record = entry as Record<string, unknown>;
+    const mime = typeof record.mime === 'string' ? record.mime : '';
+    return mime.startsWith('audio/') || typeof record.duration_ms === 'number';
+  });
+}
+
+/** How many recent group messages the voice note check looks through. */
+const VOICE_SCAN_LIMIT = 100;
+
+/** Whether the default group's chat mirror holds a voice note (attachment_meta, as chat search reads it). */
+export async function readHasVoiceNote(client: Client, channelId: string): Promise<boolean> {
+  try {
+    const { data, error } = await client
+      .from('chat_messages')
+      .select('attachment_meta')
+      .eq('channel_id', channelId)
+      .is('deleted_at', null)
+      .not('attachment_meta', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(VOICE_SCAN_LIMIT);
+    if (error) return false;
+    return (data ?? []).some((row) => metaHasVoice(row.attachment_meta));
+  } catch {
+    return false;
+  }
+}
+
+/** What the guide reads about the workspace while it runs; every field fails soft. */
+export interface GuideFactsRead {
+  group: DefaultGroup | undefined;
+  /** Approver route only. */
+  reviewPost: ReviewPost | undefined;
+  hasBrief: boolean;
+  hasPlan: boolean;
+  hasVoiceNote: boolean;
+  /** The creator's or invited member's own first post title; '' when none. */
+  ownPostTitle: string;
+}
+
+/** Reads every guide fact for one workspace (read-only, RLS-scoped). */
+export async function readGuideFacts(
+  client: Client,
+  input: { workspaceId: string; approver: boolean; postId: string | null },
+): Promise<GuideFactsRead> {
+  const { workspaceId, approver, postId } = input;
+  const [group, reviewPost, hasBrief, ownPostTitle] = await Promise.all([
+    readDefaultGroup(client, workspaceId),
+    approver ? readOldestReviewPost(client, workspaceId) : Promise.resolve(undefined),
+    readHasBrief(client, workspaceId),
+    postId !== null ? readPostTitle(client, postId) : Promise.resolve(''),
+  ]);
+  const [hasPlan, hasVoiceNote] =
+    group === undefined
+      ? [false, false]
+      : await Promise.all([
+          readHasPlanCard(client, group.channelId),
+          readHasVoiceNote(client, group.channelId),
+        ]);
+  return { group, reviewPost, hasBrief, hasPlan, hasVoiceNote, ownPostTitle };
 }

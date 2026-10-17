@@ -18,6 +18,9 @@ export function BottomTabs() {
           key={item.to}
           to={item.to}
           {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
+          {...(item.showActivityBadge === true
+            ? { 'data-induction': INDUCTION_KEYS.activityTab }
+            : {})}
           className={({ isActive }) =>
             cn(
               'flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] text-[11px] font-medium transition-colors',

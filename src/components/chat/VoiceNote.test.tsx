@@ -285,7 +285,7 @@ describe('first paint', () => {
   it('the link is plain accent text, 15px/500, 44px tall, never selecting or calling out', () => {
     const html = withLink('fp-link');
     expect(html).toMatch(
-      /<button type="button" data-voice-link="transcribe" class="flex h-11 select-none items-center text-\[15px\] font-medium leading-5 \[-webkit-touch-callout:none\] shrink-0 rounded-sm text-accent /,
+      /<button type="button" data-voice-link="transcribe" data-induction="chat-transcript" class="flex h-11 select-none items-center text-\[15px\] font-medium leading-5 \[-webkit-touch-callout:none\] shrink-0 rounded-sm text-accent /,
     );
     expect(html).toContain('>Transcribe</button>');
     expect(html).not.toMatch(/data-voice-link="transcribe"[^>]*(bg-|rounded-full|border)/);

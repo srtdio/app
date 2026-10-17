@@ -23,6 +23,7 @@ import {
   WORKSPACE_LIMIT_MESSAGE,
 } from '@/lib/workspace-context';
 import { cn } from '@/lib/cn';
+import { INDUCTION_KEYS } from '@/lib/induction-keys';
 
 const NAME_MIN = 1;
 const NAME_MAX = 80;
@@ -362,6 +363,7 @@ export function WorkspaceSwitcher() {
                 type="button"
                 variant="primary"
                 size="lg"
+                data-induction={INDUCTION_KEYS.workspaceCreateSubmit}
                 onClick={() => void submitCreate()}
                 disabled={submitting}
               >

@@ -356,7 +356,7 @@ export function MembersInviteForm({
 
   return (
     <div className="flex max-w-[520px] flex-col gap-8">
-      <section data-induction={INDUCTION_KEYS.membersInvite} className="flex flex-col gap-4">
+      <section className="flex flex-col gap-4">
         <h3 className="text-base font-semibold">Invite member</h3>
         <form className="flex flex-col gap-4" onSubmit={handleSingleSubmit}>
           <Field label="Email" htmlFor="invite-email" required>
@@ -397,6 +397,7 @@ export function MembersInviteForm({
               variant="primary"
               size="lg"
               type="submit"
+              data-induction={INDUCTION_KEYS.membersInvite}
               disabled={singleSubmitting || !singleEmailValid}
             >
               {singleSubmitting ? 'Sending' : 'Send invite'}

@@ -6,13 +6,20 @@
 // Which screens a person walks comes from stepsFor (src/lib/onboarding.ts):
 //   self sign-up, Creator:  side, name, role, then the shell (make the workspace)
 //   self sign-up, Approver: side, name, role, brand, waiting
-//   invitee:                password, name, role, then the shell
+//   invitee:                welcome, name, role, then the shell
+//
+// The invitee's link already signed them in and invite-accept already ran, so
+// the welcome only greets them: workspace, platform, who invited them and the
+// signed-in email. Their side comes only from workspace_members.role; the role
+// dropdown is a designation and never changes permissions.
 //
 // Nothing here refetches the profile or the workspace list until the very end
 // (finish), because either refetch flips the shell gate and would unmount the
 // flow mid-way. Colors are tokens only, so light and dark both hold.
 
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { PLATFORM_LABELS, isPostPlatform } from '@srtdio/posts';
 import { userOnboardingSave, usernameAvailable } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
@@ -22,12 +29,14 @@ import { readLatestBrandRequest, requestBrandTeam } from '@/components/induction
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { PlatformMark } from '@/components/ui/PlatformMark';
 import { Select } from '@/components/ui/Select';
 import { Sheet } from '@/components/ui/Sheet';
 import { uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
+import { WELCOME_COPY, fillCopy } from '@/lib/induction-copy';
 import {
   APPROVER_BRAND_STEP,
   APPROVER_WAITING_STEP,
@@ -37,24 +46,25 @@ import {
 } from '@/lib/induction';
 import { logger } from '@/lib/logger';
 import {
-  AGE_RANGES,
   OTHER_ROLE,
   ROLE_TILES,
   SIDE_TILES,
   designationFor,
+  entryCopyContext,
   normalizeUsernameInput,
+  notYouPath,
   progressSteps,
+  sideForMemberRole,
   stepsFor,
   suggestUsername,
   usernameFormat,
   type OnboardingStep,
   type Side,
 } from '@/lib/onboarding';
-import { useSession } from '@/lib/session-context';
+import { performSignout, useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import type { CurrentProfile } from '@/lib/use-current-profile';
-import { MIN_PASSWORD_LENGTH } from '@/components/auth/SignUpPage';
 
 interface OnboardingFlowProps {
   profile: CurrentProfile | null;
@@ -79,6 +89,94 @@ type NameCheck = 'idle' | 'checking' | 'free' | 'taken' | 'error';
 /** Where a finished Creator or invitee lands: the shell takes it from there. */
 const SHELL_HOME = '/pipeline';
 
+/** What the invited welcome shows, read once for the joined workspace. */
+interface WelcomeFacts {
+  loaded: boolean;
+  /** workspace_members.id, which is also the invite id invite-accept took. */
+  inviteId: string;
+  side: Side;
+  /** users.display_name of workspace_members.invited_by; '' when unknown. */
+  inviter: string;
+  /** workspaces.name; '' until read. */
+  brand: string;
+  /** workspaces.platform; '' until read. */
+  platform: string;
+}
+
+const NO_WELCOME_FACTS: WelcomeFacts = {
+  loaded: false,
+  inviteId: '',
+  side: 'creator',
+  inviter: '',
+  brand: '',
+  platform: '',
+};
+
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+/** The person's active membership in the joined workspace (RLS: own rows). */
+async function readMembership(ids: {
+  workspaceId: string;
+  userId: string;
+}): Promise<{ id: string; role: string; invitedBy: string }> {
+  const { data, error } = await supabase
+    .from('workspace_members')
+    .select('id, role, invited_by')
+    .eq('workspace_id', ids.workspaceId)
+    .eq('user_id', ids.userId)
+    .eq('active', true)
+    .maybeSingle();
+  if (error) logger.warn('welcome: membership read failed', { error: error.message });
+  const row: Record<string, unknown> = data ?? {};
+  return { id: text(row.id), role: text(row.role), invitedBy: text(row.invited_by) };
+}
+
+/** The joined workspace's own name and platform. */
+async function readWorkspace(workspaceId: string): Promise<{ name: string; platform: string }> {
+  const { data, error } = await supabase
+    .from('workspaces')
+    .select('name, platform')
+    .eq('id', workspaceId)
+    .maybeSingle();
+  if (error) logger.warn('welcome: workspace read failed', { error: error.message });
+  const row: Record<string, unknown> = data ?? {};
+  return { name: text(row.name), platform: text(row.platform) };
+}
+
+/** A co-member's display name (users is readable by co-members); '' when unread. */
+async function readDisplayName(userId: string): Promise<string> {
+  if (userId === '') return '';
+  const { data, error } = await supabase
+    .from('users')
+    .select('display_name')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) logger.warn('welcome: inviter read failed', { error: error.message });
+  const row: Record<string, unknown> = data ?? {};
+  return text(row.display_name);
+}
+
+async function readWelcomeFacts(ids: {
+  workspaceId: string;
+  userId: string;
+}): Promise<WelcomeFacts> {
+  const [member, workspace] = await Promise.all([
+    readMembership(ids),
+    readWorkspace(ids.workspaceId),
+  ]);
+  const inviter = await readDisplayName(member.invitedBy);
+  return {
+    loaded: true,
+    inviteId: member.id,
+    side: sideForMemberRole(member.role),
+    inviter,
+    brand: workspace.name,
+    platform: workspace.platform,
+  };
+}
+
 export function OnboardingFlow({
   profile,
   workspaceId: joinedWorkspaceId,
@@ -89,6 +187,7 @@ export function OnboardingFlow({
   finishError,
 }: OnboardingFlowProps): ReactElement {
   const newTrace = useNewTrace();
+  const navigate = useNavigate();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const email = session?.user.email ?? '';
@@ -96,8 +195,8 @@ export function OnboardingFlow({
 
   // The side: picked on the first screen, or the invite's role for an invitee.
   const [side, setSide] = useState<Side | null>(approverStage !== 'none' ? 'approver' : null);
-  const [inviteSide, setInviteSide] = useState<Side>('creator');
-  const shownSide: Side = invitee ? inviteSide : (side ?? 'creator');
+  const [welcome, setWelcome] = useState<WelcomeFacts>(NO_WELCOME_FACTS);
+  const shownSide: Side = invitee ? welcome.side : (side ?? 'creator');
   // Fixed at mount except for the approver's tail, which follows the side picked.
   const [profileIncomplete] = useState(profile === null || profile.profile_completed_at === null);
   const steps = stepsFor({
@@ -110,7 +209,6 @@ export function OnboardingFlow({
   const step: OnboardingStep = steps[index] ?? 'waiting';
 
   // Profile answers
-  const [password, setPassword] = useState('');
   // A new account's display_name is the email's local part (signup trigger), not
   // a real name: start blank then, so nobody becomes "connect" by default.
   const [name, setName] = useState(() => {
@@ -147,7 +245,6 @@ export function OnboardingFlow({
   }, []);
   const [role, setRole] = useState('');
   const [roleOther, setRoleOther] = useState('');
-  const [age, setAge] = useState('');
   const [emailOptIn] = useState(profile?.email_opt_in ?? true);
 
   // The approver who signed up alone: who makes their posts.
@@ -189,19 +286,17 @@ export function OnboardingFlow({
     };
   }, [shownUsername, format, newTrace]);
 
-  // Invitee: their side comes from the invite's role.
+  // Invitee: the welcome facts, and their side, which comes only from the membership role.
   useEffect(() => {
     if (joinedWorkspaceId === null || userId === null) return;
     let cancelled = false;
-    void supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('workspace_id', joinedWorkspaceId)
-      .eq('user_id', userId)
-      .eq('active', true)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setInviteSide(data?.role === 'client' ? 'approver' : 'creator');
+    void readWelcomeFacts({ workspaceId: joinedWorkspaceId, userId })
+      .then((facts) => {
+        if (!cancelled) setWelcome(facts);
+      })
+      .catch((err: unknown) => {
+        logger.warn('welcome: read failed', { error: String(err) });
+        if (!cancelled) setWelcome({ ...NO_WELCOME_FACTS, loaded: true });
       });
     return () => {
       cancelled = true;
@@ -247,15 +342,11 @@ export function OnboardingFlow({
     onFinish(to);
   }
 
-  async function savePassword(): Promise<void> {
+  /** "Not you?": sign out on this device, then sign in again on the way back to the invite. */
+  async function notYou(): Promise<void> {
     setBusy(true);
-    const { error: err } = await supabase.auth.updateUser({ password });
-    setBusy(false);
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    next();
+    await performSignout(supabase);
+    navigate(notYouPath(welcome.inviteId), { replace: true });
   }
 
   /** Upload the photo, then save the whole profile in one call. */
@@ -282,7 +373,6 @@ export function OnboardingFlow({
       username: shownUsername,
       designation,
       email_opt_in: emailOptIn,
-      age_range: age,
     };
     if (avatarUrl !== null) payload.avatar_url = avatarUrl;
     const saved = await userOnboardingSave(supabase, {
@@ -362,35 +452,39 @@ export function OnboardingFlow({
     />
   );
 
-  if (step === 'password') {
+  if (step === 'welcome') {
+    const brand = welcome.brand || (joinedWorkspaceName ?? '');
+    const subline =
+      welcome.side === 'approver' ? WELCOME_COPY.approverSubline : WELCOME_COPY.creatorSubline;
     body = (
-      <>
-        <Heading
-          title={`Join ${joinedWorkspaceName ?? 'your workspace'}`}
-          lead="Set a password and you're in. Next time, sign in with it."
-        />
-        <Labeled label="Email" htmlFor="ob-email">
-          <Input id="ob-email" value={email} readOnly className="text-fg-2" />
-        </Labeled>
-        <Labeled label="Password" htmlFor="ob-password" hint="At least 8 characters.">
-          <Input
-            id="ob-password"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </Labeled>
-      </>
+      <WelcomeBody
+        heading={fillCopy(WELCOME_COPY.heading, entryCopyContext({ brand }))}
+        platform={welcome.platform}
+        subline={
+          welcome.loaded
+            ? // An empty inviter falls back to "The team" (WELCOME_COPY.fallbackInviter).
+              fillCopy(subline, entryCopyContext({ inviter: welcome.inviter.trim() }))
+            : ''
+        }
+        joiningAs={fillCopy(WELCOME_COPY.joiningAs, entryCopyContext({ email }))}
+      />
     );
     primary = (
-      <Primary
-        disabled={busy || password.length < MIN_PASSWORD_LENGTH}
-        onClick={() => void savePassword()}
-      >
-        Continue
-      </Primary>
+      <>
+        <Primary disabled={busy} onClick={next}>
+          {WELCOME_COPY.continue}
+        </Primary>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void notYou()}
+          className="min-h-[44px] w-full text-sm font-medium text-accent hover:underline disabled:opacity-35"
+        >
+          {WELCOME_COPY.notYou}
+        </button>
+      </>
     );
+    preview = null;
   } else if (step === 'side') {
     body = (
       <>
@@ -564,20 +658,10 @@ export function OnboardingFlow({
             />
           </Labeled>
         ) : null}
-        <ChipGroup
-          label="Your age range"
-          hint="Never shown to anyone."
-          options={AGE_RANGES.map((value) => ({ value, label: value }))}
-          value={age}
-          onChange={setAge}
-        />
       </>
     );
     primary = (
-      <Primary
-        disabled={busy || designation.length === 0 || age === ''}
-        onClick={() => void saveProfile()}
-      >
+      <Primary disabled={busy || designation.length === 0} onClick={() => void saveProfile()}>
         {busy ? 'Saving' : 'Continue'}
       </Primary>
     );
@@ -632,7 +716,7 @@ export function OnboardingFlow({
   // Back is offered between the profile screens only; a saved profile is not undone.
   const previous = steps[index - 1];
   const canGoBack =
-    index > 0 && (step === 'name' || step === 'role') && previous !== 'password' && !busy;
+    index > 0 && (step === 'name' || step === 'role') && previous !== 'welcome' && !busy;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-bg md:grid md:grid-cols-2 md:overflow-hidden">
@@ -794,40 +878,43 @@ function Primary({
   );
 }
 
-function ChipGroup({
-  label,
-  hint,
-  options,
-  value,
-  onChange,
+/** The platform as the app shows it elsewhere: the letter mark and its label. */
+function PlatformTag({ platform }: { platform: string }): ReactElement {
+  const label = isPostPlatform(platform) ? PLATFORM_LABELS[platform] : platform;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-fg-2">
+      <PlatformMark platform={platform} />
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function WelcomeBody({
+  heading,
+  platform,
+  subline,
+  joiningAs,
 }: {
-  label: string;
-  hint?: string;
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (value: string) => void;
+  heading: string;
+  platform: string;
+  subline: string;
+  joiningAs: string;
 }): ReactElement {
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium">{label}</p>
-      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={value === option.value}
-            onClick={() => onChange(value === option.value ? '' : option.value)}
-            className={cn(
-              'min-h-[44px] rounded-full border px-4 text-sm font-medium',
-              value === option.value ? 'border-fg bg-fg text-bg' : 'border-border bg-panel text-fg',
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      {hint !== undefined ? <p className="text-[11px] text-fg-3">{hint}</p> : null}
+    <div className="flex flex-col gap-4">
+      <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.02em] text-fg [text-wrap:balance]">
+        {heading}
+      </h1>
+      {platform !== '' ? <PlatformTag platform={platform} /> : null}
+      <p
+        className="min-h-[22px] text-[15px] leading-[1.45] text-fg-2 [text-wrap:balance]"
+        aria-live="polite"
+      >
+        {subline}
+      </p>
+      <p className="rounded-lg border border-border bg-panel px-4 py-3 text-sm text-fg">
+        {joiningAs}
+      </p>
     </div>
   );
 }

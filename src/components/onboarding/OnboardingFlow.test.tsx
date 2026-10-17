@@ -3,29 +3,51 @@ import { act, forwardRef, useImperativeHandle, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockRequest, mockSave, mockUsername, newTrace } = vi.hoisted(() => ({
-  // Stable, as useNewTrace's is in the app.
-  newTrace: () => 'trace',
-  mockRequest: vi.fn(),
-  mockSave: vi.fn(),
-  mockUsername: vi.fn(),
-}));
+const { mockRequest, mockSave, mockUsername, newTrace, rows, mockSignout, mockNavigate, calls } =
+  vi.hoisted(() => ({
+    // Stable, as useNewTrace's is in the app.
+    newTrace: () => 'trace',
+    mockRequest: vi.fn(),
+    mockSave: vi.fn(),
+    mockUsername: vi.fn(),
+    mockSignout: vi.fn(async () => undefined),
+    mockNavigate: vi.fn(),
+    calls: [] as string[],
+    /** What each table read answers, per test. */
+    rows: {} as Record<string, { data: unknown; error: { message: string } | null }>,
+  }));
+
+/** A chainable read: .select().eq()...maybeSingle() answers rows[table]. */
+function tableRead(table: string): unknown {
+  const chain = {
+    select: () => chain,
+    eq: () => chain,
+    maybeSingle: async () => rows[table] ?? { data: null, error: null },
+  };
+  return chain;
+}
 
 // Every client the flow touches is stubbed, so nothing builds a real Supabase client.
 vi.mock('@/lib/supabase', () => ({
   supabase: {
-    auth: { getSession: async () => ({ data: { session: null } }), updateUser: vi.fn() },
-    from: () => ({
-      select: () => ({
-        eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }),
-      }),
-    }),
+    auth: { getSession: async () => ({ data: { session: null } }) },
+    from: (table: string) => tableRead(table),
   },
 }));
 vi.mock('@/lib/session-context', () => ({
   useSession: () => ({
     session: { user: { id: 'u-1', email: 'riya@kite.in', user_metadata: {} } },
   }),
+  performSignout: async () => {
+    calls.push('signout');
+    await mockSignout();
+  },
+}));
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => (to: string, opts?: unknown) => {
+    calls.push(`navigate ${to}`);
+    mockNavigate(to, opts);
+  },
 }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => newTrace }));
 vi.mock('@srtdio/rpc', () => ({ userOnboardingSave: mockSave, usernameAvailable: mockUsername }));
@@ -79,6 +101,7 @@ vi.mock('@/components/ui/Select', () => ({
 }));
 
 import { OnboardingFlow } from './OnboardingFlow';
+import { WORKSPACE_STEP } from '@/lib/induction';
 import type { CurrentProfile } from '@/lib/use-current-profile';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -107,6 +130,10 @@ beforeEach(() => {
   mockSave.mockResolvedValue({ ok: true, data: null });
   onStep.mockClear();
   onFinish.mockClear();
+  mockSignout.mockClear();
+  mockNavigate.mockClear();
+  calls.length = 0;
+  for (const key of Object.keys(rows)) delete rows[key];
   host = document.createElement('div');
   document.body.appendChild(host);
 });
@@ -198,6 +225,126 @@ async function toNameScreen(side: 'Creator' | 'Approver'): Promise<void> {
   });
 }
 
+function stepLabel(): string {
+  return document.querySelector('[role="progressbar"]')?.getAttribute('aria-label') ?? '';
+}
+
+/** An invitee whose membership, workspace and inviter read as given. */
+function invitedAs(opts: { role: string; inviter?: string | null; inviterFails?: boolean }): void {
+  rows.workspace_members = {
+    data: { id: 'inv-42', role: opts.role, invited_by: opts.inviter === null ? null : 'u-9' },
+    error: null,
+  };
+  rows.workspaces = { data: { name: 'Kite', platform: 'instagram' }, error: null };
+  rows.users = opts.inviterFails
+    ? { data: null, error: { message: 'denied' } }
+    : { data: { display_name: opts.inviter ?? 'Meera Shah' }, error: null };
+}
+
+async function renderInvitee(): Promise<void> {
+  await render({ workspaceId: 'ws-1' });
+  // The membership, then the inviter, resolve over a few turns.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
+
+describe('invited welcome', () => {
+  it('opens an invitee on the welcome, never on the side question or a password', async () => {
+    invitedAs({ role: 'agency' });
+    await renderInvitee();
+    expect(document.querySelector('h1')?.textContent).toBe('Welcome to Kite');
+    expect(document.body.textContent).not.toContain('Who are you here as?');
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it('shows the platform with the platform mark and label', async () => {
+    invitedAs({ role: 'agency' });
+    await renderInvitee();
+    expect(document.querySelector('[aria-label="instagram"]')?.textContent).toBe('ig');
+    expect(document.body.textContent).toContain('Instagram');
+  });
+
+  it('greets a creator (agency or admin) with the inviter name', async () => {
+    invitedAs({ role: 'admin' });
+    await renderInvitee();
+    expect(document.body.textContent).toContain(
+      'Meera Shah invited you to create posts with the team.',
+    );
+  });
+
+  it('greets an approver (client) with the review line', async () => {
+    invitedAs({ role: 'client' });
+    await renderInvitee();
+    expect(document.body.textContent).toContain(
+      'Meera Shah invited you to review posts for the team.',
+    );
+  });
+
+  it('falls back to The team when the inviter cannot be read', async () => {
+    invitedAs({ role: 'agency', inviterFails: true });
+    await renderInvitee();
+    expect(document.body.textContent).toContain(
+      'The team invited you to create posts with the team.',
+    );
+  });
+
+  it('falls back to The team when there is no inviter', async () => {
+    invitedAs({ role: 'client', inviter: null });
+    await renderInvitee();
+    expect(document.body.textContent).toContain(
+      'The team invited you to review posts for the team.',
+    );
+  });
+
+  it('shows Joining as with the signed-in email as text, no email input', async () => {
+    invitedAs({ role: 'agency' });
+    await renderInvitee();
+    expect(document.body.textContent).toContain('Joining as riya@kite.in');
+    expect(document.querySelector('input[type="email"]')).toBeNull();
+  });
+
+  it('Not you signs out, then goes to sign in on the way back to the invite', async () => {
+    invitedAs({ role: 'agency' });
+    await renderInvitee();
+    await click(button('Not you? Sign in with a different email'));
+    expect(calls).toEqual(['signout', 'navigate /signin?next=/invite/accept/inv-42']);
+  });
+
+  it('Not you falls back to the pipeline when the invite id is unknown', async () => {
+    await renderInvitee();
+    await click(button('Not you? Sign in with a different email'));
+    expect(mockNavigate).toHaveBeenCalledWith('/signin?next=/pipeline', { replace: true });
+  });
+
+  it('shows no step count on the welcome, then Step 1 of 2 and Step 2 of 2', async () => {
+    invitedAs({ role: 'client' });
+    await renderInvitee();
+    expect(document.querySelector('[role="progressbar"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('Step ');
+    await click(button('Continue'));
+    expect(stepLabel()).toBe('Step 1 of 2');
+    expect(document.body.textContent).toContain('What should we call you?');
+    await type(document.querySelector<HTMLInputElement>('#ob-name')!, 'Riya Menon');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await addPhoto();
+    await click(button('Continue'));
+    expect(stepLabel()).toBe('Step 2 of 2');
+    // An approver invitee picks from the approver roles: the side came from the membership.
+    await pick('Your role', 'Brand manager');
+    await click(button('Continue'));
+    const payload = mockSave.mock.calls[0]?.[1]?.p_payload as Record<string, unknown>;
+    expect(payload.designation).toBe('Brand manager');
+    expect('age_range' in payload).toBe(false);
+    expect(onFinish).toHaveBeenCalledWith('/pipeline');
+  });
+});
+
 describe('pre-app screens', () => {
   it('opens a self sign-up on Who are you here as?, Creator and Approver', async () => {
     await render({});
@@ -207,10 +354,9 @@ describe('pre-app screens', () => {
     expect(button('Continue').disabled).toBe(true);
   });
 
-  it('opens an invitee on the password, never on the side question', async () => {
-    await render({ workspaceId: 'ws-1' });
-    expect(document.body.textContent).toContain('Join Kite - Instagram');
-    expect(document.body.textContent).not.toContain('Who are you here as?');
+  it('counts the self sign-up steps: side, name, role', async () => {
+    await render({});
+    expect(stepLabel()).toBe('Step 1 of 3');
   });
 
   it('requires a photo before the name screen continues', async () => {
@@ -222,22 +368,25 @@ describe('pre-app screens', () => {
     expect(button('Continue').disabled).toBe(false);
   });
 
-  it('takes free text for Something else, needs an age, and has no How did you hear', async () => {
+  it('takes free text for Something else, with no age range and no How did you hear', async () => {
     await toNameScreen('Creator');
     await addPhoto();
     await click(button('Continue'));
+    expect(stepLabel()).toBe('Step 3 of 3');
     expect(document.body.textContent).not.toContain('How did you hear');
+    expect(document.body.textContent).not.toContain('age range');
+    expect(document.querySelector('[aria-label="Your age range"]')).toBeNull();
     await pick('Your role', 'Something else');
-    await type(document.querySelector<HTMLInputElement>('#ob-role-other')!, 'Community lead');
     expect(button('Continue').disabled).toBe(true);
-    await click(button('25-34'));
+    await type(document.querySelector<HTMLInputElement>('#ob-role-other')!, 'Community lead');
+    expect(button('Continue').disabled).toBe(false);
     await click(button('Continue'));
     const payload = mockSave.mock.calls[0]?.[1]?.p_payload as Record<string, unknown>;
     expect(payload.designation).toBe('Community lead');
-    expect(payload.age_range).toBe('25-34');
+    expect('age_range' in payload).toBe(false);
     expect('heard_from' in payload).toBe(false);
     // A Creator goes into the shell to make the workspace.
-    expect(onStep).toHaveBeenCalledWith('workspace');
+    expect(onStep).toHaveBeenCalledWith(WORKSPACE_STEP);
     expect(onFinish).toHaveBeenCalledWith('/pipeline');
   });
 
@@ -246,7 +395,6 @@ describe('pre-app screens', () => {
     await addPhoto();
     await click(button('Continue'));
     await pick('Your role', 'Brand manager');
-    await click(button('18-24'));
     await click(button('Continue'));
     expect(onStep).toHaveBeenCalledWith('approver_brand');
     expect(document.body.textContent).toContain('Who makes your posts?');

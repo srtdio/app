@@ -68,8 +68,10 @@ const CHAT_SPECS = [
   'pdf-opens-instantly',
   'onboarding',
   'activity-plan',
-  // The induction ends in the group chat.
-  'induction',
+  // The onboarding guide routes end on the chat list (Activity).
+  'onboarding-creator',
+  'onboarding-invited',
+  'onboarding-approver',
   // Link cards in a chat, then on a post's comments.
   'link-previews',
   // Delete a message with a file (purge-chat), then Settings > Delete workspace.
@@ -98,7 +100,9 @@ export const AREAS: Area[] = [
       'chat-tasks',
       'plan-desktop',
       'plan-draft-open',
-      'induction',
+      'onboarding-creator',
+      'onboarding-invited',
+      'onboarding-approver',
     ].map(t),
   },
   {
@@ -109,7 +113,9 @@ export const AREAS: Area[] = [
       'assets-type-tabs',
       'chat-back-navigation',
       'chat-status-ticker',
-      'induction',
+      'onboarding-creator',
+      'onboarding-invited',
+      'onboarding-approver',
       'plan-desktop',
       'workspace-platform',
     ].map(t),
@@ -124,7 +130,9 @@ export const AREAS: Area[] = [
       'chat-plan',
       'chat-status-ticker',
       'files-open-in-viewer',
-      'induction',
+      'onboarding-creator',
+      'onboarding-invited',
+      'onboarding-approver',
       'link-previews',
       'pdf-opens-instantly',
     ].map(t),
@@ -137,7 +145,14 @@ export const AREAS: Area[] = [
       'src/components/refs/BriefRefResolver.tsx',
     ],
     routed: true,
-    specs: ['chat-stars', 'chat-status-ticker', 'files-open-in-viewer', 'induction'].map(t),
+    specs: [
+      'chat-stars',
+      'chat-status-ticker',
+      'files-open-in-viewer',
+      'onboarding-creator',
+      'onboarding-invited',
+      'onboarding-approver',
+    ].map(t),
   },
   {
     name: 'assets',
@@ -150,16 +165,24 @@ export const AREAS: Area[] = [
       'assets-type-tabs',
       'assets-recently-deleted',
       'files-open-in-viewer',
-      'induction',
+      'onboarding-creator',
+      'onboarding-invited',
+      'onboarding-approver',
       'pdf-opens-instantly',
     ].map(t),
   },
   {
-    // The induction's approver gate lands on /settings?panel=members.
+    // The creator route's approver invite gate lands on /settings?panel=members.
     name: 'settings',
     entries: ['src/components/pages/SettingsPage.tsx'],
     routed: true,
-    specs: ['induction', 'workspace-storage', 'workspace-delete-chat-purge'].map(t),
+    specs: [
+      'onboarding-creator',
+      'onboarding-invited',
+      'onboarding-approver',
+      'workspace-storage',
+      'workspace-delete-chat-purge',
+    ].map(t),
   },
   {
     // Routes no spec opens (no Cockpit page exists in src yet).
@@ -193,7 +216,13 @@ export const AREAS: Area[] = [
       'src/components/induction/InductionProvider.tsx',
     ],
     routed: false,
-    specs: ['onboarding', 'induction', 'workspace-platform'].map(t),
+    specs: [
+      'onboarding',
+      'onboarding-creator',
+      'onboarding-invited',
+      'onboarding-approver',
+      'workspace-platform',
+    ].map(t),
   },
   {
     // Public one-click unsubscribe page (/unsubscribe), outside the auth guards.

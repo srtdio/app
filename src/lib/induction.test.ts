@@ -1,36 +1,93 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  APPROVER_STEPS,
-  CREATOR_STEPS,
   FAIL_OPEN_STATE,
-  INDUCTION_KEYS,
-  STEP_ID_PATTERN,
-  TEAMMATE_STEPS,
   approverStageOf,
+  backIndex,
+  barSide,
   boxRect,
-  boxRadius,
-  clampToViewport,
   brandRequestErrorMessage,
+  chapterOrder,
+  clampToViewport,
+  completesByUi,
   formatNeedsMedia,
-  hardGates,
+  guideRadius,
+  handPoint,
   onPlace,
   overlaps,
   parseInductionState,
-  pathFor,
-  placeCard,
+  placeLabel,
   placeRoute,
-  resolveStep,
-  stepButtons,
-  stepCopy,
-  stripRect,
+  presetPrimaryFor,
+  progressOf,
+  resolveGuide,
+  skipTarget,
+  stepDataDone,
+  storedIdFor,
   titleFromCaption,
   uploadFailedReason,
   withRetries,
-  type InductionAvailability,
+  WORKSPACE_STEP,
+  type EngineInput,
   type InductionState,
+  type Resolution,
+  type StepProbe,
 } from './induction';
+import type { InductionFacts, RouteScript, Step } from './induction-model';
+import { ROUTE_SCRIPTS } from './induction-routes';
 
-const FRESH: InductionState = {
+// ---------- fixtures ----------
+
+function step(id: string, shape: Partial<Step> = {}): Step {
+  return {
+    id,
+    route: 'creator',
+    kind: 'teach',
+    targets: ['pipeline-create'],
+    label: `Tap ${id}`,
+    why: '',
+    place: 'pipeline',
+    dataDone: 'none',
+    ...shape,
+  };
+}
+
+const SCRIPT: RouteScript = {
+  route: 'creator',
+  entrySteps: 4,
+  steps: [
+    step('c_ws', { kind: 'setup', dataDone: 'hasWorkspace', phase: 'Step 1', place: 'shell' }),
+    step('c_ws_create', { kind: 'setup', dataDone: 'hasWorkspace', phase: 'Step 1' }),
+    step('c_chip', { phase: 'Step 2' }),
+    step('c_post_create', { dataDone: 'firstPostSent', phase: 'Step 3' }),
+    step('c_post_caption', { dataDone: 'firstPostSent', phase: 'Step 3' }),
+    step('c_post_send', { kind: 'gate', dataDone: 'firstPostSent', phase: 'Step 3' }),
+    step('c_invite', { kind: 'gate', dataDone: 'clientInvited', place: 'members' }),
+    step('c_team', { kind: 'optional', dataDone: 'teamInvited', laterLabel: 'Later' }),
+    step('c_brief', { chapter: 'ask', place: 'briefs', skipWhen: ['noBrief'] }),
+    step('c_comment', { chapter: 'review', place: 'post', skipWhen: ['noOwnPost'] }),
+    step('c_group', { chapter: 'talk', place: 'chat', skipWhen: ['noGroup'] }),
+    step('c_sample', { chapter: 'talk', sampleOnly: true }),
+    step('c_activity', { chapter: 'talk', place: 'shell' }),
+  ],
+  intro: {
+    id: 'c_intro',
+    route: 'creator',
+    kind: 'intro',
+    title: 'Intro',
+    body: '',
+    button: 'Start',
+  },
+  closing: {
+    id: 'c_closing',
+    route: 'creator',
+    kind: 'closing',
+    title: 'End',
+    body: '',
+    button: 'Done',
+  },
+};
+
+const STATE: InductionState = {
   step: null,
   done: false,
   role: 'owner',
@@ -39,21 +96,52 @@ const FRESH: InductionState = {
   teamInvited: false,
 };
 
-const EVERYWHERE: InductionAvailability = {
+const FACTS: InductionFacts = {
   hasWorkspace: true,
-  postId: 'post-1',
-  groupChannelId: 'group__ws__g1',
+  hasBrief: true,
+  hasPlan: true,
+  hasReviewPost: true,
+  hasOwnPost: true,
+  hasGroup: true,
+  hasVoiceNote: true,
+  canCreateBrief: true,
 };
 
-function stepOf(r: ReturnType<typeof resolveStep>): string {
-  return r.kind === 'step' ? r.step.id : r.kind;
+const SENT = { postId: 'p1' };
+const ALL_DATA = { postId: 'p1', clientInvited: true, teamInvited: true };
+
+function input(
+  state: Partial<InductionState> = {},
+  facts: Partial<InductionFacts> = {},
+): EngineInput {
+  return { state: { ...STATE, ...state }, facts: { ...FACTS, ...facts } };
 }
+
+function shown(r: Resolution): string {
+  if (r.kind === 'step') return r.step.id;
+  if (r.kind === 'intro') return `intro@${r.steps[r.index]?.id ?? ''}`;
+  return r.kind;
+}
+
+function resolve(state: Partial<InductionState> = {}, facts: Partial<InductionFacts> = {}): string {
+  return shown(resolveGuide(SCRIPT, input(state, facts)));
+}
+
+const ids = (list: readonly Step[]): string[] => list.map((s) => s.id);
+
+/** A probe over the fixture: which ids are on screen, which the data finished. */
+function probe(visibleIds: string[], doneIds: string[] = []): StepProbe {
+  return { visible: (s) => visibleIds.includes(s.id), done: (s) => doneIds.includes(s.id) };
+}
+
+const STEPS = SCRIPT.steps.filter((s) => s.sampleOnly !== true);
+const at = (id: string): number => STEPS.findIndex((s) => s.id === id);
 
 describe('parseInductionState', () => {
   it('narrows the proc jsonb', () => {
     expect(
       parseInductionState({
-        step: 'stages',
+        step: 'c_chip',
         done_at: null,
         role: 'owner',
         post_id: 'p1',
@@ -61,7 +149,7 @@ describe('parseInductionState', () => {
         team_invited: false,
       }),
     ).toEqual({
-      step: 'stages',
+      step: 'c_chip',
       done: false,
       role: 'owner',
       postId: 'p1',
@@ -82,186 +170,244 @@ describe('parseInductionState', () => {
   });
 });
 
-describe('pathFor', () => {
-  it('maps workspace roles to the three paths', () => {
-    expect(pathFor('owner', true)).toBe('creator');
-    expect(pathFor('admin', true)).toBe('teammate');
-    expect(pathFor('agency', true)).toBe('teammate');
-    expect(pathFor('client', true)).toBe('approver');
-    expect(pathFor(null, true)).toBe('none');
-  });
-
-  it('is the Creator making a workspace before one exists', () => {
-    expect(pathFor(null, false)).toBe('creator');
-  });
-});
-
-describe('the steps', () => {
-  it('has exactly two hard gates: the first post sent for review and the approver invite', () => {
-    expect(hardGates().map((s) => s.id)).toEqual(['first_post', 'approver_invite']);
-  });
-
-  it('gives a hard gate no Next and no Later', () => {
-    for (const gate of hardGates())
-      expect(stepButtons(gate)).toEqual({ next: false, later: false });
-  });
-
-  it('gives teach steps Next and optional steps Next and Later', () => {
-    expect(stepButtons({ kind: 'teach' })).toEqual({ next: true, later: false });
-    expect(stepButtons({ kind: 'optional' })).toEqual({ next: true, later: true });
-    expect(stepButtons({ kind: 'setup' })).toEqual({ next: false, later: false });
-  });
-
-  it('stores only ids induction_step_set accepts, unique per path', () => {
-    for (const steps of [CREATOR_STEPS, APPROVER_STEPS, TEAMMATE_STEPS]) {
-      const ids = steps.map((s) => s.id);
-      expect(new Set(ids).size).toBe(ids.length);
-      for (const id of ids) expect(STEP_ID_PATTERN.test(id)).toBe(true);
-    }
-  });
-
-  it('points every step at known controls', () => {
-    const keys = new Set<string>(Object.values(INDUCTION_KEYS));
-    for (const step of [...CREATOR_STEPS, ...APPROVER_STEPS, ...TEAMMATE_STEPS]) {
-      expect(step.targets.length).toBeGreaterThan(0);
-      for (const key of step.targets) expect(keys.has(key)).toBe(true);
-    }
-  });
-
-  it('keeps the copy free of em-dashes, "trial", and "agency" or "client" for people', () => {
-    for (const step of [...CREATOR_STEPS, ...APPROVER_STEPS, ...TEAMMATE_STEPS]) {
-      const text = `${step.title} ${step.body} ${step.laterLabel ?? ''}`;
-      expect(text).not.toMatch(/\u2014|\btrial\b|\bagency\b|\bclient\b/i);
-    }
-  });
-
-  it('fills the workspace label into the approver top bar step', () => {
-    const first = APPROVER_STEPS[0];
-    if (first === undefined) throw new Error('no approver steps');
-    expect(stepCopy(first, 'Kite - Instagram').title).toBe('Kite - Instagram');
-  });
-});
-
-describe('resolveStep: creator', () => {
-  it('starts at the workspace slot before a workspace exists', () => {
-    const r = resolveStep({
-      path: 'creator',
-      state: FRESH,
-      where: { hasWorkspace: false, postId: null, groupChannelId: null },
-    });
-    expect(stepOf(r)).toBe('workspace');
-    expect(r.kind === 'step' && r.part).toBe(1);
-  });
-
-  it('moves past the workspace once it exists, to the stage row', () => {
-    const r = resolveStep({ path: 'creator', state: FRESH, where: EVERYWHERE });
-    expect(stepOf(r)).toBe('stages');
-    expect(r.kind === 'step' ? `${r.part} of ${r.parts}` : '').toBe('2 of 8');
-  });
-
-  it('holds on the first post gate until a post reaches review', () => {
-    const state = { ...FRESH, step: 'assets' };
-    expect(stepOf(resolveStep({ path: 'creator', state, where: EVERYWHERE }))).toBe('first_post');
-  });
-
-  it('then holds on the approver invite gate', () => {
-    const state = { ...FRESH, step: 'first_post', postId: 'p1' };
-    expect(stepOf(resolveStep({ path: 'creator', state, where: EVERYWHERE }))).toBe(
-      'approver_invite',
-    );
-  });
-
-  it('skips Add other creators when a teammate is already invited', () => {
-    const state = { ...FRESH, step: 'approver_invite', postId: 'p1', clientInvited: true };
-    expect(stepOf(resolveStep({ path: 'creator', state, where: EVERYWHERE }))).toBe('team_invite');
-    expect(
-      stepOf(
-        resolveStep({ path: 'creator', state: { ...state, teamInvited: true }, where: EVERYWHERE }),
-      ),
-    ).toBe('post_comments');
-  });
-
-  it('resumes at the stored teach step on any device once the gates are done', () => {
-    const state = { ...FRESH, step: 'activity', postId: 'p1', clientInvited: true };
-    expect(stepOf(resolveStep({ path: 'creator', state, where: EVERYWHERE }))).toBe('activity');
-  });
-
-  it('starts from the top when the stored step belongs to another path', () => {
-    const state = { ...FRESH, step: 'a_briefs' };
-    expect(stepOf(resolveStep({ path: 'creator', state, where: EVERYWHERE }))).toBe('stages');
-  });
-
-  it('drops the group steps when there is no group and closes up the numbering', () => {
-    const state = { ...FRESH, step: 'activity', postId: 'p1', clientInvited: true };
-    const r = resolveStep({
-      path: 'creator',
-      state,
-      where: { ...EVERYWHERE, groupChannelId: null },
-    });
-    expect(r.kind === 'step' && r.nextId).toBe('finish');
-    expect(r.kind === 'step' ? r.parts : 0).toBe(7);
-  });
-
-  it('finishes past the last step, and is off once done', () => {
-    const last = CREATOR_STEPS[CREATOR_STEPS.length - 1];
-    const state = { ...FRESH, step: last?.id ?? '', postId: 'p1', clientInvited: true };
-    const r = resolveStep({ path: 'creator', state, where: EVERYWHERE });
-    expect(r.kind === 'step' && r.nextId).toBe('finish');
-    expect(
-      resolveStep({ path: 'creator', state: { ...state, done: true }, where: EVERYWHERE }),
-    ).toEqual({ kind: 'off' });
-  });
-});
-
-describe('resolveStep: approver and teammate', () => {
-  it('walks an approver from the top bar, with no gate on the way', () => {
-    const state = { ...FRESH, role: 'client' };
-    expect(stepOf(resolveStep({ path: 'approver', state, where: EVERYWHERE }))).toBe('a_workspace');
-    expect(APPROVER_STEPS.some((s) => s.kind === 'gate')).toBe(false);
-  });
-
-  it('skips the approver post steps when nothing is in review', () => {
-    const state = { ...FRESH, role: 'client', step: 'a_review' };
-    const r = resolveStep({ path: 'approver', state, where: { ...EVERYWHERE, postId: null } });
-    expect(r.kind === 'step' && r.nextId).toBe('a_assets');
-  });
-
-  it('skips the New brief step for a viewer without brief.create', () => {
-    const state = { ...FRESH, role: 'client', step: 'a_assets' };
-    const kept = resolveStep({ path: 'approver', state, where: EVERYWHERE });
-    expect(kept.kind === 'step' && kept.nextId).toBe('a_briefs');
-    const unknown = { ...EVERYWHERE, canCreateBrief: null };
-    const stillKept = resolveStep({ path: 'approver', state, where: unknown });
-    expect(stillKept.kind === 'step' && stillKept.nextId).toBe('a_briefs');
-    const without = { ...EVERYWHERE, canCreateBrief: false };
-    const skipped = resolveStep({ path: 'approver', state, where: without });
-    expect(skipped.kind === 'step' && skipped.nextId).toBe('a_activity');
-    // Resuming on the dropped step moves on instead of pointing at a missing "+".
-    const resumed = resolveStep({
-      path: 'approver',
-      state: { ...state, step: 'a_briefs' },
-      where: without,
-    });
-    expect(resumed.kind === 'step' && resumed.step.id).not.toBe('a_briefs');
-  });
-
-  it('opens a teammate on the Draft chip', () => {
-    const state = { ...FRESH, role: 'agency' };
-    expect(stepOf(resolveStep({ path: 'teammate', state, where: EVERYWHERE }))).toBe('t_drafts');
-    expect(TEAMMATE_STEPS.some((s) => s.kind === 'gate')).toBe(false);
-  });
-
-  it('is off for an unknown role', () => {
-    expect(resolveStep({ path: 'none', state: FRESH, where: EVERYWHERE })).toEqual({ kind: 'off' });
-  });
-});
-
 describe('approverStageOf', () => {
   it('reads the approver who signed up alone from the stored step', () => {
     expect(approverStageOf({ step: 'approver_brand', done: false })).toBe('brand');
     expect(approverStageOf({ step: 'approver_waiting', done: false })).toBe('waiting');
-    expect(approverStageOf({ step: 'workspace', done: false })).toBe('none');
+    expect(approverStageOf({ step: WORKSPACE_STEP, done: false })).toBe('none');
     expect(approverStageOf({ step: 'approver_waiting', done: true })).toBe('none');
+  });
+
+  it('stores the Creator start as the first creator step', () => {
+    expect(WORKSPACE_STEP).toBe(ROUTE_SCRIPTS.creator.steps[0]?.id);
+  });
+});
+
+describe('stepDataDone', () => {
+  it('reads each data key, and never finishes a DOM step', () => {
+    const i = input({ postId: 'p1', clientInvited: true }, { hasWorkspace: false });
+    expect(stepDataDone({ dataDone: 'none' }, i)).toBe(false);
+    expect(stepDataDone({ dataDone: 'hasWorkspace' }, i)).toBe(false);
+    expect(stepDataDone({ dataDone: 'firstPostSent' }, i)).toBe(true);
+    expect(stepDataDone({ dataDone: 'clientInvited' }, i)).toBe(true);
+    expect(stepDataDone({ dataDone: 'teamInvited' }, i)).toBe(false);
+  });
+});
+
+describe('resolveGuide: stored ids', () => {
+  it('starts at the workspace before one exists', () => {
+    expect(resolve({}, { hasWorkspace: false })).toBe('c_ws');
+  });
+
+  it('keeps the second workspace step: same group, not overridden by its own setup', () => {
+    expect(resolve({ step: 'c_ws_create' }, { hasWorkspace: false })).toBe('c_ws_create');
+  });
+
+  it('resolves a stored step within the route', () => {
+    expect(resolve({ step: 'c_post_caption' })).toBe('c_post_caption');
+    expect(resolve({ step: 'c_group', ...ALL_DATA })).toBe('c_group');
+  });
+
+  it('moves on from a step the data finished, storing nothing by hand', () => {
+    expect(resolve({ step: 'c_post_send', ...SENT })).toBe('c_invite');
+    expect(resolve({ step: 'c_team', ...ALL_DATA })).toBe('intro@c_brief');
+  });
+
+  it('is off once done, and never crashes on a null step', () => {
+    expect(resolve({ done: true })).toBe('off');
+    expect(resolve({ step: null })).toBe('c_chip');
+  });
+});
+
+describe('resolveGuide: old and unknown ids resolve by data', () => {
+  it('sends an old early creator id to the first open step after the data', () => {
+    expect(resolve({ step: 'stages' })).toBe('c_chip');
+    expect(resolve({ step: 'first_post' })).toBe('c_chip');
+    expect(resolve({ step: 'workspace' }, { hasWorkspace: false })).toBe('c_ws');
+  });
+
+  it('never restarts a creator past the first post from zero', () => {
+    for (const old of ['post_comments', 'assets', 'activity', 'chat_mic', 't_drafts', 'a_review']) {
+      expect(resolve({ step: old, ...SENT })).toBe('c_invite');
+      expect(resolve({ step: old, postId: 'p1', clientInvited: true })).toBe('c_team');
+      expect(resolve({ step: old, ...ALL_DATA })).toBe('intro@c_brief');
+    }
+  });
+
+  it('starts a route with no data-finished steps at its first step', () => {
+    const noData: RouteScript = { ...SCRIPT, steps: SCRIPT.steps.slice(8) };
+    expect(shown(resolveGuide(noData, input({ step: 'a_points' })))).toBe('intro@c_brief');
+  });
+});
+
+describe('resolveGuide: gates and facts', () => {
+  it('an earlier open gate overrides a later stored step, at the start of its group', () => {
+    expect(resolve({ step: 'c_activity' })).toBe('c_post_create');
+    expect(resolve({ step: 'c_brief', ...SENT })).toBe('c_invite');
+  });
+
+  it('drops steps a fact skips and moves on from a stored dropped step', () => {
+    // A stored look-around step never brings the intro back.
+    expect(resolve({ step: 'c_brief', ...ALL_DATA }, { hasBrief: false })).toBe('c_comment');
+    expect(resolve({ step: 'c_group', ...ALL_DATA }, { hasGroup: false })).toBe('c_activity');
+  });
+
+  it('ignores sampleOnly steps', () => {
+    expect(resolve({ step: 'c_sample', ...ALL_DATA })).toBe('c_activity');
+    const r = resolveGuide(SCRIPT, input({ step: 'c_activity', ...ALL_DATA }));
+    expect(r.kind === 'step' && ids(r.steps)).not.toContain('c_sample');
+  });
+
+  it('shows the closing card when nothing is left', () => {
+    expect(resolve({ step: 'c_closing', ...ALL_DATA })).toBe('closing');
+    const empty: RouteScript = { ...SCRIPT, steps: [step('c_only', { skipWhen: ['noBrief'] })] };
+    expect(shown(resolveGuide(empty, input({}, { hasBrief: false })))).toBe('closing');
+  });
+
+  it('a closing id still yields to an open gate', () => {
+    expect(resolve({ step: 'c_closing', ...SENT })).toBe('c_invite');
+  });
+});
+
+describe('resolveGuide: the intro card', () => {
+  it('shows before the first look-around step until Start stores it', () => {
+    expect(resolve({ step: 'c_intro', ...ALL_DATA })).toBe('intro@c_brief');
+    expect(resolve({ step: 'c_brief', ...ALL_DATA })).toBe('c_brief');
+  });
+
+  it('does not show on later look-around steps', () => {
+    expect(resolve({ step: 'c_comment', ...ALL_DATA })).toBe('c_comment');
+  });
+});
+
+describe('storedIdFor', () => {
+  it('stores the intro id when entering the look-around from setup', () => {
+    expect(storedIdFor(SCRIPT, STEPS, { from: at('c_team'), to: at('c_brief') })).toBe('c_intro');
+  });
+
+  it('stores the step id otherwise, and the closing id past the end', () => {
+    expect(storedIdFor(SCRIPT, STEPS, { from: at('c_comment'), to: at('c_brief') })).toBe(
+      'c_brief',
+    );
+    expect(storedIdFor(SCRIPT, STEPS, { from: 0, to: 1 })).toBe('c_ws_create');
+    expect(storedIdFor(SCRIPT, STEPS, { from: STEPS.length - 1, to: STEPS.length })).toBe(
+      'c_closing',
+    );
+  });
+});
+
+describe('completesByUi', () => {
+  it('lets taps and the DOM finish teach, optional and an inner setup step only', () => {
+    expect(completesByUi(STEPS, at('c_ws'))).toBe(true);
+    expect(completesByUi(STEPS, at('c_ws_create'))).toBe(false);
+    expect(completesByUi(STEPS, at('c_post_send'))).toBe(false);
+    expect(completesByUi(STEPS, at('c_post_create'))).toBe(true);
+    expect(completesByUi(STEPS, at('c_team'))).toBe(true);
+    expect(completesByUi(STEPS, 99)).toBe(false);
+  });
+});
+
+describe('Back', () => {
+  it('goes to the previous step when its control is on screen', () => {
+    expect(backIndex(STEPS, at('c_comment'), probe(['c_brief', 'c_chip']))).toBe(at('c_brief'));
+  });
+
+  it('else to the nearest earlier step whose control is', () => {
+    expect(backIndex(STEPS, at('c_post_caption'), probe(['c_chip']))).toBe(at('c_chip'));
+  });
+
+  it('with no earlier control on screen, still goes to the previous open step (its place opens)', () => {
+    expect(backIndex(STEPS, at('c_comment'), probe([]))).toBe(at('c_brief'));
+  });
+
+  it('never goes back to a step the data finished, and hides on the first step', () => {
+    expect(
+      backIndex(STEPS, at('c_chip'), probe(['c_ws', 'c_ws_create'], ['c_ws', 'c_ws_create'])),
+    ).toBe(-1);
+    expect(backIndex(STEPS, at('c_chip'), probe([], ['c_ws', 'c_ws_create']))).toBe(-1);
+    expect(
+      backIndex(
+        STEPS,
+        at('c_invite'),
+        probe([], ['c_post_create', 'c_post_caption', 'c_post_send']),
+      ),
+    ).toBe(at('c_chip'));
+    expect(backIndex(STEPS, 0, probe(['c_ws']))).toBe(-1);
+  });
+});
+
+describe('the 4 s skip', () => {
+  const SCREEN = [
+    step('x_a', { chapter: 'talk', place: 'chat' }),
+    step('x_b', { chapter: 'talk', place: 'chat' }),
+    step('x_c', { chapter: 'talk', place: 'chat' }),
+    step('x_d', { chapter: 'review', place: 'chat' }),
+    step('x_act', { chapter: 'talk', place: 'shell' }),
+    step('x_e', { chapter: 'talk', place: 'chat' }),
+  ];
+
+  it('moves forward to the next visible step on the same screen and chapter', () => {
+    expect(skipTarget(SCREEN, 0, probe(['x_c']))).toBe(2);
+  });
+
+  it('never jumps to an always-visible control of a later place: one step on, its place opens', () => {
+    expect(skipTarget(SCREEN, 0, probe(['x_act', 'x_e']))).toBe(1);
+    expect(skipTarget(STEPS, at('c_brief'), probe(['c_activity', 'c_group']))).toBe(
+      at('c_brief') + 1,
+    );
+  });
+
+  it('never crosses into another chapter on the same screen', () => {
+    expect(skipTarget(SCREEN, 2, probe(['x_d']))).toBe(3);
+    expect(skipTarget(SCREEN, 1, probe(['x_d']))).toBe(2);
+  });
+
+  it('never skips past an open gate; goes back within the group instead', () => {
+    expect(skipTarget(STEPS, at('c_post_caption'), probe(['c_post_create', 'c_invite']))).toBe(
+      at('c_post_create'),
+    );
+  });
+
+  it('a gate only goes back within its group, else stays', () => {
+    expect(skipTarget(STEPS, at('c_post_send'), probe(['c_post_create']))).toBe(
+      at('c_post_create'),
+    );
+    expect(skipTarget(STEPS, at('c_invite'), probe(['c_activity']))).toBe(at('c_invite'));
+  });
+
+  it('with nothing visible, moves to the next step so its place opens', () => {
+    expect(skipTarget(STEPS, at('c_brief'), probe([]))).toBe(at('c_brief') + 1);
+    expect(skipTarget(STEPS, STEPS.length - 1, probe([]))).toBe(STEPS.length);
+  });
+});
+
+describe('progress and chapters', () => {
+  it('fills (entry + index) over (entry + applicable steps)', () => {
+    const r = resolveGuide(SCRIPT, input({ step: 'c_chip' }));
+    expect(progressOf(SCRIPT, r)).toBeCloseTo((4 + 2) / (4 + 12));
+    const fewer = resolveGuide(SCRIPT, input({ step: 'c_chip' }, { hasBrief: false }));
+    expect(progressOf(SCRIPT, fewer)).toBeCloseTo((4 + 2) / (4 + 11));
+    expect(progressOf(SCRIPT, { kind: 'closing', card: SCRIPT.closing, steps: STEPS })).toBe(1);
+    expect(progressOf(SCRIPT, { kind: 'off' })).toBe(0);
+  });
+
+  it('reads the chapter order from the steps', () => {
+    expect(chapterOrder(STEPS)).toEqual(['ask', 'review', 'talk']);
+    expect(chapterOrder(ROUTE_SCRIPTS.approver.steps)).toEqual(['review', 'ask', 'talk']);
+  });
+});
+
+describe('presetPrimaryFor', () => {
+  it('sends for review on the post sheet steps of the creator and invited routes', () => {
+    const creator = ROUTE_SCRIPTS.creator.steps;
+    const sheet = creator.filter((s) => presetPrimaryFor(s) !== undefined).map((s) => s.id);
+    expect(sheet).toContain('c_post_create');
+    expect(sheet).toContain('c_post_send');
+    expect(sheet).not.toContain('c_approved_chip');
+    expect(ROUTE_SCRIPTS.invited.steps.some((s) => presetPrimaryFor(s) === 'send_for_review')).toBe(
+      true,
+    );
+    expect(ROUTE_SCRIPTS.approver.steps.every((s) => presetPrimaryFor(s) === undefined)).toBe(true);
   });
 });
 
@@ -271,23 +417,35 @@ describe('routes', () => {
   it('builds each place', () => {
     expect(placeRoute('members', ctx)).toBe('/settings?panel=members');
     expect(placeRoute('post', ctx)).toBe('/posts/p1');
+    expect(placeRoute('post', { ...ctx, postId: null })).toBe('/pipeline');
     expect(placeRoute('group', ctx)).toBe('/chat?channel=group__ws__g1');
+    expect(placeRoute('chat', ctx)).toBe('/chat');
+    expect(placeRoute('shell', ctx)).toBe('');
   });
 
   it('knows when the person is on the step screen', () => {
     expect(onPlace('pipeline', { pathname: '/pipeline', search: '' }, ctx)).toBe(true);
-    expect(onPlace('pipeline', { pathname: '/assets', search: '' }, ctx)).toBe(false);
+    expect(onPlace('pipeline', { pathname: '/briefs', search: '' }, ctx)).toBe(false);
     expect(onPlace('members', { pathname: '/settings', search: '?panel=profile' }, ctx)).toBe(true);
     expect(onPlace('group', { pathname: '/chat', search: '?channel=group__ws__g1' }, ctx)).toBe(
       true,
     );
     expect(onPlace('group', { pathname: '/chat', search: '?channel=other' }, ctx)).toBe(false);
+    expect(onPlace('chat', { pathname: '/chat', search: '' }, ctx)).toBe(true);
+    expect(onPlace('chat', { pathname: '/chat', search: '?channel=x' }, ctx)).toBe(false);
+    // The Activity steps live on the chat list: /chat with no channel.
+    const activity = Object.values(ROUTE_SCRIPTS).flatMap((script) =>
+      script.steps.filter((s) => s.targets.includes('activity-tab')),
+    );
+    for (const s of activity) {
+      expect(onPlace(s.place, { pathname: '/chat', search: '' }, ctx)).toBe(true);
+    }
     expect(onPlace('shell', { pathname: '/anything', search: '' }, ctx)).toBe(true);
   });
 });
 
 describe('the box', () => {
-  it('sits 5px off the control behind a 2px border', () => {
+  it('is the control plus 7px (5px gap and 2px of air)', () => {
     expect(boxRect({ top: 100, left: 50, width: 44, height: 44 })).toEqual({
       top: 93,
       left: 43,
@@ -296,79 +454,154 @@ describe('the box', () => {
     });
   });
 
-  it('grows the control radius so the corners run parallel', () => {
-    expect(boxRadius(8)).toBe(15);
-    expect(boxRadius(-1)).toBe(7);
+  it('takes radius 12 for a control up to 12px, else 16', () => {
+    expect(guideRadius(0)).toBe(12);
+    expect(guideRadius(12)).toBe(12);
+    expect(guideRadius(12.5)).toBe(16);
+    expect(guideRadius(999)).toBe(16);
+  });
+
+  it('pulls a full-width box inside the screen, leaves a fitting one alone', () => {
+    expect(
+      clampToViewport({ top: 100, left: -7, width: 404, height: 58 }, { width: 390, height: 844 }),
+    ).toEqual({ top: 100, left: 2, width: 386, height: 58 });
+    const fits = { top: 50, left: 20, width: 100, height: 40 };
+    expect(clampToViewport(fits, { width: 390, height: 844 })).toEqual(fits);
+  });
+
+  it('puts the fingertip a little below and right of the centre', () => {
+    const tip = handPoint({ top: 100, left: 100, width: 44, height: 44 });
+    expect(tip.x).toBeGreaterThan(122);
+    expect(tip.y).toBeGreaterThan(122);
+    expect(tip.x).toBeLessThan(144);
+    expect(tip.y).toBeLessThan(144);
   });
 });
 
-describe('placeCard', () => {
-  const card = { width: 358, height: 150 };
-  const phone = { width: 390, height: 844 };
-  const insets = { top: 0, bottom: 56 };
-
-  it('docks bottom above the tab bar on a phone by default', () => {
-    const target = { top: 120, left: 16, width: 200, height: 44 };
-    const at = placeCard({ target, card, viewport: phone, phone: true, insets });
-    expect(at.side).toBe('bottom');
-    expect(at.top).toBe(844 - 56 - 8 - 150);
-    expect(overlaps({ ...at, ...card }, boxRect(target))).toBe(false);
+describe('resolveGuide: the intro never returns mid-route', () => {
+  it('stays away once a look-around step was stored, even when data drops earlier ones', () => {
+    // After approval the Review steps drop: the stored step is gone, the next is now first.
+    const dropped = { step: 'c_comment', ...ALL_DATA };
+    expect(resolve(dropped, { hasBrief: false, hasOwnPost: false })).toBe('c_group');
+    expect(resolve({ step: 'c_closing', ...ALL_DATA })).toBe('closing');
   });
 
-  it('docks top on a phone when the control is in the lower half', () => {
-    const target = { top: 700, left: 300, width: 44, height: 44 };
-    const at = placeCard({ target, card, viewport: phone, phone: true, insets });
-    expect(at.side).toBe('top');
-    expect(overlaps({ ...at, ...card }, boxRect(target))).toBe(false);
-  });
-
-  it('docks top when the bottom dock would cover an upper control that runs low', () => {
-    const target = { top: 380, left: 16, width: 358, height: 40 };
-    const at = placeCard({ target, card, viewport: phone, phone: true, insets });
-    expect(overlaps({ ...at, ...card }, boxRect(target))).toBe(false);
-  });
-
-  const laptop = { width: 1280, height: 800 };
-  const small = { width: 320, height: 140 };
-  const noInsets = { top: 0, bottom: 0 };
-
-  it('goes below a control on a laptop when there is room', () => {
-    const target = { top: 60, left: 400, width: 44, height: 44 };
-    const at = placeCard({ target, card: small, viewport: laptop, phone: false, insets: noInsets });
-    expect(at.side).toBe('below');
-    expect(at.top).toBeGreaterThan(target.top + target.height);
-  });
-
-  it('goes right of a control near the bottom with room on the right', () => {
-    const target = { top: 700, left: 300, width: 44, height: 44 };
-    const at = placeCard({ target, card: small, viewport: laptop, phone: false, insets: noInsets });
-    expect(at.side).toBe('right');
-    expect(overlaps({ ...at, ...small }, boxRect(target))).toBe(false);
-  });
-
-  it('goes left when the control sits at the bottom right', () => {
-    const target = { top: 700, left: 1180, width: 60, height: 44 };
-    const at = placeCard({ target, card: small, viewport: laptop, phone: false, insets: noInsets });
-    expect(at.side).toBe('left');
-    expect(overlaps({ ...at, ...small }, boxRect(target))).toBe(false);
-  });
-
-  it('goes above a wide control at the bottom', () => {
-    const target = { top: 700, left: 0, width: 1280, height: 60 };
-    const at = placeCard({ target, card: small, viewport: laptop, phone: false, insets: noInsets });
-    expect(at.side).toBe('above');
-    expect(overlaps({ ...at, ...small }, boxRect(target))).toBe(false);
+  it('shows for a setup step, an unknown id, nothing stored, or the intro id', () => {
+    expect(resolve({ step: 'c_team', ...ALL_DATA })).toBe('intro@c_brief');
+    expect(resolve({ step: 'a_review', ...ALL_DATA })).toBe('intro@c_brief');
+    expect(resolve({ step: 'c_intro', ...ALL_DATA })).toBe('intro@c_brief');
+    const lookAroundOnly: RouteScript = { ...SCRIPT, steps: SCRIPT.steps.slice(8) };
+    expect(shown(resolveGuide(lookAroundOnly, input({ step: null })))).toBe('intro@c_brief');
   });
 });
 
-describe('stripRect', () => {
-  it('sits under the sheet title, short of the close button', () => {
-    const title = { top: 27, left: 18, width: 80, height: 20 };
-    const dialog = { top: 0, left: 0, width: 540, height: 600 };
-    const r = stripRect(title, dialog);
-    expect(r.top).toBe(49);
-    expect(r.left).toBe(18);
-    expect(r.left + r.width).toBeLessThanOrEqual(540 - 44 - 16);
+describe('placeLabel', () => {
+  const label = { width: 180, height: 32 };
+  const area = { top: 0, bottom: 760, width: 390, viewportHeight: 844 };
+  const inside = (p: { top: number; left: number }): boolean =>
+    p.left >= 0 && p.top >= 0 && p.left + label.width <= 390 && p.top + label.height <= 844;
+
+  it('goes below the box', () => {
+    const box = boxRect({ top: 120, left: 16, width: 300, height: 44 });
+    const p = placeLabel({ box, label, area });
+    expect(p.side).toBe('below');
+    expect(p.top).toBeGreaterThanOrEqual(box.top + box.height);
+    expect(overlaps({ ...p, ...label }, box)).toBe(false);
+    expect(inside(p)).toBe(true);
+  });
+
+  it('goes above when there is no room below', () => {
+    const box = boxRect({ top: 700, left: 100, width: 200, height: 44 });
+    const p = placeLabel({ box, label, area });
+    expect(p.side).toBe('above');
+    expect(overlaps({ ...p, ...label }, box)).toBe(false);
+    expect(inside(p)).toBe(true);
+  });
+
+  it('takes the left side in the same row for a short control at the right edge', () => {
+    const box = boxRect({ top: 12, left: 334, width: 44, height: 44 });
+    const p = placeLabel({ box, label, area });
+    expect(p.side).toBe('left');
+    expect(p.left + label.width).toBeLessThanOrEqual(box.left);
+    expect(overlaps({ ...p, ...label }, box)).toBe(false);
+    expect(inside(p)).toBe(true);
+  });
+
+  it('goes over the bar, never over the box, when a tall box leaves the free band no room', () => {
+    const box = boxRect({ top: 20, left: 0, width: 390, height: 640 });
+    const p = placeLabel({
+      box,
+      label,
+      area: { top: 0, bottom: 700, width: 390, viewportHeight: 844 },
+    });
+    expect(overlaps({ ...p, ...label }, box)).toBe(false);
+    expect(p.top + label.height).toBeLessThanOrEqual(844);
+    expect(p.top).toBeGreaterThan(700 - label.height);
+  });
+
+  it('puts the label inside the bottom edge of a box spanning the viewport, clear of its centre', () => {
+    const box = boxRect({ top: 4, left: 0, width: 390, height: 830 });
+    const p = placeLabel({
+      box,
+      label,
+      area: { top: 0, bottom: 760, width: 390, viewportHeight: 844 },
+    });
+    expect(p.side).toBe('inside');
+    expect(p.top).toBeGreaterThan(box.top + box.height / 2);
+    expect(p.top + label.height).toBeLessThanOrEqual(844);
+  });
+
+  it('a box under 60% of the viewport with no room takes the side with most room', () => {
+    const box = boxRect({ top: 300, left: 0, width: 390, height: 400 });
+    const p = placeLabel({
+      box,
+      label: { width: 180, height: 320 },
+      area: { top: 0, bottom: 760, width: 390, viewportHeight: 844 },
+    });
+    expect(p.side).not.toBe('inside');
+  });
+
+  it('never lands on the laptop bottom-right guide card; falls back to the next side', () => {
+    const laptop = { top: 0, bottom: 800, width: 1280, viewportHeight: 800 };
+    const card = { top: 640, left: 924, width: 340, height: 144 };
+    const box = boxRect({ top: 600, left: 1000, width: 200, height: 44 });
+    const free = placeLabel({ box, label, area: laptop });
+    expect(overlaps({ ...free, ...label }, card)).toBe(true);
+    const p = placeLabel({ box, label, area: { ...laptop, obstacle: card } });
+    expect(p.side).toBe('above');
+    expect(overlaps({ ...p, ...label }, card)).toBe(false);
+    expect(overlaps({ ...p, ...label }, box)).toBe(false);
+  });
+
+  it('stays inside the viewport for a control at the left edge', () => {
+    const box = boxRect({ top: 300, left: 0, width: 40, height: 40 });
+    const p = placeLabel({ box, label, area });
+    expect(p.left).toBeGreaterThanOrEqual(16);
+    expect(overlaps({ ...p, ...label }, box)).toBe(false);
+  });
+});
+
+describe('barSide', () => {
+  const frame = { viewportHeight: 844, insets: { top: 0, bottom: 56 }, barHeight: 80 };
+  const bottomBarTop = 844 - 56 - 8 - 80;
+  const topBarBottom = 8 + 80;
+  const box = (top: number, height = 40) => ({ top, left: 0, width: 40, height });
+
+  it('docks bottom by default and whenever the bottom bar clears the box', () => {
+    expect(barSide(undefined, frame)).toBe('bottom');
+    expect(barSide(box(100), frame)).toBe('bottom');
+    expect(barSide(box(bottomBarTop - 40), frame)).toBe('bottom');
+  });
+
+  it('docks top when the bottom bar would cover the box, and the top bar clears it', () => {
+    const low = box(bottomBarTop - 20);
+    expect(barSide(low, frame)).toBe('top');
+    expect(low.top).toBeGreaterThanOrEqual(topBarBottom);
+  });
+
+  it('takes the side with more room when both bars would cover a tall box', () => {
+    expect(barSide(box(40, 700), frame)).toBe('bottom');
+    expect(barSide(box(60, 760), frame)).toBe('top');
   });
 });
 
@@ -424,36 +657,5 @@ describe('brandRequestErrorMessage', () => {
     );
     expect(brandRequestErrorMessage('invalid_payload')).toContain('email');
     expect(brandRequestErrorMessage('boom')).toBe("We couldn't send that. Try again.");
-  });
-});
-
-describe('placeCard never leaves the screen', () => {
-  it('pulls the card inside the viewport when the control is scrolled off the top', () => {
-    const target = { top: -400, left: 300, width: 700, height: 200 };
-    const at = placeCard({
-      target,
-      card: { width: 320, height: 140 },
-      viewport: { width: 1280, height: 800 },
-      phone: false,
-      insets: { top: 0, bottom: 0 },
-    });
-    expect(at.top).toBeGreaterThanOrEqual(16);
-    expect(at.top + 140).toBeLessThanOrEqual(800 - 16);
-    expect(at.left + 320).toBeLessThanOrEqual(1280 - 16);
-  });
-});
-
-describe('clampToViewport', () => {
-  it('pulls a box for a full-width control inside the screen so all four sides show', () => {
-    const r = clampToViewport(
-      { top: 100, left: -7, width: 404, height: 58 },
-      { width: 390, height: 844 },
-    );
-    expect(r).toEqual({ top: 100, left: 2, width: 386, height: 58 });
-  });
-
-  it('leaves a box that already fits alone', () => {
-    const box = { top: 50, left: 20, width: 100, height: 40 };
-    expect(clampToViewport(box, { width: 390, height: 844 })).toEqual(box);
   });
 });

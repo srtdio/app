@@ -58,6 +58,7 @@ import { NOTES_TILE_LINE } from '@/lib/chat/notes';
 import { NotesAvatar } from '@/components/chat/NotesBits';
 import { useSession } from '@/lib/session-context';
 import { BellButton } from '@/components/chat/BellButton';
+import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import {
   COARSE_POINTER_QUERY,
   DRAFT_PREFIX_TYPE,
@@ -233,8 +234,14 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   const summaryFor: SummaryLookup = props.summaryFor ?? (() => undefined);
   const nowMs = props.nowMs ?? 0;
   const timeZone = workspaceTimeZone(props.timeZone);
-  const card = (channel: ChannelSummary): ReactElement => (
-    <li key={channel.channelId} className="min-w-0">
+  // Group rows carry the induction key plus their channel id; the guide boxes the
+  // row whose id is the default group's (attributes only).
+  const groupAnchor = (channel: ChannelSummary) => ({
+    'data-induction': INDUCTION_KEYS.chatDefaultGroupRow,
+    'data-induction-channel': channel.channelId,
+  });
+  const renderCard = (channel: ChannelSummary, anchored: boolean): ReactElement => (
+    <li key={channel.channelId} className="min-w-0" {...(anchored ? groupAnchor(channel) : {})}>
       <ChannelCard
         channel={channel}
         selected={channel.channelId === props.selectedChannelId}
@@ -257,6 +264,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
       />
     </li>
   );
+  const card = (channel: ChannelSummary): ReactElement => renderCard(channel, false);
   const { groups, people } = splitSections(props.channels);
   return (
     <div data-chat-home="" className={CHAT_HOME_STACK}>
@@ -266,7 +274,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
             Groups
           </h3>
           <ul data-section="groups" className={GROUP_TILE_LIST}>
-            {groups.map(card)}
+            {groups.map((channel) => renderCard(channel, true))}
           </ul>
         </>
       ) : null}

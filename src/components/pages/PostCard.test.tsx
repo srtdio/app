@@ -174,6 +174,23 @@ describe('PostCard thumbnail frame', () => {
     expect(out).toContain('aria-label="Carousel"');
   });
 
+  it('lets a tap on the thumbnail reach the Open post button underneath', () => {
+    const { cache } = makeCache('https://cdn.example/thumb.jpg');
+    const out = render({
+      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
+      cache,
+      presignEnabled: true,
+    });
+    // The relative tile sits inside a pointer-events-none wrapper, after the
+    // full-bleed absolute button, so the button still takes the tap.
+    expect(out).toContain('<div data-post-card-thumb="" class="pointer-events-none"><div');
+    expect(out.indexOf('aria-label="Open post Post title"')).toBeLessThan(
+      out.indexOf('data-post-card-thumb'),
+    );
+    // The induction anchors stay on the card root.
+    expect(out).toContain('data-induction="pipeline-post-row" data-induction-post="p1"');
+  });
+
   it('shows the play badge on a video post that has a poster thumbnail', () => {
     const { cache } = makeCache(null);
     const out = render({

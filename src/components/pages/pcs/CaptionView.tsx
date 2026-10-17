@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconChat } from '@/components/ui/icons';
 import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
+import { INDUCTION_KEYS } from '@/lib/induction-keys';
 
 // F4 caption-highlight annotations: render a post caption with its caption_span
 // annotations as amber highlights, and let a fresh text selection start a new
@@ -254,6 +255,7 @@ export function CaptionView({
             size="lg"
             variant="primary"
             className="min-h-[44px] min-w-[44px]"
+            data-induction={INDUCTION_KEYS.postCommentButton}
             onClick={() => {
               onAnnotate(pending.start, pending.end, pending.quote);
               setPending(null);

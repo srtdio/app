@@ -5,6 +5,7 @@ import { IconPlay } from '@/components/ui/icons';
 import { FORMAT_GLYPH_LABEL, formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath } from '@/lib/entityRef';
+import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import type { PipelinePost } from '@srtdio/posts';
 
 export interface PostCardProps {
@@ -100,27 +101,35 @@ export function PostCard({ post, cache, presignEnabled, workspaceKey = null }: P
     workspaceKey !== null ? entityUrlPath('post', workspaceKey, post.number) : `/posts/${post.id}`;
 
   return (
-    <div className="relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2">
+    <div
+      data-induction={INDUCTION_KEYS.pipelinePostRow}
+      data-induction-post={post.id}
+      className="relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2"
+    >
       <button
         type="button"
         aria-label={`Open post ${post.title}`}
         onClick={() => navigate(href)}
         className="absolute inset-0 rounded-lg"
       />
-      <Thumbnail
-        assetVersionId={post.thumbnailAssetVersionId}
-        cache={cache}
-        presignEnabled={presignEnabled}
-        aspect="square"
-        fallback={postFallback(post)}
-        alt={post.title}
-      >
-        {post.format === 'carousel' ? (
-          <CarouselBadge />
-        ) : post.format === 'video' && hasPoster ? (
-          <PlayBadge />
-        ) : null}
-      </Thumbnail>
+      {/* The tile is relative, so it would paint over the absolute Open post button;
+          pointer-events-none lets a tap on the thumbnail reach the button. */}
+      <div data-post-card-thumb="" className="pointer-events-none">
+        <Thumbnail
+          assetVersionId={post.thumbnailAssetVersionId}
+          cache={cache}
+          presignEnabled={presignEnabled}
+          aspect="square"
+          fallback={postFallback(post)}
+          alt={post.title}
+        >
+          {post.format === 'carousel' ? (
+            <CarouselBadge />
+          ) : post.format === 'video' && hasPoster ? (
+            <PlayBadge />
+          ) : null}
+        </Thumbnail>
+      </div>
       <div className="flex flex-col gap-2 p-3">
         <div className="truncate text-sm font-medium leading-snug">{post.title}</div>
         {/* One quiet meta line: the platform mark, the format glyph, and the date

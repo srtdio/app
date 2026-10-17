@@ -117,15 +117,47 @@ export function workspaceDisplayName(brand: string, platform: string | null | un
   return brand ? `${brand} - ${label}` : label;
 }
 
-// The email never says "client" or "agency": the app calls the sides Approver and Creator.
-function roleWording(role: string): string {
-  if (role === 'client') return 'an Approver';
-  if (role === 'admin') return 'a Creator who can manage members';
-  return 'a Creator';
+/** First whitespace-separated word of a display name, trimmed; '' when blank. */
+export function firstName(displayName: string): string {
+  return displayName.trim().split(/\s+/)[0] ?? '';
 }
 
-export function inviteSubject(displayName: string): string {
-  return `You're invited to ${displayName} on Sorted`;
+// The email never says "client" or "agency": the app calls the sides Approver
+// and Creator. Admin and agency invitees are Creators; client is the Approver.
+function isApproverRole(role: string): boolean {
+  return role === 'client';
+}
+
+/**
+ * Subject line. Names the inviter by first name when known; an unknown inviter
+ * falls back to the plain workspace invite.
+ */
+export function inviteSubject(input: { brand: string; role: string; inviterName: string }): string {
+  const inviter = firstName(input.inviterName);
+  // A blank brand drops the "{brand} on" part instead of leaving a double space.
+  const target = input.brand.trim() === '' ? 'Sorted' : `${input.brand.trim()} on Sorted`;
+  if (inviter === '') return `You're invited to ${target}`;
+  return isApproverRole(input.role)
+    ? `${inviter} invited you to review posts on Sorted`
+    : `${inviter} invited you to ${target}`;
+}
+
+/** The approver line; a blank brand drops the "for {brand}" part. */
+function approverLine(brand: string): string {
+  const trimmed = brand.trim();
+  return trimmed === ''
+    ? 'Review posts and share your feedback with the team.'
+    : `Review posts for ${trimmed} and share your feedback with the team.`;
+}
+
+/** The role's one body line and button label. */
+function roleCopy(role: string, brand: string): { line: string; button: string } {
+  return isApproverRole(role)
+    ? { line: approverLine(brand), button: 'Review posts' }
+    : {
+        line: 'Join the workspace to create posts and work with the team.',
+        button: 'Join workspace',
+      };
 }
 
 export function inviteEmailBody(input: {
@@ -138,23 +170,19 @@ export function inviteEmailBody(input: {
   text: string;
 } {
   const heading = `Join ${input.displayName} on Sorted`;
-  const added = `You've been added as ${roleWording(input.role)}.`;
-  const detail =
-    input.role === 'client'
-      ? `Posts made for ${input.brand} come to you here for review: comment, ask for changes, or approve.`
-      : `You'll make posts for ${input.brand} here and send them to its approvers for review.`;
+  const copy = roleCopy(input.role, input.brand);
   const signInNote =
     "This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.";
   const footer = `Sent by Sorted for the ${input.displayName} workspace.`;
   const text =
     `${heading}\n\n` +
-    `${added} ${detail}\n\n` +
-    `Accept invitation:\n${input.acceptUrl}\n\n` +
+    `${copy.line}\n\n` +
+    `${copy.button}:\n${input.acceptUrl}\n\n` +
     `${signInNote}\n\n` +
     footer;
   const safeWorkspace = escapeHtml(input.displayName);
-  const safeAdded = escapeHtml(added);
-  const safeDetail = escapeHtml(detail);
+  const safeLine = escapeHtml(copy.line);
+  const safeButton = escapeHtml(copy.button);
   const safeUrl = escapeHtml(input.acceptUrl);
   // Self-contained responsive email: every color is set inline on its element so
   // the card carries its OWN background + high-contrast text and stays legible
@@ -173,11 +201,11 @@ export function inviteEmailBody(input: {
     `</tr></table></td></tr>` +
     `<tr><td align="left" style="padding:28px 40px 0 40px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#5a3fe0;">You're invited</span></td></tr>` +
     `<tr><td align="left" style="padding:8px 40px 0 40px;"><h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.4px;color:#1e1b2e;">Join ${safeWorkspace} on Sorted</h1></td></tr>` +
-    `<tr><td align="left" style="padding:16px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#4a4660;"><strong style="color:#1e1b2e;">${safeAdded}</strong> ${safeDetail}</p></td></tr>` +
+    `<tr><td align="left" style="padding:16px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#4a4660;">${safeLine}</p></td></tr>` +
     `<tr><td style="padding:24px 40px 8px 40px;">` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
     `<td height="52" align="center" valign="middle" style="height:52px;border-radius:10px;background-color:#5a3fe0;box-shadow:0 4px 10px rgba(30,27,46,0.20);">` +
-    `<a href="${safeUrl}" style="display:block;height:52px;line-height:52px;padding:0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;text-align:center;">Accept invitation</a>` +
+    `<a href="${safeUrl}" style="display:block;height:52px;line-height:52px;padding:0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;text-align:center;">${safeButton}</a>` +
     `</td></tr></table></td></tr>` +
     `<tr><td align="left" style="padding:10px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#8b8799;">This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.</p></td></tr>` +
     `<tr><td style="padding:26px 40px 0 40px;"><div style="height:1px;background-color:#eeecf4;line-height:1px;font-size:1px;">&nbsp;</div></td></tr>` +
@@ -229,6 +257,20 @@ async function findUserIdByEmail(admin: SupabaseClient, email: string): Promise<
     if (match) return match.id;
     if (data.users.length < 200) return null;
   }
+}
+
+// The inviter's users.display_name, read with the service client (the invitee
+// email needs it regardless of the caller's RLS view). '' when the row or the
+// read is missing, so the subject falls back to the plain invite.
+async function readInviterName(admin: SupabaseClient, userId: string): Promise<string> {
+  const { data, error } = await admin
+    .from('users')
+    .select('display_name')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error || !data) return '';
+  const name = (data as { display_name?: unknown }).display_name;
+  return typeof name === 'string' ? name : '';
 }
 
 // member_invite and member_invite_check raise their domain code as the error message.
@@ -440,8 +482,8 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
       errorDetail = 'resend_not_configured';
       console.error(traceId, errorDetail);
     } else {
-      // Passwordless login link for the email: lands the invitee on the
-      // set-password screen carrying the invite id. A failure here must not
+      // Passwordless login link for the email: lands the invitee on
+      // /invite/accept/{id}, which accepts the invite automatically. A failure here must not
       // discard the provisioned user or the invite row.
       const link = await adminClient.auth.admin.generateLink({
         type: 'magiclink',
@@ -467,6 +509,7 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
         const platform = workspace.data?.platform as string | null | undefined;
         const displayName = workspaceDisplayName(brand, platform);
         const body = inviteEmailBody({ brand, displayName, role, acceptUrl: actionLink });
+        const inviterName = await readInviterName(adminClient, caller.data.user.id);
 
         let status: 'sent' | 'failed' = 'sent';
         let providerMessageId: string | null = null;
@@ -476,7 +519,7 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
             apiKey: resendKey,
             from: fromAddress,
             to: email,
-            subject: inviteSubject(displayName),
+            subject: inviteSubject({ brand, role, inviterName }),
             html: body.html,
             text: body.text,
           });
