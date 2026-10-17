@@ -577,7 +577,7 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
     expect(num(`select count(*) from public.posts where workspace_id = '${main.ws.id}'`)).toBe(1);
   });
 
-  it('clears the sample when the owner invites a real client', async () => {
+  it('keeps the sample when the owner invites a real client, and clears it when they accept', async () => {
     const o = await ownWorkspace();
     expect((await seed(o)).data).toMatchObject({ seeded: true });
     const client = await seedUser(env, admin);
@@ -592,14 +592,15 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
       }),
     );
     expect(invited.error).toBeNull();
-    expect(markers(o.ws.id)).toBe(0);
-    expect(sampleMembers(o.ws.id)).toBe(0);
-    expect(num(`select count(*) from public.posts where workspace_id = '${o.ws.id}'`)).toBe(0);
+    // A pending invite is not a member joining: the creator invites the approver
+    // before the look-around, which still needs the sample.
+    expect(markers(o.ws.id)).toBeGreaterThan(0);
+    expect(sampleMembers(o.ws.id)).toBe(5);
     expect(
       sql(
         `select clear_reason from public.induction_sample_seeds where workspace_id = '${o.ws.id}'`,
       ),
-    ).toBe('member_joined');
+    ).toBe('');
     // The first real client still sets the workspace's client domain.
     expect(sql(`select client_domain from public.workspaces where id = '${o.ws.id}'`)).toBe(
       client.email.split('@')[1],
@@ -609,6 +610,20 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
       p_trace_id: uuidv7(),
     });
     expect(state.data).toMatchObject({ client_invited: true, team_invited: false });
+
+    const accepted = await clientFor(client.id).rpc(
+      'member_accept',
+      rpcArgs({ p_invite_id: String(invited.data), p_trace_id: uuidv7() }),
+    );
+    expect(accepted.error).toBeNull();
+    expect(markers(o.ws.id)).toBe(0);
+    expect(sampleMembers(o.ws.id)).toBe(0);
+    expect(num(`select count(*) from public.posts where workspace_id = '${o.ws.id}'`)).toBe(0);
+    expect(
+      sql(
+        `select clear_reason from public.induction_sample_seeds where workspace_id = '${o.ws.id}'`,
+      ),
+    ).toBe('member_joined');
   });
 
   it('clears the sample when an earlier invitee accepts', async () => {

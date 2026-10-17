@@ -7,6 +7,7 @@ import {
   GLOW_MS,
   glowById,
   glowTarget,
+  JUMP_SETTLE_MS,
   Highlight,
   highlightNodes,
   SEARCH_MARK_CLASS,
@@ -104,6 +105,23 @@ describe('glowTarget (arrival tint)', () => {
     expect(el.style.backgroundColor).toBe('');
     expect(el.style.transition).toBe('');
     expect(el.hasAttribute('data-jump-glow')).toBe(false);
+  });
+
+  it('a smooth scroll cut short: the target still off screen is snapped in once it should have landed', () => {
+    const el = row();
+    el.getBoundingClientRect = () => ({ top: -400, bottom: -340 }) as DOMRect;
+    glowTarget(el);
+    expect(el.scrollIntoView).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(JUMP_SETTLE_MS);
+    expect(el.scrollIntoView).toHaveBeenLastCalledWith({ block: 'center' });
+  });
+
+  it('a target that landed on screen is left where it is', () => {
+    const el = row();
+    el.getBoundingClientRect = () => ({ top: 300, bottom: 360 }) as DOMRect;
+    glowTarget(el);
+    vi.advanceTimersByTime(JUMP_SETTLE_MS);
+    expect(el.scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
   it('the cleanup (unmount) clears the timers and the tint at once', () => {

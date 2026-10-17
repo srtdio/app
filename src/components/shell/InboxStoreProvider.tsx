@@ -43,6 +43,7 @@ import { readProfiles } from '@/lib/chat-reads';
 import { requestBellRefresh } from '@/lib/chat/bell';
 import { listenForNameSignout, resetMentionNames } from '@/lib/chat/mentions';
 import { BellRing } from '@/components/chat/BellRing';
+import { INBOX_CHANGED_EVENT } from '@/lib/events';
 
 /** The slice the nav reads: the actionable unread count for the active workspace. */
 export interface InboxStoreContextValue {
@@ -52,7 +53,6 @@ export interface InboxStoreContextValue {
 const InboxStoreContext = createContext<InboxStoreContextValue | null>(null);
 
 const POLL_MS = 30_000;
-const INBOX_CHANGED_EVENT = 'sorted:inbox-changed';
 
 export function InboxStoreProvider({ children }: { children: ReactNode }): ReactElement {
   const { session } = useSession();

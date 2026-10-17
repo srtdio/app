@@ -7,7 +7,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
-import { Comments, writeClipboard } from '@/components/comments/Comments';
+import { Comments, runCreateCommentBatch, writeClipboard } from '@/components/comments/Comments';
 import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
@@ -787,6 +787,38 @@ export function PostDetailPage({
     flashNode(elementId);
   }
 
+  // The comment an annotation anchors to. A client's comment on a post is a
+  // checkpoint (comment_batch_create, one point); comment_create refuses a
+  // client's top-level comment (forbidden_role). Everyone else writes a plain
+  // comment. Both land on the same trace as the annotation that follows.
+  async function createAnchoredComment(
+    body: string,
+    traceId: string,
+  ): Promise<{ ok: true; data: string } | { ok: false; message: string }> {
+    if (detail === null) return { ok: false, message: 'not_found' };
+    if (clientRole) {
+      const batch = await runCreateCommentBatch(supabase, {
+        workspaceId: detail.post.workspace_id,
+        postId: detail.post.id,
+        points: [{ body }],
+        traceId,
+      });
+      if (!batch.ok) return { ok: false, message: batch.error.message };
+      const first = batch.data[0];
+      if (first === undefined) return { ok: false, message: 'invalid_payload' };
+      return { ok: true, data: first.id };
+    }
+    const result = await createComment(supabase, {
+      workspace_id: detail.post.workspace_id,
+      entity_type: 'post',
+      entity_id: detail.post.id,
+      body,
+      trace_id: traceId,
+    });
+    if (!result.ok) return { ok: false, message: result.error.message };
+    return { ok: true, data: result.data };
+  }
+
   // Comment-first, annotation-second on one shared trace. If the annotation
   // fails after the comment lands, the comment simply stays a plain comment; we
   // surface an error and refresh the list, with no retry loop.
@@ -796,16 +828,10 @@ export function PostDetailPage({
     setAnnotateError(null);
     const traceId = newTrace();
 
-    const commentResult = await createComment(supabase, {
-      workspace_id: detail.post.workspace_id,
-      entity_type: 'post',
-      entity_id: detail.post.id,
-      body,
-      trace_id: traceId,
-    });
+    const commentResult = await createAnchoredComment(body, traceId);
     if (!commentResult.ok) {
       setAnnotating(false);
-      setAnnotateError(commentResult.error.message);
+      setAnnotateError(commentResult.message);
       return;
     }
 
@@ -857,16 +883,10 @@ export function PostDetailPage({
     setPinError(null);
     const traceId = newTrace();
 
-    const commentResult = await createComment(supabase, {
-      workspace_id: detail.post.workspace_id,
-      entity_type: 'post',
-      entity_id: detail.post.id,
-      body,
-      trace_id: traceId,
-    });
+    const commentResult = await createAnchoredComment(body, traceId);
     if (!commentResult.ok) {
       setPinSubmitting(false);
-      setPinError(commentResult.error.message);
+      setPinError(commentResult.message);
       return;
     }
 

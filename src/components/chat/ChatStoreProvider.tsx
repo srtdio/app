@@ -65,6 +65,7 @@ import {
   resolveMentionPreview,
 } from '@/lib/chat/mentions';
 import { SIGNOUT_EVENT } from '@/lib/events';
+import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { clearAllDrafts, pruneDrafts, setDraftScope, stripDeletedReplies } from '@/lib/chat/drafts';
 import { clearEmojiRecents } from '@/lib/chat/emoji-list';
 import { clearVoiceTranscripts } from '@/lib/chat/transcript-store';
@@ -1139,6 +1140,8 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   // (workspace switch, sign-out, unmount) clears its timers and held messages.
   const reloadRosterRef = useRef(reloadRoster);
   reloadRosterRef.current = reloadRoster;
+  // The sample week landing or clearing adds or removes chats: re-read the roster.
+  useWorkspaceDataChanged(() => void reloadRosterRef.current());
   useEffect(() => {
     groupMembers.clear();
     if (scope === null) return;

@@ -42,6 +42,7 @@ import { PresignCache } from '@/lib/asset-presign';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 
 const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'newest', label: 'Newest' },
@@ -169,6 +170,10 @@ export function ActivityPage() {
   useEffect(() => {
     void loadMentionCount();
   }, [loadMentionCount]);
+  useWorkspaceDataChanged(() => {
+    void loadActivity();
+    void loadMentionCount();
+  });
 
   // Reset filters when the active workspace changes.
   useEffect(() => {
