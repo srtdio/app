@@ -526,7 +526,8 @@ export function AssetLightbox({
                     />
                     <div className="flex gap-2">
                       <Button
-                        className="h-11 flex-1"
+                        size="lg"
+                        className="flex-1"
                         onClick={() => setEditingName(false)}
                         disabled={savingName}
                       >
@@ -534,7 +535,8 @@ export function AssetLightbox({
                       </Button>
                       <Button
                         variant="primary"
-                        className="h-11 flex-1"
+                        size="lg"
+                        className="flex-1"
                         disabled={!canSaveName}
                         onClick={() => void saveName()}
                       >
@@ -584,7 +586,8 @@ export function AssetLightbox({
                   </div>
                   <div className="flex gap-2">
                     <Button
-                      className="h-11 flex-1"
+                      size="lg"
+                      className="flex-1"
                       onClick={() => setConfirming(false)}
                       disabled={deleting}
                     >
@@ -592,7 +595,8 @@ export function AssetLightbox({
                     </Button>
                     <Button
                       variant="danger"
-                      className="h-11 flex-1"
+                      size="lg"
+                      className="flex-1"
                       onClick={() => void confirmDelete()}
                       disabled={deleting}
                     >
@@ -603,7 +607,8 @@ export function AssetLightbox({
               ) : (
                 <Button
                   variant="danger"
-                  className="h-11 w-full"
+                  size="lg"
+                  className="w-full"
                   onClick={() => setConfirming(true)}
                 >
                   Delete
