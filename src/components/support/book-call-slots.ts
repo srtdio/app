@@ -19,7 +19,7 @@ interface CivilDate {
   day: number;
 }
 
-export interface CallSlot {
+interface CallSlot {
   at: Date;
   label: string;
 }

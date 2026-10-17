@@ -86,10 +86,10 @@ export interface StoredThumbnail {
 }
 
 /** The asset-upload Worker's 413 code for an upload that does not fit the workspace. */
-export const WORKSPACE_FULL_CODE = 'workspace_full';
+const WORKSPACE_FULL_CODE = 'workspace_full';
 
 /** A failed upload; code is set only for a full workspace (the full sheet is already open). */
-export type UploadFailure = { ok: false; message: string; code?: typeof WORKSPACE_FULL_CODE };
+type UploadFailure = { ok: false; message: string; code?: typeof WORKSPACE_FULL_CODE };
 
 export type UploadOutcome =
   | {

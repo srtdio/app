@@ -21,9 +21,9 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 
 /** The free allowance the meter is drawn against: 1 GB (1024 MB). */
-export const ALLOWANCE_BYTES = 1024 * 1024 * 1024;
+const ALLOWANCE_BYTES = 1024 * 1024 * 1024;
 
-export interface StorageBreakdown {
+interface StorageBreakdown {
   bytes_used: number;
   library_bytes: number;
   chat_bytes: number;
@@ -31,7 +31,7 @@ export interface StorageBreakdown {
   deleted_bytes: number;
 }
 
-export type MeterTone = 'accent' | 'warn' | 'bad';
+type MeterTone = 'accent' | 'warn' | 'bad';
 
 /** The meter colour: warn from the warning line, bad once full (the cap). Exempt stays accent. */
 export function meterTone(usedBytes: number, usage: StorageUsage | null): MeterTone {
@@ -41,7 +41,7 @@ export function meterTone(usedBytes: number, usage: StorageUsage | null): MeterT
 }
 
 /** Whether "NEED MORE SPACE?" shows: at or past the warning line, not exempt. */
-export function showsNeedMoreSpace(usedBytes: number, usage: StorageUsage | null): boolean {
+function showsNeedMoreSpace(usedBytes: number, usage: StorageUsage | null): boolean {
   return usage !== null && !usage.exempt && usedBytes >= usage.warnAtBytes;
 }
 

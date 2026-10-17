@@ -51,20 +51,18 @@ export interface DeleteConfirmCopy {
   title: string;
   message: string;
   confirmLabel: string;
-  cancelLabel: string;
 }
 
-export const DELETE_FILES_TITLE_ONE = 'Delete this message?';
-export const DELETE_FILES_TITLE_MANY = 'Delete these messages?';
-export const DELETE_FILES_MESSAGE_MANY =
+const DELETE_FILES_TITLE_ONE = 'Delete this message?';
+const DELETE_FILES_TITLE_MANY = 'Delete these messages?';
+const DELETE_FILES_MESSAGE_MANY =
   "Files in these messages are permanently deleted for privacy. Files shared in chat never go to Recently deleted and can't be restored.";
-export const DELETE_FILES_CONFIRM = 'Delete for everyone';
-export const DELETE_FILES_CANCEL = 'Cancel';
+const DELETE_FILES_CONFIRM = 'Delete for everyone';
 /** The toast once a delete that carried files is recorded. */
 export const FILES_DELETED_TOAST = 'Deleted. File removed for good.';
 
 /** The one-message body, naming its first file. */
-export function deleteFilesMessageOne(fileName: string): string {
+function deleteFilesMessageOne(fileName: string): string {
   return `${fileName} is permanently deleted for privacy. Files shared in chat never go to Recently deleted and can't be restored.`;
 }
 
@@ -83,7 +81,6 @@ export function deleteConfirmCopy(
     title: one ? DELETE_FILES_TITLE_ONE : DELETE_FILES_TITLE_MANY,
     message: one && firstName !== '' ? deleteFilesMessageOne(firstName) : DELETE_FILES_MESSAGE_MANY,
     confirmLabel: DELETE_FILES_CONFIRM,
-    cancelLabel: DELETE_FILES_CANCEL,
   };
 }
 
@@ -108,7 +105,7 @@ export function attachmentAssetIds(
 
 export type PurgeChatOutcome = { ok: true; data: PurgeChatResponse } | { ok: false; error: string };
 
-export interface PurgeChatConfig {
+interface PurgeChatConfig {
   /** The asset-upload worker base URL; the /purge-chat route is POSTed beneath it. */
   endpoint: string;
   token: string;

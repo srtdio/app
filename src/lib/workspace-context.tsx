@@ -170,7 +170,7 @@ export function nextActiveId(prev: string | null, rows: readonly WorkspaceRow[])
  * once a workspace is deleted is what makes the create that follows skip it:
  * the person is not new. A failure is logged and the create then runs it.
  */
-export async function skipInductionAfterDelete(client: Client, traceId: string): Promise<void> {
+async function skipInductionAfterDelete(client: Client, traceId: string): Promise<void> {
   const res = await finishInduction(client, traceId);
   if (!res.ok) {
     logger.warn('induction skip after workspace delete failed', {

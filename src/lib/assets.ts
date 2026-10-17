@@ -571,13 +571,13 @@ export function formatDimensions(width: number | null, height: number | null): s
 // ---------------------------------------------------------------------------
 // Recently deleted. A deleted library file stays readable (RLS policy
 // assets_select_deleted_member) until the owner purges it or 31 days pass, so
-// the list is one plain SELECT with the current version's size embedded.
+// the list is one plain SELECT with every version's size embedded.
 // Restore is the asset_restore proc; purge is the asset-upload Worker's /purge
 // route (owner only), behind the same Bearer auth as the other worker routes.
 // ---------------------------------------------------------------------------
 
 /** How long a deleted file is kept before the purge job removes it for good. */
-export const RECENTLY_DELETED_DAYS = 31;
+const RECENTLY_DELETED_DAYS = 31;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -631,21 +631,30 @@ interface RawDeletedRow {
   filename: string;
   display_name: string | null;
   deleted_at: string;
-  current_version: { size_bytes: number | null } | null;
+  versions: { size_bytes: number | null }[] | null;
 }
 
-// Same disambiguated embed as ASSET_SELECT: only the current version's size.
+// Every version, not just the current one: a purge frees them all. Embedded
+// through asset_versions.asset_id (disambiguated from current_version_id).
+// Renditions are not embedded: authenticated holds no SELECT on
+// asset_renditions, so their bytes are not counted here.
 const DELETED_SELECT =
   'id, filename, display_name, deleted_at, ' +
-  'current_version:asset_versions!assets_current_version_id_fkey(size_bytes)';
+  'versions:asset_versions!asset_versions_asset_id_fkey(size_bytes)';
+
+/** Sum of every version's size; null when no version records one. */
+function versionsBytes(versions: RawDeletedRow['versions']): number | null {
+  const sizes = (versions ?? []).flatMap((v) => (v.size_bytes === null ? [] : [v.size_bytes]));
+  return sizes.length === 0 ? null : sizes.reduce((sum, size) => sum + size, 0);
+}
 
 /** Flatten raw deleted rows into the display shape. Pure. */
-export function shapeDeletedAssets(rows: RawDeletedRow[]): DeletedAssetItem[] {
+function shapeDeletedAssets(rows: RawDeletedRow[]): DeletedAssetItem[] {
   return rows.map((row) => ({
     id: row.id,
     name: displayLabel({ displayName: row.display_name, filename: row.filename }),
     deletedAt: row.deleted_at,
-    sizeBytes: row.current_version?.size_bytes ?? null,
+    sizeBytes: versionsBytes(row.versions),
   }));
 }
 
@@ -656,7 +665,7 @@ export function deletedBytes(items: DeletedAssetItem[]): number {
 
 /**
  * List one workspace's Recently deleted library files, most recently deleted
- * first, in ONE read (sizes come from the embedded current version). Files the
+ * first, in ONE read (sizes sum the embedded versions). Files the
  * owner already asked to purge are excluded, matching the RLS policy.
  */
 export async function listDeletedAssets(
@@ -800,7 +809,7 @@ export function isAssetInUseError(error: { message: string }): boolean {
   return error.message === 'asset_in_use';
 }
 
-export type AssetParentKind = 'post' | 'brief' | 'comment';
+type AssetParentKind = 'post' | 'brief' | 'comment';
 
 /** Where a blocked file is used, and the route that opens it. */
 export interface AssetParent {
@@ -808,7 +817,7 @@ export interface AssetParent {
   href: string;
 }
 
-export interface AssetInUse {
+interface AssetInUse {
   assetId: string;
   parent: AssetParent;
 }

@@ -32,7 +32,7 @@ function render(isOwner: boolean, list = items): string {
       now={NOW}
       isOwner={isOwner}
       loading={false}
-      error={null}
+      failed={false}
       busyId={null}
       onRetry={() => {}}
       onRestore={() => {}}
@@ -74,6 +74,26 @@ describe('RecentlyDeletedView', () => {
   it('keeps every action at 44px', () => {
     const out = render(true);
     expect(out.match(/h-11/g)?.length).toBe(items.length * 2 + 1);
+  });
+
+  it('shows only the load failure line and a 44px Retry when the read fails', () => {
+    const out = renderToStaticMarkup(
+      <RecentlyDeletedView
+        items={[]}
+        now={NOW}
+        isOwner
+        loading={false}
+        failed
+        busyId={null}
+        onRetry={() => {}}
+        onRestore={() => {}}
+        onDeleteNow={() => {}}
+        onEmpty={() => {}}
+      />,
+    );
+    expect(out).toMatch(/role="alert"[^>]*>Could not load assets\.<\/div>/);
+    expect(out).toContain('Retry');
+    expect(out).toContain('h-11');
   });
 
   it('shows only the hint when nothing is here', () => {

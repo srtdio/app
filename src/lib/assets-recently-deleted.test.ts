@@ -146,7 +146,7 @@ function builder(result: unknown, calls: string[] = []) {
 }
 
 describe('listDeletedAssets', () => {
-  it('reads once and shapes name and current-version size', async () => {
+  it('reads once and sums every version size per asset', async () => {
     const calls: string[] = [];
     const from = vi.fn(() =>
       builder(
@@ -157,14 +157,14 @@ describe('listDeletedAssets', () => {
               filename: 'raw.png',
               display_name: 'Hero',
               deleted_at: iso(DAY),
-              current_version: { size_bytes: 2048 },
+              versions: [{ size_bytes: 2048 }, { size_bytes: 1024 }, { size_bytes: null }],
             },
             {
               id: 'a2',
               filename: 'doc.pdf',
               display_name: null,
               deleted_at: iso(0),
-              current_version: null,
+              versions: [{ size_bytes: null }],
             },
           ],
           error: null,
@@ -175,10 +175,13 @@ describe('listDeletedAssets', () => {
     const result = await listDeletedAssets({ from } as unknown as Client, 'ws-1');
     expect(from).toHaveBeenCalledTimes(1);
     expect(calls).toContain('not:["deleted_at","is",null]');
+    expect(calls.find((c) => c.startsWith('select:'))).toContain(
+      'versions:asset_versions!asset_versions_asset_id_fkey(size_bytes)',
+    );
     expect(result).toEqual({
       ok: true,
       data: [
-        { id: 'a1', name: 'Hero', deletedAt: iso(DAY), sizeBytes: 2048 },
+        { id: 'a1', name: 'Hero', deletedAt: iso(DAY), sizeBytes: 3072 },
         { id: 'a2', name: 'doc.pdf', deletedAt: iso(0), sizeBytes: null },
       ],
     });

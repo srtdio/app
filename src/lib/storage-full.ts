@@ -29,7 +29,7 @@ export function reportWorkspaceFull(fileSizeBytes: number): void {
   emit();
 }
 
-export interface WorkspaceFullSheetState {
+interface WorkspaceFullSheetState {
   /** The refused file's size while the sheet is open, else null. */
   fileSizeBytes: number | null;
   dismiss: () => void;

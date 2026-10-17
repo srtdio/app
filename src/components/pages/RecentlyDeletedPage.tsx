@@ -10,6 +10,7 @@ import { env } from '@/lib/env';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSession } from '@/lib/session-context';
+import { logger } from '@/lib/logger';
 import {
   daysLeft,
   deletedBytes,
@@ -38,7 +39,8 @@ interface RecentlyDeletedViewProps {
   now: number;
   isOwner: boolean;
   loading: boolean;
-  error: string | null;
+  /** The list read failed; the cause is logged, never shown. */
+  failed: boolean;
   /** The row whose request is in flight; its actions are disabled. */
   busyId: string | null;
   onRetry: () => void;
@@ -57,7 +59,7 @@ export function RecentlyDeletedView({
   now,
   isOwner,
   loading,
-  error,
+  failed,
   busyId,
   onRetry,
   onRestore,
@@ -71,13 +73,15 @@ export function RecentlyDeletedView({
         then.
       </p>
 
-      {error !== null ? (
+      {failed ? (
         <div className="mt-4">
           <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
-            Could not load assets. {error}
+            Could not load assets.
           </div>
           <div className="mt-3">
-            <Button onClick={onRetry}>Retry</Button>
+            <Button size="lg" onClick={onRetry}>
+              Retry
+            </Button>
           </div>
         </div>
       ) : loading && items.length === 0 ? (
@@ -146,7 +150,7 @@ export function RecentlyDeletedPage() {
 
   const [items, setItems] = useState<DeletedAssetItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<PendingConfirm>(null);
@@ -155,12 +159,13 @@ export function RecentlyDeletedPage() {
   const load = useCallback(async () => {
     if (workspaceId === null) return;
     setLoading(true);
-    setError(null);
+    setFailed(false);
     const result = await listDeletedAssets(supabase, workspaceId);
     setLoading(false);
     setNow(Date.now());
     if (!result.ok) {
-      setError(result.error.message);
+      logger.warn('recently deleted: list read failed', { error: result.error.message });
+      setFailed(true);
       return;
     }
     setItems(result.data);
@@ -221,6 +226,12 @@ export function RecentlyDeletedPage() {
         return;
       }
       push(confirm.kind === 'one' ? 'Deleted for good' : 'Emptied. Space freed.');
+    } catch (cause) {
+      // getSession() can reject; the user sees the same failure toast.
+      logger.warn('recently deleted: purge failed', {
+        error: cause instanceof Error ? cause.message : String(cause),
+      });
+      push(RETRY);
     } finally {
       setConfirmBusy(false);
       setConfirm(null);
@@ -235,7 +246,7 @@ export function RecentlyDeletedPage() {
         now={now}
         isOwner={isOwner}
         loading={workspaceId === null || loading}
-        error={error}
+        failed={failed}
         busyId={busyId}
         onRetry={() => void load()}
         onRestore={(item) => void restore(item)}

@@ -201,7 +201,6 @@ describe('delete confirm copy and asset ids', () => {
       message:
         "brief.pdf is permanently deleted for privacy. Files shared in chat never go to Recently deleted and can't be restored.",
       confirmLabel: 'Delete for everyone',
-      cancelLabel: 'Cancel',
     });
   });
 
@@ -213,7 +212,6 @@ describe('delete confirm copy and asset ids', () => {
       message:
         "Files in these messages are permanently deleted for privacy. Files shared in chat never go to Recently deleted and can't be restored.",
       confirmLabel: 'Delete for everyone',
-      cancelLabel: 'Cancel',
     });
   });
 

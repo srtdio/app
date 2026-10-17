@@ -40,7 +40,7 @@ function functionUrl(): string {
 }
 
 /** POST the booking. true only on a 2xx; never throws. */
-export async function sendBookCall(input: {
+async function sendBookCall(input: {
   workspaceId: string;
   slotAt: Date;
   timeZone: string;
