@@ -3,7 +3,7 @@ import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import type { InductionState, Rect } from '@/lib/induction';
+import { RESULT_HOLD_MS, type InductionState, type Rect } from '@/lib/induction';
 import { ROUTE_SCRIPTS } from '@/lib/induction-routes';
 import type { Step } from '@/lib/induction-model';
 import type { GuideFactsRead } from './induction-data';
@@ -814,5 +814,89 @@ describe('dismissing a control', () => {
     });
     await wait(40);
     expect(d.setStep).not.toHaveBeenCalled();
+  });
+});
+
+/** Re-render with the stored step moved, as induction_state would after setStep. */
+async function moveStored(state: Partial<InductionState>): Promise<void> {
+  current = data(state);
+  await act(async () => {
+    render(current!, {});
+  });
+}
+
+describe('the result tick', () => {
+  it('turns the finished box green with a tick, then shows the next step', async () => {
+    const chip = control('pipeline-approved-chip', CHIP);
+    control('pipeline-create', { top: 120, left: 320, width: 44, height: 44 });
+    await mount({ step: 'c_approved_chip' });
+    await act(async () => {
+      chip.el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+      chip.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    await moveStored({ step: 'c_post_create' });
+    const result = q('[data-induction-result]');
+    expect([
+      px(result, 'top'),
+      px(result, 'left'),
+      px(result, 'width'),
+      px(result, 'height'),
+    ]).toEqual([113, 9, 134, 58]);
+    expect(result.className).toContain('border-2');
+    expect(result.className).toContain('border-good');
+    expect(result.querySelector('[data-guide-tick]')).not.toBeNull();
+    expect(document.querySelector('[data-induction-box]')).toBeNull();
+    await wait(RESULT_HOLD_MS + 40);
+    expect(document.querySelector('[data-induction-result]')).toBeNull();
+    expect(document.querySelector('[data-induction-box]')).not.toBeNull();
+  });
+
+  it('shows when the data finishes the step', async () => {
+    control('members-invite', { top: 200, left: 16, width: 358, height: 300 }, { tag: 'section' });
+    await mount({ step: 'c_approver_invite', postId: 'p1' }, { route: '/settings?panel=members' });
+    await moveStored({ step: 'c_approver_invite', postId: 'p1', clientInvited: true });
+    expect(q('[data-induction-step]').getAttribute('data-induction-step')).toBe('c_team_invite');
+    expect(document.querySelector('[data-induction-result]')).not.toBeNull();
+  });
+
+  it('stays off for Back', async () => {
+    control('pipeline-approved-chip', CHIP);
+    control('pipeline-create', { top: 120, left: 320, width: 44, height: 44 });
+    await mount({ step: 'c_post_create' });
+    act(() => q('[data-induction-back]').click());
+    await moveStored({ step: 'c_approved_chip' });
+    expect(document.querySelector('[data-induction-result]')).toBeNull();
+  });
+
+  it('stays off for the optional chip', async () => {
+    control('members-invite', { top: 200, left: 16, width: 358, height: 300 }, { tag: 'section' });
+    await mount(
+      { step: 'c_team_invite', postId: 'p1', clientInvited: true },
+      { route: '/settings?panel=members' },
+    );
+    const later = Array.from(document.querySelectorAll('[data-induction-bar] button')).find(
+      (b) => b.textContent === "It's just me for now",
+    ) as HTMLButtonElement;
+    act(() => later.click());
+    await moveStored({ step: 'c_intro', postId: 'p1', clientInvited: true });
+    expect(document.querySelector('[data-induction-result]')).toBeNull();
+    expect(document.querySelector('[data-induction-card="intro"]')).not.toBeNull();
+  });
+});
+
+describe('the chapter dots', () => {
+  it('marks finished chapters green, the current one amber, upcoming ones grey', async () => {
+    const comment = stepFor('creator', 'post-comment-button');
+    control('post-comment-button', { top: 300, left: 16, width: 120, height: 44 });
+    await mount({ step: comment.id, ...ALL_DATA }, { route: '/posts/p1' });
+    const dots = Array.from(document.querySelectorAll<HTMLElement>('[data-induction-chapter]'));
+    expect(dots.map((d) => d.getAttribute('data-induction-chapter'))).toEqual([
+      'done',
+      'current',
+      'upcoming',
+    ]);
+    expect(dots[0]!.className).toContain('bg-good');
+    expect(dots[1]!.className).toContain('bg-[var(--guide)]');
+    expect(dots[2]!.className).toContain('bg-border-strong');
   });
 });

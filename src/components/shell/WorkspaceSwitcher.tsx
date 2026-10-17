@@ -91,10 +91,12 @@ export function WorkspaceSwitcher() {
   }, [clearDeletedWorkspace]);
 
   // Open on the shell event; a fresh open starts on the list, or straight on
-  // the create form right after a workspace was deleted.
+  // the create form right after a workspace was deleted or when there is none
+  // yet (the list would only hold Create workspace).
+  const startOnCreate = hasDeleted || (!loading && workspaces.length === 0 && !createBlocked);
   useEffect(() => {
     function onSwitch(): void {
-      setMode(hasDeleted ? 'create' : 'list');
+      setMode(startOnCreate ? 'create' : 'list');
       setName('');
       setPlatform(null);
       setFormError(null);
@@ -104,7 +106,7 @@ export function WorkspaceSwitcher() {
     return () => {
       window.removeEventListener('sorted:switch-workspace', onSwitch);
     };
-  }, [hasDeleted]);
+  }, [startOnCreate]);
 
   // A workspace was just deleted: open on the create form.
   useEffect(() => {
@@ -333,7 +335,13 @@ export function WorkspaceSwitcher() {
               >
                 Back
               </Button>
-              <Button type="submit" variant="primary" size="lg" disabled={preview === null}>
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                data-induction={INDUCTION_KEYS.workspaceCreateContinue}
+                disabled={preview === null}
+              >
                 Continue
               </Button>
             </div>

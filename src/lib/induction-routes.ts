@@ -54,6 +54,13 @@ function creatorWorkspaceSteps(): Step[] {
       targets: [K.topbarWorkspaceSlot],
       dataDone: 'hasWorkspace',
     }),
+    makeStep('creator', 'workspace_continue', {
+      phase,
+      kind: 'setup',
+      place: 'shell',
+      targets: [K.workspaceCreateContinue],
+      dataDone: 'hasWorkspace',
+    }),
     makeStep('creator', 'workspace_create', {
       phase,
       kind: 'setup',

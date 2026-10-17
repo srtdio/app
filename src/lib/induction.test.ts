@@ -377,6 +377,29 @@ describe('the 4 s skip', () => {
     expect(skipTarget(STEPS, at('c_invite'), probe(['c_activity']))).toBe(at('c_invite'));
   });
 
+  it('never sends the workspace sheet back to the top bar slot', () => {
+    const ws = ROUTE_SCRIPTS.creator.steps;
+    const wsAt = (id: string): number => ws.findIndex((s) => s.id === id);
+    // The sheet is open (the slot under it is covered, so not visible) and
+    // shows neither Continue nor Create: Continue moves on to Create, which stays.
+    expect(skipTarget(ws, wsAt('c_workspace_continue'), probe([]))).toBe(
+      wsAt('c_workspace_create'),
+    );
+    expect(skipTarget(ws, wsAt('c_workspace_create'), probe([]))).toBe(wsAt('c_workspace_create'));
+    // Create absent while the form shows Continue: back to Continue, never the slot.
+    expect(skipTarget(ws, wsAt('c_workspace_create'), probe(['c_workspace_continue']))).toBe(
+      wsAt('c_workspace_continue'),
+    );
+    // The sheet closed: the slot shows again and the group starts over there.
+    expect(skipTarget(ws, wsAt('c_workspace_create'), probe(['c_workspace']))).toBe(
+      wsAt('c_workspace'),
+    );
+    // Continue up while the sheet already shows Create: forward to Create.
+    expect(skipTarget(ws, wsAt('c_workspace_continue'), probe(['c_workspace_create']))).toBe(
+      wsAt('c_workspace_create'),
+    );
+  });
+
   it('with nothing visible, moves to the next step so its place opens', () => {
     expect(skipTarget(STEPS, at('c_brief'), probe([]))).toBe(at('c_brief') + 1);
     expect(skipTarget(STEPS, STEPS.length - 1, probe([]))).toBe(STEPS.length);

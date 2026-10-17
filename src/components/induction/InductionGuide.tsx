@@ -10,7 +10,14 @@
 // every render; useLiveTick re-renders whenever it could have moved. A new step
 // opens its screen, and leaving a gate's screen brings the person back to it.
 
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactElement,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -27,6 +34,7 @@ import {
   placeLabel,
   placeRoute,
   progressOf,
+  RESULT_HOLD_MS,
   skipTarget,
   type Rect,
   type Resolution,
@@ -42,6 +50,7 @@ import {
   GuideCard,
   GuideHand,
   GuideLabel,
+  GuideResult,
   GuideStyle,
   type BarCopy,
   type DockAt,
@@ -85,6 +94,7 @@ function ActiveGuide({
     bottom: (safeBottom.current?.offsetHeight ?? 0) + (tabsShown && !laptop ? PHONE_TAB_BAR : 0),
   };
   const { resolution } = ctx;
+  const hold = useResultHold(ctx);
   if (resolution.kind === 'off') return null;
   return createPortal(
     <div {...{ [LAYER_ATTR]: '' }} data-induction-step={stepIdOf(resolution)}>
@@ -100,10 +110,20 @@ function ActiveGuide({
         className="pointer-events-none invisible fixed bottom-0 left-0 h-[env(safe-area-inset-bottom)] w-0"
       />
       {resolution.kind === 'step' ? (
-        <StepLayer ctx={ctx} script={script} resolution={resolution} frame={{ laptop, insets }} />
-      ) : (
+        <StepLayer
+          ctx={ctx}
+          script={script}
+          resolution={resolution}
+          frame={{ laptop, insets }}
+          marks={hold.marks}
+          holding={hold.result !== null}
+        />
+      ) : hold.result === null ? (
         <CardLayer ctx={ctx} resolution={resolution} dock={{ side: 'bottom', laptop, insets }} />
-      )}
+      ) : null}
+      {hold.result !== null ? (
+        <GuideResult rect={hold.result.rect} radius={hold.result.radius} />
+      ) : null}
     </div>,
     document.body,
   );
@@ -112,6 +132,52 @@ function ActiveGuide({
 function stepIdOf(resolution: Exclude<Resolution, { kind: 'off' }>): string {
   if (resolution.kind === 'step') return resolution.step.id;
   return resolution.card.id;
+}
+
+/** What the step layer saw of the current step: its last boxed place (page coordinates) and a tap on its control. */
+interface StepMarks {
+  boxed: { id: string; rect: Rect; radius: number } | null;
+  /** The id of the step whose control took a tap ('' for none). */
+  tapped: string;
+}
+
+type Marks = MutableRefObject<StepMarks>;
+
+/**
+ * The green result tick: when the step changes because the one before
+ * finished (a tap on its control, or its data), its last box turns green with
+ * a tick for RESULT_HOLD_MS and the next step (or card) waits. Back, the 4 s
+ * rule and the optional chip move on quietly.
+ */
+function useResultHold(ctx: InductionContextValue): {
+  marks: Marks;
+  result: { rect: Rect; radius: number } | null;
+} {
+  const marks = useRef<StepMarks>({ boxed: null, tapped: '' });
+  const [result, setResult] = useState<{ rect: Rect; radius: number } | null>(null);
+  const { resolution } = ctx;
+  const id = resolution.kind === 'off' ? '' : stepIdOf(resolution);
+  const current = resolution.kind === 'step' ? resolution.step : undefined;
+  const latest = useRef({ current, isDone: ctx.isDone });
+  latest.current = { current, isDone: ctx.isDone };
+  const before = useRef<Step | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const prev = before.current;
+    before.current = latest.current.current;
+    const seen = marks.current;
+    marks.current = { boxed: null, tapped: '' };
+    if (prev === undefined || prev.id === id) return;
+    const finished = seen.tapped === prev.id || latest.current.isDone(prev);
+    if (!finished || seen.boxed === null || seen.boxed.id !== prev.id) return;
+    setResult({ rect: seen.boxed.rect, radius: seen.boxed.radius });
+    const timer = window.setTimeout(() => setResult(null), RESULT_HOLD_MS);
+    return () => {
+      window.clearTimeout(timer);
+      setResult(null);
+    };
+  }, [id]);
+  return { marks, result };
 }
 
 /**
@@ -188,11 +254,16 @@ function StepLayer({
   script,
   resolution,
   frame,
+  marks,
+  holding,
 }: {
   ctx: InductionContextValue;
   script: RouteScript;
   resolution: StepResolution;
   frame: Frame;
+  marks: Marks;
+  /** The result tick of the step before is up: no spotlight yet. */
+  holding: boolean;
 }): ReactElement {
   const { step, steps, index } = resolution;
   const probe = probeOf(ctx);
@@ -207,7 +278,8 @@ function StepLayer({
   const nextFound = next !== undefined ? findVisible(next.targets, ctx.qualifiers) : undefined;
   const nextEl = nextFound?.found === true ? nextFound.el : undefined;
 
-  const boxed = el !== undefined && !moving ? el : undefined;
+  const boxed = el !== undefined && !moving && !holding ? el : undefined;
+  useTapMark(el, step.id, marks);
   const field = el !== undefined ? textFieldOf(el) : undefined;
 
   const location = useLocation();
@@ -222,10 +294,15 @@ function StepLayer({
     },
     () => ctx.moveTo(index + 1),
   );
+  /** Back, the 4 s rule and the optional chip move on without the result tick. */
+  const quietMove = (to: number): void => {
+    marks.current.tapped = '';
+    ctx.moveTo(to);
+  };
   useAbsentSkip({ stepKey: step.id, found: el !== undefined }, () => {
     if (ctx.isDone(step)) return;
     const to = skipTarget(steps, index, probe);
-    if (to !== index) ctx.moveTo(to);
+    if (to !== index) quietMove(to);
   });
   const nudge = useTapGuard(boxed, {
     next: field !== undefined ? nextEl : undefined,
@@ -234,6 +311,19 @@ function StepLayer({
   const legend = useLegend(script.route, step.id);
 
   const control = boxed !== undefined ? rectOf(boxed) : undefined;
+  const radius = boxed !== undefined ? guideRadius(radiusOf(boxed)) : 0;
+  useEffect(() => {
+    if (control === undefined) return;
+    const box = clampToViewport(boxRect(control), {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
+    marks.current.boxed = {
+      id: step.id,
+      rect: { ...box, top: box.top + window.scrollY, left: box.left + window.scrollX },
+      radius,
+    };
+  });
   const back = index === 0 ? -1 : backIndex(steps, index, probe);
   const order = chapterOrder(steps);
   const copy: BarCopy = {
@@ -266,7 +356,7 @@ function StepLayer({
       {control !== undefined && boxed !== undefined ? (
         <Spotlight
           control={control}
-          radius={guideRadius(radiusOf(boxed))}
+          radius={radius}
           label={fillCopy(step.label, ctx.copy)}
           frame={{
             dock,
@@ -282,10 +372,10 @@ function StepLayer({
         progress={progressOf(script, resolution)}
         dock={dock}
         actions={{
-          onBack: back >= 0 ? () => ctx.moveTo(back) : undefined,
+          onBack: back >= 0 ? () => quietMove(back) : undefined,
           onLater:
             step.kind === 'optional' && step.laterLabel !== undefined
-              ? () => ctx.moveTo(index + 1)
+              ? () => quietMove(index + 1)
               : undefined,
         }}
       />
@@ -328,6 +418,22 @@ function Spotlight({
       <GuideLabel ref={setLabelEl} text={label} at={at} nudge={frame.nudge} />
     </>
   );
+}
+
+/** Marks a tap (or the press that starts a selection) on the step's control, for the result tick. */
+function useTapMark(el: HTMLElement | undefined, stepId: string, marks: Marks): void {
+  useEffect(() => {
+    if (el === undefined) return;
+    const mark = (event: Event): void => {
+      if (event.target instanceof Node && el.contains(event.target)) marks.current.tapped = stepId;
+    };
+    document.addEventListener('pointerdown', mark, true);
+    document.addEventListener('click', mark, true);
+    return () => {
+      document.removeEventListener('pointerdown', mark, true);
+      document.removeEventListener('click', mark, true);
+    };
+  }, [el, stepId, marks]);
 }
 
 /** How long after a step starts the guide keeps its control in view (a thread re-sticking to its bottom). */
