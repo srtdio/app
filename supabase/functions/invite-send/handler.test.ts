@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { createClient } from '@supabase/supabase-js';
 import {
+  firstName,
   handleInviteSend,
   inviteEmailBody,
   inviteSubject,
@@ -114,19 +115,53 @@ describe('invite-send member_invite_check pre-flight', () => {
   });
 });
 
+describe('firstName', () => {
+  it.each([
+    ['Priya Shah', 'Priya'],
+    ['  Priya   Shah  ', 'Priya'],
+    ['Priya', 'Priya'],
+    ['Priya\tShah', 'Priya'],
+    ['', ''],
+    ['   ', ''],
+  ])('firstName(%j) is %j', (input, expected) => {
+    expect(firstName(input)).toBe(expected);
+  });
+});
+
+describe('invite subject', () => {
+  it.each(['agency', 'admin'])('%s (creator) names the inviter and the brand', (role) => {
+    expect(inviteSubject({ brand: 'Acme', role, inviterName: 'Priya Shah' })).toBe(
+      'Priya invited you to Acme on Sorted',
+    );
+  });
+
+  it('client (approver) names the inviter and review', () => {
+    expect(inviteSubject({ brand: 'Acme', role: 'client', inviterName: 'Priya Shah' })).toBe(
+      'Priya invited you to review posts on Sorted',
+    );
+  });
+
+  it.each(['client', 'agency', 'admin'])('%s falls back when the inviter is unknown', (role) => {
+    expect(inviteSubject({ brand: 'Acme', role, inviterName: '  ' })).toBe(
+      "You're invited to Acme on Sorted",
+    );
+  });
+});
+
 describe('invite email copy', () => {
   const URL_ = 'https://app.test/accept?x=1&y=2';
+  const NOTE =
+    "This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.";
   const email = (role: string, platform: string | null = 'instagram') => {
     const displayName = workspaceDisplayName('Acme', platform);
     return {
-      subject: inviteSubject(displayName),
+      subject: inviteSubject({ brand: 'Acme', role, inviterName: 'Priya Shah' }),
       ...inviteEmailBody({ brand: 'Acme', displayName, role, acceptUrl: URL_ }),
     };
   };
 
-  it('subject, heading and footer use "<Brand> - <Platform>"', () => {
+  it('heading and footer use "<Brand> - <Platform>"', () => {
     const e = email('client');
-    expect(e.subject).toBe("You're invited to Acme - Instagram on Sorted");
     expect(e.html).toContain('Join Acme - Instagram on Sorted</h1>');
     expect(e.html).toContain('for the Acme - Instagram workspace.');
     expect(e.text.startsWith('Join Acme - Instagram on Sorted\n')).toBe(true);
@@ -134,27 +169,31 @@ describe('invite email copy', () => {
     expect(workspaceDisplayName('Acme', 'youtube_shorts')).toBe('Acme - YouTube Shorts');
   });
 
-  it('client reads as an Approver', () => {
+  it('client (approver) body and button ask for a review', () => {
     const e = email('client');
-    const line =
-      "You've been added as an Approver. Posts made for Acme come to you here for review: comment, ask for changes, or approve.";
-    expect(e.text).toContain(line);
-    expect(e.html).toContain(
-      'You&#39;ve been added as an Approver.</strong> Posts made for Acme come to you here for review: comment, ask for changes, or approve.',
-    );
+    const line = 'Review posts for Acme and share your feedback with the team.';
+    expect(e.text).toContain(`${line}\n\nReview posts:\n${URL_}`);
+    expect(e.html).toContain(`>${line}</p>`);
+    expect(e.html).toContain('>Review posts</a>');
   });
 
-  it('agency reads as a Creator', () => {
-    expect(email('agency').text).toContain(
-      "You've been added as a Creator. You'll make posts for Acme here and send them to its approvers for review.",
-    );
+  it.each(['agency', 'admin'])('%s (creator) body and button join the workspace', (role) => {
+    const e = email(role);
+    const line = 'Join the workspace to create posts and work with the team.';
+    expect(e.text).toContain(`${line}\n\nJoin workspace:\n${URL_}`);
+    expect(e.html).toContain(`>${line}</p>`);
+    expect(e.html).toContain('>Join workspace</a>');
   });
 
-  it('admin reads as a Creator who can manage members', () => {
-    expect(email('admin').text).toContain(
-      "You've been added as a Creator who can manage members. You'll make posts for Acme here and send them to its approvers for review.",
-    );
-  });
+  it.each(['client', 'agency', 'admin'])(
+    '%s keeps the sign-in note and footer verbatim',
+    (role) => {
+      const e = email(role);
+      expect(e.text).toContain(NOTE);
+      expect(e.html).toContain(`>${NOTE}</p>`);
+      expect(e.text.endsWith('Sent by Sorted for the Acme - Instagram workspace.')).toBe(true);
+    },
+  );
 
   it.each(['client', 'agency', 'admin'])(
     '%s email never says client, agency, trial or an em-dash',
@@ -162,9 +201,9 @@ describe('invite email copy', () => {
       const e = email(role);
       for (const part of [e.subject, e.html, e.text]) {
         expect(part).not.toMatch(/client|agency|trial|\u2014/i);
-        expect(part).toContain('Acme');
       }
-      expect(e.html).toContain('>Accept invitation</a>');
+      expect(e.html).toContain('Acme');
+      expect(e.text).toContain('Acme');
       expect(e.html).toContain('href="https://app.test/accept?x=1&amp;y=2"');
     },
   );
@@ -172,16 +211,101 @@ describe('invite email copy', () => {
   it.each([null, undefined, 'myspace'])(
     'unknown platform (%s) falls back to the name',
     (platform) => {
-      const displayName = workspaceDisplayName('Acme', platform);
-      expect(displayName).toBe('Acme');
-      expect(inviteSubject(displayName)).toBe("You're invited to Acme on Sorted");
+      expect(workspaceDisplayName('Acme', platform)).toBe('Acme');
     },
   );
 
   it('escapes interpolated brand names', () => {
     const displayName = workspaceDisplayName('<b>&Co', 'x');
-    const e = inviteEmailBody({ brand: '<b>&Co', displayName, role: 'agency', acceptUrl: URL_ });
+    const e = inviteEmailBody({ brand: '<b>&Co', displayName, role: 'client', acceptUrl: URL_ });
     expect(e.html).toContain('Join &lt;b&gt;&amp;Co - X on Sorted');
+    expect(e.html).toContain('Review posts for &lt;b&gt;&amp;Co and share');
     expect(e.html).not.toContain('<b>&Co');
+  });
+});
+
+describe('invite-send email delivery', () => {
+  // A full happy path: the handler reads the inviter's display_name with the
+  // service client and puts the first name in the Resend subject.
+  function deliverySetup(inviter: { data: unknown; error: unknown }) {
+    const s = setup(null);
+    const update = { eq: vi.fn(async () => ({ error: null })) };
+    const usersEq = vi.fn(() => ({ maybeSingle: async () => inviter }));
+    s.admin.from.mockImplementation((table: string) => {
+      if (table === 'users') return { select: () => ({ eq: usersEq }) };
+      return {
+        insert: () => ({
+          select: () => ({ single: async () => ({ data: { id: 'a1' }, error: null }) }),
+        }),
+        update: () => update,
+      };
+    });
+    s.admin.auth.admin.generateLink.mockResolvedValue({
+      data: { properties: { action_link: 'https://db.test/verify?t=1' } },
+      error: null,
+    });
+    const caller = s.deps.createClient('x', 'anon-key') as unknown as {
+      from: ReturnType<typeof vi.fn>;
+    };
+    caller.from.mockImplementation((table: string) =>
+      query({
+        data: table === 'workspaces' ? { name: 'Acme', platform: 'instagram' } : { role: 'owner' },
+        error: null,
+      }),
+    );
+    const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(
+      async () => new Response(JSON.stringify({ id: 'msg-1' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const env: Record<string, string> = {
+      ...ENV,
+      RESEND_API_KEY: 'rk',
+      INVITE_FROM_ADDRESS: 'from@sorted.test',
+    };
+    const deps = { ...s.deps, env: (name: string) => env[name] };
+    return { deps, fetchMock, usersEq };
+  }
+
+  async function sentSubject(inviter: { data: unknown; error: unknown }, role: string) {
+    const d = deliverySetup(inviter);
+    let res: Response;
+    try {
+      res = await handleInviteSend(
+        request({ workspace_id: WORKSPACE_ID, email: 'person@brand.com', role }),
+        d.deps,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(res.status).toBe(200);
+    expect(d.usersEq).toHaveBeenCalledWith('id', 'inviter');
+    const init = d.fetchMock.mock.calls[0]?.[1];
+    return (JSON.parse(String(init?.body)) as { subject: string; text: string }).subject;
+  }
+
+  it('creator invite subject uses the inviter first name and the brand', async () => {
+    const subject = await sentSubject(
+      { data: { display_name: 'Priya Shah' }, error: null },
+      'agency',
+    );
+    expect(subject).toBe('Priya invited you to Acme on Sorted');
+  });
+
+  it('approver invite subject uses the inviter first name', async () => {
+    const subject = await sentSubject(
+      { data: { display_name: 'Priya Shah' }, error: null },
+      'client',
+    );
+    expect(subject).toBe('Priya invited you to review posts on Sorted');
+  });
+
+  it('falls back when the inviter row is missing', async () => {
+    const subject = await sentSubject({ data: null, error: null }, 'client');
+    expect(subject).toBe("You're invited to Acme on Sorted");
+  });
+
+  it('falls back when the inviter read fails', async () => {
+    const subject = await sentSubject({ data: null, error: { message: 'boom' } }, 'agency');
+    expect(subject).toBe("You're invited to Acme on Sorted");
   });
 });

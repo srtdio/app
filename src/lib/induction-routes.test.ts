@@ -202,14 +202,28 @@ describe('stepById', () => {
 describe('isApplicable', () => {
   const plan = stepById('c_plan_open') as Step;
 
+  it('the plan step lives on the chat PlanCard, not in a brief', () => {
+    for (const id of ['c_plan_open', 'i_plan_open']) {
+      expect(stepById(id)).toMatchObject({
+        place: 'group',
+        chapter: 'ask',
+        skipWhen: ['noGroup', 'noPlan'],
+      });
+    }
+    expect(isApplicable(plan, { ...ALL_FACTS, hasBrief: false })).toBe(true);
+  });
+
   it('keeps a step when no skip fact holds', () => {
     expect(isApplicable(plan, ALL_FACTS)).toBe(true);
     expect(isApplicable(stepById('c_activity') as Step, ALL_FACTS)).toBe(true);
   });
 
   it('drops a step when any skip fact holds', () => {
-    expect(isApplicable(plan, { ...ALL_FACTS, hasBrief: false })).toBe(false);
+    expect(isApplicable(plan, { ...ALL_FACTS, hasGroup: false })).toBe(false);
     expect(isApplicable(plan, { ...ALL_FACTS, hasPlan: false })).toBe(false);
+    expect(isApplicable(stepById('c_brief_open') as Step, { ...ALL_FACTS, hasBrief: false })).toBe(
+      false,
+    );
     expect(
       isApplicable(stepById('c_line_select') as Step, { ...ALL_FACTS, hasOwnPost: false }),
     ).toBe(false);

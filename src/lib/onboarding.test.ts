@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AGE_RANGES,
   OTHER_ROLE,
   ROLE_TILES,
   SIDE_TILES,
   designationFor,
+  fillEntryCopy,
+  inviterNameOr,
   normalizeUsernameInput,
+  notYouPath,
   progressSteps,
+  sideForMemberRole,
   stepsFor,
   suggestUsername,
   usernameFormat,
@@ -62,13 +65,14 @@ describe('stepsFor', () => {
     ]);
   });
 
-  it('walks an invitee through password, name and role (their side comes from the invite)', () => {
-    expect(stepsFor({ ...SELF, hasWorkspace: true })).toEqual(['password', 'name', 'role']);
+  it('walks an invitee through the welcome, name and role, with no password step', () => {
+    expect(stepsFor({ ...SELF, hasWorkspace: true })).toEqual(['welcome', 'name', 'role']);
     expect(stepsFor({ ...SELF, hasWorkspace: true, side: 'approver' })).toEqual([
-      'password',
+      'welcome',
       'name',
       'role',
     ]);
+    expect(stepsFor({ ...SELF, hasWorkspace: true }).join(' ')).not.toContain('password');
   });
 
   it('resumes an approver who reloaded on the screen they left', () => {
@@ -90,6 +94,14 @@ describe('stepsFor', () => {
       'brand',
     ]);
   });
+
+  it('counts only the form steps after the welcome: name and role', () => {
+    expect(progressSteps(['welcome', 'name', 'role'])).toEqual(['name', 'role']);
+  });
+
+  it('keeps the self sign-up counts: side, name, role', () => {
+    expect(progressSteps(stepsFor(SELF))).toEqual(['side', 'name', 'role']);
+  });
 });
 
 describe('sides and roles', () => {
@@ -110,8 +122,51 @@ describe('sides and roles', () => {
     expect(designationFor(OTHER_ROLE, '   ')).toBe('');
     expect(designationFor('Copywriter', 'ignored')).toBe('Copywriter');
   });
+});
 
-  it('mirrors the age ranges the database accepts', () => {
-    expect(AGE_RANGES).toEqual(['18-24', '25-34', '35-44', '45-54', '55+']);
+describe('invitee side', () => {
+  it('reads the side from workspace_members.role only', () => {
+    expect(sideForMemberRole('client')).toBe('approver');
+    expect(sideForMemberRole('agency')).toBe('creator');
+    expect(sideForMemberRole('admin')).toBe('creator');
+    expect(sideForMemberRole('owner')).toBe('creator');
+  });
+});
+
+describe('fillEntryCopy', () => {
+  it('fills email, brand and inviter', () => {
+    expect(
+      fillEntryCopy('{inviter} asked {email} to join {brand}', {
+        email: 'a@b.in',
+        brand: 'Kite',
+        inviter: 'Meera',
+      }),
+    ).toBe('Meera asked a@b.in to join Kite');
+  });
+
+  it('fills every occurrence', () => {
+    expect(fillEntryCopy('{brand} and {brand}', { brand: 'Kite' })).toBe('Kite and Kite');
+  });
+
+  it('leaves a placeholder that was not given, and others untouched', () => {
+    expect(fillEntryCopy('Hi {email} {post}', {})).toBe('Hi {email} {post}');
+  });
+});
+
+describe('inviterNameOr', () => {
+  it('uses the name, trimmed', () => {
+    expect(inviterNameOr('  Meera Shah ', 'The team')).toBe('Meera Shah');
+  });
+  it('falls back when the name is blank', () => {
+    expect(inviterNameOr('   ', 'The team')).toBe('The team');
+  });
+});
+
+describe('notYouPath', () => {
+  it('signs in again on the way back to the same invite', () => {
+    expect(notYouPath('3f1c')).toBe('/signin?next=/invite/accept/3f1c');
+  });
+  it('falls back to the pipeline without an invite id', () => {
+    expect(notYouPath('')).toBe('/signin?next=/pipeline');
   });
 });

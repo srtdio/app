@@ -240,7 +240,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
     'data-induction': INDUCTION_KEYS.chatDefaultGroupRow,
     'data-induction-channel': channel.channelId,
   });
-  const card = (channel: ChannelSummary, anchored = false): ReactElement => (
+  const renderCard = (channel: ChannelSummary, anchored: boolean): ReactElement => (
     <li key={channel.channelId} className="min-w-0" {...(anchored ? groupAnchor(channel) : {})}>
       <ChannelCard
         channel={channel}
@@ -264,6 +264,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
       />
     </li>
   );
+  const card = (channel: ChannelSummary): ReactElement => renderCard(channel, false);
   const { groups, people } = splitSections(props.channels);
   return (
     <div data-chat-home="" className={CHAT_HOME_STACK}>
@@ -273,7 +274,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
             Groups
           </h3>
           <ul data-section="groups" className={GROUP_TILE_LIST}>
-            {groups.map((channel) => card(channel, true))}
+            {groups.map((channel) => renderCard(channel, true))}
           </ul>
         </>
       ) : null}

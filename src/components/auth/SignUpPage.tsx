@@ -1,13 +1,15 @@
-import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import type { Session } from '@supabase/supabase-js';
+import { useEffect, useState, type ReactElement } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
+import { CHECK_EMAIL_COPY } from '@/lib/induction-copy';
+import { fillEntryCopy } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
 
-export const MIN_PASSWORD_LENGTH = 8;
+/** Seconds before Resend link can be tapped again. */
+export const RESEND_COOLDOWN_SECONDS = 60;
 
 /** Runtime-detected IANA timezone, stored for the workspace step. */
 function detectTimezone(): string {
@@ -24,32 +26,41 @@ function detectTimezone(): string {
  */
 export interface SignUpAuthClient {
   auth: {
-    signUp(credentials: {
+    signInWithOtp(params: {
       email: string;
-      password: string;
-      options?: { data?: Record<string, unknown>; emailRedirectTo?: string };
-    }): Promise<{ data: { session: Session | null }; error: { message: string } | null }>;
+      options?: {
+        shouldCreateUser?: boolean;
+        data?: Record<string, unknown>;
+        emailRedirectTo?: string;
+      };
+    }): Promise<{ error: { message: string; status?: number } | null }>;
   };
 }
 
 export interface SignUpInput {
   email: string;
-  password: string;
   timezone: string;
   policyConsent: boolean;
 }
 
-export type SignUpResult =
-  | { status: 'error'; message: string }
-  | { status: 'authenticated' }
-  | { status: 'confirm-email' };
+export type SignUpResult = { status: 'error'; message: string } | { status: 'sent' };
 
 export const POLICY_CONSENT_MESSAGE = 'Tick the box to agree to the Terms and Privacy Policy.';
 
+export const RATE_LIMIT_MESSAGE = 'Too many links asked for. Wait a few minutes, then try again.';
+
+/** Supabase answers 429 (or 403 on some limits) when links are asked for too often. */
+export function isRateLimitError(error: { message: string; status?: number }): boolean {
+  if (error.status === 429 || error.status === 403) return true;
+  return /rate limit|security purposes/i.test(error.message);
+}
+
 /**
- * Create the account with email and password only. Name, username, role and the
- * workspace come one question at a time in onboarding (OnboardingFlow), which the
- * app shell shows to anyone whose profile is unfinished or who has no workspace.
+ * Passwordless sign-up: email a sign-in link that creates the account. Name,
+ * username, role and the workspace come one question at a time in onboarding
+ * (OnboardingFlow), which the app shell shows to anyone whose profile is
+ * unfinished or who has no workspace. emailRedirectTo is the origin only, as
+ * on sign in: the email template appends our own /auth/callback path.
  */
 export async function performSignUp(
   client: SignUpAuthClient,
@@ -57,62 +68,85 @@ export async function performSignUp(
 ): Promise<SignUpResult> {
   if (!input.policyConsent) return { status: 'error', message: POLICY_CONSENT_MESSAGE };
 
-  const { data, error } = await client.auth.signUp({
+  const { error } = await client.auth.signInWithOtp({
     email: input.email.trim(),
-    password: input.password,
-    // Origin only: the confirm email links back to the site it was requested from.
-    options: { data: { timezone: input.timezone }, emailRedirectTo: window.location.origin },
+    options: {
+      shouldCreateUser: true,
+      data: { timezone: input.timezone },
+      emailRedirectTo: window.location.origin,
+    },
   });
-  if (error) return { status: 'error', message: error.message };
-  if (data.session === null) return { status: 'confirm-email' };
-  return { status: 'authenticated' };
+  if (error) {
+    return {
+      status: 'error',
+      message: isRateLimitError(error) ? RATE_LIMIT_MESSAGE : error.message,
+    };
+  }
+  return { status: 'sent' };
 }
 
-export function SignUpPage() {
-  const navigate = useNavigate();
+/** Counts down once a second to zero; the timer is cleared on every change and unmount. */
+function useCooldown(): [number, (seconds: number) => void] {
+  const [left, setLeft] = useState(0);
+  useEffect(() => {
+    if (left <= 0) return;
+    const id = window.setTimeout(() => setLeft((n) => n - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [left]);
+  return [left, setLeft];
+}
+
+const client = supabase as unknown as SignUpAuthClient;
+
+export function SignUpPage(): ReactElement {
   // The homepage signup band and the sign-in screen hand off ?email=; prefilled, still editable.
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
-  const [password, setPassword] = useState('');
-  const [passwordVisible, setPasswordVisible] = useState(false);
   const [policyConsent, setPolicyConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [awaitingConfirm, setAwaitingConfirm] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [cooldown, startCooldown] = useCooldown();
 
-  const canSubmit =
-    email.trim().length > 0 &&
-    password.length >= MIN_PASSWORD_LENGTH &&
-    policyConsent &&
-    !submitting;
+  const canSubmit = email.trim().length > 0 && policyConsent && !submitting;
 
-  async function handleSignUp(): Promise<void> {
+  /** One request per call; the caller decides when (a tap), never a retry loop. */
+  async function sendLink(): Promise<boolean> {
     setError(null);
     setSubmitting(true);
-    const result = await performSignUp(supabase as unknown as SignUpAuthClient, {
+    const result = await performSignUp(client, {
       email,
-      password,
       timezone: detectTimezone(),
       policyConsent,
     });
+    setSubmitting(false);
     if (result.status === 'error') {
       setError(result.message);
-      setSubmitting(false);
-      return;
+      return false;
     }
-    if (result.status === 'confirm-email') {
-      setAwaitingConfirm(true);
-      setSubmitting(false);
-      return;
-    }
-    navigate('/chat', { replace: true });
+    startCooldown(RESEND_COOLDOWN_SECONDS);
+    return true;
   }
 
-  if (awaitingConfirm) {
+  async function handleSignUp(): Promise<void> {
+    if (await sendLink()) setSent(true);
+  }
+
+  function handleResend(): void {
+    if (cooldown > 0 || submitting) return;
+    void sendLink();
+  }
+
+  function backToForm(): void {
+    setError(null);
+    setSent(false);
+  }
+
+  if (sent) {
     return (
       <AuthShell
-        title="Check your email"
-        subtitle="One more step to finish setting up."
+        title={CHECK_EMAIL_COPY.title}
+        subtitle={fillEntryCopy(CHECK_EMAIL_COPY.body, { email: email.trim() })}
         footer={
           <Link
             to="/signin"
@@ -122,10 +156,29 @@ export function SignUpPage() {
           </Link>
         }
       >
-        <p className="text-sm text-fg-2 [text-wrap:pretty]">
-          We sent a confirmation link to <span className="font-medium text-fg">{email}</span>. Open
-          it, then sign in to set up your workspace.
-        </p>
+        <div className="flex flex-col gap-3">
+          {error !== null ? (
+            <p role="alert" className="text-sm text-bad">
+              {error}
+            </p>
+          ) : null}
+          <Button
+            variant="default"
+            size="lg"
+            className="w-full"
+            onClick={handleResend}
+            disabled={cooldown > 0 || submitting}
+          >
+            {cooldown > 0 ? `${CHECK_EMAIL_COPY.resend} (${cooldown}s)` : CHECK_EMAIL_COPY.resend}
+          </Button>
+          <button
+            type="button"
+            onClick={backToForm}
+            className="inline-flex min-h-[44px] w-full items-center justify-center text-sm font-medium text-accent hover:underline"
+          >
+            {CHECK_EMAIL_COPY.differentEmail}
+          </button>
+        </div>
       </AuthShell>
     );
   }
@@ -133,7 +186,7 @@ export function SignUpPage() {
   return (
     <AuthShell
       title="Create your free account"
-      subtitle="No card needed. Takes about a minute."
+      subtitle={CHECK_EMAIL_COPY.signUpSubtitle}
       footer={
         <span className="inline-flex flex-wrap items-center justify-center gap-x-1">
           <span>Already have an account?</span>
@@ -162,29 +215,6 @@ export function SignUpPage() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
-        </Field>
-
-        <Field label="Password" htmlFor="signup-password" hint="At least 8 characters.">
-          <div className="relative">
-            <Input
-              id="signup-password"
-              type={passwordVisible ? 'text' : 'password'}
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              minLength={MIN_PASSWORD_LENGTH}
-              className="pr-16"
-            />
-            <button
-              type="button"
-              aria-label={passwordVisible ? 'Hide password' : 'Show password'}
-              aria-pressed={passwordVisible}
-              onClick={() => setPasswordVisible((visible) => !visible)}
-              className="absolute right-0 top-0 min-h-[44px] min-w-[44px] px-3 text-xs font-medium text-accent hover:underline"
-            >
-              {passwordVisible ? 'Hide' : 'Show'}
-            </button>
-          </div>
         </Field>
 
         <div className="flex items-start gap-1.5 text-sm text-fg-2">
@@ -223,7 +253,11 @@ export function SignUpPage() {
           </span>
         </div>
 
-        {error !== null ? <p className="text-sm text-bad">{error}</p> : null}
+        {error !== null ? (
+          <p role="alert" className="text-sm text-bad">
+            {error}
+          </p>
+        ) : null}
 
         <Button
           variant="primary"
@@ -232,7 +266,7 @@ export function SignUpPage() {
           type="submit"
           disabled={!canSubmit}
         >
-          {submitting ? 'Creating account' : 'Create account'}
+          {submitting ? 'Sending link' : 'Create account'}
         </Button>
       </form>
     </AuthShell>

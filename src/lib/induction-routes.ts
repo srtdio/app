@@ -117,7 +117,7 @@ function teamAskSteps(route: Route): Step[] {
     makeStep(
       route,
       'plan_open',
-      inChapter('ask', teach('briefs', K.briefOpenPlan), ['noBrief', 'noPlan']),
+      inChapter('ask', teach('group', K.briefOpenPlan), ['noGroup', 'noPlan']),
     ),
   ];
 }

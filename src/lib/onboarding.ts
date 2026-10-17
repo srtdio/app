@@ -83,10 +83,7 @@ export const ROLE_TILES: Readonly<Record<Side, readonly string[]>> = {
 /** The free-text choice at the end of every role list. */
 export const OTHER_ROLE = 'Something else';
 
-/** Values mirror the user_private check constraint. */
-export const AGE_RANGES = ['18-24', '25-34', '35-44', '45-54', '55+'] as const;
-
-export type OnboardingStep = 'password' | 'side' | 'name' | 'role' | 'brand' | 'waiting';
+export type OnboardingStep = 'welcome' | 'side' | 'name' | 'role' | 'brand' | 'waiting';
 
 export interface OnboardingContext {
   /** profile_completed_at is still null. */
@@ -100,14 +97,15 @@ export interface OnboardingContext {
 }
 
 /**
- * The pre-app screens, in order. An invitee sets a password (the invite link
- * signed them in without one) and names themselves, then goes straight into
- * the shell. A self sign-up picks a side and names themselves; a Creator then
- * makes the workspace in the shell, an Approver names who makes their posts and
- * waits for them. An approver back after a reload resumes where they were.
+ * The pre-app screens, in order. An invitee (the invite link already signed
+ * them in and accepted the invite) sees the welcome, names themselves and picks
+ * a role, then goes straight into the shell. A self sign-up picks a side and
+ * names themselves; a Creator then makes the workspace in the shell, an
+ * Approver names who makes their posts and waits for them. An approver back
+ * after a reload resumes where they were.
  */
 export function stepsFor(ctx: OnboardingContext): OnboardingStep[] {
-  if (ctx.hasWorkspace) return ctx.profileIncomplete ? ['password', 'name', 'role'] : [];
+  if (ctx.hasWorkspace) return ctx.profileIncomplete ? ['welcome', 'name', 'role'] : [];
   const approverTail: OnboardingStep[] = ctx.side === 'approver' ? ['brand', 'waiting'] : [];
   if (!ctx.profileIncomplete) {
     if (ctx.approverStage === 'brand') return ['brand', 'waiting'];
@@ -116,9 +114,50 @@ export function stepsFor(ctx: OnboardingContext): OnboardingStep[] {
   return ['side', 'name', 'role', ...approverTail];
 }
 
-/** Steps that count towards "Step N of M" (the waiting screen sits after them). */
+/**
+ * Steps that count towards "Step N of M": only the form steps. The welcome sits
+ * before them and the waiting screen after them, so neither shows a count.
+ */
 export function progressSteps(steps: readonly OnboardingStep[]): OnboardingStep[] {
-  return steps.filter((step) => step !== 'waiting');
+  return steps.filter((step) => step !== 'waiting' && step !== 'welcome');
+}
+
+/** An invitee's side comes only from workspace_members.role: client approves. */
+export function sideForMemberRole(role: string): Side {
+  return role === 'client' ? 'approver' : 'creator';
+}
+
+/** The values a welcome or check-your-email line may name. */
+export interface EntryCopyValues {
+  email?: string;
+  brand?: string;
+  inviter?: string;
+}
+
+const ENTRY_PLACEHOLDER = /\{(email|brand|inviter)\}/g;
+
+/** Fills {email}, {brand} and {inviter}; anything not given is left as written. */
+export function fillEntryCopy(text: string, values: EntryCopyValues): string {
+  return text.replace(ENTRY_PLACEHOLDER, (match: string, name: keyof EntryCopyValues) => {
+    return values[name] ?? match;
+  });
+}
+
+/** The inviter's name for the welcome, or the fallback when it is missing. */
+export function inviterNameOr(displayName: string, fallback: string): string {
+  const trimmed = displayName.trim();
+  return trimmed === '' ? fallback : trimmed;
+}
+
+/**
+ * Where "Not you?" sends a signed-out invitee: back to sign in, then on to the
+ * same invite. Without the invite id it falls back to the pipeline.
+ */
+export function notYouPath(inviteId: string): string {
+  const id = inviteId.trim();
+  return id === ''
+    ? '/signin?next=/pipeline'
+    : `/signin?next=/invite/accept/${encodeURIComponent(id)}`;
 }
 
 /** The designation saved for a role pick: the free text for "Something else". */

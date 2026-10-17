@@ -8,8 +8,12 @@ import { MemoryRouter } from 'react-router-dom';
 const { mockVerifyOtp } = vi.hoisted(() => ({ mockVerifyOtp: vi.fn() }));
 vi.mock('@/lib/supabase', () => ({ supabase: { auth: { verifyOtp: mockVerifyOtp } } }));
 
+import { RECOVERY_COPY } from '@/lib/induction-copy';
 import {
   AuthCallbackPage,
+  callbackNext,
+  ExpiredLinkView,
+  isInviteDestination,
   narrowEmailOtpType,
   verifyMagicLink,
   type CallbackAuthClient,
@@ -76,5 +80,74 @@ describe('narrowEmailOtpType', () => {
   it('rejects an unknown or absent type', () => {
     expect(narrowEmailOtpType('bogus')).toBeNull();
     expect(narrowEmailOtpType(null)).toBeNull();
+  });
+});
+
+describe('callback next', () => {
+  it('prefers a safe ?next= over the remembered destination', () => {
+    expect(callbackNext('/invite/accept/a', '/briefs')).toBe('/invite/accept/a');
+  });
+
+  it('falls back to the remembered destination', () => {
+    expect(callbackNext(null, '/invite/accept/a')).toBe('/invite/accept/a');
+  });
+
+  it.each(['//evil.test', 'https://evil.test', '/\\evil.test'])(
+    'never returns an unsafe destination (%j)',
+    (bad) => {
+      expect(callbackNext(bad, '')).toBe('');
+      expect(callbackNext(null, bad)).toBe('');
+    },
+  );
+
+  it('recognises an invitation destination only with an id', () => {
+    expect(isInviteDestination('/invite/accept/abc')).toBe(true);
+    expect(isInviteDestination('/invite/accept/')).toBe(false);
+    expect(isInviteDestination('/invite/accept')).toBe(false);
+    expect(isInviteDestination('/pipeline')).toBe(false);
+    expect(isInviteDestination('')).toBe(false);
+  });
+});
+
+describe('expired link recovery', () => {
+  function renderExpired(next: string): string {
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <ExpiredLinkView next={next} footer={null} />
+      </MemoryRouter>,
+    );
+  }
+
+  it('an invitation destination explains the invite expired and signs in back to it', () => {
+    const html = renderExpired('/invite/accept/abc');
+    expect(html).toContain(RECOVERY_COPY.expired);
+    expect(html).toContain(`>${RECOVERY_COPY.signIn}</a>`);
+    expect(html).toContain('href="/signin?next=%2Finvite%2Faccept%2Fabc"');
+    expect(html).toContain('min-h-[44px]');
+    expect(html).not.toContain('This link has expired.');
+  });
+
+  it.each(['', '/pipeline'])('any other destination (%j) keeps the plain expired line', (next) => {
+    const html = renderExpired(next);
+    expect(html).toContain('This link has expired.');
+    expect(html).toContain('href="/signin"');
+    expect(html).not.toContain(RECOVERY_COPY.expired);
+  });
+
+  it('a malformed link for an invitation shows invite recovery', () => {
+    const html = renderAt('?type=magiclink&next=%2Finvite%2Faccept%2Fabc');
+    expect(html).toContain(RECOVERY_COPY.expired);
+    expect(html).toContain('href="/signin?next=%2Finvite%2Faccept%2Fabc"');
+  });
+
+  it('a malformed link with an unsafe next stays the plain invalid state', () => {
+    const html = renderAt('?type=magiclink&next=%2F%2Fevil.test%2Finvite%2Faccept%2Fabc');
+    expect(html).toContain('This link is not valid.');
+    expect(html).not.toContain('evil.test');
+  });
+
+  it('the footer sign-in link carries a safe next', () => {
+    const html = renderAt('?token_hash=abc&type=magiclink&next=%2Fposts%2F1');
+    expect(html).toContain('href="/signin?next=%2Fposts%2F1"');
   });
 });

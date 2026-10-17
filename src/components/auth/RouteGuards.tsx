@@ -1,4 +1,5 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router-dom';
+import { resolveNext, withNext } from '@/components/auth/SignInPage';
 import { useSession } from '@/lib/session-context';
 
 /**
@@ -13,6 +14,16 @@ function SessionLoading() {
   );
 }
 
+/** Where a signed-out visit to an app route goes: /signin carrying it as ?next=. */
+export function signInRedirect(location: { pathname: string; search: string }): string {
+  return withNext('/signin', location.pathname + location.search);
+}
+
+/** Where a signed-in visit to an auth route goes: a safe ?next= or { from }, else /pipeline. */
+export function guestDestination(queryNext: string | null, state: unknown): string {
+  return resolveNext(queryNext, state) || '/pipeline';
+}
+
 /** App routes: require a session, otherwise redirect to /signin. */
 export function RequireAuth() {
   const { session, loading } = useSession();
@@ -21,13 +32,20 @@ export function RequireAuth() {
   return session ? (
     <Outlet />
   ) : (
-    <Navigate to="/signin" replace state={{ from: location.pathname + location.search }} />
+    <Navigate
+      to={signInRedirect(location)}
+      replace
+      state={{ from: location.pathname + location.search }}
+    />
   );
 }
 
-/** Auth routes: redirect to /pipeline when a session already exists. */
+/** Auth routes: redirect to a safe ?next= (else /pipeline) when a session already exists. */
 export function RequireGuest() {
   const { session, loading } = useSession();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   if (loading) return <SessionLoading />;
-  return session ? <Navigate to="/pipeline" replace /> : <Outlet />;
+  const to = guestDestination(searchParams.get('next'), location.state);
+  return session ? <Navigate to={to} replace /> : <Outlet />;
 }

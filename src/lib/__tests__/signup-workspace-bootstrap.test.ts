@@ -46,39 +46,36 @@ describe('performSignUp', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows the confirm-email state and fires NO workspaceCreate when session is null', async () => {
+  it('sends the passwordless link and fires NO workspaceCreate', async () => {
     const rpc = vi.fn();
-    const signUp = vi.fn(async () => ({ data: { session: null }, error: null }));
-    const client = { auth: { signUp }, rpc } as unknown as SignUpAuthClient;
+    const signInWithOtp = vi.fn(async () => ({ error: null }));
+    const client = { auth: { signInWithOtp }, rpc } as unknown as SignUpAuthClient;
 
     const result = await performSignUp(client, {
       email: 'dana@example.com',
-      password: 'pw',
       timezone: 'UTC',
       policyConsent: true,
     });
 
-    expect(result).toEqual({ status: 'confirm-email' });
-    expect(signUp).toHaveBeenCalledWith(
+    expect(result).toEqual({ status: 'sent' });
+    expect(signInWithOtp).toHaveBeenCalledWith(
       expect.objectContaining({
-        options: {
-          data: {
-            timezone: 'UTC',
-          },
+        options: expect.objectContaining({
+          shouldCreateUser: true,
+          data: { timezone: 'UTC' },
           emailRedirectTo: ORIGIN,
-        },
+        }),
       }),
     );
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it('does not sign up when policy consent is missing', async () => {
-    const signUp = vi.fn();
-    const client = { auth: { signUp } } as unknown as SignUpAuthClient;
+  it('does not send a link when policy consent is missing', async () => {
+    const signInWithOtp = vi.fn();
+    const client = { auth: { signInWithOtp } } as unknown as SignUpAuthClient;
 
     const result = await performSignUp(client, {
       email: 'dana@example.com',
-      password: 'pw',
       timezone: 'UTC',
       policyConsent: false,
     });
@@ -87,21 +84,7 @@ describe('performSignUp', () => {
       status: 'error',
       message: POLICY_CONSENT_MESSAGE,
     });
-    expect(signUp).not.toHaveBeenCalled();
-  });
-
-  it('reports authenticated when signUp returns a session', async () => {
-    const signUp = vi.fn(async () => ({ data: { session: {} as Session }, error: null }));
-    const client = { auth: { signUp } } as unknown as SignUpAuthClient;
-
-    const result = await performSignUp(client, {
-      email: 'dana@example.com',
-      password: 'pw',
-      timezone: 'UTC',
-      policyConsent: true,
-    });
-
-    expect(result).toEqual({ status: 'authenticated' });
+    expect(signInWithOtp).not.toHaveBeenCalled();
   });
 });
 

@@ -1,0 +1,209 @@
+// @vitest-environment jsdom
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { signInWithOtp } = vi.hoisted(() => ({ signInWithOtp: vi.fn() }));
+
+vi.mock('@/lib/supabase', () => ({ supabase: { auth: { signInWithOtp } } }));
+
+import {
+  POLICY_CONSENT_MESSAGE,
+  RATE_LIMIT_MESSAGE,
+  RESEND_COOLDOWN_SECONDS,
+  SignUpPage,
+  performSignUp,
+  type SignUpAuthClient,
+} from './SignUpPage';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+function authClient(): SignUpAuthClient {
+  return { auth: { signInWithOtp } };
+}
+
+describe('performSignUp', () => {
+  beforeEach(() => {
+    signInWithOtp.mockReset();
+    signInWithOtp.mockResolvedValue({ error: null });
+  });
+
+  it('emails a sign-in link that creates the account, with the timezone, and no password', async () => {
+    const result = await performSignUp(authClient(), {
+      email: '  dana@kite.in ',
+      timezone: 'Asia/Kolkata',
+      policyConsent: true,
+    });
+    expect(result).toEqual({ status: 'sent' });
+    expect(signInWithOtp).toHaveBeenCalledTimes(1);
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: 'dana@kite.in',
+      options: {
+        shouldCreateUser: true,
+        data: { timezone: 'Asia/Kolkata' },
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    expect(JSON.stringify(signInWithOtp.mock.calls[0])).not.toContain('password');
+  });
+
+  it('asks for nothing without policy consent', async () => {
+    const result = await performSignUp(authClient(), {
+      email: 'dana@kite.in',
+      timezone: 'UTC',
+      policyConsent: false,
+    });
+    expect(result).toEqual({ status: 'error', message: POLICY_CONSENT_MESSAGE });
+    expect(signInWithOtp).not.toHaveBeenCalled();
+  });
+
+  it.each([429, 403])('maps a %s rate limit to a plain message', async (status) => {
+    signInWithOtp.mockResolvedValue({ error: { message: 'email rate limit exceeded', status } });
+    const result = await performSignUp(authClient(), {
+      email: 'dana@kite.in',
+      timezone: 'UTC',
+      policyConsent: true,
+    });
+    expect(result).toEqual({ status: 'error', message: RATE_LIMIT_MESSAGE });
+    expect(signInWithOtp).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes any other provider message through', async () => {
+    signInWithOtp.mockResolvedValue({ error: { message: 'Invalid email', status: 400 } });
+    const result = await performSignUp(authClient(), {
+      email: 'x',
+      timezone: 'UTC',
+      policyConsent: true,
+    });
+    expect(result).toEqual({ status: 'error', message: 'Invalid email' });
+  });
+});
+
+describe('SignUpPage', () => {
+  let root: Root | null = null;
+  let host: HTMLDivElement | null = null;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    signInWithOtp.mockReset();
+    signInWithOtp.mockResolvedValue({ error: null });
+    host = document.createElement('div');
+    document.body.appendChild(host);
+  });
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    root = null;
+    host?.remove();
+    vi.useRealTimers();
+  });
+
+  async function render(): Promise<void> {
+    root = createRoot(host!);
+    await act(async () => {
+      root!.render(
+        <MemoryRouter
+          initialEntries={['/signup?email=dana@kite.in']}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
+          <SignUpPage />
+        </MemoryRouter>,
+      );
+    });
+  }
+
+  function button(text: string): HTMLButtonElement {
+    const found = [...document.querySelectorAll('button')].find((b) => b.textContent === text);
+    if (found === undefined) throw new Error(`no button ${text}`);
+    return found;
+  }
+
+  async function click(el: HTMLElement): Promise<void> {
+    await act(async () => el.click());
+  }
+
+  async function submit(): Promise<void> {
+    await click(document.querySelector<HTMLInputElement>('#signup-policy-consent')!);
+    await click(button('Create account'));
+  }
+
+  async function tick(seconds: number): Promise<void> {
+    for (let i = 0; i < seconds; i += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+    }
+  }
+
+  it('renders no password field, and the short subtitle', async () => {
+    await render();
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('Password');
+    expect(document.body.textContent).toContain('No card needed.');
+  });
+
+  it('shows Check your email with the address after sending', async () => {
+    await render();
+    await submit();
+    expect(signInWithOtp).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain('Check your email');
+    expect(document.body.textContent).toContain(
+      'We sent a sign-in link to dana@kite.in. Open it on this device to carry on.',
+    );
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it('holds Resend link for 60 seconds, then sends once per tap', async () => {
+    await render();
+    await submit();
+    const resend = (): HTMLButtonElement =>
+      [...document.querySelectorAll('button')].find((b) =>
+        (b.textContent ?? '').startsWith('Resend link'),
+      )!;
+    expect(resend().disabled).toBe(true);
+    expect(resend().textContent).toBe(`Resend link (${RESEND_COOLDOWN_SECONDS}s)`);
+    await tick(1);
+    expect(resend().textContent).toBe('Resend link (59s)');
+    await tick(RESEND_COOLDOWN_SECONDS - 1);
+    expect(resend().disabled).toBe(false);
+    expect(resend().textContent).toBe('Resend link');
+    // No auto-resend while waiting.
+    expect(signInWithOtp).toHaveBeenCalledTimes(1);
+    await click(resend());
+    expect(signInWithOtp).toHaveBeenCalledTimes(2);
+    expect(resend().disabled).toBe(true);
+    await click(resend());
+    expect(signInWithOtp).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears the countdown timer on unmount', async () => {
+    await render();
+    await submit();
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    act(() => root?.unmount());
+    root = null;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('shows a plain line on a rate limit, with no retry', async () => {
+    await render();
+    await submit();
+    await tick(RESEND_COOLDOWN_SECONDS);
+    signInWithOtp.mockResolvedValue({ error: { message: 'too many', status: 429 } });
+    await click(button('Resend link'));
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(RATE_LIMIT_MESSAGE);
+    await tick(5);
+    expect(signInWithOtp).toHaveBeenCalledTimes(2);
+  });
+
+  it('Use a different email goes back to the form with the email kept and editable', async () => {
+    await render();
+    await submit();
+    await click(button('Use a different email'));
+    const input = document.querySelector<HTMLInputElement>('#signup-email')!;
+    expect(input.value).toBe('dana@kite.in');
+    expect(input.readOnly).toBe(false);
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
+});
