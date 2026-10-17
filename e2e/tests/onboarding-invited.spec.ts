@@ -19,7 +19,6 @@ import {
   expectCard,
   expectGuideId,
   expectStep,
-  reaches,
   pickPhoto,
   guideId,
   selectCaptionWords,
@@ -32,7 +31,7 @@ import {
 // the sheet, caption, format, single image, photo, send for review), the intro
 // card, Ask (the brief, the plan card in the group), Review (comment on a line
 // of their own post), Talk (the group, the transcript step skipped by the 4 s rule because the
-// seed's voice note has no transcript, Activity) and the closing card. Every
+// harness offers no Transcribe link, Activity) and the closing card. Every
 // guide step is walked with the real tap and checked against the guide spec
 // (helpers/guide.ts). Seed: the fixture workspace, one open brief, a client
 // plan card in the default group, posts by a teammate only. iPhone 13, dark.
@@ -210,36 +209,18 @@ test('invited creator: welcome, name, role, then the first post and the look-aro
   await tapControl(page, step('i_comment_post'));
   await expect.poll(() => network.world.tables.comments?.length ?? 0).toBe(1);
 
-  // Talk: the default group, the transcript step (skipped), then Activity.
+  // Talk: the default group, the transcript step (skipped: no Transcribe link in the harness), then Activity.
   await check('i_group_open');
   await tapControl(page, step('i_group_open'), narrow);
-  // Known product bug (soft, seen on the laptop): the group row stays on
-  // screen after its tap and the next control (the transcript link) is not
-  // there, so the tap is never confirmed and the guide stays on the group.
-  // The walk then resumes at the transcript step, as a reload would.
-  const leftGroup = await reaches(page, 'i_transcript', 4_000, { box: false });
-  expect.soft(leftGroup, 'the tap on the group row moves the guide on').toBe(true);
-  if (!leftGroup) {
-    startInduction(network.world.tables, 'i_transcript');
-    await page.goto('/chat');
-  }
-  // The seed's voice note has no transcript yet, and the step's control is
-  // the Show transcript link, so the 4 s rule skips it: bar only, then Activity.
+  // The harness has no transcribe Worker, so the voice note offers no
+  // Transcribe link: the step's control does not exist and the 4 s rule skips
+  // it (bar only, no box), then Activity on the chat list.
   await expectGuideId(page, 'i_transcript');
   await expect(page.locator('[data-induction-box]')).toHaveCount(0);
-  // Activity opens the chat list, where the tabs show.
   await expectGuideId(page, 'i_activity', 8_000);
+  // Activity opens the chat list, where the tabs show.
   await check('i_activity');
   await tapControl(page, step('i_activity'));
-  // Known product bug (soft): the last step has no next control, and the tab
-  // stays on screen after its tap, so the tap is never confirmed and the guide
-  // stays on Activity. The walk then resumes at the closing card, as a reload would.
-  const closed = await reaches(page, script.closing.id, 4_000, { box: false });
-  expect.soft(closed, 'the tap on the last step opens the closing card').toBe(true);
-  if (!closed) {
-    startInduction(network.world.tables, script.closing.id);
-    await page.goto('/activity');
-  }
 
   await expectCard(page, {
     id: script.closing.id,

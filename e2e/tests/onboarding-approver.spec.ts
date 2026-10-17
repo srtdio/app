@@ -12,7 +12,6 @@ import {
   expectGuideId,
   INDUCTION_KEYS,
   inductionSelector,
-  reaches,
   selectCaptionWords,
   expectStep,
   guideId,
@@ -22,7 +21,7 @@ import {
 // The approver route of onboarding v13 (an invited client): the intro card,
 // then Review (open the post, comment on a line, approve, confirm), Ask (a
 // brief), Talk (the group, the transcript step skipped by the 4 s rule because the
-// seed's voice note has no transcript, Activity), then the closing card. Every step is
+// harness offers no Transcribe link, Activity), then the closing card. Every step is
 // walked with the real tap and checked against the guide spec (helpers/guide.ts).
 // Seed: the fixture workspace with one post in review made by a teammate, the
 // default group with an untranscribed voice note.
@@ -103,18 +102,8 @@ test('approver: review, ask, talk with real taps, then Done @desktop', async ({ 
 
   // Review.
   await check('a_post_open', false, '01-first-step');
-  // Known product bug (soft): the hand presses the card's thumbnail, which
-  // sits above the card's "Open post" button (PostCard.tsx), so the tap there
-  // opens nothing and the step waits. The walk then taps the title row, which
-  // reaches the button.
+  // The tap where the hand presses (the thumbnail) opens the post.
   await tapControl(page, step('a_post_open'), narrow);
-  const opened = await reaches(page, 'a_line_select', 4_000);
-  expect.soft(opened, 'a tap where the hand presses opens the post').toBe(true);
-  if (!opened) {
-    const title = await page.getByText(REVIEW_TITLE, { exact: true }).first().boundingBox();
-    if (title === null) throw new Error('no post title');
-    await page.mouse.click(title.x + 4, title.y + title.height / 2);
-  }
   await check('a_line_select');
   // The tap alone selects nothing; the Comment button (the next control)
   // shows once a line is selected, which finishes the step.
@@ -143,18 +132,10 @@ test('approver: review, ask, talk with real taps, then Done @desktop', async ({ 
   await check('a_approve_confirm');
   await tapControl(page, step('a_approve_confirm'));
   await expect.poll(() => network.world.tables.posts?.[0]?.stage).toBe('approved');
-  // Known product bug (soft): once the post is approved the data drops the
-  // Review steps, the brief step becomes the first look-around step, and the
-  // intro card shows again mid-route (resolveGuide in induction.ts). The walk
-  // then taps Start, which lands on the brief step.
-  // Wait past the facts re-read (the post left Review), then decide.
+  // The data drops the Review steps once the post is approved; the intro card
+  // never returns, the guide goes straight on to the brief.
   await page.waitForTimeout(1_000);
-  await expect
-    .poll(() => guideId(page), { timeout: 10_000 })
-    .toMatch(new RegExp(`^(${script.intro.id}|a_brief_add)$`));
-  const noIntro = (await guideId(page)) !== script.intro.id;
-  expect.soft(noIntro, 'no intro card again after the approval').toBe(true);
-  if (!noIntro) await page.getByRole('button', { name: script.intro.button, exact: true }).click();
+  expect(await guideId(page)).not.toBe(script.intro.id);
 
   // Ask: a brief, field by field.
   await check('a_brief_add');
@@ -173,36 +154,18 @@ test('approver: review, ask, talk with real taps, then Done @desktop', async ({ 
   await tapControl(page, step('a_brief_create'));
   await expect.poll(() => network.world.tables.briefs?.length ?? 0).toBe(1);
 
-  // Talk: the default group, the transcript step (skipped), then Activity.
+  // Talk: the default group, the transcript step (skipped: no Transcribe link in the harness), then Activity.
   await check('a_group_open');
   await tapControl(page, step('a_group_open'), narrow);
-  // Known product bug (soft, seen on the laptop): the group row stays on
-  // screen after its tap and the next control (the transcript link) is not
-  // there, so the tap is never confirmed and the guide stays on the group.
-  // The walk then resumes at the transcript step, as a reload would.
-  const leftGroup = await reaches(page, 'a_transcript', 4_000, { box: false });
-  expect.soft(leftGroup, 'the tap on the group row moves the guide on').toBe(true);
-  if (!leftGroup) {
-    startInduction(network.world.tables, 'a_transcript');
-    await page.goto('/chat');
-  }
-  // The seed's voice note has no transcript yet, and the step's control is
-  // the Show transcript link, so the 4 s rule skips it: bar only, then Activity.
+  // The harness has no transcribe Worker, so the voice note offers no
+  // Transcribe link: the step's control does not exist and the 4 s rule skips
+  // it (bar only, no box), then Activity on the chat list.
   await expectGuideId(page, 'a_transcript');
   await expect(page.locator('[data-induction-box]')).toHaveCount(0);
-  // Activity opens the chat list, where the tabs show.
   await expectGuideId(page, 'a_activity', 8_000);
+  // Activity opens the chat list, where the tabs show.
   await check('a_activity');
   await tapControl(page, step('a_activity'));
-  // Known product bug (soft): the last step has no next control, and the tab
-  // stays on screen after its tap, so the tap is never confirmed and the guide
-  // stays on Activity. The walk then resumes at the closing card, as a reload would.
-  const closed = await reaches(page, script.closing.id, 4_000, { box: false });
-  expect.soft(closed, 'the tap on the last step opens the closing card').toBe(true);
-  if (!closed) {
-    startInduction(network.world.tables, script.closing.id);
-    await page.goto('/activity');
-  }
 
   await expectCard(page, {
     id: script.closing.id,

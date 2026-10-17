@@ -180,9 +180,6 @@ export interface StepCheck {
 }
 
 /**
- * Layout checks are soft (expect.soft): a violation fails the test but the
- * walk goes on, so one run reports every step that breaks the spec.
- *
  * The guide is on `step` and holds the spec: one hairline at control + 7px,
  * the hand on the control, the label (copy module text) inside the viewport
  * and clear of the box, the why line in the bar, the bar clear of the control,
@@ -217,7 +214,7 @@ export async function expectStep(page: Page, info: TestInfo, check: StepCheck): 
   const hand = await rectOf(page, '[data-induction-hand]');
   expect(hand, `hand on ${step.id}`).not.toBeNull();
   const tip = { x: (hand as R).x + HAND_TIP.x, y: (hand as R).y + HAND_TIP.y };
-  expect.soft(inside(tip, ctl, TIP_SLACK), `fingertip on ${step.id}`).toBe(true);
+  expect(inside(tip, ctl, TIP_SLACK), `fingertip on ${step.id}`).toBe(true);
 
   // The label: the copy module's text, in the viewport, never over the box.
   const label = page.locator('[data-induction-label]');
@@ -228,16 +225,16 @@ export async function expectStep(page: Page, info: TestInfo, check: StepCheck): 
     labelRect.y >= 0 &&
     labelRect.x + labelRect.width <= vp.w &&
     labelRect.y + labelRect.height <= vp.h;
-  expect.soft(labelIn, `label inside the viewport on ${step.id}`).toBe(true);
-  expect.soft(overlaps(labelRect, boxRect), `label clear of the box on ${step.id}`).toBe(false);
+  expect(labelIn, `label inside the viewport on ${step.id}`).toBe(true);
+  expect(overlaps(labelRect, boxRect), `label clear of the box on ${step.id}`).toBe(false);
 
   // The bar: the why line, never over the control, 44px chips, Back as expected.
   const bar = page.locator('[data-induction-bar]');
   if (step.why !== '')
     await expect(bar.getByText(fillCopy(step.why, ctx), { exact: true })).toBeVisible();
   const barRect = (await rectOf(page, '[data-induction-bar]')) as R;
-  expect.soft(overlaps(barRect, ctl), `bar clear of the control on ${step.id}`).toBe(false);
-  expect.soft(overlaps(labelRect, barRect), `label clear of the bar on ${step.id}`).toBe(false);
+  expect(overlaps(barRect, ctl), `bar clear of the control on ${step.id}`).toBe(false);
+  expect(overlaps(labelRect, barRect), `label clear of the bar on ${step.id}`).toBe(false);
   await expectBarChips(page, { back: check.back });
   await expectNoHorizontalScroll(page);
 
@@ -247,9 +244,11 @@ export async function expectStep(page: Page, info: TestInfo, check: StepCheck): 
   // A tap away from the control only nudges: same step, same screen.
   const url = page.url();
   // Every guide control on screen is avoided too: on a field step the guard
-  // lets the next step's control through by design.
+  // lets the next step's control through by design, and on a gate it lets the
+  // boxed control's whole form through.
   const anchors = await page.evaluate(() =>
     Array.from(document.querySelectorAll('[data-induction]'))
+      .map((el) => el.closest('form') ?? el)
       .map((el) => el.getBoundingClientRect())
       .filter((r) => r.width > 0 && r.height > 0)
       .map((r) => ({ x: r.left, y: r.top, width: r.width, height: r.height })),
@@ -345,21 +344,13 @@ export async function selectCaptionWords(page: Page): Promise<void> {
   }, inductionSelector(INDUCTION_KEYS.postCaptionText));
 }
 
-/**
- * The photo step: tap the control and pick a file in the chooser it opens.
- * Known product bug (soft): the tap guard swallows the button's programmatic
- * click on the hidden file input (it sits outside the boxed button), so no
- * chooser opens; the walk then sets the file on the input directly.
- */
+/** The photo step: tap the control and pick a file in the chooser it opens. */
 export async function pickPhoto(
   page: Page,
   step: Step,
   file: { name: string; mimeType: string; buffer: Buffer },
 ): Promise<void> {
-  const chooser = page.waitForEvent('filechooser', { timeout: 3_000 }).catch(() => null);
+  const chooser = page.waitForEvent('filechooser', { timeout: 5_000 });
   await tapControl(page, step);
-  const opened = await chooser;
-  expect.soft(opened, `the photo step's tap opens the file chooser (${step.id})`).not.toBeNull();
-  if (opened !== null) await opened.setFiles(file);
-  else await page.locator('[role="dialog"] input[type="file"]').first().setInputFiles(file);
+  await (await chooser).setFiles(file);
 }

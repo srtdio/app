@@ -13,7 +13,6 @@ import {
   expectCard,
   expectGuideId,
   expectStep,
-  reaches,
   pickPhoto,
   guideId,
   selectCaptionWords,
@@ -28,7 +27,7 @@ import {
 // intro card, then the look-around on their own workspace: no brief and no
 // plan yet (both steps dropped by the data), Review (comment on a line of
 // their post), Talk (the group, the transcript step skipped by the 4 s rule because the
-// seed's voice note has no transcript, Activity), and the closing card. Every step is
+// harness offers no Transcribe link, Activity), and the closing card. Every step is
 // walked with the real tap and checked against the guide spec
 // (helpers/guide.ts). Seed: no workspace yet. iPhone 13, dark.
 // Linux WebKit approximates iOS WebKit, it is not iOS.
@@ -170,15 +169,11 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   await page.goto('/chat');
   await expect(page).toHaveURL(/\/settings\?panel=members/, { timeout: 10_000 });
   await check('c_approver_invite');
-  // Known product bug (soft): the gate boxes only the Send invite button, so
-  // the tap guard swallows the tap on the email field; nobody can type the
-  // address and the gate cannot be passed. The walk then fills it directly.
+  // The gate boxes Send invite; the guard lets the rest of its form through.
   const email = page.locator('#invite-email');
   await email.click();
-  const focused = await email.evaluate((el) => el === document.activeElement);
-  expect.soft(focused, 'a tap on the invite email field focuses it').toBe(true);
-  if (focused) await page.keyboard.type('riya@kitebrand.in');
-  else await email.fill('riya@kitebrand.in');
+  expect(await email.evaluate((el) => el === document.activeElement)).toBe(true);
+  await page.keyboard.type('riya@kitebrand.in');
   await page.getByRole('button', { name: 'Send invite', exact: true }).click();
   await check('c_team_invite');
   await bar.getByRole('button', { name: later, exact: true }).click();
@@ -205,33 +200,15 @@ test('creator: workspace, first post, approver invite, then the look-around', as
 
   await check('c_group_open');
   await tapControl(page, step('c_group_open'), narrow);
-  // Known product bug (soft, seen on the laptop): the group row stays on
-  // screen after its tap and the next control (the transcript link) is not
-  // there, so the tap is never confirmed and the guide stays on the group.
-  // The walk then resumes at the transcript step, as a reload would.
-  const leftGroup = await reaches(page, 'c_transcript', 4_000, { box: false });
-  expect.soft(leftGroup, 'the tap on the group row moves the guide on').toBe(true);
-  if (!leftGroup) {
-    startInduction(network.world.tables, 'c_transcript');
-    await page.goto('/chat');
-  }
-  // The seed's voice note has no transcript yet, and the step's control is
-  // the Show transcript link, so the 4 s rule skips it: bar only, then Activity.
+  // The harness has no transcribe Worker, so the voice note offers no
+  // Transcribe link: the step's control does not exist and the 4 s rule skips
+  // it (bar only, no box), then Activity on the chat list.
   await expectGuideId(page, 'c_transcript');
   await expect(page.locator('[data-induction-box]')).toHaveCount(0);
-  // Activity opens the chat list, where the tabs show.
   await expectGuideId(page, 'c_activity', 8_000);
+  // Activity opens the chat list, where the tabs show.
   await check('c_activity');
   await tapControl(page, step('c_activity'));
-  // Known product bug (soft): the last step has no next control, and the tab
-  // stays on screen after its tap, so the tap is never confirmed and the guide
-  // stays on Activity. The walk then resumes at the closing card, as a reload would.
-  const closed = await reaches(page, script.closing.id, 4_000, { box: false });
-  expect.soft(closed, 'the tap on the last step opens the closing card').toBe(true);
-  if (!closed) {
-    startInduction(network.world.tables, script.closing.id);
-    await page.goto('/activity');
-  }
 
   await expectCard(page, {
     id: script.closing.id,
