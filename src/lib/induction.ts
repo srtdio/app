@@ -6,34 +6,9 @@
 // sits so it never covers the boxed control, and the upload copy of the first
 // post.
 
-/** The data-induction attribute values on the real controls. One place, never literals. */
-export const INDUCTION_KEYS = {
-  topbarWorkspaceSlot: 'topbar-workspace-slot',
-  pipelineStageRow: 'pipeline-stage-row',
-  pipelineCreate: 'pipeline-create',
-  postSheetPrimary: 'post-sheet-primary',
-  membersInvite: 'members-invite',
-  postCommentComposer: 'post-comment-composer',
-  postApprove: 'post-approve',
-  assetsAdd: 'assets-add',
-  activityList: 'activity-list',
-  chatTab: 'chat-tab',
-  chatHash: 'chat-hash',
-  chatPlus: 'chat-plus',
-  chatAttachTray: 'chat-attach-tray',
-  chatTasks: 'chat-tasks',
-  chatMic: 'chat-mic',
-  chatPostCard: 'chat-post-card',
-  pipelineDraftChip: 'pipeline-draft-chip',
-  briefsNew: 'briefs-new',
-} as const;
+import { INDUCTION_KEYS, type InductionKey } from './induction-keys';
 
-export type InductionKey = (typeof INDUCTION_KEYS)[keyof typeof INDUCTION_KEYS];
-
-/** The CSS selector for one control. */
-export function inductionSelector(key: InductionKey): string {
-  return `[data-induction="${key}"]`;
-}
+export { INDUCTION_KEYS, inductionSelector, type InductionKey } from './induction-keys';
 
 /** Success sites dispatch this so the guide refetches induction_state at once. */
 export const INDUCTION_REFRESH_EVENT = 'sorted:induction-refresh';
