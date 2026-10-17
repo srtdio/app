@@ -3,6 +3,8 @@
 // suggestion, which screens a person sees, the role lists) lives here so it is
 // unit tested. The in-app guide is src/lib/induction.ts.
 
+import type { CopyContext } from './induction-model';
+
 /** Mirrors users_username_format in the 20261014140000 migration. */
 export const USERNAME_PATTERN = /^[a-z0-9._]{3,20}$/;
 
@@ -127,26 +129,9 @@ export function sideForMemberRole(role: string): Side {
   return role === 'client' ? 'approver' : 'creator';
 }
 
-/** The values a welcome or check-your-email line may name. */
-export interface EntryCopyValues {
-  email?: string;
-  brand?: string;
-  inviter?: string;
-}
-
-const ENTRY_PLACEHOLDER = /\{(email|brand|inviter)\}/g;
-
-/** Fills {email}, {brand} and {inviter}; anything not given is left as written. */
-export function fillEntryCopy(text: string, values: EntryCopyValues): string {
-  return text.replace(ENTRY_PLACEHOLDER, (match: string, name: keyof EntryCopyValues) => {
-    return values[name] ?? match;
-  });
-}
-
-/** The inviter's name for the welcome, or the fallback when it is missing. */
-export function inviterNameOr(displayName: string, fallback: string): string {
-  const trimmed = displayName.trim();
-  return trimmed === '' ? fallback : trimmed;
+/** A CopyContext for fillCopy from the fields an entry screen has; the rest stay ''. */
+export function entryCopyContext(values: Partial<CopyContext>): CopyContext {
+  return { brand: '', platform: '', post: '', creator: '', inviter: '', email: '', ...values };
 }
 
 /**

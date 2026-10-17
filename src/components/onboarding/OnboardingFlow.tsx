@@ -36,7 +36,7 @@ import { uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
-import { WELCOME_COPY } from '@/lib/induction-copy';
+import { WELCOME_COPY, fillCopy } from '@/lib/induction-copy';
 import {
   APPROVER_BRAND_STEP,
   APPROVER_WAITING_STEP,
@@ -50,8 +50,7 @@ import {
   ROLE_TILES,
   SIDE_TILES,
   designationFor,
-  fillEntryCopy,
-  inviterNameOr,
+  entryCopyContext,
   normalizeUsernameInput,
   notYouPath,
   progressSteps,
@@ -459,16 +458,15 @@ export function OnboardingFlow({
       welcome.side === 'approver' ? WELCOME_COPY.approverSubline : WELCOME_COPY.creatorSubline;
     body = (
       <WelcomeBody
-        heading={fillEntryCopy(WELCOME_COPY.heading, { brand })}
+        heading={fillCopy(WELCOME_COPY.heading, entryCopyContext({ brand }))}
         platform={welcome.platform}
         subline={
           welcome.loaded
-            ? fillEntryCopy(subline, {
-                inviter: inviterNameOr(welcome.inviter, WELCOME_COPY.fallbackInviter),
-              })
+            ? // An empty inviter falls back to "The team" (WELCOME_COPY.fallbackInviter).
+              fillCopy(subline, entryCopyContext({ inviter: welcome.inviter.trim() }))
             : ''
         }
-        joiningAs={fillEntryCopy(WELCOME_COPY.joiningAs, { email })}
+        joiningAs={fillCopy(WELCOME_COPY.joiningAs, entryCopyContext({ email }))}
       />
     );
     primary = (

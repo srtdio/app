@@ -8,6 +8,7 @@ const { signInWithOtp } = vi.hoisted(() => ({ signInWithOtp: vi.fn() }));
 
 vi.mock('@/lib/supabase', () => ({ supabase: { auth: { signInWithOtp } } }));
 
+import { CHECK_EMAIL_COPY } from '@/lib/induction-copy';
 import {
   POLICY_CONSENT_MESSAGE,
   RATE_LIMIT_MESSAGE,
@@ -69,6 +70,10 @@ describe('performSignUp', () => {
     expect(signInWithOtp).toHaveBeenCalledTimes(1);
   });
 
+  it('uses the rate limit line from the copy file', () => {
+    expect(RATE_LIMIT_MESSAGE).toBe(CHECK_EMAIL_COPY.rateLimited);
+  });
+
   it('passes any other provider message through', async () => {
     signInWithOtp.mockResolvedValue({ error: { message: 'Invalid email', status: 400 } });
     const result = await performSignUp(authClient(), {
@@ -125,7 +130,7 @@ describe('SignUpPage', () => {
 
   async function submit(): Promise<void> {
     await click(document.querySelector<HTMLInputElement>('#signup-policy-consent')!);
-    await click(button('Create account'));
+    await click(button(CHECK_EMAIL_COPY.createAccount));
   }
 
   async function tick(seconds: number): Promise<void> {

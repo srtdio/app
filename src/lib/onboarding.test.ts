@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { CHECK_EMAIL_COPY, WELCOME_COPY, fillCopy } from './induction-copy';
 import {
   OTHER_ROLE,
   ROLE_TILES,
   SIDE_TILES,
   designationFor,
-  fillEntryCopy,
-  inviterNameOr,
+  entryCopyContext,
   normalizeUsernameInput,
   notYouPath,
   progressSteps,
@@ -133,32 +133,40 @@ describe('invitee side', () => {
   });
 });
 
-describe('fillEntryCopy', () => {
-  it('fills email, brand and inviter', () => {
-    expect(
-      fillEntryCopy('{inviter} asked {email} to join {brand}', {
-        email: 'a@b.in',
-        brand: 'Kite',
-        inviter: 'Meera',
-      }),
-    ).toBe('Meera asked a@b.in to join Kite');
+describe('entryCopyContext with fillCopy', () => {
+  it('fills the fields given and leaves the rest empty', () => {
+    expect(entryCopyContext({ email: 'a@b.in' })).toEqual({
+      brand: '',
+      platform: '',
+      post: '',
+      creator: '',
+      inviter: '',
+      email: 'a@b.in',
+    });
   });
 
-  it('fills every occurrence', () => {
-    expect(fillEntryCopy('{brand} and {brand}', { brand: 'Kite' })).toBe('Kite and Kite');
+  it('fills the check-your-email body with the address', () => {
+    expect(fillCopy(CHECK_EMAIL_COPY.body, entryCopyContext({ email: 'a@b.in' }))).toBe(
+      'We sent a sign-in link to a@b.in. Open it on this device to carry on.',
+    );
   });
 
-  it('leaves a placeholder that was not given, and others untouched', () => {
-    expect(fillEntryCopy('Hi {email} {post}', {})).toBe('Hi {email} {post}');
+  it('fills the welcome heading, subline and joining line', () => {
+    expect(fillCopy(WELCOME_COPY.heading, entryCopyContext({ brand: 'Kite' }))).toBe(
+      'Welcome to Kite',
+    );
+    expect(fillCopy(WELCOME_COPY.creatorSubline, entryCopyContext({ inviter: 'Meera' }))).toBe(
+      'Meera invited you to create posts with the team.',
+    );
+    expect(fillCopy(WELCOME_COPY.joiningAs, entryCopyContext({ email: 'a@b.in' }))).toBe(
+      'Joining as a@b.in',
+    );
   });
-});
 
-describe('inviterNameOr', () => {
-  it('uses the name, trimmed', () => {
-    expect(inviterNameOr('  Meera Shah ', 'The team')).toBe('Meera Shah');
-  });
-  it('falls back when the name is blank', () => {
-    expect(inviterNameOr('   ', 'The team')).toBe('The team');
+  it('gives the same fallback inviter as WELCOME_COPY.fallbackInviter', () => {
+    expect(fillCopy(WELCOME_COPY.approverSubline, entryCopyContext({}))).toBe(
+      `${WELCOME_COPY.fallbackInviter} invited you to review posts for the team.`,
+    );
   });
 });
 

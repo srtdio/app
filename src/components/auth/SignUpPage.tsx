@@ -4,8 +4,8 @@ import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
-import { CHECK_EMAIL_COPY } from '@/lib/induction-copy';
-import { fillEntryCopy } from '@/lib/onboarding';
+import { CHECK_EMAIL_COPY, fillCopy } from '@/lib/induction-copy';
+import { entryCopyContext } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
 
 /** Seconds before Resend link can be tapped again. */
@@ -47,7 +47,8 @@ export type SignUpResult = { status: 'error'; message: string } | { status: 'sen
 
 export const POLICY_CONSENT_MESSAGE = 'Tick the box to agree to the Terms and Privacy Policy.';
 
-export const RATE_LIMIT_MESSAGE = 'Too many links asked for. Wait a few minutes, then try again.';
+/** Alias of CHECK_EMAIL_COPY.rateLimited, kept for callers and tests. */
+export const RATE_LIMIT_MESSAGE = CHECK_EMAIL_COPY.rateLimited;
 
 /** Supabase answers 429 (or 403 on some limits) when links are asked for too often. */
 export function isRateLimitError(error: { message: string; status?: number }): boolean {
@@ -146,7 +147,7 @@ export function SignUpPage(): ReactElement {
     return (
       <AuthShell
         title={CHECK_EMAIL_COPY.title}
-        subtitle={fillEntryCopy(CHECK_EMAIL_COPY.body, { email: email.trim() })}
+        subtitle={fillCopy(CHECK_EMAIL_COPY.body, entryCopyContext({ email: email.trim() }))}
         footer={
           <Link
             to="/signin"
@@ -266,7 +267,7 @@ export function SignUpPage(): ReactElement {
           type="submit"
           disabled={!canSubmit}
         >
-          {submitting ? 'Sending link' : 'Create account'}
+          {submitting ? CHECK_EMAIL_COPY.sending : CHECK_EMAIL_COPY.createAccount}
         </Button>
       </form>
     </AuthShell>
