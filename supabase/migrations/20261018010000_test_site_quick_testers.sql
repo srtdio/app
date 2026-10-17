@@ -179,6 +179,12 @@ BEGIN
 END; $function$;
 REVOKE EXECUTE ON FUNCTION public._test_accounts_purge() FROM PUBLIC, anon, authenticated;
 
-SELECT cron.unschedule('test-accounts-purge')
- WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'test-accounts-purge');
-SELECT cron.schedule('test-accounts-purge', '17 * * * *', 'SELECT public._test_accounts_purge()');
+-- CI containers have no pg_cron: schedule only where it exists (as 20260710153728 does).
+DO $cron$
+BEGIN
+  IF to_regclass('cron.job') IS NOT NULL THEN
+    PERFORM cron.unschedule('test-accounts-purge')
+      WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'test-accounts-purge');
+    PERFORM cron.schedule('test-accounts-purge', '17 * * * *', 'SELECT public._test_accounts_purge()');
+  END IF;
+END $cron$;
