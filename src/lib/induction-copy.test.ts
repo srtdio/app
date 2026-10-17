@@ -95,7 +95,20 @@ describe('entry screen copy is unchanged', () => {
       body: 'We sent a sign-in link to {email}. Open it on this device to carry on.',
       resend: 'Resend link',
       differentEmail: 'Use a different email',
+      createAccount: 'Create account',
+      sending: 'Sending link',
+      rateLimited: 'Too many links asked for. Wait a few minutes, then try again.',
     });
+  });
+
+  it('the sign-up button lines carry no dash', () => {
+    for (const text of [
+      CHECK_EMAIL_COPY.createAccount,
+      CHECK_EMAIL_COPY.sending,
+      CHECK_EMAIL_COPY.rateLimited,
+    ]) {
+      expect(text).not.toMatch(/[\u2013\u2014]/);
+    }
   });
 
   it('WELCOME_COPY', () => {

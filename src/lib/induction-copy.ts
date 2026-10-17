@@ -1,8 +1,8 @@
 // Every user-facing string of onboarding v13: the guide (labels, why lines,
 // cards, bar), the entry screens (check your email, the invited welcome) and
 // the invite recovery lines. {placeholders} are filled by fillCopy. No
-// em-dashes. The invite emails live in supabase/functions/invite-send (Deno
-// cannot import from src) and match the lines here.
+// em-dashes. The invite email copy is not here: it lives in
+// supabase/functions/invite-send/handler.ts (Deno cannot import from src).
 
 import type { CopyContext } from './induction-model';
 
@@ -13,6 +13,9 @@ export const CHECK_EMAIL_COPY = {
   body: 'We sent a sign-in link to {email}. Open it on this device to carry on.',
   resend: 'Resend link',
   differentEmail: 'Use a different email',
+  createAccount: 'Create account',
+  sending: 'Sending link',
+  rateLimited: 'Too many links asked for. Wait a few minutes, then try again.',
 } as const;
 
 /** The invited welcome screen (replaces the invitee password step). */

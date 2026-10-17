@@ -148,7 +148,7 @@ function talkSteps(route: Route): Step[] {
       'transcript',
       inChapter('talk', teach('group', K.chatTranscript), ['noGroup', 'noVoiceNote']),
     ),
-    makeStep(route, 'activity', inChapter('talk', teach('shell', K.activityTab))),
+    makeStep(route, 'activity', inChapter('talk', teach('chat', K.activityTab))),
   ];
 }
 

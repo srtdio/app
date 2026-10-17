@@ -157,6 +157,12 @@ describe('step shape', () => {
     }
   });
 
+  it('Activity runs from the chat list, where the tab bar shows', () => {
+    for (const id of ['c_activity', 'i_activity', 'a_activity']) {
+      expect(stepById(id)).toMatchObject({ place: 'chat', chapter: 'talk' });
+    }
+  });
+
   it('route-specific lines', () => {
     expect(stepById('c_post_send')?.why).toBe('Next, you invite your approver.');
     expect(stepById('i_post_send')?.why).toBe('The approvers get it.');
