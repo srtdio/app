@@ -104,6 +104,11 @@ export interface RouteScript {
   route: Route;
   /** Taps already made before the guide (sign-up and onboarding screens); they count in the progress fill. */
   entrySteps: number;
+  /**
+   * The entry taps the hand already shows on the pre-app screens, in order
+   * (OnboardingFlow). Counted in entrySteps, never in steps, so the fill holds.
+   */
+  entryTargets: readonly InductionKey[];
   /** Setup steps (phases), then the look-around (chapters), in order. */
   steps: readonly Step[];
   /** Shown before the first look-around step. */

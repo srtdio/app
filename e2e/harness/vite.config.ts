@@ -15,6 +15,8 @@ export default defineConfig({
   root: harnessRoot,
   envDir: harnessRoot,
   envPrefix: 'HARNESS_',
+  // The app's own static files (the first post's sample photo).
+  publicDir: fileURLToPath(new URL('../../public', import.meta.url)),
   plugins: [react()],
   // The homepage renders its clips only with a media base. Specs route this
   // path themselves (see home-pages.spec.ts), so nothing is fetched for real.

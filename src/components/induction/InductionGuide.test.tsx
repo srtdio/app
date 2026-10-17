@@ -327,11 +327,14 @@ describe('the guide bar', () => {
     expect(document.querySelector('[data-induction-legend]')).toBeNull();
   });
 
-  it('Skip finishes the tour', async () => {
+  it('offers no Skip', async () => {
     control('pipeline-approved-chip', CHIP);
-    const d = await mount({ step: 'c_approved_chip' });
-    act(() => q('[data-induction-skip]').click());
-    expect(d.finish).toHaveBeenCalledTimes(1);
+    await mount({ step: 'c_approved_chip' });
+    expect(document.querySelector('[data-induction-skip]')).toBeNull();
+    const names = Array.from(document.querySelectorAll('[data-induction-bar] button')).map(
+      (b) => b.textContent,
+    );
+    expect(names).not.toContain('Skip');
   });
 
   it('gives an optional step its later chip, which moves on', async () => {
@@ -416,10 +419,10 @@ describe('the guard', () => {
   it('never swallows taps on the bar', async () => {
     control('pipeline-approved-chip', CHIP);
     await mount({ step: 'c_approved_chip' });
-    const skip = q('[data-induction-skip]');
+    const bar = q('[data-induction-bar]');
     const down = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
     await act(async () => {
-      skip.dispatchEvent(down);
+      bar.dispatchEvent(down);
     });
     expect(down.defaultPrevented).toBe(false);
   });

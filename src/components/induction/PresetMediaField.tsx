@@ -4,7 +4,9 @@
 // bar from the real upload progress, three automatic retries, then a plain
 // reason with Try again. File names are never shown (phones name photos
 // IMG_4821.HEIC). The rest of the sheet keeps everything typed whatever
-// happens here. Chunked background upload is a later backend PR.
+// happens here. Chunked background upload is a later backend PR. On the
+// first post (fillOnTap) a tap attaches the bundled sample photo instead of
+// opening the picker; nothing is uploaded until Send (uploadLocalFile).
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { isImageMime } from '@srtdio/storage';
@@ -21,7 +23,9 @@ import { frameFor } from '@/lib/platform-specs';
 import { precheckFile } from '@/lib/asset-upload';
 import { uploadChatAttachment } from '@/lib/chat/attachments';
 import { env } from '@/lib/env';
+import { fetchWithTrace } from '@/lib/fetch';
 import { INDUCTION_KEYS, UPLOAD_RETRIES, uploadFailedReason, withRetries } from '@/lib/induction';
+import { FIRST_POST_SAMPLE } from '@/lib/induction-copy';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 
@@ -31,7 +35,74 @@ const NOT_STARTED = "We couldn't start the upload. Try again in a moment.";
 type Upload =
   | { phase: 'idle' }
   | { phase: 'sending'; percent: number; retrying: boolean }
-  | { phase: 'failed'; file: File; reason: string };
+  /** file null: the sample photo did not load; Try again loads it again. */
+  | { phase: 'failed'; file: File | null; reason: string };
+
+/** The placeholder version id of the sample photo until Send uploads it. */
+export const SAMPLE_VERSION_ID = 'local-first-post';
+
+/** The bundled sample photo as a file, or null when it did not load. */
+export async function loadSamplePhoto(traceId: string): Promise<File | null> {
+  try {
+    const res = await fetchWithTrace(FIRST_POST_SAMPLE.photoPath, undefined, traceId);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new File([blob], FIRST_POST_SAMPLE.photoName, { type: 'image/jpeg' });
+  } catch {
+    return null;
+  }
+}
+
+/** One attempt over the asset-upload Worker; its real progress goes to onProgress. */
+async function attemptUpload(input: {
+  file: File;
+  workspaceId: string;
+  endpoint: string;
+  token: string;
+  traceId: string;
+  onProgress: (fraction: number) => void;
+}): Promise<{ ok: true; value: string } | { ok: false }> {
+  const result = await uploadChatAttachment({
+    file: input.file,
+    workspaceId: input.workspaceId,
+    origin: 'library',
+    token: input.token,
+    endpoint: input.endpoint,
+    xhr: { traceId: input.traceId, onProgress: input.onProgress },
+  });
+  return result.ok ? { ok: true, value: result.versionId } : { ok: false };
+}
+
+/** A file kept local until Send (the sample photo): the same path and retries as a picked one. */
+export async function uploadLocalFile(input: {
+  file: File;
+  workspaceId: string;
+  newTrace: () => string;
+}): Promise<{ ok: true; versionId: string } | { ok: false; reason: string }> {
+  const check = precheckFile(input.file);
+  if (!check.ok) return { ok: false, reason: check.message };
+  const endpoint = env.VITE_ASSET_UPLOAD_URL;
+  const token = (await supabase.auth.getSession()).data.session?.access_token ?? '';
+  if (endpoint === undefined || endpoint === '' || token === '') {
+    return { ok: false, reason: NOT_STARTED };
+  }
+  const outcome = await withRetries(
+    () =>
+      attemptUpload({
+        file: input.file,
+        workspaceId: input.workspaceId,
+        endpoint,
+        token,
+        traceId: input.newTrace(),
+        onProgress: () => undefined,
+      }),
+    UPLOAD_RETRIES,
+    () => undefined,
+  );
+  return outcome.ok
+    ? { ok: true, versionId: outcome.value }
+    : { ok: false, reason: uploadFailedReason(outcome.failures) };
+}
 
 export function PresetMediaField({
   workspaceId,
@@ -40,6 +111,7 @@ export function PresetMediaField({
   required,
   onBusyChange,
   frame,
+  fillOnTap,
 }: {
   workspaceId: string | null;
   value: AttachmentItem[];
@@ -52,6 +124,8 @@ export function PresetMediaField({
    * with no frame: small square tiles.
    */
   frame: { platform: string; format: string } | null;
+  /** The first post: a tap attaches the sample photo (or, with one attached, only moves on). */
+  fillOnTap?: { onFilled: () => void };
 }): ReactElement {
   const newTrace = useNewTrace();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -112,29 +186,60 @@ export function PresetMediaField({
   }
 
   /** One attempt; its real progress drives the bar. */
-  async function attemptOnce(input: {
+  function attemptOnce(input: {
     file: File;
     workspaceId: string;
     endpoint: string;
     token: string;
   }): Promise<{ ok: true; value: string } | { ok: false }> {
-    const result = await uploadChatAttachment({
-      file: input.file,
-      workspaceId: input.workspaceId,
-      origin: 'library',
-      token: input.token,
-      endpoint: input.endpoint,
-      xhr: {
-        traceId: newTrace(),
-        onProgress: (fraction) => {
-          if (!alive.current) return;
-          setUpload((prev) =>
-            prev.phase === 'sending' ? { ...prev, percent: sendingPercent(fraction) } : prev,
-          );
-        },
+    return attemptUpload({
+      ...input,
+      traceId: newTrace(),
+      onProgress: (fraction) => {
+        if (!alive.current) return;
+        setUpload((prev) =>
+          prev.phase === 'sending' ? { ...prev, percent: sendingPercent(fraction) } : prev,
+        );
       },
     });
-    return result.ok ? { ok: true, value: result.versionId } : { ok: false };
+  }
+
+  /** The sample photo, shown from its local copy; the sheet uploads it at Send. */
+  async function attachSample(onFilled: () => void): Promise<void> {
+    const file = await loadSamplePhoto(newTrace());
+    if (!alive.current) return;
+    if (file === null) {
+      setUpload({ phase: 'failed', file: null, reason: NOT_STARTED });
+      return;
+    }
+    setUpload({ phase: 'idle' });
+    onChange([
+      ...valueRef.current,
+      {
+        versionId: SAMPLE_VERSION_ID,
+        kind: 'image',
+        name: file.name,
+        previewUrl: URL.createObjectURL(file),
+        mime: file.type,
+        localFile: file,
+      },
+    ]);
+    onFilled();
+  }
+
+  /** The photo field's tap: the picker, or on the first post the sample photo. */
+  function pick(): void {
+    if (fillOnTap === undefined) {
+      inputRef.current?.click();
+      return;
+    }
+    if (valueRef.current.length > 0) fillOnTap.onFilled();
+    else void attachSample(fillOnTap.onFilled);
+  }
+
+  function retry(failed: File | null): void {
+    if (failed !== null) void send(failed);
+    else if (fillOnTap !== undefined) void attachSample(fillOnTap.onFilled);
   }
 
   function remove(index: number): void {
@@ -166,7 +271,7 @@ export function PresetMediaField({
           removeLabel={(item) => (item.kind === 'image' ? 'Remove photo' : 'Remove video')}
           pickLabel="Add a photo or video"
           pickDisabled={sending}
-          onPick={() => inputRef.current?.click()}
+          onPick={pick}
         />
       ) : value.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
@@ -186,12 +291,12 @@ export function PresetMediaField({
           size="lg"
           disabled={sending}
           data-induction={INDUCTION_KEYS.postSheetMedia}
-          onClick={() => inputRef.current?.click()}
+          onClick={pick}
         >
           {value.length > 0 ? 'Add another' : 'Add a photo or video'}
         </Button>
         {upload.phase === 'failed' ? (
-          <Button type="button" size="lg" variant="ghost" onClick={() => void send(upload.file)}>
+          <Button type="button" size="lg" variant="ghost" onClick={() => retry(upload.file)}>
             Try again
           </Button>
         ) : null}

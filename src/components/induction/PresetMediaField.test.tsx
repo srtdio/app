@@ -3,8 +3,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockUpload, newTrace } = vi.hoisted(() => ({
+const { mockUpload, mockFetch, newTrace } = vi.hoisted(() => ({
   mockUpload: vi.fn(),
+  mockFetch: vi.fn(),
   newTrace: () => 'trace-1',
 }));
 
@@ -14,8 +15,15 @@ vi.mock('@/lib/supabase', () => ({
 vi.mock('@/lib/env', () => ({ env: { VITE_ASSET_UPLOAD_URL: 'https://upload.test' } }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => newTrace }));
 vi.mock('@/lib/chat/attachments', () => ({ uploadChatAttachment: mockUpload }));
+vi.mock('@/lib/fetch', () => ({ fetchWithTrace: mockFetch }));
 
-import { PresetMediaField, sendingPercent, uploadLine } from './PresetMediaField';
+import {
+  PresetMediaField,
+  SAMPLE_VERSION_ID,
+  sendingPercent,
+  uploadLine,
+  uploadLocalFile,
+} from './PresetMediaField';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,6 +32,7 @@ let host: HTMLDivElement | null = null;
 
 beforeEach(() => {
   mockUpload.mockReset();
+  mockFetch.mockReset();
   URL.createObjectURL = () => 'blob:photo';
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -45,6 +54,53 @@ async function pickFile(name: string): Promise<void> {
     input.dispatchEvent(new Event('change', { bubbles: true }));
   });
 }
+
+describe('PresetMediaField fill on tap', () => {
+  it('attaches the sample photo on a tap, uploads nothing, and moves on', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(['jpg'], { type: 'image/jpeg' }),
+    });
+    const onChange = vi.fn();
+    const onFilled = vi.fn();
+    const picker = vi.fn();
+    root = createRoot(host!);
+    await act(async () => {
+      root!.render(
+        <PresetMediaField
+          workspaceId="ws-1"
+          value={[]}
+          onChange={onChange}
+          required
+          onBusyChange={() => {}}
+          frame={null}
+          fillOnTap={{ onFilled }}
+        />,
+      );
+    });
+    document.querySelector('input[type="file"]')!.addEventListener('click', picker);
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-induction="post-sheet-media"]')!.click();
+    });
+    expect(picker).not.toHaveBeenCalled();
+    expect(mockFetch.mock.calls[0]![0]).toBe('/induction/first-post.jpg');
+    expect(mockUpload).not.toHaveBeenCalled();
+    const items = onChange.mock.calls[0]![0] as { versionId: string; localFile?: File }[];
+    expect(items).toHaveLength(1);
+    expect(items[0]!.versionId).toBe(SAMPLE_VERSION_ID);
+    expect(items[0]!.localFile?.type).toBe('image/jpeg');
+    expect(onFilled).toHaveBeenCalledTimes(1);
+  });
+
+  it('uploads a local file at Send through the same path', async () => {
+    mockUpload.mockResolvedValue({ ok: true, reused: false, versionId: 'v-7' });
+    const file = new File(['x'], 'first-post.jpg', { type: 'image/jpeg' });
+    await expect(uploadLocalFile({ file, workspaceId: 'ws-1', newTrace })).resolves.toEqual({
+      ok: true,
+      versionId: 'v-7',
+    });
+  });
+});
 
 describe('PresetMediaField', () => {
   it('marks the add-photo button itself as the media control the guide boxes', async () => {

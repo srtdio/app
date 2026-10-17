@@ -199,7 +199,9 @@ const APPROVER_CHAPTERS: readonly Chapter[] = ['review', 'ask', 'talk'];
 export const ROUTE_SCRIPTS: Readonly<Record<Route, RouteScript>> = {
   creator: {
     route: 'creator',
+    // Sign up, the side, then the two Continue taps the hand shows (entryTargets).
     entrySteps: 4,
+    entryTargets: [K.onboardingNameContinue, K.onboardingRoleContinue],
     steps: [
       ...creatorWorkspaceSteps(),
       approvedChipStep('creator', 'Step 2'),
@@ -213,6 +215,7 @@ export const ROUTE_SCRIPTS: Readonly<Record<Route, RouteScript>> = {
   invited: {
     route: 'invited',
     entrySteps: 3,
+    entryTargets: [],
     steps: [
       approvedChipStep('invited', 'First post'),
       ...firstPostSteps('invited', 'First post'),
@@ -224,6 +227,7 @@ export const ROUTE_SCRIPTS: Readonly<Record<Route, RouteScript>> = {
   approver: {
     route: 'approver',
     entrySteps: 3,
+    entryTargets: [],
     steps: [...approverReviewSteps(), ...approverAskSteps(), ...talkSteps('approver')],
     intro: introCard('approver', CARD_COPY.approverIntro, APPROVER_CHAPTERS),
     closing: closingCard('approver', CARD_COPY.approverClosing),

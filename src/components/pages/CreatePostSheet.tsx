@@ -31,7 +31,7 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { listBuckets, type BucketOption } from '@/lib/buckets';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { postCreate, gallerySet, stageTransition, type Client, type Result } from '@srtdio/rpc';
-import { PresetMediaField } from '@/components/induction/PresetMediaField';
+import { PresetMediaField, uploadLocalFile } from '@/components/induction/PresetMediaField';
 import {
   dispatchInductionRefresh,
   formatNeedsMedia,
@@ -39,6 +39,7 @@ import {
   titleFromCaption,
   type PostSheetPreset,
 } from '@/lib/induction';
+import { FIRST_POST_SAMPLE } from '@/lib/induction-copy';
 import { logger } from '@/lib/logger';
 import { sendMessageRecord } from '@/lib/chat/record';
 import { newMessageId } from '@/lib/chat/message-id';
@@ -281,6 +282,30 @@ export function buildPostCreatePayload(
   if (data.origin !== undefined) payload.origin = data.origin;
   if (data.briefId !== undefined) payload.brief_id = data.briefId;
   return { ok: true, payload: payload as Json };
+}
+
+/**
+ * Upload the attachments kept local until Send (the first post's sample
+ * photo) and swap in their real version ids, in order. The first failure's
+ * reason stops it; nothing else is touched.
+ */
+export async function uploadLocalAttachments(
+  items: readonly AttachmentItem[],
+  upload: (file: File) => Promise<{ ok: true; versionId: string } | { ok: false; reason: string }>,
+): Promise<{ ok: true; items: AttachmentItem[] } | { ok: false; reason: string }> {
+  const out: AttachmentItem[] = [];
+  for (const item of items) {
+    if (item.localFile === undefined) {
+      out.push(item);
+      continue;
+    }
+    const sent = await upload(item.localFile);
+    if (!sent.ok) return { ok: false, reason: sent.reason };
+    const uploaded: AttachmentItem = { ...item, versionId: sent.versionId };
+    delete uploaded.localFile;
+    out.push(uploaded);
+  }
+  return { ok: true, items: out };
 }
 
 export interface SubmitCreatePostDeps {
@@ -578,6 +603,19 @@ export function CreatePostSheet({
     setSubmitError(null);
     let postId = savedDraftId;
     if (postId === null) {
+      let attachments = form.attachments;
+      if (attachments.some((item) => item.localFile !== undefined)) {
+        const sent = await uploadLocalAttachments(attachments, (file) =>
+          uploadLocalFile({ file, workspaceId, newTrace }),
+        );
+        if (!sent.ok) {
+          setSubmitting(false);
+          setSubmitError(sent.reason);
+          return;
+        }
+        attachments = sent.items;
+        patch({ attachments });
+      }
       const built = buildPostCreatePayload({
         title: titleFromCaption(form.caption),
         caption: form.caption,
@@ -597,7 +635,7 @@ export function CreatePostSheet({
         client: supabase,
         workspaceId,
         payload: built.payload,
-        versionIds: attachmentVersionIds(form.attachments),
+        versionIds: attachmentVersionIds(attachments),
         newTrace,
         postCreate,
         gallerySet,
@@ -890,7 +928,13 @@ export function CreatePostSheet({
   );
 }
 
-/** The preset's fields: caption, format, an optional target date, media, and the share toggle. */
+/**
+ * The preset's fields: caption, format, an optional target date, media, and the
+ * share toggle. With fillOnTap the person never types: a tap on the caption
+ * fills the sample caption, on Format picks Single image (where the platform
+ * has it), on the photo field attaches the sample photo, and each tells the
+ * guide to move on. The target date stays empty.
+ */
 function PresetFields(props: {
   preset: PostSheetPreset;
   form: CreateFormState;
@@ -911,6 +955,24 @@ function PresetFields(props: {
   // option rows mount when the menu opens, so a childList observer re-applies them.
   const formatRef = useRef<HTMLDivElement>(null);
   const singleIndex = props.formatOptions.findIndex((option) => option.value === 'single_image');
+  const fill = preset.fillOnTap;
+  const captionRef = useRef<HTMLTextAreaElement>(null);
+  // A filled caption lets go of focus once it has rendered, so no keyboard stays up.
+  const [captionFilled, setCaptionFilled] = useState(0);
+  useEffect(() => {
+    if (captionFilled > 0) captionRef.current?.blur();
+  }, [captionFilled]);
+  function fillCaption(): void {
+    if (fill === undefined) return;
+    if (form.caption.trim() === '') patch({ caption: FIRST_POST_SAMPLE.caption });
+    fill.onFilled([INDUCTION_KEYS.postSheetCaption]);
+    setCaptionFilled((n) => n + 1);
+  }
+  function pickSingle(): void {
+    if (fill === undefined) return;
+    props.onFormatChange('single_image');
+    fill.onFilled([INDUCTION_KEYS.postSheetFormat, INDUCTION_KEYS.postSheetFormatSingle]);
+  }
   useEffect(() => {
     const root = formatRef.current;
     if (root === null) return undefined;
@@ -934,10 +996,12 @@ function PresetFields(props: {
     <>
       <Field label="Caption" htmlFor="post-caption" required>
         <Textarea
+          ref={captionRef}
           id="post-caption"
           data-induction={INDUCTION_KEYS.postSheetCaption}
           value={form.caption}
           onChange={(event) => patch({ caption: event.target.value })}
+          {...(fill !== undefined ? { inputMode: 'none' as const, onFocus: fillCaption } : {})}
           placeholder="Write the caption. Its first line becomes the title."
         />
         {props.captionError}
@@ -951,6 +1015,7 @@ function PresetFields(props: {
               value={form.format}
               options={props.formatOptions}
               onChange={props.onFormatChange}
+              {...(fill !== undefined && singleIndex >= 0 ? { onPress: pickSingle } : {})}
             />
           </Field>
         </div>
@@ -973,6 +1038,9 @@ function PresetFields(props: {
           required={formatNeedsMedia(form.format)}
           onBusyChange={props.onMediaBusyChange}
           frame={props.platform !== null ? { platform: props.platform, format: form.format } : null}
+          {...(fill !== undefined && singleIndex >= 0
+            ? { fillOnTap: { onFilled: () => fill.onFilled([INDUCTION_KEYS.postSheetMedia]) } }
+            : {})}
         />
       </Field>
 

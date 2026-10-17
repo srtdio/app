@@ -186,9 +186,7 @@ test('approver: review, ask, talk with real taps, then Done @desktop', async ({ 
   expect(network.blocked).toEqual([]);
 });
 
-test('approver: an old stored step resolves by the data, then Skip finishes the tour', async ({
-  page,
-}, info) => {
+test('approver: an old stored step resolves by the data', async ({ page }, info) => {
   const errors = collectErrors(page);
   const network = await installHarnessNetwork(page);
   seedApprover(network);
@@ -205,12 +203,6 @@ test('approver: an old stored step resolves by the data, then Skip finishes the 
   });
   await page.getByRole('button', { name: script.intro.button, exact: true }).click();
   await expectStep(page, info, { step: step('a_post_open'), ctx, back: false, narrow: NARROW });
-
-  // Skip ends the tour at once: induction_finish, no guide, the screen stays.
-  await page.locator('[data-induction-skip]').click();
-  await expect(page.locator('[data-induction-layer]')).toHaveCount(0);
-  await expect(page).toHaveURL(/\/pipeline/);
-  await expect.poll(() => inductionDone(network.world.tables)).toBe(true);
-  expect(network.rpcCalls.filter((c) => c.name === 'induction_finish')).toHaveLength(1);
+  expect(network.rpcCalls.filter((c) => c.name === 'induction_finish')).toHaveLength(0);
   expect(errors.filter((e) => !NOISE.some((n) => n.test(e)))).toEqual([]);
 });

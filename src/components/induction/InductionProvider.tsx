@@ -1,7 +1,7 @@
 // The induction's shared state for the shell: which route the person runs,
 // what the guide shows (resolveGuide over induction_state and the workspace
 // facts), the screens it can open (the default group, the post), the copy
-// context, and the moves (to a step, Start, Skip). Pages read the active step
+// context, and the moves (to a step, Start, Done). Pages read the active step
 // through useInductionStepId and the post sheet's preset through
 // useInductionPostPreset; both are safe without a provider (tests, screens
 // outside the shell).
@@ -12,10 +12,12 @@ import {
   INDUCTION_KEYS,
   INDUCTION_REFRESH_EVENT,
   isGated,
+  pastFilled,
   presetPrimaryFor,
   resolveGuide,
   stepDataDone,
   storedIdFor,
+  type InductionKey,
   type InductionState,
   type PlaceContext,
   type PostSheetPreset,
@@ -44,7 +46,7 @@ export interface InductionContextValue {
   moveTo: (index: number) => void;
   /** Start on the intro card: the first look-around step. */
   start: () => void;
-  /** Skip, and Done on the closing card. */
+  /** Done on the closing card. */
   finish: () => void;
 }
 
@@ -182,6 +184,16 @@ function buildValue(input: {
   const { brand, platform } = splitWorkspaceLabel(env.workspaceLabel);
   const primary = resolution.kind === 'step' ? presetPrimaryFor(resolution.step) : undefined;
   const from = resolution.kind === 'step' || resolution.kind === 'intro' ? resolution.index : -1;
+  const moveTo = (to: number): void => {
+    if (script === undefined || resolution.kind === 'off' || resolution.kind === 'closing') return;
+    void env.data.setStep(storedIdFor(script, resolution.steps, { from, to }));
+  };
+  /** The first post's fill on tap: move past the steps whose controls the tap filled. */
+  const passFilled = (filled: readonly InductionKey[]): void => {
+    if (resolution.kind !== 'step') return;
+    const to = pastFilled(resolution.steps, resolution.index, filled);
+    if (to >= 0) moveTo(to);
+  };
   return {
     ...base,
     place: {
@@ -207,12 +219,9 @@ function buildValue(input: {
               group !== undefined
                 ? { channelId: group.channelId, groupName: group.name }
                 : 'no_group',
+            ...(primary === 'send_for_review' ? { fillOnTap: { onFilled: passFilled } } : {}),
           },
-    moveTo: (to) => {
-      if (script === undefined || resolution.kind === 'off' || resolution.kind === 'closing')
-        return;
-      void env.data.setStep(storedIdFor(script, resolution.steps, { from, to }));
-    },
+    moveTo,
     start: () => {
       if (resolution.kind !== 'intro') return;
       void env.data.setStep(resolution.steps[resolution.index]?.id ?? resolution.card.id);

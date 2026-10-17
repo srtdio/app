@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { installHarnessNetwork, solidPng, type HarnessNetwork } from '../fixtures/harness-routes';
+import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { GROUP_CHANNEL, GROUP_ID, ME, WORKSPACE_ID } from '../fixtures/chat-data';
 import { inductionDone, startInduction } from '../fixtures/induction-rpc';
 import type { Row } from '../fixtures/postgrest';
 import { ROUTE_SCRIPTS } from '../../src/lib/induction-routes';
-import { fillCopy } from '../../src/lib/induction-copy';
+import { FIRST_POST_SAMPLE, fillCopy } from '../../src/lib/induction-copy';
 import type { Step } from '../../src/lib/induction-model';
 import {
   INDUCTION_KEYS,
@@ -13,16 +13,15 @@ import {
   expectCard,
   expectGuideId,
   expectStep,
-  pickPhoto,
-  guideId,
   selectCaptionWords,
   tapControl,
 } from '../helpers/guide';
 
 // The creator route of onboarding v13 (the owner who signed up; the pre-app
 // screens are onboarding.spec.ts): Step 1 the workspace (the top bar slot, then
-// Create), Step 2 the Approved chip, Step 3 the first post (open the sheet,
-// caption, format, single image, photo, send for review), Step 4 the approver
+// Create), Step 2 the Approved chip, Step 3 the first post (open the sheet, then
+// a tap each fills the caption, picks Single image and attaches the sample
+// photo, then send for review), Step 4 the approver
 // invite (a gate) and the optional team invite ("It's just me for now"), the
 // intro card, then the look-around on their own workspace: no brief and no
 // plan yet (both steps dropped by the data), Review (comment on a line of
@@ -35,7 +34,6 @@ import {
 const SUPABASE = 'https://harness.supabase.test';
 const script = ROUTE_SCRIPTS.creator;
 const NOISE = [/chat store: initial load failed.*read cancelled/];
-const CAPTION = 'Launch day\nThe new range is here.';
 const POST_TITLE = 'Launch day';
 
 function step(id: string): Step {
@@ -139,29 +137,41 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   // Step 3: the first post.
   await check('c_post_create');
   await tapControl(page, step('c_post_create'));
-  // A field step: typing alone keeps the guide; tapping the next control
-  // (Format) finishes it. That tap also opens the Format menu.
+  // The person never types: each tap fills its field and the guide moves on.
+  // The caption tap fills the sample caption.
   await check('c_post_caption');
   await tapControl(page, step('c_post_caption'));
-  await page.keyboard.type(CAPTION);
-  expect(await guideId(page)).toBe('c_post_caption');
+  await expect(page.locator('#post-caption')).toHaveValue(FIRST_POST_SAMPLE.caption);
+  // The Format tap picks Single image (no menu) and passes the Single image step.
+  await check('c_post_format');
   await tapControl(page, step('c_post_format'));
-  await check('c_post_single');
-  await tapControl(page, step('c_post_single'));
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Format', exact: true })).toHaveText(
+    'Single image',
+  );
+  // The photo tap attaches the bundled sample; nothing uploads until Send.
   await check('c_post_media');
-  await pickPhoto(page, step('c_post_media'), {
-    name: 'launch.png',
-    mimeType: 'image/png',
-    buffer: solidPng(1080, 1080, [60, 90, 180]),
-  });
+  await tapControl(page, step('c_post_media'));
+  await expect(page.locator('img[src^="blob:"]').first()).toBeVisible();
+  expect(network.uploads).toEqual([]);
   await check('c_post_send', undefined, '02-mid-route');
   await tapControl(page, step('c_post_send'));
+  // Send creates the post with the filled values: the sample photo uploads now, no target date.
+  await expect.poll(() => network.uploads).toEqual([FIRST_POST_SAMPLE.photoName]);
+  await expect.poll(() => network.rpcCalls.some((c) => c.name === 'post_create')).toBe(true);
+  const created = network.rpcCalls.find((c) => c.name === 'post_create');
+  expect(created?.args.p_payload).toMatchObject({
+    title: POST_TITLE,
+    caption: FIRST_POST_SAMPLE.caption,
+    format: 'single_image',
+  });
+  expect('target_date' in (created?.args.p_payload as Record<string, unknown>)).toBe(false);
 
   // Step 4: the approver invite (a gate: leaving brings the person back), then
   // the optional team invite.
   await expect(page).toHaveURL(/\/settings\?panel=members/, { timeout: 15_000 });
   await check('c_approver_invite');
-  // A gate offers no way round it: no secondary chip, only Skip.
+  // A gate offers no way round it: no secondary chip, and no Skip.
   const later = step('c_team_invite').laterLabel ?? '';
   const bar = page.locator('[data-induction-bar]');
   await expect(bar.getByRole('button', { name: later, exact: true })).toHaveCount(0);

@@ -284,6 +284,25 @@ function backInGroup(steps: readonly Step[], index: number, probe: StepProbe): n
   return -1;
 }
 
+/**
+ * Where a tap that filled controls moves the guide: past the current step and
+ * every step right after it whose controls the tap filled (the first post's
+ * Format tap picks Single image too, so it passes both steps). -1 when the
+ * current step is not one of them.
+ */
+export function pastFilled(
+  steps: readonly Step[],
+  index: number,
+  filled: readonly InductionKey[],
+): number {
+  const covered = (step: Step | undefined): boolean =>
+    step !== undefined && step.targets.every((key) => filled.includes(key));
+  if (!covered(steps[index])) return -1;
+  let to = index + 1;
+  while (covered(steps[to])) to += 1;
+  return to;
+}
+
 /** The chapter or phase a step belongs to ('' when neither). */
 function sectionOf(step: Step): string {
   return step.chapter ?? step.phase ?? '';
@@ -579,10 +598,14 @@ function clamp(value: number, min: number, max: number): number {
  * origin and brief, takes the title from the caption and asks for media when
  * the format needs it. `share` is the default group to post the card into, or
  * 'no_group' when the workspace has none (the sheet says so instead).
+ * `fillOnTap`: the person never types; a tap on the caption, the format or the
+ * photo fills it with the sample (FIRST_POST_SAMPLE) and `onFilled` names the
+ * controls it filled, so the guide moves past their steps.
  */
 export interface PostSheetPreset {
   primary: 'send_for_review' | 'save_draft';
   share: { channelId: string; groupName: string } | 'no_group';
+  fillOnTap?: { onFilled: (filled: readonly InductionKey[]) => void };
 }
 
 /** Formats a post can go out without media. Everything else needs a photo or a video. */

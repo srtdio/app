@@ -96,6 +96,18 @@ describe('route order', () => {
     expect(ROUTE_SCRIPTS.approver.entrySteps).toBe(3);
   });
 
+  it('the creator route counts the two Continue taps the hand shows in its entry steps', () => {
+    expect(ROUTE_SCRIPTS.creator.entryTargets).toEqual([
+      'onboarding-name-continue',
+      'onboarding-role-continue',
+    ]);
+    expect(ROUTE_SCRIPTS.creator.entrySteps).toBeGreaterThanOrEqual(
+      ROUTE_SCRIPTS.creator.entryTargets.length,
+    );
+    expect(ROUTE_SCRIPTS.invited.entryTargets).toEqual([]);
+    expect(ROUTE_SCRIPTS.approver.entryTargets).toEqual([]);
+  });
+
   it('chapters run Ask, Review, Talk for the team and Review, Ask, Talk for the approver', () => {
     const chapters = (steps: readonly Step[]): string[] => [
       ...new Set(steps.flatMap((step) => (step.chapter === undefined ? [] : [step.chapter]))),
