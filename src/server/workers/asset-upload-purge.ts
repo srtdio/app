@@ -12,10 +12,17 @@
 //      already stamped purge_requested_at, so only the sweep runs here. Always
 //      200 with counts; the nightly job sweeps any key that failed.
 //
-// Both sweeps read storage_purge_due (service role) and keep only this
-// workspace's rows (and the given ids), so a caller can never purge another
-// tenant's files. freedBytes sums the version and rendition sizes of the rows
-// actually removed, read once per chunk of ids before the rows are dropped.
+// Both sweeps only ever remove rows the caller just marked (purge_requested_at
+// set), so neither needs storage_purge_due's 31-day branch. They read this
+// workspace's marked rows (and only the given ids) with one service-role select
+// per chunk of ids that embeds the R2 keys and sizes, and apply the proc's
+// eligibility in the same way: deleted_at set, purge_requested_at set, and not
+// asset_in_use (no live attachment to a live post, brief or comment). Reading
+// storage_purge_due globally and filtering would find nothing here whenever
+// more than its limit of rows were due elsewhere. storage_purge_done rechecks
+// eligibility and stays the authority for dropping rows, and a caller can never
+// purge another tenant's files. freedBytes sums the version and rendition sizes
+// of the rows actually removed.
 
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@srtdio/schemas';
@@ -42,7 +49,7 @@ import { PURGE_ERROR_STATUS } from './asset-upload-purge-contracts';
  */
 export type PurgeEnv = AssetUploadEnv;
 
-/** Most ids one call accepts, and the most rows storage_purge_due returns. */
+/** Most ids one call accepts, and the most rows one sweep reads. */
 const MAX_IDS = 1000;
 
 /**
@@ -54,26 +61,54 @@ const MAX_KEY_DELETES = 900;
 /** Rows deleted from R2 at once. */
 const DELETE_CONCURRENCY = 8;
 
-/** Ids per size read; keeps the PostgREST query string short. */
-const SIZE_CHUNK = 150;
+/** Ids per read; keeps the PostgREST query string short. */
+const ID_CHUNK = 150;
+
+/** asset_attachments.entity_type -> the table asset_in_use checks for a live row. */
+const ENTITY_TABLES = { post: 'posts', brief: 'briefs', comment: 'comments' } as const;
+type EntityType = keyof typeof ENTITY_TABLES;
+
+function entityType(value: string): EntityType | null {
+  return Object.hasOwn(ENTITY_TABLES, value) ? (value as EntityType) : null;
+}
+
+/** `items` in slices of at most `size`. */
+function chunked<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * asset_in_use compares `id::text` with entity_id, and a uuid renders as
+ * lowercase canonical text, so only such an entity_id can name a live row.
+ */
+const UUID_TEXT_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** One row of storage_purge_due. */
+/** One purge-requested row, as storage_purge_due shapes it, plus its stored bytes. */
 export interface PurgeDueRow {
   asset_id: string;
   workspace_id: string;
   bucket: string | null;
+  /** Version keys, then rendition keys (nulls dropped), as storage_purge_due builds them. */
   r2_keys: string[];
+  /** Stored bytes (versions plus renditions). */
+  bytes: number;
 }
 
 /** The service-role reads and writes both sweeps use. */
 export interface PurgeStore {
   isActiveMember(input: { userId: string; workspaceId: string }): Promise<boolean>;
-  /** storage_purge_due(limit). */
-  due(limit: number, traceId: string): Promise<PurgeDueRow[]>;
-  /** Stored bytes per asset (versions plus renditions). */
-  storedBytes(assetIds: readonly string[], traceId: string): Promise<Map<string, number>>;
+  /**
+   * This workspace's rows storage_purge_due would return that have
+   * purge_requested_at set (only `assetIds` when given), oldest request first.
+   */
+  due(
+    input: { workspaceId: string; assetIds: readonly string[] | null; limit: number },
+    traceId: string,
+  ): Promise<PurgeDueRow[]>;
   /** storage_purge_done(ids); returns the rows dropped. */
   done(assetIds: readonly string[], traceId: string): Promise<number>;
 }
@@ -175,9 +210,9 @@ export async function sweepWorkspace(
   deps: PurgeDeps,
   input: { workspaceId: string; assetIds: readonly string[] | null; traceId: string },
 ): Promise<SweepResult> {
-  const only = input.assetIds === null ? null : new Set(input.assetIds);
-  const due = (await deps.store.due(MAX_IDS, input.traceId)).filter(
-    (row) => row.workspace_id === input.workspaceId && (only === null || only.has(row.asset_id)),
+  const due = await deps.store.due(
+    { workspaceId: input.workspaceId, assetIds: input.assetIds, limit: MAX_IDS },
+    input.traceId,
   );
 
   // Fit the rows to the subrequest budget; the rest wait for the next sweep.
@@ -192,12 +227,7 @@ export async function sweepWorkspace(
     return { removed: 0, freedBytes: 0, failed: 0 };
   }
 
-  const sizes = await deps.store.storedBytes(
-    batch.map((row) => row.asset_id),
-    input.traceId,
-  );
-
-  const cleared: string[] = [];
+  const cleared: PurgeDueRow[] = [];
   let failed = 0;
   await eachLimited(batch, DELETE_CONCURRENCY, async (row) => {
     try {
@@ -207,7 +237,7 @@ export async function sweepWorkspace(
       for (const key of row.r2_keys) {
         await deps.objects.deleteObject(row.bucket ?? '', key, input.traceId);
       }
-      cleared.push(row.asset_id);
+      cleared.push(row);
     } catch (error) {
       failed += 1;
       logger.error('purge: R2 delete failed', {
@@ -218,8 +248,14 @@ export async function sweepWorkspace(
     }
   });
 
-  const removed = cleared.length === 0 ? 0 : await deps.store.done(cleared, input.traceId);
-  const freedBytes = cleared.reduce((sum, id) => sum + (sizes.get(id) ?? 0), 0);
+  const removed =
+    cleared.length === 0
+      ? 0
+      : await deps.store.done(
+          cleared.map((row) => row.asset_id),
+          input.traceId,
+        );
+  const freedBytes = cleared.reduce((sum, row) => sum + row.bytes, 0);
   return { removed, freedBytes, failed };
 }
 
@@ -230,35 +266,117 @@ function serviceClient(env: PurgeEnv, traceId: string) {
   });
 }
 
+/** One assets row of the due read, with its embedded keys, sizes and attachments. */
+interface CandidateRow {
+  id: string;
+  workspace_id: string;
+  purge_requested_at: string | null;
+  workspaces: { asset_bucket: string | null } | null;
+  asset_versions: Array<{
+    r2_key: string | null;
+    size_bytes: number | null;
+    asset_renditions: Array<{ r2_key: string | null; size_bytes: number | null }>;
+  }>;
+  asset_attachments: Array<{ entity_type: string; entity_id: string; deleted_at: string | null }>;
+}
+
+/**
+ * asset_in_use over many rows: the ids among `rows` with a live attachment to
+ * a live post, brief or comment. One read per entity table per chunk of ids.
+ */
+async function liveAttachedAssets(
+  client: ReturnType<typeof serviceClient>,
+  rows: readonly CandidateRow[],
+): Promise<Set<string>> {
+  const wanted = new Map<EntityType, Set<string>>();
+  for (const row of rows) {
+    for (const a of row.asset_attachments) {
+      const type = entityType(a.entity_type);
+      if (a.deleted_at !== null || type === null || !UUID_TEXT_RE.test(a.entity_id)) continue;
+      const ids = wanted.get(type) ?? new Set<string>();
+      ids.add(a.entity_id);
+      wanted.set(type, ids);
+    }
+  }
+
+  const live = new Map<EntityType, Set<string>>();
+  for (const [type, idSet] of wanted) {
+    const found = new Set<string>();
+    for (const ids of chunked([...idSet], ID_CHUNK)) {
+      const { data, error } = await client
+        .from(ENTITY_TABLES[type])
+        .select('id')
+        .in('id', ids)
+        .is('deleted_at', null);
+      if (error) throw new Error(`purge in-use read failed: ${error.message}`);
+      for (const entity of data ?? []) found.add(entity.id);
+    }
+    live.set(type, found);
+  }
+
+  const inUse = new Set<string>();
+  for (const row of rows) {
+    const used = row.asset_attachments.some((a) => {
+      const type = entityType(a.entity_type);
+      return a.deleted_at === null && type !== null && (live.get(type)?.has(a.entity_id) ?? false);
+    });
+    if (used) inUse.add(row.id);
+  }
+  return inUse;
+}
+
 /** The live service-role store. */
 export function createSupabasePurgeStore(env: PurgeEnv, traceId: string): PurgeStore {
   const client = serviceClient(env, traceId);
   const members = createSupabaseAssetReadStore(env, traceId);
   return {
     isActiveMember: (input) => members.isActiveMember(input),
-    async due(limit) {
-      const args = { p_limit: limit };
-      const { data, error } = await client.rpc('storage_purge_due', args);
-      if (error) throw new Error(`storage_purge_due failed: ${error.message}`);
-      return data ?? [];
-    },
-    async storedBytes(assetIds) {
-      const sizes = new Map<string, number>();
-      for (let i = 0; i < assetIds.length; i += SIZE_CHUNK) {
-        const { data, error } = await client
-          .from('asset_versions')
-          .select('asset_id, size_bytes, asset_renditions(size_bytes)')
-          .in('asset_id', assetIds.slice(i, i + SIZE_CHUNK));
-        if (error) throw new Error(`asset size read failed: ${error.message}`);
-        for (const row of data ?? []) {
-          const renditions = row.asset_renditions.reduce((sum, r) => sum + (r.size_bytes ?? 0), 0);
-          sizes.set(
-            row.asset_id,
-            (sizes.get(row.asset_id) ?? 0) + (row.size_bytes ?? 0) + renditions,
-          );
-        }
+    async due({ workspaceId, assetIds, limit }) {
+      const chunks: Array<readonly string[] | null> =
+        assetIds === null ? [null] : chunked(assetIds, ID_CHUNK);
+
+      const candidates: CandidateRow[] = [];
+      for (const ids of chunks) {
+        let query = client
+          .from('assets')
+          .select(
+            'id, workspace_id, purge_requested_at, workspaces!assets_workspace_id_fkey(asset_bucket), asset_versions!asset_versions_asset_id_fkey(r2_key, size_bytes, asset_renditions(r2_key, size_bytes)), asset_attachments!asset_attachments_asset_id_fkey(entity_type, entity_id, deleted_at)',
+          )
+          .eq('workspace_id', workspaceId)
+          .not('deleted_at', 'is', null)
+          .not('purge_requested_at', 'is', null)
+          .order('purge_requested_at')
+          .limit(limit);
+        if (ids !== null) query = query.in('id', ids);
+        const { data, error } = await query;
+        if (error) throw new Error(`purge due read failed: ${error.message}`);
+        const rows: CandidateRow[] = data ?? [];
+        candidates.push(...rows);
       }
-      return sizes;
+
+      const inUse = await liveAttachedAssets(client, candidates);
+      return candidates
+        .filter((row) => !inUse.has(row.id))
+        .sort((a, b) => (a.purge_requested_at ?? '').localeCompare(b.purge_requested_at ?? ''))
+        .slice(0, limit)
+        .map((row) => ({
+          asset_id: row.id,
+          workspace_id: row.workspace_id,
+          bucket: row.workspaces?.asset_bucket ?? null,
+          r2_keys: [
+            ...row.asset_versions.flatMap((v) => (v.r2_key === null ? [] : [v.r2_key])),
+            ...row.asset_versions.flatMap((v) =>
+              v.asset_renditions.flatMap((r) => (r.r2_key === null ? [] : [r.r2_key])),
+            ),
+          ],
+          bytes: row.asset_versions.reduce(
+            (sum, v) =>
+              sum +
+              (v.size_bytes ?? 0) +
+              v.asset_renditions.reduce((s, r) => s + (r.size_bytes ?? 0), 0),
+            0,
+          ),
+        }));
     },
     async done(assetIds) {
       const args = { p_asset_ids: [...assetIds] };

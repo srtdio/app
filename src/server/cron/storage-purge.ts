@@ -15,6 +15,12 @@
 //      skipped without purge_done, so the next night retries it; it never stops
 //      the others.
 //
+// A Worker invocation has a bounded subrequest budget, so the run spends at
+// most RUN_CALL_BUDGET R2 and Agora calls: the asset pass up to
+// ASSET_CALL_BUDGET, the workspace pass whatever is left. A pass that runs out
+// stops cleanly; an unfinished workspace is not marked done, and the next
+// night picks up where this one stopped (every delete is idempotent).
+//
 // handleScheduled() wires the live clients; runPurge() carries the logic
 // against injected interfaces and is unit-testable.
 
@@ -38,6 +44,12 @@ export const ASSET_BATCH_SIZE = 500;
 
 /** Asset batches per run; a larger backlog drains across nights. */
 export const MAX_ASSET_BATCHES = 20;
+
+/** R2 + Agora calls one run may make, kept under the Worker subrequest limit. */
+export const RUN_CALL_BUDGET = 900;
+
+/** The asset pass's share of RUN_CALL_BUDGET; the workspace pass gets the rest. */
+export const ASSET_CALL_BUDGET = RUN_CALL_BUDGET / 2;
 
 /** App-token TTL for Agora REST auth, as chat-agora-rest uses. */
 const APP_TOKEN_TTL_SECONDS = 3_600;
@@ -103,7 +115,29 @@ export interface PurgeSummary {
   keysFailed: number;
   workspacesPurged: number;
   workspacesFailed: number;
+  /** R2 + Agora calls made. */
+  calls: number;
+  /** True when a pass stopped early because the call budget ran out. */
+  budgetExhausted: boolean;
 }
+
+/** Calls left for this run; take() claims n of them or none. */
+class CallBudget {
+  constructor(private left: number) {}
+
+  get remaining(): number {
+    return this.left;
+  }
+
+  take(n: number): boolean {
+    if (n > this.left) return false;
+    this.left -= n;
+    return true;
+  }
+}
+
+/** Thrown inside a workspace teardown when the budget runs out mid-way. */
+class BudgetExhausted extends Error {}
 
 function errorText(error: unknown): string {
   const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
@@ -111,10 +145,15 @@ function errorText(error: unknown): string {
 }
 
 /** Pass 1: delete the bytes of due assets in batches, then drop their rows. */
-async function purgeAssets(deps: PurgeDeps, summary: PurgeSummary): Promise<void> {
+async function purgeAssets(
+  deps: PurgeDeps,
+  summary: PurgeSummary,
+  budget: CallBudget,
+): Promise<void> {
   // Rows that failed this run are not retried until the next night.
   const failed = new Set<string>();
-  while (summary.batches < MAX_ASSET_BATCHES) {
+  let outOfBudget = false;
+  while (summary.batches < MAX_ASSET_BATCHES && !outOfBudget) {
     const rows = await deps.db.storagePurgeDue(ASSET_BATCH_SIZE);
     summary.batches += 1;
     if (rows.length === 0) return;
@@ -123,6 +162,24 @@ async function purgeAssets(deps: PurgeDeps, summary: PurgeSummary): Promise<void
     for (const row of rows) {
       if (failed.has(row.assetId)) continue;
       const bucket = row.bucket;
+      // A row's keys go together or not at all; the rest wait for the next night.
+      // A row that could never fit is skipped so it cannot stall the queue.
+      if (bucket !== null && row.keys.length > ASSET_CALL_BUDGET) {
+        failed.add(row.assetId);
+        summary.assetsFailed += 1;
+        deps.log.error('storage purge asset failed', {
+          trace_id: deps.traceId,
+          asset_id: row.assetId,
+          keys: row.keys.length,
+          error: 'more keys than one run may delete',
+        });
+        continue;
+      }
+      if (bucket !== null && !budget.take(row.keys.length)) {
+        outOfBudget = true;
+        summary.budgetExhausted = true;
+        break;
+      }
       const results =
         bucket === null
           ? []
@@ -159,19 +216,34 @@ async function purgeAssets(deps: PurgeDeps, summary: PurgeSummary): Promise<void
 }
 
 /** Delete every object in a bucket, page by page, then the bucket itself. */
-async function emptyAndDeleteBucket(deps: PurgeDeps, bucket: string): Promise<void> {
+function spend(budget: CallBudget): void {
+  if (!budget.take(1)) throw new BudgetExhausted('call budget exhausted');
+}
+
+async function emptyAndDeleteBucket(
+  deps: PurgeDeps,
+  bucket: string,
+  budget: CallBudget,
+): Promise<void> {
   let cursor: string | null = null;
   do {
+    spend(budget);
     const page = await deps.storage.listObjects({ bucket, cursor, traceId: deps.traceId });
     for (const object of page.objects) {
+      spend(budget);
       await deps.storage.deleteObject(bucket, object.key, deps.traceId);
     }
     cursor = page.nextCursor;
   } while (cursor !== null);
+  spend(budget);
   await deps.storage.deleteBucket(bucket, deps.traceId);
 }
 
-async function purgeWorkspace(deps: PurgeDeps, workspace: DueWorkspace): Promise<void> {
+async function purgeWorkspace(
+  deps: PurgeDeps,
+  workspace: DueWorkspace,
+  budget: CallBudget,
+): Promise<void> {
   const { workspaceId, bucket } = workspace;
   // The bucket name is unique among live workspaces only, so a new workspace
   // can inherit a deleted one's name; never wipe a bucket someone still uses.
@@ -180,22 +252,35 @@ async function purgeWorkspace(deps: PurgeDeps, workspace: DueWorkspace): Promise
   }
   const groupIds = await deps.db.workspaceAgoraGroupIds(workspaceId);
   for (const groupId of groupIds) {
+    spend(budget);
     await deps.agora.deleteGroup(groupId, deps.traceId);
   }
   if (bucket !== null) {
-    await emptyAndDeleteBucket(deps, bucket);
+    await emptyAndDeleteBucket(deps, bucket, budget);
   }
   await deps.db.workspacePurgeDone(workspaceId);
 }
 
 /** Pass 2: tear down each deleted workspace in isolation. */
-async function purgeWorkspaces(deps: PurgeDeps, summary: PurgeSummary): Promise<void> {
+async function purgeWorkspaces(
+  deps: PurgeDeps,
+  summary: PurgeSummary,
+  budget: CallBudget,
+): Promise<void> {
   const workspaces = await deps.db.workspacePurgeDue();
   for (const workspace of workspaces) {
     try {
-      await purgeWorkspace(deps, workspace);
+      await purgeWorkspace(deps, workspace, budget);
       summary.workspacesPurged += 1;
     } catch (error) {
+      if (error instanceof BudgetExhausted) {
+        summary.budgetExhausted = true;
+        deps.log.info('storage purge out of call budget; resuming next run', {
+          trace_id: deps.traceId,
+          workspace_id: workspace.workspaceId,
+        });
+        return;
+      }
       summary.workspacesFailed += 1;
       deps.log.error('storage purge workspace failed', {
         trace_id: deps.traceId,
@@ -216,23 +301,29 @@ export async function runPurge(deps: PurgeDeps): Promise<PurgeSummary> {
     keysFailed: 0,
     workspacesPurged: 0,
     workspacesFailed: 0,
+    calls: 0,
+    budgetExhausted: false,
   };
+  const assetBudget = new CallBudget(ASSET_CALL_BUDGET);
   try {
-    await purgeAssets(deps, summary);
+    await purgeAssets(deps, summary, assetBudget);
   } catch (error) {
     deps.log.error('storage purge asset pass failed', {
       trace_id: deps.traceId,
       error: errorText(error),
     });
   }
+  const assetCalls = ASSET_CALL_BUDGET - assetBudget.remaining;
+  const workspaceBudget = new CallBudget(RUN_CALL_BUDGET - assetCalls);
   try {
-    await purgeWorkspaces(deps, summary);
+    await purgeWorkspaces(deps, summary, workspaceBudget);
   } catch (error) {
     deps.log.error('storage purge workspace pass failed', {
       trace_id: deps.traceId,
       error: errorText(error),
     });
   }
+  summary.calls = RUN_CALL_BUDGET - workspaceBudget.remaining;
   return summary;
 }
 

@@ -14,13 +14,17 @@ vi.mock('jose', async (importOriginal) => {
   };
 });
 
-// supabase-js: every client records the key and headers it was built with and
-// the rpcs it ran, so a test can tell the caller-token client from the service
-// role. Only the default (live) deps reach it; injected deps never do.
+// supabase-js: every client records the key and headers it was built with,
+// the rpcs it ran and the table queries it built (each builder call in order),
+// so a test can tell the caller-token client from the service role. A table
+// query resolves to `tables[table]`. Only the default (live) deps reach it;
+// injected deps never do.
 const supa = vi.hoisted(() => ({
   rpcs: [] as Array<{ key: string; authorization: string | undefined; fn: string; args: unknown }>,
   clients: [] as Array<{ key: string; headers: Record<string, string> }>,
   responses: {} as Record<string, { data: unknown; error: { message: string } | null }>,
+  queries: [] as Array<{ key: string; table: string; calls: Array<[string, ...unknown[]]> }>,
+  tables: {} as Record<string, unknown[]>,
 }));
 vi.mock('@supabase/supabase-js', () => ({
   createClient: (
@@ -30,12 +34,22 @@ vi.mock('@supabase/supabase-js', () => ({
   ) => {
     const headers = options?.global?.headers ?? {};
     supa.clients.push({ key, headers });
-    const chain: Record<string, unknown> = {};
-    for (const name of ['select', 'eq', 'is', 'in']) chain[name] = () => chain;
-    chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
-    chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null });
     return {
-      from: () => chain,
+      from: (table: string) => {
+        const query = { key, table, calls: [] as Array<[string, ...unknown[]]> };
+        supa.queries.push(query);
+        const chain: Record<string, unknown> = {};
+        for (const name of ['select', 'eq', 'is', 'in', 'not', 'order', 'limit']) {
+          chain[name] = (...args: unknown[]) => {
+            query.calls.push([name, ...args]);
+            return chain;
+          };
+        }
+        chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+        chain.then = (resolve: (v: unknown) => unknown) =>
+          resolve({ data: supa.tables[table] ?? [], error: null });
+        return chain;
+      },
       rpc: (fn: string, args: unknown) => {
         supa.rpcs.push({ key, authorization: headers.Authorization, fn, args });
         return Promise.resolve(supa.responses[fn] ?? { data: null, error: null });
@@ -46,6 +60,7 @@ vi.mock('@supabase/supabase-js', () => ({
 
 import {
   createSupabasePurgeRequester,
+  createSupabasePurgeStore,
   handlePurge,
   handlePurgeChat,
   type PurgeDeps,
@@ -160,19 +175,24 @@ function world() {
     store: {
       isActiveMember: ({ userId, workspaceId }) =>
         Promise.resolve(members.has(`${userId}:${workspaceId}`)),
-      due: (limit) => {
+      due: ({ workspaceId, assetIds, limit }) => {
         const rows: PurgeDueRow[] = [...assets]
-          .filter(([, a]) => a.purgeRequested && !a.inUse)
+          .filter(
+            ([id, a]) =>
+              a.workspace === workspaceId &&
+              (assetIds === null || assetIds.includes(id)) &&
+              a.purgeRequested &&
+              !a.inUse,
+          )
           .map(([id, a]) => ({
             asset_id: id,
             workspace_id: a.workspace,
             bucket: a.bucket,
             r2_keys: a.keys,
+            bytes: a.bytes,
           }));
         return Promise.resolve(rows.slice(0, limit));
       },
-      storedBytes: (ids) =>
-        Promise.resolve(new Map(ids.map((id) => [id, assets.get(id)?.bytes ?? 0]))),
       done: (ids) => {
         doneCalls.push([...ids]);
         let n = 0;
@@ -211,6 +231,8 @@ beforeEach(() => {
   supa.rpcs = [];
   supa.clients = [];
   supa.responses = {};
+  supa.queries = [];
+  supa.tables = {};
 });
 
 describe('POST /purge', () => {
@@ -489,9 +511,8 @@ describe('asset_purge_request runs as the caller, never the service role', () =>
     expect(supa.rpcs).toEqual([]);
   });
 
-  it('with live deps, only the storage_purge_* sweep uses the service role', async () => {
+  it('with live deps, only the sweep read uses the service role', async () => {
     supa.responses.asset_purge_request = { data: 0, error: null };
-    supa.responses.storage_purge_due = { data: [], error: null };
     const t = await token(OWNER);
     const request = new Request('https://upload.example/purge', {
       method: 'POST',
@@ -504,9 +525,8 @@ describe('asset_purge_request runs as the caller, never the service role', () =>
     const request_ = supa.rpcs.filter((r) => r.fn === 'asset_purge_request');
     expect(request_).toEqual([expect.objectContaining({ key: 'sb_publishable_test' })]);
     expect(request_[0]?.authorization).toBe(`Bearer ${t}`);
-    expect(supa.rpcs.filter((r) => r.key === 'service-role-key').map((r) => r.fn)).toEqual([
-      'storage_purge_due',
-    ]);
+    expect(supa.rpcs.filter((r) => r.key === 'service-role-key')).toEqual([]);
+    expect(supa.queries.map((q) => [q.key, q.table])).toEqual([['service-role-key', 'assets']]);
   });
 
   it('with live deps, an owner_only proc answer is 403 and nothing is swept', async () => {
@@ -558,5 +578,111 @@ describe('POST /purge-chat membership', () => {
     const res = await post(handlePurge, w.deps, { workspace_id: WS }, MEMBER);
     expect(res.status).toBe(403);
     expect(due).not.toHaveBeenCalled();
+  });
+});
+
+describe('the live due read', () => {
+  const V1 = 'c1111111-1111-7111-8111-111111111111';
+  const POST_LIVE = 'd1111111-1111-7111-8111-111111111111';
+  const POST_GONE = 'd2222222-2222-7222-8222-222222222222';
+
+  function assetRow(id: string, requestedAt: string, attachments: unknown[] = []) {
+    return {
+      id,
+      workspace_id: WS,
+      purge_requested_at: requestedAt,
+      workspaces: { asset_bucket: 'assets-ws' },
+      asset_versions: [
+        {
+          r2_key: `${id}/v1`,
+          size_bytes: 10,
+          asset_renditions: [
+            { r2_key: `${id}/v1-thumb`, size_bytes: 2 },
+            { r2_key: null, size_bytes: 1 },
+          ],
+        },
+        { r2_key: null, size_bytes: null, asset_renditions: [] },
+        { r2_key: `${id}/v2`, size_bytes: 5, asset_renditions: [] },
+      ],
+      asset_attachments: attachments,
+    };
+  }
+
+  const due = (assetIds: string[] | null) =>
+    createSupabasePurgeStore(env, TRACE).due({ workspaceId: WS, assetIds, limit: 1000 }, TRACE);
+
+  it('reads only this workspace, never storage_purge_due, so rows due elsewhere cannot crowd it out', async () => {
+    supa.tables.assets = [assetRow(A1, '2026-10-17T10:00:00Z')];
+    const rows = await due(null);
+    expect(rows.map((r) => r.asset_id)).toEqual([A1]);
+    expect(supa.rpcs).toEqual([]);
+    const [query] = supa.queries;
+    expect(query?.key).toBe('service-role-key');
+    expect(query?.table).toBe('assets');
+    expect(query?.calls.slice(1)).toEqual([
+      ['eq', 'workspace_id', WS],
+      ['not', 'deleted_at', 'is', null],
+      ['not', 'purge_requested_at', 'is', null],
+      ['order', 'purge_requested_at'],
+      ['limit', 1000],
+    ]);
+  });
+
+  it('builds r2_keys as storage_purge_due does (version keys, then rendition keys) and sums bytes', async () => {
+    supa.tables.assets = [assetRow(A1, '2026-10-17T10:00:00Z')];
+    expect(await due(null)).toEqual([
+      {
+        asset_id: A1,
+        workspace_id: WS,
+        bucket: 'assets-ws',
+        r2_keys: [`${A1}/v1`, `${A1}/v2`, `${A1}/v1-thumb`],
+        bytes: 18,
+      },
+    ]);
+  });
+
+  it('filters by the given ids in chunks and keeps the oldest request first', async () => {
+    supa.tables.assets = [
+      assetRow(A2, '2026-10-17T11:00:00Z'),
+      assetRow(A1, '2026-10-17T10:00:00Z'),
+    ];
+    const ids = Array.from(
+      { length: 151 },
+      (_, i) => `${String(i).padStart(8, '0')}${V1.slice(8)}`,
+    );
+    const rows = await due(ids);
+    const idFilters = supa.queries
+      .filter((q) => q.table === 'assets')
+      .map((q) => q.calls.find((c) => c[0] === 'in'));
+    expect(idFilters).toEqual([
+      ['in', 'id', ids.slice(0, 150)],
+      ['in', 'id', ids.slice(150)],
+    ]);
+    // Each chunk read returns both fixtures here; the order is by request time.
+    expect(rows.map((r) => r.asset_id)).toEqual([A1, A1, A2, A2]);
+  });
+
+  it('drops rows asset_in_use would keep: a live attachment to a live post', async () => {
+    supa.tables.assets = [
+      assetRow(A1, '2026-10-17T10:00:00Z', [
+        { entity_type: 'post', entity_id: POST_LIVE, deleted_at: null },
+      ]),
+      assetRow(A2, '2026-10-17T10:00:00Z', [
+        { entity_type: 'post', entity_id: POST_GONE, deleted_at: null },
+        { entity_type: 'post', entity_id: POST_LIVE, deleted_at: '2026-10-01T00:00:00Z' },
+        { entity_type: 'toString', entity_id: POST_LIVE, deleted_at: null },
+        { entity_type: 'post', entity_id: POST_LIVE.toUpperCase(), deleted_at: null },
+      ]),
+    ];
+    supa.tables.posts = [{ id: POST_LIVE }];
+    const rows = await due(null);
+    expect(rows.map((r) => r.asset_id)).toEqual([A2]);
+    const posts = supa.queries.find((q) => q.table === 'posts');
+    expect(posts?.calls).toEqual([
+      ['select', 'id'],
+      ['in', 'id', [POST_LIVE, POST_GONE]],
+      ['is', 'deleted_at', null],
+    ]);
+    expect(supa.queries.map((q) => q.table)).toEqual(['assets', 'posts']);
   });
 });

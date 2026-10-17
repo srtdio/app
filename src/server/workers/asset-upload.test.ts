@@ -1817,6 +1817,31 @@ describe('workspace storage cap (413 workspace_full)', () => {
       expect(state.capturedInput).toBeNull();
     });
 
+    it('counts the thumbnail part toward the cap', async () => {
+      const token = await memberToken();
+      const thumb = new Blob([new Uint8Array(10)], { type: 'image/jpeg' });
+      const withThumb = (): Request => {
+        const form = new FormData();
+        form.set('file', new File([new Uint8Array(FILE_BYTES)], 'doc.pdf', { type: MIME.pdf }));
+        form.set('workspace_id', WORKSPACE);
+        form.set('thumbnail', thumb, 'thumb.jpg');
+        return new Request('https://worker.test/', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        });
+      };
+      usageState.bytes = CAP_BYTES - FILE_BYTES - 10 + 1;
+      const over = await worker.fetch(withThumb(), env);
+      expect(over.status).toBe(413);
+      expect(await over.json()).toEqual(WORKSPACE_FULL_BODY);
+      expect(state.capturedInput).toBeNull();
+
+      // File plus thumbnail exactly on the cap is not refused by the cap.
+      usageState.bytes = CAP_BYTES - FILE_BYTES - 10;
+      expect((await worker.fetch(withThumb(), env)).status).not.toBe(413);
+    });
+
     it('caps a chat upload the same way', async () => {
       const token = await memberToken();
       usageState.bytes = CAP_BYTES;

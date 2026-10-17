@@ -37,7 +37,9 @@ vi.mock('@supabase/supabase-js', () => ({
 
 import {
   ASSET_BATCH_SIZE,
+  ASSET_CALL_BUDGET,
   MAX_ASSET_BATCHES,
+  RUN_CALL_BUDGET,
   createAgoraPurgeApi,
   handleScheduled,
   runPurge,
@@ -410,6 +412,96 @@ describe('runPurge: per-workspace isolation and the live-bucket guard', () => {
     );
     expect(db.workspacesDone).toEqual(['w2']);
     expect(summary).toMatchObject({ workspacesPurged: 1, workspacesFailed: 1 });
+  });
+});
+
+describe('runPurge: call budget', () => {
+  const keys = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
+
+  it('lets the asset pass spend at most its share, whole rows only, and leaves the rest due', async () => {
+    // 10 rows of 100 keys: only 4 fit in 450 calls.
+    const db = fakeDb({
+      assets: Array.from({ length: 10 }, (_, i) => asset(`a${i}`, keys(`a${i}-`, 100))),
+    });
+    const r2 = fakeStorage();
+    const summary = await runPurge(
+      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
+    );
+    expect(r2.deleted).toHaveLength(400);
+    expect(db.doneCalls).toEqual([['a0', 'a1', 'a2', 'a3']]);
+    expect(db.remaining()).toHaveLength(6);
+    expect(db.dueCalls()).toBe(1);
+    expect(summary).toMatchObject({ assetsPurged: 4, calls: 400, budgetExhausted: true });
+  });
+
+  it('skips a row with more keys than the asset share instead of stalling on it', async () => {
+    const db = fakeDb({
+      assets: [asset('huge', keys('h', ASSET_CALL_BUDGET + 1)), asset('small', ['s'])],
+    });
+    const r2 = fakeStorage();
+    const summary = await runPurge(
+      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
+    );
+    expect(r2.deleted).toEqual(['assets-acme/s']);
+    expect(db.doneCalls).toEqual([['small']]);
+    expect(summary).toMatchObject({ assetsPurged: 1, assetsFailed: 1 });
+  });
+
+  it('gives the workspace pass what the asset pass left, and never exceeds the run budget', async () => {
+    const db = fakeDb({
+      assets: [asset('a1', keys('k', 100))],
+      workspaces: [{ workspaceId: 'w1', bucket: 'assets-big' }],
+    });
+    const r2 = fakeStorage({ 'assets-big': keys('o', 2000) }, 1000);
+    const summary = await runPurge(
+      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
+    );
+    const total = r2.deleted.length + r2.listCursors.length + r2.deletedBuckets.length;
+    expect(total).toBe(RUN_CALL_BUDGET);
+    expect(summary.calls).toBe(RUN_CALL_BUDGET);
+    expect(summary.budgetExhausted).toBe(true);
+  });
+
+  it('stops the workspace pass cleanly: the unfinished workspace is not marked done or failed', async () => {
+    const db = fakeDb({
+      workspaces: [
+        { workspaceId: 'w1', bucket: 'assets-one' },
+        { workspaceId: 'w2', bucket: 'assets-two' },
+        { workspaceId: 'w3', bucket: null },
+      ],
+    });
+    db.groups.set('w3', ['g3']);
+    // w1 costs list + 3 deletes + bucket = 5 calls; w2 cannot finish in the rest.
+    const r2 = fakeStorage({ 'assets-one': keys('a', 3), 'assets-two': keys('b', 2000) }, 1000);
+    const agora = fakeAgora();
+    const d = deps({ db: db.db, storage: r2.storage, agora: agora.agora });
+    const summary = await runPurge(d);
+    expect(db.workspacesDone).toEqual(['w1']);
+    expect(r2.deletedBuckets).toEqual(['assets-one']);
+    expect(agora.deleted).toEqual([]);
+    expect(summary).toMatchObject({
+      workspacesPurged: 1,
+      workspacesFailed: 0,
+      calls: RUN_CALL_BUDGET,
+      budgetExhausted: true,
+    });
+    expect(d.log.info).toHaveBeenCalledWith(
+      'storage purge out of call budget; resuming next run',
+      expect.objectContaining({ workspace_id: 'w2' }),
+    );
+    expect(d.log.error).not.toHaveBeenCalled();
+  });
+
+  it('counts Agora group deletes against the budget', async () => {
+    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: null }] });
+    db.groups.set('w1', keys('g', RUN_CALL_BUDGET + 1));
+    const agora = fakeAgora();
+    const summary = await runPurge(
+      deps({ db: db.db, storage: fakeStorage().storage, agora: agora.agora }),
+    );
+    expect(agora.deleted).toHaveLength(RUN_CALL_BUDGET);
+    expect(db.workspacesDone).toEqual([]);
+    expect(summary.budgetExhausted).toBe(true);
   });
 });
 

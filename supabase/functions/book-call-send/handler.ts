@@ -152,10 +152,10 @@ export async function handleBookCallSend(req: Request, deps: BookCallSendDeps): 
     if (!value) throw new Error(`missing required env ${name}`);
     return value;
   };
-  const appBaseUrl = requireEnv('APP_BASE_URL').replace(/\/$/, '');
   const traceId = req.headers.get(TRACE_ID_HEADER) ?? uuidv7();
   // Reflect the caller's Origin (see invite-send); auth is the boundary, not CORS.
-  const allowedOrigin = req.headers.get('Origin') ?? appBaseUrl;
+  // No env is read before the try, so a missing one still answers a JSON 500.
+  const allowedOrigin = req.headers.get('Origin') ?? '*';
   const fail = (code: string, status: number): Response =>
     json({ error: { code } }, status, allowedOrigin, traceId);
 

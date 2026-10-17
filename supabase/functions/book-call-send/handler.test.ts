@@ -9,7 +9,6 @@ import {
 } from './handler.ts';
 
 const ENV: Record<string, string> = {
-  APP_BASE_URL: 'https://app.test/',
   SUPABASE_URL: 'https://db.test',
   SUPABASE_SERVICE_ROLE_KEY: 'service-key',
   SUPABASE_ANON_KEY: 'anon-key',
@@ -329,5 +328,32 @@ describe('book-call-send identity comes only from the session', () => {
     await handleBookCallSend(request({ ...VALID, user_id: 'someone-else' }), s.deps);
     const key = (s.fetchMock.mock.calls[0]?.[1] as ResendInit).headers['Idempotency-Key'];
     expect(key).toBe(await bookCallIdempotencyKey('caller-1', WORKSPACE_ID, new Date(SLOT_AT)));
+  });
+});
+
+describe('book-call-send env', () => {
+  it('a missing env answers a JSON 500 with CORS headers, not a thrown error', async () => {
+    const t = setup({ env: { SUPABASE_URL: undefined } });
+    const req = new Request('https://fn.test/book-call-send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer caller-jwt',
+        Origin: 'https://app.test',
+      },
+      body: JSON.stringify(VALID),
+    });
+    const res = await handleBookCallSend(req, t.deps);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: { code: 'internal' } });
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://app.test');
+    expect(res.headers.get('X-Trace-Id')).toBeTruthy();
+  });
+
+  it('needs no APP_BASE_URL: without an Origin the CORS fallback is *', async () => {
+    const t = setup();
+    const res = await handleBookCallSend(request(VALID), t.deps);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
   });
 });

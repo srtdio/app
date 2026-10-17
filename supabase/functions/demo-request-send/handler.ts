@@ -143,6 +143,7 @@ export function slotUtc(day: string, slot: string): string {
 
 // --- Abuse limits (in memory, per function instance) ------------------------
 
+// Best effort only: each isolate keeps its own map, so the limit is per instance, not global.
 // key ("email:<address>" | "ip:<address>") -> request times (ms) in the window.
 const recent = new Map<string, number[]>();
 

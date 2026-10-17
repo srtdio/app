@@ -645,10 +645,11 @@ async function handlePost(
     );
   }
   if (file instanceof File && mode === 'direct') {
-    // The file part's declared size, before its bytes are read or stored.
+    // The declared sizes of the file part and its optional thumbnail part,
+    // before any bytes are read or stored.
     const cap = await checkWorkspaceCap({
       workspaceId,
-      addBytes: file.size,
+      addBytes: file.size + (thumbnailPart instanceof File ? thumbnailPart.size : 0),
       store: createSupabaseUsageStore(env, traceId),
     });
     if (!cap.ok) {

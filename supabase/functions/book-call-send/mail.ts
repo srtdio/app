@@ -2,7 +2,7 @@
 // SOURCE OF TRUTH: this file. demo-request-send/mail.ts is a verbatim copy
 // (edge functions are self-contained; there is no supabase/functions/_shared).
 // Change both together.
-//
+
 // The mail goes to the team inbox (BOOK_CALL_TO_ADDRESS), so it is a plain
 // heading + label/value rows card. Every color is inline, no <style>.
 
