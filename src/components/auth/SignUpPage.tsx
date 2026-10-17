@@ -218,10 +218,10 @@ export function SignUpPage(): ReactElement {
           />
         </Field>
 
-        <div className="flex items-start gap-1.5 text-sm text-fg-2">
+        <div className="flex flex-wrap items-center gap-x-1 text-sm text-fg-2">
           <label
             htmlFor="signup-policy-consent"
-            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center"
+            className="flex min-h-11 cursor-pointer items-center gap-2"
           >
             <input
               id="signup-policy-consent"
@@ -229,29 +229,27 @@ export function SignUpPage(): ReactElement {
               checked={policyConsent}
               onChange={(event) => setPolicyConsent(event.target.checked)}
               aria-label="Agree to the Terms and Privacy Policy"
-              className="h-4 w-4 accent-accent"
+              className="h-4 w-4 shrink-0 accent-accent"
             />
+            <span>I agree to the</span>
           </label>
-          <span className="flex flex-wrap items-center gap-x-1 leading-6">
-            <span className="flex min-h-11 items-center">I agree to the</span>
-            <Link
-              to="/legal/terms-and-conditions"
-              target="_blank"
-              rel="noreferrer"
-              className="flex min-h-11 items-center text-accent underline underline-offset-2"
-            >
-              Terms
-            </Link>
-            <span className="flex min-h-11 items-center">and</span>
-            <Link
-              to="/legal/privacy-policy"
-              target="_blank"
-              rel="noreferrer"
-              className="flex min-h-11 items-center text-accent underline underline-offset-2"
-            >
-              Privacy Policy
-            </Link>
-          </span>
+          <Link
+            to="/legal/terms-and-conditions"
+            target="_blank"
+            rel="noreferrer"
+            className="flex min-h-11 items-center text-accent underline underline-offset-2"
+          >
+            Terms
+          </Link>
+          <span className="flex min-h-11 items-center">and</span>
+          <Link
+            to="/legal/privacy-policy"
+            target="_blank"
+            rel="noreferrer"
+            className="flex min-h-11 items-center text-accent underline underline-offset-2"
+          >
+            Privacy Policy
+          </Link>
         </div>
 
         {error !== null ? (
@@ -260,13 +258,7 @@ export function SignUpPage(): ReactElement {
           </p>
         ) : null}
 
-        <Button
-          variant="primary"
-          size="lg"
-          className="w-full bg-fg text-bg hover:bg-fg hover:opacity-90"
-          type="submit"
-          disabled={!canSubmit}
-        >
+        <Button variant="primary" size="lg" className="w-full" type="submit" disabled={!canSubmit}>
           {submitting ? CHECK_EMAIL_COPY.sending : CHECK_EMAIL_COPY.createAccount}
         </Button>
       </form>
