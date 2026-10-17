@@ -180,7 +180,7 @@ test('approver: review, ask, talk with real taps, then Done @desktop', async ({ 
 
   const writes = network.rpcCalls.map((c) => c.name).filter((n) => n.startsWith('induction_'));
   expect(new Set(writes)).toEqual(
-    new Set(['induction_state', 'induction_step_set', 'induction_finish']),
+    new Set(['induction_state', 'induction_step_set', 'induction_sample_seed', 'induction_finish']),
   );
   expect(errors.filter((e) => !NOISE.some((n) => n.test(e)))).toEqual([]);
   expect(network.blocked).toEqual([]);
