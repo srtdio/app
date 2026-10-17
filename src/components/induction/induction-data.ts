@@ -304,43 +304,9 @@ export interface SampleWeek {
 
 export const NO_SAMPLE: SampleWeek = { seeded: false, reviewPostId: null, postIds: [] };
 
-/**
- * The sample week's table and procs are not in the generated types until the
- * schema is applied and the types regenerated; these calls go through this
- * narrow, untyped view of the client until then.
- */
-interface SampleClient {
-  from: (table: 'induction_sample_rows') => {
-    select: (columns: string) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        in: (
-          column: string,
-          values: readonly string[],
-        ) => {
-          limit: (n: number) => PromiseLike<{
-            data: { kind: string; row_id: string; tag: string | null }[] | null;
-            error: { message: string } | null;
-          }>;
-        };
-      };
-    };
-  };
-  rpc: (
-    fn: 'induction_sample_seed' | 'induction_sample_clear',
-    args: { p_workspace_id: string; p_trace_id: string },
-  ) => PromiseLike<{ error: { message: string } | null }>;
-}
-
-function sampleClient(client: Client): SampleClient {
-  return client as unknown as SampleClient;
-}
-
 export async function readSampleWeek(client: Client, workspaceId: string): Promise<SampleWeek> {
   try {
-    const { data, error } = await sampleClient(client)
+    const { data, error } = await client
       .from('induction_sample_rows')
       .select('kind,row_id,tag')
       .eq('workspace_id', workspaceId)
@@ -365,7 +331,7 @@ export async function seedSampleWeek(
 ): Promise<boolean> {
   try {
     const args = { p_workspace_id: input.workspaceId, p_trace_id: input.traceId };
-    const { error } = await sampleClient(client).rpc('induction_sample_seed', args);
+    const { error } = await client.rpc('induction_sample_seed', args);
     if (error) {
       logger.warn('sample week seed failed', { error: error.message, trace_id: input.traceId });
       return false;
@@ -384,7 +350,7 @@ export async function clearSampleWeek(
 ): Promise<boolean> {
   try {
     const args = { p_workspace_id: input.workspaceId, p_trace_id: input.traceId };
-    const { error } = await sampleClient(client).rpc('induction_sample_clear', args);
+    const { error } = await client.rpc('induction_sample_clear', args);
     if (error) {
       logger.warn('sample week clear failed', { error: error.message, trace_id: input.traceId });
       return false;

@@ -57,7 +57,18 @@ Induction procs (20261015035000_induction_progress.sql; EXECUTE to authenticated
 
 - induction_step_set(p_step, p_trace_id) SECURITY DEFINER: saves the caller's current induction step; invalid_payload unless it matches ^[a-z0-9_]{1,40}$. Audited.
 - induction_finish(p_trace_id) SECURITY DEFINER: stamps the caller's induction_done_at (first finish wins). Audited.
-- induction_state(p_workspace_id, p_trace_id) SQL STABLE SECURITY DEFINER (search_path='', EXECUTE to authenticated only), read-only: jsonb of the caller's step and done_at, and, only when the caller is an active member of p_workspace_id, their role there, the first non-draft post they created there, and whether a client (client_invited) or an admin/agency member (team_invited) has been invited (null/false otherwise). Recorded in 20261015039000_induction_state_definer.sql.
+- induction_state(p_workspace_id, p_trace_id) plpgsql VOLATILE SECURITY DEFINER (search_path='', EXECUTE to authenticated only): jsonb of the caller's step and done_at, and, only when the caller is an active member of p_workspace_id, their role there, the first non-draft post they created there, and whether a client (client_invited) or an admin/agency member (team_invited) other than the five sample people has been invited (null/false otherwise). For a member it first clears the workspace's sample week when it is two hours old. Recorded in 20261015039000_induction_state_definer.sql, replaced by 20261017150000_induction_sample_week.sql.
+
+Induction sample week (20261017150000_induction_sample_week.sql, applied 17 Oct 2026). Every first tour runs in a seeded "Kestrel & Rowe" week inside the caller's own workspace:
+
+- Five sample people, global, fixed ids 5a3b1e00-0000-4000-8000-00000000000[1-5] (Riya Menon, Arjun Shah, Dev Kapoor, Neha Rao, Meera Iyer): auth users with no password, unconfirmed and banned until 2999, so they cannot sign in; completed profiles, email_opt_in false, avatars /induction-sample/av-*.jpg. users_avatar_url_check and groups_avatar_url_check also allow ^/induction-sample/[a-z0-9-]+\.jpg$.
+- induction_sample_rows: PK (workspace_id, kind, row_id); kind in member, group, group_member, chat_channel, chat_read_cursor, chat_message, post, post_version, post_annotation, asset, asset_version, asset_rendition, asset_attachment, comment, brief, plan, plan_item, plan_item_review, inbox_entry; row_created_at (for the partitioned chat_messages and inbox_entries); tag nullable, unique per workspace (review_post, voice_note, plan, brief); created_by -> users SET NULL; created_at. workspace_id -> workspaces CASCADE. RLS: SELECT for active members of the workspace (induction_sample_rows_select_member); no writes for anyone (functions only).
+- induction_sample_seeds: PK (workspace_id, seeded_by); seeded_at, cleared_at, cleared_by, clear_reason in seeder/owner/member_joined/expired (null together with cleared_at). At most one live (cleared_at IS NULL) row per workspace. RLS on, no grants.
+- Sample files use r2_key prefix induction-sample/ and are served from the app's static files, not a bucket. The unique indexes asset_versions_r2_key_key and asset_renditions_r2_key_key skip that prefix; workspace_bytes_used and workspace_storage exclude it.
+- induction_sample_seed(p_workspace_id, p_trace_id) SECURITY DEFINER, EXECUTE to authenticated: any active member whose tour is not done, once per person per workspace, one live sample per workspace. Seeds the members, 6 briefs, 37 posts with versions and photos, comments and annotations, an 18-file library, a client plan for the current week, Shoot crew and a DM with chat, and the seeder's inbox. Writes no outbox or sync rows. Audited.
+- induction_sample_clear(p_workspace_id, p_trace_id) SECURITY DEFINER, EXECUTE to authenticated: the seeder or the owner deletes every marked row and what hangs off sample rows only. Audited.
+- Trigger workspace_members_induction_sample_clear (AFTER INSERT OR UPDATE OF active, accepted_at): a real member joining clears the sample.
+- member_invite: the first-client check ignores sample clients.
 
 ### brand_agency_requests
 
@@ -771,4 +782,4 @@ These are dead references from the pre-MVP schema. Harmless (they only widen a C
 - intent_ledger.target_type still lists share_token. share_tokens table is dropped.
 - webhook_events.source lists stripe / resend / linkedin but not agora. To store the Agora chat webhook entry you wanted, this enum likely needs an agora value added.
 
-Counts: 33 base tables + 3 partitioned parents + 9 partition children = 45 relations in public (idempotency_keys, asset_renditions, and folders added since this line was first written). All RLS enabled.
+Counts: 35 base tables + 3 partitioned parents + 9 partition children = 47 relations in public (idempotency_keys, asset_renditions, folders, induction_sample_rows and induction_sample_seeds added since this line was first written). All RLS enabled.

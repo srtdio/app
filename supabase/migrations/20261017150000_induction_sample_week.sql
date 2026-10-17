@@ -31,8 +31,8 @@
 -- is still a team plan (_plan_notify writes nothing for team plans) and the seeder's
 -- sample activity is stamped email_sent_at so the catch-up email skips it.
 --
--- Not applied. Waits for Shubham's approval; then applied to v2 (movnexawfhsyuluspxoc)
--- via Supabase MCP and docs/schema.md regenerated.
+-- Applied to v2 (movnexawfhsyuluspxoc) on 2026-10-17 via the SQL editor; then
+-- docs/schema.md regenerated.
 
 -- ---------------------------------------------------------------------------
 -- Schema
@@ -153,7 +153,7 @@ ON CONFLICT (id) DO UPDATE
   SET display_name = EXCLUDED.display_name, designation = EXCLUDED.designation,
       avatar_url = EXCLUDED.avatar_url, username = EXCLUDED.username, timezone = EXCLUDED.timezone,
       profile_completed_at = EXCLUDED.profile_completed_at, email_opt_in = false
-  WHERE public.users.profile_completed_at IS NULL;
+  WHERE public.users.profile_completed_at IS NULL OR public.users.avatar_url IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- Internal helpers (no EXECUTE for anyone but the definer functions below)
