@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 
 const BYTES_PER_MB = 1024 * 1024;
 
-export const DELETED_FILES_LINE =
+const DELETED_FILES_LINE =
   'Deleted files free up space only after 31 days, or when the owner empties Recently deleted.';
 
 /** Whole MB (1 MB = 1024 * 1024 bytes), rounded down. */

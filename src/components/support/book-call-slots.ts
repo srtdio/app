@@ -143,7 +143,8 @@ export function chosenInstant(input: {
   if (date === null || time === null || input.date < input.minDate) return null;
   const hour = Number(time[1]);
   const minute = Number(time[2]);
-  if (hour > 23 || minute > 59) return null;
+  // The time input steps by 15 minutes; a typed 10:07 is not a slot.
+  if (hour > 23 || minute > 59 || minute % 15 !== 0) return null;
   return zonedInstant(
     { year: Number(date[1]), month: Number(date[2]), day: Number(date[3]) },
     hour,

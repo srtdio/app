@@ -89,7 +89,8 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
     };
   }, [workspaceId]);
 
-  const usedBytes = breakdown?.bytes_used ?? usage?.usedBytes ?? null;
+  // /usage (workspace_bytes_used) is what the cap and the banner use: lead with it.
+  const usedBytes = usage?.usedBytes ?? breakdown?.bytes_used ?? null;
   if (usedBytes === null || workspaceId === null) return null;
   const workspace = workspaceDisplayName ?? '';
   const tone = meterTone(usedBytes, usage);

@@ -75,6 +75,8 @@ function assetRow(input: {
       r2_key: `${WORKSPACE_ID}/${input.id}/v1`,
       version_number: 1,
     },
+    // Recently deleted sums every version (one here).
+    versions: [{ size_bytes: input.sizeBytes }],
     deleted_at: input.deletedAt,
     purge_requested_at: null,
   };

@@ -215,11 +215,12 @@ async function purgeAssets(
   }
 }
 
-/** Delete every object in a bucket, page by page, then the bucket itself. */
+/** Take one call from the run's budget, or stop the pass. */
 function spend(budget: CallBudget): void {
   if (!budget.take(1)) throw new BudgetExhausted('call budget exhausted');
 }
 
+/** Delete every object in a bucket, page by page, then the bucket itself. */
 async function emptyAndDeleteBucket(
   deps: PurgeDeps,
   bucket: string,

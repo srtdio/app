@@ -77,6 +77,7 @@ describe('custom day and time', () => {
     expect(pick({ kind: 'other' })).toBeNull();
     expect(pick({ kind: 'other' }, '2026-10-21')).toBeNull();
     expect(pick({ kind: 'other' }, '', '14:15')).toBeNull();
+    expect(pick({ kind: 'other' }, '2026-10-21', '14:07')).toBeNull();
     expect(pick({ kind: 'other' }, '2026-10-17', '14:15')).toBeNull();
     expect(pick({ kind: 'other' }, '2026-10-21', '14:15')?.toISOString()).toBe(
       '2026-10-21T08:45:00.000Z',
