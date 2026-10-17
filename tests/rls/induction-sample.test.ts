@@ -600,7 +600,7 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
       sql(
         `select clear_reason from public.induction_sample_seeds where workspace_id = '${o.ws.id}'`,
       ),
-    ).toBeNull();
+    ).toBe('');
     // The first real client still sets the workspace's client domain.
     expect(sql(`select client_domain from public.workspaces where id = '${o.ws.id}'`)).toBe(
       client.email.split('@')[1],
