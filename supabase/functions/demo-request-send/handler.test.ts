@@ -80,6 +80,7 @@ function setup(opts: { resendStatus?: number; env?: Record<string, string | unde
       now: () => NOW,
     },
     fetchMock,
+    factory,
     adminFrom,
     deliveryInserts,
     deliveryUpdates,
@@ -293,5 +294,116 @@ describe('demo-request-send validation', () => {
     expect(demoRequestSubject({ name: 'A', day: '2026-10-16', slot: '3:00 pm' })).toBe(
       'Demo request: A · 2026-10-16 3:00 pm IST',
     );
+  });
+});
+
+describe('demo-request-send abuse limits, more', () => {
+  it('a filled honeypot is a silent ok even when the rest of the body is invalid', async () => {
+    const s = setup();
+    const res = await handleDemoRequestSend(
+      request({ website: 'x', email: 'nope', day: '1999-01-01' }, unique().ip),
+      s.deps,
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(s.fetchMock).not.toHaveBeenCalled();
+    expect(s.factory).not.toHaveBeenCalled();
+  });
+
+  it('counts an email case-insensitively and with surrounding spaces', async () => {
+    const s = setup();
+    const { email } = unique();
+    for (const variant of [email, email.toUpperCase(), `  ${email}  `]) {
+      const res = await handleDemoRequestSend(request(valid(variant), unique().ip), s.deps);
+      expect(res.status).toBe(200);
+    }
+    const res = await handleDemoRequestSend(
+      request(valid(email.replace('asha', 'ASHA')), unique().ip),
+      s.deps,
+    );
+    expect(res.status).toBe(429);
+  });
+
+  it('a refused request records and sends nothing, and is not counted against its other key', async () => {
+    const s = setup();
+    const { email } = unique();
+    for (let i = 0; i < 3; i += 1) {
+      await handleDemoRequestSend(request(valid(email), unique().ip), s.deps);
+    }
+    const inserts = s.deliveryInserts.length;
+    const { ip } = unique();
+    const blocked = await handleDemoRequestSend(request(valid(email), ip), s.deps);
+    expect(blocked.status).toBe(429);
+    expect(s.deliveryInserts).toHaveLength(inserts);
+    expect(s.fetchMock).toHaveBeenCalledTimes(3);
+    // The blocked call did not use up one of this IP's three.
+    for (let i = 0; i < 3; i += 1) {
+      const res = await handleDemoRequestSend(request(valid(unique().email), ip), s.deps);
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it('an invalid request is not counted toward the limit', async () => {
+    const s = setup();
+    const { email, ip } = unique();
+    for (let i = 0; i < 3; i += 1) {
+      await handleDemoRequestSend(request(valid(email, { slot: '9:00 am' }), ip), s.deps);
+    }
+    expect((await handleDemoRequestSend(request(valid(email), ip), s.deps)).status).toBe(200);
+  });
+
+  it('never sends to the visitor, whatever they type', async () => {
+    const s = setup();
+    const { email, ip } = unique();
+    await handleDemoRequestSend(
+      request(valid(email, { to: email, cc: email, bcc: email, reply_to: email }), ip),
+      s.deps,
+    );
+    const sent = JSON.parse((s.fetchMock.mock.calls[0]?.[1] as ResendInit).body) as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(sent).sort()).toEqual(['from', 'html', 'subject', 'text', 'to']);
+    expect(sent.to).toBe('team@srtd.test');
+  });
+});
+
+describe('demo-request-send day rules use the IST calendar', () => {
+  // Thu 15 Oct 2026 19:00 UTC = Fri 16 Oct 00:30 IST.
+  const LATE = new Date('2026-10-15T19:00:00Z');
+
+  it('rejects a day that is still tomorrow in UTC but already today in IST', async () => {
+    const s = setup();
+    const { email, ip } = unique();
+    const res = await handleDemoRequestSend(request(valid(email, { day: '2026-10-16' }), ip), {
+      ...s.deps,
+      now: () => LATE,
+    });
+    expect(res.status).toBe(400);
+    expect(s.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts the next IST weekday (Mon 19 Oct) at that moment', async () => {
+    const s = setup();
+    const { email, ip } = unique();
+    const res = await handleDemoRequestSend(request(valid(email, { day: '2026-10-19' }), ip), {
+      ...s.deps,
+      now: () => LATE,
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it.each([
+    ['a Sunday', { day: '2026-10-18' }],
+    ['a slot in another case', { slot: '11:00 AM' }],
+    ['a slot with a trailing space', { slot: '11:00 am ' }],
+    ['a non-string day', { day: 20261016 }],
+    ['a missing honeypot field', { website: undefined }],
+  ])('rejects %s', async (_label, patch) => {
+    const s = setup();
+    const { email, ip } = unique();
+    const res = await handleDemoRequestSend(request(valid(email, patch), ip), s.deps);
+    expect(res.status).toBe(400);
+    expect(s.fetchMock).not.toHaveBeenCalled();
   });
 });

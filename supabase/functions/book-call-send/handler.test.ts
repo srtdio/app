@@ -55,6 +55,7 @@ function setup(opts: Setup = {}) {
     },
   };
   const memberFilters: unknown[][] = [];
+  const userFilters: unknown[][] = [];
   const deliveryInserts: unknown[] = [];
   const deliveryUpdates: unknown[] = [];
   const adminFrom = vi.fn((table: string) => {
@@ -69,7 +70,14 @@ function setup(opts: Setup = {}) {
     if (table === 'workspaces') {
       return query({ data: { name: 'Ramy Group', platform: 'instagram' }, error: null });
     }
-    if (table === 'users') return query({ data: { display_name: 'Priya' }, error: null });
+    if (table === 'users') {
+      const chain = query({ data: { display_name: 'Priya' }, error: null });
+      chain.eq = vi.fn((...args: unknown[]) => {
+        userFilters.push(args);
+        return chain;
+      });
+      return chain;
+    }
     const chain = query({ data: { id: 'attempt-1' }, error: null });
     chain.insert = vi.fn((row: unknown) => {
       deliveryInserts.push(row);
@@ -97,6 +105,8 @@ function setup(opts: Setup = {}) {
     fetchMock,
     adminFrom,
     memberFilters,
+    userFilters,
+    factory,
     deliveryInserts,
     deliveryUpdates,
   };
@@ -271,5 +281,53 @@ describe('book-call-send email', () => {
     expect(s.deliveryUpdates).toEqual([
       expect.objectContaining({ status: 'failed', error: 'resend_not_configured' }),
     ]);
+  });
+});
+
+describe('book-call-send identity comes only from the session', () => {
+  it('ignores every identity and recipient field in the body', async () => {
+    const s = setup();
+    const res = await handleBookCallSend(
+      request({
+        ...VALID,
+        user_id: 'someone-else',
+        userId: 'someone-else',
+        email: 'evil@x.test',
+        name: 'Mallory',
+        display_name: 'Mallory',
+        to: 'victim@else.test',
+      }),
+      s.deps,
+    );
+    expect(res.status).toBe(200);
+    expect(s.userFilters).toEqual([['id', 'caller-1']]);
+    expect(s.memberFilters).not.toContainEqual(['user_id', 'someone-else']);
+    const sent = JSON.parse((s.fetchMock.mock.calls[0]?.[1] as ResendInit).body) as {
+      to: string;
+      text: string;
+      html: string;
+    };
+    expect(sent.to).toBe('calls@team.test');
+    expect(sent.text).toContain('Name: Priya');
+    expect(`${sent.text}${sent.html}`).not.toMatch(/Mallory|evil@x\.test|someone-else/);
+  });
+
+  it('builds the caller client from the anon key and the request bearer, the admin from the service key', async () => {
+    const s = setup();
+    await handleBookCallSend(request(VALID), s.deps);
+    const calls = s.factory.mock.calls as unknown as Array<
+      [string, string, { global?: { headers?: Record<string, string> } }]
+    >;
+    expect(calls[0]?.[1]).toBe('anon-key');
+    expect(calls[0]?.[2].global?.headers).toEqual({ Authorization: 'Bearer caller-jwt' });
+    expect(calls[1]?.[1]).toBe('service-key');
+    expect(calls[1]?.[2].global).toBeUndefined();
+  });
+
+  it('keys the idempotency hash by the session user, not a body user id', async () => {
+    const s = setup();
+    await handleBookCallSend(request({ ...VALID, user_id: 'someone-else' }), s.deps);
+    const key = (s.fetchMock.mock.calls[0]?.[1] as ResendInit).headers['Idempotency-Key'];
+    expect(key).toBe(await bookCallIdempotencyKey('caller-1', WORKSPACE_ID, new Date(SLOT_AT)));
   });
 });

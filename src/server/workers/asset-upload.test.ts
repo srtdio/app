@@ -58,13 +58,18 @@ vi.mock('./asset-upload-activity', async (importOriginal) => {
 const usageState = vi.hoisted(() => ({
   bytes: 0 as number | null,
   exempt: false,
+  /** Cap or usage reads (one per checkWorkspaceCap / resolveWorkspaceUsage). */
+  reads: 0,
 }));
 vi.mock('./asset-upload-usage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./asset-upload-usage')>();
   return {
     ...actual,
     createSupabaseUsageStore: () => ({
-      workspace: () => Promise.resolve({ ownerUserId: 'owner' }),
+      workspace: () => {
+        usageState.reads += 1;
+        return Promise.resolve({ ownerUserId: 'owner' });
+      },
       isExemptOwner: () => Promise.resolve(usageState.exempt),
       bytesUsed: () => Promise.resolve(usageState.bytes),
     }),
@@ -213,6 +218,7 @@ beforeEach(() => {
   state.r2 = new InMemoryMultipartStorage();
   usageState.bytes = 0;
   usageState.exempt = false;
+  usageState.reads = 0;
 });
 
 async function mintToken(sub: string, expSecondsFromNow = 3600): Promise<string> {
@@ -1733,8 +1739,13 @@ describe('workspace storage cap (413 workspace_full)', () => {
   // uploadRequest's file part is 4 bytes.
   const FILE_BYTES = 4;
 
-  function complete(token: string, created: { key: string; upload_id: string }): Request {
+  function complete(
+    token: string,
+    created: { key: string; upload_id: string },
+    extra: Record<string, string> = {},
+  ): Request {
     const form = new FormData();
+    for (const [name, value] of Object.entries(extra)) form.set(name, value);
     form.set('workspace_id', WORKSPACE);
     form.set('key', created.key);
     form.set('upload_id', created.upload_id);
@@ -1915,5 +1926,93 @@ describe('workspace storage cap (413 workspace_full)', () => {
       usageState.exempt = true;
       expect((await worker.fetch(complete(token, created), env)).status).toBe(201);
     });
+  });
+
+  describe('chat origin and gate order', () => {
+    it('caps a resumable chat upload at complete, and removes its staging', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      usageState.bytes = CAP_BYTES - FILE_BYTES + 1;
+      const res = await worker.fetch(complete(token, created, { origin: 'chat' }), env);
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual(WORKSPACE_FULL_BODY);
+      expect(state.capturedInput).toBeNull();
+      expect(state.r2.uploads.size).toBe(0);
+      expect(state.r2.objects.size).toBe(0);
+    });
+
+    it('lets an exempt owner finish a resumable chat upload over the cap', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      usageState.bytes = CAP_BYTES * 2;
+      usageState.exempt = true;
+      const res = await worker.fetch(complete(token, created, { origin: 'chat' }), env);
+      expect(res.status).toBe(201);
+      expect(state.capturedInput).toMatchObject({ origin: 'chat' });
+    });
+
+    it('lets an exempt owner post a direct chat upload over the cap', async () => {
+      const token = await memberToken();
+      usageState.bytes = CAP_BYTES * 2;
+      usageState.exempt = true;
+      const res = await worker.fetch(
+        uploadRequest(token, { workspace_id: WORKSPACE, origin: 'chat' }),
+        env,
+      );
+      expect(res.status).toBe(201);
+      expect(state.capturedInput).toMatchObject({ origin: 'chat' });
+    });
+
+    it('checks membership before the cap: a non-member gets 403 and no usage read', async () => {
+      const token = await mintToken(USER);
+      usageState.bytes = CAP_BYTES;
+      const direct = await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+      expect(direct.status).toBe(403);
+      const create = await worker.fetch(createRequest(token, FILE_BYTES), env);
+      expect(create.status).toBe(403);
+      expect(usageState.reads).toBe(0);
+      expect(state.r2.uploads.size).toBe(0);
+    });
+
+    it('fails closed at create and at complete when usage cannot be read', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      usageState.bytes = null;
+      const create = await worker.fetch(createRequest(token, FILE_BYTES), env);
+      expect(create.status).toBe(503);
+      const done = await worker.fetch(complete(token, created), env);
+      expect(done.status).toBe(503);
+      expect(((await done.json()) as { error: { code: string } }).error.code).toBe(
+        'usage_unavailable',
+      );
+      expect(state.capturedInput).toBeNull();
+    });
+
+    it('reads usage once per direct POST, before the pipeline', async () => {
+      const token = await memberToken();
+      const res = await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+      expect(res.status).toBe(201);
+      expect(usageState.reads).toBe(1);
+    });
+  });
+});
+
+describe('asset-upload purge routing', () => {
+  it.each(['/purge', '/purge-chat'])(
+    'routes POST %s to the purge handler (its own body rules)',
+    async (path) => {
+      const token = await mintToken(USER);
+      const res = await worker.fetch(jsonPost(path, token, { workspace_id: 'x' }), env);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: { code: 'bad_request', message: 'Invalid workspace_id.' },
+      });
+      expect(state.capturedInput).toBeNull();
+    },
+  );
+
+  it.each(['/purge', '/purge-chat'])('POST %s is 401 without a bearer', async (path) => {
+    const res = await worker.fetch(jsonPost(path, null, { workspace_id: WORKSPACE }), env);
+    expect(res.status).toBe(401);
   });
 });

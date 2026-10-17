@@ -14,7 +14,38 @@ vi.mock('jose', async (importOriginal) => {
   };
 });
 
+// supabase-js: every client records the key and headers it was built with and
+// the rpcs it ran, so a test can tell the caller-token client from the service
+// role. Only the default (live) deps reach it; injected deps never do.
+const supa = vi.hoisted(() => ({
+  rpcs: [] as Array<{ key: string; authorization: string | undefined; fn: string; args: unknown }>,
+  clients: [] as Array<{ key: string; headers: Record<string, string> }>,
+  responses: {} as Record<string, { data: unknown; error: { message: string } | null }>,
+}));
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: (
+    _url: string,
+    key: string,
+    options?: { global?: { headers?: Record<string, string> } },
+  ) => {
+    const headers = options?.global?.headers ?? {};
+    supa.clients.push({ key, headers });
+    const chain: Record<string, unknown> = {};
+    for (const name of ['select', 'eq', 'is', 'in']) chain[name] = () => chain;
+    chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+    chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null });
+    return {
+      from: () => chain,
+      rpc: (fn: string, args: unknown) => {
+        supa.rpcs.push({ key, authorization: headers.Authorization, fn, args });
+        return Promise.resolve(supa.responses[fn] ?? { data: null, error: null });
+      },
+    };
+  },
+}));
+
 import {
+  createSupabasePurgeRequester,
   handlePurge,
   handlePurgeChat,
   type PurgeDeps,
@@ -33,7 +64,11 @@ const A3 = 'a3333333-3333-7333-8333-333333333333';
 const B1 = 'b1111111-1111-7111-8111-111111111111';
 const TRACE = '01900000-0000-7000-8000-000000000000';
 
-const env = { SUPABASE_URL: 'https://example.supabase.co' } as PurgeEnv;
+const env = {
+  SUPABASE_URL: 'https://example.supabase.co',
+  SUPABASE_SECRET_KEY: 'service-role-key',
+  SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+} as PurgeEnv;
 
 let privateKey: KeyLike;
 beforeAll(async () => {
@@ -173,6 +208,9 @@ async function post(
 let w: ReturnType<typeof world>;
 beforeEach(() => {
   w = world();
+  supa.rpcs = [];
+  supa.clients = [];
+  supa.responses = {};
 });
 
 describe('POST /purge', () => {
@@ -369,5 +407,156 @@ describe('POST /purge-chat', () => {
     expect(
       (await post(handlePurgeChat, w.deps, { workspace_id: WS, asset_ids: [A1] }, null)).status,
     ).toBe(401);
+  });
+});
+
+describe('asset_purge_request runs as the caller, never the service role', () => {
+  it('handlePurge passes the exact bearer token through', async () => {
+    const t = await token(OWNER);
+    const request = new Request('https://upload.example/purge', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ workspace_id: WS }),
+    });
+    await handlePurge(request, env, TRACE, null, w.deps);
+    expect(w.tokensSeen).toEqual([t]);
+  });
+
+  it('the live requester builds its client from the publishable key and the caller token', async () => {
+    supa.responses.asset_purge_request = { data: 3, error: null };
+    const res = await createSupabasePurgeRequester(env)({
+      token: 'caller-jwt',
+      workspaceId: WS,
+      assetIds: [A1],
+      traceId: TRACE,
+    });
+    expect(res).toEqual(ok(3));
+    expect(supa.clients).toEqual([
+      {
+        key: 'sb_publishable_test',
+        headers: { Authorization: 'Bearer caller-jwt', 'X-Trace-Id': TRACE },
+      },
+    ]);
+    expect(supa.rpcs).toEqual([
+      {
+        key: 'sb_publishable_test',
+        authorization: 'Bearer caller-jwt',
+        fn: 'asset_purge_request',
+        args: { p_workspace_id: WS, p_asset_ids: [A1], p_trace_id: TRACE },
+      },
+    ]);
+  });
+
+  it('sends p_asset_ids null for "everything" and maps the proc owner_only to a 403 result', async () => {
+    supa.responses.asset_purge_request = { data: null, error: { message: 'owner_only' } };
+    const res = await createSupabasePurgeRequester(env)({
+      token: 'member-jwt',
+      workspaceId: WS,
+      assetIds: null,
+      traceId: TRACE,
+    });
+    expect(res).toEqual(err('owner_only'));
+    expect(supa.rpcs[0]?.args).toEqual({
+      p_workspace_id: WS,
+      p_asset_ids: null,
+      p_trace_id: TRACE,
+    });
+  });
+
+  it('throws on any other proc error instead of treating it as allowed', async () => {
+    supa.responses.asset_purge_request = { data: null, error: { message: 'boom' } };
+    await expect(
+      createSupabasePurgeRequester(env)({
+        token: 't',
+        workspaceId: WS,
+        assetIds: null,
+        traceId: TRACE,
+      }),
+    ).rejects.toThrow('asset_purge_request failed: boom');
+  });
+
+  it('refuses to run without the publishable key and never falls back to the secret key', async () => {
+    const noKey = { ...env, SUPABASE_PUBLISHABLE_KEY: '' } as PurgeEnv;
+    await expect(
+      createSupabasePurgeRequester(noKey)({
+        token: 't',
+        workspaceId: WS,
+        assetIds: null,
+        traceId: TRACE,
+      }),
+    ).rejects.toThrow('SUPABASE_PUBLISHABLE_KEY is not set');
+    expect(supa.clients).toEqual([]);
+    expect(supa.rpcs).toEqual([]);
+  });
+
+  it('with live deps, only the storage_purge_* sweep uses the service role', async () => {
+    supa.responses.asset_purge_request = { data: 0, error: null };
+    supa.responses.storage_purge_due = { data: [], error: null };
+    const t = await token(OWNER);
+    const request = new Request('https://upload.example/purge', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ workspace_id: WS }),
+    });
+    const res = await handlePurge(request, env, TRACE, null);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ requested: 0, removed: 0, freedBytes: 0 });
+    const request_ = supa.rpcs.filter((r) => r.fn === 'asset_purge_request');
+    expect(request_).toEqual([expect.objectContaining({ key: 'sb_publishable_test' })]);
+    expect(request_[0]?.authorization).toBe(`Bearer ${t}`);
+    expect(supa.rpcs.filter((r) => r.key === 'service-role-key').map((r) => r.fn)).toEqual([
+      'storage_purge_due',
+    ]);
+  });
+
+  it('with live deps, an owner_only proc answer is 403 and nothing is swept', async () => {
+    supa.responses.asset_purge_request = { data: null, error: { message: 'owner_only' } };
+    const t = await token(MEMBER);
+    const request = new Request('https://upload.example/purge', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ workspace_id: WS }),
+    });
+    const res = await handlePurge(request, env, TRACE, null);
+    expect(res.status).toBe(403);
+    expect(supa.rpcs.map((r) => r.fn)).toEqual(['asset_purge_request']);
+  });
+});
+
+describe('POST /purge-chat membership', () => {
+  it('checks the verified caller, not an id in the body, and sweeps nothing for a non-member', async () => {
+    await w.add(A1, { workspace: WS, origin: 'chat', purgeRequested: true });
+    const isActiveMember = vi.spyOn(w.deps.store, 'isActiveMember');
+    const due = vi.spyOn(w.deps.store, 'due');
+    const res = await post(
+      handlePurgeChat,
+      w.deps,
+      { workspace_id: WS, asset_ids: [A1], user_id: MEMBER },
+      STRANGER,
+    );
+    expect(res.status).toBe(403);
+    expect(isActiveMember).toHaveBeenCalledWith({ userId: STRANGER, workspaceId: WS });
+    expect(due).not.toHaveBeenCalled();
+    expect(w.r2.objects.size).toBe(2);
+  });
+
+  it('a member of another workspace cannot purge this one', async () => {
+    await w.add(A1, { workspace: WS, origin: 'chat', purgeRequested: true });
+    // STRANGER is an active member of OTHER_WS only.
+    const res = await post(
+      handlePurgeChat,
+      w.deps,
+      { workspace_id: WS, asset_ids: [A1] },
+      STRANGER,
+    );
+    expect(res.status).toBe(403);
+    expect(w.assets.has(A1)).toBe(true);
+  });
+
+  it('is 403 owner_only for /purge before any sweep read', async () => {
+    const due = vi.spyOn(w.deps.store, 'due');
+    const res = await post(handlePurge, w.deps, { workspace_id: WS }, MEMBER);
+    expect(res.status).toBe(403);
+    expect(due).not.toHaveBeenCalled();
   });
 });

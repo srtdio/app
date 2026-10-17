@@ -1,11 +1,47 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ObjectPage } from '@srtdio/storage';
 import type { TracedFetchFn } from '@/server/workers/chat-agora-rest';
+// supabase-js for handleScheduled: each query records its chain of calls and
+// answers from `answers`, keyed by table or rpc name.
+const supa = vi.hoisted(() => ({
+  calls: [] as Array<{ target: string; chain: Array<[string, unknown[]]> }>,
+  answers: {} as Record<
+    string,
+    { data?: unknown; count?: number; error: null | { message: string } }
+  >,
+  key: null as string | null,
+}));
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: (_url: string, key: string) => {
+    supa.key = key;
+    const run = (target: string, first: [string, unknown[]]) => {
+      const record = { target, chain: [first] };
+      supa.calls.push(record);
+      const chain: Record<string, unknown> = {};
+      for (const name of ['select', 'eq', 'is', 'neq', 'not']) {
+        chain[name] = (...args: unknown[]) => {
+          record.chain.push([name, args]);
+          return chain;
+        };
+      }
+      chain.then = (resolve: (v: unknown) => unknown) =>
+        resolve(supa.answers[target] ?? { data: null, error: null });
+      return chain;
+    };
+    return {
+      from: (table: string) => run(table, ['from', [table]]),
+      rpc: (fn: string, args?: unknown) => run(fn, ['rpc', [fn, args]]),
+    };
+  },
+}));
+
 import {
   ASSET_BATCH_SIZE,
   MAX_ASSET_BATCHES,
   createAgoraPurgeApi,
+  handleScheduled,
   runPurge,
+  type StoragePurgeEnv,
   type DueAsset,
   type DueWorkspace,
   type PurgeAgora,
@@ -293,5 +329,128 @@ describe('createAgoraPurgeApi.deleteGroup', () => {
     await expect(
       createAgoraPurgeApi(CONFIG, fetchImpl).deleteGroup('g1', TRACE_ID),
     ).rejects.toThrow('Agora delete_group failed: 500 boom');
+  });
+});
+
+describe('runPurge: per-workspace isolation and the live-bucket guard', () => {
+  it('checks the guard first: a live bucket keeps its Agora groups and its objects', async () => {
+    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-acme' }] });
+    db.groups.set('w1', ['g1']);
+    db.liveBuckets.add('assets-acme');
+    const inUse = vi.spyOn(db.db, 'bucketInUse');
+    const agora = fakeAgora();
+    const r2 = fakeStorage({ 'assets-acme': ['live-file'] });
+    const d = deps({ db: db.db, storage: r2.storage, agora: agora.agora });
+    await runPurge(d);
+    expect(inUse).toHaveBeenCalledWith('assets-acme', 'w1');
+    expect(agora.deleted).toEqual([]);
+    expect(r2.listCursors).toEqual([]);
+    expect(r2.deletedBuckets).toEqual([]);
+    expect(r2.store.get('assets-acme')?.has('live-file')).toBe(true);
+    expect(d.log.error).toHaveBeenCalledWith(
+      'storage purge workspace failed',
+      expect.objectContaining({
+        workspace_id: 'w1',
+        error: expect.stringContaining('in use by a live workspace') as unknown,
+      }),
+    );
+  });
+
+  it('a guarded workspace does not stop the next one', async () => {
+    const db = fakeDb({
+      workspaces: [
+        { workspaceId: 'w1', bucket: 'assets-shared' },
+        { workspaceId: 'w2', bucket: 'assets-two' },
+      ],
+    });
+    db.liveBuckets.add('assets-shared');
+    const r2 = fakeStorage({ 'assets-shared': ['keep'], 'assets-two': ['x', 'y'] });
+    const summary = await runPurge(
+      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
+    );
+    expect(db.workspacesDone).toEqual(['w2']);
+    expect(r2.deletedBuckets).toEqual(['assets-two']);
+    expect(r2.store.get('assets-shared')?.size).toBe(1);
+    expect(summary).toMatchObject({ workspacesPurged: 1, workspacesFailed: 1 });
+  });
+
+  it('a workspace whose bucket fails to delete is not marked done; the next still purges', async () => {
+    const db = fakeDb({
+      workspaces: [
+        { workspaceId: 'w1', bucket: 'assets-one' },
+        { workspaceId: 'w2', bucket: 'assets-two' },
+      ],
+    });
+    const r2 = fakeStorage({ 'assets-one': ['a'], 'assets-two': ['b'] });
+    vi.spyOn(r2.storage, 'deleteBucket').mockImplementation((bucket) =>
+      bucket === 'assets-one'
+        ? Promise.reject(new Error('R2 deleteBucket failed (500)'))
+        : Promise.resolve(),
+    );
+    const summary = await runPurge(
+      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
+    );
+    expect(db.workspacesDone).toEqual(['w2']);
+    expect(summary).toMatchObject({ workspacesPurged: 1, workspacesFailed: 1 });
+  });
+
+  it('a workspace_purge_done failure is isolated to that workspace', async () => {
+    const db = fakeDb({
+      workspaces: [
+        { workspaceId: 'w1', bucket: null },
+        { workspaceId: 'w2', bucket: null },
+      ],
+    });
+    const realDone = db.db.workspacePurgeDone.bind(db.db);
+    vi.spyOn(db.db, 'workspacePurgeDone').mockImplementation((id) =>
+      id === 'w1' ? Promise.reject(new Error('rpc failed')) : realDone(id),
+    );
+    const summary = await runPurge(
+      deps({ db: db.db, storage: fakeStorage().storage, agora: fakeAgora().agora }),
+    );
+    expect(db.workspacesDone).toEqual(['w2']);
+    expect(summary).toMatchObject({ workspacesPurged: 1, workspacesFailed: 1 });
+  });
+});
+
+describe('handleScheduled live wiring', () => {
+  const ENV: StoragePurgeEnv = {
+    SUPABASE_URL: 'https://db.test',
+    SUPABASE_SECRET_KEY: 'service-role-key',
+    CLOUDFLARE_ACCOUNT_ID: 'acct',
+    CLOUDFLARE_R2_ACCESS_KEY_ID: 'akid',
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'secret',
+    AGORA_APP_ID: 'app',
+    AGORA_APP_CERTIFICATE: 'cert',
+    AGORA_CHAT_REST_URL: 'https://agora.test/org/app',
+  };
+
+  it('asks for live workspaces other than this one on the bucket, and keeps a bucket one uses', async () => {
+    supa.calls = [];
+    supa.answers = {
+      storage_purge_due: { data: [], error: null },
+      workspace_purge_due: { data: [{ workspace_id: 'w1', bucket: 'assets-acme' }], error: null },
+      workspaces: { count: 1, error: null },
+    };
+    const fetchSpy = vi.fn(() => Promise.resolve(new Response(null, { status: 500 })));
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      const summary = await handleScheduled(ENV);
+      expect(supa.key).toBe('service-role-key');
+      const guard = supa.calls.find((c) => c.target === 'workspaces');
+      expect(guard?.chain).toEqual([
+        ['from', ['workspaces']],
+        ['select', ['id', { count: 'exact', head: true }]],
+        ['eq', ['asset_bucket', 'assets-acme']],
+        ['is', ['deleted_at', null]],
+        ['neq', ['id', 'w1']],
+      ]);
+      expect(supa.calls.map((c) => c.target)).not.toContain('workspace_purge_done');
+      expect(supa.calls.map((c) => c.target)).not.toContain('chat_channels');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(summary).toMatchObject({ workspacesPurged: 0, workspacesFailed: 1 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
