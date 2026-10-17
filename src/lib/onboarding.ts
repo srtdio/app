@@ -3,7 +3,7 @@
 // suggestion, which screens a person sees, the role lists) lives here so it is
 // unit tested. The in-app guide is src/lib/induction.ts.
 
-import type { InductionKey } from './induction-keys';
+import { INDUCTION_KEYS, type InductionKey } from './induction-keys';
 import type { CopyContext } from './induction-model';
 import { ROUTE_SCRIPTS } from './induction-routes';
 
@@ -153,19 +153,24 @@ export function designationFor(role: string, other: string): string {
 }
 
 /**
- * Where the guide's hand sits on a pre-app screen, or null for none. Only a
- * Creator who signed up (the creator route) gets it: on the name screen once
- * Continue is enabled (photo, name and a free username), then on the role
- * screen's Continue, from where the shell's guide takes over at c_workspace.
+ * Where the guide's hand sits on a pre-app screen, or null for none. Every new
+ * sign-up gets it on the side screen's Continue once a side is picked; then only
+ * a Creator (the creator route) gets it, on each later Continue once it is
+ * enabled (name screen: photo, name and a free username; role screen: a role),
+ * from where the shell's guide takes over at c_workspace. Before a pick the
+ * screen stays clear, so nothing is dimmed while the person chooses.
  */
 export function entryHandTarget(input: {
   step: OnboardingStep;
+  signUp: boolean;
   creatorRoute: boolean;
   continueEnabled: boolean;
 }): InductionKey | null {
+  if (!input.continueEnabled) return null;
+  if (input.step === 'side') return input.signUp ? INDUCTION_KEYS.onboardingSideContinue : null;
   if (!input.creatorRoute) return null;
   const [name, role] = ROUTE_SCRIPTS.creator.entryTargets;
-  if (input.step === 'name') return input.continueEnabled ? (name ?? null) : null;
+  if (input.step === 'name') return name ?? null;
   if (input.step === 'role') return role ?? null;
   return null;
 }

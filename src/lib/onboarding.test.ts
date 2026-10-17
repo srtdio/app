@@ -181,10 +181,15 @@ describe('notYouPath', () => {
 });
 
 describe('entryHandTarget', () => {
-  const creator = { creatorRoute: true, continueEnabled: true };
+  const creator = { signUp: true, creatorRoute: true, continueEnabled: true };
 
-  it('never on the side screen', () => {
-    expect(entryHandTarget({ ...creator, step: 'side' })).toBeNull();
+  it('on the side screen only once a side is picked, for any new sign-up', () => {
+    expect(entryHandTarget({ ...creator, step: 'side', continueEnabled: false })).toBeNull();
+    expect(entryHandTarget({ ...creator, step: 'side' })).toBe('onboarding-side-continue');
+    expect(entryHandTarget({ ...creator, step: 'side', creatorRoute: false })).toBe(
+      'onboarding-side-continue',
+    );
+    expect(entryHandTarget({ ...creator, step: 'side', signUp: false })).toBeNull();
   });
 
   it('on the name screen only once Continue is enabled', () => {
@@ -192,19 +197,14 @@ describe('entryHandTarget', () => {
     expect(entryHandTarget({ ...creator, step: 'name' })).toBe('onboarding-name-continue');
   });
 
-  it('stays on the role screen Continue', () => {
-    expect(entryHandTarget({ ...creator, step: 'role', continueEnabled: false })).toBe(
-      'onboarding-role-continue',
-    );
+  it('on the role screen only once a role is picked', () => {
+    expect(entryHandTarget({ ...creator, step: 'role', continueEnabled: false })).toBeNull();
+    expect(entryHandTarget({ ...creator, step: 'role' })).toBe('onboarding-role-continue');
   });
 
-  it('only on the creator route', () => {
-    expect(
-      entryHandTarget({ step: 'name', creatorRoute: false, continueEnabled: true }),
-    ).toBeNull();
-    expect(
-      entryHandTarget({ step: 'role', creatorRoute: false, continueEnabled: true }),
-    ).toBeNull();
+  it('name and role only on the creator route', () => {
+    expect(entryHandTarget({ ...creator, step: 'name', creatorRoute: false })).toBeNull();
+    expect(entryHandTarget({ ...creator, step: 'role', creatorRoute: false })).toBeNull();
     expect(entryHandTarget({ ...creator, step: 'welcome' })).toBeNull();
     expect(entryHandTarget({ ...creator, step: 'brand' })).toBeNull();
   });
