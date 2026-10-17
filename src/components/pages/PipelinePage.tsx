@@ -14,6 +14,7 @@ import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { dispatchSorted } from '@/lib/events';
+import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { useInductionPostPreset } from '@/components/induction/InductionProvider';
 import { supabase } from '@/lib/supabase';
@@ -415,6 +416,8 @@ export function PipelinePage() {
   useEffect(() => {
     void loadPosts();
   }, [loadPosts]);
+  // The sample week landing or clearing under the board: re-read it.
+  useWorkspaceDataChanged(() => void loadPosts());
 
   useEffect(() => {
     if (workspaceId === null || userId === null) {

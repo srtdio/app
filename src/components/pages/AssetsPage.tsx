@@ -32,6 +32,7 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useSession } from '@/lib/session-context';
 import { useSort } from '@/lib/use-sort';
 import { PresignCache } from '@/lib/asset-presign';
+import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import {
   addAssetLink,
   canRenameAssets,
@@ -195,6 +196,10 @@ export function AssetsPage() {
     void loadFolders();
     void loadDeletedCount();
   }, [loadAssets, loadFolders, loadDeletedCount]);
+  useWorkspaceDataChanged(() => {
+    void loadAssets();
+    void loadFolders();
+  });
 
   // Reset folder + overlays when the active workspace changes.
   useEffect(() => {

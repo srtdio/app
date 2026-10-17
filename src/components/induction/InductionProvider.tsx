@@ -32,6 +32,7 @@ import {
   type PostSheetPreset,
   type Resolution,
 } from '@/lib/induction';
+import { dispatchWorkspaceDataChanged } from '@/lib/events';
 import type { CopyContext, InductionFacts, Route, RouteScript, Step } from '@/lib/induction-model';
 import { ROUTE_SCRIPTS, routeFor } from '@/lib/induction-routes';
 import { supabase } from '@/lib/supabase';
@@ -198,7 +199,11 @@ function useSampleSeed(input: { on: boolean; workspaceId: string | null }): void
     if (!on || workspaceId === null || asked.current === workspaceId) return;
     asked.current = workspaceId;
     void seedSampleWeek(supabase, { workspaceId, traceId: newTraceId() }).then((seeded) => {
-      if (seeded) dispatchInductionRefresh();
+      if (!seeded) return;
+      dispatchInductionRefresh();
+      // The pipeline, briefs, library, activity and chat list fetched before the
+      // week landed: they re-read now, so the person sees it at once.
+      dispatchWorkspaceDataChanged();
     });
   }, [on, workspaceId]);
 }
@@ -317,9 +322,10 @@ function buildValue(input: {
     finish: () => {
       const ws = env.workspaceId;
       if (ws !== null && read.sample.seeded) {
-        void clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() }).then(() =>
-          dispatchInductionRefresh(),
-        );
+        void clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() }).then(() => {
+          dispatchInductionRefresh();
+          dispatchWorkspaceDataChanged();
+        });
       }
       env.data.finish();
     },
@@ -329,6 +335,7 @@ function buildValue(input: {
       if (ws === null) return;
       await clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() });
       dispatchInductionRefresh();
+      dispatchWorkspaceDataChanged();
     },
     startedAt: readStartedAt(),
   };

@@ -425,7 +425,7 @@ folder_id and folder_path coexist for now: folder_id is the new structured folde
 
 ### asset_versions
 
-PK id. Fields: asset_id FK, workspace_id FK, version_number, r2_key unique, mime_type, sha256 ^[a-f0-9]{64}$, size_bytes > 0, width/height/duration_ms nullable > 0, uploaded_by FK, uploaded_at. Unique (asset_id, version_number).
+PK id. Fields: asset_id FK, workspace_id FK, version_number, r2_key unique (partial, skips NULL and induction-sample/ keys), mime_type, sha256 ^[a-f0-9]{64}$, size_bytes > 0, width/height/duration_ms nullable > 0, uploaded_by FK, uploaded_at. Unique (asset_id, version_number). asset_versions_kind_shape_check (live, recorded in 20261017170000): kind link has external_url and no r2_key, sha256, size_bytes or mime_type; every other kind has all four and no external_url. Sample-week versions carry sha256 of their key, not of the file's bytes, so a real upload never dedupes onto a sample row.
 
 page_count: pdf only, 1-10000, set by asset-upload from the client count; null for older files (no backfill, decision 149).
 
