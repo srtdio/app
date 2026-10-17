@@ -18,6 +18,9 @@ import { logger } from '@/server/logger';
 /** One warning, at 800 MB of the 1 GB free allowance. */
 export const WARN_AT_BYTES = 800 * 1024 * 1024;
 
+/** Hard cap for non-exempt workspaces. Never shown to users ("full" only). */
+export const CAP_BYTES = 950 * 1024 * 1024;
+
 /** Per-bucket cache lifetime: 5 minutes. */
 export const USAGE_CACHE_SECONDS = 300;
 
