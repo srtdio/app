@@ -6,6 +6,7 @@ import { BriefsPage } from '@/components/pages/BriefsPage';
 import { BriefDetailPage } from '@/components/pages/BriefDetailPage';
 import { ChatPage } from '@/components/pages/ChatPage';
 import { AssetsPage } from '@/components/pages/AssetsPage';
+import { RecentlyDeletedPage } from '@/components/pages/RecentlyDeletedPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
 import { HelpPage } from '@/components/pages/HelpPage';
 import { DeletedPage } from '@/components/pages/DeletedPage';
@@ -71,6 +72,7 @@ export default function App() {
                 <Route path="/plans/:planId" element={<PlanPage />} />
               </Route>
               <Route path="/assets" element={<AssetsPage />} />
+              <Route path="/assets/recently-deleted" element={<RecentlyDeletedPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/help" element={<HelpPage />} />
               <Route path="/deleted" element={<DeletedPage />} />

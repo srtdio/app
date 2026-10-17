@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildR2Key, buildThumbnailKey } from './storage';
+import {
+  buildR2Key,
+  buildThumbnailKey,
+  InMemoryMultipartStorage,
+  parseListObjectsXml,
+  R2StorageClient,
+  type TracedFetch,
+} from './storage';
 
 const ASSET = '55555555-5555-7555-8555-555555555555';
 
@@ -77,5 +84,166 @@ describe('buildR2Key (unchanged)', () => {
     expect(
       buildR2Key({ kind: 'pdf', assetId: ASSET, versionNumber: 1, filename: 'thumb.jpg' }),
     ).toBe(buildThumbnailKey({ kind: 'pdf', assetId: ASSET, versionNumber: 1 }));
+  });
+});
+
+describe('InMemoryMultipartStorage listObjects / deleteBucket', () => {
+  async function seeded(count: number): Promise<InMemoryMultipartStorage> {
+    const storage = new InMemoryMultipartStorage();
+    for (let i = 0; i < count; i++) {
+      await storage.putObject({
+        bucket: 'assets-a',
+        key: `images/k${String(i).padStart(3, '0')}`,
+        body: new Uint8Array(i + 1),
+        contentType: 'image/png',
+        traceId: 't',
+      });
+    }
+    await storage.putObject({
+      bucket: 'assets-b',
+      key: 'images/other',
+      body: new Uint8Array(1),
+      contentType: 'image/png',
+      traceId: 't',
+    });
+    return storage;
+  }
+
+  it('pages through every key of one bucket only, with sizes', async () => {
+    const storage = await seeded(5);
+    const first = await storage.listObjects({ bucket: 'assets-a', limit: 2 });
+    expect(first.objects).toEqual([
+      { key: 'images/k000', size: 1 },
+      { key: 'images/k001', size: 2 },
+    ]);
+    expect(first.nextCursor).not.toBeNull();
+    const keys = first.objects.map((o) => o.key);
+    let cursor = first.nextCursor;
+    while (cursor !== null) {
+      const page = await storage.listObjects({ bucket: 'assets-a', cursor, limit: 2 });
+      keys.push(...page.objects.map((o) => o.key));
+      cursor = page.nextCursor;
+    }
+    expect(keys).toEqual([
+      'images/k000',
+      'images/k001',
+      'images/k002',
+      'images/k003',
+      'images/k004',
+    ]);
+  });
+
+  it('returns a single last page when everything fits', async () => {
+    const storage = await seeded(2);
+    const page = await storage.listObjects({ bucket: 'assets-a' });
+    expect(page.objects).toHaveLength(2);
+    expect(page.nextCursor).toBeNull();
+    expect(await storage.listObjects({ bucket: 'missing' })).toEqual({
+      objects: [],
+      nextCursor: null,
+    });
+  });
+
+  it('refuses to delete a bucket that still holds objects, then deletes it once empty', async () => {
+    const storage = await seeded(1);
+    await expect(storage.deleteBucket('assets-a')).rejects.toThrow('BucketNotEmpty');
+    await storage.deleteObject('assets-a', 'images/k000');
+    await storage.deleteBucket('assets-a');
+    expect(storage.buckets.has('assets-a')).toBe(false);
+    expect(storage.buckets.has('assets-b')).toBe(true);
+    // Idempotent.
+    await storage.deleteBucket('assets-a');
+  });
+});
+
+describe('parseListObjectsXml', () => {
+  it('reads keys, sizes and the continuation token of a truncated page', () => {
+    const xml =
+      '<ListBucketResult><IsTruncated>true</IsTruncated>' +
+      '<Contents><Key>docs/a&amp;b.pdf</Key><Size>12</Size></Contents>' +
+      '<Contents><Key>images/c.png</Key><Size>3</Size></Contents>' +
+      '<NextContinuationToken>tok&amp;1</NextContinuationToken></ListBucketResult>';
+    expect(parseListObjectsXml(xml)).toEqual({
+      objects: [
+        { key: 'docs/a&b.pdf', size: 12 },
+        { key: 'images/c.png', size: 3 },
+      ],
+      nextCursor: 'tok&1',
+    });
+  });
+
+  it('has no cursor on the last page', () => {
+    const xml =
+      '<ListBucketResult><IsTruncated>false</IsTruncated>' +
+      '<Contents><Key>a</Key><Size>1</Size></Contents></ListBucketResult>';
+    expect(parseListObjectsXml(xml).nextCursor).toBeNull();
+  });
+});
+
+describe('R2StorageClient listObjects / deleteBucket', () => {
+  const env = {
+    CLOUDFLARE_ACCOUNT_ID: 'acct',
+    CLOUDFLARE_R2_ACCESS_KEY_ID: 'key',
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'secret',
+  };
+
+  function client(responses: Response[]): {
+    r2: R2StorageClient;
+    calls: { url: string; method: string }[];
+  } {
+    const calls: { url: string; method: string }[] = [];
+    const fake: TracedFetch = (input, init) => {
+      calls.push({ url: String(input), method: init?.method ?? 'GET' });
+      const next = responses.shift();
+      return next === undefined ? Promise.reject(new Error('no response')) : Promise.resolve(next);
+    };
+    return { r2: new R2StorageClient(env, fake), calls };
+  }
+
+  it('sends a signed ListObjectsV2 request with the cursor and parses the page', async () => {
+    const { r2, calls } = client([
+      new Response(
+        '<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>a</Key><Size>4</Size></Contents></ListBucketResult>',
+        { status: 200 },
+      ),
+    ]);
+    const page = await r2.listObjects({
+      bucket: 'assets-a',
+      cursor: 'c/1',
+      limit: 50,
+      traceId: 't',
+    });
+    expect(page).toEqual({ objects: [{ key: 'a', size: 4 }], nextCursor: null });
+    expect(calls[0]).toEqual({
+      url: 'https://acct.r2.cloudflarestorage.com/assets-a?continuation-token=c%2F1&list-type=2&max-keys=50',
+      method: 'GET',
+    });
+  });
+
+  it('lists a missing bucket as empty and fails loudly on other errors', async () => {
+    const { r2 } = client([
+      new Response('<Error><Code>NoSuchBucket</Code></Error>', { status: 404 }),
+      new Response('boom', { status: 500 }),
+    ]);
+    expect(await r2.listObjects({ bucket: 'gone', traceId: 't' })).toEqual({
+      objects: [],
+      nextCursor: null,
+    });
+    await expect(r2.listObjects({ bucket: 'x', traceId: 't' })).rejects.toThrow('(500)');
+  });
+
+  it('deletes a bucket, treats a missing one as done, and surfaces BucketNotEmpty', async () => {
+    const { r2, calls } = client([
+      new Response(null, { status: 204 }),
+      new Response('<Error><Code>NoSuchBucket</Code></Error>', { status: 404 }),
+      new Response('<Error><Code>BucketNotEmpty</Code></Error>', { status: 409 }),
+    ]);
+    await r2.deleteBucket('assets-a', 't');
+    await r2.deleteBucket('assets-a', 't');
+    await expect(r2.deleteBucket('assets-b', 't')).rejects.toThrow('BucketNotEmpty');
+    expect(calls[0]).toEqual({
+      url: 'https://acct.r2.cloudflarestorage.com/assets-a',
+      method: 'DELETE',
+    });
   });
 });

@@ -17,6 +17,7 @@ import { IconForward, IconStar, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { DELETE_BLOCK_COPY, type DeleteBlock } from '@/lib/chat/forward';
+import type { DeleteConfirmCopy } from '@/lib/chat/delete-flow';
 import { STAR_LABEL, UNSTAR_LABEL } from '@/lib/chat/stars';
 import {
   HEADER_NAME_TYPE,
@@ -153,8 +154,10 @@ export function SelectionBar(props: {
   onForward?: (() => void) | undefined;
   /** Star or Unstar the selection; absent hides it. */
   star?: SelectionStar | undefined;
-  /** Runs the delete; resolves ok, or the user copy to toast. */
-  onDelete: () => Promise<{ ok: true } | { ok: false; message: string }>;
+  /** The files confirm (deleteConfirmCopy), or null for today's text-only copy. */
+  confirmCopy?: DeleteConfirmCopy | null;
+  /** Runs the delete; resolves ok (with a toast when files went), or the user copy to toast. */
+  onDelete: () => Promise<{ ok: true; toast?: string } | { ok: false; message: string }>;
 }): ReactElement {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -167,6 +170,7 @@ export function SelectionBar(props: {
     setBusy(false);
     setConfirming(false);
     if (!result.ok) toast.show({ title: result.message });
+    else if (result.toast !== undefined) toast.show({ title: result.toast });
   }
 
   return (
@@ -182,6 +186,7 @@ export function SelectionBar(props: {
       {deleteMessagesConfirm({
         open: confirming,
         count: props.count,
+        copy: props.confirmCopy ?? null,
         busy,
         onCancel: () => setConfirming(false),
         onConfirm: () => void confirm(),
@@ -206,16 +211,19 @@ export const DELETE_MESSAGES_MESSAGE =
 export function deleteMessagesConfirm(props: {
   open: boolean;
   count: number;
+  /** The files confirm; null (or absent) keeps the text-only copy. */
+  copy?: DeleteConfirmCopy | null;
   busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }): ReactElement | null {
   if (!props.open) return null;
+  const copy = props.copy ?? null;
   return (
     <ConfirmDialog
-      title={deleteMessagesTitle(props.count)}
-      message={DELETE_MESSAGES_MESSAGE}
-      confirmLabel="Delete"
+      title={copy?.title ?? deleteMessagesTitle(props.count)}
+      message={copy?.message ?? DELETE_MESSAGES_MESSAGE}
+      confirmLabel={copy?.confirmLabel ?? 'Delete'}
       busyLabel="Deleting"
       destructive
       busy={props.busy}

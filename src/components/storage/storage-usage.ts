@@ -5,9 +5,11 @@ import { logger } from '@/lib/logger';
 
 const BYTES_PER_MB = 1024 * 1024;
 
-export const DELETED_FILES_LINE = 'Deleted files still count toward storage.';
+export const DELETED_FILES_LINE =
+  'Deleted files free up space only after 31 days, or when the owner empties Recently deleted.';
 
-function wholeMb(bytes: number): number {
+/** Whole MB (1 MB = 1024 * 1024 bytes), rounded down. */
+export function wholeMb(bytes: number): number {
   return Math.floor(bytes / BYTES_PER_MB);
 }
 

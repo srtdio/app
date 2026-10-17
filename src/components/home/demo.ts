@@ -136,11 +136,20 @@ export function longDate(day: CalendarDay): string {
   return `${names[weekday(day)] ?? ''} ${day.d} ${MONTH_NAMES[day.m - 1] ?? ''} ${day.y}`;
 }
 
+/** "Thu 16 Oct": the chosen day as the page shows it. */
+export function shortDate(day: CalendarDay): string {
+  return `${WEEKDAYS[weekday(day)] ?? ''} ${day.d} ${MONTHS[day.m - 1] ?? ''}`;
+}
+
 /** "Thu 16 Oct, 11:00 am IST · 30 min". */
 export function bookingSummary(day: CalendarDay, slot: DemoSlot): string {
-  const wd = WEEKDAYS[weekday(day)] ?? '';
-  const mon = MONTHS[day.m - 1] ?? '';
-  return `${wd} ${day.d} ${mon}, ${slot} ${DEMO.timeZoneLabel} · ${DEMO.durationLabel}`;
+  return `${shortDate(day)}, ${slot} ${DEMO.timeZoneLabel} · ${DEMO.durationLabel}`;
+}
+
+/** "2026-10-16": the day as demo-request-send reads it. */
+export function isoDay(day: CalendarDay): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${day.y}-${pad(day.m)}-${pad(day.d)}`;
 }
 
 export interface DemoForm {
@@ -165,7 +174,14 @@ export const DEMO_ERRORS: Record<DemoField, string> = {
   slot: 'Pick a time for the call.',
 };
 
-export const DEMO_NOTICE = 'Demo booking opens soon. Nothing was sent.';
+export const DEMO_BOOKED_HEADING = 'Booked';
+
+/** "Thu 16 Oct · 11:00 am IST. The team sends ...": the line under Booked. */
+export function demoBookedLine(day: CalendarDay, slot: DemoSlot): string {
+  return `${shortDate(day)} · ${slot} ${DEMO.timeZoneLabel}. The team sends a Google Meet link to your email before the call.`;
+}
+
+export const DEMO_SEND_ERROR = "Couldn't send. Try again.";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MOBILE_RE = /^[6-9]\d{9}$/;

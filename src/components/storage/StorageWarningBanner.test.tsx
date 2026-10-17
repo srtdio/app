@@ -71,9 +71,9 @@ afterEach(() => {
 });
 
 describe('storage warning copy and helpers', () => {
-  it('words the warning in whole MB of the 1 GB and says deleted files count', () => {
+  it('words the warning in whole MB of the 1 GB and says when deleted files free up space', () => {
     expect(storageWarningCopy(820 * MB + 12345)).toBe(
-      'This workspace has used 820 MB of its 1 GB. Deleted files still count toward storage.',
+      'This workspace has used 820 MB of its 1 GB. Deleted files free up space only after 31 days, or when the owner empties Recently deleted.',
     );
     expect(storageWarningCopy(820 * MB)).not.toContain('—');
   });
@@ -106,7 +106,7 @@ describe('StorageWarningBanner', () => {
     await render();
     expect(mockFetch.mock.calls[0]![0]).toBe('https://upload.test/usage?workspace_id=ws-1');
     expect(banner()?.textContent).toContain(
-      'This workspace has used 820 MB of its 1 GB. Deleted files still count toward storage.',
+      'This workspace has used 820 MB of its 1 GB. Deleted files free up space only after 31 days, or when the owner empties Recently deleted.',
     );
     const close = banner()!.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!;
     expect(close.className).toContain('h-11 w-11');

@@ -8,7 +8,8 @@
 // there is no N+1. All shaping below is pure and unit-tested; kinds, labels and
 // counts are derived from the fetched rows, never hardcoded.
 
-import type { Client, Result } from '@srtdio/rpc';
+import { assetRestore, type Client, type Result } from '@srtdio/rpc';
+import type { PurgeRequest, PurgeResponse } from '@/server/workers/asset-upload-purge-contracts';
 
 /**
  * The version kinds the server records (asset_versions.kind CHECK, live). A
@@ -565,4 +566,379 @@ export function linkDomain(url: string | null): string {
 export function formatDimensions(width: number | null, height: number | null): string {
   if (width === null || height === null) return '-';
   return `${width} x ${height}`;
+}
+
+// ---------------------------------------------------------------------------
+// Recently deleted. A deleted library file stays readable (RLS policy
+// assets_select_deleted_member) until the owner purges it or 31 days pass, so
+// the list is one plain SELECT with the current version's size embedded.
+// Restore is the asset_restore proc; purge is the asset-upload Worker's /purge
+// route (owner only), behind the same Bearer auth as the other worker routes.
+// ---------------------------------------------------------------------------
+
+/** How long a deleted file is kept before the purge job removes it for good. */
+export const RECENTLY_DELETED_DAYS = 31;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Whole days left before a file deleted at `deletedAt` is gone; never below 0. */
+export function daysLeft(deletedAt: string, now: number = Date.now()): number {
+  const elapsed = Math.floor((now - Date.parse(deletedAt)) / DAY_MS);
+  return Math.max(0, RECENTLY_DELETED_DAYS - elapsed);
+}
+
+function fileCount(count: number): string {
+  return `${count} ${count === 1 ? 'file' : 'files'}`;
+}
+
+/** The Assets page row's sub line: "<n> files · Kept 31 days". */
+export function recentlyDeletedSub(count: number): string {
+  return `${fileCount(count)} · Kept ${RECENTLY_DELETED_DAYS} days`;
+}
+
+/** One Recently deleted row's detail line: "<size> · gone in <d> days". */
+export function goneInLine(sizeBytes: number | null, days: number): string {
+  return `${humanizeSize(sizeBytes)} · gone in ${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+/** Bytes as megabytes for the Empty now hint: one decimal under 10 MB, whole above. */
+export function formatMegabytes(bytes: number): string {
+  const mb = Math.max(0, bytes) / (1024 * 1024);
+  return mb >= 10 ? String(Math.round(mb)) : String(Math.round(mb * 10) / 10);
+}
+
+/** The owner's Empty now hint: "Frees <X> MB right away." */
+export function freesLine(bytes: number): string {
+  return `Frees ${formatMegabytes(bytes)} MB right away.`;
+}
+
+/** The Empty now confirm body: "<n> files deleted for good. ..." */
+export function emptyConfirmMessage(count: number): string {
+  return `${fileCount(count)} deleted for good. Nothing is saved, and this can't be undone.`;
+}
+
+/** One file in Recently deleted. */
+export interface DeletedAssetItem {
+  id: string;
+  /** display_name ?? filename, shown in full. */
+  name: string;
+  deletedAt: string;
+  sizeBytes: number | null;
+}
+
+interface RawDeletedRow {
+  id: string;
+  filename: string;
+  display_name: string | null;
+  deleted_at: string;
+  current_version: { size_bytes: number | null } | null;
+}
+
+// Same disambiguated embed as ASSET_SELECT: only the current version's size.
+const DELETED_SELECT =
+  'id, filename, display_name, deleted_at, ' +
+  'current_version:asset_versions!assets_current_version_id_fkey(size_bytes)';
+
+/** Flatten raw deleted rows into the display shape. Pure. */
+export function shapeDeletedAssets(rows: RawDeletedRow[]): DeletedAssetItem[] {
+  return rows.map((row) => ({
+    id: row.id,
+    name: displayLabel({ displayName: row.display_name, filename: row.filename }),
+    deletedAt: row.deleted_at,
+    sizeBytes: row.current_version?.size_bytes ?? null,
+  }));
+}
+
+/** Total bytes Recently deleted holds, for the Empty now hint. */
+export function deletedBytes(items: DeletedAssetItem[]): number {
+  return items.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0);
+}
+
+/**
+ * List one workspace's Recently deleted library files, most recently deleted
+ * first, in ONE read (sizes come from the embedded current version). Files the
+ * owner already asked to purge are excluded, matching the RLS policy.
+ */
+export async function listDeletedAssets(
+  client: Client,
+  workspaceId: string,
+): Promise<Result<DeletedAssetItem[]>> {
+  const result = await client
+    .from('assets')
+    .select(DELETED_SELECT)
+    .eq('workspace_id', workspaceId)
+    .eq('origin', 'library')
+    .not('deleted_at', 'is', null)
+    .is('purge_requested_at', null)
+    .order('deleted_at', { ascending: false });
+  if (result.error) {
+    return { ok: false, error: { code: 'unknown', message: result.error.message } };
+  }
+  return { ok: true, data: shapeDeletedAssets((result.data ?? []) as unknown as RawDeletedRow[]) };
+}
+
+/** How many files Recently deleted holds: a head-only count, no rows fetched. */
+export async function countDeletedAssets(
+  client: Client,
+  workspaceId: string,
+): Promise<Result<number>> {
+  const result = await client
+    .from('assets')
+    .select('id', { count: 'exact', head: true })
+    .eq('workspace_id', workspaceId)
+    .eq('origin', 'library')
+    .not('deleted_at', 'is', null)
+    .is('purge_requested_at', null);
+  if (result.error) {
+    return { ok: false, error: { code: 'unknown', message: result.error.message } };
+  }
+  return { ok: true, data: result.count ?? 0 };
+}
+
+/** Restore one deleted file to the library via asset_restore. */
+export function restoreAsset(
+  client: Client,
+  assetId: string,
+  traceId: string,
+): Promise<Result<undefined>> {
+  return assetRestore(client, { p_asset_id: assetId, p_trace_id: traceId });
+}
+
+export interface PurgeConfig {
+  /** The asset-upload worker base URL; the /purge route is POSTed beneath it. */
+  endpoint: string;
+  token: string;
+  workspaceId: string;
+  /** The files to delete for good; omitted = everything in Recently deleted. */
+  assetIds?: string[] | undefined;
+  /** Injected so tests pass a mock; the app passes fetchWithTrace. */
+  fetcher: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+function isPurgeResponse(body: unknown): body is PurgeResponse {
+  if (typeof body !== 'object' || body === null) return false;
+  const { requested, removed, freedBytes } = body as Record<string, unknown>;
+  return [requested, removed, freedBytes].every(
+    (value) => typeof value === 'number' && Number.isFinite(value),
+  );
+}
+
+/** The worker's error code from an {error:{code}} body, or `http_<status>`. */
+function purgeErrorCode(body: unknown, status: number): string {
+  if (typeof body === 'object' && body !== null) {
+    const error = (body as { error?: unknown }).error;
+    if (typeof error === 'object' && error !== null) {
+      const code = (error as { code?: unknown }).code;
+      if (typeof code === 'string' && code !== '') return code;
+    }
+  }
+  return `http_${status}`;
+}
+
+async function readBody(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST {workspace_id, asset_ids?} to the worker's /purge route with a Bearer
+ * token. Never throws: a transport failure is { ok: false } with message
+ * 'network', a non-OK status carries the worker's error code (owner_only,
+ * not_member, ...) as the message, and a malformed 200 body is 'bad_response'.
+ */
+export async function purgeAssets(config: PurgeConfig): Promise<Result<PurgeResponse>> {
+  const request: PurgeRequest = { workspace_id: config.workspaceId };
+  if (config.assetIds !== undefined) request.asset_ids = config.assetIds;
+  let response: Response;
+  try {
+    response = await config.fetcher(`${config.endpoint.replace(/\/+$/, '')}/purge`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+      },
+      body: JSON.stringify(request),
+    });
+  } catch {
+    return { ok: false, error: { code: 'unknown', message: 'network' } };
+  }
+  const body = await readBody(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: { code: 'unknown', message: purgeErrorCode(body, response.status) },
+    };
+  }
+  if (!isPurgeResponse(body)) {
+    return { ok: false, error: { code: 'unknown', message: 'bad_response' } };
+  }
+  return {
+    ok: true,
+    data: { requested: body.requested, removed: body.removed, freedBytes: body.freedBytes },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Delete blocked by use. asset_delete / asset_delete_many raise 'asset_in_use'
+// when a live post, brief or comment still attaches the file; the error names
+// no parent, so findAssetsInUse looks it up with bounded reads (attachments,
+// then one read per parent table), never one per asset.
+// ---------------------------------------------------------------------------
+
+/** The delete confirm body, under "Delete <name>?". */
+export const DELETE_CONFIRM_MESSAGE =
+  'It moves to Recently deleted and is gone for good after 31 days. It keeps using storage until then, unless the owner empties it earlier.';
+
+/** What a delete call came back with, for the confirm surfaces. */
+export type AssetDeleteOutcome = 'deleted' | 'in_use' | 'failed';
+
+/** Whether a delete proc failed because the file is still attached somewhere live. */
+export function isAssetInUseError(error: { message: string }): boolean {
+  return error.message === 'asset_in_use';
+}
+
+export type AssetParentKind = 'post' | 'brief' | 'comment';
+
+/** Where a blocked file is used, and the route that opens it. */
+export interface AssetParent {
+  kind: AssetParentKind;
+  href: string;
+}
+
+export interface AssetInUse {
+  assetId: string;
+  parent: AssetParent;
+}
+
+/** The in-use sheet's button for a parent kind. */
+export function openParentLabel(kind: AssetParentKind): string {
+  if (kind === 'brief') return 'Open brief';
+  if (kind === 'comment') return 'Open comment';
+  return 'Open post';
+}
+
+/**
+ * The in-use sheet body. `more` is how many other selected files are also in
+ * use: 0 reads "<name> is part of a post.", more reads "<name> and <k> more are
+ * part of a post."
+ */
+export function assetInUseMessage(name: string, more: number): string {
+  const subject = more > 0 ? `${name} and ${more} more are` : `${name} is`;
+  return `${subject} part of a post. Delete the post first, then the file.`;
+}
+
+function entityHref(entityType: string, entityId: string): string | null {
+  if (entityType === 'post') return `/posts/${entityId}`;
+  if (entityType === 'brief') return `/briefs/${entityId}`;
+  return null;
+}
+
+interface RawAttachment {
+  asset_id: string;
+  entity_type: string;
+  entity_id: string;
+}
+
+interface RawComment {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+}
+
+/**
+ * Pick each asset's live parent from the reads below. Pure. Assets keep the
+ * order of `assetIds`; attachments are taken newest first; an attachment whose
+ * parent is not live (deleted, hidden by RLS) is skipped, as asset_in_use does.
+ */
+export function resolveAssetParents(
+  assetIds: readonly string[],
+  attachments: RawAttachment[],
+  livePostIds: ReadonlySet<string>,
+  liveBriefIds: ReadonlySet<string>,
+  liveComments: ReadonlyMap<string, RawComment>,
+): AssetInUse[] {
+  const out: AssetInUse[] = [];
+  for (const assetId of assetIds) {
+    for (const row of attachments) {
+      if (row.asset_id !== assetId) continue;
+      let parent: AssetParent | null = null;
+      if (row.entity_type === 'post' && livePostIds.has(row.entity_id)) {
+        parent = { kind: 'post', href: `/posts/${row.entity_id}` };
+      } else if (row.entity_type === 'brief' && liveBriefIds.has(row.entity_id)) {
+        parent = { kind: 'brief', href: `/briefs/${row.entity_id}` };
+      } else if (row.entity_type === 'comment') {
+        const comment = liveComments.get(row.entity_id);
+        const base = comment ? entityHref(comment.entity_type, comment.entity_id) : null;
+        if (comment && base !== null) {
+          parent = { kind: 'comment', href: `${base}?comment=${comment.id}` };
+        }
+      }
+      if (parent !== null) {
+        out.push({ assetId, parent });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function idsOfType(rows: RawAttachment[], type: string): string[] {
+  return [...new Set(rows.filter((row) => row.entity_type === type).map((row) => row.entity_id))];
+}
+
+/**
+ * Which of `assetIds` are still used by a live post, brief or comment, each with
+ * the route to its parent. One attachments read, then at most one read each of
+ * posts, briefs and comments in parallel (all RLS-scoped).
+ */
+export async function findAssetsInUse(
+  client: Client,
+  assetIds: readonly string[],
+): Promise<Result<AssetInUse[]>> {
+  if (assetIds.length === 0) return { ok: true, data: [] };
+  const attachments = await client
+    .from('asset_attachments')
+    .select('asset_id, entity_type, entity_id')
+    .in('asset_id', [...assetIds])
+    .is('deleted_at', null)
+    .order('attached_at', { ascending: false });
+  if (attachments.error) {
+    return { ok: false, error: { code: 'unknown', message: attachments.error.message } };
+  }
+  const rows = (attachments.data ?? []) as RawAttachment[];
+  const postIds = idsOfType(rows, 'post');
+  const briefIds = idsOfType(rows, 'brief');
+  const commentIds = idsOfType(rows, 'comment');
+
+  const [posts, briefs, comments] = await Promise.all([
+    postIds.length === 0
+      ? null
+      : client.from('posts').select('id').in('id', postIds).is('deleted_at', null),
+    briefIds.length === 0
+      ? null
+      : client.from('briefs').select('id').in('id', briefIds).is('deleted_at', null),
+    commentIds.length === 0
+      ? null
+      : client
+          .from('comments')
+          .select('id, entity_type, entity_id')
+          .in('id', commentIds)
+          .is('deleted_at', null),
+  ]);
+  const failed = [posts, briefs, comments].find((res) => res !== null && res.error !== null);
+  if (failed?.error) {
+    return { ok: false, error: { code: 'unknown', message: failed.error.message } };
+  }
+  const livePostIds = new Set(((posts?.data ?? []) as { id: string }[]).map((row) => row.id));
+  const liveBriefIds = new Set(((briefs?.data ?? []) as { id: string }[]).map((row) => row.id));
+  const liveComments = new Map(
+    ((comments?.data ?? []) as RawComment[]).map((row) => [row.id, row]),
+  );
+  return {
+    ok: true,
+    data: resolveAssetParents(assetIds, rows, livePostIds, liveBriefIds, liveComments),
+  };
 }

@@ -82,6 +82,7 @@ import {
   MOVE_CANCEL_PX,
 } from '@/components/ui/useLongPress';
 import { useToast } from '@/components/ui/toast';
+import { deleteConfirmCopy } from '@/lib/chat/delete-flow';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
 import type { ChannelSummary, ChatProfile } from '@/lib/chat-reads';
@@ -378,7 +379,7 @@ interface MessageThreadProps {
   /** Delete own messages for everyone; absent hides "Select". */
   onDeleteMessages?: (
     messageIds: readonly string[],
-  ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  ) => Promise<{ ok: true; toast?: string } | { ok: false; message: string }>;
   /**
    * Edit the body of an own message; absent hides "Edit". Resolves ok, or the
    * mapped failure copy ("Edit window has closed (15 min)", ...).
@@ -5637,6 +5638,12 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           ? { onForward: () => setForwardFor(selectedForForward(selected, selectable)) }
           : {})}
         {...(selectionStar !== null ? { star: selectionStar } : {})}
+        confirmCopy={deleteConfirmCopy(
+          [...selected].flatMap((id) => {
+            const message = messagesById.get(id);
+            return message !== undefined ? [message] : [];
+          }),
+        )}
         onDelete={async () => {
           // Committed chunks become tombstones (and leave the selection);
           // a failed chunk's ids stay selected for another try.

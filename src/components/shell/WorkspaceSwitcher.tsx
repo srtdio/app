@@ -4,6 +4,9 @@ import { createPortal } from 'react-dom';
 import { workspaceCreate } from '@srtdio/rpc';
 import { PLATFORM_LABELS, POST_PLATFORMS, type PostPlatform } from '@srtdio/posts';
 import type { Json } from '@srtdio/schemas';
+import { BookCallSheet } from '@/components/support/BookCallSheet';
+import { ContactSheet } from '@/components/support/ContactSheet';
+import { SupportRows } from '@/components/support/SupportRows';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
@@ -61,6 +64,9 @@ export function WorkspaceSwitcher() {
     setActiveWorkspaceId,
     refreshWorkspaces,
     createBlocked,
+    workspaceDisplayName: activeDisplayName,
+    deletedWorkspace,
+    clearDeletedWorkspace,
   } = useWorkspace();
   const newTrace = useNewTrace();
   const [open, setOpen] = useState(false);
@@ -69,6 +75,8 @@ export function WorkspaceSwitcher() {
   const [platform, setPlatform] = useState<PostPlatform | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [support, setSupport] = useState<'contact' | 'book' | null>(null);
+  const hasDeleted = deletedWorkspace !== null;
 
   const close = useCallback(() => {
     setOpen(false);
@@ -77,12 +85,15 @@ export function WorkspaceSwitcher() {
     setPlatform(null);
     setFormError(null);
     setSubmitting(false);
-  }, []);
+    setSupport(null);
+    clearDeletedWorkspace();
+  }, [clearDeletedWorkspace]);
 
-  // Open on the shell event; always reset to list mode for a fresh open.
+  // Open on the shell event; a fresh open starts on the list, or straight on
+  // the create form right after a workspace was deleted.
   useEffect(() => {
     function onSwitch(): void {
-      setMode('list');
+      setMode(hasDeleted ? 'create' : 'list');
       setName('');
       setPlatform(null);
       setFormError(null);
@@ -92,19 +103,30 @@ export function WorkspaceSwitcher() {
     return () => {
       window.removeEventListener('sorted:switch-workspace', onSwitch);
     };
-  }, []);
+  }, [hasDeleted]);
 
-  // Escape closes, matching the rest of the shell's overlays.
+  // A workspace was just deleted: open on the create form.
+  useEffect(() => {
+    if (!hasDeleted) return;
+    setMode('create');
+    setName('');
+    setPlatform(null);
+    setFormError(null);
+    setOpen(true);
+  }, [hasDeleted]);
+
+  // Escape closes, matching the rest of the shell's overlays; while a support
+  // sheet is on top, Escape is that sheet's.
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') close();
+      if (event.key === 'Escape' && support === null) close();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, close]);
+  }, [open, close, support]);
 
   function selectWorkspace(id: string): void {
     setActiveWorkspaceId(id);
@@ -227,13 +249,27 @@ export function WorkspaceSwitcher() {
               <span>Create workspace</span>
             </button>
             {createBlocked ? (
-              <p id="workspace-limit-note" className="px-3 pb-2 text-[13px] leading-snug text-fg-3">
-                {WORKSPACE_LIMIT_MESSAGE}
-              </p>
+              <>
+                <p
+                  id="workspace-limit-note"
+                  className="px-3 pb-2 text-[13px] leading-snug text-fg-3"
+                >
+                  {WORKSPACE_LIMIT_MESSAGE}
+                </p>
+                <SupportRows
+                  onContact={() => setSupport('contact')}
+                  onBook={() => setSupport('book')}
+                />
+              </>
             ) : null}
           </div>
         ) : mode === 'create' ? (
           <form onSubmit={submitDetails} className="flex flex-col gap-4 overflow-y-auto p-[18px]">
+            {deletedWorkspace !== null ? (
+              <p className="text-[13px] leading-snug text-fg-3">
+                {deletedWorkspace.name} is gone. Start a new one.
+              </p>
+            ) : null}
             <Field label="Brand name" htmlFor="workspace-name" required>
               <Input
                 id="workspace-name"
@@ -291,6 +327,7 @@ export function WorkspaceSwitcher() {
                 onClick={() => {
                   setFormError(null);
                   setMode('list');
+                  clearDeletedWorkspace();
                 }}
               >
                 Back
@@ -334,6 +371,18 @@ export function WorkspaceSwitcher() {
           </div>
         )}
       </div>
+      <ContactSheet
+        open={support === 'contact'}
+        onClose={() => setSupport(null)}
+        workspaceName={activeDisplayName ?? ''}
+      />
+      {workspaceId !== null ? (
+        <BookCallSheet
+          open={support === 'book'}
+          onClose={() => setSupport(null)}
+          workspaceId={workspaceId}
+        />
+      ) : null}
     </div>,
     document.body,
   );

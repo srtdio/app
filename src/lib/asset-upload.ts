@@ -9,6 +9,7 @@
 // drive it with a mock and the app passes fetchWithTrace.
 
 import { ALLOWED_MIME_TYPES, isAllowedMime } from '@srtdio/storage';
+import { reportWorkspaceFull } from '@/lib/storage-full';
 import { TRACE_ID_HEADER } from '@/lib/trace';
 import {
   sharedThumbnail,
@@ -69,6 +70,8 @@ export function uploadErrorMessage(code: string): string {
       return 'This file is too complex to check';
     case 'external_content':
       return "This file loads content from the internet and can't be shared.";
+    case WORKSPACE_FULL_CODE:
+      return 'This workspace is full';
     default:
       return "Couldn't upload. Try again.";
   }
@@ -82,6 +85,12 @@ export interface StoredThumbnail {
   pageCount?: number;
 }
 
+/** The asset-upload Worker's 413 code for an upload that does not fit the workspace. */
+export const WORKSPACE_FULL_CODE = 'workspace_full';
+
+/** A failed upload; code is set only for a full workspace (the full sheet is already open). */
+export type UploadFailure = { ok: false; message: string; code?: typeof WORKSPACE_FULL_CODE };
+
 export type UploadOutcome =
   | {
       ok: true;
@@ -91,7 +100,7 @@ export type UploadOutcome =
       /** Present only when the worker stored a thumbnail rendition. */
       thumbnail?: StoredThumbnail;
     }
-  | { ok: false; message: string };
+  | UploadFailure;
 
 /** Makes the thumbnail sent with a pdf/video upload; tests inject a fake. */
 export type ThumbnailMaker = (file: File) => Promise<ThumbnailResult>;
@@ -331,9 +340,7 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
     }
   }
 
-  if (!response.ok) {
-    return { ok: false, message: uploadErrorMessage(errorCode(response.body)) };
-  }
+  if (!response.ok) return refused(errorCode(response.body), file);
 
   const asset = assetField(response.body);
   if (asset === null) {
@@ -398,6 +405,16 @@ async function readJson(response: Response): Promise<unknown> {
   } catch {
     return null;
   }
+}
+
+/**
+ * A worker refusal as an outcome. A full workspace (413 workspace_full) also
+ * opens the shell's full sheet for this file's size.
+ */
+function refused(code: string, file: File): UploadFailure {
+  if (code !== WORKSPACE_FULL_CODE) return { ok: false, message: uploadErrorMessage(code) };
+  reportWorkspaceFull(file.size);
+  return { ok: false, message: uploadErrorMessage(code), code };
 }
 
 function errorCode(body: unknown): string {
@@ -1078,7 +1095,7 @@ async function uploadResumable(
   file: File,
   form: FormData,
   config: UploadConfig,
-): Promise<{ ok: true; response: UploadResponse } | { ok: false; message: string }> {
+): Promise<{ ok: true; response: UploadResponse } | UploadFailure> {
   const route = (path: string): string => workerRoute(config.endpoint, path);
   const onProgress = config.xhr?.onProgress;
   let upload: { key: string; uploadId: string } | null = null;
@@ -1108,7 +1125,7 @@ async function uploadResumable(
         'application/json',
       ),
     );
-    if (!created.ok) return { ok: false, message: uploadErrorMessage(errorCode(created.body)) };
+    if (!created.ok) return refused(errorCode(created.body), file);
     upload = createdField(created.body);
     if (upload === null) return { ok: false, message: uploadErrorMessage('network') };
 
@@ -1129,7 +1146,7 @@ async function uploadResumable(
           ),
         async () => (await storedParts()).get(part) === chunk.size,
       );
-      if (!reply.ok) return { ok: false, message: uploadErrorMessage(errorCode(reply.body)) };
+      if (!reply.ok) return refused(errorCode(reply.body), file);
       done += chunk.size;
       onProgress?.(Math.min(done / file.size, 1));
     }

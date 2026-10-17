@@ -16,9 +16,16 @@
 //   -> same auth + membership gate, then returns the current summary scoped to
 //      the workspace (cross-tenant 404).
 // GET   /usage?workspace_id=
-//   -> same auth + membership gate, then the workspace bucket's stored bytes
-//      { usedBytes, warnAtBytes, warn, exempt } (asset-upload-usage.ts). Warn
-//      only; a Cloudflare analytics failure is 503 usage_unavailable.
+//   -> same auth + membership gate, then the workspace's stored bytes from the
+//      workspace_bytes_used RPC { usedBytes, warnAtBytes, warn, exempt }
+//      (asset-upload-usage.ts). A failed read is 503 usage_unavailable.
+//
+// Storage cap (checkWorkspaceCap, asset-upload-usage.ts): after auth +
+// membership and before any bytes are stored, a direct POST (the file part's
+// declared size), POST /multipart/create (size) and POST /multipart/complete
+// (the real assembled size; a refused upload is aborted and its staging
+// removed) are refused with 413 workspace_full when the workspace would go over
+// the cap. Chat and library uploads alike; exempt owners are never capped.
 //
 // Resumable uploads (R2 multipart, 8 MB parts; see asset-upload-multipart.ts):
 //   POST /multipart/create   {workspace_id, size, content_type}
@@ -83,11 +90,11 @@ import {
   recordUploadActivity,
 } from './asset-upload-activity';
 import {
+  checkWorkspaceCap,
   createSupabaseUsageStore,
-  defaultUsageCache,
-  fetchR2BucketBytes,
   resolveWorkspaceUsage,
 } from './asset-upload-usage';
+import { handlePurge, handlePurgeChat } from './asset-upload-purge';
 
 /** The slice of the Workers ExecutionContext the upload path uses. */
 export interface UploadContext {
@@ -100,10 +107,9 @@ export interface AssetUploadEnv {
   CLOUDFLARE_R2_SECRET_ACCESS_KEY: string;
   SUPABASE_URL: string;
   SUPABASE_SECRET_KEY: string;
+  /** Public key: POST /purge calls asset_purge_request as the caller (anon role + bearer). */
+  SUPABASE_PUBLISHABLE_KEY: string;
   VIRUS_SCAN_PROVIDER?: string;
-  /** Account and API token (Account Analytics: Read) for GET /usage only. */
-  CLOUDFLARE_ANALYTICS_ACCOUNT_ID?: string;
-  CLOUDFLARE_ANALYTICS_TOKEN?: string;
   /**
    * Comma-separated list of browser origins allowed to call this Worker
    * cross-origin. Operator sets it as a Worker var/secret; when unset the code
@@ -126,6 +132,8 @@ const CORS_MAX_AGE_SECONDS = 86_400;
 export type UploadResponseCode =
   | UploadErrorCode
   | 'folder_name_taken'
+  | 'workspace_full'
+  | 'usage_unavailable'
   | 'bad_request'
   | 'unauthorized'
   | 'forbidden'
@@ -146,6 +154,8 @@ const STATUS_BY_CODE: Record<UploadResponseCode, number> = {
   virus_detected: 422,
   not_found: 404,
   folder_name_taken: 409,
+  workspace_full: 413,
+  usage_unavailable: 503,
   bad_request: 400,
   unauthorized: 401,
   forbidden: 403,
@@ -618,27 +628,37 @@ async function handlePost(
   let contentType: string;
   let bytes: Uint8Array;
   let staged: { bucket: string; key: string } | null = null;
+  // Membership first: no usage or R2 read for a caller outside the workspace.
+  const member = await createSupabaseAssetReadStore(env).isActiveMember({
+    userId: caller.value,
+    workspaceId,
+  });
+  if (!member) {
+    logger.warn('asset upload denied: caller not a workspace member', {
+      workspace_id: workspaceId,
+    });
+    return json(
+      403,
+      { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
+      traceId,
+      acao,
+    );
+  }
   if (file instanceof File && mode === 'direct') {
+    // The file part's declared size, before its bytes are read or stored.
+    const cap = await checkWorkspaceCap({
+      workspaceId,
+      addBytes: file.size,
+      store: createSupabaseUsageStore(env, traceId),
+    });
+    if (!cap.ok) {
+      return json(STATUS_BY_CODE[cap.error.code], { error: cap.error }, traceId, acao);
+    }
     filename = file.name;
     contentType = file.type;
     bytes = new Uint8Array(await file.arrayBuffer());
   } else {
-    // Membership first: no R2 read for a caller outside the workspace.
-    const member = await createSupabaseAssetReadStore(env).isActiveMember({
-      userId: caller.value,
-      workspaceId,
-    });
-    if (!member) {
-      logger.warn('asset upload denied: caller not a workspace member', {
-        workspace_id: workspaceId,
-      });
-      return json(
-        403,
-        { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
-        traceId,
-        acao,
-      );
-    }
+    // The cap runs inside completeUpload on the real assembled size.
     const key = String(stagedKey);
     const assembled = await completeUpload(buildMultipartDeps(env), {
       userId: caller.value,
@@ -732,6 +752,8 @@ function buildMultipartDeps(env: AssetUploadEnv): MultipartDeps {
     storage: buildStorage(env),
     bucketFor: (workspaceId) => repository.getAssetBucket(workspaceId),
     newId: () => crypto.randomUUID(),
+    checkCap: ({ workspaceId, addBytes, traceId }) =>
+      checkWorkspaceCap({ workspaceId, addBytes, store: createSupabaseUsageStore(env, traceId) }),
   };
 }
 
@@ -1054,8 +1076,6 @@ async function handleUsage(
   const result = await resolveWorkspaceUsage({
     workspaceId,
     store: createSupabaseUsageStore(env, traceId),
-    cache: defaultUsageCache(),
-    readBytes: (bucket) => fetchR2BucketBytes({ env, bucket, traceId, now: new Date() }),
   });
   if (!result.ok) {
     const status = result.error.code === 'not_found' ? 404 : 503;
@@ -1661,6 +1681,8 @@ export default {
         if (path === '/multipart/abort') {
           return await handleMultipartAbort(request, env, traceId, acao);
         }
+        if (path === '/purge') return await handlePurge(request, env, traceId, acao);
+        if (path === '/purge-chat') return await handlePurgeChat(request, env, traceId, acao);
         return await handlePost(request, env, traceId, acao, ctx);
       }
       if (request.method === 'PUT' && new URL(request.url).pathname === '/multipart/part') {

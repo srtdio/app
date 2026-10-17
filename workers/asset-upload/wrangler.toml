@@ -19,3 +19,4 @@ head_sampling_rate = 1.0
 #   CLOUDFLARE_R2_SECRET_ACCESS_KEY - R2 SigV4 secret
 #   SUPABASE_URL                    - project URL for membership + asset reads
 #   SUPABASE_SECRET_KEY             - service role: membership + asset writes
+#   SUPABASE_PUBLISHABLE_KEY        - public key: POST /purge runs asset_purge_request as the caller

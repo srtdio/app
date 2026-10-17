@@ -4,6 +4,14 @@
 // message_ids }. A failed signal never fails the delete (the rows are wiped; a
 // receiver that misses it reads the tombstones on its next history load).
 //
+// Files: a message carrying files is confirmed with the files copy below, its
+// attachment asset ids are collected BEFORE chat_message_delete (the delete
+// wipes attachment_asset_ids, and the tombstones drop them locally), and only
+// once every chunk is recorded are they sent to the asset-upload Worker's
+// POST /purge-chat. A failed purge never undoes the delete: the proc already
+// marked the rows purge_requested_at and the nightly job sweeps them.
+// Text-only messages take the delete path unchanged.
+//
 // Edit own message: the same order. chat_message_edit first; only the
 // returned row updates the bubble (the new text never shows before the record
 // holds it), then peers get ext { sorted_event: 'edit', message_ids: [id],
@@ -17,7 +25,12 @@
 
 import type { Client } from '@srtdio/rpc';
 import { deleteMessagesRecord, editFailureCopy, editMessageRecord } from '@/lib/chat/record';
-import { deleteEventExt, editEventExt, type ChatMessageRow } from '@/lib/chat/thread';
+import {
+  deleteEventExt,
+  editEventExt,
+  type ChatMessageRow,
+  type ThreadMessage,
+} from '@/lib/chat/thread';
 import {
   ALL_MENTION,
   isEveryoneRefusal,
@@ -28,6 +41,113 @@ import {
 import { recheck } from '@/lib/chat/send-flow';
 import { readChannelMemberIds } from '@/lib/chat-reads';
 import type { Result } from '@srtdio/rpc';
+import type {
+  PurgeChatRequest,
+  PurgeChatResponse,
+} from '@/server/workers/asset-upload-purge-contracts';
+
+/** The confirm a delete shows. */
+export interface DeleteConfirmCopy {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+}
+
+export const DELETE_FILES_TITLE_ONE = 'Delete this message?';
+export const DELETE_FILES_TITLE_MANY = 'Delete these messages?';
+export const DELETE_FILES_MESSAGE_MANY =
+  "Files in these messages are permanently deleted for privacy. Files shared in chat never go to Recently deleted and can't be restored.";
+export const DELETE_FILES_CONFIRM = 'Delete for everyone';
+export const DELETE_FILES_CANCEL = 'Cancel';
+/** The toast once a delete that carried files is recorded. */
+export const FILES_DELETED_TOAST = 'Deleted. File removed for good.';
+
+/** The one-message body, naming its first file. */
+export function deleteFilesMessageOne(fileName: string): string {
+  return `${fileName} is permanently deleted for privacy. Files shared in chat never go to Recently deleted and can't be restored.`;
+}
+
+/**
+ * The files confirm for the messages about to be deleted, or null when none
+ * carries a file (the caller keeps today's text-only confirm). Pure.
+ */
+export function deleteConfirmCopy(
+  messages: readonly Pick<ThreadMessage, 'attachments'>[],
+): DeleteConfirmCopy | null {
+  const withFiles = messages.filter((m) => m.attachments.length > 0);
+  if (withFiles.length === 0) return null;
+  const one = messages.length === 1;
+  const firstName = withFiles[0]?.attachments.find((a) => a.name !== '')?.name ?? '';
+  return {
+    title: one ? DELETE_FILES_TITLE_ONE : DELETE_FILES_TITLE_MANY,
+    message: one && firstName !== '' ? deleteFilesMessageOne(firstName) : DELETE_FILES_MESSAGE_MANY,
+    confirmLabel: DELETE_FILES_CONFIRM,
+    cancelLabel: DELETE_FILES_CANCEL,
+  };
+}
+
+/**
+ * The recorded attachment asset ids of these messages, deduped; uploads still
+ * in flight (no id yet) carry none. Read from the thread before the delete.
+ */
+export function attachmentAssetIds(
+  messages: readonly Pick<ThreadMessage, 'id' | 'attachments'>[],
+  messageIds: readonly string[],
+): string[] {
+  const wanted = new Set(messageIds);
+  const ids = new Set<string>();
+  for (const message of messages) {
+    if (!wanted.has(message.id)) continue;
+    for (const attachment of message.attachments) {
+      if (attachment.assetId !== '') ids.add(attachment.assetId);
+    }
+  }
+  return [...ids];
+}
+
+export type PurgeChatOutcome = { ok: true; data: PurgeChatResponse } | { ok: false; error: string };
+
+export interface PurgeChatConfig {
+  /** The asset-upload worker base URL; the /purge-chat route is POSTed beneath it. */
+  endpoint: string;
+  token: string;
+  workspaceId: string;
+  assetIds: readonly string[];
+  /** Injected so tests pass a mock; the app passes fetchWithTrace. */
+  fetcher: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+/**
+ * POST {workspace_id, asset_ids} to the worker's /purge-chat route with a
+ * Bearer token. Never throws: a transport failure or a non-OK status becomes
+ * { ok: false } with a log-only reason (nothing here is user copy).
+ */
+export async function purgeChatFiles(config: PurgeChatConfig): Promise<PurgeChatOutcome> {
+  const body: PurgeChatRequest = {
+    workspace_id: config.workspaceId,
+    asset_ids: [...config.assetIds],
+  };
+  let response: Response;
+  try {
+    response = await config.fetcher(`${config.endpoint.replace(/\/+$/, '')}/purge-chat`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+  if (!response.ok) return { ok: false, error: `purge-chat ${response.status}` };
+  try {
+    return { ok: true, data: (await response.json()) as PurgeChatResponse };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
 
 export interface DeleteFlowDeps {
   client: Client;
@@ -36,12 +156,19 @@ export interface DeleteFlowDeps {
   /** Publish the live delete command; undefined while there is no connection. */
   signal: ((ext: Record<string, unknown>) => Promise<unknown>) | undefined;
   onSignalFailed: (error: unknown) => void;
+  /** The attachment asset ids of these messages, read before the delete; absent: none. */
+  collectAssetIds?: (messageIds: readonly string[]) => string[];
+  /** POST /purge-chat for the collected ids (see purgeChatFiles). */
+  purgeChat?: (assetIds: string[]) => Promise<PurgeChatOutcome>;
+  onPurgeFailed?: (error: string) => void;
 }
 
 export async function runDelete(
   deps: DeleteFlowDeps,
   input: { channelId: string; messageIds: readonly string[]; traceId: string },
-): Promise<{ ok: true } | { ok: false; message: string; deleted: string[] }> {
+): Promise<{ ok: true; toast?: string } | { ok: false; message: string; deleted: string[] }> {
+  // Before the record: the delete wipes the ids the files are found by.
+  const assetIds = deps.collectAssetIds?.(input.messageIds) ?? [];
   const result = await deleteMessagesRecord({
     client: deps.client,
     channelId: input.channelId,
@@ -60,7 +187,17 @@ export async function runDelete(
       void pending.catch((error: unknown) => deps.onSignalFailed(error));
     },
   });
-  return result.ok ? { ok: true } : { ok: false, message: result.message, deleted: result.deleted };
+  if (!result.ok) return { ok: false, message: result.message, deleted: result.deleted };
+  if (assetIds.length === 0) return { ok: true };
+  if (deps.purgeChat !== undefined) {
+    try {
+      const purged = await deps.purgeChat(assetIds);
+      if (!purged.ok) deps.onPurgeFailed?.(purged.error);
+    } catch (error) {
+      deps.onPurgeFailed?.(String(error));
+    }
+  }
+  return { ok: true, toast: FILES_DELETED_TOAST };
 }
 
 export interface EditFlowDeps {

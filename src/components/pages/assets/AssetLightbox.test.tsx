@@ -76,7 +76,7 @@ function mount(
       initialInfoOpen={opts.initialInfoOpen ?? false}
       onIndexChange={() => {}}
       onClose={() => {}}
-      onDelete={async () => true}
+      onDelete={async () => 'deleted' as const}
       canRename={false}
       onRename={async () => ({ ok: true })}
       onToast={() => {}}

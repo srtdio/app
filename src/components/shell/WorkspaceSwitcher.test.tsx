@@ -3,14 +3,20 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockWorkspaceCreate, mockRefresh, mockSetActive, mockState } = vi.hoisted(() => ({
-  mockWorkspaceCreate: vi.fn(),
-  mockRefresh: vi.fn(async () => {}),
-  mockSetActive: vi.fn(),
-  mockState: { createBlocked: false },
-}));
+const { mockWorkspaceCreate, mockRefresh, mockSetActive, mockClearDeleted, mockState } = vi.hoisted(
+  () => ({
+    mockWorkspaceCreate: vi.fn(),
+    mockRefresh: vi.fn(async () => {}),
+    mockSetActive: vi.fn(),
+    mockClearDeleted: vi.fn(),
+    mockState: { createBlocked: false, deletedWorkspace: null as { name: string } | null },
+  }),
+);
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+vi.mock('@/lib/env', () => ({
+  env: { VITE_SUPABASE_URL: 'https://sb.test', VITE_SUPABASE_PUBLISHABLE_KEY: 'pk' },
+}));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
 vi.mock('@srtdio/rpc', () => ({ workspaceCreate: mockWorkspaceCreate }));
 vi.mock('@/lib/workspace-context', async (importOriginal) => {
@@ -25,11 +31,15 @@ vi.mock('@/lib/workspace-context', async (importOriginal) => {
       setActiveWorkspaceId: mockSetActive,
       refreshWorkspaces: mockRefresh,
       createBlocked: mockState.createBlocked,
+      workspaceDisplayName: 'Acme - LinkedIn',
+      deletedWorkspace: mockState.deletedWorkspace,
+      clearDeletedWorkspace: mockClearDeleted,
     }),
   };
 });
 
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
+import { WORKSPACE_LIMIT_MESSAGE } from '@/lib/workspace-context';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,6 +57,8 @@ async function mount(): Promise<void> {
 
 beforeEach(async () => {
   mockState.createBlocked = false;
+  mockState.deletedWorkspace = null;
+  mockClearDeleted.mockReset();
   mockSetActive.mockReset();
   mockWorkspaceCreate.mockReset();
   mockWorkspaceCreate.mockResolvedValue({ ok: true, data: 'ws-new' });
@@ -169,9 +181,47 @@ describe('WorkspaceSwitcher', () => {
     expect(create.disabled).toBe(true);
     expect(create.getAttribute('aria-describedby')).toBe('workspace-limit-note');
     expect(document.getElementById('workspace-limit-note')?.textContent).toBe(
-      'On the free plan you can own one workspace.',
+      WORKSPACE_LIMIT_MESSAGE,
     );
     await act(async () => create.click());
     expect(dialogTitle()).toBe('Switch workspace');
+  });
+
+  it('offers Contact us and Book a call under the limit message', async () => {
+    act(() => root?.unmount());
+    document.body.innerHTML = '';
+    mockState.createBlocked = true;
+    await mount();
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('Contact ussupport@srtd.io');
+    expect(text).toContain('Book a callPick a time, we send a Meet link');
+    await act(async () => button('Contact ussupport@srtd.io').click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(document.querySelector('[aria-label="Write to us"]')).not.toBeNull();
+    expect(document.body.textContent).toContain(
+      "Hi, I'm on Acme - LinkedIn and need another workspace.",
+    );
+  });
+
+  it('hides the rows for an exempt owner, who is never blocked', () => {
+    expect(document.body.textContent).not.toContain('Contact us');
+    expect(document.body.textContent).not.toContain('Book a call');
+  });
+
+  it('opens straight on the create form after a delete, with the gone hint', async () => {
+    act(() => root?.unmount());
+    document.body.innerHTML = '';
+    mockState.deletedWorkspace = { name: 'Somaiya - Instagram' };
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => root!.render(<WorkspaceSwitcher />));
+    expect(dialogTitle()).toBe('Create workspace');
+    expect(document.body.textContent).toContain('Somaiya - Instagram is gone. Start a new one.');
+    expect(mockClearDeleted).not.toHaveBeenCalled();
+    await act(async () => button('Back').click());
+    expect(mockClearDeleted).toHaveBeenCalled();
   });
 });
