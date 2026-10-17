@@ -47,6 +47,10 @@
   --bad-soft: rgba(194, 57, 43, 0.1);
   /* Team only plan rows and chips: a warm tint behind warn ink. */
   --warn-soft: #f6ecd9;
+  /* Link warning card + unsafe-link sheet: ink on warn-soft is 5.6:1, the line
+     is the card border. */
+  --warn-ink: #9a4a0a;
+  --warn-line: #f2c9a2;
   --annotation-bg: #ffe9b8;
   --annotation-line: #d9a93c;
   --stage-review: #b45309;
@@ -103,6 +107,8 @@
   --good-soft: rgba(95, 176, 125, 0.16);
   --bad-soft: rgba(224, 104, 90, 0.14);
   --warn-soft: #2e2610;
+  --warn-ink: #f0a35c;
+  --warn-line: #5a3a1c;
   --annotation-bg: #4a3a14;
   --annotation-line: #d9a93c;
   --stage-review: #e0954a;

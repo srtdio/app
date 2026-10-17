@@ -1,0 +1,17 @@
+name = "srtdio-link-preview"
+main = "../../src/server/workers/link-preview.ts"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ALLOWED_ORIGINS = "https://srtd.io,https://v2.srtd.io,https://srtdio-app.pages.dev"
+# Public project URL (the frontend ships it too); its JWKS verifies callers.
+SUPABASE_URL = "https://movnexawfhsyuluspxoc.supabase.co"
+
+# Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
+# srtdio-logs (see docs/cloudflare-logpush-setup.md).
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# No secrets. Previews are cached with the Workers Cache API (no KV, no D1).

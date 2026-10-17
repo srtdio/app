@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { LinkButton } from '@/components/ui/LinkButton';
+import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -35,7 +35,7 @@ function objectiveCaption(brief: Brief): string | null {
 /**
  * The non-image tile for a brief, mirroring PostCard.postFallback. Used only when the
  * brief has no thumbnail image (or presign is disabled/fails). The tile no longer
- * carries the link case: a reference link is now a real, tappable LinkButton in the
+ * carries the link case: a reference link is now a real, tappable link card in the
  * card body rather than a dead domain label painted inside the thumbnail. Selection
  * order: objective/title text -> a caption snippet; else a plain glyph. The image
  * path itself is owned by Thumbnail (it shows this fallback whenever
@@ -150,7 +150,8 @@ export function BriefCard({
             onKeyDown={(event) => event.stopPropagation()}
             role="presentation"
           >
-            <LinkButton url={link.href} />
+            {/* Compact: the list card has no room for a picture. */}
+            <LinkPreviewCard url={link.href} size="compact" className="w-full max-w-[320px]" />
           </div>
         ) : null}
 

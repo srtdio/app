@@ -1,0 +1,35 @@
+name: Deploy link-preview Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/link-preview/**'
+      - 'src/server/**'
+      - 'src/lib/links/**'
+      - 'src/lib/trace.ts'
+      - 'packages/storage/**'
+      - '.github/workflows/link-preview-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # No Worker secrets: SUPABASE_URL and ALLOWED_ORIGINS are plain vars in
+      # wrangler.toml, so a plain deploy is the whole job.
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/link-preview
+          wranglerVersion: '3.114.17'
+          packageManager: pnpm

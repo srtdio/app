@@ -70,6 +70,8 @@ const CHAT_SPECS = [
   'activity-plan',
   // The induction ends in the group chat.
   'induction',
+  // Link cards in a chat, then on a post's comments.
+  'link-previews',
 ];
 
 export const AREAS: Area[] = [
@@ -121,6 +123,7 @@ export const AREAS: Area[] = [
       'chat-status-ticker',
       'files-open-in-viewer',
       'induction',
+      'link-previews',
       'pdf-opens-instantly',
     ].map(t),
   },

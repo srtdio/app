@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { APP_ENTITY_ROUTES, classify, displayUrl, tokenize } from '@/lib/chat/message-links';
+import {
+  APP_ENTITY_ROUTES,
+  classify,
+  displayUrl,
+  firstExternalUrl,
+  tokenize,
+} from '@/lib/chat/message-links';
 
 const ORIGIN = 'https://app.example.test';
 
@@ -79,5 +85,27 @@ describe('displayUrl', () => {
   it('drops the scheme', () => {
     expect(displayUrl('https://example.com/a')).toBe('example.com/a');
     expect(displayUrl('http://example.com')).toBe('example.com');
+  });
+});
+
+describe('firstExternalUrl', () => {
+  it('returns only the first external link', () => {
+    expect(
+      firstExternalUrl('see https://a.com/x and https://b.com/y.', ORIGIN, APP_ENTITY_ROUTES),
+    ).toBe('https://a.com/x');
+  });
+
+  it('skips internal post/brief links and other same-origin pages', () => {
+    expect(
+      firstExternalUrl(
+        `${ORIGIN}/p/abc ${ORIGIN}/settings then https://c.com/`,
+        ORIGIN,
+        APP_ENTITY_ROUTES,
+      ),
+    ).toBe('https://c.com/');
+  });
+
+  it('is null when there is no external link', () => {
+    expect(firstExternalUrl('no links here', ORIGIN, APP_ENTITY_ROUTES)).toBeNull();
   });
 });

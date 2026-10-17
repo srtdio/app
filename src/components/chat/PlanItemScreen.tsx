@@ -108,6 +108,16 @@ import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
 import { mentionIds, resolvePersonMentionText } from '@/lib/chat/mentions';
 import { resolvePeople } from '@/lib/people-names';
+import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
+import { firstExternalUrl } from '@/lib/chat/message-links';
+
+/** The preview card for the first external link in a concept's description. */
+function ConceptLinkCard(props: { text: string }): ReactElement | null {
+  const url = firstExternalUrl(props.text);
+  return url !== null ? (
+    <LinkPreviewCard key={url} url={url} className="mt-1 w-full max-w-[420px]" />
+  ) : null;
+}
 
 // Loaded on first post item open: the post view's graph (PCS, the chat SDK)
 // stays out of the chat bundle and out of node imports of this module.
@@ -792,6 +802,7 @@ export function PlanItemScreen(props: {
                   {description}
                 </p>
               ) : null}
+              <ConceptLinkCard text={description} />
             </div>
             <div
               data-plan-status=""
