@@ -47,6 +47,26 @@ async function pickFile(name: string): Promise<void> {
 }
 
 describe('PresetMediaField', () => {
+  it('marks the add-photo button itself as the media control the guide boxes', async () => {
+    root = createRoot(host!);
+    await act(async () => {
+      root!.render(
+        <PresetMediaField
+          workspaceId="ws-1"
+          value={[]}
+          onChange={() => {}}
+          required
+          onBusyChange={() => {}}
+          frame={null}
+        />,
+      );
+    });
+    const anchors = document.querySelectorAll('[data-induction="post-sheet-media"]');
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0]?.tagName).toBe('BUTTON');
+    expect(anchors[0]?.textContent).toBe('Add a photo or video');
+  });
+
   it('shows a progress bar from the real upload progress, and never the file name', async () => {
     let finish: (value: { ok: true; reused: false; versionId: string }) => void = () => {};
     mockUpload.mockImplementation(

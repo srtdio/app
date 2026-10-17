@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InductionState, Rect } from '@/lib/induction';
 import { ROUTE_SCRIPTS } from '@/lib/induction-routes';
@@ -10,7 +10,7 @@ import type { GuideFactsRead } from './induction-data';
 
 const { media, facts } = vi.hoisted(() => ({
   media: { laptop: false },
-  facts: { current: undefined as unknown as GuideFactsRead },
+  facts: { current: undefined as unknown as GuideFactsRead, reads: 0 },
 }));
 
 vi.mock('@/lib/use-media-query', () => ({
@@ -18,7 +18,12 @@ vi.mock('@/lib/use-media-query', () => ({
   useMediaQuery: () => media.laptop,
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
-vi.mock('./induction-data', () => ({ readGuideFacts: async () => facts.current }));
+vi.mock('./induction-data', () => ({
+  readGuideFacts: async () => {
+    facts.reads += 1;
+    return facts.current;
+  },
+}));
 
 import { InductionGuide } from './InductionGuide';
 import { InductionProvider } from './InductionProvider';
@@ -48,6 +53,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: 844 });
   media.laptop = false;
   facts.current = BASE_FACTS;
+  facts.reads = 0;
   try {
     window.localStorage.clear();
   } catch {
@@ -111,6 +117,32 @@ async function wait(ms: number): Promise<void> {
   });
 }
 
+/** Shows the router location, so tests can read where the guide navigated. */
+function Where(): ReactElement {
+  const location = useLocation();
+  return <output data-where={`${location.pathname}${location.search}`} />;
+}
+
+function where(): string {
+  return q('[data-where]').getAttribute('data-where') ?? '';
+}
+
+function render(d: InductionData, options: { route?: string; canCreateBrief?: boolean | null }) {
+  root!.render(
+    <MemoryRouter initialEntries={[options.route ?? '/pipeline']}>
+      <InductionProvider
+        data={d}
+        workspaceId="ws-1"
+        workspaceLabel="Kite - Instagram"
+        canCreateBrief={options.canCreateBrief ?? null}
+      >
+        <Where />
+        <InductionGuide tabsShown />
+      </InductionProvider>
+    </MemoryRouter>,
+  );
+}
+
 async function mount(
   state: Partial<InductionState>,
   options: { route?: string; canCreateBrief?: boolean | null } = {},
@@ -118,18 +150,7 @@ async function mount(
   current = data(state);
   root = createRoot(host!);
   await act(async () => {
-    root!.render(
-      <MemoryRouter initialEntries={[options.route ?? '/pipeline']}>
-        <InductionProvider
-          data={current!}
-          workspaceId="ws-1"
-          workspaceLabel="Kite - Instagram"
-          canCreateBrief={options.canCreateBrief ?? null}
-        >
-          <InductionGuide tabsShown />
-        </InductionProvider>
-      </MemoryRouter>,
-    );
+    render(current!, options);
   });
   // The facts read resolves, then the control settles (SETTLE_MS) and the box shows.
   await wait(160);
@@ -368,18 +389,23 @@ describe('the guard', () => {
     expect(q('[data-induction-label]').getAttribute('data-guide-nudge')).toBe('on');
   });
 
-  it('lets the control do the real thing and moves on by itself', async () => {
+  it('lets the control do the real thing, then moves on after its own handler', async () => {
     const c = control('pipeline-approved-chip', CHIP);
-    const pressed = vi.fn();
-    c.el.addEventListener('click', pressed);
+    control('pipeline-create', { top: 120, left: 320, width: 44, height: 44 });
+    const order: string[] = [];
+    c.el.addEventListener('click', () => order.push('handler'));
     const d = await mount({ step: 'c_approved_chip' });
+    vi.mocked(d.setStep).mockImplementation(async (id) => {
+      order.push(`move:${id}`);
+      return true;
+    });
     const click = new MouseEvent('click', { bubbles: true, cancelable: true });
     await act(async () => {
       c.el.dispatchEvent(click);
     });
-    expect(pressed).toHaveBeenCalledTimes(1);
+    await wait(20);
     expect(click.defaultPrevented).toBe(false);
-    expect(d.setStep).toHaveBeenCalledWith(nextOf('creator', 'c_approved_chip'));
+    expect(order).toEqual(['handler', `move:${nextOf('creator', 'c_approved_chip')}`]);
   });
 
   it('never swallows taps on the bar', async () => {
@@ -466,6 +492,7 @@ describe('completion', () => {
     await act(async () => {
       format.el.dispatchEvent(click);
     });
+    await wait(20);
     expect(click.defaultPrevented).toBe(false);
     expect(d.setStep).toHaveBeenCalledWith('c_post_format');
   });
@@ -499,19 +526,22 @@ describe('completion', () => {
 });
 
 describe('the 4 s skip', () => {
-  it('moves to the next visible step when the control never shows', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const brief = stepFor('creator', 'briefs-first-card');
-    const line = stepFor('creator', 'post-caption-text');
-    control('post-caption-text', { top: 200, left: 16, width: 358, height: 60 });
-    const d = await mount({ step: brief.id, ...ALL_DATA }, { route: '/briefs' });
+  it('moves to the next visible step on the same screen when the control never shows', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const add = stepFor('approver', 'briefs-new');
+    const title = stepFor('approver', 'brief-sheet-title');
+    control('brief-sheet-title', { top: 200, left: 16, width: 358, height: 44 }, { tag: 'input' });
+    const d = await mount(
+      { role: 'client', step: add.id },
+      { route: '/briefs', canCreateBrief: true },
+    );
     expect(d.setStep).not.toHaveBeenCalled();
     await wait(4000);
-    expect(d.setStep).toHaveBeenCalledWith(line.id);
+    expect(d.setStep).toHaveBeenCalledWith(title.id);
   });
 
   it('does not skip a control that showed', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
     control('pipeline-approved-chip', CHIP);
     const d = await mount({ step: 'c_approved_chip' });
     await wait(4500);
@@ -536,5 +566,140 @@ describe('cards', () => {
     expect(card.textContent).toContain('Diwali drop is waiting for your approver.');
     act(() => card.querySelector('button')!.click());
     expect(d.finish).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('fix round regressions', () => {
+  it('does not finish a sheet field step when its fields mount a frame late', async () => {
+    const d = await mount({ step: 'c_post_caption' });
+    // The sheet renders its content after it opens: caption and format land together.
+    await act(async () => {
+      control(
+        'post-sheet-caption',
+        { top: 300, left: 16, width: 358, height: 80 },
+        {
+          tag: 'textarea',
+        },
+      );
+      control('post-sheet-format', { top: 400, left: 16, width: 358, height: 44 });
+    });
+    await wait(200);
+    expect(d.setStep).not.toHaveBeenCalled();
+    expect(q('[data-induction-label]').textContent).toBe('Tap to write the caption');
+  });
+
+  it('keeps the step when a tap does nothing (the action failed)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const c = control('pipeline-approved-chip', CHIP);
+    const d = await mount({ step: 'c_approved_chip' });
+    await act(async () => {
+      c.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    await wait(4500);
+    expect(d.setStep).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-induction-box]')).not.toBeNull();
+  });
+
+  it('does not confirm a tap while a modal covers the next control', async () => {
+    const c = control('pipeline-approved-chip', CHIP);
+    control('pipeline-create', { top: 120, left: 320, width: 44, height: 44 });
+    const d = await mount({ step: 'c_approved_chip' });
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.getBoundingClientRect = () =>
+      ({ top: 400, left: 0, width: 390, height: 444, right: 390, bottom: 844 }) as DOMRect;
+    await act(async () => {
+      c.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      document.body.appendChild(dialog);
+    });
+    await wait(40);
+    // The chip is covered too, which counts as it disappearing: that alone finishes it.
+    expect(d.setStep).toHaveBeenCalledTimes(1);
+  });
+
+  it('boxes nothing when a modal that does not hold the control covers it', async () => {
+    control('pipeline-approved-chip', CHIP);
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.getBoundingClientRect = () =>
+      ({ top: 300, left: 0, width: 390, height: 544, right: 390, bottom: 844 }) as DOMRect;
+    document.body.appendChild(dialog);
+    await mount({ step: 'c_approved_chip' });
+    expect(document.querySelector('[data-induction-box]')).toBeNull();
+    expect(document.querySelector('[data-induction-bar]')).not.toBeNull();
+  });
+
+  it('opens the next step place instead of jumping to the always-visible Activity tab', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const steps = ROUTE_SCRIPTS.creator.steps;
+    const brief = stepFor('creator', 'briefs-first-card');
+    control('activity-tab', { top: 790, left: 300, width: 60, height: 44 });
+    const d = await mount({ step: brief.id, ...ALL_DATA }, { route: '/briefs' });
+    await wait(4000);
+    const next = steps[steps.findIndex((s) => s.id === brief.id) + 1];
+    expect(d.setStep).toHaveBeenCalledWith(next?.id);
+    expect(d.setStep).not.toHaveBeenCalledWith(stepFor('creator', 'activity-tab').id);
+  });
+
+  it('opens a new step place when the location is elsewhere', async () => {
+    const brief = stepFor('creator', 'briefs-first-card');
+    await mount({ step: brief.id, ...ALL_DATA }, { route: '/pipeline' });
+    expect(where()).toBe('/briefs');
+  });
+
+  it('keeps Back with nothing earlier on screen, going to the previous open step', async () => {
+    control('pipeline-create', { top: 120, left: 320, width: 44, height: 44 });
+    const d = await mount({ step: 'c_post_create' });
+    act(() => q('[data-induction-back]').click());
+    expect(d.setStep).toHaveBeenCalledWith('c_approved_chip');
+  });
+
+  it('docks the bar where it does not cover the box', async () => {
+    control('pipeline-approved-chip', { top: 740, left: 16, width: 120, height: 44 });
+    await mount({ step: 'c_approved_chip' });
+    expect(q('[data-induction-bar]').getAttribute('data-induction-bar')).toBe('top');
+  });
+
+  it('uses the guide tokens for the hairline, pill and progress', async () => {
+    control('pipeline-approved-chip', CHIP);
+    await mount({ step: 'c_approved_chip' });
+    expect(q('[data-induction-box]').className).toContain('border-[var(--guide)]');
+    const label = q('[data-induction-label]').className;
+    expect(label).toContain('bg-[var(--guide)]');
+    expect(label).toContain('text-[var(--guide-ink)]');
+    expect(q('[data-induction-progress]').className).toContain('bg-[var(--guide-deep)]');
+    expect(q('[data-induction-box]').className).toMatch(/dark:shadow-/);
+  });
+
+  it('reads the facts once per workspace, not on every poll, and again on refresh', async () => {
+    control('pipeline-approved-chip', CHIP);
+    await mount({ step: 'c_approved_chip' });
+    expect(facts.reads).toBe(1);
+    await act(async () => {
+      render(data({ step: 'c_approved_chip' }), {});
+    });
+    await wait(20);
+    expect(facts.reads).toBe(1);
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('sorted:induction-refresh'));
+    });
+    await wait(20);
+    expect(facts.reads).toBe(2);
+  });
+
+  it('stops the frame loop once the control has settled', async () => {
+    const frames = vi.spyOn(window, 'requestAnimationFrame');
+    control('pipeline-approved-chip', CHIP);
+    await mount({ step: 'c_approved_chip' });
+    await wait(400);
+    const settled = frames.mock.calls.length;
+    await wait(200);
+    expect(frames.mock.calls.length).toBe(settled);
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(frames.mock.calls.length).toBeGreaterThan(settled);
   });
 });

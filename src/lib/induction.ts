@@ -244,15 +244,19 @@ export interface StepProbe {
 
 /**
  * Back: the previous step when its control is on screen, else the nearest
- * earlier one whose control is. Never a step the data finished (Back never
- * undoes data). -1 hides Back (the first step, or nothing to go back to).
+ * earlier one whose control is, else the nearest earlier step at all (its
+ * place opens). Never a step the data finished (Back never undoes data). -1
+ * hides Back: the first step, or every earlier step is finished by the data.
  */
 export function backIndex(steps: readonly Step[], index: number, probe: StepProbe): number {
+  let fallback = -1;
   for (let j = Math.min(index, steps.length) - 1; j >= 0; j -= 1) {
     const step = steps[j] as Step;
-    if (probe.visible(step) && !probe.done(step)) return j;
+    if (probe.done(step)) continue;
+    if (probe.visible(step)) return j;
+    if (fallback < 0) fallback = j;
   }
-  return -1;
+  return fallback;
 }
 
 /** The nearest earlier visible step that shares this step's data (the first post's own steps). */
@@ -267,17 +271,26 @@ function backInGroup(steps: readonly Step[], index: number, probe: StepProbe): n
   return -1;
 }
 
+/** The chapter or phase a step belongs to ('' when neither). */
+function sectionOf(step: Step): string {
+  return step.chapter ?? step.phase ?? '';
+}
+
 /**
  * Where the 4 s rule moves a step whose control never showed: forward to the
- * next step whose control is visible (never past an open gate), else back
- * within its own group, else simply the next step (its place opens). A gate
- * only ever goes back within its group, otherwise it stays (returns index).
+ * next step on the same screen (same place, same chapter or phase) whose
+ * control is visible, never past an open gate; else back within its own
+ * group; else simply the next step, whose place then opens and gets its own
+ * 4 s. A gate only ever goes back within its group, otherwise it stays.
  */
 export function skipTarget(steps: readonly Step[], index: number, probe: StepProbe): number {
+  const here = steps[index];
+  if (here === undefined) return index;
   const back = backInGroup(steps, index, probe);
-  if (steps[index]?.kind === 'gate') return back >= 0 ? back : index;
+  if (here.kind === 'gate') return back >= 0 ? back : index;
   for (let j = index + 1; j < steps.length; j += 1) {
     const step = steps[j] as Step;
+    if (step.place !== here.place || sectionOf(step) !== sectionOf(here)) break;
     if (probe.visible(step)) return j;
     if (isGated(step) && !probe.done(step)) break;
   }
@@ -434,13 +447,14 @@ export interface LabelPlacement {
 /**
  * Where the label pill goes: below the box, above it when there is no room
  * below, or on its left in the same row for a short control at the right edge.
- * `area` is the free band (the viewport minus the guide bar). Never covers the
- * box, never leaves the viewport.
+ * `area` is the free band (the viewport minus the guide bar). When the band has
+ * no room, the label goes on the side with most room in the whole viewport,
+ * over the bar if it must, but never over the box and never off screen.
  */
 export function placeLabel(input: {
   box: Rect;
   label: Size;
-  area: { top: number; bottom: number; width: number };
+  area: { top: number; bottom: number; width: number; viewportHeight: number };
 }): LabelPlacement {
   const { box, label, area } = input;
   const left = clamp(
@@ -460,16 +474,51 @@ export function placeLabel(input: {
   const above = { side: 'above' as const, top: box.top - LABEL_GAP - label.height, left };
   if (above.top >= area.top) return above;
   if (leftSide.left >= EDGE) return leftSide;
-  const roomBelow = area.bottom - (box.top + box.height);
-  const roomAbove = box.top - area.top;
-  const top = roomBelow >= roomAbove ? area.bottom - label.height : area.top;
-  return { side: roomBelow >= roomAbove ? 'below' : 'above', top, left };
+  return placeLabelInViewport({ box, label, area });
 }
 
-/** The guide bar docks at the bottom, or at the top when the boxed control sits in the bottom third. */
-export function barSide(box: Rect | undefined, viewportHeight: number): 'top' | 'bottom' {
+/** The last resort: the side of the box with most room in the whole viewport. */
+function placeLabelInViewport(input: {
+  box: Rect;
+  label: Size;
+  area: { width: number; viewportHeight: number };
+}): LabelPlacement {
+  const { box, label, area } = input;
+  const left = clamp(
+    box.left + box.width / 2 - label.width / 2,
+    EDGE,
+    area.width - EDGE - label.width,
+  );
+  const roomBelow = area.viewportHeight - (box.top + box.height);
+  const roomAbove = box.top;
+  const below = roomBelow >= roomAbove;
+  const top = below
+    ? Math.min(box.top + box.height + LABEL_GAP, area.viewportHeight - label.height)
+    : Math.max(box.top - LABEL_GAP - label.height, 0);
+  return { side: below ? 'below' : 'above', top, left };
+}
+
+/** The gap between a docked bar and the screen edge (or the tab bar). */
+export const DOCK_GAP = 8;
+
+/**
+ * The guide bar's side, by free space: bottom unless the bottom bar would
+ * cover the box, then top unless the top bar would too; if both would, the
+ * side with more room.
+ */
+export function barSide(
+  box: Rect | undefined,
+  frame: { viewportHeight: number; insets: { top: number; bottom: number }; barHeight: number },
+): 'top' | 'bottom' {
   if (box === undefined) return 'bottom';
-  return box.top + box.height / 2 > (viewportHeight * 2) / 3 ? 'top' : 'bottom';
+  const { viewportHeight, insets, barHeight } = frame;
+  const bottomBarTop = viewportHeight - insets.bottom - DOCK_GAP - barHeight;
+  const topBarBottom = insets.top + DOCK_GAP + barHeight;
+  if (box.top + box.height <= bottomBarTop) return 'bottom';
+  if (box.top >= topBarBottom) return 'top';
+  const roomBelow = viewportHeight - insets.bottom - (box.top + box.height);
+  const roomAbove = box.top - insets.top;
+  return roomBelow >= roomAbove ? 'bottom' : 'top';
 }
 
 /** The hand's fingertip: a little below and right of the control's centre. */

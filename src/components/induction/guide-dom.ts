@@ -48,7 +48,7 @@ function findKey(
   return match ?? (qualifier.strict ? undefined : all[0]);
 }
 
-/** The first visible control for the keys, in key order, narrowed by any qualifier. */
+/** The first shown control for the keys, in key order, narrowed by any qualifier. */
 export function findTarget(keys: readonly InductionKey[], qualifiers: Qualifiers = {}): Found {
   for (const key of keys) {
     const el = findKey(key, qualifiers[key]);
@@ -66,6 +66,21 @@ export function topDialog(): OpenDialog {
   ).filter((el) => el.closest(`[${LAYER_ATTR}]`) === null && shown(el));
   const last = all[all.length - 1];
   return last === undefined ? { open: false } : { open: true, el: last };
+}
+
+/** Whether an open modal sheet or dialog that does not hold the control covers it. */
+export function isCovered(el: HTMLElement): boolean {
+  const dialog = topDialog();
+  return dialog.open && !dialog.el.contains(el);
+}
+
+/** The first control for the keys that is on screen: shown and not covered by a modal. */
+export function findVisible(keys: readonly InductionKey[], qualifiers: Qualifiers = {}): Found {
+  for (const key of keys) {
+    const found = findTarget([key], qualifiers);
+    if (found.found && !isCovered(found.el)) return found;
+  }
+  return { found: false };
 }
 
 /** The control's own corner radius in px (its top-left corner). */

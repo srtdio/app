@@ -6,14 +6,19 @@
 
 import { forwardRef, type ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
-import type { Rect } from '@/lib/induction';
+import { DOCK_GAP, type Rect } from '@/lib/induction';
 import { CHROME_ATTR } from './guide-dom';
 
 /** Above page content and Sheet (z-50); below toasts (z-60/70) and the lightbox (z-80). */
 export const GUIDE_Z = 'z-[55]';
 
-const AMBER_BG = 'bg-[rgb(var(--guide-rgb))]';
-const AMBER_INK = 'text-[rgb(var(--guide-ink-rgb))]';
+/** The six guide tokens (src/index.css): amber fill and ink, the deep fill, the light tint, two triplets. */
+const AMBER_BG = 'bg-[var(--guide)]';
+const AMBER_INK = 'text-[var(--guide-ink)]';
+const AMBER_DEEP_BG = 'bg-[var(--guide-deep)]';
+const AMBER_LIGHT_BG = 'bg-[var(--guide-light)]';
+const LABEL_EDGE = 'border border-[rgb(var(--guide-ink-rgb)/0.12)]';
+const LABEL_GLOW = 'shadow-[0_2px_8px_rgb(var(--guide-rgb)/0.35)]';
 
 /** Keyframes for the hand, its ripple and the nudge; reduced motion holds them still. */
 const GUIDE_STYLE = `
@@ -58,7 +63,7 @@ export function GuideBox({ rect, radius }: { rect: Rect; radius: number }): Reac
     <div
       data-induction-box=""
       aria-hidden="true"
-      className={`pointer-events-none absolute ${GUIDE_Z} border border-[rgb(var(--guide-rgb))] shadow-[0_0_0_200vmax_rgba(14,16,30,0.30)] dark:shadow-[0_0_0_200vmax_rgba(0,0,0,0.22)]`}
+      className={`pointer-events-none absolute ${GUIDE_Z} border border-[var(--guide)] shadow-[0_0_0_200vmax_rgba(14,16,30,0.30)] dark:shadow-[0_0_0_200vmax_rgba(0,0,0,0.22)]`}
       style={{
         top: rect.top + window.scrollY,
         left: rect.left + window.scrollX,
@@ -75,7 +80,7 @@ export const HAND_TIP = { x: 17, y: 1 };
 const HAND_SIZE = 40;
 const RIPPLE = 28;
 
-/** The hand pressing the control twice, then resting, with a thin white ring from its tip. */
+/** The hand pressing the control twice, then resting, with a thin light ring from its tip. */
 export function GuideHand({
   tip,
   nudge,
@@ -99,7 +104,7 @@ export function GuideHand({
     >
       <span
         data-guide-ripple=""
-        className="absolute rounded-full border-2 border-white"
+        className="absolute rounded-full border-2 border-[var(--overlay-fg)]"
         style={{
           width: RIPPLE,
           height: RIPPLE,
@@ -112,12 +117,12 @@ export function GuideHand({
         width={HAND_SIZE}
         height={HAND_SIZE}
         viewBox="0 0 40 40"
-        className="relative drop-shadow-[0_2px_3px_rgba(0,0,0,0.35)]"
+        className="relative drop-shadow-md"
       >
         <path
           d="M14 4a3 3 0 0 1 6 0v12a3 3 0 0 1 6 0v2a3 3 0 0 1 6 0v2a3 3 0 0 1 5 2v8c0 6-4 9-10 9h-4c-4 0-6-2-8-5l-6-8a3 3 0 0 1 5-4l0 0z"
-          fill="#ffffff"
-          stroke="rgb(var(--guide-ink-rgb))"
+          fill="var(--panel)"
+          stroke="var(--fg)"
           strokeWidth="1.6"
           strokeLinejoin="round"
         />
@@ -137,7 +142,7 @@ export const GuideLabel = forwardRef<
       key={nudge}
       data-induction-label=""
       data-guide-nudge={nudge > 0 ? 'on' : 'off'}
-      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1.5 text-[14px] font-[650] leading-tight shadow-md ${AMBER_BG} ${AMBER_INK}`}
+      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1.5 text-[14px] font-[650] leading-tight ${LABEL_EDGE} ${LABEL_GLOW} ${AMBER_BG} ${AMBER_INK}`}
       style={{ top: at.top, left: at.left }}
     >
       {text}
@@ -173,8 +178,6 @@ export interface DockAt {
   insets: { top: number; bottom: number };
 }
 
-const DOCK_GAP = 8;
-
 function dockStyle(dock: DockAt): { className: string; style: Record<string, number> } {
   const vertical =
     dock.side === 'top'
@@ -208,11 +211,11 @@ export const GuideBar = forwardRef<
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(progress * 100)}
-        className="h-1 w-full bg-panel-3"
+        className={`h-1 w-full ${AMBER_LIGHT_BG}`}
       >
         <div
           data-induction-progress=""
-          className={`h-full ${AMBER_BG}`}
+          className={`h-full ${AMBER_DEEP_BG}`}
           style={{ width: `${Math.round(progress * 1000) / 10}%` }}
         />
       </div>
@@ -334,7 +337,7 @@ export function GuideCard({
           {copy.pills.map((pill) => (
             <span
               key={pill}
-              className="rounded-full bg-white/15 px-2.5 py-1 text-[12px] font-semibold"
+              className="rounded-full bg-[var(--overlay-surface)] px-2.5 py-1 text-[12px] font-semibold"
             >
               {pill}
             </span>
@@ -346,7 +349,7 @@ export function GuideCard({
           variant={hero ? 'default' : 'primary'}
           size="lg"
           onClick={onPress}
-          className={hero ? 'border-transparent bg-white text-accent hover:bg-white/90' : ''}
+          className={hero ? 'border-transparent bg-panel text-fg hover:bg-panel-2' : ''}
         >
           {copy.button}
         </Button>

@@ -10,6 +10,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import {
   approverStageOf,
   INDUCTION_KEYS,
+  INDUCTION_REFRESH_EVENT,
   isGated,
   presetPrimaryFor,
   resolveGuide,
@@ -240,10 +241,10 @@ interface FactsState {
 const NO_FACTS: FactsState = { workspaceId: '', key: '', facts: EMPTY_FACTS };
 
 /**
- * The workspace facts, read while the induction runs. Read again on each
- * induction_state refetch until the default group shows up (its chat channel
- * can land a moment after the workspace), and whenever the route or the
- * person's own post changes.
+ * The workspace facts, read once per workspace, route and own post while the
+ * induction runs, and again on each sorted:induction-refresh (the success
+ * sites dispatch it, e.g. once the default group lands). Never on the poll or
+ * a route change.
  */
 function useGuideFacts(input: {
   active: boolean;
@@ -251,25 +252,31 @@ function useGuideFacts(input: {
   route: Route | 'none';
   state: InductionState;
 }): { workspaceId: string; facts: GuideFactsRead } {
-  const { active, workspaceId, route, state } = input;
+  const { active, workspaceId, route } = input;
+  const postId = input.state.postId;
   const [read, setRead] = useState<FactsState>(NO_FACTS);
-  const key = `${workspaceId ?? ''}|${route}|${state.postId ?? ''}`;
-  const settled = read.key === key && read.facts.group !== undefined;
+  const [refreshes, setRefreshes] = useState(0);
+  const key = `${workspaceId ?? ''}|${route}|${postId ?? ''}`;
 
   useEffect(() => {
-    if (!active || workspaceId === null || settled) return;
+    if (!active) return;
+    const onRefresh = (): void => setRefreshes((n) => n + 1);
+    window.addEventListener(INDUCTION_REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(INDUCTION_REFRESH_EVENT, onRefresh);
+  }, [active]);
+
+  useEffect(() => {
+    if (!active || workspaceId === null) return;
     let cancelled = false;
-    void readGuideFacts(supabase, {
-      workspaceId,
-      approver: route === 'approver',
-      postId: state.postId,
-    }).then((facts) => {
-      if (!cancelled) setRead({ workspaceId, key, facts });
-    });
+    void readGuideFacts(supabase, { workspaceId, approver: route === 'approver', postId }).then(
+      (facts) => {
+        if (!cancelled) setRead({ workspaceId, key, facts });
+      },
+    );
     return () => {
       cancelled = true;
     };
-  }, [active, workspaceId, route, key, settled, state]);
+  }, [active, workspaceId, route, postId, key, refreshes]);
 
   return read.key === key ? read : { workspaceId: '', facts: read.facts };
 }

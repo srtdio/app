@@ -30,7 +30,11 @@ function signature(el: HTMLElement | undefined): string {
   return parts.map((n) => Math.round(n * 2) / 2).join(',');
 }
 
-/** Returns true while the control is new or moving. */
+/**
+ * Returns true while the control is new or moving. The frame loop runs only
+ * until the control has held still for SETTLE_MS; resize, scroll, the visual
+ * viewport and DOM changes start it again.
+ */
 export function useLiveTick(el: HTMLElement | undefined): boolean {
   const [, setTick] = useState(0);
   const changedAt = useRef({ el: undefined as HTMLElement | undefined, at: 0 });
@@ -48,32 +52,43 @@ export function useLiveTick(el: HTMLElement | undefined): boolean {
       bump();
     };
     const frame = (): void => {
+      raf = 0;
       const now = signature(el);
       if (now !== last) {
         last = now;
         moved();
       }
-      raf = requestAnimationFrame(frame);
+      if (performance.now() - changedAt.current.at < SETTLE_MS * 2) {
+        raf = requestAnimationFrame(frame);
+      }
+    };
+    const wake = (): void => {
+      changedAt.current = { el, at: Math.max(changedAt.current.at, performance.now() - SETTLE_MS) };
+      if (raf === 0) raf = requestAnimationFrame(frame);
+    };
+    const poke = (): void => {
+      bump();
+      wake();
     };
     raf = requestAnimationFrame(frame);
     settle = window.setTimeout(bump, SETTLE_MS);
     const mutations = new MutationObserver((records) => {
-      if (records.some((record) => !inLayer(record.target))) bump();
+      if (records.some((record) => !inLayer(record.target))) poke();
     });
     mutations.observe(document.body, { childList: true, subtree: true, attributes: true });
     const viewport = window.visualViewport;
-    window.addEventListener('resize', bump);
-    document.addEventListener('scroll', bump, true);
-    viewport?.addEventListener('resize', bump);
-    viewport?.addEventListener('scroll', bump);
+    window.addEventListener('resize', poke);
+    document.addEventListener('scroll', poke, true);
+    viewport?.addEventListener('resize', poke);
+    viewport?.addEventListener('scroll', poke);
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf !== 0) cancelAnimationFrame(raf);
       window.clearTimeout(settle);
       mutations.disconnect();
-      window.removeEventListener('resize', bump);
-      document.removeEventListener('scroll', bump, true);
-      viewport?.removeEventListener('resize', bump);
-      viewport?.removeEventListener('scroll', bump);
+      window.removeEventListener('resize', poke);
+      document.removeEventListener('scroll', poke, true);
+      viewport?.removeEventListener('resize', poke);
+      viewport?.removeEventListener('scroll', poke);
     };
   }, [el]);
 

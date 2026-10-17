@@ -20,6 +20,7 @@ import {
   chapterOrder,
   clampToViewport,
   completesByUi,
+  DOCK_GAP,
   guideRadius,
   handPoint,
   onPlace,
@@ -45,7 +46,7 @@ import {
   type BarCopy,
   type DockAt,
 } from './GuideParts';
-import { findTarget, LAYER_ATTR, radiusOf, rectOf, textFieldOf, topDialog } from './guide-dom';
+import { findVisible, LAYER_ATTR, radiusOf, rectOf, textFieldOf } from './guide-dom';
 import {
   useAbsentSkip,
   useElementSize,
@@ -113,22 +114,32 @@ function stepIdOf(resolution: Exclude<Resolution, { kind: 'off' }>): string {
   return resolution.card.id;
 }
 
-/** A new step opens its screen; a gate's screen cannot be left. */
+/**
+ * A new step opens its screen, and keeps opening it until the person has been
+ * on it once (a tapped control's own navigation can land after the step
+ * changed). After that the person's own moves win, except on a gate, whose
+ * screen cannot be left.
+ */
 function useStepNavigation(ctx: InductionContextValue): void {
   const navigate = useNavigate();
   const location = useLocation();
   const { resolution, place } = ctx;
   const step = resolution.kind === 'step' ? resolution.step : undefined;
-  const opened = useRef('');
+  const opened = useRef({ id: '', arrived: false, navigated: false });
 
   useEffect(() => {
     if (step === undefined) return;
-    const firstTime = opened.current !== step.id;
-    opened.current = step.id;
-    if (onPlace(step.place, location, place)) return;
-    if (firstTime || step.kind === 'gate') {
-      navigate(placeRoute(step.place, place), { replace: !firstTime });
+    if (opened.current.id !== step.id) {
+      opened.current = { id: step.id, arrived: false, navigated: false };
     }
+    const now = opened.current;
+    if (onPlace(step.place, location, place)) {
+      now.arrived = true;
+      return;
+    }
+    if (now.arrived && step.kind !== 'gate') return;
+    navigate(placeRoute(step.place, place), { replace: now.navigated });
+    now.navigated = true;
   }, [step, location, place, navigate]);
 }
 
@@ -167,7 +178,7 @@ interface Frame {
 /** The live probe the pure rules read: is a step's control on screen, did the data finish it. */
 function probeOf(ctx: InductionContextValue): StepProbe {
   return {
-    visible: (step: Step) => findTarget(step.targets, ctx.qualifiers).found,
+    visible: (step: Step) => findVisible(step.targets, ctx.qualifiers).found,
     done: ctx.isDone,
   };
 }
@@ -187,17 +198,16 @@ function StepLayer({
   const probe = probeOf(ctx);
   const [barEl, setBarEl] = useState<HTMLElement | null>(null);
   const bar = useElementSize(barEl, BAR_FALLBACK);
-  const target = findTarget(step.targets, ctx.qualifiers);
+  // A control covered by a modal that does not hold it counts as not on screen.
+  const target = findVisible(step.targets, ctx.qualifiers);
   const el = target.found ? target.el : undefined;
   const moving = useLiveTick(el);
   useBringIntoView(step.id, el);
   const next = steps[index + 1];
-  const nextFound = next !== undefined ? findTarget(next.targets, ctx.qualifiers) : undefined;
+  const nextFound = next !== undefined ? findVisible(next.targets, ctx.qualifiers) : undefined;
   const nextEl = nextFound?.found === true ? nextFound.el : undefined;
 
-  const dialog = topDialog();
-  const covered = dialog.open && el !== undefined && !dialog.el.contains(el);
-  const boxed = el !== undefined && !covered && !moving ? el : undefined;
+  const boxed = el !== undefined && !moving ? el : undefined;
   const field = el !== undefined ? textFieldOf(el) : undefined;
 
   useStepCompletion({ stepKey: step.id, enabled: completesByUi(steps, index), el, nextEl }, () =>
@@ -233,7 +243,11 @@ function StepLayer({
     },
   };
   const dock: DockAt = {
-    side: barSide(control !== undefined ? boxRect(control) : undefined, window.innerHeight),
+    side: barSide(control !== undefined ? boxRect(control) : undefined, {
+      viewportHeight: window.innerHeight,
+      insets: frame.insets,
+      barHeight: bar.height,
+    }),
     laptop: frame.laptop,
     insets: frame.insets,
   };
@@ -284,11 +298,12 @@ function Spotlight({
   const viewport = { width: window.innerWidth, height: window.innerHeight };
   const box = boxRect(control);
   const { dock } = frame;
-  const barRoom = dock.laptop ? 0 : frame.barHeight + 8;
+  const barRoom = dock.laptop ? 0 : frame.barHeight + DOCK_GAP;
   const area = {
     top: dock.insets.top + (dock.side === 'top' ? barRoom : 0),
     bottom: viewport.height - (dock.side === 'bottom' ? dock.insets.bottom + barRoom : 0),
     width: viewport.width,
+    viewportHeight: viewport.height,
   };
   const at = placeLabel({ box, label: size, area });
   return (

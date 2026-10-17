@@ -21,26 +21,67 @@ export interface CompletionInput {
   stepKey: string;
   /** False for steps only the data finishes (gates, the last setup step of a group). */
   enabled: boolean;
-  /** The step's control while it is found (boxed or not). */
+  /** The step's control while it is on screen (shown, not covered by a modal). */
   el: HTMLElement | undefined;
-  /** The next step's control while it is found. */
+  /** The next step's control while it is on screen. */
   nextEl: HTMLElement | undefined;
 }
 
+/** How long after a tap the DOM may confirm it; after that the step stays. */
+export const TAP_CONFIRM_MS = 4000;
+
+interface Seen {
+  key: string;
+  done: boolean;
+  /** This step's own control has been on screen at least once. */
+  found: boolean;
+  /** The next control was absent while this one was on screen. */
+  nextAbsent: boolean;
+  /** When the control was tapped (0: no tap waiting for confirmation). */
+  tappedAt: number;
+}
+
+function freshSeen(key: string): Seen {
+  return { key, done: false, found: false, nextAbsent: false, tappedAt: 0 };
+}
+
+/** One DOM read of a step: whether it is finished now. Mutates the seen record. */
+function domConfirms(now: Seen, input: CompletionInput): boolean {
+  const { el, nextEl } = input;
+  if (el !== undefined) now.found = true;
+  else if (now.found) return true;
+  // Until this step's own control has shown, the next control appearing
+  // means nothing: a sheet mounts its fields a frame after it opens.
+  if (!now.found) return false;
+  if (nextEl === undefined) {
+    now.nextAbsent = true;
+    return false;
+  }
+  if (now.nextAbsent) return true;
+  if (now.tappedAt === 0) return false;
+  if (performance.now() - now.tappedAt > TAP_CONFIRM_MS) {
+    now.tappedAt = 0;
+    return false;
+  }
+  return true;
+}
+
 /**
- * Calls onComplete once per step when the person did the step: a tap on the
- * control (a field instead finishes when it holds text and loses focus), the
- * next step's control appearing after being absent, this control disappearing
- * after it showed, or (on a field step) a tap on the next step's control.
+ * Calls onComplete once per step when the DOM shows the person did it: this
+ * control disappearing (or a modal covering it) after it showed, the next
+ * step's control appearing after being absent, or, after a tap on the
+ * control, the next step's control on screen within TAP_CONFIRM_MS (a tap
+ * whose action failed leaves the step up). A field finishes when it holds
+ * text and loses focus, or when the next step's control is tapped. Every
+ * check runs after the control's own handler, so its navigation lands first.
  */
 export function useStepCompletion(input: CompletionInput, onComplete: () => void): void {
   const { stepKey, enabled, el, nextEl } = input;
+  const [, setTick] = useState(0);
   const latest = useRef(onComplete);
   latest.current = onComplete;
-  const seen = useRef({ key: '', done: false, found: false, nextAbsent: false });
-  if (seen.current.key !== stepKey) {
-    seen.current = { key: stepKey, done: false, found: false, nextAbsent: false };
-  }
+  const seen = useRef<Seen>(freshSeen(''));
+  if (seen.current.key !== stepKey) seen.current = freshSeen(stepKey);
   const complete = useRef(() => {
     if (seen.current.done) return;
     seen.current.done = true;
@@ -49,21 +90,24 @@ export function useStepCompletion(input: CompletionInput, onComplete: () => void
 
   // DOM changes: read on every render (the live tick re-renders on any change).
   useEffect(() => {
-    const now = seen.current;
-    if (!enabled || now.done) return;
-    if (el !== undefined) now.found = true;
-    else if (now.found) complete.current();
-    if (nextEl === undefined) now.nextAbsent = true;
-    else if (now.nextAbsent) complete.current();
+    if (!enabled || seen.current.done) return;
+    if (domConfirms(seen.current, { stepKey, enabled, el, nextEl })) complete.current();
   });
 
   useEffect(() => {
     if (!enabled || el === undefined) return;
     const field = textFieldOf(el);
+    const timers: number[] = [];
+    const later = (fn: () => void): void => {
+      timers.push(window.setTimeout(fn, 0));
+    };
     const onClick = (event: Event): void => {
       const node = targetNode(event);
-      if (field === undefined && contains(el, node)) complete.current();
-      if (field !== undefined && contains(nextEl, node)) complete.current();
+      if (field === undefined && contains(el, node)) {
+        seen.current.tappedAt = performance.now();
+        later(() => setTick((t) => t + 1));
+      }
+      if (field !== undefined && contains(nextEl, node)) later(() => complete.current());
     };
     const onBlur = (): void => {
       if (field !== undefined && fieldValue(field) !== '') complete.current();
@@ -71,6 +115,7 @@ export function useStepCompletion(input: CompletionInput, onComplete: () => void
     document.addEventListener('click', onClick, true);
     el.addEventListener('focusout', onBlur);
     return () => {
+      for (const timer of timers) window.clearTimeout(timer);
       document.removeEventListener('click', onClick, true);
       el.removeEventListener('focusout', onBlur);
     };

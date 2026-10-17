@@ -315,17 +315,50 @@ describe('Back', () => {
     expect(backIndex(STEPS, at('c_post_caption'), probe(['c_chip']))).toBe(at('c_chip'));
   });
 
+  it('with no earlier control on screen, still goes to the previous open step (its place opens)', () => {
+    expect(backIndex(STEPS, at('c_comment'), probe([]))).toBe(at('c_brief'));
+  });
+
   it('never goes back to a step the data finished, and hides on the first step', () => {
     expect(
       backIndex(STEPS, at('c_chip'), probe(['c_ws', 'c_ws_create'], ['c_ws', 'c_ws_create'])),
     ).toBe(-1);
+    expect(backIndex(STEPS, at('c_chip'), probe([], ['c_ws', 'c_ws_create']))).toBe(-1);
+    expect(
+      backIndex(
+        STEPS,
+        at('c_invite'),
+        probe([], ['c_post_create', 'c_post_caption', 'c_post_send']),
+      ),
+    ).toBe(at('c_chip'));
     expect(backIndex(STEPS, 0, probe(['c_ws']))).toBe(-1);
   });
 });
 
 describe('the 4 s skip', () => {
-  it('moves forward to the next step whose control is visible', () => {
-    expect(skipTarget(STEPS, at('c_brief'), probe(['c_group']))).toBe(at('c_group'));
+  const SCREEN = [
+    step('x_a', { chapter: 'talk', place: 'chat' }),
+    step('x_b', { chapter: 'talk', place: 'chat' }),
+    step('x_c', { chapter: 'talk', place: 'chat' }),
+    step('x_d', { chapter: 'review', place: 'chat' }),
+    step('x_act', { chapter: 'talk', place: 'shell' }),
+    step('x_e', { chapter: 'talk', place: 'chat' }),
+  ];
+
+  it('moves forward to the next visible step on the same screen and chapter', () => {
+    expect(skipTarget(SCREEN, 0, probe(['x_c']))).toBe(2);
+  });
+
+  it('never jumps to an always-visible control of a later place: one step on, its place opens', () => {
+    expect(skipTarget(SCREEN, 0, probe(['x_act', 'x_e']))).toBe(1);
+    expect(skipTarget(STEPS, at('c_brief'), probe(['c_activity', 'c_group']))).toBe(
+      at('c_brief') + 1,
+    );
+  });
+
+  it('never crosses into another chapter on the same screen', () => {
+    expect(skipTarget(SCREEN, 2, probe(['x_d']))).toBe(3);
+    expect(skipTarget(SCREEN, 1, probe(['x_d']))).toBe(2);
   });
 
   it('never skips past an open gate; goes back within the group instead', () => {
@@ -399,6 +432,13 @@ describe('routes', () => {
     expect(onPlace('group', { pathname: '/chat', search: '?channel=other' }, ctx)).toBe(false);
     expect(onPlace('chat', { pathname: '/chat', search: '' }, ctx)).toBe(true);
     expect(onPlace('chat', { pathname: '/chat', search: '?channel=x' }, ctx)).toBe(false);
+    // The Activity steps live on the chat list: /chat with no channel.
+    const activity = Object.values(ROUTE_SCRIPTS).flatMap((script) =>
+      script.steps.filter((s) => s.targets.includes('activity-tab')),
+    );
+    for (const s of activity) {
+      expect(onPlace(s.place, { pathname: '/chat', search: '' }, ctx)).toBe(true);
+    }
     expect(onPlace('shell', { pathname: '/anything', search: '' }, ctx)).toBe(true);
   });
 });
@@ -439,7 +479,7 @@ describe('the box', () => {
 
 describe('placeLabel', () => {
   const label = { width: 180, height: 32 };
-  const area = { top: 0, bottom: 760, width: 390 };
+  const area = { top: 0, bottom: 760, width: 390, viewportHeight: 844 };
   const inside = (p: { top: number; left: number }): boolean =>
     p.left >= 0 && p.top >= 0 && p.left + label.width <= 390 && p.top + label.height <= 844;
 
@@ -469,6 +509,18 @@ describe('placeLabel', () => {
     expect(inside(p)).toBe(true);
   });
 
+  it('goes over the bar, never over the box, when a tall box leaves the free band no room', () => {
+    const box = boxRect({ top: 20, left: 0, width: 390, height: 640 });
+    const p = placeLabel({
+      box,
+      label,
+      area: { top: 0, bottom: 700, width: 390, viewportHeight: 844 },
+    });
+    expect(overlaps({ ...p, ...label }, box)).toBe(false);
+    expect(p.top + label.height).toBeLessThanOrEqual(844);
+    expect(p.top).toBeGreaterThan(700 - label.height);
+  });
+
   it('stays inside the viewport for a control at the left edge', () => {
     const box = boxRect({ top: 300, left: 0, width: 40, height: 40 });
     const p = placeLabel({ box, label, area });
@@ -478,11 +530,26 @@ describe('placeLabel', () => {
 });
 
 describe('barSide', () => {
-  it('docks bottom by default and top when the box is in the bottom third', () => {
-    expect(barSide(undefined, 844)).toBe('bottom');
-    expect(barSide({ top: 100, left: 0, width: 40, height: 40 }, 844)).toBe('bottom');
-    expect(barSide({ top: 500, left: 0, width: 40, height: 40 }, 844)).toBe('bottom');
-    expect(barSide({ top: 600, left: 0, width: 40, height: 40 }, 844)).toBe('top');
+  const frame = { viewportHeight: 844, insets: { top: 0, bottom: 56 }, barHeight: 80 };
+  const bottomBarTop = 844 - 56 - 8 - 80;
+  const topBarBottom = 8 + 80;
+  const box = (top: number, height = 40) => ({ top, left: 0, width: 40, height });
+
+  it('docks bottom by default and whenever the bottom bar clears the box', () => {
+    expect(barSide(undefined, frame)).toBe('bottom');
+    expect(barSide(box(100), frame)).toBe('bottom');
+    expect(barSide(box(bottomBarTop - 40), frame)).toBe('bottom');
+  });
+
+  it('docks top when the bottom bar would cover the box, and the top bar clears it', () => {
+    const low = box(bottomBarTop - 20);
+    expect(barSide(low, frame)).toBe('top');
+    expect(low.top).toBeGreaterThanOrEqual(topBarBottom);
+  });
+
+  it('takes the side with more room when both bars would cover a tall box', () => {
+    expect(barSide(box(40, 700), frame)).toBe('bottom');
+    expect(barSide(box(60, 760), frame)).toBe('top');
   });
 });
 
