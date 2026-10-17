@@ -25,3 +25,7 @@ jobs:
         run: supabase functions deploy brand-request-send --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
       - name: Deploy catchup-unsubscribe
         run: supabase functions deploy catchup-unsubscribe --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
+      - name: Deploy book-call-send
+        run: supabase functions deploy book-call-send --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
+      - name: Deploy demo-request-send
+        run: supabase functions deploy demo-request-send --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"

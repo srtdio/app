@@ -1,0 +1,35 @@
+name: Deploy storage-purge Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/storage-purge/**'
+      - 'src/server/cron/storage-purge.ts'
+      - 'packages/storage/**'
+      - 'src/server/logger.ts'
+      - 'src/server/trace.ts'
+      - 'src/server/traced-fetch.ts'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/storage-purge-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/storage-purge
+          wranglerVersion: '3.114.17'
+          packageManager: pnpm
