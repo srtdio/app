@@ -152,6 +152,35 @@ export const INDUCTION_RPC: Record<string, RpcHandler> = {
     return id;
   },
   annotation_create: () => crypto.randomUUID(),
+  // A client's line or pin comment is a checkpoint (PostDetailPage).
+  comment_batch_create: (args, tables) => {
+    const points = (args.p_points ?? []) as Array<{ body?: string }>;
+    const seqBase = (tables.comments ?? []).filter(
+      (c) => c.entity_id === args.p_post_id && c.ledger_seq != null,
+    ).length;
+    return points.map((point, k) => {
+      const id = crypto.randomUUID();
+      (tables.comments ??= []).push({
+        id,
+        workspace_id: args.p_workspace_id,
+        entity_type: 'post',
+        entity_id: args.p_post_id,
+        parent_comment_id: null,
+        author_user_id: ME,
+        body: point.body ?? '',
+        mentions: null,
+        attachment_asset_ids: null,
+        ledger_seq: seqBase + k + 1,
+        resolved_at: null,
+        resolved_by: null,
+        unaccepted_by: null,
+        created_at: new Date().toISOString(),
+        edited_at: null,
+        deleted_at: null,
+      });
+      return { id, seq: seqBase + k + 1 };
+    });
+  },
   brief_create: (args, tables) => {
     const payload = (args.p_payload ?? {}) as Record<string, unknown>;
     const id = crypto.randomUUID();

@@ -34,6 +34,9 @@ export function Highlight(props: { text: string; words?: readonly string[] }): R
   return <>{highlightNodes(props.text, props.words ?? fromScreen)}</>;
 }
 
+/** When a jump's smooth scroll should have landed; a target still off screen then is snapped in. */
+export const JUMP_SETTLE_MS = 700;
+
 /** How long an arrived-at target keeps its tint before it fades. */
 export const GLOW_MS = 2000;
 
@@ -54,6 +57,14 @@ function prefersReducedMotion(): boolean {
 export function glowTarget(el: HTMLElement): () => void {
   const reduced = prefersReducedMotion();
   el.scrollIntoView?.({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+  // A smooth scroll can be cut short when rows above it change height while it
+  // runs (images and previews settling, seen on iPhone Safari): once it should
+  // have finished, a target still off screen is brought in without animation.
+  const settleTimer = window.setTimeout(() => {
+    if (!el.isConnected) return;
+    const r = el.getBoundingClientRect();
+    if (r.bottom <= 0 || r.top >= window.innerHeight) el.scrollIntoView?.({ block: 'center' });
+  }, JUMP_SETTLE_MS);
   const prev = { background: el.style.backgroundColor, transition: el.style.transition };
   el.setAttribute('data-jump-glow', '');
   el.style.transition = 'none';
@@ -74,6 +85,7 @@ export function glowTarget(el: HTMLElement): () => void {
     fadeTimer = window.setTimeout(restore, DUR_SLOW_MS * 3);
   }, GLOW_MS);
   return () => {
+    window.clearTimeout(settleTimer);
     window.clearTimeout(holdTimer);
     if (fadeTimer !== null) window.clearTimeout(fadeTimer);
     restore();

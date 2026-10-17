@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '@/components/auth/AuthShell';
+import { TestSiteStart } from '@/components/test-site/TestSiteStart';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -200,6 +201,7 @@ export function SignUpPage(): ReactElement {
         </span>
       }
     >
+      <TestSiteStart />
       <form
         className="flex flex-col gap-4"
         onSubmit={(event) => {

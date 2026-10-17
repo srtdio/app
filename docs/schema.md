@@ -59,6 +59,12 @@ Induction procs (20261015035000_induction_progress.sql; EXECUTE to authenticated
 - induction_finish(p_trace_id) SECURITY DEFINER: stamps the caller's induction_done_at (first finish wins). Audited.
 - induction_state(p_workspace_id, p_trace_id) plpgsql VOLATILE SECURITY DEFINER (search_path='', EXECUTE to authenticated only): jsonb of the caller's step and done_at, and, only when the caller is an active member of p_workspace_id, their role there, the first non-draft post they created there, and whether a client (client_invited) or an admin/agency member (team_invited) other than the five sample people has been invited (null/false otherwise). For a member it first clears the workspace's sample week when it is two hours old. Recorded in 20261015039000_induction_state_definer.sql, replaced by 20261017150000_induction_sample_week.sql.
 
+Test-site quick testers (20261018010000_test_site_quick_testers.sql, applied 18 Oct 2026). Only for requests whose Origin is https://test.srtdio-app.pages.dev (checked from PostgREST's request.headers):
+
+- test_session_create(p_email, p_trace_id) SECURITY DEFINER, EXECUTE to anon and authenticated: with p_email NULL makes a new confirmed auth user tester-xxxxxxxx@test.srtd.io (raw_app_meta_data test_account=true, an email identity, a random password) and returns { email, password, invite_id: null }; with a test.srtd.io address that has a pending invite, sets a new password on that invitee and returns it with the newest pending invite id. test_site_only from any other origin; at most 100 new test accounts an hour (rate_limited). Audited.
+- member_invite_check: a test account may invite only test.srtd.io addresses (test_account_test_addresses_only). The invite-send function sends no email to test.srtd.io addresses.
+- _test_accounts_purge(), pg_cron job test-accounts-purge at minute 17 every hour: test accounts older than 24 hours have their owned workspaces soft-deleted (the normal workspace purge removes them) and are deleted once they own none.
+
 Induction sample week (20261017150000_induction_sample_week.sql, applied 17 Oct 2026). Every first tour runs in a seeded "Kestrel & Rowe" week inside the caller's own workspace:
 
 - Five sample people, global, fixed ids 5a3b1e00-0000-4000-8000-00000000000[1-5] (Riya Menon, Arjun Shah, Dev Kapoor, Neha Rao, Meera Iyer): auth users with no password, unconfirmed and banned until 2999, so they cannot sign in; completed profiles, email_opt_in false, avatars /induction-sample/av-*.jpg. users_avatar_url_check and groups_avatar_url_check also allow ^/induction-sample/[a-z0-9-]+\.jpg$.
@@ -425,7 +431,7 @@ folder_id and folder_path coexist for now: folder_id is the new structured folde
 
 ### asset_versions
 
-PK id. Fields: asset_id FK, workspace_id FK, version_number, r2_key unique, mime_type, sha256 ^[a-f0-9]{64}$, size_bytes > 0, width/height/duration_ms nullable > 0, uploaded_by FK, uploaded_at. Unique (asset_id, version_number).
+PK id. Fields: asset_id FK, workspace_id FK, version_number, r2_key unique (partial, skips NULL and induction-sample/ keys), mime_type, sha256 ^[a-f0-9]{64}$, size_bytes > 0, width/height/duration_ms nullable > 0, uploaded_by FK, uploaded_at. Unique (asset_id, version_number). asset_versions_kind_shape_check (live, recorded in 20261017170000): kind link has external_url and no r2_key, sha256, size_bytes or mime_type; every other kind has all four and no external_url. Sample-week versions carry sha256 of their key, not of the file's bytes, so a real upload never dedupes onto a sample row.
 
 page_count: pdf only, 1-10000, set by asset-upload from the client count; null for older files (no backfill, decision 149).
 

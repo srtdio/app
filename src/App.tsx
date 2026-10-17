@@ -17,6 +17,7 @@ import { LegalPolicyPage } from '@/components/auth/LegalPolicyPage';
 import { UnsubscribePage } from '@/components/unsubscribe/UnsubscribePage';
 import { SignUpPage } from '@/components/auth/SignUpPage';
 import { AcceptInvitePage } from '@/components/auth/AcceptInvitePage';
+import { TestInviteePage } from '@/components/test-site/TestInviteePage';
 import { PostRefResolver } from '@/components/refs/PostRefResolver';
 import { BriefRefResolver } from '@/components/refs/BriefRefResolver';
 import { RequireAuth, RequireGuest } from '@/components/auth/RouteGuards';
@@ -58,6 +59,7 @@ export default function App() {
           <Route element={<RequireAuth />}>
             <Route path="/invite/accept" element={<AcceptInvitePage />} />
             <Route path="/invite/accept/:inviteId" element={<AcceptInvitePage />} />
+            <Route path="/test/invitee/:email" element={<TestInviteePage />} />
             <Route element={<WorkspaceLayout />}>
               <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/posts/:postId" element={<PostDetailPage />} />

@@ -9,6 +9,7 @@ import { IconBriefs, IconPlus } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
 import { CreateBriefSheet } from '@/components/pages/CreateBriefSheet';
 import { dispatchSorted } from '@/lib/events';
+import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import { PresignCache } from '@/lib/asset-presign';
@@ -271,6 +272,7 @@ export function BriefsPage() {
   useEffect(() => {
     void loadBriefs();
   }, [loadBriefs]);
+  useWorkspaceDataChanged(() => void loadBriefs());
 
   // The New brief button and the command palette dispatch this event; the sheet
   // lives here so the list can re-fetch on success.

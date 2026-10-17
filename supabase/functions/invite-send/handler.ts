@@ -478,7 +478,15 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
     let errorDetail: string | null = null;
     const resendKey = deps.env('RESEND_API_KEY');
     const fromAddress = deps.env('INVITE_FROM_ADDRESS');
-    if (!resendKey || !fromAddress) {
+    if (email.toLowerCase().endsWith('@test.srtd.io')) {
+      // A test-site address has no inbox: the invitee opens the invite from the
+      // test site instead, so nothing is sent (no bounce from the sending domain).
+      errorDetail = 'test_address_not_emailed';
+      await adminClient
+        .from('delivery_attempts')
+        .update({ status: 'failed', provider_message_id: null, error: errorDetail, sent_at: null })
+        .eq('id', attempt.data.id);
+    } else if (!resendKey || !fromAddress) {
       errorDetail = 'resend_not_configured';
       console.error(traceId, errorDetail);
     } else {
