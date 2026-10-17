@@ -337,7 +337,7 @@ export function SignInPage() {
           variant="primary"
           size="lg"
           type="submit"
-          className="w-full bg-fg text-bg hover:bg-fg hover:opacity-90"
+          className="w-full"
           disabled={busy || email.length === 0 || password.length === 0}
         >
           {submitting === 'password' ? 'Signing in' : 'Sign in'}
