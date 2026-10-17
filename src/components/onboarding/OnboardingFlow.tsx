@@ -495,10 +495,10 @@ export function OnboardingFlow({
     body = (
       <>
         <Heading
-          title="Who are you here as?"
+          title="Your role"
           lead="Creators make the posts. Approvers evaluate them, share feedback and approve them."
         />
-        <div role="radiogroup" aria-label="Who are you here as?" className="flex flex-col gap-3">
+        <div role="radiogroup" aria-label="Your role" className="flex flex-col gap-3">
           {SIDE_TILES.map((tile) => (
             <button
               key={tile.side}
@@ -518,8 +518,13 @@ export function OnboardingFlow({
         </div>
       </>
     );
+    continueEnabled = side !== null;
     primary = (
-      <Primary disabled={side === null} onClick={next}>
+      <Primary
+        disabled={side === null}
+        onClick={next}
+        anchor={INDUCTION_KEYS.onboardingSideContinue}
+      >
         Continue
       </Primary>
     );
@@ -547,7 +552,7 @@ export function OnboardingFlow({
     body = (
       <>
         <Heading
-          title="What should we call you?"
+          title="Your name"
           lead="This is how people see you in notifications, comments and chat."
         />
         <div className="flex items-center gap-4">
@@ -640,26 +645,23 @@ export function OnboardingFlow({
     }));
     body = (
       <>
-        <Heading
-          title="What do you do?"
-          lead="It shows under your name, so people know who to ask."
-        />
+        <Heading title="Your title" lead="It shows under your name, so people know who to ask." />
         <div>
-          <p className="mb-1.5 block text-sm font-medium">Your role</p>
+          <p className="mb-1.5 block text-sm font-medium">Job title</p>
           <Select
-            label="Your role"
+            label="Job title"
             value={role}
             options={options}
-            placeholder="Pick your role"
+            placeholder="Pick your job title"
             onChange={setRole}
           />
         </div>
         {role === OTHER_ROLE ? (
-          <Labeled label="Tell us your role" htmlFor="ob-role-other">
+          <Labeled label="Tell us your job title" htmlFor="ob-role-other">
             <Input
               id="ob-role-other"
               maxLength={80}
-              placeholder="Type your role"
+              placeholder="Type your job title"
               value={roleOther}
               onChange={(event) => setRoleOther(event.target.value)}
             />
@@ -667,6 +669,7 @@ export function OnboardingFlow({
         ) : null}
       </>
     );
+    continueEnabled = !busy && designation.length > 0;
     primary = (
       <Primary
         disabled={busy || designation.length === 0}
@@ -832,6 +835,7 @@ export function OnboardingFlow({
       <EntryHand
         target={entryHandTarget({
           step,
+          signUp: !invitee && approverStage === 'none',
           creatorRoute: !invitee && shownSide === 'creator' && approverStage === 'none',
           continueEnabled,
         })}

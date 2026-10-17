@@ -265,3 +265,28 @@ export function useElementSize(
   }, [el]);
   return size;
 }
+
+/** How long after the last keystroke the entry hand may show. */
+export const TYPING_PAUSE_MS = 900;
+
+/**
+ * True while the person is typing (a keystroke in the last TYPING_PAUSE_MS),
+ * re-rendering when the pause ends, so the hand never lands mid-word.
+ */
+export function useTypingNow(): boolean {
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    let timer: number | undefined;
+    const onInput = (): void => {
+      setTyping(true);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setTyping(false), TYPING_PAUSE_MS);
+    };
+    document.addEventListener('input', onInput, true);
+    return () => {
+      document.removeEventListener('input', onInput, true);
+      window.clearTimeout(timer);
+    };
+  }, []);
+  return typing;
+}

@@ -18,6 +18,7 @@ import { UnsubscribePage } from '@/components/unsubscribe/UnsubscribePage';
 import { SignUpPage } from '@/components/auth/SignUpPage';
 import { AcceptInvitePage } from '@/components/auth/AcceptInvitePage';
 import { TestInviteePage } from '@/components/test-site/TestInviteePage';
+import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereStart';
 import { PostRefResolver } from '@/components/refs/PostRefResolver';
 import { BriefRefResolver } from '@/components/refs/BriefRefResolver';
 import { RequireAuth, RequireGuest } from '@/components/auth/RouteGuards';
@@ -47,6 +48,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <SessionProvider>
+        <TestSiteAnywhereStart />
         <Routes>
           <Route path="/" element={<HomeGate />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />

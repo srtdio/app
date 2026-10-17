@@ -113,7 +113,7 @@ async function walkEntry(page: Page): Promise<void> {
   await cont.click();
 
   await expect(page.getByText('Step 2 of 2')).toBeVisible();
-  await page.getByRole('button', { name: 'Your role' }).click();
+  await page.getByRole('button', { name: 'Job title' }).click();
   await page.getByRole('option', { name: 'Copywriter' }).click();
   // No age range any more (v13 dropped it).
   await expect(page.getByText(/age range/i)).toHaveCount(0);

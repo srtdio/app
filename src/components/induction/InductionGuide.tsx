@@ -55,7 +55,15 @@ import {
   type BarCopy,
   type DockAt,
 } from './GuideParts';
-import { findVisible, formOf, LAYER_ATTR, radiusOf, rectOf, textFieldOf } from './guide-dom';
+import {
+  findVisible,
+  formOf,
+  isUnavailable,
+  LAYER_ATTR,
+  radiusOf,
+  rectOf,
+  textFieldOf,
+} from './guide-dom';
 import {
   useAbsentSkip,
   useElementSize,
@@ -329,7 +337,10 @@ function StepLayer({
   const nextFound = next !== undefined ? findVisible(next.targets, ctx.qualifiers) : undefined;
   const nextEl = nextFound?.found === true ? nextFound.el : undefined;
 
-  const boxed = el !== undefined && !moving && !holding ? el : undefined;
+  // Nothing dims while the control cannot be used yet (Send invite with no
+  // address, Post with no words): the bar alone shows until it can be tapped.
+  const waiting = el !== undefined && isUnavailable(el);
+  const boxed = el !== undefined && !moving && !holding && !waiting ? el : undefined;
   useTapMark(el, step.id, marks);
   const field = el !== undefined ? textFieldOf(el) : undefined;
 

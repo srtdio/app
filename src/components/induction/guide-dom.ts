@@ -127,3 +127,8 @@ export function formOf(el: HTMLElement, gate: boolean): HTMLElement | undefined 
   if (form === null) return undefined;
   return gate || el.matches(SUBMIT) ? form : undefined;
 }
+
+/** A control the person cannot use yet (a disabled button): the guide waits, nothing dims. */
+export function isUnavailable(el: HTMLElement): boolean {
+  return el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true';
+}

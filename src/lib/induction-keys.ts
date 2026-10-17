@@ -2,6 +2,7 @@
 // One place, never literals: every anchor reads its value from here.
 
 export const INDUCTION_KEYS = {
+  onboardingSideContinue: 'onboarding-side-continue',
   onboardingNameContinue: 'onboarding-name-continue',
   onboardingRoleContinue: 'onboarding-role-continue',
   topbarWorkspaceSlot: 'topbar-workspace-slot',

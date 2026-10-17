@@ -15,6 +15,7 @@ import { startInduction } from '../fixtures/induction-rpc';
 
 const NAME_CONTINUE = '[data-induction-entry="onboarding-name-continue"]';
 const ROLE_CONTINUE = '[data-induction-entry="onboarding-role-continue"]';
+const SIDE_CONTINUE = '[data-induction-entry="onboarding-side-continue"]';
 
 /** The hand's fingertip sits on the control (HAND_TIP in GuideParts.tsx, 8px slack). */
 async function expectHandOn(page: Page, control: string): Promise<void> {
@@ -47,7 +48,7 @@ test('a Creator walks side, name with photo and role, then makes the workspace i
   newPerson(network, { workspace: false });
   await page.goto('/chat');
 
-  await expect(page.getByRole('heading', { name: 'Who are you here as?' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Your role' })).toBeVisible({
     timeout: 15_000,
   });
   // The shell's first reads can still be landing when the screen paints; a late
@@ -55,20 +56,22 @@ test('a Creator walks side, name with photo and role, then makes the workspace i
   await page.waitForLoadState('networkidle');
   const cont = page.getByRole('button', { name: 'Continue', exact: true });
   await expect(cont).toBeDisabled();
-  // No hand on the side screen.
+  // No hand on the side screen until a side is picked.
   await expect(page.locator('[data-induction-hand]')).toHaveCount(0);
   // A read landing later still can re-mount the flow and drop the pick: pick
   // again until Continue holds (a pre-existing shell behaviour, seen on WebKit).
   await expect(async () => {
     await page.getByRole('radio', { name: /Creator/ }).click();
     await expect(cont).toBeEnabled({ timeout: 1_000 });
+    // Picked: the hand comes onto Continue.
+    await expect(page.locator(SIDE_CONTINUE)).toHaveCount(1, { timeout: 1_000 });
     await cont.click({ timeout: 1_000 });
-    await expect(page.getByRole('heading', { name: 'What should we call you?' })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Your name' })).toBeVisible({
       timeout: 1_000,
     });
   }).toPass({ timeout: 15_000 });
 
-  await expect(page.getByRole('heading', { name: 'What should we call you?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your name' })).toBeVisible();
   await page.getByLabel('Full name').fill('Meera Shah');
   await expect(page.getByLabel('Username')).toHaveValue('meera.shah');
   await expect(page.getByText('@meera.shah is yours.')).toBeVisible();
@@ -93,14 +96,16 @@ test('a Creator walks side, name with photo and role, then makes the workspace i
   await expectHandOn(page, '[data-induction="onboarding-name-continue"]');
   await cont.click();
 
-  await expect(page.getByRole('heading', { name: 'What do you do?' })).toBeVisible();
-  // It stays: on the role screen's Continue from the start.
+  await expect(page.getByRole('heading', { name: 'Your title' })).toBeVisible();
+  // Nothing dimmed and no hand until a job title is picked.
+  await expect(page.locator('[data-induction-hand]')).toHaveCount(0);
+  await expect(page.getByText('How did you hear')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Job title' }).click();
+  await page.getByRole('option', { name: 'Something else' }).click();
+  await page.getByLabel('Tell us your job title').fill('Community lead');
+  // Picked: the hand comes onto Continue.
   await expect(page.locator(ROLE_CONTINUE)).toHaveCount(1);
   await expectHandOn(page, '[data-induction="onboarding-role-continue"]');
-  await expect(page.getByText('How did you hear')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Your role' }).click();
-  await page.getByRole('option', { name: 'Something else' }).click();
-  await page.getByLabel('Tell us your role').fill('Community lead');
   await expect(page.getByText(/age range/i)).toHaveCount(0);
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
   // Watch the hand from the tap until the shell's guide holds the workspace step.
