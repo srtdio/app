@@ -7,6 +7,7 @@ export const INDUCTION_KEYS = {
   pipelineStageRow: 'pipeline-stage-row',
   pipelineApprovedChip: 'pipeline-approved-chip',
   pipelineCreate: 'pipeline-create',
+  pipelinePostRow: 'pipeline-post-row',
   pipelineDraftChip: 'pipeline-draft-chip',
   postSheetCaption: 'post-sheet-caption',
   postSheetFormat: 'post-sheet-format',
