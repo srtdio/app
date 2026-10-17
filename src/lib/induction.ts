@@ -31,7 +31,7 @@ export function dispatchInductionRefresh(): void {
 export const INDUCTION_POLL_MS = 4000;
 
 /** How long the green result tick holds after a step finishes, before the next step shows. */
-export const RESULT_HOLD_MS = 480;
+export const RESULT_HOLD_MS = 320;
 
 /** How long a step's control may stay off screen before the guide moves on. */
 export const ABSENT_SKIP_MS = 4000;

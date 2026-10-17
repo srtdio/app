@@ -552,7 +552,7 @@ export function OnboardingFlow({
     body = (
       <>
         <Heading
-          title="What should we call you?"
+          title="Your name"
           lead="This is how people see you in notifications, comments and chat."
         />
         <div className="flex items-center gap-4">

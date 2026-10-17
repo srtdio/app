@@ -117,15 +117,18 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   await page.goto('/pipeline');
 
   // Step 1: the workspace. The slot opens the sheet straight on the form
-  // (there is no workspace to list); Continue is boxed while its form takes
-  // taps, then Create, which only the data finishes.
+  // (there is no workspace to list); Continue is boxed once the form can
+  // continue, then Create, which only the data finishes.
   await check('c_workspace', false, '01-first-step');
   await expect(page.locator('[data-induction-bar]')).toContainText('Step 1');
   await tapControl(page, step('c_workspace'));
-  await check('c_workspace_continue');
+  // Nothing dims until the form can continue; then Continue is boxed.
+  await expectGuideId(page, 'c_workspace_continue');
+  await expect(page.locator('[data-induction-box]')).toHaveCount(0);
   await expect(page.locator('[data-induction-bar]')).toContainText('Step 1');
   await page.getByLabel('Brand name').fill('Kite');
   await page.getByRole('radio', { name: 'LinkedIn' }).click();
+  await check('c_workspace_continue');
   await tapControl(page, step('c_workspace_continue'));
   // The finished step's box turns green with a tick before the next one shows.
   await expect(page.locator('[data-induction-result]')).toHaveCount(1);
@@ -174,7 +177,9 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   // Step 4: the approver invite (a gate: leaving brings the person back), then
   // the optional team invite.
   await expect(page).toHaveURL(/\/settings\?panel=members/, { timeout: 15_000 });
-  await check('c_approver_invite');
+  // No address yet: Send invite cannot be used, so nothing dims.
+  await expectGuideId(page, 'c_approver_invite');
+  await expect(page.locator('[data-induction-box]')).toHaveCount(0);
   // A gate offers no way round it: no secondary chip, and no Skip.
   const later = step('c_team_invite').laterLabel ?? '';
   const bar = page.locator('[data-induction-bar]');
@@ -182,14 +187,17 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   // Leaving a gate's screen brings the person back to it.
   await page.goto('/chat');
   await expect(page).toHaveURL(/\/settings\?panel=members/, { timeout: 10_000 });
-  await check('c_approver_invite');
-  // The gate boxes Send invite; the guard lets the rest of its form through.
+  await expectGuideId(page, 'c_approver_invite');
+  // Once an address is in, the gate boxes Send invite.
   const email = page.locator('#invite-email');
   await email.click();
   expect(await email.evaluate((el) => el === document.activeElement)).toBe(true);
   await page.keyboard.type('riya@kitebrand.in');
+  await check('c_approver_invite');
   await page.getByRole('button', { name: 'Send invite', exact: true }).click();
-  await check('c_team_invite');
+  // The team invite: the form is empty again, so nothing dims until an address is in.
+  await expectGuideId(page, 'c_team_invite');
+  await expect(page.locator('[data-induction-box]')).toHaveCount(0);
   await bar.getByRole('button', { name: later, exact: true }).click();
 
   // The look-around: no brief, no plan, so Review comes first.

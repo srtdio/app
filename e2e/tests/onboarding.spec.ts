@@ -66,12 +66,12 @@ test('a Creator walks side, name with photo and role, then makes the workspace i
     // Picked: the hand comes onto Continue.
     await expect(page.locator(SIDE_CONTINUE)).toHaveCount(1, { timeout: 1_000 });
     await cont.click({ timeout: 1_000 });
-    await expect(page.getByRole('heading', { name: 'What should we call you?' })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Your name' })).toBeVisible({
       timeout: 1_000,
     });
   }).toPass({ timeout: 15_000 });
 
-  await expect(page.getByRole('heading', { name: 'What should we call you?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your name' })).toBeVisible();
   await page.getByLabel('Full name').fill('Meera Shah');
   await expect(page.getByLabel('Username')).toHaveValue('meera.shah');
   await expect(page.getByText('@meera.shah is yours.')).toBeVisible();

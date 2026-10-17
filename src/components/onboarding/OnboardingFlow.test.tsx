@@ -324,7 +324,7 @@ describe('invited welcome', () => {
     expect(document.body.textContent).not.toContain('Step ');
     await click(button('Continue'));
     expect(stepLabel()).toBe('Step 1 of 2');
-    expect(document.body.textContent).toContain('What should we call you?');
+    expect(document.body.textContent).toContain('Your name');
     await type(document.querySelector<HTMLInputElement>('#ob-name')!, 'Riya Menon');
     await act(async () => {
       await vi.advanceTimersByTimeAsync(400);

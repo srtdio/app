@@ -9,14 +9,18 @@ import { createPortal } from 'react-dom';
 import { boxRect, clampToViewport, guideRadius, handPoint } from '@/lib/induction';
 import type { InductionKey } from '@/lib/induction-keys';
 import { GuideBox, GuideHand, GuideStyle } from './GuideParts';
-import { findVisible, LAYER_ATTR, radiusOf, rectOf } from './guide-dom';
+import { findVisible, isUnavailable, LAYER_ATTR, radiusOf, rectOf } from './guide-dom';
+import { useTypingNow } from './guide-hooks';
 import { useLiveTick } from './useLiveTick';
 
 export function EntryHand({ target }: { target: InductionKey | null }): ReactElement | null {
   const found = target !== null ? findVisible([target]) : undefined;
   const el = found?.found === true ? found.el : undefined;
   const moving = useLiveTick(el);
+  // Not mid-word (it waits for a pause in typing), nor on a disabled Continue.
+  const typing = useTypingNow();
   if (target === null || el === undefined || moving) return null;
+  if (typing || isUnavailable(el)) return null;
   const control = rectOf(el);
   const viewport = { width: window.innerWidth, height: window.innerHeight };
   return createPortal(
