@@ -57,6 +57,7 @@ import { createInFlightGuard } from '@/lib/chat/thread-actions';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
+import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { logger } from '@/lib/logger';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
@@ -248,6 +249,7 @@ export function PlanCardBody(props: {
         <button
           type="button"
           data-plan-open=""
+          data-induction={INDUCTION_KEYS.briefOpenPlan}
           onClick={props.onOpen}
           className="min-h-[48px] flex-1 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >

@@ -14,6 +14,7 @@ import {
 } from '@/components/pages/create/AttachmentsField';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
+import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
 import { briefCreate, type Client, type Result } from '@srtdio/rpc';
 import { FORMATS_BY_PLATFORM, formatLabel, type PostPlatform } from '@srtdio/posts';
@@ -240,6 +241,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             <Button
               variant="primary"
               size="lg"
+              data-induction={INDUCTION_KEYS.briefSheetCreate}
               onClick={() => void handleSubmit()}
               disabled={!canSubmit}
             >
@@ -257,6 +259,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
         <Field label="Title" htmlFor="brief-title" required>
           <Input
             id="brief-title"
+            data-induction={INDUCTION_KEYS.briefSheetTitle}
             value={form.title}
             onChange={(event) => patch({ title: event.target.value })}
             placeholder="Brief title"
@@ -267,6 +270,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
         <Field label="Objective" htmlFor="brief-objective" required>
           <Textarea
             id="brief-objective"
+            data-induction={INDUCTION_KEYS.briefSheetObjective}
             value={form.objective}
             onChange={(event) => patch({ objective: event.target.value })}
             placeholder="What should this brief achieve?"

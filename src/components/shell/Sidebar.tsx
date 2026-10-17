@@ -52,6 +52,9 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             key={item.to}
             to={item.to}
             {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
+            {...(item.showActivityBadge === true
+              ? { 'data-induction': INDUCTION_KEYS.activityTab }
+              : {})}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-sm font-medium transition-colors',

@@ -906,11 +906,36 @@ function PresetFields(props: {
   captionError: ReactElement | null;
 }): ReactElement {
   const { preset, form, patch } = props;
+  // Select renders its own trigger and option rows (inline, no portal), so the
+  // Format keys are set on the rendered elements from here (attributes only). The
+  // option rows mount when the menu opens, so a childList observer re-applies them.
+  const formatRef = useRef<HTMLDivElement>(null);
+  const singleIndex = props.formatOptions.findIndex((option) => option.value === 'single_image');
+  useEffect(() => {
+    const root = formatRef.current;
+    if (root === null) return undefined;
+    function mark(el: HTMLElement): void {
+      el.querySelector('[aria-haspopup="listbox"]')?.setAttribute(
+        'data-induction',
+        INDUCTION_KEYS.postSheetFormat,
+      );
+      if (singleIndex < 0) return;
+      el.querySelectorAll('[role="option"]')[singleIndex]?.setAttribute(
+        'data-induction',
+        INDUCTION_KEYS.postSheetFormatSingle,
+      );
+    }
+    mark(root);
+    const observer = new MutationObserver(() => mark(root));
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [singleIndex]);
   return (
     <>
       <Field label="Caption" htmlFor="post-caption" required>
         <Textarea
           id="post-caption"
+          data-induction={INDUCTION_KEYS.postSheetCaption}
           value={form.caption}
           onChange={(event) => patch({ caption: event.target.value })}
           placeholder="Write the caption. Its first line becomes the title."
@@ -919,7 +944,7 @@ function PresetFields(props: {
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="min-w-0">
+        <div ref={formatRef} className="min-w-0">
           <Field label="Format">
             <Select
               label="Format"
@@ -941,14 +966,18 @@ function PresetFields(props: {
       </div>
 
       <Field label="Photo or video" required={formatNeedsMedia(form.format)}>
-        <PresetMediaField
-          workspaceId={props.workspaceId}
-          value={form.attachments}
-          onChange={props.onAttachmentsChange}
-          required={formatNeedsMedia(form.format)}
-          onBusyChange={props.onMediaBusyChange}
-          frame={props.platform !== null ? { platform: props.platform, format: form.format } : null}
-        />
+        <div data-induction={INDUCTION_KEYS.postSheetMedia}>
+          <PresetMediaField
+            workspaceId={props.workspaceId}
+            value={form.attachments}
+            onChange={props.onAttachmentsChange}
+            required={formatNeedsMedia(form.format)}
+            onBusyChange={props.onMediaBusyChange}
+            frame={
+              props.platform !== null ? { platform: props.platform, format: form.format } : null
+            }
+          />
+        </div>
       </Field>
 
       {preset.share === 'no_group' ? (

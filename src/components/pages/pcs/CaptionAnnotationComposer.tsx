@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
 import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
+import { INDUCTION_KEYS } from '@/lib/induction-keys';
 
 // F4 caption annotation composer: a bottom sheet that shows the quoted caption
 // selection and a comment field. It owns no RPC; PostDetailPage passes onSubmit,
@@ -59,6 +60,7 @@ export function CaptionAnnotationComposer({
             size="lg"
             variant="primary"
             className="ml-auto min-h-[44px] min-w-[44px]"
+            data-induction={INDUCTION_KEYS.postCommentPost}
             disabled={!canPost}
             onClick={() => void onSubmit(body)}
           >

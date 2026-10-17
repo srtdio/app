@@ -131,6 +131,8 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
 
 /** The Draft chip's place in the row: the stages keep transition-map order. */
 const DRAFT_CHIP_INDEX = STAGES.indexOf('draft');
+/** The Approved chip's place in the row, by the same transition-map order. */
+const APPROVED_CHIP_INDEX = STAGES.indexOf('approved');
 
 /**
  * The stage row, marked for the induction. StageChips renders its own buttons,
@@ -139,8 +141,12 @@ const DRAFT_CHIP_INDEX = STAGES.indexOf('draft');
 function StageRow({ children }: { children: ReactNode }): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const chip = ref.current?.querySelectorAll('button')[DRAFT_CHIP_INDEX];
-    chip?.setAttribute('data-induction', INDUCTION_KEYS.pipelineDraftChip);
+    const chips = ref.current?.querySelectorAll('button');
+    chips?.[DRAFT_CHIP_INDEX]?.setAttribute('data-induction', INDUCTION_KEYS.pipelineDraftChip);
+    chips?.[APPROVED_CHIP_INDEX]?.setAttribute(
+      'data-induction',
+      INDUCTION_KEYS.pipelineApprovedChip,
+    );
   });
   return (
     <div ref={ref} data-induction={INDUCTION_KEYS.pipelineStageRow}>

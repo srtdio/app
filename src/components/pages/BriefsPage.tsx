@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -320,6 +320,22 @@ export function BriefsPage() {
 
   const listLoading = workspaceId === null || (loading && briefs.length === 0);
 
+  // BriefCard renders its own root, so the first rendered card is marked for the
+  // induction from here (attribute only). Re-run each render: the chip or search
+  // can change which card is first, so a stale mark is cleared first.
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = listRef.current;
+    if (root === null) return;
+    const cards = root.querySelectorAll('[role="link"]');
+    cards.forEach((card, index) => {
+      if (index === 0) card.setAttribute('data-induction', INDUCTION_KEYS.briefsFirstCard);
+      else if (card.getAttribute('data-induction') === INDUCTION_KEYS.briefsFirstCard) {
+        card.removeAttribute('data-induction');
+      }
+    });
+  });
+
   return (
     <>
       {briefsHeader({
@@ -349,7 +365,7 @@ export function BriefsPage() {
           description="Briefs from approvers will show up here."
         />
       ) : (
-        <div className="px-4 md:px-6 py-4 flex flex-col gap-6">
+        <div ref={listRef} className="px-4 md:px-6 py-4 flex flex-col gap-6">
           {briefSections({
             groups,
             timeZone,

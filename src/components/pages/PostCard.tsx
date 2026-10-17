@@ -5,6 +5,7 @@ import { IconPlay } from '@/components/ui/icons';
 import { FORMAT_GLYPH_LABEL, formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath } from '@/lib/entityRef';
+import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import type { PipelinePost } from '@srtdio/posts';
 
 export interface PostCardProps {
@@ -100,7 +101,11 @@ export function PostCard({ post, cache, presignEnabled, workspaceKey = null }: P
     workspaceKey !== null ? entityUrlPath('post', workspaceKey, post.number) : `/posts/${post.id}`;
 
   return (
-    <div className="relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2">
+    <div
+      data-induction={INDUCTION_KEYS.pipelinePostRow}
+      data-induction-post={post.id}
+      className="relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2"
+    >
       <button
         type="button"
         aria-label={`Open post ${post.title}`}

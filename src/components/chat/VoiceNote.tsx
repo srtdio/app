@@ -46,6 +46,7 @@ import {
   MOVE_CANCEL_PX,
 } from '@/components/ui/useLongPress';
 import { cn } from '@/lib/cn';
+import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { logger } from '@/lib/logger';
 import { resamplePeaks } from '@/lib/chat/waveform-peaks';
 import {
@@ -361,6 +362,7 @@ function TranscribeLink(props: {
         <button
           type="button"
           data-voice-link={state}
+          data-induction={INDUCTION_KEYS.chatTranscript}
           aria-expanded={state === 'hide'}
           onClick={() => props.onCollapse(state === 'hide')}
           className={LINK_BUTTON}
