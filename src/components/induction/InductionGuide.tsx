@@ -220,7 +220,7 @@ function CardLayer({
 }): ReactElement {
   const { card } = resolution;
   const fill = (text: string): string => fillCopy(text, ctx.copy);
-  if (card.kind === 'closing' && ctx.sample.seeded) {
+  if (card.kind === 'closing' && ctx.route === 'creator' && ctx.sample.seeded) {
     return <ClearCard ctx={ctx} steps={resolution.steps.length} dock={dock} />;
   }
   return (

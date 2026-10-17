@@ -148,13 +148,14 @@ export function InductionProvider({
 
   useStoredStepSync(resolution, data);
   useSampleSeed({
+    // Every first tour runs in a lived-in workspace: the creator's from the setup
+    // steps (once the workspace exists), an invited member's from their first screen.
     on:
       active &&
-      route === 'creator' &&
       workspaceId !== null &&
       known &&
-      resolution.kind === 'step' &&
-      resolution.step.chapter === undefined &&
+      resolution.kind !== 'off' &&
+      resolution.kind !== 'closing' &&
       !read.facts.sample.seeded,
     workspaceId,
   });
@@ -312,8 +313,17 @@ function buildValue(input: {
       markStarted();
       void env.data.setStep(resolution.steps[resolution.index]?.id ?? resolution.card.id);
     },
-    finish: env.data.finish,
-    sample: base.route === 'creator' ? read.sample : NO_SAMPLE,
+    // Done clears what is left of the sample (the creator cleared theirs on the clear card).
+    finish: () => {
+      const ws = env.workspaceId;
+      if (ws !== null && read.sample.seeded) {
+        void clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() }).then(() =>
+          dispatchInductionRefresh(),
+        );
+      }
+      env.data.finish();
+    },
+    sample: read.sample,
     clearSample: async () => {
       const ws = env.workspaceId;
       if (ws === null) return;

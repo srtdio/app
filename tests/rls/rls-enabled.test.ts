@@ -41,7 +41,7 @@ const RLS_SUITE = process.env.RLS_SUITE === '1';
 // (20261015037000_workspace_client_domains.sql, created with RLS enabled).
 // Then 155 -> 156 for induction_sample_rows
 // (20261017150000_induction_sample_week.sql, created with RLS enabled).
-// Then 156 -> 157 for induction_sample_clears (same migration, created with RLS enabled).
+// Then 156 -> 157 for induction_sample_seeds (same migration, created with RLS enabled).
 const EXPECTED_RELATION_COUNT = 157;
 
 interface Relation {

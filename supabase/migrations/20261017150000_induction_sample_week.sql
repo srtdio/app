@@ -1,20 +1,23 @@
--- The creator's sample workspace (onboarding v13): "Kestrel & Rowe", a fashion brand,
--- lived in for a week. induction_sample_seed fills the caller's own new workspace with it
--- (five sample people, two groups and a DM with their chat, 37 posts with photos, the
--- Pink ruffle set's comments and annotations, six briefs, an 18-file library, a client
--- plan for the current week and the owner's activity); induction_sample_clear deletes
--- exactly those rows. The owner's own first post (Launch day) is never seeded or touched.
--- Source of truth for every row: the peek fixture (seedPeek, seedPeekMembers).
+-- The first-time tour's sample workspace (onboarding v13): "Kestrel & Rowe", a fashion
+-- brand, lived in for a week. Every first tour (creator, invited creator, approver) runs
+-- in it: induction_sample_seed fills the caller's workspace with it (five sample people,
+-- two groups and a DM with their chat, 37 posts with photos, the Pink ruffle set's
+-- comments and annotations, six briefs, an 18-file library, a client plan for the
+-- current week and the seeder's activity); induction_sample_clear deletes exactly those
+-- rows. The fixture's ME is the seeder. A person's own work (the creator's Launch day)
+-- is never seeded or touched. Source of truth for every row: the peek fixture.
 --
 -- Sample rows are flagged in a marker table, induction_sample_rows (one row per sample
 -- row: kind, the row's key as text, created_at for the partitioned chat_messages and
 -- inbox_entries, an optional tag the app looks up: review_post, voice_note, plan,
 -- brief). Clear deletes what the markers name (plus what hangs off those rows only:
 -- comments anyone wrote on a sample post or brief, the sample DM and group's chat,
--- attachments of sample files) and records the workspace in induction_sample_clears so
--- it is never seeded again. Adding a real member (an invite or an accept, anyone but
--- the owner and the five sample people) clears the sample at once, so an invited
--- approver never sees it.
+-- attachments of sample files). induction_sample_seeds keeps one row per workspace and
+-- seeder (seeded_at, cleared_at): at most one live sample per workspace, and a person is
+-- never seeded twice in the same workspace (reload, second device). A sample is cleared
+-- by its seeder or the owner, by a real member joining (an invite or an accept, anyone
+-- but the owner, the seeder and the five sample people), or lazily once it is two hours
+-- old (induction_state and induction_sample_seed clear an expired sample first).
 --
 -- The five sample people exist once, globally: auth users that cannot sign in (empty
 -- password, unconfirmed, banned) with completed profiles, email opt-in off. Their
@@ -25,7 +28,7 @@
 -- Nothing is sent: the seed writes no outbox row (chat_sync_events rows its group
 -- inserts enqueue are removed in the same transaction, the new channels are stamped
 -- synced so the Agora sync never creates them), its plan items are added while the plan
--- is still a team plan (_plan_notify writes nothing for team plans) and the owner's
+-- is still a team plan (_plan_notify writes nothing for team plans) and the seeder's
 -- sample activity is stamped email_sent_at so the catch-up email skips it.
 --
 -- Not applied. Waits for Shubham's approval; then applied to v2 (movnexawfhsyuluspxoc)
@@ -76,24 +79,30 @@ ALTER TABLE public.induction_sample_rows ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.induction_sample_rows FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.induction_sample_rows TO authenticated;
 
+-- Every active member reads the markers (the app tells sample rows from real ones on
+-- every route); writes go through the functions only.
 DROP POLICY IF EXISTS induction_sample_rows_select_owner ON public.induction_sample_rows;
-CREATE POLICY induction_sample_rows_select_owner ON public.induction_sample_rows
+DROP POLICY IF EXISTS induction_sample_rows_select_member ON public.induction_sample_rows;
+CREATE POLICY induction_sample_rows_select_member ON public.induction_sample_rows
   FOR SELECT TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM public.workspace_members m
-    WHERE m.workspace_id = induction_sample_rows.workspace_id
-      AND m.user_id = auth.uid() AND m.role = 'owner' AND m.active
-  ));
+  USING (public.is_active_workspace_member(workspace_id));
 
--- A workspace whose sample was cleared once is never seeded again.
-CREATE TABLE IF NOT EXISTS public.induction_sample_clears (
-  workspace_id uuid PRIMARY KEY REFERENCES public.workspaces(id) ON DELETE CASCADE,
-  cleared_at timestamptz NOT NULL DEFAULT now(),
+-- One row per workspace and seeder. cleared_at IS NULL is the workspace's live sample
+-- (at most one); the row stays after a clear so that person is never seeded again there.
+CREATE TABLE IF NOT EXISTS public.induction_sample_seeds (
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  seeded_by uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  seeded_at timestamptz NOT NULL DEFAULT now(),
+  cleared_at timestamptz,
   cleared_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
-  reason text NOT NULL CHECK (reason IN ('owner', 'member_joined'))
+  clear_reason text CHECK (clear_reason IN ('seeder', 'owner', 'member_joined', 'expired')),
+  PRIMARY KEY (workspace_id, seeded_by),
+  CHECK ((cleared_at IS NULL) = (clear_reason IS NULL))
 );
-ALTER TABLE public.induction_sample_clears ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.induction_sample_clears FROM PUBLIC, anon, authenticated;
+CREATE UNIQUE INDEX IF NOT EXISTS induction_sample_seeds_live_uq
+  ON public.induction_sample_seeds (workspace_id) WHERE cleared_at IS NULL;
+ALTER TABLE public.induction_sample_seeds ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.induction_sample_seeds FROM PUBLIC, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- The five sample people (global, created once)
@@ -257,41 +266,57 @@ BEGIN
 END; $function$;
 REVOKE EXECUTE ON FUNCTION public._induction_sample_cursor(uuid, text, uuid, text, timestamptz) FROM PUBLIC, anon, authenticated;
 
--- The caller must be the workspace's owner (owner_user_id and an active owner
--- membership). Locks the workspace row so a seed and a clear never interleave.
-CREATE OR REPLACE FUNCTION public._induction_sample_owner_lock(p_workspace_id uuid)
- RETURNS void
+-- The caller must be an active member. Locks the workspace row so seeds and clears in
+-- one workspace never interleave. Returns the caller's role.
+DROP FUNCTION IF EXISTS public._induction_sample_owner_lock(uuid);
+CREATE OR REPLACE FUNCTION public._induction_sample_member_lock(p_workspace_id uuid)
+ RETURNS text
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
 AS $function$
-DECLARE v_owner uuid;
+DECLARE v_role text;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
   IF NOT public.is_active_workspace_member(p_workspace_id) THEN
     RAISE EXCEPTION 'workspace_member_only';
   END IF;
-  SELECT owner_user_id INTO v_owner FROM public.workspaces
-   WHERE id = p_workspace_id AND deleted_at IS NULL
-   FOR UPDATE;
-  IF v_owner IS DISTINCT FROM auth.uid() OR NOT EXISTS (
-    SELECT 1 FROM public.workspace_members
-     WHERE workspace_id = p_workspace_id AND user_id = auth.uid() AND role = 'owner' AND active
-  ) THEN
-    RAISE EXCEPTION 'forbidden_role';
-  END IF;
+  PERFORM 1 FROM public.workspaces WHERE id = p_workspace_id AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'workspace_member_only'; END IF;
+  SELECT role INTO v_role FROM public.workspace_members
+   WHERE workspace_id = p_workspace_id AND user_id = auth.uid() AND active;
+  RETURN v_role;
 END; $function$;
 
-REVOKE EXECUTE ON FUNCTION public._induction_sample_owner_lock(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public._induction_sample_member_lock(uuid) FROM PUBLIC, anon, authenticated;
+
+-- Clears the workspace's sample when it is two hours old (reason 'expired'). Called
+-- first by induction_state and induction_sample_seed; no cron. Returns whether it cleared.
+CREATE OR REPLACE FUNCTION public._induction_sample_expire(p_workspace_id uuid, p_trace_id uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.induction_sample_seeds
+                  WHERE workspace_id = p_workspace_id AND cleared_at IS NULL
+                    AND seeded_at < now() - interval '2 hours') THEN
+    RETURN false;
+  END IF;
+  RETURN coalesce((public._induction_sample_clear(p_workspace_id, p_trace_id, 'expired') ->> 'cleared')::boolean, false);
+END; $function$;
+
+REVOKE EXECUTE ON FUNCTION public._induction_sample_expire(uuid, uuid) FROM PUBLIC, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Seed
 -- ---------------------------------------------------------------------------
 
--- Seeds once per workspace. Returns seeded:false (and changes nothing) when the sample
--- is already there (with its ids), was cleared before (reason 'cleared'), or anyone
--- but the owner and the sample people has ever been active in the workspace (reason
--- 'workspace_in_use').
+-- Any active member whose own tour is not finished may seed. Returns seeded:false (and
+-- changes nothing) when a sample is already there (reason 'already_seeded', with its
+-- ids), when this person had a sample here before (reason 'seeded_before') or finished
+-- their tour (reason 'tour_done'). An expired sample is cleared first.
 CREATE OR REPLACE FUNCTION public.induction_sample_seed(p_workspace_id uuid, p_trace_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -320,24 +345,34 @@ DECLARE
   v_covers uuid[] := ARRAY[]::uuid[]; v_cover_meta jsonb := '{}'::jsonb;
   v_voice uuid; v_peaks jsonb;
   v_msg jsonb := '{}'::jsonb;
+  v_role text; v_client boolean; v_team uuid; v_in_group boolean := false; v_me_group uuid;
 BEGIN
   IF p_trace_id IS NULL THEN RAISE EXCEPTION 'invalid_payload'; END IF;
-  PERFORM public._induction_sample_owner_lock(p_workspace_id);
+  v_role := public._induction_sample_member_lock(p_workspace_id);
+  PERFORM public._induction_sample_expire(p_workspace_id, p_trace_id);
 
-  IF EXISTS (SELECT 1 FROM public.induction_sample_rows WHERE workspace_id = p_workspace_id) THEN
-    RETURN jsonb_build_object('seeded', false, 'reason', 'already_seeded')
+  IF EXISTS (SELECT 1 FROM public.induction_sample_seeds
+              WHERE workspace_id = p_workspace_id AND cleared_at IS NULL) THEN
+    RETURN jsonb_build_object('seeded', false, 'reason', 'already_seeded',
+             'seeded_by', (SELECT seeded_by FROM public.induction_sample_seeds
+                            WHERE workspace_id = p_workspace_id AND cleared_at IS NULL))
       || coalesce((SELECT jsonb_object_agg(tag || '_id', row_id) FROM public.induction_sample_rows
                     WHERE workspace_id = p_workspace_id AND tag IS NOT NULL), '{}'::jsonb);
   END IF;
-  IF EXISTS (SELECT 1 FROM public.induction_sample_clears WHERE workspace_id = p_workspace_id) THEN
-    RETURN jsonb_build_object('seeded', false, 'reason', 'cleared');
+  IF EXISTS (SELECT 1 FROM public.induction_sample_seeds
+              WHERE workspace_id = p_workspace_id AND seeded_by = v_uid) THEN
+    RETURN jsonb_build_object('seeded', false, 'reason', 'seeded_before');
   END IF;
-  IF EXISTS (SELECT 1 FROM public.workspace_members m
-              WHERE m.workspace_id = p_workspace_id AND m.user_id <> v_uid
-                AND m.user_id <> ALL (v_people)
-                AND (m.active OR m.accepted_at IS NOT NULL)) THEN
-    RETURN jsonb_build_object('seeded', false, 'reason', 'workspace_in_use');
+  IF EXISTS (SELECT 1 FROM public.user_private
+              WHERE user_id = v_uid AND induction_done_at IS NOT NULL) THEN
+    RETURN jsonb_build_object('seeded', false, 'reason', 'tour_done');
   END IF;
+  INSERT INTO public.induction_sample_seeds (workspace_id, seeded_by, seeded_at)
+  VALUES (p_workspace_id, v_uid, v_now);
+  -- An approver (client) sees what a client sees: not the agency's Shoot crew, and the
+  -- plan's team side is the agency's (Arjun), not theirs.
+  v_client := v_role = 'client';
+  v_team := CASE WHEN v_client THEN c_arjun ELSE v_uid END;
 
   SELECT platform, coalesce(timezone, 'UTC') INTO v_platform, v_tz
     FROM public.workspaces WHERE id = p_workspace_id;
@@ -568,7 +603,7 @@ BEGIN
   -- Plan: AW26 drop fortnight, this week, shared with the client. Its items go in while
   -- it is still a team plan (_plan_notify writes nothing for those), then it is shared.
   INSERT INTO public.plans (workspace_id, title, starts_on, ends_on, audience, created_by, created_at, updated_at)
-  VALUES (p_workspace_id, 'AW26 drop fortnight', v_start, v_start + 6, 'team', v_uid,
+  VALUES (p_workspace_id, 'AW26 drop fortnight', v_start, v_start + 6, 'team', v_team,
           ((v_start - 3) + time '09:00') AT TIME ZONE v_tz, ((v_start - 3) + time '09:00') AT TIME ZONE v_tz)
   RETURNING id INTO v_plan;
   PERFORM public._induction_sample_mark(p_workspace_id, 'plan', v_plan::text, NULL, 'plan');
@@ -577,12 +612,12 @@ BEGIN
              FROM jsonb_each(v_posts) e WHERE e.value ->> 'plan_pos' IS NOT NULL
             ORDER BY 2 LOOP
     INSERT INTO public.plan_items (workspace_id, plan_id, kind, position, post_id, created_by, created_at, updated_at)
-    VALUES (p_workspace_id, v_plan, 'post', r.pos, r.post_id, v_uid,
+    VALUES (p_workspace_id, v_plan, 'post', r.pos, r.post_id, v_team,
             ((v_start - 3) + time '09:00') AT TIME ZONE v_tz, ((v_start - 3) + time '09:00') AT TIME ZONE v_tz)
     RETURNING id INTO v_item;
     PERFORM public._induction_sample_mark(p_workspace_id, 'plan_item', v_item::text);
     INSERT INTO public.plan_item_reviews (item_id, workspace_id, side, status, reviewed_by, reviewed_at)
-    VALUES (v_item, p_workspace_id, 'team', 'approved', v_uid, ((v_start - 2) + time '10:00') AT TIME ZONE v_tz);
+    VALUES (v_item, p_workspace_id, 'team', 'approved', v_team, ((v_start - 2) + time '10:00') AT TIME ZONE v_tz);
     PERFORM public._induction_sample_mark(p_workspace_id, 'plan_item_review', v_item::text || '|team');
     IF r.client_ok THEN
       INSERT INTO public.plan_item_reviews (item_id, workspace_id, side, status, reviewed_by, reviewed_at)
@@ -591,7 +626,7 @@ BEGIN
     END IF;
   END LOOP;
   UPDATE public.plans SET audience = 'client', shared_with_client_at = v_now - interval '150 minutes',
-                          shared_with_client_by = v_uid
+                          shared_with_client_by = v_team
    WHERE id = v_plan;
 
   -- Chat rooms. The default group keeps its name and photo; Riya, Arjun, Dev and Neha join.
@@ -610,6 +645,10 @@ BEGIN
       END IF;
     END LOOP;
   END IF;
+  -- The plan card is the seeder's when they are in the default group, else Arjun's.
+  v_in_group := v_group IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.group_members WHERE group_id = v_group AND user_id = v_uid);
+  v_me_group := CASE WHEN v_in_group THEN v_uid ELSE c_arjun END;
   -- Shoot crew: members go in before its channel exists, as group_create does, so no
   -- sync event is queued; the channel is stamped synced so no Agora group is created.
   IF EXISTS (SELECT 1 FROM public.groups WHERE workspace_id = p_workspace_id AND deleted_at IS NULL
@@ -617,10 +656,11 @@ BEGIN
     v_crew_name := 'Shoot crew sample';
   END IF;
   INSERT INTO public.groups (workspace_id, name, created_by, created_at, avatar_url)
-  VALUES (p_workspace_id, v_crew_name, v_uid, v_now - interval '20 days', '/induction-sample/gp-crew.jpg')
+  VALUES (p_workspace_id, v_crew_name, v_team, v_now - interval '20 days', '/induction-sample/gp-crew.jpg')
   RETURNING id INTO v_crew;
   PERFORM public._induction_sample_mark(p_workspace_id, 'group', v_crew::text);
-  FOR r IN SELECT unnest(ARRAY[v_uid, c_dev, c_neha]) AS uid LOOP
+  -- The seeder, Dev and Neha; for a client seeder it is the agency's room (Arjun instead).
+  FOR r IN SELECT unnest(ARRAY[v_team, c_dev, c_neha]) AS uid LOOP
     INSERT INTO public.group_members (group_id, user_id, workspace_id, joined_at)
     VALUES (v_crew, r.uid, p_workspace_id, v_now - interval '20 days');
     PERFORM public._induction_sample_mark(p_workspace_id, 'group_member', v_crew::text || '|' || r.uid::text);
@@ -669,7 +709,7 @@ BEGIN
   IF v_group_channel IS NOT NULL THEN
     v_msg := v_msg || jsonb_build_object(
       'g1', public._induction_sample_msg(p_workspace_id, v_group_channel, c_neha, 'Shot list for Friday is in the brief.', v_base + interval '10 minutes'),
-      'g5', public._induction_sample_msg(p_workspace_id, v_group_channel, v_uid, NULL, v_now - interval '150 minutes',
+      'g5', public._induction_sample_msg(p_workspace_id, v_group_channel, v_me_group, NULL, v_now - interval '150 minutes',
                                          NULL, ARRAY[v_plan]),
       'g3', public._induction_sample_msg(p_workspace_id, v_group_channel, c_riya, 'Plan looks right. Ticking as I go.', v_now - interval '144 minutes'),
       'g4', public._induction_sample_msg(p_workspace_id, v_group_channel, c_arjun, 'Pink ruffle set is ready for a look.', v_now - interval '2 hours',
@@ -691,23 +731,25 @@ BEGIN
   v_msg := v_msg || jsonb_build_object(
     's1', public._induction_sample_msg(p_workspace_id, v_crew_channel, c_neha, 'Call time is 7, the van leaves at 6:30.', v_now - interval '5 hours'),
     's2', public._induction_sample_msg(p_workspace_id, v_crew_channel, c_dev, 'Bringing the backup lights.', v_now - interval '270 minutes'),
-    's3', public._induction_sample_msg(p_workspace_id, v_crew_channel, v_uid, 'I do.', v_now - interval '30 minutes'));
+    's3', public._induction_sample_msg(p_workspace_id, v_crew_channel, v_team, 'I do.', v_now - interval '30 minutes'));
 
-  -- Read cursors. The owner has read the DM up to Riya's last message (so the catch-up
+  -- Read cursors. The seeder has read the DM up to Riya's last message (so the catch-up
   -- email has no unread DM to send), the group up to the plan card, Shoot crew to their
   -- own reply; the sample people have read everything.
   PERFORM public._induction_sample_cursor(p_workspace_id, v_dm, v_uid, v_msg ->> 'd9', v_base + interval '290 minutes');
   PERFORM public._induction_sample_cursor(p_workspace_id, v_dm, c_riya, v_msg ->> 'd10', v_now - interval '1 hour');
-  PERFORM public._induction_sample_cursor(p_workspace_id, v_group_channel, v_uid, v_msg ->> 'g5', v_now - interval '144 minutes');
+  IF v_in_group THEN
+    PERFORM public._induction_sample_cursor(p_workspace_id, v_group_channel, v_uid, v_msg ->> 'g5', v_now - interval '144 minutes');
+  END IF;
   PERFORM public._induction_sample_cursor(p_workspace_id, v_group_channel, c_riya, v_msg ->> 'g9', v_now - interval '1 minute');
   PERFORM public._induction_sample_cursor(p_workspace_id, v_group_channel, c_arjun, v_msg ->> 'g9', v_now - interval '1 minute');
   PERFORM public._induction_sample_cursor(p_workspace_id, v_group_channel, c_dev, v_msg ->> 'g9', v_now - interval '1 minute');
   PERFORM public._induction_sample_cursor(p_workspace_id, v_group_channel, c_neha, v_msg ->> 'g9', v_now - interval '1 minute');
-  PERFORM public._induction_sample_cursor(p_workspace_id, v_crew_channel, v_uid, v_msg ->> 's3', v_now - interval '30 minutes');
+  PERFORM public._induction_sample_cursor(p_workspace_id, v_crew_channel, v_team, v_msg ->> 's3', v_now - interval '30 minutes');
   PERFORM public._induction_sample_cursor(p_workspace_id, v_crew_channel, c_dev, v_msg ->> 's3', v_now - interval '29 minutes');
   PERFORM public._induction_sample_cursor(p_workspace_id, v_crew_channel, c_neha, v_msg ->> 's3', v_now - interval '29 minutes');
 
-  -- The owner's activity, in the shapes comment_create, stage_transition and
+  -- The seeder's activity, in the shapes comment_create, stage_transition and
   -- brief_create write. Stamped email_sent_at: the catch-up email never reports it.
   FOR r IN SELECT * FROM (VALUES
       ('comment', 'post', 11, 'arjun', 3, 1, 'active'),
@@ -765,8 +807,9 @@ GRANT EXECUTE ON FUNCTION public.induction_sample_seed(uuid, uuid) TO authentica
 -- Deletes every marked row, children first, plus what hangs off sample rows only:
 -- comments (anyone's) on sample posts and briefs, attachments of sample files, the
 -- sample DM and Shoot crew with everything in them, the sample people's own inbox,
--- cursors and memberships. Records the workspace as cleared and drops the markers. No
--- caller check: induction_sample_clear checks the owner, the member trigger needs none.
+-- cursors and memberships. Closes the live induction_sample_seeds row (cleared_at, by,
+-- reason) and drops the markers. No caller check: induction_sample_clear checks the
+-- seeder or owner; the member trigger and the expiry need none.
 CREATE OR REPLACE FUNCTION public._induction_sample_clear(p_workspace_id uuid, p_trace_id uuid, p_reason text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -783,7 +826,11 @@ BEGIN
   SELECT jsonb_object_agg(kind, n) INTO v_rows FROM (
     SELECT kind, count(*) AS n FROM public.induction_sample_rows
      WHERE workspace_id = p_workspace_id GROUP BY kind) s;
-  IF v_rows IS NULL THEN RETURN jsonb_build_object('cleared', false); END IF;
+  IF v_rows IS NULL THEN
+    UPDATE public.induction_sample_seeds SET cleared_at = now(), cleared_by = auth.uid(), clear_reason = p_reason
+     WHERE workspace_id = p_workspace_id AND cleared_at IS NULL;
+    RETURN jsonb_build_object('cleared', false);
+  END IF;
 
   -- Comments on sample posts and briefs, whoever wrote them, with their attachments.
   SELECT coalesce(array_agg(c.id), ARRAY[]::uuid[]) INTO v_comment_ids
@@ -894,9 +941,8 @@ BEGIN
   DELETE FROM public.chat_sync_events
    WHERE workspace_id = p_workspace_id AND processed_at IS NULL AND user_id = ANY (v_people);
 
-  INSERT INTO public.induction_sample_clears (workspace_id, cleared_at, cleared_by, reason)
-  VALUES (p_workspace_id, now(), auth.uid(), p_reason)
-  ON CONFLICT (workspace_id) DO NOTHING;
+  UPDATE public.induction_sample_seeds SET cleared_at = now(), cleared_by = auth.uid(), clear_reason = p_reason
+   WHERE workspace_id = p_workspace_id AND cleared_at IS NULL;
   DELETE FROM public.induction_sample_rows WHERE workspace_id = p_workspace_id;
 
   PERFORM public.audit_log_write('induction_sample_clear', 'success', p_trace_id, p_workspace_id,
@@ -908,24 +954,38 @@ END; $function$;
 
 REVOKE EXECUTE ON FUNCTION public._induction_sample_clear(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
 
--- The owner's Clear it. A second call finds no markers and changes nothing.
+-- Clear it: the sample's seeder or the workspace owner. With no live sample it changes
+-- nothing (cleared:false), for anyone who is a member.
 CREATE OR REPLACE FUNCTION public.induction_sample_clear(p_workspace_id uuid, p_trace_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
 AS $function$
+DECLARE v_seeder uuid; v_owner boolean;
 BEGIN
   IF p_trace_id IS NULL THEN RAISE EXCEPTION 'invalid_payload'; END IF;
-  PERFORM public._induction_sample_owner_lock(p_workspace_id);
-  RETURN public._induction_sample_clear(p_workspace_id, p_trace_id, 'owner');
+  PERFORM public._induction_sample_member_lock(p_workspace_id);
+  SELECT seeded_by INTO v_seeder FROM public.induction_sample_seeds
+   WHERE workspace_id = p_workspace_id AND cleared_at IS NULL;
+  IF v_seeder IS NULL
+     AND NOT EXISTS (SELECT 1 FROM public.induction_sample_rows WHERE workspace_id = p_workspace_id) THEN
+    RETURN jsonb_build_object('cleared', false);
+  END IF;
+  v_owner := EXISTS (SELECT 1 FROM public.workspaces w
+                      JOIN public.workspace_members m ON m.workspace_id = w.id AND m.user_id = w.owner_user_id
+                     WHERE w.id = p_workspace_id AND w.owner_user_id = auth.uid()
+                       AND m.role = 'owner' AND m.active);
+  IF v_seeder IS DISTINCT FROM auth.uid() AND NOT v_owner THEN RAISE EXCEPTION 'forbidden_role'; END IF;
+  RETURN public._induction_sample_clear(p_workspace_id, p_trace_id,
+           CASE WHEN v_seeder = auth.uid() THEN 'seeder' ELSE 'owner' END);
 END; $function$;
 
 REVOKE EXECUTE ON FUNCTION public.induction_sample_clear(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.induction_sample_clear(uuid, uuid) TO authenticated;
 
 -- A real person joining (an invite row, or a row becoming active or accepted; anyone
--- but the owner and the sample people) clears the sample at once. The trace id is the
+-- but the owner, the sample's seeder and the sample people) clears the sample at once. The trace id is the
 -- caller's when the RPC set app.trace_id, else a new one.
 CREATE OR REPLACE FUNCTION public._induction_sample_member_joined()
  RETURNS trigger
@@ -944,6 +1004,10 @@ BEGIN
     RETURN NULL;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.induction_sample_rows WHERE workspace_id = NEW.workspace_id) THEN
+    RETURN NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.induction_sample_seeds
+              WHERE workspace_id = NEW.workspace_id AND cleared_at IS NULL AND seeded_by = NEW.user_id) THEN
     RETURN NULL;
   END IF;
   PERFORM public._induction_sample_clear(NEW.workspace_id,
@@ -965,37 +1029,44 @@ CREATE TRIGGER workspace_members_induction_sample_clear
 -- ---------------------------------------------------------------------------
 
 -- induction_state (20261015039000) with client_invited and team_invited ignoring the
--- five sample people. Everything else unchanged.
+-- five sample people, and an expired sample (two hours) cleared first when the caller is
+-- a member (so plpgsql and volatile now; the returned object is unchanged). post_id needs
+-- no sample filter: it is the caller's own post (created_by = caller), and sample posts
+-- are created by the sample people.
 CREATE OR REPLACE FUNCTION public.induction_state(p_workspace_id uuid, p_trace_id uuid)
  RETURNS jsonb
- LANGUAGE sql
- STABLE
+ LANGUAGE plpgsql
+ VOLATILE
  SECURITY DEFINER
  SET search_path TO ''
 AS $function$
-  WITH me AS (
-    SELECT role FROM public.workspace_members
-    WHERE workspace_id = p_workspace_id AND user_id = auth.uid() AND active
-  )
-  SELECT jsonb_build_object(
+DECLARE v_role text; v_member boolean;
+BEGIN
+  SELECT role INTO v_role FROM public.workspace_members
+   WHERE workspace_id = p_workspace_id AND user_id = auth.uid() AND active;
+  v_member := v_role IS NOT NULL;
+  IF v_member AND p_trace_id IS NOT NULL THEN
+    PERFORM public._induction_sample_expire(p_workspace_id, p_trace_id);
+  END IF;
+  RETURN jsonb_build_object(
     'step',    (SELECT induction_step    FROM public.user_private WHERE user_id = auth.uid()),
     'done_at', (SELECT induction_done_at FROM public.user_private WHERE user_id = auth.uid()),
-    'role',    (SELECT role FROM me),
+    'role',    v_role,
     'post_id', (SELECT id FROM public.posts
-                 WHERE EXISTS (SELECT 1 FROM me)
+                 WHERE v_member
                    AND workspace_id = p_workspace_id AND created_by = auth.uid()
                    AND stage <> 'draft' AND deleted_at IS NULL
                  ORDER BY created_at LIMIT 1),
-    'client_invited', EXISTS (SELECT 1 FROM me) AND EXISTS (
+    'client_invited', v_member AND EXISTS (
                  SELECT 1 FROM public.workspace_members
                  WHERE workspace_id = p_workspace_id AND role = 'client' AND removed_at IS NULL
                    AND user_id <> ALL (public._induction_sample_people())),
-    'team_invited',   EXISTS (SELECT 1 FROM me) AND EXISTS (
+    'team_invited',   v_member AND EXISTS (
                  SELECT 1 FROM public.workspace_members
                  WHERE workspace_id = p_workspace_id AND role IN ('admin','agency') AND removed_at IS NULL
                    AND user_id <> ALL (public._induction_sample_people()))
   );
-$function$;
+END; $function$;
 
 REVOKE EXECUTE ON FUNCTION public.induction_state(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.induction_state(uuid, uuid) TO authenticated;

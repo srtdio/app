@@ -23,7 +23,7 @@ vi.mock('./induction-data', () => ({
     facts.reads += 1;
     return facts.current;
   },
-  NO_SAMPLE: { seeded: false, reviewPostId: null },
+  NO_SAMPLE: { seeded: false, reviewPostId: null, postIds: [] },
   seedSampleWeek: async () => false,
   clearSampleWeek: async () => true,
 }));
@@ -36,7 +36,7 @@ import type { InductionData } from './useInductionData';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const BASE_FACTS: GuideFactsRead = {
-  sample: { seeded: false, reviewPostId: null },
+  sample: { seeded: false, reviewPostId: null, postIds: [] },
   group: { name: 'Kite', channelId: 'group__ws-1__g1' },
   reviewPost: undefined,
   hasBrief: true,
@@ -584,7 +584,10 @@ describe('cards', () => {
 
 describe('sample week', () => {
   it('shows the clear card before the closing card while the sample is there', async () => {
-    facts.current = { ...BASE_FACTS, sample: { seeded: true, reviewPostId: 'p-sample' } };
+    facts.current = {
+      ...BASE_FACTS,
+      sample: { seeded: true, reviewPostId: 'p-sample', postIds: ['p-sample'] },
+    };
     await mount({ step: 'c_closing', ...ALL_DATA });
     const card = q('[data-induction-card="clear"]');
     expect(card.textContent).toContain("That was Kestrel & Rowe's week");

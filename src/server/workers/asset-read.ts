@@ -149,6 +149,12 @@ export function isSampleKey(key: string | null): boolean {
   return key !== null && key.startsWith(SAMPLE_KEY_PREFIX);
 }
 
+/** The small copy of a sample file: thumb/<name>, a PDF's being its cover image. */
+export function sampleThumbKey(key: string): string {
+  const name = key.slice(key.lastIndexOf('/') + 1).replace(/\.pdf$/i, '.jpg');
+  return `${SAMPLE_KEY_PREFIX}thumb/${name}`;
+}
+
 /** Signs sample keys as the site's own static URL; everything else goes to the inner signer. */
 export function withSampleFiles(inner: PresignedUrlSigner, siteOrigin: string): PresignedUrlSigner {
   return {
@@ -335,12 +341,11 @@ export async function authorizeAndSignRendition(
   if (!readable.ok) {
     return readable;
   }
-  // A sample PDF has its own thumbnail rendition row; a sample photo is its own thumbnail.
-  const stored = await deps.renditions.findRendition(input.assetVersionId, 'thumbnail');
-  const rendition =
-    stored === null && isSampleKey(readable.value.r2Key) && readable.value.version.kind === 'image'
-      ? { r2Key: readable.value.r2Key }
-      : stored;
+  // A sample file's thumbnail is its small copy (induction-sample/thumb/), kept light
+  // for slow networks; every other version uses its stored rendition.
+  const rendition = isSampleKey(readable.value.r2Key)
+    ? { r2Key: sampleThumbKey(readable.value.r2Key) }
+    : await deps.renditions.findRendition(input.assetVersionId, 'thumbnail');
   if (rendition === null) {
     return err('no_rendition');
   }

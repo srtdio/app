@@ -187,14 +187,18 @@ async function readDisplayName(client: Client, userId: string | null): Promise<s
 export async function readOldestReviewPost(
   client: Client,
   workspaceId: string,
+  samplePostIds: readonly string[] = [],
 ): Promise<ReviewPost | undefined> {
   try {
-    const { data, error } = await client
+    // The sample week's posts never stand in for the real one the approver reviews.
+    let query = client
       .from('posts')
       .select('id, title, created_by')
       .eq('workspace_id', workspaceId)
       .eq('stage', 'review')
-      .is('deleted_at', null)
+      .is('deleted_at', null);
+    if (samplePostIds.length > 0) query = query.not('id', 'in', `(${samplePostIds.join(',')})`);
+    const { data, error } = await query
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -294,9 +298,11 @@ export async function readHasVoiceNote(client: Client, channelId: string): Promi
 export interface SampleWeek {
   seeded: boolean;
   reviewPostId: string | null;
+  /** Every sample post, so a real post is never mistaken for one (and the reverse). */
+  postIds: readonly string[];
 }
 
-export const NO_SAMPLE: SampleWeek = { seeded: false, reviewPostId: null };
+export const NO_SAMPLE: SampleWeek = { seeded: false, reviewPostId: null, postIds: [] };
 
 /**
  * The sample week's table and procs are not in the generated types until the
@@ -342,7 +348,11 @@ export async function readSampleWeek(client: Client, workspaceId: string): Promi
       .limit(200);
     if (error || data === null || data.length === 0) return NO_SAMPLE;
     const review = data.find((row) => row.tag === 'review_post');
-    return { seeded: true, reviewPostId: review !== undefined ? String(review.row_id) : null };
+    return {
+      seeded: true,
+      reviewPostId: review !== undefined ? String(review.row_id) : null,
+      postIds: data.filter((row) => row.kind === 'post').map((row) => String(row.row_id)),
+    };
   } catch {
     return NO_SAMPLE;
   }
@@ -388,7 +398,7 @@ export async function clearSampleWeek(
 
 /** What the guide reads about the workspace while it runs; every field fails soft. */
 export interface GuideFactsRead {
-  /** The sample week, creator route only. */
+  /** The sample week in this workspace (any route's tour seeds it). */
   sample: SampleWeek;
   group: DefaultGroup | undefined;
   /** Approver route only. */
@@ -406,12 +416,14 @@ export async function readGuideFacts(
   input: { workspaceId: string; approver: boolean; postId: string | null },
 ): Promise<GuideFactsRead> {
   const { workspaceId, approver, postId } = input;
-  const [group, reviewPost, hasBrief, ownPostTitle, sample] = await Promise.all([
+  const sample = await readSampleWeek(client, workspaceId);
+  const [group, reviewPost, hasBrief, ownPostTitle] = await Promise.all([
     readDefaultGroup(client, workspaceId),
-    approver ? readOldestReviewPost(client, workspaceId) : Promise.resolve(undefined),
+    approver
+      ? readOldestReviewPost(client, workspaceId, sample.postIds)
+      : Promise.resolve(undefined),
     readHasBrief(client, workspaceId),
     postId !== null ? readPostTitle(client, postId) : Promise.resolve(''),
-    approver ? Promise.resolve(NO_SAMPLE) : readSampleWeek(client, workspaceId),
   ]);
   const [hasPlan, hasVoiceNote] =
     group === undefined

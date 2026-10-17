@@ -1,14 +1,13 @@
-// The creator's sample workspace (20261017150000_induction_sample_week.sql):
-// induction_sample_seed fills the owner's own workspace with Kestrel & Rowe (five
-// sample people, Shoot crew, a DM with Riya, 22 chat messages, 37 posts with photos,
-// 6 briefs, an 18-file library, a client plan for this week, comments, annotations
-// and the owner's activity), flagged in induction_sample_rows; a second seed changes
-// nothing. induction_sample_clear deletes exactly those rows (and comments anyone
-// wrote on sample posts), keeps the owner's own post, other comments, briefs and
-// chat, records the workspace as cleared, and a later seed is a no-op. Only the owner
-// may call either; only the owner reads the markers. A real member joining (invite or
-// accept) clears the sample at once. induction_state ignores sample people, and the
-// sample files use no storage. Seed and clear write audit_log with the caller's trace.
+// The first-time tour's sample workspace (20261017150000_induction_sample_week.sql):
+// induction_sample_seed lets any active member whose tour is not finished fill the
+// workspace with Kestrel & Rowe (five sample people, Shoot crew, a DM with Riya, 22 chat
+// messages, 37 posts with photos, 6 briefs, an 18-file library, a client plan for this
+// week, comments, annotations and the seeder's activity), flagged in
+// induction_sample_rows. One live sample per workspace, one seed per person per
+// workspace (induction_sample_seeds). induction_sample_clear (seeder or owner) deletes
+// exactly the sample rows and keeps everyone's own work. A third person joining, or the
+// sample turning two hours old (read through induction_state), clears it. Members read
+// the markers; induction_state ignores sample people; sample files use no storage.
 
 import { execFileSync } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -22,7 +21,6 @@ import {
   createAdminClient,
   insertRow,
   loadRlsEnv,
-  seedMember,
   seedUser,
   type GenericClient,
   type RlsEnv,
@@ -132,6 +130,32 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
     );
   const seed = (o: Owned): Promise<RpcResult> =>
     rpc(o.owner.id, 'induction_sample_seed', { p_workspace_id: o.ws.id, p_trace_id: uuidv7() });
+  const seedAs = (userId: string, wsId: string): Promise<RpcResult> =>
+    rpc(userId, 'induction_sample_seed', { p_workspace_id: wsId, p_trace_id: uuidv7() });
+  const clearAs = (userId: string, wsId: string): Promise<RpcResult> =>
+    rpc(userId, 'induction_sample_clear', { p_workspace_id: wsId, p_trace_id: uuidv7() });
+  const seedRecord = (wsId: string, userId: string): string =>
+    sql(
+      `select coalesce(clear_reason, 'live') from public.induction_sample_seeds ` +
+        `where workspace_id = '${wsId}' and seeded_by = '${userId}'`,
+    );
+
+  /** A new user invited by the owner with `role` who has accepted. */
+  async function joined(o: Owned, role: 'agency' | 'client'): Promise<SeededUser> {
+    const user = await seedUser(env, admin);
+    users.push(user);
+    const invited = await clientFor(o.owner.id).rpc(
+      'member_invite',
+      rpcArgs({ p_workspace_id: o.ws.id, p_email: user.email, p_role: role, p_trace_id: uuidv7() }),
+    );
+    if (invited.error) throw new Error(invited.error.message);
+    const accepted = await clientFor(user.id).rpc(
+      'member_accept',
+      rpcArgs({ p_invite_id: String(invited.data), p_trace_id: uuidv7() }),
+    );
+    if (accepted.error) throw new Error(accepted.error.message);
+    return user;
+  }
 
   beforeAll(async () => {
     env = loadRlsEnv();
@@ -178,33 +202,13 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
     ).toBe(5);
   });
 
-  it('refuses anyone but the owner, and a workspace someone else has been active in', async () => {
-    const other = await ownWorkspace();
-    const agency = await seedUser(env, admin);
+  it('refuses anyone who is not an active member', async () => {
     const outsider = await seedUser(env, admin);
-    users.push(agency, outsider);
-    await seedMember(g, other.ws, agency, 'agency');
-
-    const asAgency = await rpc(agency.id, 'induction_sample_seed', {
-      p_workspace_id: other.ws.id,
-      p_trace_id: uuidv7(),
-    });
-    expect(asAgency.error?.message).toBe('forbidden_role');
-    const clearAsAgency = await rpc(agency.id, 'induction_sample_clear', {
-      p_workspace_id: other.ws.id,
-      p_trace_id: uuidv7(),
-    });
-    expect(clearAsAgency.error?.message).toBe('forbidden_role');
-    const asOutsider = await rpc(outsider.id, 'induction_sample_clear', {
-      p_workspace_id: main.ws.id,
-      p_trace_id: uuidv7(),
-    });
-    expect(asOutsider.error?.message).toBe('workspace_member_only');
-
-    const inUse = await seed(other);
-    expect(inUse.error).toBeNull();
-    expect(inUse.data).toMatchObject({ seeded: false, reason: 'workspace_in_use' });
-    expect(markers(other.ws.id)).toBe(0);
+    users.push(outsider);
+    for (const fn of ['induction_sample_seed', 'induction_sample_clear']) {
+      const res = await rpc(outsider.id, fn, { p_workspace_id: main.ws.id, p_trace_id: uuidv7() });
+      expect(res.error?.message).toBe('workspace_member_only');
+    }
     expect(markers(main.ws.id)).toBe(0);
   });
 
@@ -442,7 +446,7 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
     expect(sampleMembers(main.ws.id)).toBe(5);
   });
 
-  it('lets only the owner read the markers', async () => {
+  it('lets members read the markers, not strangers, and nobody write them', async () => {
     const read = (userId: string) =>
       rowCount(
         asGeneric(clientFor(userId))
@@ -508,7 +512,7 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
     expect(res.error).toBeNull();
     expect(res.data).toMatchObject({
       cleared: true,
-      reason: 'owner',
+      reason: 'seeder',
       linked_comments: 1,
       rows: { post: 37 },
     });
@@ -549,8 +553,8 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
       0,
     );
     expect(
-      sql(`select reason from public.induction_sample_clears where workspace_id = '${ws}'`),
-    ).toBe('owner');
+      sql(`select clear_reason from public.induction_sample_seeds where workspace_id = '${ws}'`),
+    ).toBe('seeder');
     expect(
       await countWhere(g, 'audit_log', [
         ['trace_id', trace],
@@ -559,7 +563,7 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
     ).toBe(1);
   });
 
-  it('is idempotent and never re-seeds: a second clear and a later seed change nothing', async () => {
+  it('is idempotent and never re-seeds the same person: a second clear and seed change nothing', async () => {
     const again = await rpc(main.owner.id, 'induction_sample_clear', {
       p_workspace_id: main.ws.id,
       p_trace_id: uuidv7(),
@@ -568,7 +572,7 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
     expect(again.data).toMatchObject({ cleared: false });
     const reseed = await seed(main);
     expect(reseed.error).toBeNull();
-    expect(reseed.data).toMatchObject({ seeded: false, reason: 'cleared' });
+    expect(reseed.data).toMatchObject({ seeded: false, reason: 'seeded_before' });
     expect(markers(main.ws.id)).toBe(0);
     expect(num(`select count(*) from public.posts where workspace_id = '${main.ws.id}'`)).toBe(1);
   });
@@ -592,7 +596,9 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
     expect(sampleMembers(o.ws.id)).toBe(0);
     expect(num(`select count(*) from public.posts where workspace_id = '${o.ws.id}'`)).toBe(0);
     expect(
-      sql(`select reason from public.induction_sample_clears where workspace_id = '${o.ws.id}'`),
+      sql(
+        `select clear_reason from public.induction_sample_seeds where workspace_id = '${o.ws.id}'`,
+      ),
     ).toBe('member_joined');
     // The first real client still sets the workspace's client domain.
     expect(sql(`select client_domain from public.workspaces where id = '${o.ws.id}'`)).toBe(
@@ -637,5 +643,141 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
         `select count(*) from public.workspace_members where workspace_id = '${o.ws.id}' and active`,
       ),
     ).toBe(2);
+  });
+  it('runs every tour in a sample: owner, then an approver, each seeded once', async () => {
+    const o = await ownWorkspace();
+    const teammate = await joined(o, 'agency');
+    const approver = await joined(o, 'client');
+    const ws = o.ws.id;
+
+    // The owner's tour: seeded, cleared by the owner (the seeder).
+    expect((await seed(o)).data).toMatchObject({ seeded: true });
+    expect((await seedAs(approver.id, ws)).data).toMatchObject({
+      seeded: false,
+      reason: 'already_seeded',
+      seeded_by: o.owner.id,
+    });
+    expect((await clearAs(o.owner.id, ws)).data).toMatchObject({ cleared: true, reason: 'seeder' });
+
+    // The approver's tour, after accepting: the same world, with the approver as ME.
+    expect((await seedAs(approver.id, ws)).data).toMatchObject({ seeded: true });
+    expect(seedRecord(ws, approver.id)).toBe('live');
+    expect(num(`select count(*) from public.posts where workspace_id = '${ws}'`)).toBe(37);
+    expect(
+      num(
+        `select count(*) from public.inbox_entries where workspace_id = '${ws}' ` +
+          `and user_id = '${approver.id}' and email_sent_at is not null and event_type <> 'system'`,
+      ),
+    ).toBe(6);
+    expect(
+      num(
+        `select count(*) from public.comments where workspace_id = '${ws}' ` +
+          `and mentions = jsonb_build_array('${approver.id}')`,
+      ),
+    ).toBe(1);
+    expect(
+      num(
+        `select count(*) from public.chat_channels where workspace_id = '${ws}' and channel_type = 'dm' ` +
+          `and '${approver.id}' in (dm_user_a, dm_user_b)`,
+      ),
+    ).toBe(1);
+    // Shoot crew is the agency's room: the approver is not in it.
+    expect(
+      sql(
+        `select string_agg(gm.user_id::text, ',' order by gm.user_id) from public.group_members gm ` +
+          `join public.groups g on g.id = gm.group_id where g.workspace_id = '${ws}' and not g.is_default`,
+      ),
+    ).toBe([SAMPLE_PEOPLE[1], SAMPLE_PEOPLE[2], SAMPLE_PEOPLE[3]].join(','));
+    expect(
+      num(
+        `select count(*) from public.chat_messages where workspace_id = '${ws}' ` +
+          `and sender_user_id = '${approver.id}'`,
+      ),
+    ).toBeGreaterThan(0);
+
+    // Every member reads the markers.
+    const read = (userId: string) =>
+      rowCount(
+        asGeneric(clientFor(userId))
+          .from('induction_sample_rows')
+          .select('row_id')
+          .eq('workspace_id', ws),
+      );
+    expect(await read(teammate.id)).toBe(markers(ws));
+    expect(await read(approver.id)).toBe(markers(ws));
+
+    // Seeded twice for the same person: no. Cleared by a non-seeder, non-owner: no.
+    expect((await seedAs(approver.id, ws)).data).toMatchObject({
+      seeded: false,
+      reason: 'already_seeded',
+    });
+    expect((await clearAs(teammate.id, ws)).error?.message).toBe('forbidden_role');
+    expect(markers(ws)).toBeGreaterThan(0);
+
+    // The owner may clear the approver's sample; neither is seeded again here.
+    expect((await clearAs(o.owner.id, ws)).data).toMatchObject({ cleared: true, reason: 'owner' });
+    expect(markers(ws)).toBe(0);
+    expect(sampleMembers(ws)).toBe(0);
+    expect(seedRecord(ws, approver.id)).toBe('owner');
+    expect((await seedAs(approver.id, ws)).data).toMatchObject({
+      seeded: false,
+      reason: 'seeded_before',
+    });
+    expect((await seed(o)).data).toMatchObject({ seeded: false, reason: 'seeded_before' });
+  });
+
+  it('lets an approver clear their own sample; a third person joining clears one', async () => {
+    const o = await ownWorkspace();
+    const approver = await joined(o, 'client');
+    const ws = o.ws.id;
+    expect((await seedAs(approver.id, ws)).data).toMatchObject({ seeded: true });
+    expect((await clearAs(approver.id, ws)).data).toMatchObject({
+      cleared: true,
+      reason: 'seeder',
+    });
+    expect(markers(ws)).toBe(0);
+
+    expect((await seed(o)).data).toMatchObject({ seeded: true });
+    const third = await joined(o, 'agency');
+    expect(markers(ws)).toBe(0);
+    expect(sampleMembers(ws)).toBe(0);
+    expect(seedRecord(ws, o.owner.id)).toBe('member_joined');
+
+    // A finished tour is never seeded.
+    sql(
+      `insert into public.user_private (user_id, induction_done_at) values ('${third.id}', now()) ` +
+        `on conflict (user_id) do update set induction_done_at = now()`,
+    );
+    expect((await seedAs(third.id, ws)).data).toMatchObject({ seeded: false, reason: 'tour_done' });
+  });
+
+  it('clears a sample older than two hours when induction_state is read', async () => {
+    const o = await ownWorkspace();
+    expect((await seed(o)).data).toMatchObject({ seeded: true });
+    const state = () =>
+      rpc(o.owner.id, 'induction_state', { p_workspace_id: o.ws.id, p_trace_id: uuidv7() });
+    expect((await state()).error).toBeNull();
+    expect(markers(o.ws.id)).toBeGreaterThan(0);
+
+    sql(
+      `update public.induction_sample_seeds set seeded_at = now() - interval '2 hours 1 minute' ` +
+        `where workspace_id = '${o.ws.id}'`,
+    );
+    const trace = uuidv7();
+    const res = await rpc(o.owner.id, 'induction_state', {
+      p_workspace_id: o.ws.id,
+      p_trace_id: trace,
+    });
+    expect(res.error).toBeNull();
+    expect(res.data).toMatchObject({ role: 'owner' });
+    expect(markers(o.ws.id)).toBe(0);
+    expect(sampleMembers(o.ws.id)).toBe(0);
+    expect(seedRecord(o.ws.id, o.owner.id)).toBe('expired');
+    expect(
+      num(
+        `select count(*) from public.audit_log where trace_id = '${trace}' ` +
+          `and action = 'induction_sample_clear' and payload ->> 'reason' = 'expired'`,
+      ),
+    ).toBe(1);
   });
 });
