@@ -123,7 +123,7 @@ export const STEP_COPY = {
   team_invite: { label: 'Tap Send invite', why: '', laterLabel: "It's just me for now" },
   brief_open: { label: 'Tap to open the brief', why: 'This is what the client asked for.' },
   plan_open: { label: 'Tap to open the plan', why: 'Plan the content together.' },
-  line_select: { label: 'Tap a line to comment', why: 'Comment on exactly that line.' },
+  line_select: { label: 'Select text to comment', why: 'Comment on exactly that line.' },
   comment_button: { label: 'Tap Comment', why: 'Your note sticks to that line.' },
   comment_post: { label: 'Tap to post the comment', why: 'It stays on the post, not on WhatsApp.' },
   comment_post_approver: { label: 'Tap to post the comment', why: 'The team sees it on the post.' },
