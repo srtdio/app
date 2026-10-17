@@ -96,12 +96,76 @@ export const INDUCTION_RPC: Record<string, RpcHandler> = {
       created_at: now,
       updated_at: now,
       deleted_at: null,
-      post_versions: [],
+      // One version, as post_create writes it: a caption comment anchors to it.
+      post_versions: [
+        {
+          id: crypto.randomUUID(),
+          post_id: id,
+          workspace_id: args.p_workspace_id,
+          version_number: 1,
+          snapshot: {},
+          created_by: ME,
+          legacy_author_name: null,
+          created_at: now,
+        },
+      ],
       post_annotations: [],
     });
     return id;
   },
   gallery_set: () => crypto.randomUUID(),
+  // The look-around writes (onboarding-*.spec.ts): a caption comment and its
+  // annotation, and the approver's first brief.
+  comment_create: (args, tables) => {
+    const id = crypto.randomUUID();
+    (tables.comments ??= []).push({
+      id,
+      workspace_id: args.p_workspace_id,
+      entity_type: args.p_entity_type,
+      entity_id: args.p_entity_id,
+      parent_comment_id: args.p_parent_comment_id ?? null,
+      author_user_id: ME,
+      body: args.p_body,
+      mentions: args.p_mentions ?? null,
+      attachment_asset_ids: null,
+      resolved_at: null,
+      resolved_by: null,
+      unaccepted_by: null,
+      created_at: new Date().toISOString(),
+      edited_at: null,
+      deleted_at: null,
+    });
+    return id;
+  },
+  annotation_create: () => crypto.randomUUID(),
+  brief_create: (args, tables) => {
+    const payload = (args.p_payload ?? {}) as Record<string, unknown>;
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    (tables.briefs ??= []).push({
+      id,
+      workspace_id: args.p_workspace_id,
+      number: 1 + (tables.briefs?.length ?? 0),
+      title: payload.title ?? '',
+      objective: payload.objective ?? '',
+      brand_requirements: payload.brand_requirements ?? null,
+      format_requested: payload.format_requested ?? null,
+      reference_links: payload.reference_links ?? null,
+      mentions: payload.mentions ?? null,
+      status: 'open',
+      target_date: payload.target_date ?? null,
+      created_via: 'app',
+      created_by: ME,
+      closed_at: null,
+      closed_by: null,
+      legacy_author_name: null,
+      row_version: 1,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    });
+    return id;
+  },
   stage_transition: (args, tables) => {
     const post = (tables.posts ?? []).find((p) => p.id === args.p_post_id);
     if (post !== undefined) {
