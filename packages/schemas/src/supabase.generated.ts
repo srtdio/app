@@ -8868,6 +8868,7 @@ export type Database = {
       }
       _induction_sample_people: { Args: never; Returns: string[] }
       _induction_sample_uuid_at: { Args: { p_at: string }; Returns: string }
+      _is_test_email: { Args: { p_email: string }; Returns: boolean }
       _plan_attach_versions: {
         Args: {
           p_item_id: string
@@ -8894,6 +8895,8 @@ export type Database = {
         Returns: undefined
       }
       _post_snapshot: { Args: { p_post_id: string }; Returns: Json }
+      _test_accounts_purge: { Args: never; Returns: Json }
+      _test_site_origin_ok: { Args: never; Returns: boolean }
       annotation_create: {
         Args: {
           p_asset_attachment_id: string
@@ -9852,6 +9855,10 @@ export type Database = {
           r2_keys: string[]
           workspace_id: string
         }[]
+      }
+      test_session_create: {
+        Args: { p_email: string; p_trace_id: string }
+        Returns: Json
       }
       user_onboarding_save: {
         Args: { p_payload: Json; p_trace_id: string }

@@ -12,6 +12,13 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
 import { FREE_MAIL_APPROVER_MESSAGE } from './members-data';
 import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
+import {
+  isTestEmail,
+  isTestSite,
+  rememberTestInvitee,
+  testAddress,
+  testInviteePath,
+} from '@/lib/test-site';
 
 export type InviteRole = 'admin' | 'agency' | 'client';
 
@@ -234,6 +241,7 @@ export function MembersInviteForm({
   }
   // Capture the narrowed id so the async submit closure keeps the string type.
   const activeWorkspaceId = workspaceId;
+  const testSite = isTestSite();
 
   const trimmedSingleEmail = singleEmail.trim();
   const singleEmailValid = isValidInviteEmail(trimmedSingleEmail);
@@ -257,6 +265,7 @@ export function MembersInviteForm({
       onSuccess: () => {
         setSingleEmail('');
         setSingleSentTo(target);
+        if (isTestEmail(target)) rememberTestInvitee(target);
         setSingleSubmitting(false);
         onInvited?.();
         dispatchInductionRefresh();
@@ -375,6 +384,19 @@ export function MembersInviteForm({
               autoComplete="off"
               disabled={singleSubmitting}
             />
+            {testSite ? (
+              <button
+                type="button"
+                className="mt-1.5 inline-flex min-h-[44px] items-center text-sm font-medium text-accent hover:underline"
+                onClick={() => {
+                  const role = clientOnly ? 'client' : singleRole;
+                  setSingleEmail(testAddress(role === 'client' ? 'approver' : 'creator'));
+                  setSingleError(null);
+                }}
+              >
+                Use a test address
+              </button>
+            ) : null}
             {singleEmailError ? (
               <p id="invite-email-error" role="alert" className="mt-1.5 text-xs text-bad">
                 {INVITE_INVALID_EMAIL_MESSAGE}
@@ -405,6 +427,18 @@ export function MembersInviteForm({
           </div>
           {singleSentTo !== null ? (
             <p className="text-sm text-good">Invitation sent to {singleSentTo}.</p>
+          ) : null}
+          {testSite && singleSentTo !== null && isTestEmail(singleSentTo) ? (
+            <p className="text-sm text-fg-2">
+              Test site: open it as the invitee from the sign-in page, or{' '}
+              <a
+                className="font-medium text-accent hover:underline"
+                href={testInviteePath(singleSentTo)}
+              >
+                switch to {singleSentTo} now
+              </a>
+              .
+            </p>
           ) : null}
           {singleError !== null ? <p className="text-sm text-bad">{singleError}</p> : null}
         </form>
