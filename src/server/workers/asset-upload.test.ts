@@ -53,23 +53,26 @@ vi.mock('./asset-upload-activity', async (importOriginal) => {
   };
 });
 
-// GET /usage: the service-role store and the Cloudflare read are per-test
-// stand-ins; the threshold and exemption logic stays real.
+// GET /usage and the storage cap: the service-role store (workspace_bytes_used
+// RPC) is a per-test stand-in; the threshold, cap and exemption logic stays real.
 const usageState = vi.hoisted(() => ({
   bytes: 0 as number | null,
   exempt: false,
-  bucket: 'assets-ws' as string | null,
+  /** Cap or usage reads (one per checkWorkspaceCap / resolveWorkspaceUsage). */
+  reads: 0,
 }));
 vi.mock('./asset-upload-usage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./asset-upload-usage')>();
   return {
     ...actual,
-    defaultUsageCache: () => null,
     createSupabaseUsageStore: () => ({
-      workspace: () => Promise.resolve({ bucket: usageState.bucket, ownerUserId: 'owner' }),
+      workspace: () => {
+        usageState.reads += 1;
+        return Promise.resolve({ ownerUserId: 'owner' });
+      },
       isExemptOwner: () => Promise.resolve(usageState.exempt),
+      bytesUsed: () => Promise.resolve(usageState.bytes),
     }),
-    fetchR2BucketBytes: () => Promise.resolve(usageState.bytes),
   };
 });
 
@@ -159,6 +162,8 @@ import {
   type UploadInput,
 } from '@/server/assets';
 import { InMemoryMultipartStorage, InMemoryStorageClient } from '@srtdio/storage';
+import { CAP_BYTES } from './asset-upload-usage';
+import { WORKSPACE_FULL_BODY } from './asset-upload-purge-contracts';
 import {
   MIME,
   buildZip,
@@ -188,6 +193,7 @@ const env: AssetUploadEnv = {
   CLOUDFLARE_R2_ACCESS_KEY_ID: 'akid',
   CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'secret',
   SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
   SUPABASE_SECRET_KEY: 'service-role-key',
 };
 
@@ -210,6 +216,9 @@ beforeEach(() => {
   state.activityRows = [];
   state.activityMembers = [];
   state.r2 = new InMemoryMultipartStorage();
+  usageState.bytes = 0;
+  usageState.exempt = false;
+  usageState.reads = 0;
 });
 
 async function mintToken(sub: string, expSecondsFromNow = 3600): Promise<string> {
@@ -1664,12 +1673,6 @@ describe('asset-upload GET /usage', () => {
     });
   }
 
-  beforeEach(() => {
-    usageState.bytes = 0;
-    usageState.exempt = false;
-    usageState.bucket = 'assets-ws';
-  });
-
   it('requires a verified caller', async () => {
     const res = await worker.fetch(usageRequest(null, WORKSPACE), env);
     expect(res.status).toBe(401);
@@ -1720,7 +1723,7 @@ describe('asset-upload GET /usage', () => {
     expect(body).toMatchObject({ warn: false, exempt: true });
   });
 
-  it('answers 503 usage_unavailable when Cloudflare cannot be read', async () => {
+  it('answers 503 usage_unavailable when the usage read fails', async () => {
     state.members.add(`${USER}:${WORKSPACE}`);
     usageState.bytes = null;
     const token = await mintToken(USER);
@@ -1729,5 +1732,312 @@ describe('asset-upload GET /usage', () => {
     const body = (await res.json()) as { error: { code: string }; usedBytes?: unknown };
     expect(body.error.code).toBe('usage_unavailable');
     expect(body.usedBytes).toBeUndefined();
+  });
+});
+
+describe('workspace storage cap (413 workspace_full)', () => {
+  // uploadRequest's file part is 4 bytes.
+  const FILE_BYTES = 4;
+
+  function complete(
+    token: string,
+    created: { key: string; upload_id: string },
+    extra: Record<string, string> = {},
+  ): Request {
+    const form = new FormData();
+    for (const [name, value] of Object.entries(extra)) form.set(name, value);
+    form.set('workspace_id', WORKSPACE);
+    form.set('key', created.key);
+    form.set('upload_id', created.upload_id);
+    form.set('filename', 'doc.pdf');
+    form.set('content_type', 'application/pdf');
+    return new Request('https://worker.test/multipart/complete', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+  }
+
+  function createRequest(token: string, size: number): Request {
+    return jsonPost('/multipart/create', token, {
+      workspace_id: WORKSPACE,
+      size,
+      content_type: 'application/pdf',
+    });
+  }
+
+  /** Create a resumable upload with one 4 byte part already stored. */
+  async function staged(token: string): Promise<{ key: string; upload_id: string }> {
+    const res = await worker.fetch(createRequest(token, FILE_BYTES), env);
+    expect(res.status).toBe(201);
+    const created = (await res.json()) as { key: string; upload_id: string };
+    const url = new URL('https://worker.test/multipart/part');
+    url.searchParams.set('workspace_id', WORKSPACE);
+    url.searchParams.set('key', created.key);
+    url.searchParams.set('upload_id', created.upload_id);
+    url.searchParams.set('part_number', '1');
+    const part = await worker.fetch(
+      new Request(url, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+        body: new Blob([new Uint8Array(FILE_BYTES)]),
+      }),
+      env,
+    );
+    expect(part.status).toBe(200);
+    return created;
+  }
+
+  async function memberToken(): Promise<string> {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    return mintToken(USER);
+  }
+
+  describe('direct POST', () => {
+    it('stores a file under the cap', async () => {
+      const token = await memberToken();
+      usageState.bytes = 100;
+      const res = await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+      expect(res.status).toBe(201);
+    });
+
+    it('stores a file that lands exactly on the cap', async () => {
+      const token = await memberToken();
+      usageState.bytes = CAP_BYTES - FILE_BYTES;
+      const res = await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+      expect(res.status).toBe(201);
+    });
+
+    it('refuses a file over the cap before the pipeline runs', async () => {
+      const token = await memberToken();
+      usageState.bytes = CAP_BYTES - FILE_BYTES + 1;
+      const res = await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual(WORKSPACE_FULL_BODY);
+      expect(state.capturedInput).toBeNull();
+    });
+
+    it('counts the thumbnail part toward the cap', async () => {
+      const token = await memberToken();
+      const thumb = new Blob([new Uint8Array(10)], { type: 'image/jpeg' });
+      const withThumb = (): Request => {
+        const form = new FormData();
+        form.set('file', new File([new Uint8Array(FILE_BYTES)], 'doc.pdf', { type: MIME.pdf }));
+        form.set('workspace_id', WORKSPACE);
+        form.set('thumbnail', thumb, 'thumb.jpg');
+        return new Request('https://worker.test/', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        });
+      };
+      usageState.bytes = CAP_BYTES - FILE_BYTES - 10 + 1;
+      const over = await worker.fetch(withThumb(), env);
+      expect(over.status).toBe(413);
+      expect(await over.json()).toEqual(WORKSPACE_FULL_BODY);
+      expect(state.capturedInput).toBeNull();
+
+      // File plus thumbnail exactly on the cap is not refused by the cap.
+      usageState.bytes = CAP_BYTES - FILE_BYTES - 10;
+      expect((await worker.fetch(withThumb(), env)).status).not.toBe(413);
+    });
+
+    it('caps a chat upload the same way', async () => {
+      const token = await memberToken();
+      usageState.bytes = CAP_BYTES;
+      const res = await worker.fetch(
+        uploadRequest(token, { workspace_id: WORKSPACE, origin: 'chat' }),
+        env,
+      );
+      expect(res.status).toBe(413);
+      expect(state.capturedInput).toBeNull();
+    });
+
+    it('never caps an exempt owner', async () => {
+      const token = await memberToken();
+      usageState.bytes = CAP_BYTES;
+      usageState.exempt = true;
+      const res = await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+      expect(res.status).toBe(201);
+    });
+
+    it('fails closed with 503 when usage cannot be read', async () => {
+      const token = await memberToken();
+      usageState.bytes = null;
+      const res = await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+      expect(res.status).toBe(503);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+        'usage_unavailable',
+      );
+      expect(state.capturedInput).toBeNull();
+    });
+  });
+
+  describe('POST /multipart/create', () => {
+    it('starts an upload under or exactly at the cap', async () => {
+      const token = await memberToken();
+      usageState.bytes = CAP_BYTES - 10;
+      expect((await worker.fetch(createRequest(token, 9), env)).status).toBe(201);
+      expect((await worker.fetch(createRequest(token, 10), env)).status).toBe(201);
+    });
+
+    it('refuses an upload over the cap and starts nothing in R2', async () => {
+      const token = await memberToken();
+      usageState.bytes = CAP_BYTES - 10;
+      const res = await worker.fetch(createRequest(token, 11), env);
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual(WORKSPACE_FULL_BODY);
+      expect(state.r2.uploads.size).toBe(0);
+    });
+
+    it('never caps an exempt owner', async () => {
+      const token = await memberToken();
+      usageState.bytes = CAP_BYTES;
+      usageState.exempt = true;
+      expect((await worker.fetch(createRequest(token, 11), env)).status).toBe(201);
+    });
+  });
+
+  describe('POST /multipart/complete', () => {
+    it('completes an upload under the cap', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      usageState.bytes = 100;
+      expect((await worker.fetch(complete(token, created), env)).status).toBe(201);
+    });
+
+    it('completes an upload that lands exactly on the cap', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      usageState.bytes = CAP_BYTES - FILE_BYTES;
+      expect((await worker.fetch(complete(token, created), env)).status).toBe(201);
+    });
+
+    it('refuses on the real size, aborts the upload and removes the staging', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      // Usage grew after create (another upload landed).
+      usageState.bytes = CAP_BYTES - FILE_BYTES + 1;
+      const res = await worker.fetch(complete(token, created), env);
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual(WORKSPACE_FULL_BODY);
+      expect(state.capturedInput).toBeNull();
+      expect(state.r2.uploads.size).toBe(0);
+      expect(state.r2.objects.size).toBe(0);
+    });
+
+    it('removes an already-assembled staging object when a retried complete is refused', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      const [upload] = [...state.r2.uploads.values()];
+      await state.r2.completeMultipartUpload({
+        bucket: upload!.bucket,
+        key: created.key,
+        uploadId: created.upload_id,
+        parts: [{ partNumber: 1, etag: 'e' }],
+      });
+      expect(state.r2.objects.size).toBe(1);
+      usageState.bytes = CAP_BYTES;
+      const res = await worker.fetch(complete(token, created), env);
+      expect(res.status).toBe(413);
+      expect(state.capturedInput).toBeNull();
+      expect(state.r2.objects.size).toBe(0);
+    });
+
+    it('never caps an exempt owner', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      usageState.bytes = CAP_BYTES;
+      usageState.exempt = true;
+      expect((await worker.fetch(complete(token, created), env)).status).toBe(201);
+    });
+  });
+
+  describe('chat origin and gate order', () => {
+    it('caps a resumable chat upload at complete, and removes its staging', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      usageState.bytes = CAP_BYTES - FILE_BYTES + 1;
+      const res = await worker.fetch(complete(token, created, { origin: 'chat' }), env);
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual(WORKSPACE_FULL_BODY);
+      expect(state.capturedInput).toBeNull();
+      expect(state.r2.uploads.size).toBe(0);
+      expect(state.r2.objects.size).toBe(0);
+    });
+
+    it('lets an exempt owner finish a resumable chat upload over the cap', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      usageState.bytes = CAP_BYTES * 2;
+      usageState.exempt = true;
+      const res = await worker.fetch(complete(token, created, { origin: 'chat' }), env);
+      expect(res.status).toBe(201);
+      expect(state.capturedInput).toMatchObject({ origin: 'chat' });
+    });
+
+    it('lets an exempt owner post a direct chat upload over the cap', async () => {
+      const token = await memberToken();
+      usageState.bytes = CAP_BYTES * 2;
+      usageState.exempt = true;
+      const res = await worker.fetch(
+        uploadRequest(token, { workspace_id: WORKSPACE, origin: 'chat' }),
+        env,
+      );
+      expect(res.status).toBe(201);
+      expect(state.capturedInput).toMatchObject({ origin: 'chat' });
+    });
+
+    it('checks membership before the cap: a non-member gets 403 and no usage read', async () => {
+      const token = await mintToken(USER);
+      usageState.bytes = CAP_BYTES;
+      const direct = await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+      expect(direct.status).toBe(403);
+      const create = await worker.fetch(createRequest(token, FILE_BYTES), env);
+      expect(create.status).toBe(403);
+      expect(usageState.reads).toBe(0);
+      expect(state.r2.uploads.size).toBe(0);
+    });
+
+    it('fails closed at create and at complete when usage cannot be read', async () => {
+      const token = await memberToken();
+      const created = await staged(token);
+      usageState.bytes = null;
+      const create = await worker.fetch(createRequest(token, FILE_BYTES), env);
+      expect(create.status).toBe(503);
+      const done = await worker.fetch(complete(token, created), env);
+      expect(done.status).toBe(503);
+      expect(((await done.json()) as { error: { code: string } }).error.code).toBe(
+        'usage_unavailable',
+      );
+      expect(state.capturedInput).toBeNull();
+    });
+
+    it('reads usage once per direct POST, before the pipeline', async () => {
+      const token = await memberToken();
+      const res = await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
+      expect(res.status).toBe(201);
+      expect(usageState.reads).toBe(1);
+    });
+  });
+});
+
+describe('asset-upload purge routing', () => {
+  it.each(['/purge', '/purge-chat'])(
+    'routes POST %s to the purge handler (its own body rules)',
+    async (path) => {
+      const token = await mintToken(USER);
+      const res = await worker.fetch(jsonPost(path, token, { workspace_id: 'x' }), env);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: { code: 'bad_request', message: 'Invalid workspace_id.' },
+      });
+      expect(state.capturedInput).toBeNull();
+    },
+  );
+
+  it.each(['/purge', '/purge-chat'])('POST %s is 401 without a bearer', async (path) => {
+    const res = await worker.fetch(jsonPost(path, null, { workspace_id: WORKSPACE }), env);
+    expect(res.status).toBe(401);
   });
 });

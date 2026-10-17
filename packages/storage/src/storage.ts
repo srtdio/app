@@ -88,6 +88,35 @@ export interface MultipartStorage {
   deleteObject(bucket: string, key: string, traceId: string): Promise<void>;
 }
 
+/** One object in a bucket listing. */
+export interface ListedObject {
+  key: string;
+  size: number;
+}
+
+/** One page of a bucket listing; nextCursor is null on the last page. */
+export interface ObjectPage {
+  objects: ListedObject[];
+  nextCursor: string | null;
+}
+
+/**
+ * Whole-bucket operations for the workspace purge: page through every key, then
+ * drop the emptied bucket. Kept apart from StorageClient so existing fakes stay
+ * valid.
+ */
+export interface BucketStorage {
+  /** One page of keys (at most `limit`, R2 caps at 1000), resumed from `cursor`. */
+  listObjects(input: {
+    bucket: string;
+    cursor?: string | null;
+    limit?: number;
+    traceId: string;
+  }): Promise<ObjectPage>;
+  /** Delete an empty bucket. Idempotent: a missing bucket is not an error. */
+  deleteBucket(bucket: string, traceId: string): Promise<void>;
+}
+
 /** Text of the first <tag>...</tag> in an S3 XML body, or null. */
 function xmlTag(xml: string, tag: string): string | null {
   const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(xml);
@@ -124,6 +153,24 @@ export function parseListPartsXml(xml: string): UploadedPart[] {
     parts.push({ partNumber, etag: xmlUnescape(etag), size });
   }
   return parts.sort((a, b) => a.partNumber - b.partNumber);
+}
+
+/** Parse a ListObjectsV2 body into its objects and continuation token. */
+export function parseListObjectsXml(xml: string): ObjectPage {
+  const objects: ListedObject[] = [];
+  for (const match of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+    const body = match[1] ?? '';
+    const key = xmlTag(body, 'Key');
+    const size = Number.parseInt(xmlTag(body, 'Size') ?? '', 10);
+    if (key === null) continue;
+    objects.push({ key: xmlUnescape(key), size: Number.isFinite(size) ? size : 0 });
+  }
+  const truncated = xmlTag(xml, 'IsTruncated') === 'true';
+  const token = xmlTag(xml, 'NextContinuationToken');
+  return {
+    objects,
+    nextCursor: truncated && token !== null && token !== '' ? xmlUnescape(token) : null,
+  };
 }
 
 /** The CompleteMultipartUpload request body. */
@@ -288,7 +335,7 @@ function objectPath(bucket: string, key: string): string {
   return `/${encodeSegment(bucket)}/${key.split('/').map(encodeSegment).join('/')}`;
 }
 
-export class R2StorageClient implements StorageClient, MultipartStorage {
+export class R2StorageClient implements StorageClient, MultipartStorage, BucketStorage {
   private readonly host: string;
 
   constructor(
@@ -513,6 +560,55 @@ export class R2StorageClient implements StorageClient, MultipartStorage {
     }
   }
 
+  async listObjects(input: {
+    bucket: string;
+    cursor?: string | null;
+    limit?: number;
+    traceId: string;
+  }): Promise<ObjectPage> {
+    const query: Array<[string, string]> = [
+      ['list-type', '2'],
+      ['max-keys', String(Math.min(Math.max(input.limit ?? 1000, 1), 1000))],
+    ];
+    if (input.cursor !== undefined && input.cursor !== null) {
+      query.push(['continuation-token', input.cursor]);
+    }
+    const res = await this.signedFetch({
+      method: 'GET',
+      path: `/${encodeSegment(input.bucket)}`,
+      query,
+      body: new Uint8Array(0),
+      contentType: 'application/octet-stream',
+      traceId: input.traceId,
+    });
+    const text = await res.text();
+    if (res.status === 404 || /NoSuchBucket/.test(text)) {
+      return { objects: [], nextCursor: null };
+    }
+    if (!res.ok) {
+      throw new Error(`R2 listObjects failed (${res.status}): ${text}`);
+    }
+    return parseListObjectsXml(text);
+  }
+
+  async deleteBucket(bucket: string, traceId: string): Promise<void> {
+    const res = await this.signedFetch({
+      method: 'DELETE',
+      path: `/${encodeSegment(bucket)}`,
+      body: new Uint8Array(0),
+      contentType: 'application/octet-stream',
+      traceId,
+    });
+    if (res.ok || res.status === 404) {
+      return;
+    }
+    const text = await res.text();
+    if (/NoSuchBucket/.test(text)) {
+      return;
+    }
+    throw new Error(`R2 deleteBucket failed (${res.status}): ${text}`);
+  }
+
   /**
    * Mint a query-string SigV4 presigned GET URL the browser can fetch directly.
    * No request is sent here - this only signs - so the caller never proxies the
@@ -689,7 +785,10 @@ export class InMemoryStorageClient implements StorageClient {
 }
 
 /** In-memory multipart storage for tests; extends the plain in-memory client. */
-export class InMemoryMultipartStorage extends InMemoryStorageClient implements MultipartStorage {
+export class InMemoryMultipartStorage
+  extends InMemoryStorageClient
+  implements MultipartStorage, BucketStorage
+{
   readonly uploads = new Map<
     string,
     { bucket: string; key: string; contentType: string; parts: Map<number, Uint8Array> }
@@ -788,6 +887,34 @@ export class InMemoryMultipartStorage extends InMemoryStorageClient implements M
 
   deleteObject(bucket: string, key: string): Promise<void> {
     this.objects.delete(`${bucket}/${key}`);
+    return Promise.resolve();
+  }
+
+  /** Keys in byte order; the cursor is the last key of the previous page. */
+  listObjects(input: {
+    bucket: string;
+    cursor?: string | null;
+    limit?: number;
+  }): Promise<ObjectPage> {
+    const limit = Math.min(Math.max(input.limit ?? 1000, 1), 1000);
+    const cursor = input.cursor ?? null;
+    const keys = [...this.objects.values()]
+      .filter((o) => o.bucket === input.bucket && (cursor === null || o.key > cursor))
+      .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+    const page = keys.slice(0, limit);
+    const last = page[page.length - 1];
+    return Promise.resolve({
+      objects: page.map((o) => ({ key: o.key, size: o.body.byteLength })),
+      nextCursor: keys.length > limit && last !== undefined ? last.key : null,
+    });
+  }
+
+  /** Mirrors R2: a bucket that still holds objects cannot be deleted. */
+  deleteBucket(bucket: string): Promise<void> {
+    if ([...this.objects.values()].some((o) => o.bucket === bucket)) {
+      return Promise.reject(new Error('BucketNotEmpty'));
+    }
+    this.buckets.delete(bucket);
     return Promise.resolve();
   }
 }

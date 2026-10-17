@@ -23,7 +23,9 @@ describe('workspace owner limit mapping', () => {
   it('maps the trigger exception to the free-plan message', () => {
     expect(isWorkspaceLimitError('workspace_limit_reached')).toBe(true);
     expect(workspaceCreateErrorMessage('workspace_limit_reached')).toBe(WORKSPACE_LIMIT_MESSAGE);
-    expect(WORKSPACE_LIMIT_MESSAGE).toBe('On the free plan you can own one workspace.');
+    expect(WORKSPACE_LIMIT_MESSAGE).toBe(
+      'On the free plan you can own one workspace. Need another? Talk to us.',
+    );
   });
 
   it('passes any other failure through unchanged', () => {

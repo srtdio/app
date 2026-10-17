@@ -10,6 +10,7 @@ import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { StorageWarningBanner } from '@/components/storage/StorageWarningBanner';
+import { WorkspaceFullSheet } from '@/components/storage/WorkspaceFullSheet';
 import { ChatStoreProvider } from '@/components/chat/ChatStoreProvider';
 import { ChatTabSignals } from '@/components/chat/ChatTabSignals';
 import { InboxStoreProvider } from '@/components/shell/InboxStoreProvider';
@@ -57,7 +58,18 @@ export function shellChrome(threadOpen: boolean): {
   };
 }
 
+// One ToastProvider for every branch below: a toast fired as the shell swaps
+// branches (e.g. "<name> deleted for good" as the last workspace goes, through
+// the induction read's blank frame) survives the swap.
 export function AppLayout() {
+  return (
+    <ToastProvider>
+      <AppLayoutBody />
+    </ToastProvider>
+  );
+}
+
+function AppLayoutBody() {
   const {
     workspaceName,
     workspaceDisplayName,
@@ -281,77 +293,74 @@ export function AppLayout() {
   // create dialog. Chat and inbox mount only once a workspace exists.
   if (noWorkspace) {
     return (
-      <ToastProvider>
-        <InductionProvider data={induction} workspaceId={null} workspaceLabel="">
-          <div className="flex h-full">
-            <div className="flex flex-1 min-w-0 flex-col h-full">
-              <Topbar
-                workspaceName={null}
-                {...(profile !== null ? { currentUserName: profile.display_name } : {})}
-                currentUserAvatarUrl={profile?.avatar_url ?? null}
-                onOpenPalette={() => undefined}
-                onOpenAvatar={() => setAvatarOpen(true)}
-                onCreateWorkspace={() => dispatchSorted('sorted:switch-workspace')}
-              />
-              <main className={chrome.mainClassName} />
-            </div>
-            <ToastViewport />
-            <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
-            <WorkspaceSwitcher />
-            <InductionGuide tabsShown={false} />
+      <InductionProvider data={induction} workspaceId={null} workspaceLabel="">
+        <div className="flex h-full">
+          <div className="flex flex-1 min-w-0 flex-col h-full">
+            <Topbar
+              workspaceName={null}
+              {...(profile !== null ? { currentUserName: profile.display_name } : {})}
+              currentUserAvatarUrl={profile?.avatar_url ?? null}
+              onOpenPalette={() => undefined}
+              onOpenAvatar={() => setAvatarOpen(true)}
+              onCreateWorkspace={() => dispatchSorted('sorted:switch-workspace')}
+            />
+            <main className={chrome.mainClassName} />
           </div>
-        </InductionProvider>
-      </ToastProvider>
+          <ToastViewport />
+          <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+          <WorkspaceSwitcher />
+          <InductionGuide tabsShown={false} />
+        </div>
+      </InductionProvider>
     );
   }
 
-  // ChatStoreProvider sits inside ToastProvider (it fires toasts) and the router
+  // ChatStoreProvider sits inside AppLayout's ToastProvider (it fires toasts) and the router
   // (toast presses navigate), and wraps the whole shell so the always-on chat
   // store is live across routes and the Chat-tab badge (a later PR) can read it.
   return (
-    <ToastProvider>
-      <InductionProvider
-        data={induction}
-        workspaceId={workspaceId}
-        workspaceLabel={workspaceDisplayName ?? ''}
-        canCreateBrief={briefCreate}
-      >
-        <ChatStoreProvider>
-          <ChatTabSignals />
-          <InboxStoreProvider>
-            <div className="flex h-full">
-              <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
-              <div className="flex flex-1 min-w-0 flex-col h-full">
-                <div className={chrome.topbarClassName}>
-                  <Topbar
-                    workspaceName={workspaceDisplayName}
-                    {...(profile !== null ? { currentUserName: profile.display_name } : {})}
-                    currentUserAvatarUrl={profile?.avatar_url ?? null}
-                    onOpenPalette={openPalette}
-                    onOpenAvatar={() => setAvatarOpen(true)}
-                  />
-                </div>
-                {/* Its own sibling above main: showing it never remounts the Outlet. */}
-                <StorageWarningBanner />
-                <main className={chrome.mainClassName}>{switchPending ? null : <Outlet />}</main>
+    <InductionProvider
+      data={induction}
+      workspaceId={workspaceId}
+      workspaceLabel={workspaceDisplayName ?? ''}
+      canCreateBrief={briefCreate}
+    >
+      <ChatStoreProvider>
+        <ChatTabSignals />
+        <InboxStoreProvider>
+          <div className="flex h-full">
+            <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
+            <div className="flex flex-1 min-w-0 flex-col h-full">
+              <div className={chrome.topbarClassName}>
+                <Topbar
+                  workspaceName={workspaceDisplayName}
+                  {...(profile !== null ? { currentUserName: profile.display_name } : {})}
+                  currentUserAvatarUrl={profile?.avatar_url ?? null}
+                  onOpenPalette={openPalette}
+                  onOpenAvatar={() => setAvatarOpen(true)}
+                />
               </div>
-              {chrome.showBottomTabs ? <BottomTabs /> : null}
-              <ToastViewport />
-              <CommandPalette
-                open={paletteOpen}
-                onClose={closePalette}
-                inputRef={paletteInputRef}
-                workspaceId={workspaceId}
-                workspaceKey={workspaceKey}
-                userId={userId}
-              />
-              <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
-              <WorkspaceSwitcher />
-              <InductionGuide tabsShown={chrome.showBottomTabs} />
+              {/* Its own sibling above main: showing it never remounts the Outlet. */}
+              <StorageWarningBanner />
+              <main className={chrome.mainClassName}>{switchPending ? null : <Outlet />}</main>
             </div>
-          </InboxStoreProvider>
-        </ChatStoreProvider>
-      </InductionProvider>
-    </ToastProvider>
+            {chrome.showBottomTabs ? <BottomTabs /> : null}
+            <ToastViewport />
+            <CommandPalette
+              open={paletteOpen}
+              onClose={closePalette}
+              inputRef={paletteInputRef}
+              workspaceId={workspaceId}
+              workspaceKey={workspaceKey}
+              userId={userId}
+            />
+            <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+            <WorkspaceSwitcher />
+            <WorkspaceFullSheet />
+            <InductionGuide tabsShown={chrome.showBottomTabs} />
+          </div>
+        </InboxStoreProvider>
+      </ChatStoreProvider>
+    </InductionProvider>
   );
 }

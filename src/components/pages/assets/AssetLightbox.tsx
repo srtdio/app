@@ -6,7 +6,13 @@ import { IconChevronRight, IconCopy, IconDownload, IconX } from '@/components/ui
 import { IconChevronLeft, IconEdit, IconInfo } from '@/components/pages/assets/viewerIcons';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { RenameOutcome } from '@/lib/asset-upload';
-import { displayLabel, humanizeSize, type AssetListItem } from '@/lib/assets';
+import {
+  DELETE_CONFIRM_MESSAGE,
+  displayLabel,
+  humanizeSize,
+  type AssetDeleteOutcome,
+  type AssetListItem,
+} from '@/lib/assets';
 import {
   isInlineRenderable,
   mediaKind,
@@ -48,8 +54,11 @@ interface AssetLightboxProps {
   initialInfoOpen?: boolean;
   onIndexChange: (index: number) => void;
   onClose: () => void;
-  /** Soft-delete; resolves true on success so the viewer can close onto the new list. */
-  onDelete: (item: AssetListItem) => Promise<boolean>;
+  /**
+   * Soft-delete. 'deleted' closes the viewer onto the new list; 'in_use' is
+   * handled by the parent (it closes the viewer and explains), 'failed' toasts.
+   */
+  onDelete: (item: AssetListItem) => Promise<AssetDeleteOutcome>;
   /** True when the current member may rename (owner/admin/agency); clients see no edit. */
   canRename: boolean;
   /** Commit a rename to the worker; resolves the mapped outcome for the toast. */
@@ -323,15 +332,15 @@ export function AssetLightbox({
 
   async function confirmDelete(): Promise<void> {
     setDeleting(true);
-    const ok = await onDelete(asset);
-    if (ok) {
+    const outcome = await onDelete(asset);
+    if (outcome === 'deleted') {
       onClose();
       onToast('Moved to Recently deleted');
       return;
     }
     setDeleting(false);
     setConfirming(false);
-    onToast("Couldn't delete this asset. Try again.");
+    if (outcome === 'failed') onToast("Couldn't delete this asset. Try again.");
   }
 
   // Commit an inline rename. Save is gated to a non-empty, changed name; on
@@ -517,7 +526,8 @@ export function AssetLightbox({
                     />
                     <div className="flex gap-2">
                       <Button
-                        className="h-11 flex-1"
+                        size="lg"
+                        className="flex-1"
                         onClick={() => setEditingName(false)}
                         disabled={savingName}
                       >
@@ -525,7 +535,8 @@ export function AssetLightbox({
                       </Button>
                       <Button
                         variant="primary"
-                        className="h-11 flex-1"
+                        size="lg"
+                        className="flex-1"
                         disabled={!canSaveName}
                         onClick={() => void saveName()}
                       >
@@ -567,13 +578,16 @@ export function AssetLightbox({
             <div className="mt-4 border-t border-border pt-4">
               {confirming ? (
                 <div className="flex flex-col gap-3">
-                  <p className="text-sm text-fg">
-                    Delete {name}? It&apos;s attached in {item.attachmentCount}{' '}
-                    {item.attachmentCount === 1 ? 'place' : 'places'}.
-                  </p>
+                  <div>
+                    <p className="text-sm font-semibold text-fg [overflow-wrap:anywhere]">
+                      Delete {name}?
+                    </p>
+                    <p className="mt-1 text-sm text-fg-2">{DELETE_CONFIRM_MESSAGE}</p>
+                  </div>
                   <div className="flex gap-2">
                     <Button
-                      className="h-11 flex-1"
+                      size="lg"
+                      className="flex-1"
                       onClick={() => setConfirming(false)}
                       disabled={deleting}
                     >
@@ -581,7 +595,8 @@ export function AssetLightbox({
                     </Button>
                     <Button
                       variant="danger"
-                      className="h-11 flex-1"
+                      size="lg"
+                      className="flex-1"
                       onClick={() => void confirmDelete()}
                       disabled={deleting}
                     >
@@ -592,7 +607,8 @@ export function AssetLightbox({
               ) : (
                 <Button
                   variant="danger"
-                  className="h-11 w-full"
+                  size="lg"
+                  className="w-full"
                   onClick={() => setConfirming(true)}
                 >
                   Delete

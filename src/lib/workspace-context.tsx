@@ -20,6 +20,8 @@ import { useNewTrace } from '@/lib/trace-context';
 import { getCurrentTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
 import { primeWorkspacePlatforms } from '@/lib/workspace-context-platform';
+import { dispatchInductionRefresh } from '@/lib/induction';
+import { finishInduction } from '@/components/induction/induction-data';
 
 /** A workspace row, as returned by the RLS-scoped listWorkspaces select. */
 export type WorkspaceRow = Database['public']['Tables']['workspaces']['Row'];
@@ -50,7 +52,8 @@ function workspaceNameFromMetadata(session: Session): string | null {
 }
 
 /** The free-plan rule, shown on the create form. No upgrade path yet. */
-export const WORKSPACE_LIMIT_MESSAGE = 'On the free plan you can own one workspace.';
+export const WORKSPACE_LIMIT_MESSAGE =
+  'On the free plan you can own one workspace. Need another? Talk to us.';
 
 /**
  * Whether a workspace_create failure is the one-workspace-per-owner rule. The
@@ -155,6 +158,30 @@ export async function bootstrapWorkspaces(
 }
 
 /**
+ * The active id after a re-list: the current one while it is still listed,
+ * otherwise the first remaining row (null: none left, the create form).
+ */
+export function nextActiveId(prev: string | null, rows: readonly WorkspaceRow[]): string | null {
+  return prev !== null && rows.some((w) => w.id === prev) ? prev : (rows[0]?.id ?? null);
+}
+
+/**
+ * Induction is per user (user_private.induction_done_at), so stamping it done
+ * once a workspace is deleted is what makes the create that follows skip it:
+ * the person is not new. A failure is logged and the create then runs it.
+ */
+async function skipInductionAfterDelete(client: Client, traceId: string): Promise<void> {
+  const res = await finishInduction(client, traceId);
+  if (!res.ok) {
+    logger.warn('induction skip after workspace delete failed', {
+      error: res.error.message,
+      trace_id: traceId,
+    });
+  }
+  dispatchInductionRefresh();
+}
+
+/**
  * Active-workspace context for signed-in users. One workspace = one client =
  * one platform, so a single active workspace drives every tenant-scoped read.
  * Resolved once on mount via bootstrapWorkspaces; the active id lives in React
@@ -186,6 +213,18 @@ interface WorkspaceContextValue {
   applyWorkspacePatch: (id: string, patch: WorkspacePatch) => void;
   /** True when the caller may not create another workspace (free plan, not exempt). */
   createBlocked: boolean;
+  /**
+   * Set after the owner deletes a workspace: the create form shows the "is
+   * gone" hint while it is, and the create that follows skips induction.
+   */
+  deletedWorkspace: { name: string } | null;
+  clearDeletedWorkspace: () => void;
+  /**
+   * After a successful workspace_delete: skip induction for the next create,
+   * drop the row (its chat connection closes with the active id), move to the
+   * remaining workspace or none, and set deletedWorkspace.
+   */
+  workspaceDeleted: (id: string, name: string) => Promise<void>;
 }
 
 /** The workspace fields workspace_update may change. */
@@ -213,6 +252,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     sessionRef.current = session;
   }, [session]);
   const [isOperator, setIsOperator] = useState<boolean | null>(null);
+  const [deletedWorkspace, setDeletedWorkspace] = useState<{ name: string } | null>(null);
+  // Read by the delete and the recheck below without keying their effects on them.
+  const workspacesRef = useRef(workspaces);
+  const activeIdRef = useRef(activeId);
+  useEffect(() => {
+    workspacesRef.current = workspaces;
+    activeIdRef.current = activeId;
+  }, [workspaces, activeId]);
 
   // Exemption from the one-workspace rule, read once per user under RLS.
   useEffect(() => {
@@ -254,11 +301,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           setWorkspaces(res.workspaces);
           // Default to the first row (the freshly created one when bootstrapped),
           // keeping any prior selection still present in the refreshed list.
-          setActiveId((prev) =>
-            prev !== null && res.workspaces.some((w) => w.id === prev)
-              ? prev
-              : (res.workspaces[0]?.id ?? null),
-          );
+          setActiveId((prev) => nextActiveId(prev, res.workspaces));
           setLoaded(true);
         }
         setLoading(false);
@@ -299,11 +342,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         });
       } else {
         setWorkspaces(res.workspaces);
-        setActiveId((prev) =>
-          prev !== null && res.workspaces.some((w) => w.id === prev)
-            ? prev
-            : (res.workspaces[0]?.id ?? null),
-        );
+        setActiveId((prev) => nextActiveId(prev, res.workspaces));
       }
     } catch (err: unknown) {
       logger.error('workspace refresh failed', {
@@ -318,6 +357,48 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const applyWorkspacePatch = useCallback((id: string, patch: WorkspacePatch) => {
     setWorkspaces((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }, []);
+
+  const clearDeletedWorkspace = useCallback(() => setDeletedWorkspace(null), []);
+
+  const workspaceDeleted = useCallback(
+    async (id: string, name: string) => {
+      await skipInductionAfterDelete(supabase, newTrace());
+      const remaining = workspacesRef.current.filter((row) => row.id !== id);
+      setWorkspaces(remaining);
+      setActiveId((prev) => nextActiveId(prev === id ? null : prev, remaining));
+      setDeletedWorkspace({ name });
+    },
+    [newTrace],
+  );
+
+  // Another member deleted the active workspace: RLS stops listing it. Re-list
+  // quietly when the tab comes back and move to the remaining workspace (or
+  // none, the create form). No loading state and no error: a failed read keeps
+  // what is shown.
+  useEffect(() => {
+    if (!loaded) return;
+    let active = true;
+    function recheck(): void {
+      if (document.visibilityState !== 'visible') return;
+      const current = activeIdRef.current;
+      if (current === null) return;
+      void listWorkspaces(supabase).then(
+        (res) => {
+          if (!active || !res.ok || res.data.some((w) => w.id === current)) return;
+          setWorkspaces(res.data);
+          setActiveId((prev) => nextActiveId(prev === current ? null : prev, res.data));
+        },
+        (err: unknown) => logger.warn('workspace recheck failed', { error: String(err) }),
+      );
+    }
+    window.addEventListener('focus', recheck);
+    document.addEventListener('visibilitychange', recheck);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', recheck);
+      document.removeEventListener('visibilitychange', recheck);
+    };
+  }, [loaded]);
 
   // The listed rows already carry each platform: seed the sheets' lookup.
   useEffect(() => {
@@ -348,6 +429,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       refreshWorkspaces,
       applyWorkspacePatch,
       createBlocked,
+      deletedWorkspace,
+      clearDeletedWorkspace,
+      workspaceDeleted,
     }),
     [
       activeWorkspace,
@@ -359,6 +443,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       refreshWorkspaces,
       applyWorkspacePatch,
       createBlocked,
+      deletedWorkspace,
+      clearDeletedWorkspace,
+      workspaceDeleted,
     ],
   );
 

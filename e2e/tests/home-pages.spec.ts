@@ -233,9 +233,14 @@ test.describe('phone', () => {
     await expect(page.getByRole('button', { name: 'Book my demo' })).toBeVisible();
   });
 
-  test('demo: errors, then a valid booking sends nothing and shows the notice', async ({
+  test('demo: errors, then a valid booking sends the request and shows Booked', async ({
     page,
   }) => {
+    const sent: unknown[] = [];
+    await page.route('**/functions/v1/demo-request-send', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
     await page.goto('/demo');
     const submit = page.getByRole('button', { name: 'Book my demo' });
     await submit.click();
@@ -245,6 +250,7 @@ test.describe('phone', () => {
     await expect(page.getByText('Pick a day for the call.')).toBeVisible();
     await expect(page.locator('#demo-name')).toBeFocused();
     await expect(page.getByText('Choose a day first. Weekdays only.')).toBeVisible();
+    expect(sent).toEqual([]);
 
     await page.locator('#demo-name').fill('Asha');
     await page.locator('#demo-email').fill('you@agency.com');
@@ -259,16 +265,17 @@ test.describe('phone', () => {
       /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, 12:30 pm IST · 30 min$/,
     );
 
-    const requests: string[] = [];
-    page.on('request', (request) => requests.push(request.url()));
-    const stored = await page.evaluate(() => localStorage.length + sessionStorage.length);
     await submit.click();
-    await expect(page.getByText('Demo booking opens soon. Nothing was sent.')).toBeVisible();
-    await expect(page.locator('#demo-name')).toHaveValue('Asha');
-    await page.waitForTimeout(300);
-    expect(requests).toEqual([]);
-    expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(stored);
-    await expect(page.getByText(/booked|see you/i)).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Booked' })).toBeVisible();
+    await expect(
+      page.getByText(
+        /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} · 12:30 pm IST\. The team sends a Google Meet link to your email before the call\.$/,
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Back to home' }).last()).toBeVisible();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ name: 'Asha', email: 'you@agency.com', website: '' });
+    await expect(page.getByText(/opens soon/i)).toHaveCount(0);
   });
 });
 

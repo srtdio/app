@@ -37,6 +37,7 @@ vi.mock('@/components/shell/Topbar', () => ({ Topbar: nothing }));
 vi.mock('@/components/shell/CommandPalette', () => ({ CommandPalette: nothing }));
 vi.mock('@/components/shell/AvatarMenu', () => ({ AvatarMenu: nothing }));
 vi.mock('@/components/shell/WorkspaceSwitcher', () => ({ WorkspaceSwitcher: nothing }));
+vi.mock('@/components/storage/WorkspaceFullSheet', () => ({ WorkspaceFullSheet: nothing }));
 vi.mock('@/components/ui/toast', () => ({ ToastProvider: passthrough, ToastViewport: nothing }));
 vi.mock('@/components/chat/ChatStoreProvider', () => ({ ChatStoreProvider: passthrough }));
 vi.mock('@/components/chat/ChatTabSignals', () => ({ ChatTabSignals: nothing }));
@@ -196,7 +197,9 @@ describe('AppLayout across workspace re-lists', () => {
     render({ loading: false, loaded: true, error: null, workspaces: ROWS });
 
     const banner = host?.querySelector('[role="status"]');
-    expect(banner?.textContent).toContain('Deleted files still count toward storage.');
+    expect(banner?.textContent).toContain(
+      'Deleted files free up space only after 31 days, or when the owner empties Recently deleted.',
+    );
     expect(banner?.closest('main')).toBeNull();
     expect(text()).not.toBe('Loading');
     expect(mounts.count).toBe(1);

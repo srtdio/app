@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconAssets, IconChevronRight, IconUpload } from '@/components/ui/icons';
+import { IconAssets, IconChevronRight, IconTrash, IconUpload } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
 import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
+import { AssetInUseSheet, type AssetInUseState } from '@/components/pages/assets/AssetInUseSheet';
 import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { AddLinkSheet } from '@/components/pages/assets/AddLinkSheet';
@@ -56,18 +58,25 @@ import {
   buildTabCounts,
   canBulkDelete,
   childFolders,
+  countDeletedAssets,
+  DELETE_CONFIRM_MESSAGE,
   displayLabel,
   fetchFolders,
   fetchMemberRole,
   filterAssets,
+  findAssetsInUse,
   folderBreadcrumb,
   folderChildCount,
+  assetInUseMessage,
+  isAssetInUseError,
   listAssets,
   parseAssetTab,
+  recentlyDeletedSub,
   removeAssetsById,
   renameAssetInList,
   sortAssets,
   TAB_EMPTY,
+  type AssetDeleteOutcome,
   type AssetListItem,
   type AssetSort,
   type AssetTab,
@@ -110,6 +119,9 @@ export function AssetsPage() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const [inUse, setInUse] = useState<AssetInUseState | null>(null);
+  const [deletedCount, setDeletedCount] = useState(0);
+  const navigate = useNavigate();
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   const { toasts, push, dismiss } = useToasts();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -170,10 +182,19 @@ export function AssetsPage() {
     if (result.ok) setFolders(result.data);
   }, [workspaceId]);
 
+  // How many files sit in Recently deleted, for the row under the library. A
+  // failed count leaves the last value (0 hides the row), never blocking the grid.
+  const loadDeletedCount = useCallback(async () => {
+    if (workspaceId === null) return;
+    const result = await countDeletedAssets(supabase, workspaceId);
+    if (result.ok) setDeletedCount(result.data);
+  }, [workspaceId]);
+
   useEffect(() => {
     void loadAssets();
     void loadFolders();
-  }, [loadAssets, loadFolders]);
+    void loadDeletedCount();
+  }, [loadAssets, loadFolders, loadDeletedCount]);
 
   // Reset folder + overlays when the active workspace changes.
   useEffect(() => {
@@ -190,6 +211,8 @@ export function AssetsPage() {
     setMoveOpen(false);
     setBulkDeleteOpen(false);
     setBulkDeleting(false);
+    setInUse(null);
+    setDeletedCount(0);
   }, [workspaceId]);
 
   // Resolve the current member's workspace role with one RLS-scoped read (no
@@ -348,21 +371,41 @@ export function AssetsPage() {
     return body.url;
   }, []);
 
+  // A delete refused with asset_in_use: look up where the blocked files are used
+  // and open the in-use sheet naming the first one (and how many more). The
+  // lookup failing still explains, just without the Open button.
+  const showInUse = useCallback(async (ids: string[], snapshot: AssetListItem[]): Promise<void> => {
+    const found = await findAssetsInUse(supabase, ids);
+    const blocked = found.ok ? found.data : [];
+    const firstId = blocked[0]?.assetId ?? ids[0];
+    const first = snapshot.find((candidate) => candidate.id === firstId);
+    const name = first !== undefined ? displayLabel(first) : '';
+    setInUse({
+      message: assetInUseMessage(name, Math.max(0, blocked.length - 1)),
+      parent: blocked[0]?.parent ?? null,
+    });
+  }, []);
+
   // Soft-delete one asset: remove the row optimistically and roll back on
-  // failure. Resolves true on success so the viewer can close onto the new list.
-  // Delete is offered to every member, matching asset_delete's policy.
+  // failure. 'deleted' lets the viewer close onto the new list; 'in_use' closes
+  // it here and opens the in-use sheet. Delete is offered to every member,
+  // matching asset_delete's policy.
   const deleteOne = useCallback(
-    async (item: AssetListItem): Promise<boolean> => {
+    async (item: AssetListItem): Promise<AssetDeleteOutcome> => {
       const snapshot = items;
       setItems((prev) => removeAssetsById(prev, [item.id]));
       const result = await assetDelete(supabase, { p_asset_id: item.id, p_trace_id: newTrace() });
       if (!result.ok) {
         setItems(snapshot);
-        return false;
+        if (!isAssetInUseError(result.error)) return 'failed';
+        setViewer(null);
+        await showInUse([item.id], snapshot);
+        return 'in_use';
       }
-      return true;
+      void loadDeletedCount();
+      return 'deleted';
     },
-    [items, newTrace],
+    [items, newTrace, showInUse, loadDeletedCount],
   );
 
   // Soft-delete the whole selection in ONE atomic asset_delete_many call: remove
@@ -382,14 +425,16 @@ export function AssetsPage() {
     if (!result.ok) {
       setItems(snapshot);
       setBulkDeleteOpen(false);
-      push('Could not delete the files. Try again');
+      if (isAssetInUseError(result.error)) await showInUse(ids, snapshot);
+      else push('Could not delete the files. Try again');
       return;
     }
     setBulkDeleteOpen(false);
     setSelectMode(false);
     setSelected(new Set());
-    push(`Deleted ${ids.length} ${ids.length === 1 ? 'file' : 'files'}`);
-  }, [selected, items, newTrace, push]);
+    push('Moved to Recently deleted');
+    void loadDeletedCount();
+  }, [selected, items, newTrace, push, showInUse, loadDeletedCount]);
 
   // Commit one queued file to the asset-upload worker: the file part keeps its
   // ORIGINAL device name (stored as assets.filename, with its extension for type
@@ -616,6 +661,9 @@ export function AssetsPage() {
   );
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
+  // The one selected file, for the single-file wording of the bulk confirm.
+  const soleSelected =
+    selected.size === 1 ? items.find((candidate) => selected.has(candidate.id)) : undefined;
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
 
   return (
@@ -788,6 +836,21 @@ export function AssetsPage() {
         )}
       </div>
 
+      {/* Recently deleted sits under the library root, shown once it holds files. */}
+      {!searching && !selectMode && folderId === null && deletedCount > 0 ? (
+        <div className="px-4 md:px-6 pb-4">
+          <div className="rounded-xl border border-border bg-panel p-1">
+            <ActionRow
+              icon={<IconTrash size={18} />}
+              label="Recently deleted"
+              sub={recentlyDeletedSub(deletedCount)}
+              chevron
+              onClick={() => navigate('/assets/recently-deleted')}
+            />
+          </div>
+        </div>
+      ) : null}
+
       {viewer !== null && viewerItem !== undefined ? (
         <SearchWordsContext.Provider value={searchJump.words}>
           <AssetLightbox
@@ -873,10 +936,12 @@ export function AssetsPage() {
 
       {bulkDeleteOpen ? (
         <ConfirmDialog
-          title="Delete files?"
+          title={
+            soleSelected !== undefined ? `Delete ${displayLabel(soleSelected)}?` : 'Delete files?'
+          }
           message={
-            selected.size === 1
-              ? "Delete 1 file? It'll be removed from the library."
+            soleSelected !== undefined
+              ? DELETE_CONFIRM_MESSAGE
               : `Delete ${selected.size} files? They'll be removed from the library.`
           }
           confirmLabel="Delete"
@@ -909,6 +974,15 @@ export function AssetsPage() {
         onSubmit={(name) => handleRenameFolder(renameTarget!, name)}
         onToast={push}
         onRenamed={() => void loadFolders()}
+      />
+
+      <AssetInUseSheet
+        state={inUse}
+        onClose={() => setInUse(null)}
+        onOpenParent={(parent) => {
+          setInUse(null);
+          navigate(parent.href);
+        }}
       />
 
       <Toasts toasts={toasts} onDismiss={dismiss} />

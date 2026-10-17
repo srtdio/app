@@ -536,3 +536,45 @@ export function chatPlanShare(
 ): Promise<Result<ProcReturns<'chat_plan_share'>>> {
   return callProc(client, 'chat_plan_share', args);
 }
+
+// --- Workspace rules: storage, Recently deleted, delete workspace -----------
+
+export type AssetRestoreArgs = ProcArgs<'asset_restore'>;
+export function assetRestore(
+  client: Client,
+  args: AssetRestoreArgs,
+): Promise<Result<ProcReturns<'asset_restore'>>> {
+  return callProc(client, 'asset_restore', args);
+}
+
+export type AssetPurgeRequestArgs = ProcArgs<'asset_purge_request'>;
+export function assetPurgeRequest(
+  client: Client,
+  args: AssetPurgeRequestArgs,
+): Promise<Result<ProcReturns<'asset_purge_request'>>> {
+  return callProc(client, 'asset_purge_request', args);
+}
+
+export type WorkspaceDeleteArgs = ProcArgs<'workspace_delete'>;
+export function workspaceDelete(
+  client: Client,
+  args: WorkspaceDeleteArgs,
+): Promise<Result<ProcReturns<'workspace_delete'>>> {
+  return callProc(client, 'workspace_delete', args);
+}
+
+export type WorkspaceStorageArgs = ProcArgs<'workspace_storage'>;
+export function workspaceStorage(
+  client: Client,
+  args: WorkspaceStorageArgs,
+): Promise<Result<ProcReturns<'workspace_storage'>>> {
+  return callProc(client, 'workspace_storage', args);
+}
+
+export type WorkspaceBytesUsedArgs = ProcArgs<'workspace_bytes_used'>;
+export function workspaceBytesUsed(
+  client: Client,
+  args: WorkspaceBytesUsedArgs,
+): Promise<Result<ProcReturns<'workspace_bytes_used'>>> {
+  return callProc(client, 'workspace_bytes_used', args);
+}

@@ -1,11 +1,15 @@
 // Calls and copy for the Settings > Workspace tab. The three procs used here
 // (workspace_update, workspace_client_domain_add/remove) have no @srtdio/rpc
 // wrapper, so they are called directly with the args object passed through as
-// the wrappers do (p_trace_id included). Each proc raises its domain code as the
-// error message; the helpers below turn those codes into user-facing copy.
+// the wrappers do (p_trace_id included); workspace_delete has its wrapper.
+// Each proc raises its domain code as the error message;
+// the helpers below turn those codes into user-facing copy.
 
 import type { Client, DomainError, Result } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
+import { clearOpenCache } from '@/lib/chat/open-cache';
+import { pruneDrafts } from '@/lib/chat/drafts';
+import { writePersistedOutbox, type OutboxStorage } from '@/lib/chat/chat-store';
 import { domainBrandWord } from './members-data';
 
 /**
@@ -137,4 +141,52 @@ export function timezoneOptions(current: string): string[] {
   const zones =
     typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
   return zones.includes(current) || current === '' ? [...zones] : [current, ...zones];
+}
+
+/** What a non-owner sees in place of Delete workspace. */
+export const DELETE_OWNER_ONLY_LINE = 'Only the owner can delete this workspace.';
+
+export function deleteWorkspaceTitle(name: string): string {
+  return `Delete ${name} for good?`;
+}
+
+export function deleteWorkspaceBody(name: string): string {
+  return `Every post, file, chat, brief and approval in ${name} is deleted now. Nothing is saved, there is no Recently deleted for a workspace, and this can't be undone. Members lose access immediately.`;
+}
+
+export function deleteWorkspaceHint(name: string): string {
+  return `Type ${name} to confirm`;
+}
+
+/** Delete permanently is enabled only on an exact match of the brand name. */
+export function canConfirmWorkspaceDelete(typed: string, name: string): boolean {
+  return typed === name;
+}
+
+export function workspaceDeletedToast(name: string): string {
+  return `${name} deleted for good`;
+}
+
+/** Copy for a failed workspace_delete, shown inline in the sheet. */
+export function workspaceDeleteErrorMessage(code: string): string {
+  return code === 'owner_only' ? DELETE_OWNER_ONLY_LINE : "Couldn't delete. Try again.";
+}
+
+function localStorageOrNull(): OutboxStorage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Forget a deleted workspace on this device: the remembered chats and their
+ * stashed reads, its chat drafts and its slot of the pending outbox. Its chat
+ * connection closes on its own once it is no longer the active workspace.
+ */
+export function clearDeletedWorkspaceData(workspaceId: string, userId: string): void {
+  clearOpenCache();
+  pruneDrafts(workspaceId, new Set());
+  writePersistedOutbox(localStorageOrNull(), { workspaceId, userId }, {});
 }

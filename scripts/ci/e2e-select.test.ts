@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { AREAS } from './e2e-areas.ts';
 import { REPO_ROOT, buildGraph, checkSpecCoverage, select, type Graph } from './e2e-select.ts';
 
-const HOME = ['e2e/tests/home-pages.spec.ts'];
+const HOME = ['e2e/tests/demo-booking.spec.ts', 'e2e/tests/home-pages.spec.ts'];
 const isChat = (s: string): boolean => s.startsWith('e2e/tests/chat-');
 
 describe('e2e-select', () => {

@@ -1,6 +1,8 @@
 // Resumable uploads for the asset-upload Worker: R2 multipart through the
 // Worker, then the assembled bytes run the same upload pipeline as a direct
-// POST, so the 100 MB cap and every file-type rule stay where they are.
+// POST, so the 100 MB cap and every file-type rule stay where they are. The
+// workspace storage cap runs at create (declared size) and again at complete
+// (the real assembled size) before the parts are assembled.
 //
 // Stateless by design (no table holds upload sessions): the staging object key
 // carries the uploader's user id, `_uploads/{user_id}/{uuid}`, and every call
@@ -18,6 +20,7 @@ import {
   type UploadedPart,
 } from '@srtdio/storage';
 import { MAX_FILE_SIZE_BYTES, err, ok, type Result } from '@/server/assets';
+import { logger } from '@/server/logger';
 
 export const MULTIPART_PART_SIZE = 8 * 1024 * 1024;
 
@@ -34,7 +37,9 @@ export type MultipartErrorCode =
   | 'not_found'
   | 'file_too_large'
   | 'empty_file'
-  | 'unsupported_mime';
+  | 'unsupported_mime'
+  | 'workspace_full'
+  | 'usage_unavailable';
 
 export interface MultipartError {
   code: MultipartErrorCode;
@@ -47,6 +52,12 @@ export interface MultipartDeps {
   bucketFor(workspaceId: string): Promise<string>;
   /** Fresh id for a staging key; crypto.randomUUID in the Worker. */
   newId(): string;
+  /** The workspace storage cap (checkWorkspaceCap in the Worker). */
+  checkCap(input: {
+    workspaceId: string;
+    addBytes: number;
+    traceId: string;
+  }): Promise<Result<null, MultipartError>>;
 }
 
 /** The staging key for one upload by one user. */
@@ -112,6 +123,12 @@ export async function createUpload(
   if (!isAllowedMime(input.contentType)) {
     return err({ code: 'unsupported_mime', message: 'This file type is not supported.' });
   }
+  const cap = await deps.checkCap({
+    workspaceId: input.workspaceId,
+    addBytes: input.size,
+    traceId: input.traceId,
+  });
+  if (!cap.ok) return cap;
   const bucket = await deps.bucketFor(input.workspaceId);
   await deps.storage.ensureBucket(bucket, input.traceId);
   const key = stagingKey(input.userId, deps.newId());
@@ -235,10 +252,34 @@ export function validateParts(parts: readonly UploadedPart[]): Result<null, Mult
   return ok(null);
 }
 
+/** Drop a refused upload's parts and staging object. Best effort, never throws. */
+async function discardStaged(deps: MultipartDeps, bucket: string, input: Target): Promise<void> {
+  try {
+    await deps.storage.abortMultipartUpload({
+      bucket,
+      key: input.key,
+      uploadId: input.uploadId,
+      traceId: input.traceId,
+    });
+  } catch (error) {
+    logger.error('multipart abort after refusal failed', { key: input.key, error: String(error) });
+  }
+  try {
+    await deps.storage.deleteObject(bucket, input.key, input.traceId);
+  } catch (error) {
+    logger.error('multipart staging delete after refusal failed', {
+      key: input.key,
+      error: String(error),
+    });
+  }
+}
+
 /**
  * Assemble the parts and read the whole file back for the pipeline. A retried
  * complete (the first one assembled the object but its response was lost)
  * finds no upload and reads the already-assembled staging object instead.
+ * The workspace cap runs on the real size before assembly (or, on a retry, on
+ * the assembled object); a refused upload is aborted and its staging removed.
  */
 export async function completeUpload(
   deps: MultipartDeps,
@@ -247,6 +288,15 @@ export async function completeUpload(
   const checked = checkKey(input);
   if (!checked.ok) return checked;
   const bucket = await deps.bucketFor(input.workspaceId);
+  const fits = async (addBytes: number): Promise<Result<null, MultipartError>> => {
+    const cap = await deps.checkCap({
+      workspaceId: input.workspaceId,
+      addBytes,
+      traceId: input.traceId,
+    });
+    if (!cap.ok) await discardStaged(deps, bucket, input);
+    return cap;
+  };
   const parts = await deps.storage.listParts({
     bucket,
     key: input.key,
@@ -256,6 +306,8 @@ export async function completeUpload(
   if (parts !== null) {
     const valid = validateParts(parts);
     if (!valid.ok) return valid;
+    const cap = await fits(parts.reduce((total, part) => total + part.size, 0));
+    if (!cap.ok) return cap;
     await deps.storage.completeMultipartUpload({
       bucket,
       key: input.key,
@@ -271,6 +323,10 @@ export async function completeUpload(
   if (bytes.byteLength > MAX_FILE_SIZE_BYTES) {
     await deps.storage.deleteObject(bucket, input.key, input.traceId);
     return err({ code: 'file_too_large', message: `File exceeds ${MAX_FILE_SIZE_BYTES} bytes.` });
+  }
+  if (parts === null) {
+    const cap = await fits(bytes.byteLength);
+    if (!cap.ok) return cap;
   }
   return ok({ bucket, bytes });
 }

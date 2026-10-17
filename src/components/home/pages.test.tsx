@@ -5,7 +5,6 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEMO_NOTICE } from './demo';
 import DemoPage from './DemoPage';
 import { FEATURES, FEATURE_KEYS, featureFromHash, featureId } from './features';
 import { isHomeBundlePath } from './guest-path';
@@ -15,6 +14,14 @@ import HomePage from './HomePage';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // jsdom has no IntersectionObserver; the clips never mount without a media base anyway.
+const send = vi.hoisted(() => ({
+  fetch: vi.fn<(url: string, init: RequestInit) => Promise<Response>>(),
+}));
+vi.mock('@/lib/fetch', () => ({ fetchWithTrace: send.fetch }));
+vi.mock('@/lib/env', () => ({
+  env: { VITE_SUPABASE_URL: 'https://db.test/', VITE_SUPABASE_PUBLISHABLE_KEY: 'publishable-key' },
+}));
+
 vi.mock('./media', () => ({
   HOME_MEDIA_BASE: null,
   clipFor: () => null,
@@ -158,18 +165,7 @@ describe('/demo', () => {
     expect(document.activeElement?.id).toBe('demo-name');
   });
 
-  it('a valid submit sends nothing, stores nothing, logs nothing, and shows the notice', async () => {
-    const fetchSpy = vi.fn();
-    const beacon = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
-    vi.stubGlobal('navigator', { ...navigator, sendBeacon: beacon });
-    const xhrOpen = vi.spyOn(XMLHttpRequest.prototype, 'open');
-    const setItem = vi.spyOn(Storage.prototype, 'setItem');
-    const logs = (['log', 'info', 'warn', 'error', 'debug'] as const).map((m) =>
-      vi.spyOn(console, m),
-    );
-
-    const host = await mountDemo();
+  async function fillValid(host: HTMLElement): Promise<HTMLInputElement> {
     const input = (id: string): HTMLInputElement =>
       host.querySelector<HTMLInputElement>(`#${id}`) as HTMLInputElement;
     await act(async () => {
@@ -189,21 +185,66 @@ describe('/demo', () => {
     expect(host.querySelector('[data-demo-summary]')?.textContent).toMatch(
       /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, 11:00 am IST · 30 min$/,
     );
+    return input('demo-name');
+  }
+
+  it('a valid submit posts the request and shows Booked in place of the form', async () => {
+    send.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const host = await mountDemo();
+    await fillValid(host);
+    const summary = host.querySelector('[data-demo-summary]')?.textContent ?? '';
+    const shown = summary.slice(0, summary.indexOf(','));
     await act(async () => {
       host.querySelector('form')?.requestSubmit();
     });
 
-    expect(host.querySelector('[role="status"].notice')?.textContent).toBe(DEMO_NOTICE);
-    expect(host.querySelectorAll('.err')).toHaveLength(0);
-    // The form stays, filled in; never a "booked" message.
+    expect(send.fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = send.fetch.mock.calls[0] ?? [];
+    expect(url).toBe('https://db.test/functions/v1/demo-request-send');
+    expect(new Headers(init?.headers).get('apikey')).toBe('publishable-key');
+    const body = JSON.parse(String(init?.body)) as Record<string, string>;
+    expect(body).toMatchObject({
+      name: 'Asha',
+      email: 'you@agency.com',
+      mobile: '9876543210',
+      slot: '11:00 am',
+      website: '',
+    });
+    expect(body.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    expect(host.querySelector('form')).toBeNull();
+    const booked = host.querySelector('[data-demo-booked]');
+    expect(booked?.querySelector('h2')?.textContent).toBe('Booked');
+    expect(booked?.querySelector('p')?.textContent).toBe(
+      `${shown} · 11:00 am IST. The team sends a Google Meet link to your email before the call.`,
+    );
+    expect(booked?.querySelector('a')?.getAttribute('href')).toBe('/');
+    expect(booked?.querySelector('a')?.textContent).toBe('Back to home');
+    expect(host.textContent).not.toMatch(/opens soon/i);
+  });
+
+  it('a failed send keeps the form, shows the error and re-enables the button', async () => {
+    send.fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'send_failed' } }), { status: 502 }),
+    );
+    const host = await mountDemo();
+    const name = await fillValid(host);
+    await act(async () => {
+      host.querySelector('form')?.requestSubmit();
+    });
+    expect(host.querySelector('[role="alert"].err')?.textContent).toBe("Couldn't send. Try again.");
     expect(host.querySelector('form')).not.toBeNull();
-    expect(input('demo-name').value).toBe('Asha');
-    expect(host.textContent).not.toMatch(/booked|see you/i);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(beacon).not.toHaveBeenCalled();
-    expect(xhrOpen).not.toHaveBeenCalled();
-    expect(setItem).not.toHaveBeenCalled();
-    for (const log of logs) expect(log).not.toHaveBeenCalled();
+    expect(name.value).toBe('Asha');
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+    expect(host.textContent).not.toMatch(/booked/i);
+  });
+
+  it('the honeypot is hidden from people and sent as website', async () => {
+    const host = await mountDemo();
+    const trap = host.querySelector<HTMLInputElement>('input[name="website"]');
+    expect(trap?.getAttribute('aria-hidden')).toBe('true');
+    expect(trap?.tabIndex).toBe(-1);
+    expect(trap?.getAttribute('autocomplete')).toBe('off');
   });
 
   it('slots wait for a day; weekends and today are not pickable', async () => {

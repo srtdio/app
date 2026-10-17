@@ -25,6 +25,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, Result } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
+import { env } from '@/lib/env';
+import { fetchWithTrace } from '@/lib/fetch';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
 import { newMessageId } from '@/lib/chat/message-id';
@@ -86,7 +88,13 @@ import {
 import { LIVE_PUBLISH_TIMEOUT_MS, publishWithTimeout } from '@/lib/chat/send-flow';
 import { forwardRecordInput, forwardableInOrder, runForward } from '@/lib/chat/forward';
 import { withLateRead, type ChannelSummary } from '@/lib/chat-reads';
-import { runDelete, runEdit } from '@/lib/chat/delete-flow';
+import {
+  attachmentAssetIds,
+  purgeChatFiles,
+  runDelete,
+  runEdit,
+  type PurgeChatOutcome,
+} from '@/lib/chat/delete-flow';
 import { findInOlderPages, type FindOlderOutcome } from '@/lib/chat/marks';
 import { createInFlightGuard, recordThenSignal } from '@/lib/chat/thread-actions';
 import {
@@ -254,11 +262,15 @@ export interface UseChatThread {
    * chunks turn into tombstones at once and are signalled live; the first
    * failing chunk stops the run. A failure returns the user copy
    * (deleteOutcomeCopy: "Deleted N of M ..." or the mapped proc error, never
-   * raw text) and the ids that were deleted.
+   * raw text) and the ids that were deleted. Messages with files: their asset
+   * ids are read before the delete and sent to POST /purge-chat once it is
+   * recorded (a failed purge never undoes it); ok then carries the toast.
    */
   deleteMessages: (
     messageIds: readonly string[],
-  ) => Promise<{ ok: true } | { ok: false; message: string; deleted: readonly string[] }>;
+  ) => Promise<
+    { ok: true; toast?: string } | { ok: false; message: string; deleted: readonly string[] }
+  >;
   /**
    * Edit the body of an own message: recorded first, then the bubble shows the
    * returned row and peers are signalled live. A failure returns the user copy
@@ -642,6 +654,31 @@ function asSignalConnection(client: ChatConnection): TypingConnection {
   return client as TypingConnection;
 }
 
+/**
+ * POST /purge-chat for a delete's files on the asset-upload Worker, with the
+ * session's bearer token and a fresh trace. Missing config or session is a
+ * failed purge (the nightly job sweeps the rows the delete marked).
+ */
+async function purgeChat(
+  workspaceId: string | null,
+  assetIds: string[],
+): Promise<PurgeChatOutcome> {
+  const endpoint = env.VITE_ASSET_UPLOAD_URL;
+  if (endpoint === undefined || endpoint === '' || workspaceId === null) {
+    return { ok: false, error: 'purge-chat not configured' };
+  }
+  const token = (await supabase.auth.getSession()).data.session?.access_token ?? '';
+  if (token === '') return { ok: false, error: 'no session' };
+  const traceId = generateTraceId();
+  return purgeChatFiles({
+    endpoint,
+    token,
+    workspaceId,
+    assetIds,
+    fetcher: (input, init) => fetchWithTrace(input, init, traceId),
+  });
+}
+
 export function useChatThread(params: {
   client: ChatConnection | null;
   status: ChatStatus;
@@ -689,6 +726,7 @@ export function useChatThread(params: {
   const verifier = params.verifier ?? liveVerifierFor(db);
   const outbox = params.outbox;
   const memory = params.memory ?? openCache;
+  const workspaceId = params.workspaceId ?? null;
   const memoryKey = useMemo(
     () => chatKey(currentUserId, params.workspaceId ?? null, channelId),
     [currentUserId, params.workspaceId, channelId],
@@ -1799,10 +1837,15 @@ export function useChatThread(params: {
               : undefined,
           onSignalFailed: (error) =>
             logger.warn('chat: delete signal failed', { trace_id: traceId, error: String(error) }),
+          collectAssetIds: (ids) => attachmentAssetIds(messagesRef.current, ids),
+          purgeChat: (assetIds) => purgeChat(workspaceId, assetIds),
+          onPurgeFailed: (error) =>
+            logger.warn('chat: purge-chat failed', { trace_id: traceId, error }),
         },
         { channelId: forChannel, messageIds, traceId },
       );
-      if (result.ok) return { ok: true };
+      if (result.ok)
+        return result.toast !== undefined ? { ok: true, toast: result.toast } : { ok: true };
       logger.warn('chat: delete failed', {
         trace_id: traceId,
         deleted: result.deleted.length,
@@ -1814,7 +1857,7 @@ export function useChatThread(params: {
         deleted: result.deleted,
       };
     },
-    [db, reportDeleted],
+    [db, reportDeleted, workspaceId],
   );
 
   const editMessage = useCallback<UseChatThread['editMessage']>(

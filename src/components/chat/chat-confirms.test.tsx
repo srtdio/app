@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DELETE_CHATS_MESSAGE, deleteChatsConfirm } from '@/components/chat/ChannelList';
 import { deleteMessagesConfirm, deleteOneConfirm } from '@/components/chat/SelectionBar';
 import type { ChannelSummary } from '@/lib/chat-reads';
+import { deleteConfirmCopy } from '@/lib/chat/delete-flow';
 
 type DialogProps = {
   title: string;
@@ -110,6 +111,43 @@ describe('delete messages confirm', () => {
     expect(onConfirm).toHaveBeenCalledOnce();
     props.onCancel();
     expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('a selection with files takes the files copy and "Delete for everyone"', () => {
+    const copy = deleteConfirmCopy([
+      { attachments: [{ assetId: 'a1', name: 'brief.pdf', mime: 'application/pdf' }] },
+    ]);
+    const props = dialog(
+      deleteMessagesConfirm({
+        open: true,
+        count: 1,
+        copy,
+        busy: false,
+        onCancel: vi.fn(),
+        onConfirm: vi.fn(),
+      }),
+    );
+    expect(props).toMatchObject({
+      title: 'Delete this message?',
+      message:
+        "brief.pdf is permanently deleted for privacy. Files shared in chat never go to Recently deleted and can't be restored.",
+      confirmLabel: 'Delete for everyone',
+      destructive: true,
+    });
+  });
+
+  it('text-only (null copy) keeps the existing copy', () => {
+    const props = dialog(
+      deleteMessagesConfirm({
+        open: true,
+        count: 2,
+        copy: deleteConfirmCopy([{ attachments: [] }, { attachments: [] }]),
+        busy: false,
+        onCancel: vi.fn(),
+        onConfirm: vi.fn(),
+      }),
+    );
+    expect(props).toMatchObject({ title: 'Delete 2 messages?', confirmLabel: 'Delete' });
   });
 });
 

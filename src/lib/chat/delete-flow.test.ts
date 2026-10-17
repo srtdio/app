@@ -7,7 +7,14 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
-import { runDelete, runEdit } from '@/lib/chat/delete-flow';
+import {
+  attachmentAssetIds,
+  deleteConfirmCopy,
+  FILES_DELETED_TOAST,
+  purgeChatFiles,
+  runDelete,
+  runEdit,
+} from '@/lib/chat/delete-flow';
 import {
   applyRevalidatedRows,
   editChannelType,
@@ -86,6 +93,172 @@ describe('runDelete', () => {
     await Promise.resolve();
     expect(result).toEqual({ ok: true });
     await vi.waitFor(() => expect(onSignalFailed).toHaveBeenCalledOnce());
+  });
+});
+
+describe('runDelete with files', () => {
+  it('collects the asset ids before chat_message_delete and purges them only after it succeeds', async () => {
+    const order: string[] = [];
+    const rpc = vi.fn(() => {
+      order.push('record');
+      return Promise.resolve({ data: null, error: null });
+    });
+    const collectAssetIds = vi.fn(() => {
+      order.push('collect');
+      return ['a1', 'a2'];
+    });
+    const purgeChat = vi.fn(() => {
+      order.push('purge');
+      return Promise.resolve({ ok: true as const, data: { removed: 2, freedBytes: 10 } });
+    });
+    const result = await runDelete(
+      {
+        client: { rpc } as unknown as Client,
+        markDeletedLocal: vi.fn(),
+        signal: undefined,
+        onSignalFailed: vi.fn(),
+        collectAssetIds,
+        purgeChat,
+      },
+      { channelId: 'c', messageIds: ['m1'], traceId: 't' },
+    );
+    expect(order).toEqual(['collect', 'record', 'purge']);
+    expect(collectAssetIds).toHaveBeenCalledWith(['m1']);
+    expect(purgeChat).toHaveBeenCalledWith(['a1', 'a2']);
+    expect(result).toEqual({ ok: true, toast: FILES_DELETED_TOAST });
+    expect(FILES_DELETED_TOAST).toBe('Deleted. File removed for good.');
+  });
+
+  it('never purges when the delete fails', async () => {
+    const { client: db } = client(true);
+    const purgeChat = vi.fn();
+    const result = await runDelete(
+      {
+        client: db,
+        markDeletedLocal: vi.fn(),
+        signal: undefined,
+        onSignalFailed: vi.fn(),
+        collectAssetIds: () => ['a1'],
+        purgeChat,
+      },
+      { channelId: 'c', messageIds: ['m1'], traceId: 't' },
+    );
+    expect(result.ok).toBe(false);
+    expect(purgeChat).not.toHaveBeenCalled();
+  });
+
+  it('a failed purge keeps the delete and still toasts', async () => {
+    const { client: db } = client();
+    const onPurgeFailed = vi.fn();
+    const result = await runDelete(
+      {
+        client: db,
+        markDeletedLocal: vi.fn(),
+        signal: undefined,
+        onSignalFailed: vi.fn(),
+        collectAssetIds: () => ['a1'],
+        purgeChat: () => Promise.resolve({ ok: false as const, error: 'purge-chat 500' }),
+        onPurgeFailed,
+      },
+      { channelId: 'c', messageIds: ['m1'], traceId: 't' },
+    );
+    expect(result).toEqual({ ok: true, toast: FILES_DELETED_TOAST });
+    expect(onPurgeFailed).toHaveBeenCalledWith('purge-chat 500');
+  });
+
+  it('text-only messages: no purge, no toast, the same result as before', async () => {
+    const { client: db, rpc } = client();
+    const purgeChat = vi.fn();
+    const result = await runDelete(
+      {
+        client: db,
+        markDeletedLocal: vi.fn(),
+        signal: undefined,
+        onSignalFailed: vi.fn(),
+        collectAssetIds: () => [],
+        purgeChat,
+      },
+      { channelId: 'c', messageIds: ['m1'], traceId: 't' },
+    );
+    expect(result).toEqual({ ok: true });
+    expect(rpc).toHaveBeenCalledOnce();
+    expect(purgeChat).not.toHaveBeenCalled();
+  });
+});
+
+describe('delete confirm copy and asset ids', () => {
+  const file = (assetId: string, name: string) => ({ assetId, name, mime: 'image/png' });
+
+  it("is null for text-only messages (today's confirm stays)", () => {
+    expect(deleteConfirmCopy([{ attachments: [] }, { attachments: [] }])).toBeNull();
+  });
+
+  it('names the first file for one message', () => {
+    expect(
+      deleteConfirmCopy([{ attachments: [file('a1', 'brief.pdf'), file('a2', 'x.png')] }]),
+    ).toEqual({
+      title: 'Delete this message?',
+      message:
+        "brief.pdf is permanently deleted for privacy. Files shared in chat never go to Recently deleted and can't be restored.",
+      confirmLabel: 'Delete for everyone',
+    });
+  });
+
+  it('uses the plural copy for several messages', () => {
+    expect(
+      deleteConfirmCopy([{ attachments: [] }, { attachments: [file('a1', 'brief.pdf')] }]),
+    ).toEqual({
+      title: 'Delete these messages?',
+      message:
+        "Files in these messages are permanently deleted for privacy. Files shared in chat never go to Recently deleted and can't be restored.",
+      confirmLabel: 'Delete for everyone',
+    });
+  });
+
+  it('collects recorded ids of the chosen messages only, deduped', () => {
+    const messages = [
+      { id: 'm1', attachments: [file('a1', 'a'), file('', 'uploading')] },
+      { id: 'm2', attachments: [file('a1', 'a'), file('a2', 'b')] },
+      { id: 'm3', attachments: [file('a3', 'c')] },
+    ];
+    expect(attachmentAssetIds(messages, ['m1', 'm2'])).toEqual(['a1', 'a2']);
+  });
+});
+
+describe('purgeChatFiles', () => {
+  it('POSTs workspace_id and asset_ids to /purge-chat with the bearer token', async () => {
+    const fetcher = vi.fn(() => Promise.resolve(Response.json({ removed: 1, freedBytes: 5 })));
+    const result = await purgeChatFiles({
+      endpoint: 'https://upload.test/',
+      token: 'tok',
+      workspaceId: 'ws',
+      assetIds: ['a1'],
+      fetcher,
+    });
+    expect(result).toEqual({ ok: true, data: { removed: 1, freedBytes: 5 } });
+    const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://upload.test/purge-chat');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init.body as string)).toEqual({ workspace_id: 'ws', asset_ids: ['a1'] });
+  });
+
+  it('never throws: a transport failure or a non-OK status is ok: false', async () => {
+    const base = {
+      endpoint: 'https://upload.test',
+      token: 't',
+      workspaceId: 'ws',
+      assetIds: ['a'],
+    };
+    expect(
+      (await purgeChatFiles({ ...base, fetcher: () => Promise.reject(new Error('down')) })).ok,
+    ).toBe(false);
+    expect(
+      await purgeChatFiles({
+        ...base,
+        fetcher: () => Promise.resolve(new Response('{}', { status: 403 })),
+      }),
+    ).toEqual({ ok: false, error: 'purge-chat 403' });
   });
 });
 
