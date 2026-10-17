@@ -966,18 +966,14 @@ function PresetFields(props: {
       </div>
 
       <Field label="Photo or video" required={formatNeedsMedia(form.format)}>
-        <div data-induction={INDUCTION_KEYS.postSheetMedia}>
-          <PresetMediaField
-            workspaceId={props.workspaceId}
-            value={form.attachments}
-            onChange={props.onAttachmentsChange}
-            required={formatNeedsMedia(form.format)}
-            onBusyChange={props.onMediaBusyChange}
-            frame={
-              props.platform !== null ? { platform: props.platform, format: form.format } : null
-            }
-          />
-        </div>
+        <PresetMediaField
+          workspaceId={props.workspaceId}
+          value={form.attachments}
+          onChange={props.onAttachmentsChange}
+          required={formatNeedsMedia(form.format)}
+          onBusyChange={props.onMediaBusyChange}
+          frame={props.platform !== null ? { platform: props.platform, format: form.format } : null}
+        />
       </Field>
 
       {preset.share === 'no_group' ? (
