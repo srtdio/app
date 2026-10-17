@@ -254,7 +254,7 @@ describe('invited welcome', () => {
     invitedAs({ role: 'agency' });
     await renderInvitee();
     expect(document.querySelector('h1')?.textContent).toBe('Welcome to Kite');
-    expect(document.body.textContent).not.toContain('Who are you here as?');
+    expect(document.body.textContent).not.toContain('Your role');
     expect(document.querySelector('input[type="password"]')).toBeNull();
   });
 
@@ -336,7 +336,7 @@ describe('invited welcome', () => {
     await click(button('Continue'));
     expect(stepLabel()).toBe('Step 2 of 2');
     // An approver invitee picks from the approver roles: the side came from the membership.
-    await pick('Your role', 'Brand manager');
+    await pick('Job title', 'Brand manager');
     await click(button('Continue'));
     const payload = mockSave.mock.calls[0]?.[1]?.p_payload as Record<string, unknown>;
     expect(payload.designation).toBe('Brand manager');
@@ -346,9 +346,9 @@ describe('invited welcome', () => {
 });
 
 describe('pre-app screens', () => {
-  it('opens a self sign-up on Who are you here as?, Creator and Approver', async () => {
+  it('opens a self sign-up on Your role, Creator and Approver', async () => {
     await render({});
-    expect(document.body.textContent).toContain('Who are you here as?');
+    expect(document.body.textContent).toContain('Your role');
     expect(document.body.textContent).toContain('We make the posts');
     expect(document.body.textContent).toContain('We approve them');
     expect(button('Continue').disabled).toBe(true);
@@ -376,7 +376,7 @@ describe('pre-app screens', () => {
     expect(document.body.textContent).not.toContain('How did you hear');
     expect(document.body.textContent).not.toContain('age range');
     expect(document.querySelector('[aria-label="Your age range"]')).toBeNull();
-    await pick('Your role', 'Something else');
+    await pick('Job title', 'Something else');
     expect(button('Continue').disabled).toBe(true);
     await type(document.querySelector<HTMLInputElement>('#ob-role-other')!, 'Community lead');
     expect(button('Continue').disabled).toBe(false);
@@ -394,7 +394,7 @@ describe('pre-app screens', () => {
     await toNameScreen('Approver');
     await addPhoto();
     await click(button('Continue'));
-    await pick('Your role', 'Brand manager');
+    await pick('Job title', 'Brand manager');
     await click(button('Continue'));
     expect(onStep).toHaveBeenCalledWith('approver_brand');
     expect(document.body.textContent).toContain('Who makes your posts?');
