@@ -72,6 +72,8 @@ const CHAT_SPECS = [
   'induction',
   // Link cards in a chat, then on a post's comments.
   'link-previews',
+  // Delete a message with a file (purge-chat), then Settings > Delete workspace.
+  'workspace-delete-chat-purge',
 ];
 
 export const AREAS: Area[] = [
@@ -139,16 +141,25 @@ export const AREAS: Area[] = [
   },
   {
     name: 'assets',
-    entries: ['src/components/pages/AssetsPage.tsx'],
+    entries: [
+      'src/components/pages/AssetsPage.tsx',
+      'src/components/pages/RecentlyDeletedPage.tsx',
+    ],
     routed: true,
-    specs: ['assets-type-tabs', 'files-open-in-viewer', 'induction', 'pdf-opens-instantly'].map(t),
+    specs: [
+      'assets-type-tabs',
+      'assets-recently-deleted',
+      'files-open-in-viewer',
+      'induction',
+      'pdf-opens-instantly',
+    ].map(t),
   },
   {
     // The induction's approver gate lands on /settings?panel=members.
     name: 'settings',
     entries: ['src/components/pages/SettingsPage.tsx'],
     routed: true,
-    specs: ['induction'].map(t),
+    specs: ['induction', 'workspace-storage', 'workspace-delete-chat-purge'].map(t),
   },
   {
     // Routes no spec opens (no Cockpit page exists in src yet).
@@ -171,7 +182,7 @@ export const AREAS: Area[] = [
     entries: ['src/components/home/HomeEntry.tsx'],
     routed: true,
     ownedDirs: ['src/components/home/'],
-    specs: ['home-pages'].map(t),
+    specs: ['home-pages', 'demo-booking'].map(t),
   },
   {
     // Mounted by AppLayout on every route, so the shell rule runs everything.
