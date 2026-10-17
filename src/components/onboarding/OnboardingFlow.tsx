@@ -893,7 +893,7 @@ function Primary({
       data-induction={anchor}
       disabled={disabled}
       onClick={onClick}
-      className="h-[50px] w-full rounded-lg bg-fg text-[15px] font-semibold text-bg hover:opacity-90 disabled:opacity-35"
+      className="h-[50px] w-full rounded-lg bg-accent text-[15px] font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-35"
     >
       {children}
     </button>
