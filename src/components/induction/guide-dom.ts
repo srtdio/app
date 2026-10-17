@@ -115,3 +115,15 @@ export function fieldValue(field: HTMLElement): string {
   }
   return (field.textContent ?? '').trim();
 }
+
+const SUBMIT = 'button[type="submit"], button:not([type]), input[type="submit"]';
+
+/**
+ * The form a boxed control works with: its closest form when it is that
+ * form's submit button, or when the step is a gate (its fields must take taps).
+ */
+export function formOf(el: HTMLElement, gate: boolean): HTMLElement | undefined {
+  const form = el.closest('form');
+  if (form === null) return undefined;
+  return gate || el.matches(SUBMIT) ? form : undefined;
+}

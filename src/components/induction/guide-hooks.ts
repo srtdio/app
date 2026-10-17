@@ -25,12 +25,16 @@ export interface CompletionInput {
   el: HTMLElement | undefined;
   /** The next step's control while it is on screen. */
   nextEl: HTMLElement | undefined;
+  /** Where the tap moves on without the next control: no next step, or the next step lives on another place. */
+  nextElsewhere: boolean;
+  /** The current location (pathname + search); a change after a tap confirms it. */
+  where: string;
 }
 
 /** How long after a tap the DOM may confirm it; after that the step stays. */
 export const TAP_CONFIRM_MS = 4000;
 
-interface Seen {
+export interface Seen {
   key: string;
   done: boolean;
   /** This step's own control has been on screen at least once. */
@@ -39,31 +43,35 @@ interface Seen {
   nextAbsent: boolean;
   /** When the control was tapped (0: no tap waiting for confirmation). */
   tappedAt: number;
+  /** The location at the tap. */
+  tappedWhere: string;
 }
 
-function freshSeen(key: string): Seen {
-  return { key, done: false, found: false, nextAbsent: false, tappedAt: 0 };
+export function freshSeen(key: string): Seen {
+  return { key, done: false, found: false, nextAbsent: false, tappedAt: 0, tappedWhere: '' };
+}
+
+/** Whether a pending tap is confirmed: the next control on screen, no next step here, or the location moved. */
+function tapConfirmed(now: Seen, input: CompletionInput): boolean {
+  if (now.tappedAt === 0) return false;
+  if (performance.now() - now.tappedAt > TAP_CONFIRM_MS) {
+    now.tappedAt = 0;
+    return false;
+  }
+  return input.nextEl !== undefined || input.nextElsewhere || input.where !== now.tappedWhere;
 }
 
 /** One DOM read of a step: whether it is finished now. Mutates the seen record. */
-function domConfirms(now: Seen, input: CompletionInput): boolean {
+export function domConfirms(now: Seen, input: CompletionInput): boolean {
   const { el, nextEl } = input;
   if (el !== undefined) now.found = true;
   else if (now.found) return true;
   // Until this step's own control has shown, the next control appearing
   // means nothing: a sheet mounts its fields a frame after it opens.
   if (!now.found) return false;
-  if (nextEl === undefined) {
-    now.nextAbsent = true;
-    return false;
-  }
-  if (now.nextAbsent) return true;
-  if (now.tappedAt === 0) return false;
-  if (performance.now() - now.tappedAt > TAP_CONFIRM_MS) {
-    now.tappedAt = 0;
-    return false;
-  }
-  return true;
+  if (nextEl === undefined) now.nextAbsent = true;
+  else if (now.nextAbsent) return true;
+  return tapConfirmed(now, input);
 }
 
 /**
@@ -77,6 +85,8 @@ function domConfirms(now: Seen, input: CompletionInput): boolean {
  */
 export function useStepCompletion(input: CompletionInput, onComplete: () => void): void {
   const { stepKey, enabled, el, nextEl } = input;
+  const live = useRef(input);
+  live.current = input;
   const [, setTick] = useState(0);
   const latest = useRef(onComplete);
   latest.current = onComplete;
@@ -91,7 +101,7 @@ export function useStepCompletion(input: CompletionInput, onComplete: () => void
   // DOM changes: read on every render (the live tick re-renders on any change).
   useEffect(() => {
     if (!enabled || seen.current.done) return;
-    if (domConfirms(seen.current, { stepKey, enabled, el, nextEl })) complete.current();
+    if (domConfirms(seen.current, live.current)) complete.current();
   });
 
   useEffect(() => {
@@ -105,6 +115,7 @@ export function useStepCompletion(input: CompletionInput, onComplete: () => void
       const node = targetNode(event);
       if (field === undefined && contains(el, node)) {
         seen.current.tappedAt = performance.now();
+        seen.current.tappedWhere = live.current.where;
         later(() => setTick((t) => t + 1));
       }
       if (field !== undefined && contains(nextEl, node)) later(() => complete.current());
@@ -125,25 +136,35 @@ export function useStepCompletion(input: CompletionInput, onComplete: () => void
 const GUARDED_EVENTS = ['pointerdown', 'mousedown', 'click'] as const;
 export const NUDGE_MS = 300;
 
+/** Whether an event came from the person; injectable so tests can mark synthetic taps as theirs. */
+export const eventTrust = { isTrusted: (event: Event): boolean => event.isTrusted };
+
+/** Regions besides the control that take taps: the next control (field steps), the control's form. */
+export interface GuardAllowed {
+  next: HTMLElement | undefined;
+  form: HTMLElement | undefined;
+}
+
 /**
  * While a control is boxed, a tap anywhere else (outside the control, outside
- * the guide's own bar and cards, outside `allowed`) is swallowed in the capture
- * phase and nudges the hand and label. The control itself is never touched:
- * its own tap does the real thing. Returns the nudge count (0: no nudge yet).
+ * the guide's own bar and cards, outside the allowed regions) is swallowed in
+ * the capture phase and nudges the hand and label. The control itself is never
+ * touched: its own tap does the real thing. Programmatic events (a button
+ * clicking a hidden file input) pass. Returns the nudge count (0: none yet).
  */
-export function useTapGuard(
-  control: HTMLElement | undefined,
-  allowed: HTMLElement | undefined,
-): number {
+export function useTapGuard(control: HTMLElement | undefined, allowed: GuardAllowed): number {
   const [nudge, setNudge] = useState(0);
+  const { next, form } = allowed;
   useEffect(() => {
     if (control === undefined) return;
     const guard = (event: Event): void => {
+      if (!eventTrust.isTrusted(event)) return;
       const node = targetNode(event);
       if (
         node === undefined ||
         contains(control, node) ||
-        contains(allowed, node) ||
+        contains(next, node) ||
+        contains(form, node) ||
         inChrome(node)
       ) {
         return;
@@ -156,7 +177,7 @@ export function useTapGuard(
     return () => {
       for (const type of GUARDED_EVENTS) document.removeEventListener(type, guard, true);
     };
-  }, [control, allowed]);
+  }, [control, next, form]);
   return nudge;
 }
 

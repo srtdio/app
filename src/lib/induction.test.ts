@@ -247,7 +247,8 @@ describe('resolveGuide: gates and facts', () => {
   });
 
   it('drops steps a fact skips and moves on from a stored dropped step', () => {
-    expect(resolve({ step: 'c_brief', ...ALL_DATA }, { hasBrief: false })).toBe('intro@c_comment');
+    // A stored look-around step never brings the intro back.
+    expect(resolve({ step: 'c_brief', ...ALL_DATA }, { hasBrief: false })).toBe('c_comment');
     expect(resolve({ step: 'c_group', ...ALL_DATA }, { hasGroup: false })).toBe('c_activity');
   });
 
@@ -477,6 +478,23 @@ describe('the box', () => {
   });
 });
 
+describe('resolveGuide: the intro never returns mid-route', () => {
+  it('stays away once a look-around step was stored, even when data drops earlier ones', () => {
+    // After approval the Review steps drop: the stored step is gone, the next is now first.
+    const dropped = { step: 'c_comment', ...ALL_DATA };
+    expect(resolve(dropped, { hasBrief: false, hasOwnPost: false })).toBe('c_group');
+    expect(resolve({ step: 'c_closing', ...ALL_DATA })).toBe('closing');
+  });
+
+  it('shows for a setup step, an unknown id, nothing stored, or the intro id', () => {
+    expect(resolve({ step: 'c_team', ...ALL_DATA })).toBe('intro@c_brief');
+    expect(resolve({ step: 'a_review', ...ALL_DATA })).toBe('intro@c_brief');
+    expect(resolve({ step: 'c_intro', ...ALL_DATA })).toBe('intro@c_brief');
+    const lookAroundOnly: RouteScript = { ...SCRIPT, steps: SCRIPT.steps.slice(8) };
+    expect(shown(resolveGuide(lookAroundOnly, input({ step: null })))).toBe('intro@c_brief');
+  });
+});
+
 describe('placeLabel', () => {
   const label = { width: 180, height: 32 };
   const area = { top: 0, bottom: 760, width: 390, viewportHeight: 844 };
@@ -519,6 +537,28 @@ describe('placeLabel', () => {
     expect(overlaps({ ...p, ...label }, box)).toBe(false);
     expect(p.top + label.height).toBeLessThanOrEqual(844);
     expect(p.top).toBeGreaterThan(700 - label.height);
+  });
+
+  it('puts the label inside the bottom edge of a box spanning the viewport, clear of its centre', () => {
+    const box = boxRect({ top: 4, left: 0, width: 390, height: 830 });
+    const p = placeLabel({
+      box,
+      label,
+      area: { top: 0, bottom: 760, width: 390, viewportHeight: 844 },
+    });
+    expect(p.side).toBe('inside');
+    expect(p.top).toBeGreaterThan(box.top + box.height / 2);
+    expect(p.top + label.height).toBeLessThanOrEqual(844);
+  });
+
+  it('a box under 60% of the viewport with no room takes the side with most room', () => {
+    const box = boxRect({ top: 300, left: 0, width: 390, height: 400 });
+    const p = placeLabel({
+      box,
+      label: { width: 180, height: 320 },
+      area: { top: 0, bottom: 760, width: 390, viewportHeight: 844 },
+    });
+    expect(p.side).not.toBe('inside');
   });
 
   it('stays inside the viewport for a control at the left edge', () => {

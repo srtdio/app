@@ -196,6 +196,19 @@ function skipDone(steps: readonly Step[], at: number, input: EngineInput): numbe
 }
 
 /**
+ * Whether the intro may still show: nothing stored yet, a setup step, an
+ * unknown (old) id or the intro id itself. Never once any look-around step or
+ * the closing card was stored, even when the data later drops earlier
+ * look-around steps (an approval removes the Review chapter).
+ */
+function introDue(script: RouteScript, stored: string | null): boolean {
+  if (stored === null || stored === script.intro.id) return true;
+  if (stored === script.closing.id) return false;
+  const known = script.steps.find((step) => step.id === stored);
+  return known === undefined || known.chapter === undefined;
+}
+
+/**
  * What the guide shows for a route: the stored step (resolved as above), the
  * intro card before the first look-around step (until Start stores that step),
  * or the closing card when nothing is left. Off once done.
@@ -206,7 +219,7 @@ export function resolveGuide(script: RouteScript, input: EngineInput): Resolutio
   const at = skipDone(steps, gateOverride(steps, startIndex(script, steps, input), input), input);
   const step = steps[at];
   if (step === undefined) return { kind: 'closing', card: script.closing, steps };
-  if (at === firstLookAroundIndex(steps) && input.state.step !== step.id) {
+  if (at === firstLookAroundIndex(steps) && introDue(script, input.state.step)) {
     return { kind: 'intro', card: script.intro, steps, index: at };
   }
   return { kind: 'step', step, steps, index: at };
@@ -436,7 +449,16 @@ const LABEL_GAP = 8;
 /** A control this close to the right edge, and narrower than its label, takes the label on its left. */
 const RIGHT_EDGE_ZONE = 72;
 
-export type LabelSide = 'below' | 'above' | 'left';
+export type LabelSide = 'below' | 'above' | 'left' | 'inside';
+
+/** A box taller than this share of the viewport may take the label inside its bottom edge. */
+const TALL_BOX = 0.6;
+
+/** Inside the box's bottom edge (within the viewport), well clear of the control's centre. */
+function insideBottom(box: Rect, label: Size, viewportHeight: number): number {
+  const bottom = Math.min(box.top + box.height, viewportHeight);
+  return Math.max(bottom - LABEL_GAP - label.height, box.top + box.height / 2 + LABEL_GAP);
+}
 
 export interface LabelPlacement {
   side: LabelSide;
@@ -491,6 +513,10 @@ function placeLabelInViewport(input: {
   );
   const roomBelow = area.viewportHeight - (box.top + box.height);
   const roomAbove = box.top;
+  const need = label.height + LABEL_GAP;
+  if (roomBelow < need && roomAbove < need && box.height > area.viewportHeight * TALL_BOX) {
+    return { side: 'inside', top: insideBottom(box, label, area.viewportHeight), left };
+  }
   const below = roomBelow >= roomAbove;
   const top = below
     ? Math.min(box.top + box.height + LABEL_GAP, area.viewportHeight - label.height)

@@ -242,9 +242,9 @@ const NO_FACTS: FactsState = { workspaceId: '', key: '', facts: EMPTY_FACTS };
 
 /**
  * The workspace facts, read once per workspace, route and own post while the
- * induction runs, and again on each sorted:induction-refresh (the success
- * sites dispatch it, e.g. once the default group lands). Never on the poll or
- * a route change.
+ * induction runs, and again on each sorted:induction-refresh. While the
+ * default group is still unknown, each induction_state refetch reads again;
+ * once it is found, the poll and route changes never do.
  */
 function useGuideFacts(input: {
   active: boolean;
@@ -257,6 +257,10 @@ function useGuideFacts(input: {
   const [read, setRead] = useState<FactsState>(NO_FACTS);
   const [refreshes, setRefreshes] = useState(0);
   const key = `${workspaceId ?? ''}|${route}|${postId ?? ''}`;
+  // Until the default group is known, each induction_state refetch reads again:
+  // its chat channel can land a moment after the workspace.
+  const groupPending = read.key === key && read.facts.group === undefined;
+  const refetch = groupPending ? input.state : null;
 
   useEffect(() => {
     if (!active) return;
@@ -276,7 +280,7 @@ function useGuideFacts(input: {
     return () => {
       cancelled = true;
     };
-  }, [active, workspaceId, route, postId, key, refreshes]);
+  }, [active, workspaceId, route, postId, key, refreshes, refetch]);
 
   return read.key === key ? read : { workspaceId: '', facts: read.facts };
 }

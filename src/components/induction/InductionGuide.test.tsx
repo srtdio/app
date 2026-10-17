@@ -2,7 +2,7 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { InductionState, Rect } from '@/lib/induction';
 import { ROUTE_SCRIPTS } from '@/lib/induction-routes';
 import type { Step } from '@/lib/induction-model';
@@ -27,6 +27,7 @@ vi.mock('./induction-data', () => ({
 
 import { InductionGuide } from './InductionGuide';
 import { InductionProvider } from './InductionProvider';
+import { eventTrust } from './guide-hooks';
 import type { InductionData } from './useInductionData';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -46,7 +47,11 @@ let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 let current: InductionData | null = null;
 
+let trust: MockInstance<(event: Event) => boolean>;
+
 beforeEach(() => {
+  // jsdom marks dispatched events untrusted; the tests stand in for real taps.
+  trust = vi.spyOn(eventTrust, 'isTrusted').mockReturnValue(true);
   host = document.createElement('div');
   document.body.appendChild(host);
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
@@ -670,7 +675,10 @@ describe('fix round regressions', () => {
     expect(label).toContain('bg-[var(--guide)]');
     expect(label).toContain('text-[var(--guide-ink)]');
     expect(q('[data-induction-progress]').className).toContain('bg-[var(--guide-deep)]');
-    expect(q('[data-induction-box]').className).toMatch(/dark:shadow-/);
+    const dim = q('[data-induction-box]').className;
+    expect(dim).toContain('shadow-[0_0_0_200vmax_rgba(14,16,30,0.30)]');
+    expect(dim).toContain('dark:shadow-[0_0_0_200vmax_rgba(0,0,0,0.22)]');
+    expect(q('[data-induction-box]').getAttribute('style')).not.toMatch(/shadow|rgba/);
   });
 
   it('reads the facts once per workspace, not on every poll, and again on refresh', async () => {
@@ -703,3 +711,92 @@ describe('fix round regressions', () => {
     expect(frames.mock.calls.length).toBeGreaterThan(settled);
   });
 });
+
+describe('fix round 2 regressions', () => {
+  it('lets a programmatic click through the guard (a button opening a hidden file input)', async () => {
+    control('pipeline-approved-chip', CHIP);
+    const input = document.createElement('input');
+    input.type = 'file';
+    const opened = vi.fn();
+    input.addEventListener('click', opened);
+    document.body.appendChild(input);
+    await mount({ step: 'c_approved_chip' });
+    trust.mockImplementation((event: Event) => event.isTrusted);
+    await act(async () => {
+      input.click();
+    });
+    expect(opened).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets the gate form take taps while boxing only its submit button', async () => {
+    const form = document.createElement('form');
+    const email = document.createElement('input');
+    email.type = 'email';
+    form.appendChild(email);
+    document.body.appendChild(form);
+    const send = control(
+      'members-invite',
+      { top: 400, left: 16, width: 358, height: 44 },
+      {
+        parent: form,
+        attrs: { type: 'submit' },
+      },
+    );
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    await mount({ step: 'c_approver_invite', postId: 'p1' }, { route: '/settings?panel=members' });
+    const inField = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    const elsewhere = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    await act(async () => {
+      email.dispatchEvent(inField);
+      outside.dispatchEvent(elsewhere);
+    });
+    expect(inField.defaultPrevented).toBe(false);
+    expect(elsewhere.defaultPrevented).toBe(true);
+    const box = q('[data-induction-box]');
+    expect(Number.parseFloat(box.style.top)).toBe(393);
+    expect(send.el.parentElement).toBe(form);
+  });
+
+  it('confirms a tap on the last step, which has no next step: the closing card follows', async () => {
+    const steps = ROUTE_SCRIPTS.creator.steps;
+    const last = steps[steps.length - 1]!;
+    const key = last.targets[0]!;
+    const c = control(key, { top: 300, left: 16, width: 120, height: 44 });
+    const d = await mount({ step: last.id, ...ALL_DATA }, { route: placeRouteFor(last) });
+    await act(async () => {
+      c.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    await wait(20);
+    expect(d.setStep).toHaveBeenCalledWith(ROUTE_SCRIPTS.creator.closing.id);
+  });
+
+  it('re-reads the facts on each refetch until the default group is known, then stops', async () => {
+    facts.current = { ...BASE_FACTS, group: undefined };
+    control('pipeline-approved-chip', CHIP);
+    await mount({ step: 'c_approved_chip' });
+    const first = facts.reads;
+    await act(async () => {
+      render(data({ step: 'c_approved_chip' }), {});
+    });
+    await wait(20);
+    expect(facts.reads).toBe(first + 1);
+    facts.current = BASE_FACTS;
+    await act(async () => {
+      render(data({ step: 'c_approved_chip' }), {});
+    });
+    await wait(20);
+    const found = facts.reads;
+    await act(async () => {
+      render(data({ step: 'c_approved_chip' }), {});
+    });
+    await wait(20);
+    expect(facts.reads).toBe(found);
+  });
+});
+
+function placeRouteFor(step: Step): string {
+  if (step.place === 'chat' || step.place === 'group') return '/chat';
+  if (step.place === 'shell') return '/pipeline';
+  return `/${step.place}`;
+}

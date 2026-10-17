@@ -46,7 +46,7 @@ import {
   type BarCopy,
   type DockAt,
 } from './GuideParts';
-import { findVisible, LAYER_ATTR, radiusOf, rectOf, textFieldOf } from './guide-dom';
+import { findVisible, formOf, LAYER_ATTR, radiusOf, rectOf, textFieldOf } from './guide-dom';
 import {
   useAbsentSkip,
   useElementSize,
@@ -210,15 +210,27 @@ function StepLayer({
   const boxed = el !== undefined && !moving ? el : undefined;
   const field = el !== undefined ? textFieldOf(el) : undefined;
 
-  useStepCompletion({ stepKey: step.id, enabled: completesByUi(steps, index), el, nextEl }, () =>
-    ctx.moveTo(index + 1),
+  const location = useLocation();
+  useStepCompletion(
+    {
+      stepKey: step.id,
+      enabled: completesByUi(steps, index),
+      el,
+      nextEl,
+      nextElsewhere: next === undefined || next.place !== step.place,
+      where: `${location.pathname}${location.search}`,
+    },
+    () => ctx.moveTo(index + 1),
   );
   useAbsentSkip({ stepKey: step.id, found: el !== undefined }, () => {
     if (ctx.isDone(step)) return;
     const to = skipTarget(steps, index, probe);
     if (to !== index) ctx.moveTo(to);
   });
-  const nudge = useTapGuard(boxed, field !== undefined ? nextEl : undefined);
+  const nudge = useTapGuard(boxed, {
+    next: field !== undefined ? nextEl : undefined,
+    form: boxed !== undefined ? formOf(boxed, step.kind === 'gate') : undefined,
+  });
   const legend = useLegend(script.route, step.id);
 
   const control = boxed !== undefined ? rectOf(boxed) : undefined;
