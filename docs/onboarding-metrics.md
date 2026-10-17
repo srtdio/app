@@ -2,7 +2,7 @@
 
 No schema. The guide stores the last step reached in `user_private.induction_step`
 (through `induction_step_set`) and stamps `user_private.induction_done_at` (through
-`induction_finish`, also on Skip). Every v13 step id starts with its route prefix:
+`induction_finish`, only on Done on the closing card; the guide has no Skip). Every v13 step id starts with its route prefix:
 `c_` creator (self sign-up owner), `i_` invited creator (admin or agency), `a_` approver
 (client). Ids without one of these prefixes are older guides or the approver who signed
 up alone (`approver_brand`, `approver_waiting`) and are left out.
@@ -39,7 +39,7 @@ group by 1, 2
 order by 1, 3 desc;
 ```
 
-## Last step reached by people who finished (Skip shows as an early step)
+## Last step reached by people who finished
 
 ```sql
 select
@@ -59,5 +59,6 @@ Notes:
   signs up but never reaches the first guided step has no prefixed step and is not counted.
 - Going past the last step stores the route's closing card id (`c_closing`, `i_closing`,
   `a_closing`) before `induction_done_at` is stamped, so a finished person whose last step is
-  `*_closing` completed the tour; an earlier last step with `induction_done_at` set means they
-  tapped Skip there. Entering the look-around stores `*_intro`.
+  `*_closing` completed the tour. There is no Skip, so an earlier last step with
+  `induction_done_at` set comes from a guide version that still had Skip. Entering the
+  look-around stores `*_intro`.

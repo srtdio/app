@@ -5,15 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostPlatform } from '@srtdio/posts';
 import type { PostSheetPreset } from '@/lib/induction';
 
-const { mockWorkspace, mockPostCreate, mockGallerySet, mockStage, mockShare, newTrace } =
-  vi.hoisted(() => ({
-    mockWorkspace: { workspacePlatform: 'instagram' as PostPlatform },
-    mockPostCreate: vi.fn(),
-    mockGallerySet: vi.fn(),
-    mockStage: vi.fn(),
-    mockShare: vi.fn(),
-    newTrace: () => 'trace-1',
-  }));
+const {
+  mockWorkspace,
+  mockPostCreate,
+  mockGallerySet,
+  mockStage,
+  mockShare,
+  mockUploadLocal,
+  newTrace,
+} = vi.hoisted(() => ({
+  mockWorkspace: { workspacePlatform: 'instagram' as PostPlatform },
+  mockPostCreate: vi.fn(),
+  mockGallerySet: vi.fn(),
+  mockStage: vi.fn(),
+  mockShare: vi.fn(),
+  mockUploadLocal: vi.fn(),
+  newTrace: () => 'trace-1',
+}));
 
 vi.mock('@/lib/workspace-context-platform', () => ({
   useWorkspacePlatform: (id: string | null) =>
@@ -42,18 +50,34 @@ vi.mock('@srtdio/rpc', () => ({
   stageTransition: mockStage,
 }));
 vi.mock('@/lib/chat/share-post', () => ({ sharePostToChannel: mockShare }));
-// The media field's upload path has its own tests: here it hands back one upload.
+// The media field's upload path has its own tests: here it hands back one
+// upload, or with fillOnTap the local sample photo (uploaded at Send).
 vi.mock('@/components/induction/PresetMediaField', () => ({
+  uploadLocalFile: mockUploadLocal,
   PresetMediaField: (props: {
     required: boolean;
     frame: { platform: string; format: string } | null;
-    onChange: (items: { versionId: string; kind: 'image'; name: string }[]) => void;
+    onChange: (
+      items: { versionId: string; kind: 'image'; name: string; localFile?: File }[],
+    ) => void;
+    fillOnTap?: { onFilled: () => void };
   }) => (
     <button
       type="button"
       data-required={props.required ? 'yes' : 'no'}
+      data-fill={props.fillOnTap !== undefined ? 'yes' : 'no'}
       data-frame={props.frame === null ? 'none' : `${props.frame.platform}:${props.frame.format}`}
-      onClick={() => props.onChange([{ versionId: 'v-1', kind: 'image', name: 'hero.png' }])}
+      onClick={() => {
+        if (props.fillOnTap === undefined) {
+          props.onChange([{ versionId: 'v-1', kind: 'image', name: 'hero.png' }]);
+          return;
+        }
+        const localFile = new File(['jpg'], 'first-post.jpg', { type: 'image/jpeg' });
+        props.onChange([
+          { versionId: 'local-first-post', kind: 'image', name: 'first-post.jpg', localFile },
+        ]);
+        props.fillOnTap.onFilled();
+      }}
     >
       Fake upload
     </button>
@@ -65,7 +89,9 @@ import {
   REVIEW_RETRY_MESSAGE,
   presetCanSubmit,
   presetPrimaryLabel,
+  uploadLocalAttachments,
 } from '@/components/pages/CreatePostSheet';
+import { FIRST_POST_SAMPLE } from '@/lib/induction-copy';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -79,7 +105,16 @@ const SEND: PostSheetPreset = {
 };
 
 beforeEach(() => {
-  for (const m of [mockPostCreate, mockGallerySet, mockStage, mockShare, onCreated]) m.mockReset();
+  for (const m of [
+    mockPostCreate,
+    mockGallerySet,
+    mockStage,
+    mockShare,
+    mockUploadLocal,
+    onCreated,
+  ])
+    m.mockReset();
+  mockUploadLocal.mockResolvedValue({ ok: true, versionId: 'v-sample' });
   mockPostCreate.mockResolvedValue({ ok: true, data: 'post-1' });
   mockGallerySet.mockResolvedValue({ ok: true, data: 'g' });
   mockStage.mockResolvedValue({ ok: true, data: null });
@@ -206,6 +241,105 @@ describe('CreatePostSheet preset', () => {
     await typeCaption('Thread opener');
     await act(async () => button('Send for review').click());
     expect(mockShare).not.toHaveBeenCalled();
+  });
+});
+
+describe('CreatePostSheet first post fill on tap', () => {
+  const onFilled = vi.fn();
+  const FILL: PostSheetPreset = { ...SEND, fillOnTap: { onFilled } };
+  beforeEach(() => onFilled.mockReset());
+
+  it('fills the caption on a tap, lets go of focus and tells the guide', async () => {
+    await renderSheet('instagram', FILL);
+    const caption = document.querySelector<HTMLTextAreaElement>('#post-caption')!;
+    expect(caption.getAttribute('inputmode')).toBe('none');
+    await act(async () => caption.focus());
+    expect(caption.value).toBe(FIRST_POST_SAMPLE.caption);
+    expect(document.activeElement).not.toBe(caption);
+    expect(onFilled).toHaveBeenCalledWith(['post-sheet-caption']);
+  });
+
+  it('picks Single image on the Format tap, without the menu, and passes both steps', async () => {
+    await renderSheet('instagram', FILL);
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Format"]')!.click();
+    });
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
+    expect(button('Fake upload').getAttribute('data-frame')).toBe('instagram:single_image');
+    expect(onFilled).toHaveBeenCalledWith(['post-sheet-format', 'post-sheet-format-single']);
+  });
+
+  it('sends the filled post: sample caption, Single image, the sample photo uploaded at Send, no date', async () => {
+    await renderSheet('instagram', FILL);
+    await act(async () => document.querySelector<HTMLTextAreaElement>('#post-caption')!.focus());
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Format"]')!.click();
+    });
+    await act(async () => button('Fake upload').click());
+    expect(onFilled).toHaveBeenCalledTimes(3);
+    expect(mockUploadLocal).not.toHaveBeenCalled();
+    await act(async () => button('Send for review').click());
+
+    expect(mockUploadLocal).toHaveBeenCalledTimes(1);
+    const args = mockPostCreate.mock.calls[0]![1] as { p_payload: Record<string, unknown> };
+    expect(args.p_payload).toMatchObject({
+      title: 'Launch day',
+      caption: FIRST_POST_SAMPLE.caption,
+      format: 'single_image',
+    });
+    expect('target_date' in args.p_payload).toBe(false);
+    expect(mockGallerySet.mock.calls[0]![1]).toMatchObject({ p_asset_version_ids: ['v-sample'] });
+    expect(mockStage.mock.calls[0]![1]).toMatchObject({
+      p_post_id: 'post-1',
+      p_to_stage: 'review',
+    });
+    expect(onCreated).toHaveBeenCalledWith('post-1');
+  });
+
+  it('keeps the post unsent and says why when the sample photo does not upload', async () => {
+    mockUploadLocal.mockResolvedValueOnce({ ok: false, reason: 'The file did not reach us.' });
+    await renderSheet('instagram', FILL);
+    await act(async () => document.querySelector<HTMLTextAreaElement>('#post-caption')!.focus());
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Format"]')!.click();
+    });
+    await act(async () => button('Fake upload').click());
+    await act(async () => button('Send for review').click());
+    expect(mockPostCreate).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+      'The file did not reach us.',
+    );
+  });
+
+  it('leaves the sheet as it was without fillOnTap', async () => {
+    await renderSheet('instagram', SEND);
+    const caption = document.querySelector<HTMLTextAreaElement>('#post-caption')!;
+    expect(caption.getAttribute('inputmode')).toBeNull();
+    await act(async () => caption.focus());
+    expect(caption.value).toBe('');
+    expect(button('Fake upload').getAttribute('data-fill')).toBe('no');
+  });
+});
+
+describe('uploadLocalAttachments', () => {
+  it('uploads only the local items and swaps in their version ids, in order', async () => {
+    const localFile = new File(['x'], 'a.jpg', { type: 'image/jpeg' });
+    const upload = vi.fn().mockResolvedValue({ ok: true, versionId: 'v-2' });
+    const out = await uploadLocalAttachments(
+      [
+        { versionId: 'v-1', kind: 'image', name: 'one.png' },
+        { versionId: 'local', kind: 'image', name: 'a.jpg', localFile },
+      ],
+      upload,
+    );
+    expect(upload).toHaveBeenCalledWith(localFile);
+    expect(out).toEqual({
+      ok: true,
+      items: [
+        { versionId: 'v-1', kind: 'image', name: 'one.png' },
+        { versionId: 'v-2', kind: 'image', name: 'a.jpg' },
+      ],
+    });
   });
 });
 

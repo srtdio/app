@@ -120,6 +120,8 @@ interface SelectProps {
   disabled?: boolean;
   /** Accessible label for the trigger. */
   label?: string;
+  /** When set, a tap on the trigger calls this instead of opening the menu (the first post picks for the person). */
+  onPress?: () => void;
 }
 
 export function Select({
@@ -129,6 +131,7 @@ export function Select({
   placeholder = 'Select',
   disabled = false,
   label,
+  onPress,
 }: SelectProps): ReactElement {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<MenuPlacement>('down');
@@ -149,6 +152,10 @@ export function Select({
 
   function toggle(): void {
     if (disabled) return;
+    if (onPress !== undefined) {
+      onPress();
+      return;
+    }
     if (!open && buttonRef.current !== null && typeof window !== 'undefined') {
       const rect = buttonRef.current.getBoundingClientRect();
       setPlacement(computeMenuPlacement(rect.bottom, window.innerHeight));

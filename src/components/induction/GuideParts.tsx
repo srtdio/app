@@ -158,15 +158,13 @@ export interface BarCopy {
   why: string;
   legend: string;
   back: string;
-  skip: string;
   later: string;
-  aria: { bar: string; progress: string; back: string; skip: string };
+  aria: { bar: string; progress: string; back: string };
 }
 
 export interface BarActions {
   /** undefined hides Back. */
   onBack: (() => void) | undefined;
-  onSkip: () => void;
   /** undefined hides the optional step's secondary chip. */
   onLater: (() => void) | undefined;
 }
@@ -275,15 +273,6 @@ function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): 
           {copy.back}
         </button>
       ) : null}
-      <button
-        type="button"
-        data-induction-skip=""
-        aria-label={copy.aria.skip}
-        onClick={actions.onSkip}
-        className={`${CHIP} text-fg-2`}
-      >
-        {copy.skip}
-      </button>
     </div>
   );
 }

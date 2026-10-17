@@ -25,6 +25,7 @@ import type { Json } from '@srtdio/schemas';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
 import { isValidInviteEmail } from '@/components/pages/settings/MembersInviteForm';
 import { Wordmark } from '@/components/home/Wordmark';
+import { EntryHand } from '@/components/induction/EntryHand';
 import { readLatestBrandRequest, requestBrandTeam } from '@/components/induction/induction-data';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -41,8 +42,10 @@ import {
   APPROVER_BRAND_STEP,
   APPROVER_WAITING_STEP,
   brandRequestErrorMessage,
+  INDUCTION_KEYS,
   WORKSPACE_STEP,
   type ApproverStage,
+  type InductionKey,
 } from '@/lib/induction';
 import { logger } from '@/lib/logger';
 import {
@@ -51,6 +54,7 @@ import {
   SIDE_TILES,
   designationFor,
   entryCopyContext,
+  entryHandTarget,
   normalizeUsernameInput,
   notYouPath,
   progressSteps,
@@ -442,6 +446,8 @@ export function OnboardingFlow({
 
   let body: ReactNode;
   let primary: ReactNode = null;
+  // The name screen's Continue is enabled: the hand may show on it.
+  let continueEnabled = false;
   let preview: ReactNode = (
     <PersonPreview
       name={name}
@@ -612,16 +618,17 @@ export function OnboardingFlow({
         </div>
       </>
     );
+    continueEnabled =
+      !busy &&
+      photoPreview !== null &&
+      name.trim().length > 0 &&
+      format === 'ok' &&
+      nameCheck === 'free';
     primary = (
       <Primary
-        disabled={
-          busy ||
-          photoPreview === null ||
-          name.trim().length === 0 ||
-          format !== 'ok' ||
-          nameCheck !== 'free'
-        }
+        disabled={!continueEnabled}
         onClick={next}
+        anchor={INDUCTION_KEYS.onboardingNameContinue}
       >
         Continue
       </Primary>
@@ -661,7 +668,11 @@ export function OnboardingFlow({
       </>
     );
     primary = (
-      <Primary disabled={busy || designation.length === 0} onClick={() => void saveProfile()}>
+      <Primary
+        disabled={busy || designation.length === 0}
+        onClick={() => void saveProfile()}
+        anchor={INDUCTION_KEYS.onboardingRoleContinue}
+      >
         {busy ? 'Saving' : 'Continue'}
       </Primary>
     );
@@ -818,6 +829,13 @@ export function OnboardingFlow({
           onPhotoChange={(info) => setCropReady(info.hasPhoto)}
         />
       </Sheet>
+      <EntryHand
+        target={entryHandTarget({
+          step,
+          creatorRoute: !invitee && shownSide === 'creator' && approverStage === 'none',
+          continueEnabled,
+        })}
+      />
     </div>
   );
 }
@@ -860,15 +878,19 @@ function Labeled({
 function Primary({
   disabled,
   onClick,
+  anchor,
   children,
 }: {
   disabled: boolean;
   onClick: () => void;
+  /** The guide's data-induction key, where the hand can sit on it. */
+  anchor?: InductionKey;
   children: ReactNode;
 }): ReactElement {
   return (
     <button
       type="button"
+      data-induction={anchor}
       disabled={disabled}
       onClick={onClick}
       className="h-[50px] w-full rounded-lg bg-fg text-[15px] font-semibold text-bg hover:opacity-90 disabled:opacity-35"

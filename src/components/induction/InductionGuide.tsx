@@ -1,7 +1,7 @@
 // The guide layer on top of the real app. On a step: a soft dim with the one
 // real control left clear inside a thin amber hairline, a hand pressing it, a
 // label pill beside it, and the guide bar (progress, phase or chapter, the why
-// line, Back, Skip). Only the control takes taps; the step finishes by the tap,
+// line, Back). Only the control takes taps; the step finishes by the tap,
 // the DOM or the data and the guide moves on by itself. While the app moves
 // (route change, a sheet sliding in, the control not found yet) only the bar
 // shows. The intro and closing cards dock where the bar does.
@@ -245,13 +245,11 @@ function StepLayer({
     why: fillCopy(step.why, ctx.copy),
     legend: legend ? GUIDE_LEGEND : '',
     back: GUIDE_CHROME.back,
-    skip: GUIDE_CHROME.skip,
     later: step.laterLabel ?? '',
     aria: {
       bar: GUIDE_CHROME.barAria,
       progress: GUIDE_CHROME.progressAria,
       back: GUIDE_CHROME.backAria,
-      skip: GUIDE_CHROME.skipAria,
     },
   };
   const dock: DockAt = {
@@ -285,7 +283,6 @@ function StepLayer({
         dock={dock}
         actions={{
           onBack: back >= 0 ? () => ctx.moveTo(back) : undefined,
-          onSkip: ctx.finish,
           onLater:
             step.kind === 'optional' && step.laterLabel !== undefined
               ? () => ctx.moveTo(index + 1)

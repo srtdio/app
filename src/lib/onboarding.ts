@@ -3,7 +3,9 @@
 // suggestion, which screens a person sees, the role lists) lives here so it is
 // unit tested. The in-app guide is src/lib/induction.ts.
 
+import type { InductionKey } from './induction-keys';
 import type { CopyContext } from './induction-model';
+import { ROUTE_SCRIPTS } from './induction-routes';
 
 /** Mirrors users_username_format in the 20261014140000 migration. */
 export const USERNAME_PATTERN = /^[a-z0-9._]{3,20}$/;
@@ -148,4 +150,22 @@ export function notYouPath(inviteId: string): string {
 /** The designation saved for a role pick: the free text for "Something else". */
 export function designationFor(role: string, other: string): string {
   return role === OTHER_ROLE ? other.trim() : role;
+}
+
+/**
+ * Where the guide's hand sits on a pre-app screen, or null for none. Only a
+ * Creator who signed up (the creator route) gets it: on the name screen once
+ * Continue is enabled (photo, name and a free username), then on the role
+ * screen's Continue, from where the shell's guide takes over at c_workspace.
+ */
+export function entryHandTarget(input: {
+  step: OnboardingStep;
+  creatorRoute: boolean;
+  continueEnabled: boolean;
+}): InductionKey | null {
+  if (!input.creatorRoute) return null;
+  const [name, role] = ROUTE_SCRIPTS.creator.entryTargets;
+  if (input.step === 'name') return input.continueEnabled ? (name ?? null) : null;
+  if (input.step === 'role') return role ?? null;
+  return null;
 }

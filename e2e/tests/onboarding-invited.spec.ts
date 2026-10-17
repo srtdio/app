@@ -10,7 +10,7 @@ import {
 } from '../fixtures/chat-data';
 import { inductionDone, startInduction } from '../fixtures/induction-rpc';
 import { ROUTE_SCRIPTS } from '../../src/lib/induction-routes';
-import { fillCopy, WELCOME_COPY } from '../../src/lib/induction-copy';
+import { FIRST_POST_SAMPLE, fillCopy, WELCOME_COPY } from '../../src/lib/induction-copy';
 import type { Step } from '../../src/lib/induction-model';
 import {
   INDUCTION_KEYS,
@@ -19,8 +19,6 @@ import {
   expectCard,
   expectGuideId,
   expectStep,
-  pickPhoto,
-  guideId,
   selectCaptionWords,
   tapControl,
 } from '../helpers/guide';
@@ -28,7 +26,8 @@ import {
 // The invited creator (an agency member who joined from an invite): the
 // welcome, name with photo and role screens (Step 1 of 2, Step 2 of 2, no
 // password, no age), then the guide: the Approved chip, the first post (open
-// the sheet, caption, format, single image, photo, send for review), the intro
+// the sheet, then a tap each fills the caption, picks Single image and attaches
+// the sample photo, then send for review), the intro
 // card, Ask (the brief, the plan card in the group), Review (comment on a line
 // of their own post), Talk (the group, the transcript step skipped by the 4 s rule because the
 // harness offers no Transcribe link, Activity) and the closing card. Every
@@ -40,7 +39,6 @@ import {
 const script = ROUTE_SCRIPTS.invited;
 const NOISE = [/chat store: initial load failed.*read cancelled/];
 const BRIEF_AT = '2026-10-10T09:00:00Z';
-const CAPTION = 'Gift boxes are here\nThree new boxes for the festive week.';
 
 function step(id: string): Step {
   const found = script.steps.find((s) => s.id === id);
@@ -159,21 +157,23 @@ test('invited creator: welcome, name, role, then the first post and the look-aro
   await tapControl(page, step('i_approved_chip'));
   await check('i_post_create');
   await tapControl(page, step('i_post_create'));
-  // A field step: typing alone keeps the guide; tapping the next control
-  // (Format) finishes it. That tap also opens the Format menu.
+  // The person never types: each tap fills its field and the guide moves on.
+  // The caption tap fills the sample caption.
   await check('i_post_caption');
   await tapControl(page, step('i_post_caption'));
-  await page.keyboard.type(CAPTION);
-  expect(await guideId(page)).toBe('i_post_caption');
+  await expect(page.locator('#post-caption')).toHaveValue(FIRST_POST_SAMPLE.caption);
+  // The Format tap picks Single image (no menu) and passes the Single image step.
+  await check('i_post_format');
   await tapControl(page, step('i_post_format'));
-  await check('i_post_single');
-  await tapControl(page, step('i_post_single'));
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Format', exact: true })).toHaveText(
+    'Single image',
+  );
+  // The photo tap attaches the bundled sample; nothing uploads until Send.
   await check('i_post_media');
-  await pickPhoto(page, step('i_post_media'), {
-    name: 'box.png',
-    mimeType: 'image/png',
-    buffer: solidPng(1080, 1080, [180, 90, 60]),
-  });
+  await tapControl(page, step('i_post_media'));
+  await expect(page.locator('img[src^="blob:"]').first()).toBeVisible();
+  expect(network.uploads).toEqual([]);
   await check('i_post_send');
   await tapControl(page, step('i_post_send'));
 

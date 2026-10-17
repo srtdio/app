@@ -77,11 +77,11 @@ describe('copy hygiene', () => {
 
   it('guide chrome', () => {
     expect(copy.GUIDE_LEGEND).toBe(
-      'When the hand taps a control, it is your turn. Back goes one step back. Skip ends the tour.',
+      'When the hand taps a control, it is your turn. Back goes one step back.',
     );
+    expect('skip' in copy.GUIDE_CHROME).toBe(false);
     expect(copy.GUIDE_CHROME).toMatchObject({
       back: 'Back',
-      skip: 'Skip',
       chapters: { ask: 'Ask', review: 'Review', talk: 'Talk' },
     });
   });

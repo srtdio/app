@@ -15,6 +15,7 @@ import {
   onPlace,
   overlaps,
   parseInductionState,
+  pastFilled,
   placeLabel,
   placeRoute,
   presetPrimaryFor,
@@ -54,6 +55,7 @@ function step(id: string, shape: Partial<Step> = {}): Step {
 const SCRIPT: RouteScript = {
   route: 'creator',
   entrySteps: 4,
+  entryTargets: [],
   steps: [
     step('c_ws', { kind: 'setup', dataDone: 'hasWorkspace', phase: 'Step 1', place: 'shell' }),
     step('c_ws_create', { kind: 'setup', dataDone: 'hasWorkspace', phase: 'Step 1' }),
@@ -394,6 +396,33 @@ describe('progress and chapters', () => {
   it('reads the chapter order from the steps', () => {
     expect(chapterOrder(STEPS)).toEqual(['ask', 'review', 'talk']);
     expect(chapterOrder(ROUTE_SCRIPTS.approver.steps)).toEqual(['review', 'ask', 'talk']);
+  });
+});
+
+describe('pastFilled', () => {
+  const steps = ROUTE_SCRIPTS.creator.steps;
+  const at = (id: string): number => steps.findIndex((s) => s.id === id);
+
+  it('moves past the caption step on the caption fill', () => {
+    expect(pastFilled(steps, at('c_post_caption'), ['post-sheet-caption'])).toBe(
+      at('c_post_format'),
+    );
+  });
+
+  it('passes Format and Single image on the one Format tap, so the step count holds', () => {
+    expect(
+      pastFilled(steps, at('c_post_format'), ['post-sheet-format', 'post-sheet-format-single']),
+    ).toBe(at('c_post_media'));
+    expect(at('c_post_single')).toBeGreaterThan(at('c_post_format'));
+  });
+
+  it('moves past the photo step on the photo fill, onto Send for review', () => {
+    expect(pastFilled(steps, at('c_post_media'), ['post-sheet-media'])).toBe(at('c_post_send'));
+  });
+
+  it('does nothing when the current step is not one the tap filled', () => {
+    expect(pastFilled(steps, at('c_post_caption'), ['post-sheet-media'])).toBe(-1);
+    expect(pastFilled(steps, at('c_post_send'), ['post-sheet-caption'])).toBe(-1);
   });
 });
 

@@ -2,6 +2,8 @@
 // One place, never literals: every anchor reads its value from here.
 
 export const INDUCTION_KEYS = {
+  onboardingNameContinue: 'onboarding-name-continue',
+  onboardingRoleContinue: 'onboarding-role-continue',
   topbarWorkspaceSlot: 'topbar-workspace-slot',
   workspaceCreateSubmit: 'workspace-create-submit',
   pipelineStageRow: 'pipeline-stage-row',

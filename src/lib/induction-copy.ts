@@ -87,16 +87,23 @@ export function hasUnfilledPlaceholder(text: string): boolean {
 // ---------- guide bar ----------
 
 export const GUIDE_LEGEND =
-  'When the hand taps a control, it is your turn. Back goes one step back. Skip ends the tour.';
+  'When the hand taps a control, it is your turn. Back goes one step back.';
 
 export const GUIDE_CHROME = {
   back: 'Back',
-  skip: 'Skip',
   chapters: { ask: 'Ask', review: 'Review', talk: 'Talk' },
   barAria: 'Guide',
   progressAria: 'Tour progress',
   backAria: 'Go one step back',
-  skipAria: 'Skip the tour',
+} as const;
+
+// ---------- the first post ----------
+
+/** What a tap fills on the first post (the sheet's fill on tap). The photo ships in public/. */
+export const FIRST_POST_SAMPLE = {
+  caption: 'Launch day\nOur first post on Sorted. More to come this week.',
+  photoPath: '/induction/first-post.jpg',
+  photoName: 'first-post.jpg',
 } as const;
 
 // ---------- steps ----------

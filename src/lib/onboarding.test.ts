@@ -6,6 +6,7 @@ import {
   SIDE_TILES,
   designationFor,
   entryCopyContext,
+  entryHandTarget,
   normalizeUsernameInput,
   notYouPath,
   progressSteps,
@@ -176,5 +177,35 @@ describe('notYouPath', () => {
   });
   it('falls back to the pipeline without an invite id', () => {
     expect(notYouPath('')).toBe('/signin?next=/pipeline');
+  });
+});
+
+describe('entryHandTarget', () => {
+  const creator = { creatorRoute: true, continueEnabled: true };
+
+  it('never on the side screen', () => {
+    expect(entryHandTarget({ ...creator, step: 'side' })).toBeNull();
+  });
+
+  it('on the name screen only once Continue is enabled', () => {
+    expect(entryHandTarget({ ...creator, step: 'name', continueEnabled: false })).toBeNull();
+    expect(entryHandTarget({ ...creator, step: 'name' })).toBe('onboarding-name-continue');
+  });
+
+  it('stays on the role screen Continue', () => {
+    expect(entryHandTarget({ ...creator, step: 'role', continueEnabled: false })).toBe(
+      'onboarding-role-continue',
+    );
+  });
+
+  it('only on the creator route', () => {
+    expect(
+      entryHandTarget({ step: 'name', creatorRoute: false, continueEnabled: true }),
+    ).toBeNull();
+    expect(
+      entryHandTarget({ step: 'role', creatorRoute: false, continueEnabled: true }),
+    ).toBeNull();
+    expect(entryHandTarget({ ...creator, step: 'welcome' })).toBeNull();
+    expect(entryHandTarget({ ...creator, step: 'brand' })).toBeNull();
   });
 });

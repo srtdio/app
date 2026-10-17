@@ -59,6 +59,11 @@ export interface AttachmentItem {
   previewUrl?: string;
   /** The picked file's MIME type (files only), for the format's soft file check. */
   mime?: string;
+  /**
+   * Not uploaded yet (the first post's sample photo): versionId is a local
+   * placeholder until the sheet uploads this at Send and binds the real one.
+   */
+  localFile?: File;
 }
 
 /** The ordered asset VERSION ids the parent binds via gallery_set. */
