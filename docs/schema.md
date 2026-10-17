@@ -408,7 +408,7 @@ Versioned. Attachments bind to a specific asset_version_id.
 
 ### assets
 
-PK id. Fields: workspace_id FK, filename 1 to 500, display_name text nullable (human label, backfilled from post title), current_version_id nullable FK asset_versions.id, folder_id nullable FK folders.id (SET NULL on folder delete), folder_path default '/', tags text[] default {}, uploaded_by FK users.id, uploaded_at, deleted_at nullable, origin text NOT NULL default 'library' (CHECK assets_origin_check: origin in ('library','chat'); 'chat' marks a file uploaded in chat, backfilled in 20260930160000_assets_origin_chat_private.sql). Indexes: FTS filename, gin tags, (workspace_id, folder_path), (workspace_id, folder_id), (workspace_id, uploaded_at desc). All where deleted_at null.
+PK id. Fields: workspace_id FK, filename 1 to 500, display_name text nullable (human label, backfilled from post title), current_version_id nullable FK asset_versions.id, folder_id nullable FK folders.id (SET NULL on folder delete), folder_path default '/', tags text[] default {}, uploaded_by FK users.id, uploaded_at, deleted_at nullable, purge_requested_at timestamptz nullable (set by asset_purge_request or chat_message_delete; marks a soft-deleted asset for hard purge), origin text NOT NULL default 'library' (CHECK assets_origin_check: origin in ('library','chat'); 'chat' marks a file uploaded in chat, backfilled in 20260930160000_assets_origin_chat_private.sql). Indexes: FTS filename, gin tags, (workspace_id, folder_path), (workspace_id, folder_id), (workspace_id, uploaded_at desc). All where deleted_at null. Plus assets_deleted_at_idx btree (deleted_at) WHERE deleted_at IS NOT NULL.
 
 folder_id and folder_path coexist for now: folder_id is the new structured folder reference, folder_path is the legacy string path. folder_path remains present pending a later reconciliation decision; no migration drops or backfills either column yet.
 
@@ -421,6 +421,7 @@ page_count: pdf only, 1-10000, set by asset-upload from the client count; null f
 RLS (20260930160000_assets_origin_chat_private.sql):
 
 - assets_select_member (SELECT to authenticated): deleted_at IS NULL AND origin = 'library' AND an active workspace_members row for (assets.workspace_id, auth.uid()).
+- assets_select_deleted_member (SELECT to authenticated, 20261017120000_workspace_rules_storage_delete.sql): deleted_at IS NOT NULL AND origin = 'library' AND purge_requested_at IS NULL AND is_active_workspace_member(workspace_id).
 - asset_versions_select_member (SELECT to authenticated): an active workspace_members row for (asset_versions.workspace_id, auth.uid()) AND the parent asset has origin = 'library'.
 
 Chat-origin assets and their versions are therefore invisible to authenticated reads; chat file reads go through the service role and chat_attachment_readable (section 7).
@@ -440,6 +441,21 @@ Chat files stay in chat (20261005040000_chat_files_stay_in_chat.sql):
   - stage_change payload is {from, to, actor_role} (also in the audit row); approved / rejected need post.approve, parked / review need post.edit. Rows written before 7 Oct have no actor_role.
   - workspace_role_permissions: agency has post.delete (post_soft_delete is owner, admin, agency).
   - workspace_role_permissions: client has asset.delete (all workspaces and seed_workspace_role_defaults).
+
+Workspace rules: storage, delete guards, purge list (20261017120000_workspace_rules_storage_delete.sql, applied 17 Oct). All SECURITY DEFINER, search_path=''; EXECUTE revoked from PUBLIC, anon and granted only as listed.
+
+- workspace_bytes_used(p_workspace_id uuid) RETURNS bigint, SQL STABLE (service_role only): sum of asset_versions.size_bytes + asset_renditions.size_bytes for the workspace.
+- workspace_storage(p_workspace_id uuid) RETURNS TABLE (bytes_used, library_bytes, chat_bytes, voice_bytes, deleted_bytes bigint), SQL STABLE (authenticated): bytes_used = workspace_bytes_used; the rest sum asset_versions.size_bytes split by origin library / chat non-audio / chat audio (live assets) and soft-deleted assets. Zero rows unless is_active_workspace_member.
+- asset_in_use(p_asset_id uuid) RETURNS boolean, SQL STABLE (no client EXECUTE): true when a live asset_attachments row points at a non-deleted post, brief or comment.
+- asset_delete(p_asset_id, p_trace_id) / asset_delete_many(p_asset_ids, p_trace_id) (authenticated): raise 'asset_in_use' when asset_in_use is true for the asset (any asset in the set). Other checks and the assets_deleted inbox event as below.
+- chat_message_delete(p_message_ids text[], p_channel_id text, p_trace_id uuid) (authenticated): also sets deleted_at (if null) and purge_requested_at = now() on the origin 'chat' assets attached to the messages it deletes.
+- asset_restore(p_asset_id, p_trace_id) RETURNS void (authenticated): active member clears deleted_at on a soft-deleted origin 'library' asset with purge_requested_at null; else 'invalid_payload' / 'workspace_member_only'. audit_log 'asset_restore'.
+- asset_purge_request(p_workspace_id, p_asset_ids uuid[], p_trace_id) RETURNS integer (authenticated): workspace owner only ('owner_only'); sets purge_requested_at on soft-deleted origin 'library' assets (all when p_asset_ids is null); returns rows updated. audit_log 'asset_purge_request'.
+- workspace_delete(p_workspace_id, p_confirm_name text, p_trace_id) RETURNS void (authenticated): owner only ('owner_only'), p_confirm_name must equal workspaces.name ('confirm_name_mismatch'); sets workspaces.deleted_at and deactivates all members. audit_log 'workspace_delete'.
+- storage_purge_due(p_limit integer) RETURNS TABLE (asset_id, workspace_id, bucket text, r2_keys text[]), SQL STABLE (service_role only): soft-deleted assets with purge_requested_at set or deleted_at older than 31 days, not asset_in_use; r2_keys = version + rendition keys; ordered by coalesce(purge_requested_at, deleted_at), limit clamped 1 to 1000 (default 100).
+- storage_purge_done(p_asset_ids uuid[]) RETURNS integer (service_role only): re-checks the same purge rule, deletes their asset_attachments then the assets; returns assets deleted.
+- workspace_purge_due() RETURNS TABLE (workspace_id, bucket text, deleted_at), SQL STABLE (service_role only): soft-deleted workspaces, oldest first, limit 50.
+- workspace_purge_done(p_workspace_id uuid) RETURNS void (service_role only): 'not_deleted' unless soft-deleted; deletes asset_attachments, assets, folders, comments, posts, then the workspace row.
 
 ### asset_renditions
 

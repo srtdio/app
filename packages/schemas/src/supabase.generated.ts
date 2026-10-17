@@ -233,6 +233,7 @@ export type Database = {
           folder_path: string
           id: string
           origin: string
+          purge_requested_at: string | null
           tags: string[]
           uploaded_at: string
           uploaded_by: string | null
@@ -247,6 +248,7 @@ export type Database = {
           folder_path?: string
           id?: string
           origin?: string
+          purge_requested_at?: string | null
           tags?: string[]
           uploaded_at?: string
           uploaded_by?: string | null
@@ -261,6 +263,7 @@ export type Database = {
           folder_path?: string
           id?: string
           origin?: string
+          purge_requested_at?: string | null
           tags?: string[]
           uploaded_at?: string
           uploaded_by?: string | null
@@ -8739,6 +8742,19 @@ export type Database = {
         Args: { p_asset_ids: string[]; p_trace_id: string }
         Returns: undefined
       }
+      asset_in_use: { Args: { p_asset_id: string }; Returns: boolean }
+      asset_purge_request: {
+        Args: {
+          p_asset_ids: string[]
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: number
+      }
+      asset_restore: {
+        Args: { p_asset_id: string; p_trace_id: string }
+        Returns: undefined
+      }
       audit_log_write: {
         Args: {
           p_action: string
@@ -9644,6 +9660,16 @@ export type Database = {
             }
             Returns: string
           }
+      storage_purge_done: { Args: { p_asset_ids: string[] }; Returns: number }
+      storage_purge_due: {
+        Args: { p_limit: number }
+        Returns: {
+          asset_id: string
+          bucket: string
+          r2_keys: string[]
+          workspace_id: string
+        }[]
+      }
       user_onboarding_save: {
         Args: { p_payload: Json; p_trace_id: string }
         Returns: string
@@ -9667,6 +9693,10 @@ export type Database = {
         Returns: string
       }
       uuidv7: { Args: never; Returns: string }
+      workspace_bytes_used: {
+        Args: { p_workspace_id: string }
+        Returns: number
+      }
       workspace_client_domain_add: {
         Args: { p_domain: string; p_trace_id: string; p_workspace_id: string }
         Returns: string
@@ -9679,7 +9709,27 @@ export type Database = {
         Args: { p_payload: Json; p_trace_id: string }
         Returns: string
       }
+      workspace_delete: {
+        Args: {
+          p_confirm_name: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       workspace_id: { Args: never; Returns: string }
+      workspace_purge_done: {
+        Args: { p_workspace_id: string }
+        Returns: undefined
+      }
+      workspace_purge_due: {
+        Args: never
+        Returns: {
+          bucket: string
+          deleted_at: string
+          workspace_id: string
+        }[]
+      }
       workspace_search_counts: {
         Args: { p_query: string; p_trace_id: string; p_workspace_id: string }
         Returns: {
@@ -9721,6 +9771,16 @@ export type Database = {
           number: number
           parent_id: string
           title: string
+        }[]
+      }
+      workspace_storage: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          bytes_used: number
+          chat_bytes: number
+          deleted_bytes: number
+          library_bytes: number
+          voice_bytes: number
         }[]
       }
       workspace_update: {

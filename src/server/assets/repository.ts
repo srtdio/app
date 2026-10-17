@@ -882,6 +882,7 @@ export class InMemoryAssetRepository implements AssetRepository {
       uploaded_at: now,
       deleted_at: null,
       origin: asset.origin ?? 'library',
+      purge_requested_at: null,
     });
     return Promise.resolve();
   }
