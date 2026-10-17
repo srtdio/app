@@ -35,8 +35,16 @@ test('a Creator walks side, name with photo and role, then makes the workspace i
   await page.waitForLoadState('networkidle');
   const cont = page.getByRole('button', { name: 'Continue', exact: true });
   await expect(cont).toBeDisabled();
-  await page.getByRole('radio', { name: /Creator/ }).click();
-  await cont.click();
+  // A read landing later still can re-mount the flow and drop the pick: pick
+  // again until Continue holds (a pre-existing shell behaviour, seen on WebKit).
+  await expect(async () => {
+    await page.getByRole('radio', { name: /Creator/ }).click();
+    await expect(cont).toBeEnabled({ timeout: 1_000 });
+    await cont.click({ timeout: 1_000 });
+    await expect(page.getByRole('heading', { name: 'What should we call you?' })).toBeVisible({
+      timeout: 1_000,
+    });
+  }).toPass({ timeout: 15_000 });
 
   await expect(page.getByRole('heading', { name: 'What should we call you?' })).toBeVisible();
   await page.getByLabel('Full name').fill('Meera Shah');

@@ -95,6 +95,48 @@ function selectorFor(key: InductionKey, narrow: Narrow): string {
   return `${inductionSelector(key)}${narrow[key] ?? ''}`;
 }
 
+interface Pieces {
+  control: R;
+  box: R;
+  hand: R;
+  label: R;
+  bar: R;
+  vp: { w: number; h: number };
+}
+
+/** Every guide piece and the step's control in one read; null while any is missing. */
+async function readPieces(page: Page, controlSelectors: string[]): Promise<Pieces | null> {
+  return page.evaluate((controls) => {
+    const rect = (el: Element | null) => {
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0
+        ? { x: r.left, y: r.top, width: r.width, height: r.height }
+        : null;
+    };
+    const first = (selector: string) => {
+      for (const el of Array.from(document.querySelectorAll(selector))) {
+        const r = rect(el);
+        if (r !== null) return r;
+      }
+      return null;
+    };
+    let control = null;
+    for (const selector of controls) {
+      control = first(selector);
+      if (control !== null) break;
+    }
+    const box = first('[data-induction-box]');
+    const hand = first('[data-induction-hand]');
+    const label = first('[data-induction-label]');
+    const bar = first('[data-induction-bar]');
+    if (control === null || box === null || hand === null || label === null || bar === null) {
+      return null;
+    }
+    return { control, box, hand, label, bar, vp: { w: window.innerWidth, h: window.innerHeight } };
+  }, controlSelectors);
+}
+
 /** The first shown control for a step (the guide boxes the first visible target, key order). */
 async function controlFor(
   page: Page,
@@ -192,34 +234,36 @@ export async function expectStep(page: Page, info: TestInfo, check: StepCheck): 
   await expect(box, `box on ${step.id}`).toBeVisible({ timeout: 10_000 });
   await expect(box).toHaveCount(1);
 
-  // The hairline: control rect plus 7px each side, read live (1px tolerance).
-  let control: R | null = null;
+  // One reading of every piece at once (control, hairline, hand, label, bar),
+  // taken when the guide shows them all and the hairline sits on the control
+  // (control rect plus 7px each side, 1px tolerance). Reading them one by one
+  // could straddle a frame where the guide briefly drops the spotlight.
+  const selectors = step.targets.map((key) => selectorFor(key, check.narrow ?? {}));
+  let shot: Pieces | null = null;
   await expect
     .poll(
       async () => {
-        const found = await controlFor(page, step, check.narrow);
-        const boxRect = await rectOf(page, '[data-induction-box]');
-        if (found === null || boxRect === null) return 99;
-        control = found.rect;
-        return worst(boxRect, expectedBox(found.rect, await viewport(page)));
+        shot = await readPieces(page, selectors);
+        if (shot === null) return 99;
+        return worst(shot.box, expectedBox(shot.control, shot.vp));
       },
       { message: `hairline on ${step.id}`, timeout: 5_000, intervals: [100, 200] },
     )
     .toBeLessThanOrEqual(1);
-  const ctl = control as unknown as R;
-  const vp = await viewport(page);
-  const boxRect = (await rectOf(page, '[data-induction-box]')) as R;
+  const pieces = shot as unknown as Pieces;
+  const ctl = pieces.control;
+  const vp = pieces.vp;
+  const boxRect = pieces.box;
+  const hand = pieces.hand;
 
   // The hand presses the control: its fingertip inside or just beside it.
-  const hand = await rectOf(page, '[data-induction-hand]');
-  expect(hand, `hand on ${step.id}`).not.toBeNull();
-  const tip = { x: (hand as R).x + HAND_TIP.x, y: (hand as R).y + HAND_TIP.y };
+  const tip = { x: hand.x + HAND_TIP.x, y: hand.y + HAND_TIP.y };
   expect(inside(tip, ctl, TIP_SLACK), `fingertip on ${step.id}`).toBe(true);
 
   // The label: the copy module's text, in the viewport, never over the box.
   const label = page.locator('[data-induction-label]');
   await expect(label).toHaveText(fillCopy(step.label, ctx));
-  const labelRect = (await rectOf(page, '[data-induction-label]')) as R;
+  const labelRect = pieces.label;
   const labelIn =
     labelRect.x >= 0 &&
     labelRect.y >= 0 &&
@@ -232,7 +276,7 @@ export async function expectStep(page: Page, info: TestInfo, check: StepCheck): 
   const bar = page.locator('[data-induction-bar]');
   if (step.why !== '')
     await expect(bar.getByText(fillCopy(step.why, ctx), { exact: true })).toBeVisible();
-  const barRect = (await rectOf(page, '[data-induction-bar]')) as R;
+  const barRect = pieces.bar;
   expect(overlaps(barRect, ctl), `bar clear of the control on ${step.id}`).toBe(false);
   expect(overlaps(labelRect, barRect), `label clear of the bar on ${step.id}`).toBe(false);
   await expectBarChips(page, { back: check.back });
@@ -253,7 +297,7 @@ export async function expectStep(page: Page, info: TestInfo, check: StepCheck): 
       .filter((r) => r.width > 0 && r.height > 0)
       .map((r) => ({ x: r.left, y: r.top, width: r.width, height: r.height })),
   );
-  const away = await pointAway(page, [boxRect, barRect, labelRect, hand as R, ...anchors]);
+  const away = await pointAway(page, [boxRect, barRect, labelRect, hand, ...anchors]);
   await page.mouse.click(away.x, away.y);
   await page.waitForTimeout(150);
   expect(await guideId(page), `tap away keeps ${step.id}`).toBe(step.id);
