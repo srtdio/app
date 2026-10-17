@@ -27,7 +27,9 @@ function signature(el: HTMLElement | undefined): string {
     parts.push(d.top, d.left, d.width, d.height);
   }
   parts.push(window.innerWidth, window.innerHeight);
-  return parts.map((n) => Math.round(n * 2) / 2).join(',');
+  // 0.1px: a sheet's easing tail moves well under half a pixel per frame, and a
+  // coarser reading would call it still while it creeps the last pixels in.
+  return parts.map((n) => Math.round(n * 10) / 10).join(',');
 }
 
 /**
@@ -89,6 +91,12 @@ export function useLiveTick(el: HTMLElement | undefined): boolean {
     document.addEventListener('scroll', poke, true);
     viewport?.addEventListener('resize', poke);
     viewport?.addEventListener('scroll', poke);
+    // A transition or animation ending is the moment a sliding sheet lands.
+    const landed = (event: Event): void => {
+      if (event.target instanceof Node && !inLayer(event.target)) poke();
+    };
+    document.addEventListener('transitionend', landed, true);
+    document.addEventListener('animationend', landed, true);
     return () => {
       if (raf !== 0) cancelAnimationFrame(raf);
       window.clearTimeout(settle);
@@ -97,6 +105,8 @@ export function useLiveTick(el: HTMLElement | undefined): boolean {
       document.removeEventListener('scroll', poke, true);
       viewport?.removeEventListener('resize', poke);
       viewport?.removeEventListener('scroll', poke);
+      document.removeEventListener('transitionend', landed, true);
+      document.removeEventListener('animationend', landed, true);
     };
   }, [el]);
 

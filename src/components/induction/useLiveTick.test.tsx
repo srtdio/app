@@ -2,6 +2,7 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LAYER_ATTR } from './guide-dom';
 import { useLiveTick } from './useLiveTick';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -100,5 +101,71 @@ describe('useLiveTick', () => {
       await vi.advanceTimersByTimeAsync(400);
     });
     expect(moving()).toBe('false');
+  });
+
+  it('re-reads when the sheet transition ends after the frame loop stopped', async () => {
+    vi.useFakeTimers({
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'performance',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+      ],
+    });
+    const el = document.createElement('textarea');
+    document.body.appendChild(el);
+    let top = 200;
+    vi.spyOn(el, 'getBoundingClientRect').mockImplementation(
+      () => ({ top, left: 16, width: 300, height: 88, right: 316, bottom: top + 88 }) as DOMRect,
+    );
+    const host = document.createElement('div');
+    // The guide's own nodes never poke the loop; the probe renders as one.
+    host.setAttribute(LAYER_ATTR, '');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const moving = (): string | null =>
+      host.querySelector('output')?.getAttribute('data-moving') ?? null;
+    await act(async () => {
+      root!.render(<Probe el={el} />);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(moving()).toBe('false');
+    // The loop has stopped; the sheet's slow easing tail lands the last 1.9px
+    // with no event the loop would see, then its transition ends.
+    top = 198.1;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(moving()).toBe('false');
+    await act(async () => {
+      el.dispatchEvent(new Event('transitionend', { bubbles: true }));
+      await vi.advanceTimersByTimeAsync(16);
+    });
+    expect(moving()).toBe('true');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(moving()).toBe('false');
+  });
+
+  it('re-reads when a transition ends and removes its listeners on unmount', async () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const added = vi.spyOn(document, 'addEventListener');
+    const removed = vi.spyOn(document, 'removeEventListener');
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(<Probe el={el} />);
+    });
+    const types = (spy: typeof added): string[] => spy.mock.calls.map((call) => String(call[0]));
+    expect(types(added)).toEqual(expect.arrayContaining(['transitionend', 'animationend']));
+    act(() => root?.unmount());
+    root = null;
+    expect(types(removed)).toEqual(expect.arrayContaining(['transitionend', 'animationend']));
   });
 });
