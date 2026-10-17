@@ -57,6 +57,7 @@ Notes:
 
 - "Started" means the guide stored at least one v13 step for the person. A person who
   signs up but never reaches the first guided step has no prefixed step and is not counted.
-- A finished person whose last step is the route's final step (`c_activity`, `i_activity`,
-  `a_activity`, or the step before a skipped tail) completed the tour; an earlier last step
-  with `induction_done_at` set means they tapped Skip there.
+- Going past the last step stores the route's closing card id (`c_closing`, `i_closing`,
+  `a_closing`) before `induction_done_at` is stamped, so a finished person whose last step is
+  `*_closing` completed the tour; an earlier last step with `induction_done_at` set means they
+  tapped Skip there. Entering the look-around stores `*_intro`.
