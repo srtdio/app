@@ -1,12 +1,16 @@
-// The creator's sample week (20261017150000_induction_sample_week.sql):
-// induction_sample_seed puts one brief, one team plan holding one review post,
-// the plan's card and one voice note with its transcript (default group) into
-// the caller's own workspace, flagged in induction_sample_rows; a second seed
-// changes nothing. induction_sample_clear deletes exactly those rows (the
-// creator's own post, other briefs and chat stay), and a second clear changes
-// nothing. Only the workspace owner may call either; only the owner reads the
-// markers. Both write audit_log with the caller's trace id.
+// The creator's sample workspace (20261017150000_induction_sample_week.sql):
+// induction_sample_seed fills the owner's own workspace with Kestrel & Rowe (five
+// sample people, Shoot crew, a DM with Riya, 22 chat messages, 37 posts with photos,
+// 6 briefs, an 18-file library, a client plan for this week, comments, annotations
+// and the owner's activity), flagged in induction_sample_rows; a second seed changes
+// nothing. induction_sample_clear deletes exactly those rows (and comments anyone
+// wrote on sample posts), keeps the owner's own post, other comments, briefs and
+// chat, records the workspace as cleared, and a later seed is a no-op. Only the owner
+// may call either; only the owner reads the markers. A real member joining (invite or
+// accept) clears the sample at once. induction_state ignores sample people, and the
+// sample files use no storage. Seed and clear write audit_log with the caller's trace.
 
+import { execFileSync } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { v7 as uuidv7 } from 'uuid';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -29,6 +33,16 @@ import type { Database } from '../../packages/schemas/src/supabase.generated';
 
 const RLS_SUITE = process.env.RLS_SUITE === '1';
 
+const SAMPLE_PEOPLE = [
+  '5a3b1e00-0000-4000-8000-000000000001', // Riya Menon, client
+  '5a3b1e00-0000-4000-8000-000000000002', // Arjun Shah, agency
+  '5a3b1e00-0000-4000-8000-000000000003', // Dev Kapoor, agency
+  '5a3b1e00-0000-4000-8000-000000000004', // Neha Rao, agency
+  '5a3b1e00-0000-4000-8000-000000000005', // Meera Iyer, client
+];
+const DEV = SAMPLE_PEOPLE[2];
+const PEOPLE_SQL = `array[${SAMPLE_PEOPLE.map((p) => `'${p}'`).join(',')}]::uuid[]`;
+
 /** Typed pass-through for direct .rpc() args; each call sets its own p_trace_id (a uuid v7). */
 function rpcArgs<T>(args: T): T {
   return args;
@@ -36,16 +50,16 @@ function rpcArgs<T>(args: T): T {
 
 type RpcResult = { data: unknown; error: { message: string } | null };
 
-/** The two procs are not in the generated types until the migration is applied. */
-/** The first row a query returns; throws on an error or no row. */
-async function firstRow<T>(
-  query: PromiseLike<{ data: unknown; error: { message: string } | null }>,
-): Promise<T> {
-  const res = await query;
-  if (res.error) throw new Error(res.error.message);
-  const row = ((res.data ?? []) as T[])[0];
-  if (row === undefined) throw new Error('no row');
-  return row;
+/** Procs not in the generated types until the migration is applied. */
+async function rpc(
+  userId: string,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<RpcResult> {
+  const client = clientFor(userId) as unknown as {
+    rpc: (fn: string, a: Record<string, unknown>) => Promise<RpcResult>;
+  };
+  return client.rpc(name, rpcArgs(args));
 }
 
 /** How many rows a query returns (0 when RLS hides them). */
@@ -56,66 +70,79 @@ async function rowCount(
   return ((res.data ?? []) as unknown[]).length;
 }
 
-async function rpc(
-  userId: string,
-  name: 'induction_sample_seed' | 'induction_sample_clear',
-  args: Record<string, unknown>,
-): Promise<RpcResult> {
-  const client = clientFor(userId) as unknown as {
-    rpc: (fn: string, a: Record<string, unknown>) => Promise<RpcResult>;
-  };
-  return client.rpc(name, rpcArgs(args));
+interface Owned {
+  owner: SeededUser;
+  ws: SeededWorkspace;
+  groupChannel: string;
 }
 
-describe.runIf(RLS_SUITE)('induction sample week', () => {
+describe.runIf(RLS_SUITE)('induction sample workspace', () => {
   let env: RlsEnv;
   let admin: SupabaseClient<Database>;
   let g: GenericClient;
-  let owner: SeededUser;
-  let agency: SeededUser;
-  let outsider: SeededUser;
-  let ws: SeededWorkspace;
-  let channelId: string;
+  let main: Owned;
   let ownPostId: string;
   const users: SeededUser[] = [];
   const workspaces: SeededWorkspace[] = [];
 
-  async function rowsOf(table: string, column: string, value: string): Promise<number> {
-    return countWhere(g, table, [[column, value]]);
+  /** Ground truth through psql (bypasses RLS): the first column of the first row. */
+  function sql(query: string): string {
+    return execFileSync('psql', [env.dbUrl, '-At', '-c', query], { encoding: 'utf8' }).trim();
   }
+  const num = (query: string): number => Number(sql(query));
+
+  /** A new owner and their real workspace (workspace_create makes the default group). */
+  async function ownWorkspace(): Promise<Owned> {
+    const owner = await seedUser(env, admin);
+    users.push(owner);
+    const created = await clientFor(owner.id).rpc(
+      'workspace_create',
+      rpcArgs({
+        p_payload: {
+          name: `Sample ${uuidv7().slice(-6)}`,
+          timezone: 'Asia/Kolkata',
+          platform: 'instagram',
+        },
+        p_trace_id: uuidv7(),
+      }),
+    );
+    if (created.error) throw new Error(created.error.message);
+    const ws = { id: String(created.data), name: 'Sample', ownerId: owner.id };
+    workspaces.push(ws);
+    const groupChannel = sql(
+      `select c.channel_id from public.chat_channels c join public.groups g on g.id = c.entity_id ` +
+        `where g.workspace_id = '${ws.id}' and g.is_default`,
+    );
+    return { owner, ws, groupChannel };
+  }
+
+  const markers = (wsId: string, kind?: string): number =>
+    num(
+      `select count(*) from public.induction_sample_rows where workspace_id = '${wsId}'` +
+        (kind ? ` and kind = '${kind}'` : ''),
+    );
+  const tagged = (wsId: string, tag: string): string =>
+    sql(
+      `select row_id from public.induction_sample_rows where workspace_id = '${wsId}' and tag = '${tag}'`,
+    );
+  const sampleMembers = (wsId: string): number =>
+    num(
+      `select count(*) from public.workspace_members where workspace_id = '${wsId}' ` +
+        `and user_id = any(${PEOPLE_SQL})`,
+    );
+  const seed = (o: Owned): Promise<RpcResult> =>
+    rpc(o.owner.id, 'induction_sample_seed', { p_workspace_id: o.ws.id, p_trace_id: uuidv7() });
 
   beforeAll(async () => {
     env = loadRlsEnv();
     admin = createAdminClient(env);
     g = asGeneric(admin);
-    owner = await seedUser(env, admin);
-    agency = await seedUser(env, admin);
-    outsider = await seedUser(env, admin);
-    users.push(owner, agency, outsider);
-    // A real workspace: workspace_create makes the counters, the default group and its channel.
-    const created = await clientFor(owner.id).rpc(
-      'workspace_create',
-      rpcArgs({
-        p_payload: { name: `Sample ${uuidv7().slice(-6)}`, timezone: 'UTC', platform: 'instagram' },
-        p_trace_id: uuidv7(),
-      }),
-    );
-    if (created.error) throw new Error(created.error.message);
-    ws = { id: String(created.data), name: 'Sample', ownerId: owner.id };
-    workspaces.push(ws);
-    await seedMember(g, ws, agency, 'agency');
-    const group = await firstRow<{ id: string }>(
-      g.from('groups').select('id').eq('workspace_id', ws.id).eq('is_default', true),
-    );
-    const channel = await firstRow<{ channel_id: string }>(
-      g.from('chat_channels').select('channel_id').eq('entity_id', group.id),
-    );
-    channelId = channel.channel_id;
+    main = await ownWorkspace();
     // The creator's own first post, sent for review before the look-around.
-    const post = await clientFor(owner.id).rpc(
+    const post = await clientFor(main.owner.id).rpc(
       'post_create',
       rpcArgs({
-        p_workspace_id: ws.id,
+        p_workspace_id: main.ws.id,
         p_payload: { title: 'Launch day', caption: 'Our first post', format: 'single_image' },
         p_trace_id: uuidv7(),
       }),
@@ -128,62 +155,271 @@ describe.runIf(RLS_SUITE)('induction sample week', () => {
     await cleanupWorkspaces(admin, workspaces, users);
   });
 
-  it('refuses anyone but the workspace owner', async () => {
+  it('creates the five sample people once: completed profiles that cannot sign in', () => {
+    expect(
+      sql(
+        `select string_agg(display_name || ':' || designation || ':' || username || ':' || avatar_url, ',' order by id) ` +
+          `from public.users where id = any(${PEOPLE_SQL}) and profile_completed_at is not null and not email_opt_in`,
+      ),
+    ).toBe(
+      [
+        'Riya Menon:Brand manager:riya.menon.sample:/induction-sample/av-riya.jpg',
+        'Arjun Shah:Creative lead:arjun.shah.sample:/induction-sample/av-arjun.jpg',
+        'Dev Kapoor:Designer:dev.kapoor.sample:/induction-sample/av-dev.jpg',
+        'Neha Rao:Copywriter:neha.rao.sample:/induction-sample/av-neha.jpg',
+        'Meera Iyer:Marketing head:meera.iyer.sample:/induction-sample/av-meera.jpg',
+      ].join(','),
+    );
+    expect(
+      num(
+        `select count(*) from auth.users where id = any(${PEOPLE_SQL}) and email like '%@sample.srtd.io' ` +
+          `and email_confirmed_at is null and banned_until > now() and coalesce(encrypted_password, '') = ''`,
+      ),
+    ).toBe(5);
+  });
+
+  it('refuses anyone but the owner, and a workspace someone else has been active in', async () => {
+    const other = await ownWorkspace();
+    const agency = await seedUser(env, admin);
+    const outsider = await seedUser(env, admin);
+    users.push(agency, outsider);
+    await seedMember(g, other.ws, agency, 'agency');
+
     const asAgency = await rpc(agency.id, 'induction_sample_seed', {
-      p_workspace_id: ws.id,
+      p_workspace_id: other.ws.id,
       p_trace_id: uuidv7(),
     });
     expect(asAgency.error?.message).toBe('forbidden_role');
+    const clearAsAgency = await rpc(agency.id, 'induction_sample_clear', {
+      p_workspace_id: other.ws.id,
+      p_trace_id: uuidv7(),
+    });
+    expect(clearAsAgency.error?.message).toBe('forbidden_role');
     const asOutsider = await rpc(outsider.id, 'induction_sample_clear', {
-      p_workspace_id: ws.id,
+      p_workspace_id: main.ws.id,
       p_trace_id: uuidv7(),
     });
     expect(asOutsider.error?.message).toBe('workspace_member_only');
-    expect(await rowsOf('induction_sample_rows', 'workspace_id', ws.id)).toBe(0);
+
+    const inUse = await seed(other);
+    expect(inUse.error).toBeNull();
+    expect(inUse.data).toMatchObject({ seeded: false, reason: 'workspace_in_use' });
+    expect(markers(other.ws.id)).toBe(0);
+    expect(markers(main.ws.id)).toBe(0);
   });
 
-  it('seeds the sample week into the owner workspace, flagged, with an audit row', async () => {
+  it('seeds the whole sample world into the owner workspace, flagged, with an audit row', async () => {
+    const ws = main.ws.id;
+    const bytesBefore = num(`select public.workspace_bytes_used('${ws}')`);
     const trace = uuidv7();
-    const res = await rpc(owner.id, 'induction_sample_seed', {
-      p_workspace_id: ws.id,
+    const res = await rpc(main.owner.id, 'induction_sample_seed', {
+      p_workspace_id: ws,
       p_trace_id: trace,
     });
     expect(res.error).toBeNull();
-    const out = res.data as { seeded: boolean; brief_id: string; post_id: string; plan_id: string };
-    expect(out.seeded).toBe(true);
+    expect(res.data).toMatchObject({
+      seeded: true,
+      rows: {
+        member: 5,
+        post: 37,
+        post_version: 37,
+        brief: 6,
+        comment: 5,
+        post_annotation: 2,
+        plan: 1,
+        plan_item: 8,
+        plan_item_review: 10,
+        chat_message: 22,
+        chat_channel: 2,
+        group: 1,
+        inbox_entry: 6,
+      },
+    });
 
-    const post = await firstRow(g.from('posts').select('stage, brief_id').eq('id', out.post_id));
-    expect(post).toMatchObject({ stage: 'review', brief_id: out.brief_id });
-    // plans and plan_items grant SELECT to authenticated only: read them as the owner.
-    const asOwner = asGeneric(clientFor(owner.id));
-    const plan = await firstRow(asOwner.from('plans').select('audience').eq('id', out.plan_id));
-    expect(plan).toMatchObject({ audience: 'team' });
+    // People: five active members with their roles, none of them the owner.
     expect(
-      await rowCount(
-        asOwner
-          .from('plan_items')
-          .select('id')
-          .eq('plan_id', out.plan_id)
-          .eq('post_id', out.post_id),
+      sql(
+        `select string_agg(role, ',' order by user_id) from public.workspace_members ` +
+          `where workspace_id = '${ws}' and active and user_id = any(${PEOPLE_SQL})`,
+      ),
+    ).toBe('client,agency,agency,agency,client');
+
+    // Posts: 37 sample posts and the owner's own, every sample post with its photos.
+    expect(num(`select count(*) from public.posts where workspace_id = '${ws}'`)).toBe(38);
+    expect(
+      num(
+        `select count(distinct a.entity_id) from public.asset_attachments a ` +
+          `join public.asset_versions v on v.id = a.asset_version_id ` +
+          `where a.workspace_id = '${ws}' and a.entity_type = 'post' and v.r2_key like 'induction-sample/%'`,
+      ),
+    ).toBe(37);
+    expect(
+      num(
+        `select count(*) from public.posts p where p.workspace_id = '${ws}' and p.id <> '${ownPostId}' ` +
+          `and not exists (select 1 from public.post_versions v where v.post_id = p.id and v.version_number = 1)`,
+      ),
+    ).toBe(0);
+    expect(
+      num(
+        `select count(*) from public.posts where workspace_id = '${ws}' and stage = 'approved' ` +
+          `and approved_by = '${SAMPLE_PEOPLE[0]}'`,
+      ),
+    ).toBe(9);
+    // The owner's own post keeps the first number; a new post still gets the next one.
+    expect(num(`select number from public.posts where id = '${ownPostId}'`)).toBe(1);
+    expect(
+      num(
+        `select count(*) from (select number from public.posts where workspace_id = '${ws}' ` +
+          `union all select number from public.briefs where workspace_id = '${ws}') n`,
+      ),
+    ).toBe(44);
+    expect(
+      num(`select next_entity_number from public.workspace_counters where workspace_id = '${ws}'`),
+    ).toBe(45);
+
+    // Pink ruffle set: three slides, version 1, a caption span and a pin, four comments.
+    const review = tagged(ws, 'review_post');
+    expect(sql(`select title || ':' || stage from public.posts where id = '${review}'`)).toBe(
+      'Pink ruffle set:review',
+    );
+    expect(num(`select count(*) from public.asset_attachments where entity_id = '${review}'`)).toBe(
+      3,
+    );
+    expect(
+      sql(
+        `select string_agg(a.kind || ':' || coalesce(substr(p.caption, a.caption_start + 1, ` +
+          `a.caption_end - a.caption_start), '') || ':' || c.body, ',' order by a.kind) ` +
+          `from public.post_annotations a join public.posts p on p.id = a.post_id ` +
+          `join public.comments c on c.id = a.comment_id where a.post_id = '${review}'`,
+      ),
+    ).toBe(
+      'caption_span:drops Friday:Say lands Friday, not drops.,image_pin::Warm the skin tone here, please.',
+    );
+    expect(num(`select count(*) from public.comments where workspace_id = '${ws}'`)).toBe(5);
+    expect(
+      num(
+        `select count(*) from public.comments where workspace_id = '${ws}' ` +
+          `and mentions = jsonb_build_array('${main.owner.id}') and body like '@[${main.owner.id}]%'`,
       ),
     ).toBe(1);
-    const chat = await g
-      .from('chat_messages')
-      .select('sender_user_id, shared_plan_ids, attachment_meta')
-      .eq('channel_id', channelId);
-    const rows = (chat.data ?? []) as {
-      sender_user_id: string | null;
-      shared_plan_ids: string[] | null;
-      attachment_meta: Record<string, { mime: string; transcript: string }> | null;
-    }[];
-    expect(rows.some((r) => r.shared_plan_ids?.includes(out.plan_id))).toBe(true);
-    const voice = rows.find((r) => r.attachment_meta !== null);
-    expect(voice?.sender_user_id).toBeNull();
-    const meta = Object.values(voice?.attachment_meta ?? {})[0];
-    expect(meta?.mime).toBe('audio/mp4');
-    expect(meta?.transcript).toContain('Thursday');
 
-    expect(await rowsOf('induction_sample_rows', 'workspace_id', ws.id)).toBe(6);
+    // Briefs: six, Disco knits drop open with three photos, two closed.
+    expect(num(`select count(*) from public.briefs where workspace_id = '${ws}'`)).toBe(6);
+    expect(
+      num(`select count(*) from public.briefs where workspace_id = '${ws}' and status = 'closed'`),
+    ).toBe(2);
+    expect(
+      num(
+        `select count(*) from public.asset_attachments where entity_id = '${tagged(ws, 'brief')}'`,
+      ),
+    ).toBe(3);
+
+    // Library: six PDFs (each with a thumbnail) and twelve photos, by Arjun.
+    expect(
+      num(
+        `select count(*) from public.asset_versions where workspace_id = '${ws}' and kind = 'pdf' ` +
+          `and r2_key like 'induction-sample/pdf-%.pdf' and uploaded_by = '${SAMPLE_PEOPLE[1]}'`,
+      ),
+    ).toBe(6);
+    expect(
+      num(
+        `select count(*) from public.asset_versions where workspace_id = '${ws}' and kind = 'image' ` +
+          `and r2_key like 'induction-sample/as-%.jpg'`,
+      ),
+    ).toBe(12);
+    expect(
+      num(
+        `select count(*) from public.asset_renditions where workspace_id = '${ws}' and role = 'thumbnail'`,
+      ),
+    ).toBe(6);
+
+    // Chat: the DM, the default group and Shoot crew; Dev's voice note with its transcript.
+    expect(num(`select count(*) from public.chat_messages where workspace_id = '${ws}'`)).toBe(22);
+    expect(
+      num(`select count(*) from public.chat_messages where channel_id = '${main.groupChannel}'`),
+    ).toBe(9);
+    const voice = JSON.parse(
+      sql(
+        `select json_build_object('sender', sender_user_id, 'meta', attachment_meta) ` +
+          `from public.chat_messages where id = '${tagged(ws, 'voice_note')}'`,
+      ),
+    ) as {
+      sender: string;
+      meta: Record<string, { mime: string; peaks: number[]; transcript: string }>;
+    };
+    expect(voice.sender).toBe(DEV);
+    const meta = Object.values(voice.meta)[0];
+    expect(meta?.mime).toBe('audio/webm');
+    expect(meta?.peaks).toHaveLength(48);
+    expect(meta?.transcript).toBe(
+      'Riya wants the red deeper on the co-ord, and the caption under two hundred characters. Can we fix both before six?',
+    );
+    expect(
+      num(
+        `select count(*) from public.chat_messages where channel_id = '${main.groupChannel}' ` +
+          `and cardinality(attachment_asset_ids) = 3 and body = 'Three options for the cover'`,
+      ),
+    ).toBe(1);
+    expect(
+      sql(
+        `select name || ':' || avatar_url from public.groups where workspace_id = '${ws}' and not is_default`,
+      ),
+    ).toBe('Shoot crew:/induction-sample/gp-crew.jpg');
+
+    // Plan: shared with the client, this week, eight items, its card in the group.
+    const plan = tagged(ws, 'plan');
+    const asOwner = asGeneric(clientFor(main.owner.id));
+    expect(
+      await rowCount(asOwner.from('plans').select('id').eq('id', plan).eq('audience', 'client')),
+    ).toBe(1);
+    expect(await rowCount(asOwner.from('plan_items').select('id').eq('plan_id', plan))).toBe(8);
+    expect(
+      num(
+        `select count(*) from public.plans where id = '${plan}' and starts_on <= ` +
+          `(now() at time zone 'Asia/Kolkata')::date and ends_on >= (now() at time zone 'Asia/Kolkata')::date`,
+      ),
+    ).toBe(1);
+    expect(
+      num(
+        `select count(*) from public.chat_messages where shared_plan_ids @> array['${plan}']::uuid[]`,
+      ),
+    ).toBe(1);
+
+    // Activity: the owner's six sample entries (plus the welcome), already emailed; no
+    // one else got anything, and nothing was queued for the Agora sync.
+    expect(
+      num(
+        `select count(*) from public.inbox_entries where workspace_id = '${ws}' and user_id = '${main.owner.id}'`,
+      ),
+    ).toBe(7);
+    expect(
+      num(
+        `select count(*) from public.inbox_entries where workspace_id = '${ws}' ` +
+          `and user_id = '${main.owner.id}' and event_type <> 'system' and email_sent_at is not null`,
+      ),
+    ).toBe(6);
+    expect(
+      num(
+        `select count(*) from public.inbox_entries where workspace_id = '${ws}' and user_id <> '${main.owner.id}'`,
+      ),
+    ).toBe(0);
+    expect(num(`select count(*) from public.chat_sync_events where workspace_id = '${ws}'`)).toBe(
+      0,
+    );
+
+    // Storage: sample files use none of the workspace's space.
+    expect(num(`select public.workspace_bytes_used('${ws}')`)).toBe(bytesBefore);
+    const storage = await rpc(main.owner.id, 'workspace_storage', { p_workspace_id: ws });
+    expect(storage.error).toBeNull();
+    expect((storage.data as { library_bytes: number }[])[0]?.library_bytes).toBe(0);
+
+    // Sample people are not invites.
+    const state = await rpc(main.owner.id, 'induction_state', {
+      p_workspace_id: ws,
+      p_trace_id: uuidv7(),
+    });
+    expect(state.data).toMatchObject({ client_invited: false, team_invited: false });
+
     expect(
       await countWhere(g, 'audit_log', [
         ['trace_id', trace],
@@ -193,21 +429,17 @@ describe.runIf(RLS_SUITE)('induction sample week', () => {
   });
 
   it('is idempotent: a second seed changes nothing and returns the same ids', async () => {
-    const before = await rowsOf('posts', 'workspace_id', ws.id);
-    const first = await firstRow<{ row_id: string }>(
-      g.from('induction_sample_rows').select('row_id').eq('workspace_id', ws.id).eq('kind', 'post'),
-    );
-    const res = await rpc(owner.id, 'induction_sample_seed', {
-      p_workspace_id: ws.id,
-      p_trace_id: uuidv7(),
-    });
+    const before = markers(main.ws.id);
+    const res = await seed(main);
     expect(res.error).toBeNull();
     expect(res.data).toMatchObject({
       seeded: false,
-      post_id: first.row_id,
+      review_post_id: tagged(main.ws.id, 'review_post'),
+      plan_id: tagged(main.ws.id, 'plan'),
     });
-    expect(await rowsOf('posts', 'workspace_id', ws.id)).toBe(before);
-    expect(await rowsOf('induction_sample_rows', 'workspace_id', ws.id)).toBe(6);
+    expect(markers(main.ws.id)).toBe(before);
+    expect(num(`select count(*) from public.posts where workspace_id = '${main.ws.id}'`)).toBe(38);
+    expect(sampleMembers(main.ws.id)).toBe(5);
   });
 
   it('lets only the owner read the markers', async () => {
@@ -216,69 +448,109 @@ describe.runIf(RLS_SUITE)('induction sample week', () => {
         asGeneric(clientFor(userId))
           .from('induction_sample_rows')
           .select('row_id')
-          .eq('workspace_id', ws.id),
+          .eq('workspace_id', main.ws.id),
       );
-    expect(await read(owner.id)).toBe(6);
-    expect(await read(agency.id)).toBe(0);
-    const write = await asGeneric(clientFor(owner.id))
+    expect(await read(main.owner.id)).toBe(markers(main.ws.id));
+    const stranger = await seedUser(env, admin);
+    users.push(stranger);
+    expect(await read(stranger.id)).toBe(0);
+    const write = await asGeneric(clientFor(main.owner.id))
       .from('induction_sample_rows')
       .delete()
-      .eq('workspace_id', ws.id);
+      .eq('workspace_id', main.ws.id);
     expect(write.error).not.toBeNull();
   });
 
-  it('clears exactly the sample rows: the own post, other briefs and chat stay', async () => {
+  it('clears exactly the sample: own post, own comments elsewhere, other briefs and chat stay', async () => {
+    const ws = main.ws.id;
+    const review = tagged(ws, 'review_post');
+    const comment = (entityId: string, body: string) =>
+      clientFor(main.owner.id).rpc(
+        'comment_create',
+        rpcArgs({
+          p_workspace_id: ws,
+          p_entity_type: 'post',
+          p_entity_id: entityId,
+          p_parent_comment_id: null,
+          p_body: body,
+          p_mentions: null,
+          p_attachment_asset_ids: null,
+          p_trace_id: uuidv7(),
+        }) as never,
+      );
+    const onSample = await comment(review, 'Looks good to me');
+    expect(onSample.error).toBeNull();
+    const onOwn = await comment(ownPostId, 'A note on my own post');
+    expect(onOwn.error).toBeNull();
     const otherBrief = await insertRow(g, 'briefs', {
-      workspace_id: ws.id,
+      workspace_id: ws,
       number: 9000,
       title: 'Real brief',
       objective: 'Stays',
-      created_by: owner.id,
+      created_by: main.owner.id,
     });
-    const sent = await clientFor(owner.id).rpc(
+    const sent = await clientFor(main.owner.id).rpc(
       'chat_message_send',
       rpcArgs({
         p_id: uuidv7(),
-        p_channel_id: channelId,
+        p_channel_id: main.groupChannel,
         p_trace_id: uuidv7(),
         p_body: 'A real message',
       }),
     );
     expect(sent.error).toBeNull();
-    const markers = await g
-      .from('induction_sample_rows')
-      .select('kind, row_id')
-      .eq('workspace_id', ws.id);
-    const ids = (markers.data ?? []) as { kind: string; row_id: string }[];
-    const idOf = (kind: string): string => ids.find((m) => m.kind === kind)?.row_id ?? '';
-
-    const planRows = (): Promise<number> =>
-      rowCount(asGeneric(clientFor(owner.id)).from('plans').select('id').eq('id', idOf('plan')));
-    expect(await planRows()).toBe(1);
 
     const trace = uuidv7();
-    const res = await rpc(owner.id, 'induction_sample_clear', {
-      p_workspace_id: ws.id,
+    const res = await rpc(main.owner.id, 'induction_sample_clear', {
+      p_workspace_id: ws,
       p_trace_id: trace,
     });
     expect(res.error).toBeNull();
     expect(res.data).toMatchObject({
       cleared: true,
-      chat_messages: 2,
-      plan_items: 1,
-      plans: 1,
-      posts: 1,
-      briefs: 1,
+      reason: 'owner',
+      linked_comments: 1,
+      rows: { post: 37 },
     });
-    expect(await rowsOf('posts', 'id', idOf('post'))).toBe(0);
-    expect(await rowsOf('post_versions', 'post_id', idOf('post'))).toBe(0);
-    expect(await rowsOf('briefs', 'id', idOf('brief'))).toBe(0);
-    expect(await planRows()).toBe(0);
-    expect(await rowsOf('induction_sample_rows', 'workspace_id', ws.id)).toBe(0);
 
-    expect(await rowsOf('posts', 'id', ownPostId)).toBe(1);
-    expect(await rowsOf('briefs', 'id', String(otherBrief.id))).toBe(1);
-    expect(await rowsOf('chat_messages', 'channel_id', channelId)).toBe(1);
+    expect(markers(ws)).toBe(0);
+    expect(sampleMembers(ws)).toBe(0);
+    expect(
+      sql(`select string_agg(id::text, ',') from public.posts where workspace_id = '${ws}'`),
+    ).toBe(ownPostId);
+    expect(
+      sql(`select string_agg(body, ',') from public.comments where workspace_id = '${ws}'`),
+    ).toBe('A note on my own post');
+    expect(
+      sql(`select string_agg(id::text, ',') from public.briefs where workspace_id = '${ws}'`),
+    ).toBe(String(otherBrief.id));
+    expect(num(`select count(*) from public.assets where workspace_id = '${ws}'`)).toBe(0);
+    expect(num(`select count(*) from public.asset_attachments where workspace_id = '${ws}'`)).toBe(
+      0,
+    );
+    expect(num(`select count(*) from public.plans where workspace_id = '${ws}'`)).toBe(0);
+    expect(num(`select count(*) from public.groups where workspace_id = '${ws}'`)).toBe(1);
+    expect(num(`select count(*) from public.chat_channels where workspace_id = '${ws}'`)).toBe(1);
+    expect(
+      sql(`select string_agg(body, ',') from public.chat_messages where workspace_id = '${ws}'`),
+    ).toBe('A real message');
+    expect(
+      num(
+        `select count(*) from public.group_members where workspace_id = '${ws}' and user_id = any(${PEOPLE_SQL})`,
+      ),
+    ).toBe(0);
+    expect(
+      num(
+        `select count(*) from public.inbox_entries where workspace_id = '${ws}' ` +
+          `and (user_id = any(${PEOPLE_SQL}) or (user_id = '${main.owner.id}' and event_type <> 'system'))`,
+      ),
+    ).toBe(0);
+    expect(num(`select count(*) from public.chat_sync_events where workspace_id = '${ws}'`)).toBe(
+      0,
+    );
+    expect(
+      sql(`select reason from public.induction_sample_clears where workspace_id = '${ws}'`),
+    ).toBe('owner');
     expect(
       await countWhere(g, 'audit_log', [
         ['trace_id', trace],
@@ -287,13 +559,83 @@ describe.runIf(RLS_SUITE)('induction sample week', () => {
     ).toBe(1);
   });
 
-  it('is idempotent: a second clear changes nothing', async () => {
-    const res = await rpc(owner.id, 'induction_sample_clear', {
-      p_workspace_id: ws.id,
+  it('is idempotent and never re-seeds: a second clear and a later seed change nothing', async () => {
+    const again = await rpc(main.owner.id, 'induction_sample_clear', {
+      p_workspace_id: main.ws.id,
       p_trace_id: uuidv7(),
     });
-    expect(res.error).toBeNull();
-    expect(res.data).toMatchObject({ cleared: false });
-    expect(await rowsOf('posts', 'id', ownPostId)).toBe(1);
+    expect(again.error).toBeNull();
+    expect(again.data).toMatchObject({ cleared: false });
+    const reseed = await seed(main);
+    expect(reseed.error).toBeNull();
+    expect(reseed.data).toMatchObject({ seeded: false, reason: 'cleared' });
+    expect(markers(main.ws.id)).toBe(0);
+    expect(num(`select count(*) from public.posts where workspace_id = '${main.ws.id}'`)).toBe(1);
+  });
+
+  it('clears the sample when the owner invites a real client', async () => {
+    const o = await ownWorkspace();
+    expect((await seed(o)).data).toMatchObject({ seeded: true });
+    const client = await seedUser(env, admin);
+    users.push(client);
+    const invited = await clientFor(o.owner.id).rpc(
+      'member_invite',
+      rpcArgs({
+        p_workspace_id: o.ws.id,
+        p_email: client.email,
+        p_role: 'client',
+        p_trace_id: uuidv7(),
+      }),
+    );
+    expect(invited.error).toBeNull();
+    expect(markers(o.ws.id)).toBe(0);
+    expect(sampleMembers(o.ws.id)).toBe(0);
+    expect(num(`select count(*) from public.posts where workspace_id = '${o.ws.id}'`)).toBe(0);
+    expect(
+      sql(`select reason from public.induction_sample_clears where workspace_id = '${o.ws.id}'`),
+    ).toBe('member_joined');
+    // The first real client still sets the workspace's client domain.
+    expect(sql(`select client_domain from public.workspaces where id = '${o.ws.id}'`)).toBe(
+      client.email.split('@')[1],
+    );
+    const state = await rpc(o.owner.id, 'induction_state', {
+      p_workspace_id: o.ws.id,
+      p_trace_id: uuidv7(),
+    });
+    expect(state.data).toMatchObject({ client_invited: true, team_invited: false });
+  });
+
+  it('clears the sample when an earlier invitee accepts', async () => {
+    const o = await ownWorkspace();
+    const teammate = await seedUser(env, admin);
+    users.push(teammate);
+    const invited = await clientFor(o.owner.id).rpc(
+      'member_invite',
+      rpcArgs({
+        p_workspace_id: o.ws.id,
+        p_email: teammate.email,
+        p_role: 'agency',
+        p_trace_id: uuidv7(),
+      }),
+    );
+    expect(invited.error).toBeNull();
+    // A pending invite has never been active: the seed still runs.
+    expect((await seed(o)).data).toMatchObject({ seeded: true });
+    expect(sampleMembers(o.ws.id)).toBe(5);
+    const accepted = await clientFor(teammate.id).rpc(
+      'member_accept',
+      rpcArgs({ p_invite_id: String(invited.data), p_trace_id: uuidv7() }),
+    );
+    expect(accepted.error).toBeNull();
+    expect(markers(o.ws.id)).toBe(0);
+    expect(sampleMembers(o.ws.id)).toBe(0);
+    expect(num(`select count(*) from public.chat_messages where workspace_id = '${o.ws.id}'`)).toBe(
+      0,
+    );
+    expect(
+      num(
+        `select count(*) from public.workspace_members where workspace_id = '${o.ws.id}' and active`,
+      ),
+    ).toBe(2);
   });
 });

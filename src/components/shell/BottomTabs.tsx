@@ -17,10 +17,6 @@ export function BottomTabs() {
         <NavLink
           key={item.to}
           to={item.to}
-          {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
-          {...(item.showActivityBadge === true
-            ? { 'data-induction': INDUCTION_KEYS.activityTab }
-            : {})}
           className={({ isActive }) =>
             cn(
               'flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] text-[11px] font-medium transition-colors',
@@ -28,22 +24,32 @@ export function BottomTabs() {
             )
           }
         >
-          <span className="relative">
-            <item.Icon size={20} />
-            {item.showChatBadge && total > 0 ? (
-              <CountBadge
-                count={total}
-                className="absolute -right-2 -top-1.5 border-2 border-panel"
-              />
-            ) : null}
-            {item.showActivityBadge && unreadCount > 0 ? (
-              <CountBadge
-                count={unreadCount}
-                className="absolute -right-2 -top-1.5 border-2 border-panel"
-              />
-            ) : null}
+          {/* The guide boxes the icon and its label, not the whole 56px cell: the
+              whole cell meets the screen's edge and the box would be cut there. */}
+          <span
+            {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
+            {...(item.showActivityBadge === true
+              ? { 'data-induction': INDUCTION_KEYS.activityTab }
+              : {})}
+            className="flex flex-col items-center gap-1 rounded-lg px-1.5 py-0.5"
+          >
+            <span className="relative">
+              <item.Icon size={20} />
+              {item.showChatBadge && total > 0 ? (
+                <CountBadge
+                  count={total}
+                  className="absolute -right-2 -top-1.5 border-2 border-panel"
+                />
+              ) : null}
+              {item.showActivityBadge && unreadCount > 0 ? (
+                <CountBadge
+                  count={unreadCount}
+                  className="absolute -right-2 -top-1.5 border-2 border-panel"
+                />
+              ) : null}
+            </span>
+            <span>{item.label}</span>
           </span>
-          <span>{item.label}</span>
         </NavLink>
       ))}
     </nav>

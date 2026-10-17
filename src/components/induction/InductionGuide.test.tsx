@@ -23,6 +23,9 @@ vi.mock('./induction-data', () => ({
     facts.reads += 1;
     return facts.current;
   },
+  NO_SAMPLE: { seeded: false, reviewPostId: null },
+  seedSampleWeek: async () => false,
+  clearSampleWeek: async () => true,
 }));
 
 import { InductionGuide } from './InductionGuide';
@@ -33,6 +36,7 @@ import type { InductionData } from './useInductionData';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const BASE_FACTS: GuideFactsRead = {
+  sample: { seeded: false, reviewPostId: null },
   group: { name: 'Kite', channelId: 'group__ws-1__g1' },
   reviewPost: undefined,
   hasBrief: true,
@@ -563,7 +567,7 @@ describe('cards', () => {
     const d = await mount({ step: 'c_intro', ...ALL_DATA });
     const card = q('[data-induction-card="intro"]');
     expect(card.textContent).toContain('Have a look around');
-    expect(card.textContent).toContain('KITE');
+    expect(card.textContent).toContain('KESTREL & ROWE · SAMPLE WEEK');
     act(() => card.querySelector('button')!.click());
     const first = ROUTE_SCRIPTS.creator.steps.find((s) => s.chapter !== undefined)!;
     expect(d.setStep).toHaveBeenCalledWith(first.id);
@@ -575,6 +579,19 @@ describe('cards', () => {
     expect(card.textContent).toContain('Diwali drop is waiting for your approver.');
     act(() => card.querySelector('button')!.click());
     expect(d.finish).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sample week', () => {
+  it('shows the clear card before the closing card while the sample is there', async () => {
+    facts.current = { ...BASE_FACTS, sample: { seeded: true, reviewPostId: 'p-sample' } };
+    await mount({ step: 'c_closing', ...ALL_DATA });
+    const card = q('[data-induction-card="clear"]');
+    expect(card.textContent).toContain("That was Kestrel & Rowe's week");
+    expect(card.textContent).toContain('things you did');
+    expect(card.querySelector('button')?.textContent).toBe('Clear it');
+    expect(document.querySelector('[data-induction-card="closing"]')).toBeNull();
+    facts.current = BASE_FACTS;
   });
 });
 

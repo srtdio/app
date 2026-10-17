@@ -40,7 +40,7 @@ import {
   type Resolution,
   type StepProbe,
 } from '@/lib/induction';
-import { fillCopy, GUIDE_CHROME, GUIDE_LEGEND } from '@/lib/induction-copy';
+import { CLEAR_CARD_COPY, fillCopy, GUIDE_CHROME, GUIDE_LEGEND } from '@/lib/induction-copy';
 import type { RouteScript, Step } from '@/lib/induction-model';
 import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useInduction, type InductionContextValue } from './InductionProvider';
@@ -220,6 +220,9 @@ function CardLayer({
 }): ReactElement {
   const { card } = resolution;
   const fill = (text: string): string => fillCopy(text, ctx.copy);
+  if (card.kind === 'closing' && ctx.sample.seeded) {
+    return <ClearCard ctx={ctx} steps={resolution.steps.length} dock={dock} />;
+  }
   return (
     <GuideCard
       kind={card.kind}
@@ -231,6 +234,54 @@ function CardLayer({
         button: card.button,
       }}
       onPress={card.kind === 'intro' ? ctx.start : ctx.finish}
+      dock={dock}
+    />
+  );
+}
+
+function minutesLabel(ms: number): string {
+  const s = Math.max(1, Math.round(ms / 1000));
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
+}
+
+/**
+ * After the creator's look-around: the sample week clears (every sample row and
+ * person), then the closing card shows on their own Pipeline with their post.
+ */
+function ClearCard({
+  ctx,
+  steps,
+  dock,
+}: {
+  ctx: InductionContextValue;
+  steps: number;
+  dock: DockAt;
+}): ReactElement {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const taken = ctx.startedAt !== null ? minutesLabel(Date.now() - ctx.startedAt) : '1 min';
+  return (
+    <GuideCard
+      kind="clear"
+      copy={{
+        eyebrow: CLEAR_CARD_COPY.eyebrow,
+        title: CLEAR_CARD_COPY.title,
+        body: CLEAR_CARD_COPY.body,
+        pills: [],
+        button: busy ? CLEAR_CARD_COPY.clearing : CLEAR_CARD_COPY.button,
+        stats: [
+          { value: String(steps), label: CLEAR_CARD_COPY.thingsDone },
+          { value: taken, label: CLEAR_CARD_COPY.timeTaken },
+        ],
+      }}
+      onPress={() => {
+        if (busy) return;
+        setBusy(true);
+        void ctx.clearSample().then(() => {
+          navigate('/pipeline', { replace: true });
+          setBusy(false);
+        });
+      }}
       dock={dock}
     />
   );
@@ -452,7 +503,22 @@ function useBringIntoView(stepId: string, el: HTMLElement | undefined): void {
     if (since.current.key !== key) since.current = { key, at: performance.now() };
     if (performance.now() - since.current.at > BRING_WINDOW_MS) return;
     const r = el.getBoundingClientRect();
-    if (r.top >= 0 && r.bottom <= window.innerHeight) return;
+    if (r.top >= 0 && r.bottom <= window.innerHeight && !coveredByPage(el, r)) return;
     el.scrollIntoView?.({ block: 'center' });
   });
+}
+
+/**
+ * True when another part of the page (a sticky header, a pinned bar) sits on the
+ * control's centre, so it reads as on screen but cannot be seen: a voice note
+ * scrolled under a chat's header. The guide's own layer is looked through.
+ */
+function coveredByPage(el: HTMLElement, r: DOMRect): boolean {
+  if (typeof document.elementsFromPoint !== 'function') return false;
+  const x = r.left + r.width / 2;
+  const y = r.top + r.height / 2;
+  const top = document
+    .elementsFromPoint(x, y)
+    .find((node) => node.closest(`[${LAYER_ATTR}]`) === null);
+  return top !== undefined && top !== el && !el.contains(top) && !top.contains(el);
 }

@@ -496,7 +496,7 @@ export function OnboardingFlow({
       <>
         <Heading
           title="Who are you here as?"
-          lead="Creators make the posts. Approvers read them and approve them."
+          lead="Creators make the posts. Approvers evaluate them, share feedback and approve them."
         />
         <div role="radiogroup" aria-label="Who are you here as?" className="flex flex-col gap-3">
           {SIDE_TILES.map((tile) => (
@@ -508,7 +508,7 @@ export function OnboardingFlow({
               onClick={() => setSide(tile.side)}
               className={cn(
                 'flex min-h-[72px] flex-col items-start justify-center rounded-xl border bg-panel px-4 py-3 text-left',
-                side === tile.side ? 'border-fg ring-1 ring-fg' : 'border-border',
+                side === tile.side ? 'border-accent ring-1 ring-accent' : 'border-border',
               )}
             >
               <span className="text-[17px] font-semibold text-fg">{tile.title}</span>
@@ -773,7 +773,7 @@ export function OnboardingFlow({
                     key={s}
                     className={cn(
                       'h-1 flex-1 rounded-full',
-                      i <= progressAt ? 'bg-fg' : 'bg-border',
+                      i <= progressAt ? 'bg-accent' : 'bg-border',
                     )}
                   />
                 ))}
@@ -845,7 +845,7 @@ export function OnboardingFlow({
 function Heading({ title, lead }: { title: string; lead: string }): ReactElement {
   return (
     <div>
-      <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.02em] text-fg [text-wrap:balance]">
+      <h1 className="text-[24px] font-semibold leading-[1.2] tracking-[-0.01em] text-fg [text-wrap:balance]">
         {title}
       </h1>
       <p className="mt-2 text-[15px] leading-[1.45] text-fg-2 [text-wrap:balance]">{lead}</p>
@@ -893,7 +893,7 @@ function Primary({
       data-induction={anchor}
       disabled={disabled}
       onClick={onClick}
-      className="h-[50px] w-full rounded-lg bg-fg text-[15px] font-semibold text-bg hover:opacity-90 disabled:opacity-35"
+      className="h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
     >
       {children}
     </button>
@@ -924,7 +924,7 @@ function WelcomeBody({
 }): ReactElement {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-[26px] font-bold leading-[1.15] tracking-[-0.02em] text-fg [text-wrap:balance]">
+      <h1 className="text-[24px] font-semibold leading-[1.2] tracking-[-0.01em] text-fg [text-wrap:balance]">
         {heading}
       </h1>
       {platform !== '' ? <PlatformTag platform={platform} /> : null}

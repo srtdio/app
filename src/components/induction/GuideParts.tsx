@@ -337,6 +337,8 @@ export interface CardCopy {
   body: string;
   pills: readonly string[];
   button: string;
+  /** The clear card's two figures (things done, time taken). */
+  stats?: readonly { value: string; label: string }[];
 }
 
 /** The intro (hero, indigo, chapter pills, Start) or closing (plain, Done) card, docked like the bar. */
@@ -346,7 +348,7 @@ export function GuideCard({
   onPress,
   dock,
 }: {
-  kind: 'intro' | 'closing';
+  kind: 'intro' | 'closing' | 'clear';
   copy: CardCopy;
   onPress: () => void;
   dock: DockAt;
@@ -375,6 +377,16 @@ export function GuideCard({
       >
         {copy.body}
       </p>
+      {copy.stats !== undefined && copy.stats.length > 0 ? (
+        <div className="mt-3 flex gap-3">
+          {copy.stats.map((stat) => (
+            <div key={stat.label} className="flex-1 rounded-lg bg-panel-2 px-3 py-2.5">
+              <p className="text-[20px] font-semibold tabular-nums text-accent">{stat.value}</p>
+              <p className="text-[12px] text-fg-2">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {copy.pills.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {copy.pills.map((pill) => (
