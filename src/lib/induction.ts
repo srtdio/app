@@ -1,12 +1,22 @@
 // Pure logic for the induction: the guided first run on the real screens
-// (src/components/induction/**). No network, no React. Which step a person is
-// on comes from the database (induction_state) plus the stored teach step
-// (induction_step_set), so every rule here is a function of that state and is
-// unit tested: the steps per role, resume, the two hard gates, where the card
-// sits so it never covers the boxed control, and the upload copy of the first
-// post.
+// (src/components/induction/**). No network, no React. The steps come from the
+// route scripts (src/lib/induction-routes.ts); every function here takes the
+// script as a parameter, so the rules are unit tested on small fixture
+// scripts: which step is up (resolve), where it moves next, Back, the 4 s
+// skip, the progress fill, the box and label geometry, and the upload copy of
+// the first post.
 
 import { INDUCTION_KEYS, type InductionKey } from './induction-keys';
+import {
+  ROUTE_PREFIX,
+  type Card,
+  type Chapter,
+  type InductionFacts,
+  type RouteScript,
+  type Step,
+  type StepPlace,
+} from './induction-model';
+import { isApplicable } from './induction-routes';
 
 export { INDUCTION_KEYS, inductionSelector, type InductionKey } from './induction-keys';
 
@@ -17,16 +27,20 @@ export function dispatchInductionRefresh(): void {
   window.dispatchEvent(new CustomEvent(INDUCTION_REFRESH_EVENT));
 }
 
-/** The 4 s poll, only while a gated step is active. */
+/** The 4 s poll, only while a data-finished step is active. */
 export const INDUCTION_POLL_MS = 4000;
 
+/** How long a step's control may stay off screen before the guide moves on. */
+export const ABSENT_SKIP_MS = 4000;
+
 /**
- * Stored step ids outside the in-app list: the approver who signed up alone
- * (naming their team, then waiting for it) and the Creator's start.
+ * Stored step ids outside the route scripts: the approver who signed up alone
+ * (naming their team, then waiting for it). The Creator's start is the first
+ * creator step.
  */
 export const APPROVER_BRAND_STEP = 'approver_brand';
 export const APPROVER_WAITING_STEP = 'approver_waiting';
-export const WORKSPACE_STEP = 'workspace';
+export const WORKSPACE_STEP = `${ROUTE_PREFIX.creator}workspace`;
 
 /** Where an approver who signed up alone is, from the stored step. */
 export type ApproverStage = 'none' | 'brand' | 'waiting';
@@ -85,439 +99,223 @@ export function parseInductionState(raw: unknown): InductionState {
   };
 }
 
-// ---------- steps ----------
+// ---------- step data ----------
 
-/** creator: the owner who signed up. approver: an invited client. teammate: an invited admin or agency member. */
-export type InductionPath = 'creator' | 'approver' | 'teammate';
-
-/**
- * The path for a workspace role. No workspace yet is the Creator who has to
- * make one. 'none' when the role is unknown (the guide stays off).
- */
-export function pathFor(role: string | null, hasWorkspace: boolean): InductionPath | 'none' {
-  if (!hasWorkspace) return 'creator';
-  if (role === 'owner') return 'creator';
-  if (role === 'admin' || role === 'agency') return 'teammate';
-  if (role === 'client') return 'approver';
-  return 'none';
+/** What the engine reads to decide a step: the stored state and the workspace facts. */
+export interface EngineInput {
+  state: InductionState;
+  facts: InductionFacts;
 }
 
-/**
- * setup: done by the data, no buttons (the workspace). gate: a hard gate, no
- * Next and no Later, and leaving its page brings the person back. teach: Next.
- * optional: Next and Later.
- */
-export type StepKind = 'setup' | 'gate' | 'teach' | 'optional';
-
-/** Where a step lives; the route is built from it (see placeRoute). */
-export type StepPlace =
-  | 'shell'
-  | 'pipeline'
-  | 'members'
-  | 'post'
-  | 'assets'
-  | 'briefs'
-  | 'activity'
-  | 'group';
-
-export interface InductionStep {
-  id: string;
-  kind: StepKind;
-  /** The "Step N of M" group: steps on one screen share it. */
-  part: number;
-  place: StepPlace;
-  /** The controls to box, first visible wins (an open sheet's control before the page's). */
-  targets: readonly InductionKey[];
-  /** One line each. "{workspace}" reads the "<Brand> - <Platform>" label. */
-  title: string;
-  body: string;
-  /** The Later button's words on an optional step. */
-  laterLabel?: string;
+/** Whether the data already finished a step. 'none' steps are finished by the DOM, never here. */
+export function stepDataDone(step: Pick<Step, 'dataDone'>, input: EngineInput): boolean {
+  switch (step.dataDone) {
+    case 'none':
+      return false;
+    case 'hasWorkspace':
+      return input.facts.hasWorkspace;
+    case 'firstPostSent':
+      return input.state.postId !== null;
+    case 'clientInvited':
+      return input.state.clientInvited;
+    case 'teamInvited':
+      return input.state.teamInvited;
+  }
 }
 
-const K = INDUCTION_KEYS;
-
-const CHAT_HASH: Omit<InductionStep, 'id' | 'part'> = {
-  kind: 'teach',
-  place: 'group',
-  targets: [K.chatHash],
-  title: 'Type # to bring a post in',
-  body: 'The post shows up as a card everyone can open.',
-};
-
-const CHAT_PLUS: Omit<InductionStep, 'id' | 'part'> = {
-  kind: 'teach',
-  place: 'group',
-  targets: [K.chatAttachTray, K.chatPlus],
-  title: 'Tap + to attach',
-  body: 'Photos, files, brand assets, briefs and posts.',
-};
-
-const CHAT_TASKS: Omit<InductionStep, 'id' | 'part'> = {
-  kind: 'teach',
-  place: 'group',
-  targets: [K.chatTasks],
-  title: 'Tap the tick for tasks',
-  body: 'Everything someone owes this group, in one list.',
-};
-
-const ACTIVITY: Omit<InductionStep, 'id' | 'part'> = {
-  kind: 'teach',
-  place: 'activity',
-  targets: [K.activityList],
-  title: 'Activity',
-  body: 'Everything that happens lands here, newest first.',
-};
-
-export const CREATOR_STEPS: readonly InductionStep[] = [
-  {
-    id: WORKSPACE_STEP,
-    kind: 'setup',
-    part: 1,
-    place: 'shell',
-    targets: [K.topbarWorkspaceSlot],
-    title: 'Create your workspace',
-    body: 'Name it after the brand, then pick its platform.',
-  },
-  {
-    id: 'stages',
-    kind: 'teach',
-    part: 2,
-    place: 'pipeline',
-    targets: [K.pipelineStageRow],
-    title: 'Five stages',
-    body: 'Every post lives in one of these. Review is where your approver looks.',
-  },
-  {
-    id: 'first_post',
-    kind: 'gate',
-    part: 3,
-    place: 'pipeline',
-    targets: [K.postSheetPrimary, K.pipelineCreate],
-    title: 'Send your first post for review',
-    body: 'Add the caption and the creative, then send it.',
-  },
-  {
-    id: 'approver_invite',
-    kind: 'gate',
-    part: 4,
-    place: 'members',
-    targets: [K.membersInvite],
-    title: 'Invite your approver',
-    body: 'Add their email with the role Approver. They read and approve here.',
-  },
-  {
-    id: 'team_invite',
-    kind: 'optional',
-    part: 4,
-    place: 'members',
-    targets: [K.membersInvite],
-    title: 'Add other creators',
-    body: 'People who make the posts with you. Pick the role Creator.',
-    laterLabel: "It's just me for now",
-  },
-  {
-    id: 'post_comments',
-    kind: 'teach',
-    part: 5,
-    place: 'post',
-    targets: [K.postCommentComposer],
-    title: 'Comments stay on the post',
-    body: 'Your approver reads them here, not on WhatsApp.',
-  },
-  {
-    id: 'post_approve',
-    kind: 'teach',
-    part: 5,
-    place: 'post',
-    targets: [K.postApprove],
-    title: 'Approve',
-    body: 'This one is for your approver.',
-  },
-  {
-    id: 'assets',
-    kind: 'teach',
-    part: 6,
-    place: 'assets',
-    targets: [K.assetsAdd],
-    title: 'Brand files go here',
-    body: 'Logos, fonts and photos, in one place for everyone.',
-  },
-  { ...ACTIVITY, id: 'activity', part: 7 },
-  { ...CHAT_HASH, id: 'chat_hash', part: 8 },
-  { ...CHAT_PLUS, id: 'chat_plus', part: 8 },
-  { ...CHAT_TASKS, id: 'chat_tasks', part: 8 },
-  {
-    id: 'chat_mic',
-    kind: 'teach',
-    part: 8,
-    place: 'group',
-    targets: [K.chatMic],
-    title: 'Tap the mic for a voice note',
-    body: 'Quicker than typing when you are on the move.',
-  },
-];
-
-export const APPROVER_STEPS: readonly InductionStep[] = [
-  {
-    id: 'a_workspace',
-    kind: 'teach',
-    part: 1,
-    place: 'pipeline',
-    targets: [K.topbarWorkspaceSlot],
-    title: '{workspace}',
-    body: 'Posts waiting for your approval live here.',
-  },
-  {
-    id: 'a_review',
-    kind: 'teach',
-    part: 2,
-    place: 'pipeline',
-    targets: [K.pipelineStageRow],
-    title: 'Review',
-    body: 'Posts waiting on you sit in Review.',
-  },
-  {
-    id: 'a_points',
-    kind: 'teach',
-    part: 3,
-    place: 'post',
-    targets: [K.postCommentComposer],
-    title: 'Add your points here',
-    body: 'Comments stay on the post, so nothing gets lost.',
-  },
-  {
-    id: 'a_approve',
-    kind: 'teach',
-    part: 3,
-    place: 'post',
-    targets: [K.postApprove],
-    title: 'Approve when it is right',
-    body: 'One post at a time. Comments keep it in review.',
-  },
-  {
-    id: 'a_assets',
-    kind: 'teach',
-    part: 4,
-    place: 'assets',
-    targets: [K.assetsAdd],
-    title: 'Brand files',
-    body: 'Logos, fonts and photos your team works from.',
-  },
-  {
-    id: 'a_briefs',
-    kind: 'optional',
-    part: 5,
-    place: 'briefs',
-    targets: [K.briefsNew],
-    title: 'Write a brief',
-    body: 'Tell your team what the next post needs.',
-    laterLabel: 'Later',
-  },
-  { ...ACTIVITY, id: 'a_activity', part: 6 },
-  {
-    id: 'a_chat_card',
-    kind: 'teach',
-    part: 7,
-    place: 'group',
-    targets: [K.chatPostCard],
-    title: 'Your post is in the group too',
-    body: 'Its card reads Waiting on you until you decide.',
-  },
-  { ...CHAT_HASH, id: 'a_chat_hash', part: 7 },
-  { ...CHAT_TASKS, id: 'a_chat_tasks', part: 7 },
-];
-
-export const TEAMMATE_STEPS: readonly InductionStep[] = [
-  {
-    id: 't_drafts',
-    kind: 'teach',
-    part: 1,
-    place: 'pipeline',
-    targets: [K.pipelineDraftChip],
-    title: 'Drafts',
-    body: 'Drafts are yours until you send them.',
-  },
-  {
-    id: 't_post',
-    kind: 'optional',
-    part: 2,
-    place: 'pipeline',
-    targets: [K.postSheetPrimary, K.pipelineCreate],
-    title: 'Start a post',
-    body: 'Save it as a draft while you work on it.',
-    laterLabel: 'Later',
-  },
-  {
-    id: 't_assets',
-    kind: 'optional',
-    part: 3,
-    place: 'assets',
-    targets: [K.assetsAdd],
-    title: 'Upload brand files',
-    body: 'Put the files the team works from here.',
-    laterLabel: 'Later',
-  },
-  { ...ACTIVITY, id: 't_activity', part: 4 },
-  { ...CHAT_HASH, id: 't_chat_hash', part: 5 },
-  { ...CHAT_PLUS, id: 't_chat_plus', part: 5 },
-];
-
-export function stepsForPath(path: InductionPath): readonly InductionStep[] {
-  if (path === 'approver') return APPROVER_STEPS;
-  if (path === 'teammate') return TEAMMATE_STEPS;
-  return CREATOR_STEPS;
-}
-
-/** Every hard gate across the three paths (exactly two: first post, approver invite). */
-export function hardGates(): InductionStep[] {
-  return [...CREATOR_STEPS, ...APPROVER_STEPS, ...TEAMMATE_STEPS].filter((s) => s.kind === 'gate');
-}
-
-/** Which buttons a step's card shows. A hard gate and the setup step show none. */
-export function stepButtons(step: Pick<InductionStep, 'kind'>): { next: boolean; later: boolean } {
-  if (step.kind === 'teach') return { next: true, later: false };
-  if (step.kind === 'optional') return { next: true, later: true };
-  return { next: false, later: false };
-}
-
-/** Steps the data finishes; the guide polls while one is active. */
-export function isGated(step: Pick<InductionStep, 'kind'>): boolean {
+/** Steps the data finishes and the guide polls for (setup and gate). */
+export function isGated(step: Pick<Step, 'kind'>): boolean {
   return step.kind === 'gate' || step.kind === 'setup';
+}
+
+/** The script's steps that apply to this workspace, in order. */
+export function applicableSteps(script: RouteScript, facts: InductionFacts): readonly Step[] {
+  return script.steps.filter((step) => isApplicable(step, facts));
+}
+
+/** The first look-around (chapter) step, or -1 when the route has none. */
+export function firstLookAroundIndex(steps: readonly Step[]): number {
+  return steps.findIndex((step) => step.chapter !== undefined);
 }
 
 // ---------- resolution ----------
 
-/** What the person's workspace can show right now. */
-export interface InductionAvailability {
-  hasWorkspace: boolean;
-  /** A post to open for the post steps (the creator's sent post, the approver's first in review). */
-  postId: string | null;
-  /** The default group's chat channel id, for the group steps. */
-  groupChannelId: string | null;
-  /**
-   * Whether the viewer holds brief.create. false drops the New brief step (its
-   * "+" is not rendered); null or absent while unknown keeps it.
-   */
-  canCreateBrief?: boolean | null;
-}
-
-/** Whether the data already finished a step (a setup or gate, or the team invite). */
-export function dataDone(
-  step: Pick<InductionStep, 'id'>,
-  state: InductionState,
-  hasWorkspace: boolean,
-): boolean {
-  switch (step.id) {
-    case WORKSPACE_STEP:
-      return hasWorkspace;
-    case 'first_post':
-      return state.postId !== null;
-    case 'approver_invite':
-      return state.clientInvited;
-    case 'team_invite':
-      return state.teamInvited;
-    default:
-      return false;
-  }
-}
-
-/**
- * Whether a step's screen exists. The Creator's post steps always count: they
- * come after the first post gate, which guarantees the post, so the numbering
- * never shifts once it is sent.
- */
-function available(
-  step: InductionStep,
-  where: InductionAvailability,
-  path: InductionPath,
-): boolean {
-  if (step.place === 'post') return path === 'creator' || where.postId !== null;
-  // workspace_create makes the default group, so before a workspace it still counts.
-  if (step.place === 'group') return where.groupChannelId !== null || !where.hasWorkspace;
-  if (step.targets.includes(K.briefsNew)) return where.canCreateBrief !== false;
-  return true;
-}
-
-export type InductionResolution =
+export type Resolution =
   | { kind: 'off' }
-  | { kind: 'finish' }
-  | {
-      kind: 'step';
-      step: InductionStep;
-      /** The next step's id, or 'finish' after the last one. */
-      nextId: string;
-      /** "Step part of parts". */
-      part: number;
-      parts: number;
-    };
+  | { kind: 'intro'; card: Card; steps: readonly Step[]; index: number }
+  | { kind: 'step'; step: Step; steps: readonly Step[]; index: number }
+  | { kind: 'closing'; card: Card; steps: readonly Step[] };
 
 /**
- * The step to show. Resume rule: the stored step, unless an earlier setup or
- * hard gate is still open (then that gate), skipping forward over anything the
- * data already finished. Steps whose screen is not available (no post to open,
- * no group) drop out and the numbering closes up. Past the end: finish.
+ * Where the stored id points. A step id resolves within the route (a step the
+ * facts dropped moves on to the next one that applies); the intro id points at
+ * the first look-around step and the closing id past the end. Anything else (an
+ * old or foreign id) resumes after the furthest step the data has finished, so
+ * nobody restarts from zero when the data shows progress.
  */
-export function resolveStep(input: {
-  path: InductionPath | 'none';
-  state: InductionState;
-  where: InductionAvailability;
-}): InductionResolution {
-  const { path, state, where } = input;
-  if (state.done || path === 'none') return { kind: 'off' };
-  const steps = stepsForPath(path).filter((step) => available(step, where, path));
-  if (!where.hasWorkspace) {
-    const setup = steps.find((step) => step.kind === 'setup');
-    if (setup === undefined) return { kind: 'off' };
-    return describe(steps, steps.indexOf(setup));
+function startIndex(script: RouteScript, steps: readonly Step[], input: EngineInput): number {
+  const stored = input.state.step;
+  if (stored === script.intro.id) return Math.max(0, firstLookAroundIndex(steps));
+  if (stored === script.closing.id) return steps.length;
+  const inScript = script.steps.findIndex((step) => step.id === stored);
+  if (inScript >= 0) {
+    const later = script.steps.slice(inScript).find((step) => steps.includes(step));
+    return later === undefined ? steps.length : steps.indexOf(later);
   }
-  const stored = steps.findIndex((step) => step.id === state.step);
-  const openGate = steps.findIndex(
-    (step) => isGated(step) && !dataDone(step, state, where.hasWorkspace),
+  return afterData(steps, input);
+}
+
+function afterData(steps: readonly Step[], input: EngineInput): number {
+  let last = -1;
+  steps.forEach((step, i) => {
+    if (step.dataDone !== 'none' && stepDataDone(step, input)) last = i;
+  });
+  return last + 1;
+}
+
+/**
+ * An earlier open setup or gate wins over a later stored step: the person goes
+ * back to the first open step of that gate's group (the steps sharing its
+ * data), unless the stored step is already inside that group.
+ */
+function gateOverride(steps: readonly Step[], at: number, input: EngineInput): number {
+  const gate = steps.findIndex((step) => isGated(step) && !stepDataDone(step, input));
+  const gateStep = steps[gate];
+  if (gateStep === undefined || gate >= at) return at;
+  if (steps[at]?.dataDone === gateStep.dataDone) return at;
+  const first = steps.findIndex(
+    (step) => step.dataDone === gateStep.dataDone && !stepDataDone(step, input),
   );
-  let at = stored < 0 ? 0 : stored;
-  if (openGate >= 0 && openGate < at) at = openGate;
-  while (at < steps.length) {
-    const step = steps[at];
-    if (step === undefined || !finishedByData(step, state, where.hasWorkspace)) break;
-    at += 1;
-  }
-  if (at >= steps.length) return { kind: 'finish' };
-  return describe(steps, at);
+  return first < 0 ? gate : first;
 }
 
-function finishedByData(
-  step: InductionStep,
-  state: InductionState,
-  hasWorkspace: boolean,
-): boolean {
-  return (isGated(step) || step.id === 'team_invite') && dataDone(step, state, hasWorkspace);
+function skipDone(steps: readonly Step[], at: number, input: EngineInput): number {
+  let i = at;
+  while (i < steps.length && stepDataDone(steps[i] as Step, input)) i += 1;
+  return i;
 }
 
-function describe(steps: readonly InductionStep[], at: number): InductionResolution {
+/**
+ * What the guide shows for a route: the stored step (resolved as above), the
+ * intro card before the first look-around step (until Start stores that step),
+ * or the closing card when nothing is left. Off once done.
+ */
+export function resolveGuide(script: RouteScript, input: EngineInput): Resolution {
+  if (input.state.done) return { kind: 'off' };
+  const steps = applicableSteps(script, input.facts);
+  const at = skipDone(steps, gateOverride(steps, startIndex(script, steps, input), input), input);
   const step = steps[at];
-  if (step === undefined) return { kind: 'finish' };
-  const parts = [...new Set(steps.map((s) => s.part))].sort((a, b) => a - b);
-  return {
-    kind: 'step',
-    step,
-    nextId: steps[at + 1]?.id ?? 'finish',
-    part: parts.indexOf(step.part) + 1,
-    parts: parts.length,
-  };
+  if (step === undefined) return { kind: 'closing', card: script.closing, steps };
+  if (at === firstLookAroundIndex(steps) && input.state.step !== step.id) {
+    return { kind: 'intro', card: script.intro, steps, index: at };
+  }
+  return { kind: 'step', step, steps, index: at };
 }
 
-/** The card's title and body with the workspace label filled in. */
-export function stepCopy(
-  step: Pick<InductionStep, 'title' | 'body'>,
-  workspaceLabel: string,
-): { title: string; body: string } {
-  const fill = (text: string) => text.replace('{workspace}', workspaceLabel);
-  return { title: fill(step.title), body: fill(step.body) };
+/**
+ * The id to store when the guide moves from one step to another: the intro id
+ * when it enters the look-around from a setup step, the closing id past the end.
+ */
+export function storedIdFor(
+  script: RouteScript,
+  steps: readonly Step[],
+  move: { from: number; to: number },
+): string {
+  const target = steps[move.to];
+  if (target === undefined || move.to < 0) return script.closing.id;
+  const first = firstLookAroundIndex(steps);
+  if (move.to === first && move.from < first) return script.intro.id;
+  return target.id;
 }
 
-export function stepCountLabel(part: number, parts: number): string {
-  return `Step ${part} of ${parts}`;
+/** Whether a tap or the DOM may finish a step. A gate, and the last setup step of its group, wait for the data. */
+export function completesByUi(steps: readonly Step[], index: number): boolean {
+  const step = steps[index];
+  if (step === undefined || step.kind === 'gate') return false;
+  if (step.kind !== 'setup') return true;
+  return steps[index + 1]?.dataDone === step.dataDone;
+}
+
+/** Live answers about a step's control and data, injected so the rules stay pure. */
+export interface StepProbe {
+  visible: (step: Step) => boolean;
+  done: (step: Step) => boolean;
+}
+
+/**
+ * Back: the previous step when its control is on screen, else the nearest
+ * earlier one whose control is. Never a step the data finished (Back never
+ * undoes data). -1 hides Back (the first step, or nothing to go back to).
+ */
+export function backIndex(steps: readonly Step[], index: number, probe: StepProbe): number {
+  for (let j = Math.min(index, steps.length) - 1; j >= 0; j -= 1) {
+    const step = steps[j] as Step;
+    if (probe.visible(step) && !probe.done(step)) return j;
+  }
+  return -1;
+}
+
+/** The nearest earlier visible step that shares this step's data (the first post's own steps). */
+function backInGroup(steps: readonly Step[], index: number, probe: StepProbe): number {
+  const key = steps[index]?.dataDone;
+  if (key === undefined || key === 'none') return -1;
+  for (let j = index - 1; j >= 0; j -= 1) {
+    const step = steps[j] as Step;
+    if (step.dataDone !== key) return -1;
+    if (probe.visible(step)) return j;
+  }
+  return -1;
+}
+
+/**
+ * Where the 4 s rule moves a step whose control never showed: forward to the
+ * next step whose control is visible (never past an open gate), else back
+ * within its own group, else simply the next step (its place opens). A gate
+ * only ever goes back within its group, otherwise it stays (returns index).
+ */
+export function skipTarget(steps: readonly Step[], index: number, probe: StepProbe): number {
+  const back = backInGroup(steps, index, probe);
+  if (steps[index]?.kind === 'gate') return back >= 0 ? back : index;
+  for (let j = index + 1; j < steps.length; j += 1) {
+    const step = steps[j] as Step;
+    if (probe.visible(step)) return j;
+    if (isGated(step) && !probe.done(step)) break;
+  }
+  return back >= 0 ? back : index + 1;
+}
+
+/** The fill: (entry taps + steps behind) over (entry taps + every applicable step). */
+export function progressOf(script: RouteScript, resolution: Resolution): number {
+  if (resolution.kind === 'off') return 0;
+  if (resolution.kind === 'closing') return 1;
+  const total = script.entrySteps + resolution.steps.length;
+  return total === 0 ? 1 : (script.entrySteps + resolution.index) / total;
+}
+
+/** The route's chapters in the order its steps run them. */
+export function chapterOrder(steps: readonly Step[]): Chapter[] {
+  const order: Chapter[] = [];
+  for (const step of steps) {
+    if (step.chapter !== undefined && !order.includes(step.chapter)) order.push(step.chapter);
+  }
+  return order;
+}
+
+// ---------- the post sheet ----------
+
+const POST_SHEET_KEYS: readonly InductionKey[] = [
+  INDUCTION_KEYS.pipelineCreate,
+  INDUCTION_KEYS.postSheetCaption,
+  INDUCTION_KEYS.postSheetFormat,
+  INDUCTION_KEYS.postSheetFormatSingle,
+  INDUCTION_KEYS.postSheetMedia,
+  INDUCTION_KEYS.postSheetPrimary,
+];
+
+/** The preset primary while a first post step is up (creator and invited routes); undefined otherwise. */
+export function presetPrimaryFor(step: Step): PostSheetPreset['primary'] | undefined {
+  if (step.route === 'approver') return undefined;
+  return step.targets.some((key) => POST_SHEET_KEYS.includes(key)) ? 'send_for_review' : undefined;
 }
 
 // ---------- routes ----------
@@ -538,12 +336,12 @@ export function placeRoute(place: StepPlace, ctx: PlaceContext): string {
       return '/settings?panel=members';
     case 'post':
       return ctx.postId !== null ? `/posts/${ctx.postId}` : '/pipeline';
-    case 'assets':
-      return '/assets';
     case 'briefs':
       return '/briefs';
     case 'activity':
       return '/activity';
+    case 'chat':
+      return '/chat';
     case 'group':
       return ctx.groupChannelId !== null
         ? `/chat?channel=${encodeURIComponent(ctx.groupChannelId)}`
@@ -559,12 +357,9 @@ export function onPlace(
 ): boolean {
   if (place === 'shell') return true;
   if (place === 'members') return location.pathname === '/settings';
-  if (place === 'group') {
-    return (
-      location.pathname === '/chat' &&
-      new URLSearchParams(location.search).get('channel') === ctx.groupChannelId
-    );
-  }
+  const channel = new URLSearchParams(location.search).get('channel');
+  if (place === 'chat') return location.pathname === '/chat' && channel === null;
+  if (place === 'group') return location.pathname === '/chat' && channel === ctx.groupChannelId;
   return location.pathname === placeRoute(place, ctx);
 }
 
@@ -577,12 +372,17 @@ export interface Rect {
   height: number;
 }
 
-/** 5px breathing room plus the 2px border: the box's outer edge sits 7px off the control. */
-export const BOX_GAP = 5;
-export const BOX_BORDER = 2;
-const BOX_OUTSET = BOX_GAP + BOX_BORDER;
+export interface Size {
+  width: number;
+  height: number;
+}
 
-/** The accent box around a control's live rect. */
+/** 5px gap plus 2px of air: the hairline sits 7px off the control. */
+export const BOX_GAP = 5;
+export const BOX_AIR = 2;
+const BOX_OUTSET = BOX_GAP + BOX_AIR;
+
+/** The hairline's rect around a control's live rect. */
 export function boxRect(target: Rect): Rect {
   return {
     top: target.top - BOX_OUTSET,
@@ -593,13 +393,10 @@ export function boxRect(target: Rect): Rect {
 }
 
 /** How far inside the screen edge the box stays, so all four sides always show. */
-export const BOX_SCREEN_EDGE = 2;
+const BOX_SCREEN_EDGE = 2;
 
-/**
- * The box kept inside the viewport. A control that runs to the screen edge (a
- * full-width row) gets its box pulled in rather than cut off.
- */
-export function clampToViewport(rect: Rect, viewport: { width: number; height: number }): Rect {
+/** The box kept inside the viewport: a full-width row gets its box pulled in rather than cut off. */
+export function clampToViewport(rect: Rect, viewport: Size): Rect {
   const left = Math.max(rect.left, BOX_SCREEN_EDGE);
   const top = Math.max(rect.top, BOX_SCREEN_EDGE);
   const right = Math.min(rect.left + rect.width, viewport.width - BOX_SCREEN_EDGE);
@@ -607,9 +404,9 @@ export function clampToViewport(rect: Rect, viewport: { width: number; height: n
   return { top, left, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
 }
 
-/** The box radius: the control's own radius grown by the outset, so the corners run parallel. */
-export function boxRadius(controlRadiusPx: number): number {
-  return Math.max(0, controlRadiusPx) + BOX_OUTSET;
+/** The hairline radius from the control's own: 12 for a control up to 12px, else 16. */
+export function guideRadius(controlRadiusPx: number): number {
+  return controlRadiusPx <= 12 ? 12 : 16;
 }
 
 export function overlaps(a: Rect, b: Rect): boolean {
@@ -621,105 +418,70 @@ export function overlaps(a: Rect, b: Rect): boolean {
   );
 }
 
-export type CardSide = 'bottom' | 'top' | 'below' | 'right' | 'left' | 'above';
-
 const EDGE = 16;
-const CARD_GAP = 8;
+const LABEL_GAP = 8;
+/** A control this close to the right edge, and narrower than its label, takes the label on its left. */
+const RIGHT_EDGE_ZONE = 72;
 
-/**
- * Where the card goes so it never covers the boxed control. Phone: docked
- * bottom (above the tab bar) by default, docked top when the control sits in
- * the lower half or the bottom dock would cover it. Laptop: below, right, left
- * or above the box, whichever side has room, clamped inside the viewport.
- */
-export function placeCard(input: {
-  target: Rect;
-  card: { width: number; height: number };
-  viewport: { width: number; height: number };
-  phone: boolean;
-  /** Space the docks keep clear: the safe area top, and the tab bar plus safe area bottom. */
-  insets: { top: number; bottom: number };
-}): { side: CardSide; top: number; left: number } {
-  const box = boxRect(input.target);
-  const { card, viewport, insets } = input;
-  if (input.phone) {
-    const left = EDGE;
-    const bottom = {
-      side: 'bottom' as const,
-      top: viewport.height - insets.bottom - CARD_GAP - card.height,
-      left,
-    };
-    const top = { side: 'top' as const, top: insets.top + CARD_GAP, left };
-    const lowerHalf = box.top + box.height / 2 > viewport.height / 2;
-    const first = lowerHalf ? top : bottom;
-    const second = lowerHalf ? bottom : top;
-    return covers(first, card, box) && !covers(second, card, box) ? second : first;
-  }
-  const clampLeft = (x: number) => clamp(x, EDGE, viewport.width - EDGE - card.width);
-  const clampTop = (y: number) => clamp(y, EDGE, viewport.height - EDGE - card.height);
-  const options: { side: CardSide; top: number; left: number; fits: boolean }[] = [
-    {
-      side: 'below',
-      top: box.top + box.height + CARD_GAP,
-      left: clampLeft(box.left),
-      fits:
-        box.top + box.height + CARD_GAP >= EDGE &&
-        box.top + box.height + CARD_GAP + card.height <= viewport.height - EDGE,
-    },
-    {
-      side: 'right',
-      top: clampTop(box.top),
-      left: box.left + box.width + CARD_GAP,
-      fits: box.left + box.width + CARD_GAP + card.width <= viewport.width - EDGE,
-    },
-    {
-      side: 'left',
-      top: clampTop(box.top),
-      left: box.left - CARD_GAP - card.width,
-      fits: box.left - CARD_GAP - card.width >= EDGE,
-    },
-    {
-      side: 'above',
-      top: box.top - CARD_GAP - card.height,
-      left: clampLeft(box.left),
-      fits:
-        box.top - CARD_GAP - card.height >= EDGE && box.top - CARD_GAP <= viewport.height - EDGE,
-    },
-  ];
-  // Never off screen: a side that does not fit is pulled inside the viewport,
-  // and is taken only if it still keeps clear of the box.
-  const inside = options.map((o) => ({ ...o, top: clampTop(o.top), left: clampLeft(o.left) }));
-  const pick =
-    options.find((o) => o.fits && !covers(o, card, box)) ??
-    inside.find((o) => !covers(o, card, box)) ??
-    inside[0];
-  return { side: pick?.side ?? 'below', top: pick?.top ?? EDGE, left: pick?.left ?? EDGE };
+export type LabelSide = 'below' | 'above' | 'left';
+
+export interface LabelPlacement {
+  side: LabelSide;
+  top: number;
+  left: number;
 }
 
-function covers(
-  at: { top: number; left: number },
-  card: { width: number; height: number },
-  box: Rect,
-): boolean {
-  return overlaps({ top: at.top, left: at.left, width: card.width, height: card.height }, box);
+/**
+ * Where the label pill goes: below the box, above it when there is no room
+ * below, or on its left in the same row for a short control at the right edge.
+ * `area` is the free band (the viewport minus the guide bar). Never covers the
+ * box, never leaves the viewport.
+ */
+export function placeLabel(input: {
+  box: Rect;
+  label: Size;
+  area: { top: number; bottom: number; width: number };
+}): LabelPlacement {
+  const { box, label, area } = input;
+  const left = clamp(
+    box.left + box.width / 2 - label.width / 2,
+    EDGE,
+    area.width - EDGE - label.width,
+  );
+  const atRightEdge = box.left + box.width >= area.width - RIGHT_EDGE_ZONE;
+  const leftSide = {
+    side: 'left' as const,
+    top: clamp(box.top + box.height / 2 - label.height / 2, area.top, area.bottom - label.height),
+    left: box.left - LABEL_GAP - label.width,
+  };
+  if (atRightEdge && box.width < label.width && leftSide.left >= EDGE) return leftSide;
+  const below = { side: 'below' as const, top: box.top + box.height + LABEL_GAP, left };
+  if (below.top + label.height <= area.bottom) return below;
+  const above = { side: 'above' as const, top: box.top - LABEL_GAP - label.height, left };
+  if (above.top >= area.top) return above;
+  if (leftSide.left >= EDGE) return leftSide;
+  const roomBelow = area.bottom - (box.top + box.height);
+  const roomAbove = box.top - area.top;
+  const top = roomBelow >= roomAbove ? area.bottom - label.height : area.top;
+  return { side: roomBelow >= roomAbove ? 'below' : 'above', top, left };
+}
+
+/** The guide bar docks at the bottom, or at the top when the boxed control sits in the bottom third. */
+export function barSide(box: Rect | undefined, viewportHeight: number): 'top' | 'bottom' {
+  if (box === undefined) return 'bottom';
+  return box.top + box.height / 2 > (viewportHeight * 2) / 3 ? 'top' : 'bottom';
+}
+
+/** The hand's fingertip: a little below and right of the control's centre. */
+export function handPoint(target: Rect): { x: number; y: number } {
+  return {
+    x: target.left + target.width / 2 + Math.min(8, target.width / 4),
+    y: target.top + target.height / 2 + Math.min(8, target.height / 4),
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
-}
-
-/**
- * The one-line strip inside an open sheet or dialog: under its title, inside
- * the header's lower padding, stopping short of the close button.
- */
-export function stripRect(title: Rect, dialog: Rect): Rect {
-  const closeRoom = 44 + EDGE + CARD_GAP;
-  return {
-    top: title.top + title.height + 2,
-    left: title.left,
-    width: Math.max(120, dialog.left + dialog.width - closeRoom - title.left),
-    height: 24,
-  };
 }
 
 // ---------- the first post ----------

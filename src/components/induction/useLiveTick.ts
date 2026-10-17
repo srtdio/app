@@ -5,9 +5,15 @@
 // scroll, the visual viewport and DOM changes outside the guide re-render at
 // once. The guide then reads every rect again in render; the last-seen value
 // here only decides whether to re-render.
+//
+// It also says whether the control is still moving: a new control, or one
+// whose rect changed, counts as moving until it has held still for SETTLE_MS,
+// so the guide shows only its bar while a sheet slides in.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { inLayer, topDialog } from './guide-dom';
+
+export const SETTLE_MS = 120;
 
 function signature(el: HTMLElement | undefined): string {
   const parts: number[] = [];
@@ -24,22 +30,33 @@ function signature(el: HTMLElement | undefined): string {
   return parts.map((n) => Math.round(n * 2) / 2).join(',');
 }
 
-export function useLiveTick(el: HTMLElement | undefined): void {
+/** Returns true while the control is new or moving. */
+export function useLiveTick(el: HTMLElement | undefined): boolean {
   const [, setTick] = useState(0);
+  const changedAt = useRef({ el: undefined as HTMLElement | undefined, at: 0 });
+  if (changedAt.current.el !== el) changedAt.current = { el, at: performance.now() };
 
   useEffect(() => {
     let raf = 0;
+    let settle = 0;
     let last = signature(el);
     const bump = (): void => setTick((t) => t + 1);
+    const moved = (): void => {
+      changedAt.current = { el, at: performance.now() };
+      window.clearTimeout(settle);
+      settle = window.setTimeout(bump, SETTLE_MS);
+      bump();
+    };
     const frame = (): void => {
       const now = signature(el);
       if (now !== last) {
         last = now;
-        bump();
+        moved();
       }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
+    settle = window.setTimeout(bump, SETTLE_MS);
     const mutations = new MutationObserver((records) => {
       if (records.some((record) => !inLayer(record.target))) bump();
     });
@@ -51,6 +68,7 @@ export function useLiveTick(el: HTMLElement | undefined): void {
     viewport?.addEventListener('scroll', bump);
     return () => {
       cancelAnimationFrame(raf);
+      window.clearTimeout(settle);
       mutations.disconnect();
       window.removeEventListener('resize', bump);
       document.removeEventListener('scroll', bump, true);
@@ -58,4 +76,6 @@ export function useLiveTick(el: HTMLElement | undefined): void {
       viewport?.removeEventListener('scroll', bump);
     };
   }, [el]);
+
+  return performance.now() - changedAt.current.at < SETTLE_MS;
 }

@@ -76,6 +76,14 @@
   --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
   /* The docked plan panel over the chat (laptop): a shadow on its left edge only. */
   --shadow-panel-left: -12px 0 24px -12px rgba(20, 22, 30, 0.18);
+  /* The induction guide's amber: the hairline, the label pill (dark ink on
+     amber, 8:1) and the progress fill. Triplets feed rgb(var(--guide-rgb)). */
+  --guide: #e8930c;
+  --guide-deep: #b86f00;
+  --guide-light: #fde3b0;
+  --guide-ink: #1f1400;
+  --guide-rgb: 232 147 12;
+  --guide-ink-rgb: 31 20 0;
 }
 .dark {
   --bg: #0c0d10;
@@ -124,6 +132,14 @@
   --overlay-line: rgba(244, 245, 246, 0.14);
   --overlay-dot: rgba(244, 245, 246, 0.4);
   --shadow-panel-left: -12px 0 24px -12px rgba(0, 0, 0, 0.55);
+  /* Brighter amber so the hairline reads on dark panels; the pill keeps its
+     dark ink (10:1). */
+  --guide: #fbb53c;
+  --guide-deep: #e8930c;
+  --guide-light: #4a3410;
+  --guide-ink: #1a1100;
+  --guide-rgb: 251 181 60;
+  --guide-ink-rgb: 26 17 0;
 }
 @layer base {
   html,
