@@ -270,7 +270,12 @@ function StepLayer({
           control={control}
           radius={guideRadius(radiusOf(boxed))}
           label={fillCopy(step.label, ctx.copy)}
-          frame={{ dock, nudge, barHeight: bar.height }}
+          frame={{
+            dock,
+            nudge,
+            barHeight: bar.height,
+            barRect: barEl !== null ? rectOf(barEl) : undefined,
+          }}
         />
       ) : null}
       <GuideBar
@@ -303,7 +308,7 @@ function Spotlight({
   control: Rect;
   radius: number;
   label: string;
-  frame: { dock: DockAt; nudge: number; barHeight: number };
+  frame: { dock: DockAt; nudge: number; barHeight: number; barRect: Rect | undefined };
 }): ReactElement {
   const [labelEl, setLabelEl] = useState<HTMLDivElement | null>(null);
   const size = useElementSize(labelEl, LABEL_FALLBACK);
@@ -316,6 +321,7 @@ function Spotlight({
     bottom: viewport.height - (dock.side === 'bottom' ? dock.insets.bottom + barRoom : 0),
     width: viewport.width,
     viewportHeight: viewport.height,
+    ...(frame.barRect !== undefined ? { obstacle: frame.barRect } : {}),
   };
   const at = placeLabel({ box, label: size, area });
   return (

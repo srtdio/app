@@ -561,6 +561,18 @@ describe('placeLabel', () => {
     expect(p.side).not.toBe('inside');
   });
 
+  it('never lands on the laptop bottom-right guide card; falls back to the next side', () => {
+    const laptop = { top: 0, bottom: 800, width: 1280, viewportHeight: 800 };
+    const card = { top: 640, left: 924, width: 340, height: 144 };
+    const box = boxRect({ top: 600, left: 1000, width: 200, height: 44 });
+    const free = placeLabel({ box, label, area: laptop });
+    expect(overlaps({ ...free, ...label }, card)).toBe(true);
+    const p = placeLabel({ box, label, area: { ...laptop, obstacle: card } });
+    expect(p.side).toBe('above');
+    expect(overlaps({ ...p, ...label }, card)).toBe(false);
+    expect(overlaps({ ...p, ...label }, box)).toBe(false);
+  });
+
   it('stays inside the viewport for a control at the left edge', () => {
     const box = boxRect({ top: 300, left: 0, width: 40, height: 40 });
     const p = placeLabel({ box, label, area });

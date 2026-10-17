@@ -476,7 +476,14 @@ export interface LabelPlacement {
 export function placeLabel(input: {
   box: Rect;
   label: Size;
-  area: { top: number; bottom: number; width: number; viewportHeight: number };
+  area: {
+    top: number;
+    bottom: number;
+    width: number;
+    viewportHeight: number;
+    /** The guide bar's own rect (the laptop card, the phone dock): the label never lands on it. */
+    obstacle?: Rect;
+  };
 }): LabelPlacement {
   const { box, label, area } = input;
   const left = clamp(
@@ -485,18 +492,24 @@ export function placeLabel(input: {
     area.width - EDGE - label.width,
   );
   const atRightEdge = box.left + box.width >= area.width - RIGHT_EDGE_ZONE;
-  const leftSide = {
-    side: 'left' as const,
-    top: clamp(box.top + box.height / 2 - label.height / 2, area.top, area.bottom - label.height),
-    left: box.left - LABEL_GAP - label.width,
-  };
-  if (atRightEdge && box.width < label.width && leftSide.left >= EDGE) return leftSide;
+  const rowTop = clamp(
+    box.top + box.height / 2 - label.height / 2,
+    area.top,
+    area.bottom - label.height,
+  );
+  const leftSide = { side: 'left' as const, top: rowTop, left: box.left - LABEL_GAP - label.width };
   const below = { side: 'below' as const, top: box.top + box.height + LABEL_GAP, left };
-  if (below.top + label.height <= area.bottom) return below;
   const above = { side: 'above' as const, top: box.top - LABEL_GAP - label.height, left };
-  if (above.top >= area.top) return above;
-  if (leftSide.left >= EDGE) return leftSide;
-  return placeLabelInViewport({ box, label, area });
+  const fits = (at: LabelPlacement): boolean =>
+    at.left >= EDGE &&
+    at.left + label.width <= area.width - EDGE + 0.5 &&
+    at.top >= area.top &&
+    at.top + label.height <= area.bottom &&
+    !overlaps({ ...at, ...label }, box) &&
+    (area.obstacle === undefined || !overlaps({ ...at, ...label }, area.obstacle));
+  const order =
+    atRightEdge && box.width < label.width ? [leftSide, below, above] : [below, above, leftSide];
+  return order.find(fits) ?? placeLabelInViewport({ box, label, area });
 }
 
 /** The last resort: the side of the box with most room in the whole viewport. */
