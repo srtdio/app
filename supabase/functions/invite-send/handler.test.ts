@@ -148,6 +148,51 @@ describe('invite subject', () => {
   });
 });
 
+describe('blank brand fallbacks', () => {
+  it.each(['', '   '])('creator subject with brand %j drops the brand', (brand) => {
+    for (const role of ['agency', 'admin']) {
+      expect(inviteSubject({ brand, role, inviterName: 'Priya Shah' })).toBe(
+        'Priya invited you to Sorted',
+      );
+    }
+  });
+
+  it.each(['', '   '])('no-inviter subject with brand %j drops the brand', (brand) => {
+    for (const role of ['client', 'agency', 'admin']) {
+      expect(inviteSubject({ brand, role, inviterName: '' })).toBe("You're invited to Sorted");
+    }
+  });
+
+  it.each(['', '   '])('approver subject with brand %j is unchanged', (brand) => {
+    expect(inviteSubject({ brand, role: 'client', inviterName: 'Priya' })).toBe(
+      'Priya invited you to review posts on Sorted',
+    );
+  });
+
+  it.each(['', '   '])('approver body with brand %j drops "for {brand}"', (brand) => {
+    const e = inviteEmailBody({
+      brand,
+      displayName: brand,
+      role: 'client',
+      acceptUrl: 'https://a.test',
+    });
+    const line = 'Review posts and share your feedback with the team.';
+    expect(e.text).toContain(`${line}\n\nReview posts:\nhttps://a.test`);
+    expect(e.html).toContain(`>${line}</p>`);
+    expect(e.text).not.toContain('Review posts for');
+  });
+
+  it('no subject or body ever carries a double space from a blank brand', () => {
+    for (const role of ['client', 'agency', 'admin']) {
+      for (const inviterName of ['Priya', '']) {
+        expect(inviteSubject({ brand: ' ', role, inviterName })).not.toMatch(/ {2}/);
+      }
+      const e = inviteEmailBody({ brand: '', displayName: '', role, acceptUrl: 'https://a.test' });
+      expect(e.text.split('\n')[2]).not.toMatch(/ {2}/);
+    }
+  });
+});
+
 describe('invite email copy', () => {
   const URL_ = 'https://app.test/accept?x=1&y=2';
   const NOTE =

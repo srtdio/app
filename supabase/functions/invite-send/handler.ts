@@ -134,19 +134,26 @@ function isApproverRole(role: string): boolean {
  */
 export function inviteSubject(input: { brand: string; role: string; inviterName: string }): string {
   const inviter = firstName(input.inviterName);
-  if (inviter === '') return `You're invited to ${input.brand} on Sorted`;
+  // A blank brand drops the "{brand} on" part instead of leaving a double space.
+  const target = input.brand.trim() === '' ? 'Sorted' : `${input.brand.trim()} on Sorted`;
+  if (inviter === '') return `You're invited to ${target}`;
   return isApproverRole(input.role)
     ? `${inviter} invited you to review posts on Sorted`
-    : `${inviter} invited you to ${input.brand} on Sorted`;
+    : `${inviter} invited you to ${target}`;
+}
+
+/** The approver line; a blank brand drops the "for {brand}" part. */
+function approverLine(brand: string): string {
+  const trimmed = brand.trim();
+  return trimmed === ''
+    ? 'Review posts and share your feedback with the team.'
+    : `Review posts for ${trimmed} and share your feedback with the team.`;
 }
 
 /** The role's one body line and button label. */
 function roleCopy(role: string, brand: string): { line: string; button: string } {
   return isApproverRole(role)
-    ? {
-        line: `Review posts for ${brand} and share your feedback with the team.`,
-        button: 'Review posts',
-      }
+    ? { line: approverLine(brand), button: 'Review posts' }
     : {
         line: 'Join the workspace to create posts and work with the team.',
         button: 'Join workspace',
