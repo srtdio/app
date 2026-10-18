@@ -4,13 +4,14 @@
 // pointing at the same person: the body stores the user id, not the text.
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { usernameAvailable, usernameSet } from '@srtdio/rpc';
+import { usernameSet } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
 import { normalizeUsernameInput, usernameFormat } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
+import { checkUsername } from '@/lib/username-check';
 
 type Check = 'idle' | 'checking' | 'free' | 'taken' | 'error';
 
@@ -46,17 +47,9 @@ export function UsernameField({
     setCheck('checking');
     let cancelled = false;
     const id = window.setTimeout(() => {
-      void usernameAvailable(supabase, { p_username: value, p_trace_id: newTrace() }).then(
-        (res) => {
-          if (cancelled) return;
-          if (!res.ok) {
-            logger.error('settings username check failed', { error: res.error.message });
-            setCheck('error');
-            return;
-          }
-          setCheck(res.data ? 'free' : 'taken');
-        },
-      );
+      void checkUsername(value, newTrace).then((result) => {
+        if (!cancelled) setCheck(result);
+      });
     }, 350);
     return () => {
       cancelled = true;
@@ -88,7 +81,7 @@ export function UsernameField({
     : format === 'empty'
       ? 'Pick a username.'
       : format === 'invalid'
-        ? 'Use 3 to 20 lowercase letters, numbers, dots or underscores.'
+        ? 'Use up to 20 lowercase letters, numbers, dots or underscores.'
         : format === 'reserved'
           ? `@${value} is reserved. Try another.`
           : check === 'checking'
@@ -96,7 +89,7 @@ export function UsernameField({
             : check === 'taken'
               ? `@${value} is taken. Try another.`
               : check === 'error'
-                ? "Couldn't check right now. Try again."
+                ? `We'll check @${value} when you save.`
                 : `@${value} is yours.`;
   const tone =
     !unchanged && check === 'free'
@@ -104,7 +97,8 @@ export function UsernameField({
       : format === 'invalid' || format === 'reserved' || check === 'taken'
         ? 'text-warn'
         : 'text-fg-3';
-  const canSave = !unchanged && format === 'ok' && check === 'free' && !saving;
+  const canSave =
+    !unchanged && format === 'ok' && (check === 'free' || check === 'error') && !saving;
 
   return (
     <div>

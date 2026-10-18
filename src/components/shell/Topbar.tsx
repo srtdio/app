@@ -1,3 +1,4 @@
+import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereStart';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronDown, IconPlus, IconSearch } from '@/components/ui/icons';
@@ -73,6 +74,7 @@ export function Topbar({
       )}
 
       <div className="ml-auto flex items-center gap-1">
+        <TestSiteAnywhereStart inline />
         {onCreateWorkspace !== undefined ? null : (
           <IconButton label="Search" className="md:hidden" onClick={onOpenPalette}>
             <IconSearch />

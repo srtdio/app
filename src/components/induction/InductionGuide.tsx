@@ -40,7 +40,7 @@ import {
   type StepProbe,
   INDUCTION_DID_EVENT,
 } from '@/lib/induction';
-import { CLEAR_CARD_COPY, fillCopy, GUIDE_CHROME, GUIDE_LEGEND } from '@/lib/induction-copy';
+import { CLEAR_CARD_COPY, fillCopy, GUIDE_CHROME } from '@/lib/induction-copy';
 import type { RouteScript, Step } from '@/lib/induction-model';
 import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useInduction, type InductionContextValue } from './InductionProvider';
@@ -68,7 +68,6 @@ import {
 import {
   useAbsentSkip,
   useElementSize,
-  useLegend,
   useStepCompletion,
   useTapGuard,
   useScrolledByHand,
@@ -412,16 +411,23 @@ function StepLayer({
   }, [step.targets, ctx, index]);
   usePauseReleases();
   const paused = pausedHere(step, onPlace(step.place, location, ctx.place));
-  useAbsentSkip({ stepKey: step.id, found: el !== undefined || paused }, () => {
-    if (ctx.isDone(step)) return;
-    const to = skipTarget(steps, index, probe);
-    if (to !== index) quietMove(to);
-  });
+  const found = el !== undefined || paused;
+  useAbsentSkip(
+    {
+      stepKey: step.id,
+      found,
+      earlierShown: !found && skipTarget(steps, index, probe) < index,
+    },
+    () => {
+      if (ctx.isDone(step)) return;
+      const to = skipTarget(steps, index, probe);
+      if (to !== index) quietMove(to);
+    },
+  );
   const nudge = useTapGuard(boxed, {
     next: field !== undefined ? nextEl : undefined,
     form: boxed !== undefined ? formOf(boxed, step.kind === 'gate') : undefined,
   });
-  const legend = useLegend(script.route, step.id);
 
   const control = boxed !== undefined ? rectOf(boxed) : undefined;
   const radius = boxed !== undefined ? guideRadius(radiusOf(boxed)) : 0;
@@ -451,7 +457,6 @@ function StepLayer({
       current: step.chapter !== undefined ? order.indexOf(step.chapter) : -1,
     },
     why: fillCopy(paused && step.pauseWhy !== undefined ? step.pauseWhy : step.why, ctx.copy),
-    legend: legend ? GUIDE_LEGEND : '',
     back: GUIDE_CHROME.back,
     next: GUIDE_CHROME.next,
     later: step.laterLabel ?? '',
@@ -460,6 +465,13 @@ function StepLayer({
       progress: GUIDE_CHROME.progressAria,
       back: GUIDE_CHROME.backAria,
     },
+  };
+  // A step with nothing to add (the first one: the hand's label says it all)
+  // shows no bar, so there is one message on screen, not two.
+  const barActions = {
+    onBack: back >= 0 ? () => quietMove(back) : undefined,
+    onLater: optOut && optOutShown ? () => quietMove(index + 1) : undefined,
+    onNext: paused ? () => releasePause(step.id) : undefined,
   };
   const dock: DockAt = {
     side: barSide(control !== undefined ? boxRect(control) : undefined, {
@@ -488,17 +500,18 @@ function StepLayer({
           }}
         />
       ) : null}
-      <GuideBar
-        ref={setBarEl}
-        copy={copy}
-        progress={progressOf(script, resolution)}
-        dock={dock}
-        actions={{
-          onBack: back >= 0 ? () => quietMove(back) : undefined,
-          onLater: optOut && optOutShown ? () => quietMove(index + 1) : undefined,
-          onNext: paused ? () => releasePause(step.id) : undefined,
-        }}
-      />
+      {barActions.onBack !== undefined ||
+      barActions.onLater !== undefined ||
+      barActions.onNext !== undefined ||
+      copy.why !== '' ? (
+        <GuideBar
+          ref={setBarEl}
+          copy={copy}
+          progress={progressOf(script, resolution)}
+          dock={dock}
+          actions={barActions}
+        />
+      ) : null}
     </>
   );
 }

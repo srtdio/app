@@ -29,7 +29,7 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LABELS, isPostPlatform } from '@srtdio/posts';
-import { userOnboardingSave, usernameAvailable } from '@srtdio/rpc';
+import { userOnboardingSave } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
 import { isValidInviteEmail } from '@/components/pages/settings/MembersInviteForm';
@@ -57,6 +57,7 @@ import {
   type InductionKey,
 } from '@/lib/induction';
 import { logger } from '@/lib/logger';
+import { clearDraft, readDraft, writeDraft } from '@/lib/onboarding-draft';
 import {
   OTHER_ROLE,
   ROLE_TILES,
@@ -77,6 +78,7 @@ import {
 import { performSignout, useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
+import { checkUsername } from '@/lib/username-check';
 import type { CurrentProfile } from '@/lib/use-current-profile';
 
 interface OnboardingFlowProps {
@@ -205,9 +207,15 @@ export function OnboardingFlow({
   const userId = session?.user.id ?? null;
   const email = session?.user.email ?? '';
   const invitee = joinedWorkspaceId !== null;
+  // Answers kept on this device from before a refresh, read once.
+  const [draft] = useState(() => readDraft(userId));
+  // Set once the profile is saved: nothing more is kept on the device after that.
+  const draftDone = useRef(false);
 
   // The side: picked on the first screen, or the invite's role for an invitee.
-  const [side, setSide] = useState<Side | null>(approverStage !== 'none' ? 'approver' : null);
+  const [side, setSide] = useState<Side | null>(
+    approverStage !== 'none' ? 'approver' : (draft?.side ?? null),
+  );
   const [welcome, setWelcome] = useState<WelcomeFacts>(NO_WELCOME_FACTS);
   const shownSide: Side = invitee ? welcome.side : (side ?? 'creator');
   // Fixed at mount except for the approver's tail, which follows the side picked.
@@ -218,23 +226,32 @@ export function OnboardingFlow({
     side: shownSide,
     approverStage,
   });
-  const [index, setIndex] = useState(0);
+  // After a refresh, the screen the person was on (when it is still one of theirs).
+  const [index, setIndex] = useState(() => {
+    const at = draft === undefined ? -1 : steps.indexOf(draft.step);
+    return at < 0 ? 0 : at;
+  });
   const step: OnboardingStep = steps[index] ?? 'waiting';
 
   // Profile answers
   // A new account's display_name is the email's local part (signup trigger), not
   // a real name: start blank then, so nobody becomes "connect" by default.
   const [name, setName] = useState(() => {
+    if (draft !== undefined) return draft.name;
     const current = profile?.display_name ?? '';
     return current === email.split('@')[0] ? '' : current;
   });
-  const [username, setUsername] = useState('');
-  const [usernameEdited, setUsernameEdited] = useState(false);
+  const [username, setUsername] = useState(draft?.username ?? '');
+  const [usernameEdited, setUsernameEdited] = useState(draft?.usernameEdited ?? false);
   const [nameCheck, setNameCheck] = useState<NameCheck>('idle');
   // The photo: picked from the device, positioned in a sheet (so the name and
   // username stay on screen), kept as the cropped file and uploaded with the
   // profile save.
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(
+    draft !== undefined && draft.avatarUrl !== '' ? draft.avatarUrl : null,
+  );
+  // The uploaded photo's URL, kept so a refresh does not ask for the photo again.
+  const [uploadedAvatar, setUploadedAvatar] = useState(draft?.avatarUrl ?? '');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   // The photo's upload, started when it is applied so it is done (or nearly)
   // by the time the title is saved.
@@ -259,13 +276,13 @@ export function OnboardingFlow({
       }, 0);
     }
   }, []);
-  const [role, setRole] = useState('');
-  const [roleOther, setRoleOther] = useState('');
+  const [role, setRole] = useState(draft?.role ?? '');
+  const [roleOther, setRoleOther] = useState(draft?.roleOther ?? '');
   const [emailOptIn] = useState(profile?.email_opt_in ?? true);
 
   // The approver who signed up alone: who makes their posts.
-  const [teamEmail, setTeamEmail] = useState('');
-  const [brandName, setBrandName] = useState('');
+  const [teamEmail, setTeamEmail] = useState(draft?.teamEmail ?? '');
+  const [brandName, setBrandName] = useState(draft?.brandName ?? '');
   const [resent, setResent] = useState(false);
 
   const [busy, setBusy] = useState(false);
@@ -284,17 +301,9 @@ export function OnboardingFlow({
     setNameCheck('checking');
     let cancelled = false;
     const id = window.setTimeout(() => {
-      void usernameAvailable(supabase, { p_username: shownUsername, p_trace_id: newTrace() }).then(
-        (res) => {
-          if (cancelled) return;
-          if (!res.ok) {
-            logger.error('username check failed', { error: res.error.message });
-            setNameCheck('error');
-            return;
-          }
-          setNameCheck(res.data ? 'free' : 'taken');
-        },
-      );
+      void checkUsername(shownUsername, newTrace).then((result) => {
+        if (!cancelled) setNameCheck(result);
+      });
     }, 350);
     return () => {
       cancelled = true;
@@ -339,6 +348,36 @@ export function OnboardingFlow({
     setError(finishError);
   }, [finishError]);
 
+  // Keep every answer on this device until the profile is saved (refresh-safe).
+  useEffect(() => {
+    if (!profileIncomplete || draftDone.current) return;
+    writeDraft(userId, {
+      step,
+      side,
+      name,
+      username,
+      usernameEdited,
+      role,
+      roleOther,
+      avatarUrl: uploadedAvatar,
+      teamEmail,
+      brandName,
+    });
+  }, [
+    profileIncomplete,
+    userId,
+    step,
+    side,
+    name,
+    username,
+    usernameEdited,
+    role,
+    roleOther,
+    uploadedAvatar,
+    teamEmail,
+    brandName,
+  ]);
+
   const progress = progressSteps(steps);
   const progressAt = progress.indexOf(step);
 
@@ -354,6 +393,8 @@ export function OnboardingFlow({
   }
 
   function finish(to: string): void {
+    draftDone.current = true;
+    clearDraft(userId);
     setBusy(true);
     onFinish(to);
   }
@@ -388,7 +429,9 @@ export function OnboardingFlow({
     photoUpload.current = entry;
     // A failed upload is not kept: the next save tries again.
     void url.then((done) => {
-      if (done === null && photoUpload.current === entry) photoUpload.current = null;
+      if (photoUpload.current !== entry) return;
+      if (done === null) photoUpload.current = null;
+      else setUploadedAvatar(done);
     });
     return url;
   }
@@ -397,7 +440,9 @@ export function OnboardingFlow({
   async function saveProfile(): Promise<void> {
     setBusy(true);
     setError(null);
-    let avatarUrl: string | null = null;
+    // A photo uploaded before a refresh is already there: no file to send again.
+    let avatarUrl: string | null =
+      photoFile === null && uploadedAvatar !== '' ? uploadedAvatar : null;
     if (photoFile !== null && env.VITE_AVATAR_UPLOAD_URL !== undefined) {
       avatarUrl = await uploadPhoto(photoFile);
       if (avatarUrl === null) {
@@ -429,6 +474,9 @@ export function OnboardingFlow({
       setError("We couldn't save that. Try again.");
       return;
     }
+    // Saved: the profile itself now says where to resume, the draft is done.
+    draftDone.current = true;
+    clearDraft(userId);
     // A Creator makes the workspace in the shell; an approver goes on to name their team.
     if (!invitee && shownSide === 'creator') {
       await onStep(WORKSPACE_STEP);
@@ -452,6 +500,7 @@ export function OnboardingFlow({
     }
     setError(null);
     setPhotoFile(file);
+    setUploadedAvatar('');
     setPhotoPreview(URL.createObjectURL(file));
     setCropOpen(false);
     void uploadPhoto(file);
@@ -570,7 +619,7 @@ export function OnboardingFlow({
       format === 'empty'
         ? 'People @mention you with this.'
         : format === 'invalid'
-          ? 'Use 3 to 20 lowercase letters, numbers, dots or underscores.'
+          ? 'Use up to 20 lowercase letters, numbers, dots or underscores.'
           : format === 'reserved'
             ? `@${shownUsername} is reserved. Try another.`
             : nameCheck === 'checking'
@@ -578,7 +627,7 @@ export function OnboardingFlow({
               : nameCheck === 'taken'
                 ? `@${shownUsername} is taken. Try another.`
                 : nameCheck === 'error'
-                  ? "Couldn't check right now. Try again."
+                  ? `We'll check @${shownUsername} when you continue.`
                   : `@${shownUsername} is yours.`;
     const hintTone =
       format === 'ok' && nameCheck === 'free'
@@ -665,7 +714,8 @@ export function OnboardingFlow({
       photoPreview !== null &&
       name.trim().length > 0 &&
       format === 'ok' &&
-      nameCheck === 'free';
+      // A check that got no answer does not block: the save refuses a taken name.
+      (nameCheck === 'free' || nameCheck === 'error');
     primary = (
       <Primary
         disabled={!continueEnabled}

@@ -302,7 +302,7 @@ export function mentionHandle(person: { displayName: string; username?: string |
 }
 
 /** Usernames are lowercase letters, digits, dots and underscores (users_username_format). */
-const TYPED_USERNAME = /(^|\s)@([a-z0-9._]{3,20})(?![\p{L}\p{N}_.])/giu;
+const TYPED_USERNAME = /(^|\s)@([a-z0-9._]{1,20})(?![\p{L}\p{N}_.])/giu;
 
 /**
  * Turn every "@username" typed without the picker into a real mention token,

@@ -38,7 +38,7 @@ App-level profile. id mirrors auth.users.id (FK).
 | timezone | text | nullable, IANA tz; null falls back to workspaces.timezone for catch-up scheduling |
 | profile_completed_at | timestamptz | nullable, onboarding gate; stamped once an avatar exists |
 | email_opt_in | boolean | not null, default true; catch-up email opt-out |
-| username | text | nullable, ^[a-z0-9._]{3,20}$, unique across Sorted (users_username_unique, partial where not null); used for @mentions. Existing users backfilled from display_name on 14 Oct 2026 |
+| username | text | nullable, ^[a-z0-9._]{1,20}$ (minimum was 3 until 18 Oct 2026), unique across Sorted (users_username_unique, partial where not null); used for @mentions. Existing users backfilled from display_name on 14 Oct 2026 |
 | created_at / updated_at | timestamptz | default now() |
 
 user_profile_update(p_display_name, p_designation, p_avatar_url, p_email_opt_in, p_trace_id) SECURITY DEFINER (search_path='', EXECUTE to authenticated only): the only write path to a user's own profile. Acts on auth.uid(); a null or blank display_name raises invalid_payload. designation / avatar_url / email_opt_in are coalesced (null leaves the existing value). profile_completed_at is stamped now() the first time an avatar exists and never overwritten. Writes a success audit row.

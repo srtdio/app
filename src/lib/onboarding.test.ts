@@ -33,7 +33,9 @@ describe('suggestUsername', () => {
 describe('usernameFormat', () => {
   it('classifies input', () => {
     expect(usernameFormat('')).toBe('empty');
-    expect(usernameFormat('ab')).toBe('invalid');
+    expect(usernameFormat('ab')).toBe('ok');
+    expect(usernameFormat('k')).toBe('ok');
+    expect(usernameFormat('a'.repeat(21))).toBe('invalid');
     expect(usernameFormat('Riya')).toBe('invalid');
     expect(usernameFormat('admin')).toBe('reserved');
     expect(usernameFormat('riya.menon')).toBe('ok');

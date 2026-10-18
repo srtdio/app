@@ -1,11 +1,14 @@
 // The guide's behaviour on the real DOM: what finishes a step (the tap, the
 // next control appearing, this one disappearing, a filled field losing focus),
 // the guard that keeps every other tap from reaching the app, the 4 s skip for
-// a control that never shows, the once-per-route legend and element sizes.
+// a control that never shows, and element sizes.
 // Every listener, observer and timer is removed on cleanup.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ABSENT_SKIP_MS } from '@/lib/induction';
+
+/** How long the first step after a load waits for its control before going back to an earlier one on screen. */
+export const RESUME_BACK_MS = 700;
 import { fieldValue, inChrome, textFieldOf } from './guide-dom';
 
 function targetNode(event: Event): Node | undefined {
@@ -196,17 +199,25 @@ export function useTapGuard(control: HTMLElement | undefined, allowed: GuardAllo
 /**
  * After ABSENT_SKIP_MS on a step whose control never showed, calls onAbsent
  * once (the caller decides where to go; it never blocks the app).
+ *
+ * The first step after a page load is the stored one: after a refresh its
+ * control can sit in a sheet that is now closed (Continue in the workspace
+ * form). When an earlier control of the same task is on screen instead
+ * (`earlierShown`), that step moves after RESUME_BACK_MS, not ABSENT_SKIP_MS,
+ * so the hand is back on the button that reopens it almost at once. Only the
+ * first step: mid-tour, a sheet's next control can mount late on purpose.
  */
 export function useAbsentSkip(
-  input: { stepKey: string; found: boolean },
+  input: { stepKey: string; found: boolean; earlierShown: boolean },
   onAbsent: () => void,
 ): void {
-  const { stepKey, found } = input;
+  const { stepKey, found, earlierShown } = input;
   const latest = useRef(onAbsent);
   latest.current = onAbsent;
   const seen = useRef({ key: '', found: false });
   if (seen.current.key !== stepKey) seen.current = { key: stepKey, found: false };
   if (found) seen.current.found = true;
+  const firstKey = useRef(stepKey);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -214,35 +225,15 @@ export function useAbsentSkip(
     }, ABSENT_SKIP_MS);
     return () => window.clearTimeout(timer);
   }, [stepKey]);
-}
 
-function legendKey(route: string): string {
-  return `sorted:guide-legend:${route}`;
-}
-
-function legendSeen(route: string): boolean {
-  try {
-    return window.localStorage.getItem(legendKey(route)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function markLegendSeen(route: string): void {
-  try {
-    window.localStorage.setItem(legendKey(route), '1');
-  } catch {
-    // Private mode: the legend may show again, which is fine.
-  }
-}
-
-/** Whether the legend shows on this step: once per route, on the first step the guide shows. */
-export function useLegend(route: string, stepId: string): boolean {
-  const [legendStep] = useState(() => (legendSeen(route) ? '' : stepId));
+  const resume = stepKey === firstKey.current && earlierShown && !found;
   useEffect(() => {
-    if (legendStep !== '') markLegendSeen(route);
-  }, [legendStep, route]);
-  return legendStep !== '' && legendStep === stepId;
+    if (!resume) return;
+    const timer = window.setTimeout(() => {
+      if (!seen.current.found) latest.current();
+    }, RESUME_BACK_MS);
+    return () => window.clearTimeout(timer);
+  }, [resume]);
 }
 
 /** An element's live size (its offset box), with a fallback before it renders. */

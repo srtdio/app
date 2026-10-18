@@ -121,7 +121,8 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   // (there is no workspace to list); Continue is boxed once the form can
   // continue, then Create, which only the data finishes.
   await check('c_workspace', false, '01-first-step');
-  await expect(page.locator('[data-induction-bar]')).toContainText('Step 1');
+  // The label is the one message on the first step: no bar under it.
+  await expect(page.locator('[data-induction-bar]')).toHaveCount(0);
   await tapControl(page, step('c_workspace'));
   // Nothing dims until the form can continue; then Continue is boxed.
   await expectGuideId(page, 'c_workspace_continue');
