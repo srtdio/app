@@ -542,14 +542,14 @@ export function OnboardingFlow({
               aria-checked={side === tile.side}
               onClick={() => setSide(tile.side)}
               className={cn(
-                'flex min-h-[64px] flex-col items-start justify-center rounded-lg border px-4 py-3 text-left',
+                'flex min-h-[56px] flex-col items-start justify-center gap-0.5 rounded-md border px-3.5 py-2.5 text-left',
                 side === tile.side
                   ? 'border-accent bg-accent-soft ring-1 ring-accent'
                   : 'border-border bg-panel-2',
               )}
             >
-              <span className="text-[17px] font-semibold text-fg">{tile.title}</span>
-              <span className="text-sm text-fg-2">{tile.sub}</span>
+              <span className="text-sm font-semibold text-fg">{tile.title}</span>
+              <span className="text-xs text-fg-2">{tile.sub}</span>
             </button>
           ))}
         </div>
@@ -804,7 +804,7 @@ export function OnboardingFlow({
             <StepLabel.Provider
               value={progressAt >= 0 ? `Step ${progressAt + 1} of ${progress.length}` : null}
             >
-              <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-[0_12px_32px_-18px_rgba(17,17,20,0.22)]">
+              <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_40px_-12px_rgba(0,0,0,0.12)]">
                 {body}
                 {error !== null ? (
                   <p role="alert" className="text-sm text-bad [text-wrap:pretty]">
@@ -871,15 +871,13 @@ function Heading({ title, lead }: { title: string; lead: string }): ReactElement
   const stepLabel = useContext(StepLabel);
   return (
     <div>
-      <h1 className="text-[24px] font-semibold leading-[1.2] tracking-[-0.01em] text-fg [text-wrap:balance]">
-        {title}
-      </h1>
+      <h1 className="text-lg font-semibold tracking-tight text-fg [text-wrap:balance]">{title}</h1>
       {stepLabel !== null ? (
-        <p data-onboarding-step="" className="mt-1.5 text-[15px] text-fg-3">
+        <p data-onboarding-step="" className="mt-1 text-sm text-fg-3">
           {stepLabel}
         </p>
       ) : null}
-      <p className="mt-3 text-[15px] leading-[1.45] text-fg-2 [text-wrap:balance]">{lead}</p>
+      <p className="mt-2 text-sm text-fg-2 [text-wrap:balance]">{lead}</p>
     </div>
   );
 }
@@ -924,7 +922,7 @@ function Primary({
       data-induction={anchor}
       disabled={disabled}
       onClick={onClick}
-      className="h-12 w-full rounded-lg bg-accent text-[16px] font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
+      className="h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
     >
       {children}
     </button>
@@ -955,14 +953,11 @@ function WelcomeBody({
 }): ReactElement {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-[24px] font-semibold leading-[1.2] tracking-[-0.01em] text-fg [text-wrap:balance]">
+      <h1 className="text-lg font-semibold tracking-tight text-fg [text-wrap:balance]">
         {heading}
       </h1>
       {platform !== '' ? <PlatformTag platform={platform} /> : null}
-      <p
-        className="min-h-[22px] text-[15px] leading-[1.45] text-fg-2 [text-wrap:balance]"
-        aria-live="polite"
-      >
+      <p className="min-h-[20px] text-sm text-fg-2 [text-wrap:balance]" aria-live="polite">
         {subline}
       </p>
       <p className="rounded-lg border border-border bg-panel px-4 py-3 text-sm text-fg">
@@ -998,12 +993,12 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft font-mono text-sm font-semibold text-accent">
               {i + 1}
             </span>
-            <span className="text-[14px] text-fg [text-wrap:pretty]">{line}</span>
+            <span className="text-sm text-fg [text-wrap:pretty]">{line}</span>
           </li>
         ))}
       </ol>
       {email !== '' ? (
-        <p className="text-[13px] text-fg-2" aria-live="polite">
+        <p className="text-sm text-fg-2" aria-live="polite">
           {resent ? `Sent again to ${email}.` : `We asked ${email}.`}
         </p>
       ) : null}
