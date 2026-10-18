@@ -196,6 +196,8 @@ Cockpit staff. PK user_id (FK auth.users.id). Fields: granted_at, granted_by nul
 
 PK id. Fields: workspace_id FK, name, color_hex ^#[0-9A-Fa-f]{6}$, position default 0, archived default false, target_month int 0 to 100 default 0, created_at. Unique (workspace_id, lower(name)) where not archived.
 
+RPC `workspace_bucket_create(p_workspace_id uuid, p_name text, p_trace_id uuid) returns uuid` (SECURITY DEFINER, search_path ''). Execute: authenticated only (revoked from public). Caller (auth.uid()) must be an active member of p_workspace_id whose role has capability post.create allowed. Name is btrimmed, 1 to 40 chars; case-insensitive unique among non-archived buckets. color_hex auto-picked from an 8-colour list by non-archived bucket count; position = that count. Sets app.trace_id via set_config. Returns the new bucket id. Errors: 'not authenticated', 'forbidden_role', 'invalid_name', 'name_taken'.
+
 ### posts
 
 The approval unit. stage is the only workflow state. No publish_status.

@@ -264,6 +264,7 @@ Every frontend PR ships with an explicit light AND dark mode parity check. 44x44
 | - | W11 Onboarding and sign-in (scaffold) | F1 Safe close, undo and copy foundation |
 | - | W12 Invite code (scaffold) | F1 Safe close, undo and copy foundation |
 | - | W13 Auth emails from our code (scaffold) | F1 Safe close, undo and copy foundation |
+| - | S2 workspace bucket create record: migration 20261019013500_workspace_bucket_create.sql records workspace_bucket_create(uuid, text, uuid) applied live 19 Oct 2026 via MCP (post.create members only; name 1 to 40, unique case-insensitive among non-archived; auto colour and position; errors forbidden_role, invalid_name, name_taken). docs/schema.md updated. Supabase types already synced on main by the types-regen workflow. No frontend change. | none |
 
 ## 5. Handoff rules
 
