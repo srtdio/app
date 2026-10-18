@@ -5,6 +5,15 @@ import type { ReactElement, ReactNode } from 'react';
 // and its element tree walked (the SectionHeader/SortMenu test style in this
 // codebase). Topbar holds no hooks, so no renderer is needed.
 import { Topbar } from '@/components/shell/Topbar';
+import { TopbarBell } from '@/components/chat/BellButton';
+
+// The bell's module graph reaches the chat SDK and the logger: stub both.
+vi.mock('agora-chat', () => ({
+  default: { connection: vi.fn(), message: { create: vi.fn() } },
+}));
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 function isElement(node: ReactNode): node is ReactElement {
   return typeof node === 'object' && node !== null && 'props' in node;
@@ -104,5 +113,19 @@ describe('Topbar create menu', () => {
     expect(labels).not.toContain('New brief');
     expect(texts(tree)).not.toContain('New post');
     expect(texts(tree)).not.toContain('New brief');
+  });
+});
+
+describe('W8 fix 1: the bell lives in the top bar on every main screen', () => {
+  it('mounts the bell once beside search and the account menu', () => {
+    const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
+    expect(findAll(tree, (el) => el.type === TopbarBell)).toHaveLength(1);
+  });
+
+  it('leaves the bell out while there is no workspace yet', () => {
+    const creating = Topbar({ ...baseProps, workspaceName: null, onCreateWorkspace: () => {} });
+    expect(findAll(creating, (el) => el.type === TopbarBell)).toHaveLength(0);
+    const loading = Topbar({ ...baseProps, workspaceName: null });
+    expect(findAll(loading, (el) => el.type === TopbarBell)).toHaveLength(0);
   });
 });

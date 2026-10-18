@@ -28,6 +28,8 @@ import {
   onlyBellEntries,
   type BellEventType,
   type BellOnlyEventType,
+  INBOX_SNOOZE_OPTIONS,
+  type InboxSnoozeKind,
 } from '@/lib/inbox/bell-types';
 import { planEventLine } from '@/components/pages/activity/data';
 import { formatCivilDayHeader } from '@/lib/plan-week';
@@ -861,14 +863,10 @@ export function mergeOlder(current: BellData, older: BellData): BellData {
 // ---------------------------------------------------------------------------
 
 /** inbox_snooze kinds the bell offers, in menu order. */
-export type BellSnoozeKind = '1h' | '4h' | 'tomorrow_9' | 'next_week';
+export type BellSnoozeKind = InboxSnoozeKind;
 
-export const BELL_SNOOZE_OPTIONS: readonly { kind: BellSnoozeKind; label: string }[] = [
-  { kind: '1h', label: '1 hour' },
-  { kind: '4h', label: '4 hours' },
-  { kind: 'tomorrow_9', label: 'Tomorrow 9 AM' },
-  { kind: 'next_week', label: 'Next week' },
-];
+/** The shared snooze labels (Activity shows the same set). */
+export const BELL_SNOOZE_OPTIONS = INBOX_SNOOZE_OPTIONS;
 
 /** Mark one bell row read via inbox_mark_read. */
 export function markBellRead(

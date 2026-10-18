@@ -28,6 +28,9 @@ vi.mock('react', async (importOriginal) => {
   };
 });
 
+// The card's ⋯ menu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
+
 // The card reads the workspace key (for KEY-N) from the workspace context.
 vi.mock('@/lib/workspace-context', async (importOriginal) => ({
   // The real display formatter, so the welcome row reads "<Brand> - <Platform>".

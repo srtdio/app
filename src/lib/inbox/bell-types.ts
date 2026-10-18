@@ -156,3 +156,14 @@ export const BELL_OPEN_HREF = '/chat?bell=1';
 
 /** The search param BELL_OPEN_HREF carries. */
 export const BELL_OPEN_PARAM = 'bell';
+
+/** inbox_snooze kinds offered in a menu (the bell and Activity), in menu order. */
+export type InboxSnoozeKind = '1h' | '4h' | 'tomorrow_9' | 'next_week';
+
+/** The one set of snooze labels the bell and Activity both show. */
+export const INBOX_SNOOZE_OPTIONS: readonly { kind: InboxSnoozeKind; label: string }[] = [
+  { kind: '1h', label: '1 hour' },
+  { kind: '4h', label: '4 hours' },
+  { kind: 'tomorrow_9', label: 'Tomorrow 9 AM' },
+  { kind: 'next_week', label: 'Next week' },
+];

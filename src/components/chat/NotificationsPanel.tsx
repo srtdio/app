@@ -18,7 +18,8 @@
 // first load settles. Tokens only; 44px targets.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ReactElement, ReactNode, RefObject } from 'react';
+import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
@@ -33,7 +34,6 @@ import {
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
 import { ReminderSheet } from '@/components/chat/ReminderSheet';
-import { ScheduledListSheet } from '@/components/chat/ScheduledListSheet';
 import { useBellOptional, type BellContextValue } from '@/components/chat/BellContext';
 import {
   BELL_SNOOZE_OPTIONS,
@@ -52,7 +52,9 @@ import {
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import { eventText, type TaskEventKind } from '@/lib/chat/tasks';
 import { workspaceTimeZone } from '@/lib/chat/time-format';
-import { taskLinkToken } from '@/lib/inbox/bell-types';
+import { chatMessageHref, taskLinkToken } from '@/lib/inbox/bell-types';
+import type { ScheduledRow } from '@/lib/chat/scheduled';
+import type { NameOf } from '@/lib/chat/mentions';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import { useWorkspace } from '@/lib/workspace-context';
 
@@ -62,6 +64,8 @@ export const BELL_EMPTY_UPCOMING = 'Nothing coming up';
 export const BELL_LOAD_FAILED = "Couldn't load notifications";
 export const CANCEL_REMINDER_TITLE = 'Cancel this reminder?';
 export const NOT_SENT_LABEL = 'Not sent';
+export const NOTIFICATIONS_SUBTITLE = 'Your reminders, mentions and task alerts';
+export const MARK_ALL_READ_LABEL = 'Mark all read';
 
 export type BellTab = 'now' | 'upcoming';
 
@@ -129,7 +133,9 @@ function RowBody(props: {
             {props.time}
           </span>
         </span>
-        <span className="truncate text-sm text-fg-2">{props.preview}</span>
+        {props.preview !== '' ? (
+          <span className="truncate text-sm text-fg-2">{props.preview}</span>
+        ) : null}
         <span className="truncate text-xs text-fg-3">{props.chat}</span>
       </span>
     </>
@@ -249,11 +255,8 @@ function PlanRowView(props: { bell: BellContextValue; entry: BellEntry }): React
   const { side } = useViewerSide(workspaceId);
   const plan = planTitleOfEntry(entry, bell.data.planTitles);
   const who = entry.actorId !== null ? (bell.nameOf(entry.actorId) ?? null) : null;
-  const line = planBellLine(
-    entry,
-    { who, plan, item: itemTitleOfEntry(entry, bell.data.itemTitles) },
-    side,
-  );
+  const item = itemTitleOfEntry(entry, bell.data.itemTitles);
+  const line = planBellLine(entry, { who, plan, item }, side);
   return (
     <li
       data-bell-row="plan"
@@ -270,12 +273,20 @@ function PlanRowView(props: { bell: BellContextValue; entry: BellEntry }): React
         }
         title={line}
         time={rowTime(entry.createdAt, new Date())}
-        preview={plan ?? 'Plan'}
+        preview={planRowPreview(item)}
         chat="Plan"
         onClick={() => bell.openEntry(entry)}
       />
     </li>
   );
+}
+
+/**
+ * A plan row's preview: the item's title, or nothing when the alert names no
+ * item. The line above already names the plan, so never the plan name twice. Pure.
+ */
+export function planRowPreview(item: string | null): string {
+  return item ?? '';
 }
 
 const TASK_KINDS = new Set<string>([
@@ -609,8 +620,25 @@ export function UpcomingTab(props: { bell: BellContextValue }): ReactElement {
 export function NotificationsPanel(props: { bell: BellContextValue }): ReactElement {
   const { bell } = props;
   const [tab, setTab] = useState<BellTab>('now');
+  const markAllRead = bell.markAllRead;
+  const canMarkAll = markAllRead !== undefined && bell.status === 'ready' && bell.unread > 0;
   return (
     <div data-bell-panel="" className={cn('flex flex-col gap-3', NO_TOUCH_SELECT)}>
+      <div data-bell-header="" className="flex min-h-[44px] items-center gap-2">
+        <p data-bell-subtitle="" className="min-w-0 flex-1 text-sm text-fg-2">
+          {NOTIFICATIONS_SUBTITLE}
+        </p>
+        {canMarkAll ? (
+          <button
+            type="button"
+            data-bell-action="mark-all-read"
+            className="h-11 shrink-0 rounded-md px-3 text-[13px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            onClick={() => void markAllRead()}
+          >
+            {MARK_ALL_READ_LABEL}
+          </button>
+        ) : null}
+      </div>
       <div
         role="tablist"
         aria-label={NOTIFICATIONS_TITLE}
@@ -761,6 +789,39 @@ export function NotificationsSurface(props: {
   );
 }
 
+/** What the "Scheduled in this chat" sheet takes (ScheduledListSheet's props). */
+export type ScheduledSheetComponent = ComponentType<
+  {
+    open: boolean;
+    onClose: () => void;
+    rows: readonly ScheduledRow[];
+    nameOf: NameOf;
+  } & BellContextValue['scheduledActions']
+>;
+
+/**
+ * The "Scheduled in this chat" sheet, provided by the chat surface when it
+ * loads (ChannelList). The bell mounts in the top bar on every screen, and a
+ * static import here would pull the chat Composer into the app shell; so the
+ * sheet is handed in, and before chat has loaded a scheduled row opens its chat.
+ */
+let scheduledSheet: ScheduledSheetComponent | null = null;
+
+export function provideScheduledSheet(component: ScheduledSheetComponent): void {
+  scheduledSheet = component;
+}
+
+/** No sheet yet (chat not loaded): open that chat instead, then close the bell. */
+function OpenScheduledChat(props: { channelId: string; done: () => void }): null {
+  const navigate = useNavigate();
+  const { channelId, done } = props;
+  useEffect(() => {
+    done();
+    navigate(chatMessageHref(channelId, null));
+  }, [channelId, done, navigate]);
+  return null;
+}
+
 /**
  * The sheets the bell opens over the chat: the reminder sheet (Remind me and
  * Change time), the cancel-reminder confirm and "Scheduled in this chat" for
@@ -769,6 +830,7 @@ export function NotificationsSurface(props: {
 export function NotificationsSheets(): ReactElement | null {
   const bell = useBellOptional();
   if (bell === null) return null;
+  const ScheduledSheet = scheduledSheet;
   return (
     <>
       <ReminderSheet
@@ -804,13 +866,23 @@ export function NotificationsSheets(): ReactElement | null {
             : ''}
         </p>
       </Sheet>
-      <ScheduledListSheet
-        open={bell.scheduledSheet !== null}
-        onClose={bell.closeScheduledSheet}
-        rows={bell.scheduledSheet?.rows ?? []}
-        nameOf={bell.nameOf}
-        {...bell.scheduledActions}
-      />
+      {ScheduledSheet !== null ? (
+        <ScheduledSheet
+          open={bell.scheduledSheet !== null}
+          onClose={bell.closeScheduledSheet}
+          rows={bell.scheduledSheet?.rows ?? []}
+          nameOf={bell.nameOf}
+          {...bell.scheduledActions}
+        />
+      ) : bell.scheduledSheet !== null ? (
+        <OpenScheduledChat
+          channelId={bell.scheduledSheet.channelId}
+          done={() => {
+            bell.closeScheduledSheet();
+            bell.setOpen(false);
+          }}
+        />
+      ) : null}
     </>
   );
 }

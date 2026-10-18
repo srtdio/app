@@ -205,9 +205,16 @@ test('bell: a missed due time opens the chat on that item; Back closes the sheet
   seedTasks(network.world);
 
   // Activity is posts only: its read filters the task alerts out server-side.
-  const activityRead = page.waitForRequest(
-    (r) => r.url().includes('/rest/v1/inbox_entries') && r.url().includes('task_due'),
-  );
+  // The top-bar bell reads the same table on every screen (its rows are the
+  // event_type.in.(...) filter), so wait for the read that is not the bell's.
+  const activityRead = page.waitForRequest((r) => {
+    const url = decodeURIComponent(r.url());
+    return (
+      url.includes('/rest/v1/inbox_entries') &&
+      url.includes('task_due') &&
+      !url.includes('or=(event_type.in.(reminder')
+    );
+  });
   await page.goto('/activity');
   expect(decodeURIComponent((await activityRead).url())).toContain(
     'not.in.(reminder,scheduled_sent,scheduled_failed',

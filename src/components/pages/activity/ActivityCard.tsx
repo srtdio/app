@@ -7,6 +7,7 @@ import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
 import { IconClock, IconPlan } from '@/components/ui/icons';
+import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
 import {
   ACTOR_ROW_EVENTS,
   MENTION_EVENT_TYPE,
@@ -32,7 +33,7 @@ interface ActivityCardProps {
   cache: PresignCache;
   /** False when presigning is unconfigured: the tile shows the fallback. */
   presignEnabled: boolean;
-  /** Open the thread: mark every entry read and navigate from the lead. */
+  /** Open the thread: mark the lead entry read and navigate from it. */
   onOpenGroup: (group: ActivityItem[]) => void;
   /** Open a single thread entry: mark it read and navigate from that entry. */
   onOpenEntry: (entry: ActivityItem) => void;
@@ -207,6 +208,14 @@ function EntryAuthor({ entry }: { entry: ActivityItem }) {
   );
 }
 
+/** True when any entry in a group is unread: the whole card is highlighted. Pure. */
+export function groupHasUnread(group: readonly ActivityItem[]): boolean {
+  return group.some((entry) => entry.readAt === null);
+}
+
+/** The unread dot: one size (8px) on the card and on every expanded row. */
+export const UNREAD_DOT_CLASS = 'h-2 w-2 shrink-0 rounded-full bg-accent';
+
 /** A deleted post has nowhere to open: its entries are not tappable. */
 function opensNothing(item: ActivityItem): boolean {
   return item.eventType === 'post_deleted';
@@ -218,7 +227,8 @@ function opensNothing(item: ActivityItem): boolean {
  * beside a square media tile inset from the card edge, above a footer that carries
  * the meta (relative time, scope tag, snoozed chip). A threaded group (>1 entry)
  * adds a "+N more" toggle to the footer that expands the remaining events inside
- * the same card. The content row opens the thread (marking every entry read).
+ * the same card. The content row opens the thread (marking the lead read). The
+ * footer's ⋯ opens the row menu (Mark as read, Snooze) for the whole card.
  */
 export function ActivityCard({
   group,
@@ -227,6 +237,8 @@ export function ActivityCard({
   presignEnabled,
   onOpenGroup,
   onOpenEntry,
+  onSnooze,
+  onMarkRead,
   selfName,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -235,7 +247,7 @@ export function ActivityCard({
   if (lead === undefined) return null;
   const rest = group.slice(1);
 
-  const unread = lead.readAt === null;
+  const unread = groupHasUnread(group);
   const snoozed = isSnoozed(lead, nowMs);
   const planItem = lead.entityType === PLAN_ITEM_ENTITY;
   const hasEntity = lead.entityType === 'post' || lead.entityType === 'brief' || planItem;
@@ -305,7 +317,7 @@ export function ActivityCard({
               </span>
               {unread ? (
                 <span
-                  className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+                  className={cn('ml-auto', UNREAD_DOT_CLASS)}
                   aria-label="Unread"
                   role="status"
                 />
@@ -373,6 +385,18 @@ export function ActivityCard({
               {expanded ? 'Show less' : `+${rest.length} more`}
             </button>
           ) : null}
+          <div data-activity-menu="" className={cn('-mr-2', rest.length === 0 && 'ml-auto')}>
+            <ActivityRowMenu
+              snoozed={snoozed}
+              unread={unread}
+              onSnooze={(kind) => {
+                for (const entry of group) onSnooze(entry, kind);
+              }}
+              onMarkRead={() => {
+                for (const entry of group) if (entry.readAt === null) onMarkRead(entry);
+              }}
+            />
+          </div>
         </div>
         {rest.length > 0 && expanded ? (
           <ul className="border-t border-border">
@@ -411,11 +435,7 @@ export function ActivityCard({
                   <p className="mt-0.5 text-xs text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
                 </div>
                 {entry.readAt === null ? (
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full bg-accent"
-                    aria-label="Unread"
-                    role="status"
-                  />
+                  <span className={UNREAD_DOT_CLASS} aria-label="Unread" role="status" />
                 ) : null}
               </li>
             ))}

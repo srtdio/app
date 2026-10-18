@@ -289,11 +289,11 @@ describe('select mode', () => {
     expect(mode.onToggle).toHaveBeenCalledWith('a');
   });
 
-  it('the bottom Delete is disabled at 0 and opens the confirm otherwise', () => {
+  it('the bottom Hide is disabled at 0 and opens the confirm otherwise', () => {
     const deleteOf = (t: ReactElement): ReactElement =>
       findAll(t, (el) => {
         const c = (el.props as { children?: unknown }).children;
-        return Array.isArray(c) && c.includes('Delete');
+        return Array.isArray(c) && c.includes('Hide');
       })[0]!;
     const empty = select({ active: true });
     expect((deleteOf(tree(empty)).props as { disabled: boolean }).disabled).toBe(true);

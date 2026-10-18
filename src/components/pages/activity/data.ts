@@ -18,7 +18,7 @@ import {
   resolvePersonMentionText,
 } from '@/lib/chat/mentions';
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
-import { chatMessageHref, withoutBellEntries } from '@/lib/inbox/bell-types';
+import { INBOX_SNOOZE_OPTIONS, chatMessageHref, withoutBellEntries } from '@/lib/inbox/bell-types';
 import { isPostPlatform } from '@srtdio/posts';
 import { workspaceDisplayName } from '@/lib/workspace-context';
 
@@ -113,13 +113,8 @@ export interface SnoozeOption {
   label: string;
 }
 
-/** Menu options offered in the kebab. 'clear' is shown separately by the menu. */
-export const SNOOZE_OPTIONS: readonly SnoozeOption[] = [
-  { kind: '1h', label: 'For 1 hour' },
-  { kind: '4h', label: 'For 4 hours' },
-  { kind: 'tomorrow_9', label: 'Until tomorrow' },
-  { kind: 'next_week', label: 'Until next week' },
-];
+/** Menu options offered in the kebab: the bell's labels. 'clear' is shown separately by the menu. */
+export const SNOOZE_OPTIONS: readonly SnoozeOption[] = INBOX_SNOOZE_OPTIONS;
 
 /** One inbox entry, mapped to the fields the row renders. */
 export interface ActivityItem {
@@ -748,6 +743,26 @@ export function filterByState(
     default:
       return items.filter((item) => !isSnoozed(item, nowMs));
   }
+}
+
+/** The Undo toast after "Mark all read". */
+export const MARKED_READ_LABEL = 'Marked as read';
+
+/** The load error: plain copy, never the raw error. */
+export const ACTIVITY_LOAD_FAILED = "Couldn't load activity. Check your connection and try again.";
+
+/**
+ * The entries "Mark all read" clears: the unread, non-snoozed items the active
+ * chip shows. Every other chip's rows are left alone. Pure.
+ */
+export function markAllTargets(
+  items: readonly ActivityItem[],
+  state: ActivityState,
+  nowMs: number,
+): ActivityItem[] {
+  return filterByState(items, state, nowMs).filter(
+    (item) => item.readAt === null && !isSnoozed(item, nowMs),
+  );
 }
 
 /** One segment of a mention preview: the current user's own @name (self) is set

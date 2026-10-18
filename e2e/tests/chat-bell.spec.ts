@@ -3,7 +3,7 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { DM_CHANNEL, ME, MENTION_PREVIEW, PEER_NAME, WORKSPACE_ID } from '../fixtures/chat-data';
 
-// The chat bell (UI-2): the bell on the Chat home, Remind me from a held
+// The bell (UI-2, W8): the bell in the top bar on every screen, Remind me from a held
 // message, Upcoming, a reminder that fires while the app is open, and chat
 // mentions living in the bell instead of Activity. The real app tree runs
 // against fixture data in both colour schemes; Linux WebKit approximates iOS
@@ -35,33 +35,24 @@ async function holdBubble(page: Page, text: string): Promise<void> {
 }
 
 test(
-  'bell: between Select and +, chat mention in Now, Activity shows no chat mention',
+  'bell: in the top bar on every screen, chat mention in Now, Activity shows no chat mention',
   { tag: '@theme' },
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
 
-    // Activity is posts only: the seeded chat mention is not there.
+    // Activity is posts only: the seeded chat mention is not there. The bell
+    // still sits in the top bar here.
     await page.goto('/activity');
     await page.waitForTimeout(1200);
     await expect(page.getByText(MENTION_PREVIEW, { exact: false })).toHaveCount(0);
+    await expect(page.locator('header [data-bell-button]')).toBeVisible();
 
     await page.goto('/chat');
     const bell = page.locator('[data-bell-button]');
     await bell.waitFor({ state: 'visible' });
-    await page.getByRole('button', { name: 'Select', exact: true }).waitFor({ state: 'visible' });
-    // The order in the search row: Select, the bell, the blue +.
-    const order = await page.evaluate(() => {
-      const plus = document.querySelector('[aria-label="New chat"]');
-      const bellEl = document.querySelector('[data-bell-button]');
-      const select = [...document.querySelectorAll('button')].find(
-        (b) => b.textContent === 'Select',
-      );
-      if (!plus || !bellEl || !select) return null;
-      const pos = (a: Element, b: Element): boolean =>
-        (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-      return pos(select, bellEl) && pos(bellEl, plus);
-    });
-    expect(order).toBe(true);
+    // One bell, in the top bar: the Chat home search row no longer has its own.
+    await expect(bell).toHaveCount(1);
+    await expect(page.locator('header [data-bell-button]')).toHaveCount(1);
     const size = await bell.boundingBox();
     expectMinTouchTarget(size);
     await expect(page.locator('[data-bell-badge]')).toHaveText('1');
