@@ -16,6 +16,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
 import { IconPaperclip } from '@/components/chat/AttachmentIcons';
+import { IconX } from '@/components/ui/icons';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
 import { PendingChip, doneVersionIds } from '@/components/comments/CommentComposer';
@@ -59,27 +60,30 @@ export function counterTone(words: number): CounterTone {
   return 'hidden';
 }
 
-/** Send needs every slot at 1..50 words (the proc enforces the same rule). */
+/** Empty slots are ignored on send: send needs at least one slot with text and
+ *  every slot with text at 1..50 words (the proc enforces the same rule). */
 export function slotsSendable(bodies: readonly string[]): boolean {
-  return (
-    bodies.length > 0 &&
-    bodies.every((body) => {
-      const words = countWords(body);
-      return words >= 1 && words <= MAX_WORDS;
-    })
-  );
+  const filled = bodies.filter((body) => countWords(body) > 0);
+  return filled.length > 0 && filled.every((body) => countWords(body) <= MAX_WORDS);
+}
+
+/** How many slots carry text, i.e. how many points a send writes. */
+export function filledCount(bodies: readonly string[]): number {
+  return bodies.filter((body) => countWords(body) > 0).length;
 }
 
 /** Build p_points: each slot's completed version ids ride with its own point;
- *  a slot with no attachments omits the key entirely. */
+ *  a slot with no attachments omits the key entirely. Empty slots are dropped. */
 export function buildPoints(
   slots: readonly { body: string; attachmentVersionIds: readonly string[] }[],
 ): CheckpointPoint[] {
-  return slots.map((slot) =>
-    slot.attachmentVersionIds.length > 0
-      ? { body: slot.body, attachment_version_ids: [...slot.attachmentVersionIds] }
-      : { body: slot.body },
-  );
+  return slots
+    .filter((slot) => countWords(slot.body) > 0)
+    .map((slot) =>
+      slot.attachmentVersionIds.length > 0
+        ? { body: slot.body, attachment_version_ids: [...slot.attachmentVersionIds] }
+        : { body: slot.body },
+    );
 }
 
 /** The send button label: "Send N points" (singular at one). */
@@ -147,6 +151,19 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
 
   function updateBody(slotId: string, body: string): void {
     setSlots((prev) => prev.map((slot) => (slot.id === slotId ? { ...slot, body } : slot)));
+  }
+
+  // Only slots after the first are removable; their upload previews go with them.
+  function removeSlot(slotId: string): void {
+    setSlots((prev) => {
+      const target = prev.find((slot) => slot.id === slotId);
+      if (target === undefined || prev[0]?.id === slotId) return prev;
+      for (const item of target.pending) {
+        if (item.previewUrl != null) URL.revokeObjectURL(item.previewUrl);
+      }
+      return prev.filter((slot) => slot.id !== slotId);
+    });
+    textareas.current.delete(slotId);
   }
 
   function addSlot(): void {
@@ -299,6 +316,15 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                     <IconPaperclip size={20} />
                   </IconButton>
                 ) : null}
+                {index > 0 ? (
+                  <IconButton
+                    label={`Remove point ${index + 1}`}
+                    disabled={submitting}
+                    onClick={() => removeSlot(slot.id)}
+                  >
+                    <IconX size={18} />
+                  </IconButton>
+                ) : null}
               </div>
               {tone !== 'hidden' ? (
                 <span
@@ -348,7 +374,9 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
           disabled={!canSend}
           onClick={() => void submit()}
         >
-          {submitting ? 'Sending' : sendLabel(slots.length)}
+          {submitting
+            ? 'Sending'
+            : sendLabel(Math.max(1, filledCount(slots.map((slot) => slot.body))))}
         </Button>
       </div>
 

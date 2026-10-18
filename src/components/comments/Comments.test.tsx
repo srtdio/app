@@ -18,6 +18,9 @@ import { editComment, deleteComment } from '@srtdio/comments';
 import type { CommentRow } from '@srtdio/comments';
 import {
   annotationChip,
+  applyHidden,
+  editedTime,
+  replyHasTypedText,
   buildBatchArgs,
   buildCreateInput,
   buildThreads,
@@ -931,12 +934,38 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
     expect(pointWordCount(fiftyOne)).toBeGreaterThan(POINT_WORD_CAP);
   });
 
+  it('shows the edit clock time on comments and points ("edited 2:14 pm")', () => {
+    const edited = new Date(2026, 2, 1, 14, 14);
+    const now = new Date(2026, 2, 1, 18, 0);
+    expect(editedTime(edited.toISOString(), now)).toBe('2:14 pm');
+    expect(pointEditedMarker(edited.toISOString(), now)).toBe('edited 2:14 pm');
+    expect(editedTime(new Date(2026, 2, 1, 0, 5).toISOString(), now)).toBe('12:05 am');
+  });
+
+  it('hides a pending delete optimistically (tombstone when replies remain)', () => {
+    const rows = [
+      { id: 'a', deleted_at: null },
+      { id: 'b', deleted_at: null },
+    ] as unknown as CommentRow[];
+    const out = applyHidden(rows, new Set(['a']), '2026-03-01T00:00:00.000Z');
+    expect(out[0]?.deleted_at).toBe('2026-03-01T00:00:00.000Z');
+    expect(out[1]?.deleted_at).toBeNull();
+    expect(applyHidden(rows, new Set(), 'x')).toEqual(rows);
+  });
+
+  it('asks before discarding a reply only when text was typed beyond the seed', () => {
+    expect(replyHasTypedText(undefined, '')).toBe(false);
+    expect(replyHasTypedText('   ', '')).toBe(false);
+    expect(replyHasTypedText('@[u] ', '@[u] ')).toBe(false);
+    expect(replyHasTypedText('@[u] hello', '@[u] ')).toBe(true);
+  });
+
   it('renders the edited marker with a timestamp only once a point is edited', () => {
     const now = new Date('2026-03-01T00:00:00.000Z');
     expect(pointEditedMarker(null, now)).toBeNull();
     const marker = pointEditedMarker('2026-02-28T00:00:00.000Z', now);
     expect(marker).not.toBeNull();
-    expect(marker!.startsWith('edited · ')).toBe(true);
+    expect(marker!.startsWith('edited ')).toBe(true);
     expect(marker).not.toContain('—');
   });
 
