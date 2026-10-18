@@ -5,7 +5,6 @@ import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select, type SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import {
@@ -461,8 +460,6 @@ export function CreatePostSheet({
   // Files still uploading in the full form, and whether Save was tapped meanwhile.
   const [pendingUploads, setPendingUploads] = useState(0);
   const [uploadWait, setUploadWait] = useState(false);
-  // The footer Cancel's own discard confirm (the Sheet guards X, backdrop, Escape).
-  const [cancelConfirm, setCancelConfirm] = useState(false);
   // The inline "+ New bucket" form.
   const [newBucketOpen, setNewBucketOpen] = useState(false);
   const [newBucketName, setNewBucketName] = useState('');
@@ -552,7 +549,6 @@ export function CreatePostSheet({
     setPreviewOpen(false);
     setPendingUploads(0);
     setUploadWait(false);
-    setCancelConfirm(false);
     setNewBucketOpen(false);
     setNewBucketName('');
     setNewBucketBusy(false);
@@ -668,15 +664,6 @@ export function CreatePostSheet({
 
   const dirty =
     preset === undefined && createPostDirty(form, pendingUploads, initialTargetDate ?? '');
-
-  function requestCancel(): void {
-    if (submitting) return;
-    if (dirty) {
-      setCancelConfirm(true);
-      return;
-    }
-    onClose();
-  }
 
   const canSubmit =
     preset !== undefined
@@ -923,7 +910,7 @@ export function CreatePostSheet({
       busy={preset === undefined && submitting}
       footer={
         <>
-          <Button size="lg" onClick={requestCancel} disabled={submitting}>
+          <Button size="lg" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
           <span className="ml-auto flex flex-col items-end gap-1">
@@ -1144,20 +1131,6 @@ export function CreatePostSheet({
           prompt={activePrompt}
           onKeep={() => setPromptIds([])}
           onRemove={removePrompted}
-        />
-      ) : null}
-      {cancelConfirm ? (
-        <ConfirmDialog
-          title={CREATE_POST_DISCARD.title}
-          message={CREATE_POST_DISCARD.message}
-          confirmLabel="Discard"
-          cancelLabel="Keep editing"
-          destructive
-          onConfirm={() => {
-            setCancelConfirm(false);
-            onClose();
-          }}
-          onCancel={() => setCancelConfirm(false)}
         />
       ) : null}
     </Sheet>

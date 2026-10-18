@@ -13,7 +13,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -264,18 +263,6 @@ export function ConceptSheet(props: {
     uploads: uploads.length,
   });
   const discardCopy = conceptDiscardCopy(props.mode);
-  const [cancelConfirm, setCancelConfirm] = useState(false);
-  useEffect(() => {
-    if (!props.open) setCancelConfirm(false);
-  }, [props.open]);
-  const cancel = (): void => {
-    if (busy) return;
-    if (dirty) {
-      setCancelConfirm(true);
-      return;
-    }
-    props.onClose();
-  };
   const room = conceptFilesRoom(form.files.length, uploads.length);
   const atLimit = room === 0;
   const canUpload = props.uploadFile !== undefined;
@@ -309,7 +296,7 @@ export function ConceptSheet(props: {
               </p>
             ) : null}
             <div className="grid w-full grid-cols-2 gap-2">
-              <Button size="lg" variant="ghost" disabled={busy} onClick={cancel}>
+              <Button size="lg" variant="ghost" disabled={busy} onClick={props.onClose}>
                 Cancel
               </Button>
               <Button
@@ -530,20 +517,6 @@ export function ConceptSheet(props: {
             </div>
           ) : null}
         </div>
-        {cancelConfirm ? (
-          <ConfirmDialog
-            title={discardCopy.title}
-            message={discardCopy.message}
-            confirmLabel="Discard"
-            cancelLabel="Keep editing"
-            destructive
-            onConfirm={() => {
-              setCancelConfirm(false);
-              props.onClose();
-            }}
-            onCancel={() => setCancelConfirm(false)}
-          />
-        ) : null}
       </Sheet>
 
       <AssetPicker
