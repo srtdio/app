@@ -201,3 +201,42 @@ describe('PostCard thumbnail frame', () => {
     expect(out).toContain('aria-label="Video"');
   });
 });
+
+describe('W4 PostCard fixes', () => {
+  function renderWith(props: Partial<PostCardProps> & Pick<PostCardProps, 'post'>): string {
+    const { cache } = makeCache(null);
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <PostCard cache={cache} presignEnabled={false} {...props} />
+      </MemoryRouter>,
+    );
+  }
+
+  it('fix 1: a card with onMove carries a 44x44 Move button above the open overlay', () => {
+    const out = renderWith({ post: makePost({}), onMove: () => {} });
+    expect(out).toContain('aria-label="Move post Post title"');
+    const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(button).toContain('h-11');
+    expect(button).toContain('w-11');
+    expect(button).toContain('z-10');
+    // No onMove, no button.
+    expect(renderWith({ post: makePost({}) })).not.toContain('data-post-card-move');
+  });
+
+  it('fix 5: showStage leads the meta line with the stage dot and label', () => {
+    const out = renderWith({ post: makePost({ stage: 'review' }), showStage: true });
+    expect(out).toContain('data-post-card-stage');
+    expect(out).toContain('bg-stage-review');
+    expect(out).toContain('Review');
+    expect(renderWith({ post: makePost({ stage: 'review' }) })).not.toContain(
+      'data-post-card-stage',
+    );
+  });
+
+  it('fix 9: the title wraps to two lines instead of truncating', () => {
+    const out = renderWith({ post: makePost({}) });
+    const title = /<div[^>]*data-post-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(title).toContain('line-clamp-2');
+    expect(title).not.toContain('truncate');
+  });
+});

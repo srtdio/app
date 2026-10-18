@@ -374,3 +374,53 @@ describe('MoveSheet targets per role', () => {
     }
   });
 });
+
+describe('W4 fix 9: MoveSheet blocked reasons and title', () => {
+  function sheet(source: Stage, role: string | null = 'agency'): ReactElement {
+    return MoveSheetView({
+      open: true,
+      post: { ...makePost(source), title: 'A very long post title that should wrap' },
+      onClose: () => {},
+      ...view(harness(), role),
+    })!;
+  }
+
+  function reasons(tree: ReactElement): Record<string, string> {
+    const all: ReactElement[] = [];
+    collect(tree, all);
+    const out: Record<string, string> = {};
+    for (const button of all.filter((el) => el.type === 'button')) {
+      const label = labelOf(button);
+      if (label === undefined) continue;
+      const inner: ReactElement[] = [];
+      collect((button.props as { children?: ReactNode }).children, inner);
+      const hint = inner.find((el) => 'data-blocked-reason' in (el.props as object));
+      if (hint !== undefined) out[label] = (hint.props as { children: string }).children;
+    }
+    return out;
+  }
+
+  it('a blocked row names the reason from the stage map, not a bare "Blocked"', () => {
+    const r = reasons(sheet('draft'));
+    expect(r.Approved).toBe('Needs Review first');
+    expect(r.Rejected).toBe('Needs Review first');
+    expect(Object.values(r)).not.toContain('Blocked');
+    // Legal targets carry no reason.
+    expect(r.Review).toBeUndefined();
+    expect(r.Parked).toBeUndefined();
+  });
+
+  it('a row blocked from Parked also names the stage it must pass first', () => {
+    const r = reasons(sheet('parked'));
+    expect(r.Approved).toBe('Needs Review first');
+  });
+
+  it('the title wraps to two lines instead of truncating', () => {
+    const all: ReactElement[] = [];
+    collect(sheet('review'), all);
+    const title = all.find((el) => 'data-move-title' in (el.props as object))!;
+    const className = (title.props as { className: string }).className;
+    expect(className).toContain('line-clamp-2');
+    expect(className).not.toContain('truncate');
+  });
+});

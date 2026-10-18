@@ -57,6 +57,7 @@ vi.mock('react', async (importOriginal) => {
 // body can be invoked far enough to run its first useState (the stage filter).
 vi.mock('react-router-dom', () => ({
   useNavigate: () => () => {},
+  useSearchParams: () => [new URLSearchParams(), () => {}],
 }));
 vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/workspace-context', () => ({
@@ -66,16 +67,23 @@ vi.mock('@/lib/workspace-context', () => ({
 import {
   INITIAL_STAGE,
   MOVE_FALLBACK_MESSAGE,
+  dateFilterChip,
+  filteredEmpty,
+  isUndoableMove,
   moveErrorMessage,
   pipelineHeader,
-  PipelinePage,
   pipelineSurface,
   postCountLabel,
   runMovePost,
+  runUndoableMove,
+  undoMoveLabel,
   sanitizePostSort,
   stageCounts,
 } from '@/components/pages/PipelinePage';
 import type { MovePostDeps } from '@/components/pages/PipelinePage';
+import { parsePipelineQuery } from '@/components/pages/pipeline/pipeline-query';
+import type { UndoableAction } from '@/lib/use-undoable-action';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -211,7 +219,7 @@ function texts(tree: ReactNode): string[] {
   return out;
 }
 
-function header(): ReactElement {
+function header(canCreate = true): ReactElement {
   return pipelineHeader({
     search: '',
     onSearchChange: () => {},
@@ -225,6 +233,7 @@ function header(): ReactElement {
     stage: 'all',
     onStageChange: () => {},
     counts: { all: 3, draft: 2, review: 1 },
+    canCreate,
   });
 }
 
@@ -293,18 +302,9 @@ describe('pipelineHeader', () => {
 
 describe('opens on the Review chip by default', () => {
   it('initializes the stage filter to review, the stages in order and All closing the row (no Plan chip)', () => {
-    hookState.reset();
-    try {
-      // Invoke the page body far enough to run its first useState (the stage
-      // filter, index 0). Later hooks (useSort's real useCallback) bail out
-      // without a renderer, but the initial stage is already recorded by then.
-      PipelinePage();
-    } catch {
-      // Expected: the real hooks past the shimmed useState calls throw outside a
-      // renderer. The stage default we assert below is captured before that.
-    }
-    // (a) On first render the stage passed down (StageChips.active) is 'review'.
-    expect(hookState.inits[0]).toBe('review');
+    // (a) A query naming no stage (the stage lives in the URL now) opens on 'review'.
+    const initial = parsePipelineQuery(new URLSearchParams(), INITIAL_STAGE).stage;
+    expect(initial).toBe('review');
 
     // (b) The chip order is the stages in transition-map order, then All;
     // the review default only shifts which chip is selected, never the list.
@@ -319,9 +319,10 @@ describe('opens on the Review chip by default', () => {
         customRange: null,
         onCustomRangeChange: () => {},
         weekStartDay: 1,
-        stage: hookState.inits[0] as string,
+        stage: initial,
         onStageChange: () => {},
         counts: { all: 3, draft: 2, review: 1 },
+        canCreate: true,
       }),
       (el) => el.type === StageChips,
     );
@@ -336,7 +337,11 @@ describe('opens on the Review chip by default', () => {
   it('a stale ?view=plan link opens Review: the page never reads view or week', () => {
     expect(INITIAL_STAGE).toBe('review');
     const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
-    expect(src).not.toMatch(/useSearchParams|PlanWeek|SetDateSheet|['"]week['"]|['"]view['"]/);
+    expect(src).not.toMatch(/PlanWeek|SetDateSheet|['"]week['"]|['"]view['"]/);
+    // A stale ?view=plan link still opens Review: only the pipeline keys are read.
+    expect(
+      parsePipelineQuery(new URLSearchParams('view=plan&week=2026-06-15'), INITIAL_STAGE),
+    ).toEqual({ stage: 'review', search: '', dateWindow: 'any', customRange: null });
   });
 });
 
@@ -355,6 +360,8 @@ describe('the surface', () => {
       onViewAll: () => {},
       onMovePost: () => {},
       onLongPressPost: () => {},
+      onBlockedMove: () => {},
+      shownKey: 'pipeline:shown:',
     });
   }
 
@@ -677,6 +684,27 @@ describe('PipelineSortControl (consolidated sort + date window)', () => {
     expect(range).toEqual({ start: '2026-06-24', end: '2026-06-27' });
     expect(chosen).toBe('custom');
   });
+
+  it('W4 fix 9: applying a custom range closes the sort sheet too, not just the calendar', () => {
+    hookState.reset();
+    hookState.overrides[0] = true; // sheet/popover open
+    hookState.overrides[1] = true; // calendar open
+    const tree = PipelineSortControl({
+      order: 'updated',
+      onOrderChange: () => {},
+      dateWindow: 'any',
+      onDateWindowChange: () => {},
+      customRange: null,
+      onCustomRangeChange: () => {},
+      weekStartDay: 1,
+    });
+    const cal = findAll(tree, (el) => el.type === PipelineDateRangeCalendar)[0]!.props as {
+      onApply: (r: { start: string; end: string }) => void;
+    };
+    cal.onApply({ start: '2026-06-24', end: '2026-06-27' });
+    expect(hookState.calls[1]).toEqual([false]);
+    expect(hookState.calls[0]).toEqual([false]);
+  });
 });
 
 describe('target-date window narrows every surface (fix A)', () => {
@@ -725,5 +753,117 @@ describe('target-date window narrows every surface (fix A)', () => {
     );
     const count = stageCounts(groupByStage(filtered, STAGES), STAGES).all ?? 0;
     expect(count).toBe(1);
+  });
+});
+
+describe('W4 fix 3: create gating', () => {
+  it('hides the "+" Create post button unless post.create is granted', () => {
+    const label = (el: ReactElement): string | undefined =>
+      (el.props as { 'aria-label'?: string })['aria-label'];
+    expect(findAll(header(false), (el) => label(el) === 'Create post')).toHaveLength(0);
+    expect(findAll(header(true), (el) => label(el) === 'Create post')).toHaveLength(1);
+  });
+});
+
+describe('W4 fix 4: filtered empty state', () => {
+  it('says "No matches" with a Clear filters button that fires the reset', () => {
+    const onClear = vi.fn();
+    const tree = filteredEmpty(onClear);
+    const empty = findAll(tree, (el) => el.type === EmptyState)[0]!;
+    const props = empty.props as { title: string; action: ReactElement };
+    expect(props.title).toBe('No matches');
+    expect(texts(props.action)).toContain('Clear filters');
+    (props.action.props as { onClick: () => void }).onClick();
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('W4 fix 6: date filter chip', () => {
+  it('shows the range and a 44px X that clears it', () => {
+    const onClear = vi.fn();
+    const tree = dateFilterChip('24 Jun – 27 Jun', onClear);
+    expect(texts(tree)).toContain('24 Jun – 27 Jun');
+    const x = findAll(
+      tree,
+      (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Clear date filter',
+    )[0]!;
+    const className = (x.props as { className: string }).className;
+    expect(className).toContain('h-11');
+    expect(className).toContain('w-11');
+    // No responsive hide: the chip shows on phones too.
+    expect((tree.props as { className: string }).className).not.toMatch(/\bhidden\b/);
+    (x.props as { onClick: () => void }).onClick();
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('W4 fix 7: undoable Rejected / Parked moves', () => {
+  afterEach(() => {
+    stMock.mockReset();
+  });
+
+  function undoHarness(stage: Stage): {
+    h: ReturnType<typeof harness>;
+    actions: UndoableAction[];
+  } {
+    const h = harness([makePost('p1', stage)]);
+    const actions: UndoableAction[] = [];
+    return { h, actions };
+  }
+
+  it('only Rejected and Parked are undoable, with the "Moved to X" label', () => {
+    expect(STAGES.filter(isUndoableMove)).toEqual(['parked', 'rejected']);
+    expect(undoMoveLabel('rejected')).toBe('Moved to Rejected');
+    expect(undoMoveLabel('parked')).toBe('Moved to Parked');
+  });
+
+  it('flips at once, sends nothing until the window ends, then sends once', async () => {
+    stMock.mockResolvedValue({ ok: true, data: 'ok' } satisfies Result<string>);
+    const { h, actions } = undoHarness('review');
+    runUndoableMove({ ...h.deps, run: (a) => actions.push(a) }, 'p1', 'rejected');
+    expect(h.state()[0]!.stage).toBe('rejected');
+    expect(h.closed()).toBe(true);
+    expect(actions.map((a) => a.label)).toEqual(['Moved to Rejected']);
+    expect(stMock).not.toHaveBeenCalled();
+    await actions[0]!.commit();
+    expect(stMock).toHaveBeenCalledTimes(1);
+    expect(stMock).toHaveBeenCalledWith(h.deps.client, { postId: 'p1', toStage: 'rejected' });
+    expect(h.deps.inFlight.has('p1')).toBe(false);
+  });
+
+  it('Undo puts the post back and the proc is never sent', () => {
+    const { h, actions } = undoHarness('approved');
+    runUndoableMove({ ...h.deps, run: (a) => actions.push(a) }, 'p1', 'parked');
+    expect(h.state()[0]!.stage).toBe('parked');
+    actions[0]!.revert?.();
+    expect(h.state()[0]!.stage).toBe('approved');
+    expect(stMock).not.toHaveBeenCalled();
+    expect(h.deps.inFlight.has('p1')).toBe(false);
+  });
+
+  it('a failed send puts the post back and toasts the friendly error', async () => {
+    stMock.mockResolvedValue({
+      ok: false,
+      error: { code: 'forbidden_role', message: 'forbidden_role' },
+    } satisfies Result<string>);
+    const { h, actions } = undoHarness('review');
+    runUndoableMove({ ...h.deps, run: (a) => actions.push(a) }, 'p1', 'rejected');
+    await actions[0]!.commit();
+    expect(h.state()[0]!.stage).toBe('review');
+    expect(h.toasts).toEqual([moveErrorMessage('forbidden_role')]);
+  });
+
+  it('an illegal move never flips (draft cannot go to Rejected)', () => {
+    const { h, actions } = undoHarness('draft');
+    runUndoableMove({ ...h.deps, run: (a) => actions.push(a) }, 'p1', 'rejected');
+    expect(h.setPostsCalls()).toBe(0);
+    expect(actions).toHaveLength(0);
+  });
+
+  it('the page no longer imports the assets toasts', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
+    expect(src).not.toMatch(/assets\/useToasts|assets\/Toasts/);
+    expect(src).toMatch(/@\/components\/ui\/toast/);
+    expect(src).toMatch(/useUndoableAction/);
   });
 });

@@ -6,6 +6,7 @@ import { IconPipeline } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui/useLongPress';
 import { PostCard } from '@/components/pages/PostCard';
 import { BOARD_CAP, emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
+import { readShown, writeShown } from '@/components/pages/pipeline/pipeline-query';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
@@ -19,8 +20,13 @@ export interface PipelineFeedProps {
   presignEnabled: boolean;
   /** The active workspace key, threaded into every card for its pretty /p link. */
   workspaceKey?: string | null;
-  /** A long-press on a card asks the page to open the move sheet for that post. */
+  /** A long-press or the card's Move button asks the page to open the move sheet. */
   onLongPressPost: (post: PipelinePost) => void;
+  /**
+   * sessionStorage key for the Show more depth, built from the filter query, so
+   * Back to the same filters restores the same depth. Absent: not remembered.
+   */
+  shownKey?: string;
 }
 
 /**
@@ -71,6 +77,7 @@ function cardGrid(
   presignEnabled: boolean,
   onLongPressPost: (post: PipelinePost) => void,
   workspaceKey: string | null,
+  showStage: boolean,
 ): ReactElement {
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -81,6 +88,8 @@ function cardGrid(
             cache={cache}
             presignEnabled={presignEnabled}
             workspaceKey={workspaceKey}
+            onMove={onLongPressPost}
+            showStage={showStage}
           />
         </FeedCard>
       ))}
@@ -92,9 +101,9 @@ function cardGrid(
  * Mobile feed: one flat 2-column grid over the active stage's posts, capped at
  * BOARD_CAP with an in-place Show more control that reveals another page rather
  * than navigating away. The 'all' tab shows every post; a single-stage tab shows
- * just that stage, or the EmptyState when it holds nothing. The shown count
- * resets whenever the active stage changes, so switching tabs never strands a
- * stale "expanded" depth on the new list.
+ * just that stage, or the EmptyState when it holds nothing. The shown count is
+ * keyed by the filter query (shownKey) in sessionStorage: a new tab or filter
+ * starts at the cap, and Back to the same filters restores the same depth.
  */
 export function PipelineFeed({
   posts,
@@ -103,9 +112,21 @@ export function PipelineFeed({
   presignEnabled,
   workspaceKey = null,
   onLongPressPost,
+  shownKey,
 }: PipelineFeedProps): ReactElement {
-  const [shown, setShown] = useState(BOARD_CAP);
-  useEffect(() => setShown(BOARD_CAP), [activeStage]);
+  const depthKey = shownKey ?? null;
+  const [shown, setShown] = useState(() =>
+    depthKey === null ? BOARD_CAP : readShown(depthKey, BOARD_CAP),
+  );
+  useEffect(
+    () => setShown(depthKey === null ? BOARD_CAP : readShown(depthKey, BOARD_CAP)),
+    [activeStage, depthKey],
+  );
+  const showMore = (): void => {
+    const next = shown + BOARD_CAP;
+    setShown(next);
+    if (depthKey !== null) writeShown(depthKey, next);
+  };
 
   const list = activeStage === 'all' ? posts : posts.filter((post) => post.stage === activeStage);
   const view = list.slice(0, shown);
@@ -119,10 +140,17 @@ export function PipelineFeed({
         />
       ) : (
         <>
-          {cardGrid(view, cache, presignEnabled, onLongPressPost, workspaceKey)}
+          {cardGrid(
+            view,
+            cache,
+            presignEnabled,
+            onLongPressPost,
+            workspaceKey,
+            activeStage === 'all',
+          )}
           {list.length > shown ? (
             <div className="mt-4 flex justify-center">
-              <Button variant="default" size="lg" onClick={() => setShown((s) => s + BOARD_CAP)}>
+              <Button variant="default" size="lg" onClick={showMore}>
                 Show {Math.min(BOARD_CAP, list.length - shown)} more
               </Button>
             </div>

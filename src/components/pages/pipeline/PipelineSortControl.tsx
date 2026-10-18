@@ -192,8 +192,8 @@ export function PipelineSortControl({
   });
 
   // Always mounted so it floats above the sheet/popover; its own `open` prop
-  // gates the portal. Applying keeps the sheet/popover open (only the calendar
-  // closes), so the user lands back on the grouped rows with 'Custom' active.
+  // gates the portal. Applying closes both the calendar and the sheet/popover,
+  // so the user lands straight back on the filtered board.
   const calendar = (
     <PipelineDateRangeCalendar
       open={calendarOpen}
@@ -203,6 +203,7 @@ export function PipelineSortControl({
         onCustomRangeChange(range);
         onDateWindowChange('custom');
         setCalendarOpen(false);
+        setOpen(false);
       }}
       onClear={() => {
         onCustomRangeChange(null);

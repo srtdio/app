@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useOptionalToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconPlus } from '@/components/ui/icons';
+import { IconCalendar, IconPipeline, IconPlus, IconX } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
@@ -11,8 +14,18 @@ import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
 import { PipelineSortControl } from '@/components/pages/pipeline/PipelineSortControl';
 import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
 import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
-import { Toasts } from '@/components/pages/assets/Toasts';
-import { useToasts } from '@/components/pages/assets/useToasts';
+import {
+  dateChipLabel,
+  dateFilterActive,
+  filtersActive,
+  parsePipelineQuery,
+  pipelineQueryParams,
+  showMoreKey,
+  type DateRange,
+  type PipelineQuery,
+} from '@/components/pages/pipeline/pipeline-query';
+import { useUndoableAction, type UndoableAction } from '@/lib/use-undoable-action';
+import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { dispatchSorted } from '@/lib/events';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { INDUCTION_KEYS } from '@/lib/induction';
@@ -23,7 +36,7 @@ import { useMediaQuery } from '@/lib/use-media-query';
 import { useSort } from '@/lib/use-sort';
 import { useSession } from '@/lib/session-context';
 import { fetchMemberRole } from '@/lib/assets';
-import { roleMayTarget } from '@/components/pages/pcs/stage-actions';
+import { canRoleMove, roleMayTarget } from '@/components/pages/pcs/stage-actions';
 import {
   DATE_WINDOW_DEFAULT,
   POST_SORT_DEFAULT,
@@ -34,11 +47,6 @@ import {
   type DateWindow,
   type PostSort,
 } from '@/lib/list-sort';
-
-interface DateRange {
-  start: string;
-  end: string;
-}
 import { groupByStage, stageColumns } from '@/lib/post-board';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, DomainErrorCode, PipelinePost, Stage } from '@srtdio/posts';
@@ -71,6 +79,8 @@ interface PipelineHeaderProps {
   onStageChange: (key: string) => void;
   /** Per-tab post counts keyed by tab ('all' plus each Stage), shown as badges. */
   counts: Record<string, number>;
+  /** post.create granted: only then does the header carry the "+" create button. */
+  canCreate: boolean;
 }
 
 /**
@@ -108,20 +118,24 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
           />
         ),
       }}
-      primaryAction={{
-        node: (
-          <Button
-            variant="primary"
-            size="lg"
-            aria-label="Create post"
-            data-induction={INDUCTION_KEYS.pipelineCreate}
-            className="w-11 px-0"
-            onClick={() => dispatchSorted('sorted:create-post')}
-          >
-            <IconPlus size={18} />
-          </Button>
-        ),
-      }}
+      {...(props.canCreate
+        ? {
+            primaryAction: {
+              node: (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  aria-label="Create post"
+                  data-induction={INDUCTION_KEYS.pipelineCreate}
+                  className="w-11 px-0"
+                  onClick={() => dispatchSorted('sorted:create-post')}
+                >
+                  <IconPlus size={18} />
+                </Button>
+              ),
+            },
+          }
+        : {})}
     >
       <StageRow>
         <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
@@ -227,6 +241,10 @@ export interface PipelineSurfaceProps {
   onLongPressPost: (post: PipelinePost) => void;
   /** The viewer's workspace role: filters the board's drop targets. */
   role: string | null;
+  /** A desktop drop onto a column the post cannot move to: toast the reason. */
+  onBlockedMove: (reason: string) => void;
+  /** sessionStorage key for the feed's Show more depth (keyed by the filter query). */
+  shownKey: string;
 }
 
 /**
@@ -247,6 +265,8 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
         onViewAll={props.onViewAll}
         onMovePost={props.onMovePost}
         role={props.role}
+        onOpenMove={props.onLongPressPost}
+        onBlockedMove={props.onBlockedMove}
       />
     );
   }
@@ -258,7 +278,50 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
       presignEnabled={props.presignEnabled}
       workspaceKey={props.workspaceKey}
       onLongPressPost={props.onLongPressPost}
+      shownKey={props.shownKey}
     />
+  );
+}
+
+/**
+ * The filtered empty state: search or a date window hides every post on this
+ * view. "Clear filters" resets both (the stage chip stays). The unfiltered
+ * empty states (feed and board) are untouched.
+ */
+export function filteredEmpty(onClear: () => void): ReactElement {
+  return (
+    <div data-filtered-empty="" className="px-4 md:px-6">
+      <EmptyState
+        icon={<IconPipeline size={22} />}
+        title="No matches"
+        action={
+          <Button variant="default" size="lg" onClick={onClear}>
+            Clear filters
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+/** The active date filter as a chip with a 44px X that clears it (phones too). */
+export function dateFilterChip(label: string, onClear: () => void): ReactElement {
+  return (
+    <span
+      data-date-chip=""
+      className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full border border-border bg-panel-2 pl-3 text-xs text-fg-2"
+    >
+      <IconCalendar size={14} className="shrink-0 text-fg-3" />
+      <span className="truncate">{label}</span>
+      <button
+        type="button"
+        aria-label="Clear date filter"
+        onClick={onClear}
+        className="-my-1.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <IconX size={14} />
+      </button>
+    </span>
   );
 }
 
@@ -277,6 +340,72 @@ export function sanitizePostSort(sort: string): PostSort {
  * Plan surface, so a stale `?view=plan` (or `?week`) link opens Review too.
  */
 export const INITIAL_STAGE = 'review';
+
+/** Moves that wait out an Undo window before the proc is sent. */
+export function isUndoableMove(toStage: Stage): boolean {
+  return toStage === 'rejected' || toStage === 'parked';
+}
+
+/** The Undo toast title: "Moved to Rejected", "Moved to Parked". */
+export function undoMoveLabel(toStage: Stage): string {
+  return `Moved to ${stageLabel(toStage)}`;
+}
+
+/** {@link runMovePost}'s deps plus the Undo runner (useUndoableAction's run). */
+export interface UndoableMoveDeps extends MovePostDeps {
+  run: (action: UndoableAction) => void;
+}
+
+/**
+ * A move to Rejected or Parked: flip the post locally at once, close the sheet,
+ * and hand the proc call to the Undo toast. Undo puts the post back and nothing
+ * is sent; the window running out (or the toast closing) sends stage_transition
+ * once. A failed send puts the post back and toasts the friendly error. The
+ * in-flight guard holds from the flip until the send settles or Undo.
+ */
+export function runUndoableMove(deps: UndoableMoveDeps, postId: string, toStage: Stage): void {
+  if (deps.inFlight.has(postId)) {
+    return;
+  }
+  const target = deps.posts.find((post) => post.id === postId);
+  if (target === undefined) {
+    return;
+  }
+  // posts.stage is a DB text column (typed string); it is one of the Stage values.
+  const fromStage = target.stage as Stage;
+  // Optimistic, so only a move the stage map and the role allow ever flips.
+  if (!canRoleMove(deps.role, fromStage, toStage)) {
+    return;
+  }
+  const setStage = (stage: Stage): void =>
+    deps.setPosts((prev) => prev.map((post) => (post.id === postId ? { ...post, stage } : post)));
+  const revert = (): void => {
+    setStage(fromStage);
+    deps.inFlight.delete(postId);
+  };
+  deps.inFlight.add(postId);
+  setStage(toStage);
+  deps.onClose();
+  deps.run({
+    label: undoMoveLabel(toStage),
+    commit: async () => {
+      try {
+        const result = await stageTransition(deps.client, { postId, toStage });
+        if (!result.ok) {
+          revert();
+          deps.toast(moveErrorMessage(result.error.code));
+          return;
+        }
+      } catch {
+        revert();
+        deps.toast(MOVE_FALLBACK_MESSAGE);
+        return;
+      }
+      deps.inFlight.delete(postId);
+    },
+    revert,
+  });
+}
 
 /** Everything {@link runMovePost} needs, so the page wires it and tests drive it directly. */
 export interface MovePostDeps {
@@ -343,21 +472,53 @@ export async function runMovePost(
 export function PipelinePage() {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
-  // Opens on Review (a stale ?view=plan link included).
-  const [stage, setStage] = useState(INITIAL_STAGE);
-  const [search, setSearch] = useState('');
+  // Stage, search, date window and custom range live in the URL query so Back
+  // restores them. Opens on Review when the query names no stage (a stale
+  // ?view=plan link included: only the pipeline's own keys are read).
+  const [params, setParams] = useSearchParams();
+  const query = useMemo(() => parsePipelineQuery(params, INITIAL_STAGE), [params]);
+  const { stage, search, dateWindow, customRange } = query;
+  // Patches compose through a ref: the sort control's Apply sets the range and
+  // the window back to back, before the URL re-renders the page.
+  const latestQuery = useRef(query);
+  latestQuery.current = query;
+  const updateQuery = useCallback(
+    (patch: Partial<PipelineQuery>): void => {
+      const next = { ...latestQuery.current, ...patch };
+      latestQuery.current = next;
+      setParams(pipelineQueryParams(next, INITIAL_STAGE), { replace: true });
+    },
+    [setParams],
+  );
+  const setStage = useCallback((key: string): void => updateQuery({ stage: key }), [updateQuery]);
+  const setSearch = useCallback(
+    (value: string): void => updateQuery({ search: value }),
+    [updateQuery],
+  );
+  const setDateWindow = useCallback(
+    (value: DateWindow): void => updateQuery({ dateWindow: value }),
+    [updateQuery],
+  );
+  const setCustomRange = useCallback(
+    (range: DateRange | null): void => updateQuery({ customRange: range }),
+    [updateQuery],
+  );
+  const clearDate = useCallback(
+    (): void => updateQuery({ dateWindow: DATE_WINDOW_DEFAULT, customRange: null }),
+    [updateQuery],
+  );
+  const clearFilters = useCallback(
+    (): void => updateQuery({ search: '', dateWindow: DATE_WINDOW_DEFAULT, customRange: null }),
+    [updateQuery],
+  );
+  const shownKey = showMoreKey(pipelineQueryParams(query, INITIAL_STAGE).toString());
+  const canCreate = useWorkspaceCapability('post.create') === true;
   const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
   // Sanitize the persisted sort: a live workspace may hold a value the trimmed
   // menu no longer lists ('newest'/'title'). Fall back to the default for the
   // derivation and the header, but leave setSort untouched so the first user pick
   // heals storage.
   const activeSort = sanitizePostSort(sort);
-  // Target-date window: not persisted, resets to 'any' on load (the global
-  // `window` is used below for addEventListener, so this is named dateWindow).
-  const [dateWindow, setDateWindow] = useState<DateWindow>(DATE_WINDOW_DEFAULT);
-  // The custom date range for the 'custom' window; in-memory only, defaults to
-  // null (no range yet picked, so filterByWindow passes the list through).
-  const [customRange, setCustomRange] = useState<DateRange | null>(null);
   // The active workspace's civil-date context for the window filter; the helper
   // re-validates the zone, so a bad stored value is still safe.
   const activeWorkspace = workspaces.find((w) => w.id === workspaceId);
@@ -372,7 +533,14 @@ export function PipelinePage() {
   // Reactive mirror of the in-flight guard for the open move sheet: the guard
   // itself is a ref (no re-render), so this state drives the sheet's busy prop.
   const [movingId, setMovingId] = useState<string | null>(null);
-  const { toasts, push, dismiss } = useToasts();
+  // Pipeline toasts ride the shared ui/toast surface; a ref keeps push stable.
+  const toastApi = useOptionalToast();
+  const toastRef = useRef(toastApi);
+  toastRef.current = toastApi;
+  const push = useCallback((message: string): void => {
+    toastRef.current?.show({ title: message });
+  }, []);
+  const { run: runUndoable } = useUndoableAction();
   // A post step of the induction opens the sheet with its preset.
   const postPreset = useInductionPostPreset();
   // The viewer's role, loaded once from the membership exactly as PCS does: it
@@ -471,8 +639,9 @@ export function PipelinePage() {
   // The header counter: the filtered board total.
   const shownCount = counts.all ?? 0;
 
-  // Picking a chip sets the stage filter.
-  const changeStage = useCallback((key: string): void => setStage(key), []);
+  // The empty view under active search/date filters gets "No matches".
+  const visibleCount = (stage === ALL_KEY ? counts.all : counts[stage]) ?? 0;
+  const showFilteredEmpty = filtersActive(query) && visibleCount === 0;
 
   // Single source for the move: both the desktop drop and the mobile sheet call
   // this, which awaits the proc then re-groups on success (see runMovePost).
@@ -482,6 +651,24 @@ export function PipelinePage() {
       // a move we actually start; a double-fire is dropped here (and again inside
       // runMovePost, which stays the authority for firing the proc once).
       if (inFlight.current.has(postId)) {
+        return;
+      }
+      // Rejected and Parked flip now and send after the Undo window.
+      if (isUndoableMove(toStage)) {
+        runUndoableMove(
+          {
+            client: supabase,
+            posts,
+            inFlight: inFlight.current,
+            setPosts,
+            onClose: () => setMovePostTarget(null),
+            toast: push,
+            role,
+            run: runUndoable,
+          },
+          postId,
+          toStage,
+        );
         return;
       }
       setMovingId(postId);
@@ -501,7 +688,7 @@ export function PipelinePage() {
         setMovingId((current) => (current === postId ? null : current));
       });
     },
-    [posts, push, role],
+    [posts, push, role, runUndoable],
   );
 
   const boardLoading = workspaceId === null || (postsLoading && posts.length === 0);
@@ -519,14 +706,18 @@ export function PipelinePage() {
         onCustomRangeChange: setCustomRange,
         weekStartDay,
         stage,
-        onStageChange: changeStage,
+        onStageChange: setStage,
         counts,
+        canCreate,
       })}
 
       {/* Honest counter: the FILTERED total (counts.all, summed from the same
           grouped list the board/feed render), so it tracks the active search
           instead of freezing at the unfiltered posts.length. */}
-      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">{postCountLabel(shownCount)}</div>
+      <div className="flex min-h-[44px] flex-wrap items-center gap-2 px-4 pt-3 md:px-6">
+        <span className="text-sm text-fg-3">{postCountLabel(shownCount)}</span>
+        {dateFilterActive(query) ? dateFilterChip(dateChipLabel(query), clearDate) : null}
+      </div>
 
       {postsError !== null ? (
         <div className="px-4 md:px-6 mt-4">
@@ -538,6 +729,8 @@ export function PipelinePage() {
         <div data-guide-wait="" className="px-4 md:px-6 py-10 text-sm text-fg-3">
           Loading posts
         </div>
+      ) : showFilteredEmpty ? (
+        filteredEmpty(clearFilters)
       ) : (
         pipelineSurface({
           stage,
@@ -551,6 +744,8 @@ export function PipelinePage() {
           onMovePost: movePost,
           onLongPressPost: setMovePostTarget,
           role,
+          onBlockedMove: push,
+          shownKey,
         })
       )}
 
@@ -573,8 +768,6 @@ export function PipelinePage() {
           void loadPosts();
         }}
       />
-
-      <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }
