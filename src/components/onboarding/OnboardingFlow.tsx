@@ -17,7 +17,16 @@
 // (finish), because either refetch flips the shell gate and would unmount the
 // flow mid-way. Colors are tokens only, so light and dark both hold.
 
-import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LABELS, isPostPlatform } from '@srtdio/posts';
 import { userOnboardingSave, usernameAvailable } from '@srtdio/rpc';
@@ -533,8 +542,10 @@ export function OnboardingFlow({
               aria-checked={side === tile.side}
               onClick={() => setSide(tile.side)}
               className={cn(
-                'flex min-h-[72px] flex-col items-start justify-center rounded-xl border bg-panel px-4 py-3 text-left',
-                side === tile.side ? 'border-accent ring-1 ring-accent' : 'border-border',
+                'flex min-h-[64px] flex-col items-start justify-center rounded-lg border px-4 py-3 text-left',
+                side === tile.side
+                  ? 'border-accent bg-accent-soft ring-1 ring-accent'
+                  : 'border-border bg-panel-2',
               )}
             >
               <span className="text-[17px] font-semibold text-fg">{tile.title}</span>
@@ -787,42 +798,23 @@ export function OnboardingFlow({
             )}
           </header>
 
-          {progressAt >= 0 ? (
-            <div className="pt-1">
-              <div
-                role="progressbar"
-                aria-valuemin={1}
-                aria-valuemax={progress.length}
-                aria-valuenow={progressAt + 1}
-                aria-label={`Step ${progressAt + 1} of ${progress.length}`}
-                className="flex gap-1.5"
-              >
-                {progress.map((s, i) => (
-                  <span
-                    key={s}
-                    className={cn(
-                      'h-1 flex-1 rounded-full',
-                      i <= progressAt ? 'bg-accent' : 'bg-border',
-                    )}
-                  />
-                ))}
+          {/* Sorted's card: one white box on the page, the step under the title,
+              grey option boxes and the blue Continue inside it. */}
+          <main className="flex flex-1 flex-col py-4">
+            <StepLabel.Provider
+              value={progressAt >= 0 ? `Step ${progressAt + 1} of ${progress.length}` : null}
+            >
+              <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-[0_12px_32px_-18px_rgba(17,17,20,0.22)]">
+                {body}
+                {error !== null ? (
+                  <p role="alert" className="text-sm text-bad [text-wrap:pretty]">
+                    {error}
+                  </p>
+                ) : null}
+                {primary}
               </div>
-              <p className="mt-2 font-mono text-[11px] text-fg-3">
-                Step {progressAt + 1} of {progress.length}
-              </p>
-            </div>
-          ) : null}
-
-          <main className="flex flex-1 flex-col gap-5 py-5">{body}</main>
-
-          <footer className="sticky bottom-0 -mx-6 flex flex-col gap-2 bg-bg px-6 pb-6 pt-3">
-            {error !== null ? (
-              <p role="alert" className="text-sm text-bad [text-wrap:pretty]">
-                {error}
-              </p>
-            ) : null}
-            {primary}
-          </footer>
+            </StepLabel.Provider>
+          </main>
         </div>
       </div>
 
@@ -872,13 +864,18 @@ export function OnboardingFlow({
 
 // ---------- pieces ----------
 
+/** "Step 1 of 3" for the screen in view, shown under its title; null off the counted steps. */
+const StepLabel = createContext<string | null>(null);
+
 function Heading({ title, lead }: { title: string; lead: string }): ReactElement {
+  const stepLabel = useContext(StepLabel);
   return (
     <div>
       <h1 className="text-[24px] font-semibold leading-[1.2] tracking-[-0.01em] text-fg [text-wrap:balance]">
         {title}
       </h1>
-      <p className="mt-2 text-[15px] leading-[1.45] text-fg-2 [text-wrap:balance]">{lead}</p>
+      {stepLabel !== null ? <p className="mt-1.5 text-[15px] text-fg-3">{stepLabel}</p> : null}
+      <p className="mt-3 text-[15px] leading-[1.45] text-fg-2 [text-wrap:balance]">{lead}</p>
     </div>
   );
 }
@@ -923,7 +920,7 @@ function Primary({
       data-induction={anchor}
       disabled={disabled}
       onClick={onClick}
-      className="h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
+      className="h-12 w-full rounded-lg bg-accent text-[16px] font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
     >
       {children}
     </button>
