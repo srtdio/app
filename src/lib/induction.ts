@@ -9,6 +9,7 @@
 import { INDUCTION_KEYS, type InductionKey } from './induction-keys';
 import {
   ROUTE_PREFIX,
+  type Route,
   type Card,
   type Chapter,
   type InductionFacts,
@@ -48,6 +49,11 @@ export const ABSENT_SKIP_MS = 4000;
 export const APPROVER_BRAND_STEP = 'approver_brand';
 export const APPROVER_WAITING_STEP = 'approver_waiting';
 export const WORKSPACE_STEP = `${ROUTE_PREFIX.creator}workspace`;
+
+/** Stored before induction_finish when the person ends the tour with Skip tour. */
+export function skippedStepId(route: Route): string {
+  return `${ROUTE_PREFIX[route]}skipped`;
+}
 
 /** Where an approver who signed up alone is, from the stored step. */
 export type ApproverStage = 'none' | 'brand' | 'waiting';
@@ -135,6 +141,11 @@ export function isGated(step: Pick<Step, 'kind'>): boolean {
   return step.kind === 'gate' || step.kind === 'setup';
 }
 
+/** A gated step with no later chip: an open one pulls later stored steps back to it. */
+export function isHardGate(step: Pick<Step, 'kind' | 'laterLabel'>): boolean {
+  return isGated(step) && step.laterLabel === undefined;
+}
+
 /** The script's steps that apply to this workspace, in order. */
 export function applicableSteps(script: RouteScript, facts: InductionFacts): readonly Step[] {
   return script.steps.filter((step) => isApplicable(step, facts));
@@ -186,7 +197,7 @@ function afterData(steps: readonly Step[], input: EngineInput): number {
  * data), unless the stored step is already inside that group.
  */
 function gateOverride(steps: readonly Step[], at: number, input: EngineInput): number {
-  const gate = steps.findIndex((step) => isGated(step) && !stepDataDone(step, input));
+  const gate = steps.findIndex((step) => isHardGate(step) && !stepDataDone(step, input));
   const gateStep = steps[gate];
   if (gateStep === undefined || gate >= at) return at;
   if (steps[at]?.dataDone === gateStep.dataDone) return at;

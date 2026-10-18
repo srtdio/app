@@ -290,48 +290,6 @@ export function useTypingNow(pauseMs: number = TYPING_PAUSE_MS): boolean {
 /** In the app: how long typing must pause before a button step's box shows. */
 export const APP_TYPING_PAUSE_MS = 1500;
 
-/** When nothing on the page scrolls, the opt-out still shows after this long. */
-export const NO_SCROLL_SHOW_MS = 8000;
-
-/**
- * True once the person has scrolled by hand (a swipe or the wheel) since this
- * step appeared: an opt-out shows only after they have looked at what it skips.
- * The guide's own bring-into-view scrolls do not count. A page with nothing to
- * scroll shows it after NO_SCROLL_SHOW_MS.
- */
-export function useScrolledByHand(stepKey: string, enabled: boolean): boolean {
-  const [scrolled, setScrolled] = useState<{ key: string; done: boolean }>({
-    key: stepKey,
-    done: false,
-  });
-  useEffect(() => {
-    if (!enabled) return;
-    setScrolled({ key: stepKey, done: false });
-    const done = (): void => setScrolled({ key: stepKey, done: true });
-    const onMove = (): void => done();
-    const onKey = (event: KeyboardEvent): void => {
-      if (['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', ' '].includes(event.key)) done();
-    };
-    window.addEventListener('touchmove', onMove, { passive: true, capture: true });
-    window.addEventListener('wheel', onMove, { passive: true, capture: true });
-    window.addEventListener('keydown', onKey, true);
-    const page = document.scrollingElement;
-    const scrollable =
-      (page != null && page.scrollHeight > page.clientHeight + 1) ||
-      Array.from(document.querySelectorAll('main, [data-scroll-root]')).some(
-        (el) => el.scrollHeight > el.clientHeight + 1,
-      );
-    const timer = scrollable ? undefined : window.setTimeout(done, NO_SCROLL_SHOW_MS);
-    return () => {
-      window.removeEventListener('touchmove', onMove, true);
-      window.removeEventListener('wheel', onMove, true);
-      window.removeEventListener('keydown', onKey, true);
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [stepKey, enabled]);
-  return scrolled.key === stepKey && scrolled.done;
-}
-
 /** The longest a step waits for the page behind it before it points anyway. */
 export const PHOTOS_WAIT_CAP_MS = 5000;
 

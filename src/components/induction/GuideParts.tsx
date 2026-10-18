@@ -175,6 +175,8 @@ export interface BarCopy {
   later: string;
   /** The pause's button: "Next". */
   next: string;
+  /** "Skip tour". */
+  skip: string;
   aria: { bar: string; progress: string; back: string };
 }
 
@@ -185,6 +187,8 @@ export interface BarActions {
   onLater: (() => void) | undefined;
   /** A pause before the next screen: Next takes them on. undefined hides it. */
   onNext?: (() => void) | undefined;
+  /** Skip tour: ends the tour. undefined hides it. */
+  onSkip?: (() => void) | undefined;
 }
 
 export interface DockAt {
@@ -297,6 +301,16 @@ function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): 
           {copy.back}
         </button>
       ) : null}
+      {actions.onSkip !== undefined ? (
+        <button
+          type="button"
+          data-induction-skip=""
+          onClick={actions.onSkip}
+          className={`${CHIP} text-fg-3`}
+        >
+          {copy.skip}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -309,6 +323,8 @@ export interface CardCopy {
   button: string;
   /** The clear card's two figures (things done, time taken). */
   stats?: readonly { value: string; label: string }[];
+  /** The intro's "Skip tour", shown with onSkip. */
+  skip?: string;
 }
 
 /** The intro (hero, indigo, chapter pills, Start) or closing (plain, Done) card, docked like the bar. */
@@ -316,11 +332,14 @@ export function GuideCard({
   kind,
   copy,
   onPress,
+  onSkip,
   dock,
 }: {
   kind: 'intro' | 'closing' | 'clear';
   copy: CardCopy;
   onPress: () => void;
+  /** Skip tour beside the button; undefined hides it. */
+  onSkip?: (() => void) | undefined;
   dock: DockAt;
 }): ReactElement {
   const placed = dockStyle(dock);
@@ -369,7 +388,17 @@ export function GuideCard({
           ))}
         </div>
       ) : null}
-      <div className="mt-3 flex justify-end">
+      <div className="mt-3 flex items-center justify-end gap-2">
+        {onSkip !== undefined && copy.skip !== undefined ? (
+          <button
+            type="button"
+            data-induction-skip=""
+            onClick={onSkip}
+            className={`${CHIP} ${hero ? 'text-accent-fg opacity-90 focus-visible:ring-accent-fg' : 'text-fg-2'}`}
+          >
+            {copy.skip}
+          </button>
+        ) : null}
         <Button
           variant={hero ? 'default' : 'primary'}
           size="lg"

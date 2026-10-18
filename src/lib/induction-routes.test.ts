@@ -204,6 +204,7 @@ describe('step shape', () => {
     expect(stepById('c_approver_invite')).toMatchObject({
       kind: 'gate',
       dataDone: 'clientInvited',
+      laterLabel: 'Invite later',
     });
     expect(stepById('c_workspace')).toMatchObject({ kind: 'setup', dataDone: 'hasWorkspace' });
   });

@@ -3,6 +3,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { MenuItem } from '@/components/shell/MenuItem';
 import {
   IconMoon,
+  IconRotateCcw,
   IconScrollText,
   IconSettings,
   IconSignOut,
@@ -12,7 +13,9 @@ import {
   IconUser,
   IconUsers,
 } from '@/components/ui/icons';
+import { useInduction } from '@/components/induction/InductionProvider';
 import { dispatchSorted } from '@/lib/events';
+import { GUIDE_CHROME } from '@/lib/induction-copy';
 import { useTheme } from '@/lib/use-theme';
 import { useMediaQuery } from '@/lib/use-media-query';
 
@@ -25,6 +28,7 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  const restartTour = useInduction()?.restart;
 
   function go(to: string): void {
     onClose();
@@ -67,6 +71,16 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
         onClick={toggle}
       />
       <MenuItem icon={<IconScrollText size={18} />} label="Help" onClick={() => go('/help')} />
+      {restartTour !== undefined ? (
+        <MenuItem
+          icon={<IconRotateCcw size={18} />}
+          label={GUIDE_CHROME.restart}
+          onClick={() => {
+            onClose();
+            restartTour();
+          }}
+        />
+      ) : null}
       <div className="my-1 h-px bg-border" />
       <MenuItem
         icon={<IconSignOut size={18} />}

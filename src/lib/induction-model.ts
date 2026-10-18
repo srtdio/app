@@ -23,7 +23,9 @@ export type Chapter = 'ask' | 'review' | 'talk';
 /**
  * setup: finished by the data (the workspace). gate: finished by the data and
  * never skipped by the 4 s rule while its screen is up (the first post, the
- * approver invite). teach: finished by the person's tap on the control.
+ * approver invite). A gate with a laterLabel is soft: its chip moves on and an
+ * open soft gate never pulls a later step back (the approver invite's Invite
+ * later). teach: finished by the person's tap on the control.
  * optional: like teach, plus one secondary chip with the step's laterLabel.
  */
 export type StepKind = 'setup' | 'gate' | 'teach' | 'optional';
@@ -79,7 +81,7 @@ export interface Step {
   label: string;
   /** One sentence in the guide bar. May hold {placeholders}. '' only where the copy gives none. */
   why: string;
-  /** The optional step's secondary chip. */
+  /** The secondary chip of an optional step or a soft gate. */
   laterLabel?: string;
   /**
    * While the control is disabled for an empty field in its form (Send invite

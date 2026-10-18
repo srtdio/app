@@ -21,6 +21,7 @@ import {
   presetPrimaryFor,
   progressOf,
   resolveGuide,
+  skippedStepId,
   skipTarget,
   stepDataDone,
   storedIdFor,
@@ -709,5 +710,36 @@ describe('brandRequestErrorMessage', () => {
     );
     expect(brandRequestErrorMessage('invalid_payload')).toContain('email');
     expect(brandRequestErrorMessage('boom')).toBe("We couldn't send that. Try again.");
+  });
+});
+
+describe('W10 guided tour: Invite later and Skip tour', () => {
+  it('a gate with a later chip is soft: a later stored step is not pulled back to it', () => {
+    const soft: RouteScript = {
+      ...SCRIPT,
+      steps: SCRIPT.steps.map((s) => (s.id === 'c_invite' ? { ...s, laterLabel: 'Later' } : s)),
+    };
+    const at = (state: Partial<InductionState>): string => {
+      const r = resolveGuide(soft, input(state));
+      return r.kind === 'step' ? r.step.id : r.kind;
+    };
+    expect(at({ step: 'c_team', ...SENT })).toBe('c_team');
+    expect(at({ step: 'c_brief', ...SENT })).toBe('c_brief');
+    // The hard first-post gate still holds.
+    expect(at({ step: 'c_team' })).toBe('c_post_create');
+  });
+
+  it('records a skip under the route prefix, within the stored id format', () => {
+    expect(skippedStepId('creator')).toBe('c_skipped');
+    expect(skippedStepId('invited')).toBe('i_skipped');
+    expect(skippedStepId('approver')).toBe('a_skipped');
+    for (const id of ['c_skipped', 'i_skipped', 'a_skipped']) {
+      expect(/^[a-z0-9_]{1,40}$/.test(id)).toBe(true);
+    }
+  });
+
+  it('the real creator script lets Invite later move on to the team invite', () => {
+    const r = resolveGuide(ROUTE_SCRIPTS.creator, input({ step: 'c_team_invite', ...SENT }));
+    expect(r.kind === 'step' && r.step.id).toBe('c_team_invite');
   });
 });

@@ -70,7 +70,6 @@ import {
   useElementSize,
   useStepCompletion,
   useTapGuard,
-  useScrolledByHand,
   usePhotosSettled,
   useDimHold,
   useTypingNow,
@@ -251,8 +250,10 @@ function CardLayer({
         body: fill(card.body),
         pills: card.pills ?? [],
         button: card.button,
+        skip: GUIDE_CHROME.skip,
       }}
       onPress={card.kind === 'intro' ? ctx.start : ctx.finish}
+      onSkip={card.kind === 'intro' ? ctx.skip : undefined}
       dock={dock}
     />
   );
@@ -445,9 +446,9 @@ function StepLayer({
   });
   // The dim never blinks off for a moment between two dimmed states.
   const dimHold = useDimHold(boxed !== undefined || (el !== undefined && moving && !waiting));
-  const optOut = step.kind === 'optional' && step.laterLabel !== undefined;
-  // The opt-out ("It's just me for now") waits until they have scrolled the page.
-  const optOutShown = useScrolledByHand(step.id, optOut);
+  // The later chip ("It's just me for now", the approver invite's "Invite later")
+  // shows at once, with no wait for a scroll.
+  const optOut = step.laterLabel !== undefined;
   const back = index === 0 ? -1 : backIndex(steps, index, probe);
   const order = chapterOrder(steps);
   const copy: BarCopy = {
@@ -459,6 +460,7 @@ function StepLayer({
     why: fillCopy(paused && step.pauseWhy !== undefined ? step.pauseWhy : step.why, ctx.copy),
     back: GUIDE_CHROME.back,
     next: GUIDE_CHROME.next,
+    skip: GUIDE_CHROME.skip,
     later: step.laterLabel ?? '',
     aria: {
       bar: GUIDE_CHROME.barAria,
@@ -470,8 +472,9 @@ function StepLayer({
   // shows no bar, so there is one message on screen, not two.
   const barActions = {
     onBack: back >= 0 ? () => quietMove(back) : undefined,
-    onLater: optOut && optOutShown ? () => quietMove(index + 1) : undefined,
+    onLater: optOut ? () => quietMove(index + 1) : undefined,
     onNext: paused ? () => releasePause(step.id) : undefined,
+    onSkip: ctx.skip,
   };
   const dock: DockAt = {
     side: barSide(control !== undefined ? boxRect(control) : undefined, {

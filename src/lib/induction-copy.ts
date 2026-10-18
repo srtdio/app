@@ -100,6 +100,10 @@ export const GUIDE_CHROME = {
   barAria: 'Guide',
   progressAria: 'Tour progress',
   backAria: 'Go one step back',
+  /** On every step bar and the intro card: ends the tour. */
+  skip: 'Skip tour',
+  /** The avatar menu row that runs the tour again. */
+  restart: 'Restart tour',
 } as const;
 
 // ---------- the first post ----------
@@ -137,6 +141,7 @@ export const STEP_COPY = {
   approver_invite: {
     label: 'Tap Send invite',
     why: '',
+    laterLabel: 'Invite later',
     fieldLabel: "Type your approver's email",
   },
   team_invite: { label: 'Tap Send invite', why: '', laterLabel: "It's just me for now" },
