@@ -136,8 +136,11 @@ test('edit a row: P0, Tomorrow 12 pm, Shared, then Save: one write, one line', a
   expect(network.rpcCalls.filter((c) => c.name.startsWith('chat_task_'))).toHaveLength(0);
   await row.locator('[data-task-save]').click();
 
+  // The write leaves after the tap: wait for it to be recorded.
+  await expect
+    .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_task_save').length)
+    .toBe(1);
   const saves = network.rpcCalls.filter((c) => c.name === 'chat_task_save');
-  expect(saves).toHaveLength(1);
   const changes = saves[0]?.args.p_changes as Record<string, unknown>;
   expect(Object.keys(changes).sort()).toEqual(['due', 'priority', 'status']);
   expect(changes.priority).toBe(0);
