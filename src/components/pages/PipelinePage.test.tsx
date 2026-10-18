@@ -551,6 +551,7 @@ describe('persisted sort sanitization (fix 1)', () => {
       stage: 'all',
       onStageChange: () => {},
       counts: { all: 0 },
+      canCreate: true,
     });
     const controls = findAll(tree, (el) => el.type === PipelineSortControl);
     expect((controls[0]!.props as { order: string }).order).toBe(POST_SORT_DEFAULT);
