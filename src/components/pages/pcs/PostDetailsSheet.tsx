@@ -31,7 +31,8 @@ interface PostDetailsSheetProps {
   ownerAvatarUrl: string | null;
   onChangeBucket: (bucketId: string) => void;
   onChangeOwner: (ownerUserId: string) => void;
-  onChangeTargetDate: (targetDate: string) => void;
+  /** A picked YYYY-MM-DD, or null when Clear removes the date. */
+  onChangeTargetDate: (targetDate: string | null) => void;
 }
 
 /** Format a timestamp for read display, falling back to the raw value. */
@@ -182,8 +183,17 @@ export function PostDetailsSheet({
                 onChange={(event) => {
                   if (event.target.value !== '') onChangeTargetDate(event.target.value);
                 }}
-                className="min-h-[44px] flex-1 rounded-md border border-border bg-panel-2 px-3 text-sm text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
+                className="min-h-[44px] min-w-0 flex-1 rounded-md border border-border bg-panel-2 px-3 text-sm text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
               />
+              {targetDate !== null ? (
+                <button
+                  type="button"
+                  onClick={() => onChangeTargetDate(null)}
+                  className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-3 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  Clear
+                </button>
+              ) : null}
             </div>
           ) : (
             <DetailRow

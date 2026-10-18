@@ -28,6 +28,7 @@ import {
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
+import { useOptionalToast } from '@/components/ui/toast';
 import { fileKindLabel } from '@/lib/files/display-name';
 import type { GalleryItem } from '@srtdio/posts';
 
@@ -261,6 +262,28 @@ const TOOLBAR_BUTTON =
   'hover:bg-overlay-surface disabled:opacity-40 focus-visible:outline-none ' +
   'focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
 
+/**
+ * The remove-image confirm copy, shared by this viewer's inline confirm and the
+ * slide actions sheet so both ask the same question. A gallery may be emptied:
+ * deleting the sole image leaves the post with no artwork, so the wording
+ * shifts and a consequence line is added.
+ */
+export function removeImageConfirmCopy(count: number): {
+  title: string;
+  message: string | null;
+} {
+  return count <= 1
+    ? {
+        title: 'Delete the only image?',
+        message: 'The post goes back to having no artwork, for everyone. The file stays in Assets.',
+      }
+    : { title: 'Remove this image?', message: null };
+}
+
+/** Lightbox download toasts. */
+export const DOWNLOAD_DONE = 'Downloaded';
+export const DOWNLOAD_FAILED = "Couldn't download. Try again.";
+
 /** The agency manage actions, prewired to the current slide. */
 export interface LightboxManage {
   onMakeFirst: () => void;
@@ -304,6 +327,11 @@ export interface LightboxViewProps {
   manage?: LightboxManage | undefined;
   /** Whether the delete confirm row has replaced the bottom-bar controls. */
   removeConfirming?: boolean;
+  /**
+   * A gallery write is in flight: reorder and delete are blocked and the bar
+   * says "Saving…", so two full-list writes never overlap.
+   */
+  saving?: boolean;
   /** Delete tapped: swap the bottom bar for the inline confirm row. */
   onRequestRemove?: (() => void) | undefined;
   /** Cancel in the confirm row: restore the bottom-bar controls. */
@@ -404,9 +432,8 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const count = items.length;
   const chromeVisible = chrome;
   const removeConfirming = props.removeConfirming === true;
-  // A gallery may be emptied: deleting the sole image is allowed and leaves the
-  // post with no artwork, so the confirm copy shifts to the only-image wording.
-  const soloRemaining = count <= 1;
+  const saving = props.saving === true;
+  const removeCopy = removeImageConfirmCopy(count);
 
   // The image region is a full-width aspect-ratio box following the CURRENT
   // item's ratio (stored dims or measured fallback), so the whole image shows
@@ -530,13 +557,9 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
         ) : removeConfirming ? (
           <div className="flex items-center gap-2 px-3">
             <span className="flex min-w-0 flex-col text-left">
-              <span className="text-sm text-overlay-fg">
-                {soloRemaining ? 'Delete the only image?' : 'Remove this image?'}
-              </span>
-              {soloRemaining ? (
-                <span className="text-xs text-overlay-fg-dim">
-                  The post goes back to having no artwork, for everyone. The file stays in Assets.
-                </span>
+              <span className="text-sm text-overlay-fg">{removeCopy.title}</span>
+              {removeCopy.message !== null ? (
+                <span className="text-xs text-overlay-fg-dim">{removeCopy.message}</span>
               ) : null}
             </span>
             <button
@@ -548,6 +571,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             </button>
             <button
               type="button"
+              disabled={saving || undefined}
               onClick={props.onConfirmRemove}
               className="inline-flex h-11 items-center rounded-lg border border-bad px-3 text-sm font-medium text-bad hover:bg-bad/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad"
             >
@@ -559,7 +583,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <button
               type="button"
               aria-label="Make first"
-              disabled={index === 0}
+              disabled={saving || index === 0}
               onClick={manage.onMakeFirst}
               className={TOOLBAR_BUTTON}
             >
@@ -568,7 +592,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <button
               type="button"
               aria-label="Move left"
-              disabled={index === 0}
+              disabled={saving || index === 0}
               onClick={manage.onMoveLeft}
               className={TOOLBAR_BUTTON}
             >
@@ -577,7 +601,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <button
               type="button"
               aria-label="Move right"
-              disabled={index === count - 1}
+              disabled={saving || index === count - 1}
               onClick={manage.onMoveRight}
               className={TOOLBAR_BUTTON}
             >
@@ -586,7 +610,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <button
               type="button"
               aria-label="Make last"
-              disabled={index === count - 1}
+              disabled={saving || index === count - 1}
               onClick={manage.onMakeLast}
               className={TOOLBAR_BUTTON}
             >
@@ -613,11 +637,17 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             <button
               type="button"
               aria-label="Delete image"
+              disabled={saving || undefined}
               onClick={props.onRequestRemove}
               className={cn(TOOLBAR_BUTTON, 'hover:text-bad')}
             >
               <IconTrash size={20} />
             </button>
+            {saving ? (
+              <span aria-live="polite" className="ml-2 text-xs text-overlay-fg-dim">
+                Saving…
+              </span>
+            ) : null}
           </div>
         )}
       </div>
@@ -743,6 +773,8 @@ interface PostLightboxProps {
         onRemove: (index: number) => void;
       }
     | undefined;
+  /** A gallery write is in flight: reorder and delete taps do nothing. */
+  saving?: boolean | undefined;
 }
 
 /**
@@ -762,7 +794,9 @@ export function PostLightbox({
   onClose,
   pinOverlay,
   manage,
+  saving = false,
 }: PostLightboxProps) {
+  const toast = useOptionalToast();
   const [srcs, setSrcs] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState<Record<string, boolean>>({});
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
@@ -1092,8 +1126,11 @@ export function PostLightbox({
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
+        toast?.show({ title: DOWNLOAD_DONE });
       })
-      .catch(() => {})
+      .catch(() => {
+        toast?.show({ title: DOWNLOAD_FAILED });
+      })
       .finally(() => setBusy(false));
   };
 
@@ -1103,22 +1140,22 @@ export function PostLightbox({
     manage !== undefined
       ? {
           onMakeFirst: () => {
-            if (index <= 0) return;
+            if (saving || index <= 0) return;
             manage.onMakeFirst(index);
             onIndexChange(0);
           },
           onMoveLeft: () => {
-            if (index <= 0) return;
+            if (saving || index <= 0) return;
             manage.onMoveLeft(index);
             onIndexChange(index - 1);
           },
           onMoveRight: () => {
-            if (index >= items.length - 1) return;
+            if (saving || index >= items.length - 1) return;
             manage.onMoveRight(index);
             onIndexChange(index + 1);
           },
           onMakeLast: () => {
-            if (index >= items.length - 1) return;
+            if (saving || index >= items.length - 1) return;
             manage.onMakeLast(index);
             onIndexChange(items.length - 1);
           },
@@ -1130,6 +1167,7 @@ export function PostLightbox({
           // Removing the sole image empties the gallery; the parent clears the
           // open index when items becomes empty, so the viewer closes on its own.
           onRemove: () => {
+            if (saving) return;
             manage.onRemove(index);
             onIndexChange(Math.max(0, Math.min(index, items.length - 2)));
           },
@@ -1166,6 +1204,7 @@ export function PostLightbox({
     trackRef,
     manage: manageView,
     removeConfirming: confirmingRemove,
+    saving,
     onRequestRemove: () => setConfirmingRemove(true),
     onCancelRemove: () => setConfirmingRemove(false),
     onConfirmRemove: () => {

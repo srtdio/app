@@ -76,3 +76,33 @@ export function visibleStageActions(stage: Stage, role: string | null): StageAct
   }
   return out;
 }
+
+/** The confirm a reject or park opens on the post page, and its Undo toast label. */
+export interface StageReasonConfirmCopy {
+  title: string;
+  confirmLabel: string;
+  undoLabel: string;
+}
+
+/** The optional reason field's label, shared by the reject and park confirms. */
+export const STAGE_REASON_LABEL = 'Reason (optional), goes to the comments';
+
+/**
+ * Reject and Park ask first (with an optional reason) and commit behind an Undo
+ * window; every other target returns null and keeps its existing path.
+ */
+export function stageReasonConfirm(to: Stage): StageReasonConfirmCopy | null {
+  if (to === 'rejected') {
+    return { title: 'Reject this post?', confirmLabel: 'Reject', undoLabel: 'Post rejected' };
+  }
+  if (to === 'parked') {
+    return { title: 'Park this post?', confirmLabel: 'Park', undoLabel: 'Post parked' };
+  }
+  return null;
+}
+
+/** The reason as a comment body: trimmed, or null when nothing was typed. */
+export function stageReasonComment(reason: string): string | null {
+  const body = reason.trim();
+  return body === '' ? null : body;
+}

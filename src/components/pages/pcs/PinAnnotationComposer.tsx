@@ -1,59 +1,73 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
 import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
+import { COMMENT_DISCARD } from '@/components/pages/pcs/CaptionAnnotationComposer';
 
 // F5 image-pin composer: the sibling of the F4 caption composer, pin-worded. It
 // shows the slide the pin landed on (filename or "Slide N") instead of a caption
 // quote, and owns no RPC. PostDetailPage passes onSubmit, which mints the comment
 // and the image_pin annotation on one trace. Amber accent is the F1 annotation
-// token, so the context block flips correctly in light and dark.
+// token, so the context block flips correctly in light and dark. Draft, dirty,
+// busy and failure handling match the caption composer.
 
 interface PinAnnotationComposerProps {
   open: boolean;
   /** The slide the pin is anchored to (filename or "Slide N"). */
   context: string;
-  onClose: () => void;
+  /** The draft for this pin (page-owned). */
+  body: string;
+  onBodyChange: (body: string) => void;
+  /** Cancel: close and keep the draft for this pin. */
+  onCancel: () => void;
+  /** Close after the discard confirm (or with nothing typed): drop the draft. */
+  onDiscard: () => void;
   onSubmit: (body: string) => void | Promise<void>;
   submitting?: boolean;
+  /** Inline failure, shown under the field; null shows none. */
+  error?: string | null;
 }
 
 export function PinAnnotationComposer({
   open,
   context,
-  onClose,
+  body,
+  onBodyChange,
+  onCancel,
+  onDiscard,
   onSubmit,
   submitting = false,
+  error = null,
 }: PinAnnotationComposerProps) {
-  const [body, setBody] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Start each pin comment from an empty field so a prior draft never leaks in.
-  useEffect(() => {
-    if (open) setBody('');
-  }, [open]);
 
   const canPost = body.trim().length > 0 && !submitting;
 
   return (
     <Sheet
       open={open}
-      onClose={onClose}
+      onClose={onDiscard}
       title="Comment on image"
+      dirty={body.trim() !== ''}
+      discard={COMMENT_DISCARD}
+      busy={submitting}
+      busyLabel="Posting…"
       footer={
         <>
           <Button
             size="lg"
             className="min-h-[44px] min-w-[44px]"
             disabled={submitting}
-            onClick={onClose}
+            onClick={onCancel}
           >
             Cancel
           </Button>
           <CommentEmojiButton
             disabled={submitting}
-            onPick={(char) => insertIntoTextarea(() => textareaRef.current, body, char, setBody)}
+            onPick={(char) =>
+              insertIntoTextarea(() => textareaRef.current, body, char, onBodyChange)
+            }
           />
           <Button
             size="lg"
@@ -74,12 +88,17 @@ export function PinAnnotationComposer({
         <Textarea
           ref={textareaRef}
           value={body}
-          onChange={(event) => setBody(event.target.value)}
+          onChange={(event) => onBodyChange(event.target.value)}
           placeholder="Add your comment"
           aria-label="Image comment body"
           disabled={submitting}
           autoFocus
         />
+        {error !== null ? (
+          <p role="alert" className="text-sm text-bad">
+            {error}
+          </p>
+        ) : null}
       </div>
     </Sheet>
   );

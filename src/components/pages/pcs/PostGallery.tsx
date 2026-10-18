@@ -840,6 +840,11 @@ interface PostGalleryProps {
   /** Lightbox manage bar: remove the slide over the existing gallery_set commit. */
   onRemove?: ((index: number) => void) | undefined;
   /**
+   * A gallery write is in flight: the lightbox blocks reorder and delete and
+   * shows "Saving…", so two full-list writes never overlap.
+   */
+  saving?: boolean | undefined;
+  /**
    * The post's platform frame (workspace platform + format). Absent (briefs) or
    * a format with no media box keeps the uncropped ribbon.
    */
@@ -877,6 +882,7 @@ export function PostGallery({
   onMakeLast,
   onAddAfter,
   onRemove,
+  saving = false,
   frame,
   pinsFor,
   onPinClick,
@@ -1031,6 +1037,7 @@ export function PostGallery({
       onClose={() => setOpenIndex(null)}
       pinOverlay={pinOverlay}
       manage={manage}
+      saving={saving}
     />
   ) : (
     galleryView({
