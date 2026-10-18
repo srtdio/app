@@ -8,9 +8,10 @@ import { MemoryRouter } from 'react-router-dom';
 const { mockVerifyOtp } = vi.hoisted(() => ({ mockVerifyOtp: vi.fn() }));
 vi.mock('@/lib/supabase', () => ({ supabase: { auth: { verifyOtp: mockVerifyOtp } } }));
 
-import { RECOVERY_COPY } from '@/lib/induction-copy';
+import { RECOVERY_COPY, SIGNUP_CALLBACK_COPY } from '@/lib/induction-copy';
 import {
   AuthCallbackPage,
+  callbackCopyFor,
   callbackNext,
   ExpiredLinkView,
   isInviteDestination,
@@ -149,5 +150,32 @@ describe('expired link recovery', () => {
   it('the footer sign-in link carries a safe next', () => {
     const html = renderAt('?token_hash=abc&type=magiclink&next=%2Fposts%2F1');
     expect(html).toContain('href="/signin?next=%2Fposts%2F1"');
+  });
+});
+
+describe('ready-state wording by link type', () => {
+  it.each(['email', 'signup'] as const)('a %s link confirms the new account', (type) => {
+    const html = renderAt(`?token_hash=abc&type=${type}`);
+    expect(html).toContain(SIGNUP_CALLBACK_COPY.title);
+    expect(html).toContain(SIGNUP_CALLBACK_COPY.subtitle);
+    expect(html).toContain(`>${SIGNUP_CALLBACK_COPY.button}<`);
+    expect(html).not.toContain('Sign in to Sorted');
+    expect(mockVerifyOtp).not.toHaveBeenCalled();
+  });
+
+  it.each(['magiclink', 'invite', 'recovery'] as const)(
+    'a %s link keeps the sign-in wording',
+    (type) => {
+      const html = renderAt(`?token_hash=abc&type=${type}`);
+      expect(html).toContain('Sign in to Sorted');
+      expect(html).toContain('Tap the button to finish signing in on this device.');
+      expect(html).toContain('>Sign in<');
+      expect(html).not.toContain(SIGNUP_CALLBACK_COPY.title);
+    },
+  );
+
+  it('callbackCopyFor picks the wording without rendering', () => {
+    expect(callbackCopyFor('email')).toBe(SIGNUP_CALLBACK_COPY);
+    expect(callbackCopyFor('magiclink').title).toBe('Sign in to Sorted');
   });
 });

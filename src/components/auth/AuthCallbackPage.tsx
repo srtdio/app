@@ -10,7 +10,7 @@ import {
   safeNextPath,
   withNext,
 } from '@/components/auth/SignInPage';
-import { RECOVERY_COPY } from '@/lib/induction-copy';
+import { RECOVERY_COPY, SIGNUP_CALLBACK_COPY } from '@/lib/induction-copy';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -41,6 +41,24 @@ const EMAIL_OTP_TYPES: readonly EmailOtpType[] = [
 /** Narrow a raw query value to a known EmailOtpType, or null when unrecognised. */
 export function narrowEmailOtpType(value: string | null): EmailOtpType | null {
   return value !== null && EMAIL_OTP_TYPES.includes(value) ? value : null;
+}
+
+/** The ready-state wording for a valid link: a new-account link confirms, every other link signs in. */
+export interface CallbackCopy {
+  title: string;
+  subtitle: string;
+  button: string;
+}
+
+const SIGN_IN_CALLBACK_COPY: CallbackCopy = {
+  title: 'Sign in to Sorted',
+  subtitle: 'Tap the button to finish signing in on this device.',
+  button: 'Sign in',
+};
+
+/** 'signup' and 'email' links come from the Confirm signup email; the rest keep the sign-in wording. */
+export function callbackCopyFor(type: EmailOtpType): CallbackCopy {
+  return type === 'signup' || type === 'email' ? SIGNUP_CALLBACK_COPY : SIGN_IN_CALLBACK_COPY;
 }
 
 export type VerifyResult = { status: 'authenticated' } | { status: 'error' };
@@ -158,12 +176,10 @@ export function AuthCallbackPage() {
     return <ExpiredLinkView next={next} footer={backToSignIn} />;
   }
 
+  const copy = callbackCopyFor(type);
+
   return (
-    <AuthShell
-      title="Sign in to Sorted"
-      subtitle="Tap the button to finish signing in on this device."
-      footer={backToSignIn}
-    >
+    <AuthShell title={copy.title} subtitle={copy.subtitle} footer={backToSignIn}>
       <Button
         variant="primary"
         size="lg"
@@ -171,7 +187,7 @@ export function AuthCallbackPage() {
         onClick={handleSignIn}
         disabled={phase === 'signing'}
       >
-        {phase === 'signing' ? 'Signing in' : 'Sign in'}
+        {phase === 'signing' ? 'Signing in' : copy.button}
       </Button>
     </AuthShell>
   );

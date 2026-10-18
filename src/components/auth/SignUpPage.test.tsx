@@ -155,7 +155,7 @@ describe('SignUpPage', () => {
     expect(signInWithOtp).toHaveBeenCalledTimes(1);
     expect(document.body.textContent).toContain('Check your email');
     expect(document.body.textContent).toContain(
-      'We sent a sign-in link to dana@kite.in. Open it on this device to carry on.',
+      'We sent a link to dana@kite.in. Open it on this device to finish signing up.',
     );
     expect(document.querySelector('input[type="password"]')).toBeNull();
   });

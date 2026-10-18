@@ -89,7 +89,7 @@ describe('entry screen copy is unchanged', () => {
     expect(CHECK_EMAIL_COPY).toEqual({
       signUpSubtitle: 'No card needed.',
       title: 'Check your email',
-      body: 'We sent a sign-in link to {email}. Open it on this device to carry on.',
+      body: 'We sent a link to {email}. Open it on this device to finish signing up.',
       resend: 'Resend link',
       differentEmail: 'Use a different email',
       createAccount: 'Create account',
