@@ -222,10 +222,12 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   await expectGuideId(page, 'c_approver_invite');
   await expect(page.locator('[data-induction-box]')).toHaveCount(1);
   await expect(page.locator('[data-induction-label]')).toHaveText("Type your approver's email");
-  // A gate offers no way round it: no secondary chip, and no Skip.
+  // The approver invite is a soft gate: Invite later moves on, and Skip tour is there.
   const later = step('c_team_invite').laterLabel ?? '';
   const bar = page.locator('[data-induction-bar]');
   await expect(bar.getByRole('button', { name: later, exact: true })).toHaveCount(0);
+  await expect(bar.getByRole('button', { name: 'Invite later', exact: true })).toHaveCount(1);
+  await expect(bar.getByRole('button', { name: 'Skip tour', exact: true })).toHaveCount(1);
   // Leaving a gate's screen brings the person back to it.
   await page.goto('/chat');
   await expect(page).toHaveURL(/\/settings\?panel=members/, { timeout: 10_000 });
@@ -240,9 +242,7 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   // The team invite: the form is empty again, so nothing dims until an address is in.
   await expectGuideId(page, 'c_team_invite');
   await expect(page.locator('[data-induction-box]')).toHaveCount(0);
-  // "It's just me for now" waits until they have scrolled the page by hand.
-  await expect(bar.getByRole('button', { name: later, exact: true })).toHaveCount(0);
-  await page.evaluate(() => window.dispatchEvent(new WheelEvent('wheel', { deltaY: 120 })));
+  // "It's just me for now" shows at once, with no scroll.
   await bar.getByRole('button', { name: later, exact: true }).click();
 
   // The look-around: no brief, no plan, so Review comes first.

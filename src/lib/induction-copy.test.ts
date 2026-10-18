@@ -76,9 +76,10 @@ describe('copy hygiene', () => {
   });
 
   it('guide chrome', () => {
-    expect('skip' in copy.GUIDE_CHROME).toBe(false);
     expect(copy.GUIDE_CHROME).toMatchObject({
       back: 'Back',
+      skip: 'Skip tour',
+      restart: 'Restart tour',
       chapters: { ask: 'Ask', review: 'Review', talk: 'Talk' },
     });
   });
