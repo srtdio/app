@@ -554,3 +554,11 @@ describe('activityToneWanted', () => {
     expect(activityToneWanted(2, '/activity')).toBe(false);
   });
 });
+
+describe('activityToneWanted in a background tab', () => {
+  it('tones even on Activity when the tab is hidden', async () => {
+    const { activityToneWanted } = await import('@/lib/inbox/inbox-live');
+    expect(activityToneWanted(1, '/activity', true)).toBe(true);
+    expect(activityToneWanted(0, '/activity', true)).toBe(false);
+  });
+});
