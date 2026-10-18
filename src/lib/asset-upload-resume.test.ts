@@ -3,7 +3,6 @@ import {
   PART_RETRIES,
   RESUMABLE_PART_SIZE,
   RESUME_FAILED_MESSAGE,
-  runUploads,
   uploadAssetFile,
   type UploadConfig,
   type UploadFetcher,
@@ -166,35 +165,5 @@ describe('resumable upload', () => {
       Promise.resolve(jsonResponse(413, { error: { code: 'file_too_large', message: 'x' } }));
     const outcome = await uploadAssetFile(bigFile(), config(fetcher));
     expect(outcome).toEqual({ ok: false, message: 'Files up to 100MB only' });
-  });
-});
-
-describe('upload batches', () => {
-  it('sends one batch id and the run size for every file of a runUploads run', async () => {
-    const worker = fakeWorker();
-    const small = (name: string) => new File(['x'], name, { type: 'application/pdf' });
-    await runUploads(
-      [
-        { id: '1', file: small('a.pdf'), filename: 'a.pdf' },
-        { id: '2', file: small('b.pdf'), filename: 'b.pdf' },
-      ],
-      (item) => uploadAssetFile(item.file, config(worker.fetcher, { filename: item.filename })),
-    );
-    const forms = worker.calls.map((c) => c.body as FormData);
-    expect(forms[0]?.get('batch_size')).toBe('2');
-    expect(forms[0]?.get('batch_id')).toMatch(/^[0-9a-f-]{36}$/);
-    expect(forms[1]?.get('batch_id')).toBe(forms[0]?.get('batch_id'));
-  });
-
-  it('sends no batch outside a run and never for a chat upload', async () => {
-    const worker = fakeWorker();
-    const file = new File(['x'], 'a.pdf', { type: 'application/pdf' });
-    await uploadAssetFile(file, config(worker.fetcher));
-    await runUploads([{ id: '1', file, filename: 'a.pdf' }], () =>
-      uploadAssetFile(file, config(worker.fetcher, { origin: 'chat' })),
-    );
-    for (const call of worker.calls) {
-      expect((call.body as FormData).get('batch_id')).toBeNull();
-    }
   });
 });

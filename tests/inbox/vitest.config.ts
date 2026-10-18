@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
-// Dedicated config for the inbox-writer suite. Kept separate from the root
+// Dedicated config for the inbox suite. Kept separate from the root
 // vitest config so a plain `pnpm test` run never reaches a database: these specs
 // only execute when INBOX_SUITE=1 (set here) and the global setup has a
 // container ready. Run with:

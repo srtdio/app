@@ -140,20 +140,8 @@ interface UploadConfigBase {
    * one (one attempt per File, also shown on the sending bubble).
    */
   makeThumbnail?: ThumbnailMaker;
-  /**
-   * The upload run this file belongs to (sent as batch_id / batch_size). The
-   * worker writes one Activity entry per batch for library uploads. When
-   * absent, a file sent inside {@link runUploads} joins that run's batch.
-   */
-  batch?: UploadBatch;
   /** Waits between part retries; tests inject an instant one. */
   sleep?: (ms: number) => Promise<void>;
-}
-
-/** One upload run: a client-minted id and how many files it holds. */
-export interface UploadBatch {
-  id: string;
-  size: number;
 }
 
 /**
@@ -306,11 +294,6 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   }
   if (config.folderId != null) {
     form.append('folder_id', config.folderId);
-  }
-  const batch = config.batch ?? activeBatch;
-  if (config.origin === 'library' && batch !== null) {
-    form.append('batch_id', batch.id);
-    form.append('batch_size', String(batch.size));
   }
   if (thumbnailKind(file.type) !== null) {
     const thumbnail = await boundedThumbnail(file, config.makeThumbnail ?? sharedThumbnail);
@@ -923,29 +906,14 @@ export async function runUploads(
   hooks?: RunHooks,
 ): Promise<RunResult> {
   const result: RunResult = { succeeded: [], failed: [] };
-  // Every file this run sends is one batch, so the worker writes one Activity
-  // entry for the run rather than one per file.
-  const previous = activeBatch;
-  activeBatch = { id: newBatchId(), size: items.length };
-  try {
-    for (const item of items) {
-      hooks?.onStart?.(item.id);
-      const outcome = await uploadOne(item);
-      hooks?.onResult?.(item.id, outcome);
-      if (outcome.ok) result.succeeded.push(item.id);
-      else result.failed.push({ id: item.id, message: outcome.message });
-    }
-  } finally {
-    activeBatch = previous;
+  for (const item of items) {
+    hooks?.onStart?.(item.id);
+    const outcome = await uploadOne(item);
+    hooks?.onResult?.(item.id, outcome);
+    if (outcome.ok) result.succeeded.push(item.id);
+    else result.failed.push({ id: item.id, message: outcome.message });
   }
   return result;
-}
-
-/** The batch of the {@link runUploads} run in progress, if any. */
-let activeBatch: UploadBatch | null = null;
-
-function newBatchId(): string {
-  return crypto.randomUUID();
 }
 
 // ---------------------------------------------------------------------------

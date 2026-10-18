@@ -12,7 +12,6 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { INBOX_EVENT_TYPES, InboxEntrySchema } from '@srtdio/schemas';
-import { WORKER_INBOX_EVENT_TYPES } from '@srtdio/inbox';
 import { CATCHUP_EVENT_TYPES } from '@/server/cron/catchup-send';
 import { logger } from '@/lib/logger';
 import { warnUnknownEventType } from '@/components/pages/activity/data';
@@ -93,12 +92,6 @@ describe('INBOX_EVENT_TYPES (canonical event_type list)', () => {
 
 describe('emitter lists are subsets of the canonical list', () => {
   const canonical = new Set<string>(INBOX_EVENT_TYPES);
-
-  it('the inbox-writer worker only emits canonical values', () => {
-    for (const eventType of WORKER_INBOX_EVENT_TYPES) {
-      expect(canonical.has(eventType)).toBe(true);
-    }
-  });
 
   it('the catch-up email only reads canonical values', () => {
     for (const eventType of CATCHUP_EVENT_TYPES) {

@@ -35,10 +35,6 @@
 //                            content_type} in place of the file part
 //   POST /multipart/abort    {workspace_id, key, upload_id}
 //
-// Optional batch_id / batch_size form fields group a library upload run: after
-// a stored (not deduped) library file, every other active member gets one
-// ambient asset_uploaded Activity entry per batch (asset-upload-activity.ts).
-//
 // The Worker is the only holder of the Supabase service-role key and the R2
 // credentials; neither is ever shipped to the browser. Caller tokens are
 // verified against the project's published asymmetric JWKS (ES256); membership
@@ -85,21 +81,11 @@ import {
   type MultipartError,
 } from './asset-upload-multipart';
 import {
-  createSupabaseActivityStore,
-  parseBatch,
-  recordUploadActivity,
-} from './asset-upload-activity';
-import {
   checkWorkspaceCap,
   createSupabaseUsageStore,
   resolveWorkspaceUsage,
 } from './asset-upload-usage';
 import { handlePurge, handlePurgeChat } from './asset-upload-purge';
-
-/** The slice of the Workers ExecutionContext the upload path uses. */
-export interface UploadContext {
-  waitUntil(promise: Promise<unknown>): void;
-}
 
 export interface AssetUploadEnv {
   CLOUDFLARE_ACCOUNT_ID: string;
@@ -475,7 +461,6 @@ async function handlePost(
   env: AssetUploadEnv,
   traceId: string,
   acao: string | null,
-  ctx: UploadContext | undefined,
   mode: 'direct' | 'multipart' = 'direct',
 ): Promise<Response> {
   const caller = await verifyCaller(request, getSupabaseJwks(env));
@@ -677,10 +662,6 @@ async function handlePost(
     staged = { bucket: assembled.value.bucket, key };
   }
 
-  const batch = parseBatch(form.get('batch_id'), form.get('batch_size')) ?? {
-    id: crypto.randomUUID(),
-    size: 1,
-  };
   const outcome = await authorizeAndUpload(
     {
       membership: createSupabaseAssetReadStore(env),
@@ -714,24 +695,6 @@ async function handlePost(
       });
     }
     return json(STATUS_BY_CODE[outcome.error.code], { error: outcome.error }, traceId, acao);
-  }
-  if (origin === 'library' && !outcome.value.reused) {
-    const activity = recordUploadActivity(
-      createSupabaseActivityStore(
-        { SUPABASE_URL: env.SUPABASE_URL, SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY },
-        traceId,
-      ),
-      {
-        workspaceId,
-        uploaderId: caller.value,
-        batch,
-        assetId: outcome.value.summary.assetId,
-        filename: outcome.value.summary.filename,
-        traceId,
-      },
-    );
-    if (ctx !== undefined) ctx.waitUntil(activity);
-    else await activity;
   }
   const thumbnail = await attachThumbnail(env, {
     summary: outcome.value.summary,
@@ -1645,7 +1608,7 @@ async function handleMoveAssets(
 }
 
 export default {
-  async fetch(request: Request, env: AssetUploadEnv, ctx?: UploadContext): Promise<Response> {
+  async fetch(request: Request, env: AssetUploadEnv): Promise<Response> {
     const traceId = extractTraceId(request);
     logger.setTraceId(traceId);
     const acao = resolveAllowedOrigin(request, env);
@@ -1677,14 +1640,14 @@ export default {
           return await handleMultipartCreate(request, env, traceId, acao);
         }
         if (path === '/multipart/complete') {
-          return await handlePost(request, env, traceId, acao, ctx, 'multipart');
+          return await handlePost(request, env, traceId, acao, 'multipart');
         }
         if (path === '/multipart/abort') {
           return await handleMultipartAbort(request, env, traceId, acao);
         }
         if (path === '/purge') return await handlePurge(request, env, traceId, acao);
         if (path === '/purge-chat') return await handlePurgeChat(request, env, traceId, acao);
-        return await handlePost(request, env, traceId, acao, ctx);
+        return await handlePost(request, env, traceId, acao);
       }
       if (request.method === 'PUT' && new URL(request.url).pathname === '/multipart/part') {
         return await handleMultipartPart(request, env, traceId, acao);

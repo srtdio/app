@@ -1,9 +1,9 @@
 name: Inbox Writer
 
 # Spins up a local Supabase stack, applies supabase/migrations/ (so
-# inbox_entry_create / audit_log_write exist), and runs the inbox-writer suite:
-# mention/recipient units, per-event-type integration, idempotency replay, and
-# the grant check. Mirrors rls-ci.yml; independent of the other suites.
+# inbox_entry_create / audit_log_write exist), and runs the inbox suite: the
+# inbox_entry_create grant check and inbox read state. Mirrors rls-ci.yml;
+# independent of the other suites.
 on:
   pull_request:
   push:
@@ -14,8 +14,7 @@ jobs:
   # sets run=true only when a changed file matches PATTERNS below. A push to main
   # always runs.
   # Imports behind the list: tests/inbox imports @srtdio/inbox, @srtdio/rpc,
-  # @srtdio/schemas, workers/inbox-writer/src, packages/test-utils and
-  # tests/rls/setup.ts.
+  # @srtdio/schemas, packages/test-utils and tests/rls/setup.ts.
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -43,7 +42,6 @@ jobs:
             ^packages/rpc/
             ^packages/schemas/
             ^packages/test-utils/
-            ^workers/inbox-writer/
             ^tests/rls/setup\.ts$
             ^package\.json$
             ^pnpm-lock\.yaml$
@@ -107,11 +105,11 @@ jobs:
         if: env.RUN == 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Type-check the inbox package, worker and test workspace
+      - name: Type-check the inbox package and test workspace
         if: env.RUN == 'true'
         run: pnpm exec tsc -p tests/inbox/tsconfig.json --noEmit
 
-      - name: Run inbox-writer suite
+      - name: Run inbox suite
         if: env.RUN == 'true'
         run: pnpm exec vitest run --config tests/inbox/vitest.config.ts
 
