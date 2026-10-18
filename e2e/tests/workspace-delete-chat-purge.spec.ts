@@ -62,8 +62,8 @@ async function holdBubble(page: Page, text: string): Promise<void> {
   await bubble.dispatchEvent('pointerup', { ...at, pointerType: 'touch', isPrimary: true });
 }
 
-/** Long-press Delete: selection mode with that message ticked, then the bar's Delete. */
-async function deleteViaSelection(page: Page, text: string): Promise<void> {
+/** Long-press Delete: the single-message confirm opens (no selection mode). */
+async function deleteFromMenu(page: Page, text: string): Promise<void> {
   const menu = page.getByRole('menu');
   // The thread can still be settling its scroll right after it opens; a hold
   // that lands mid-move is cancelled like a finger that moved, so hold again.
@@ -71,13 +71,10 @@ async function deleteViaSelection(page: Page, text: string): Promise<void> {
     await holdBubble(page, text);
     await expect(menu).toBeVisible({ timeout: 1_500 });
   }).toPass({ timeout: 10_000 });
-  await menu.locator('[data-menu-item="delete"]').click();
-  const bar = page.locator('[data-selection-bar]');
-  await expect(bar).toBeVisible();
-  const remove = bar.getByRole('button', { name: 'Delete', exact: true });
-  await expect(remove).toBeEnabled();
+  const remove = menu.locator('[data-menu-item="delete"]');
   expectMinTouchTarget(await remove.boundingBox());
   await remove.click();
+  await expect(page.locator('[data-selection-bar]')).toHaveCount(0);
 }
 
 async function openDm(page: Page): Promise<void> {
@@ -100,7 +97,7 @@ test.describe('chat delete with a file', () => {
     await openDm(page);
 
     // Cancel first: nothing is sent.
-    await deleteViaSelection(page, FILE_MESSAGE_BODY);
+    await deleteFromMenu(page, FILE_MESSAGE_BODY);
     const confirm = page.getByRole('alertdialog');
     await expect(confirm).toBeVisible();
     await expect(confirm).toHaveAttribute('aria-label', 'Delete this message?');
@@ -116,11 +113,8 @@ test.describe('chat delete with a file', () => {
     await expect(confirm).toHaveCount(0);
     expect(recorder.order).toEqual([]);
 
-    // The selection stays: Delete again and confirm.
-    await page
-      .locator('[data-selection-bar]')
-      .getByRole('button', { name: 'Delete', exact: true })
-      .click();
+    // Delete again from the menu and confirm.
+    await deleteFromMenu(page, FILE_MESSAGE_BODY);
     await page
       .getByRole('alertdialog')
       .getByRole('button', { name: 'Delete for everyone' })
@@ -138,21 +132,21 @@ test.describe('chat delete with a file', () => {
     expectClean(network, errors);
   });
 
-  test('a text-only message keeps the old confirm and never purges', async ({ page }) => {
+  test('a text-only message takes the single-message confirm and never purges', async ({
+    page,
+  }) => {
     const { network, recorder, errors } = await setup(page, ({ world }) => {
       seedChatFile(world);
       makeRecent(world);
     });
     await openDm(page);
 
-    await deleteViaSelection(page, TEXT_MESSAGE_BODY);
+    await deleteFromMenu(page, TEXT_MESSAGE_BODY);
     const confirm = page.getByRole('alertdialog');
-    await expect(confirm).toHaveAttribute('aria-label', 'Delete 1 message?');
-    await expect(confirm).toContainText(
-      'They will be removed from this chat for everyone. This cannot be undone.',
-    );
+    await expect(confirm).toHaveAttribute('aria-label', 'Delete message?');
+    await expect(confirm).toContainText('It is removed for everyone in this chat.');
     await expect(confirm).not.toContainText('permanently deleted');
-    await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+    await confirm.getByRole('button', { name: 'Delete for everyone', exact: true }).click();
 
     await expect(page.locator('[data-bubble]', { hasText: TEXT_MESSAGE_BODY })).toHaveCount(0);
     await expect.poll(() => recorder.order).toEqual(['rpc:chat_message_delete']);

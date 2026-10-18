@@ -123,13 +123,21 @@ test('personal notes: phone', async ({ page }) => {
   await holdBubble(page, peerLine);
   const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
-  const keys = await menu
-    .locator('[data-menu-item]')
-    .evaluateAll((els) => els.map((el) => el.getAttribute('data-menu-item')));
-  const copyAt = keys.indexOf('copy');
+  const menuKeys = (): Promise<(string | null)[]> =>
+    menu
+      .locator('[data-menu-item]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('data-menu-item')));
+  // Copy is top level; Save to notes sits under More, after Select and before Remind me.
+  const top = await menuKeys();
+  expect(top).toContain('copy');
+  expect(top).not.toContain('save-notes');
+  expect(top.indexOf('more')).toBeGreaterThan(top.indexOf('copy'));
+  await menu.locator('[data-menu-item="more"]').click();
+  const keys = await menuKeys();
+  const selectAt = keys.indexOf('select-text');
   const saveAt = keys.indexOf('save-notes');
   const remindAt = keys.indexOf('remind');
-  expect(saveAt).toBeGreaterThan(copyAt);
+  expect(saveAt).toBeGreaterThan(selectAt);
   expect(remindAt).toBeGreaterThan(saveAt);
   const sends = rpcCalls(page, 'chat_message_send');
   await menu.locator('[data-menu-item="save-notes"]').click();

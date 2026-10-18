@@ -80,7 +80,14 @@ async function userSelect(target: Locator): Promise<string> {
   });
 }
 
+/** Select sits under More. */
+async function openMore(page: Page): Promise<void> {
+  await menu(page).locator('[data-menu-item="more"]').click();
+  await expect(menu(page).locator('[data-menu-item="back"]')).toBeVisible();
+}
+
 async function pickSelect(page: Page): Promise<void> {
+  await openMore(page);
   await menu(page).locator('[data-menu-item="select-text"]').click();
   await expect(menu(page)).toHaveCount(0);
 }
@@ -148,9 +155,10 @@ test.describe('iPhone', () => {
     expect(panel.y).toBeGreaterThanOrEqual(held.y + held.height);
     const viewport = page.viewportSize();
     if (viewport !== null) expect(panel.y + panel.height).toBeLessThanOrEqual(viewport.height);
+    await expectMenuStyle(page);
+    await openMore(page);
     await expect(menu(page).locator('[data-menu-item="select-text"]')).toBeVisible();
     await expect(menu(page).locator('[data-menu-item="select"]')).toHaveCount(0);
-    await expectMenuStyle(page);
   });
 
   test('Select selects the displayed body; only that body is selectable; tap outside clears', async ({
@@ -272,7 +280,7 @@ test.describe('iPhone', () => {
     );
   });
 
-  test('Delete still opens multi-select with the message ticked', async ({ page }) => {
+  test('Delete opens the single-message confirm, no multi-select', async ({ page }) => {
     await openDm(page);
     const line = 'Fresh line to delete';
     await page.locator('form textarea').first().fill(line);
@@ -281,8 +289,11 @@ test.describe('iPhone', () => {
     await expect(row).toBeVisible();
     await hold(page, bubbleWith(page, line));
     await menu(page).locator('[data-menu-item="delete"]').click();
-    await expect(page.locator('[data-selection-bar]')).toBeVisible();
-    await expect(page.locator('[data-msg-id][data-checked]', { hasText: line })).toHaveCount(1);
+    const confirm = page.getByRole('alertdialog', { name: 'Delete message?' });
+    await expect(confirm).toBeVisible();
+    await expect(confirm.getByRole('button', { name: 'Delete for everyone' })).toBeVisible();
+    await expect(page.locator('[data-selection-bar]')).toHaveCount(0);
+    await expect(page.locator('[data-msg-id][data-checked]')).toHaveCount(0);
   });
 });
 

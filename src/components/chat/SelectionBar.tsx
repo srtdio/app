@@ -17,7 +17,7 @@ import { IconForward, IconStar, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { DELETE_BLOCK_COPY, type DeleteBlock } from '@/lib/chat/forward';
-import type { DeleteConfirmCopy } from '@/lib/chat/delete-flow';
+import { deleteNotesConfirmCopy, type DeleteConfirmCopy } from '@/lib/chat/delete-flow';
 import { STAR_LABEL, UNSTAR_LABEL } from '@/lib/chat/stars';
 import {
   HEADER_NAME_TYPE,
@@ -156,6 +156,8 @@ export function SelectionBar(props: {
   star?: SelectionStar | undefined;
   /** The files confirm (deleteConfirmCopy), or null for today's text-only copy. */
   confirmCopy?: DeleteConfirmCopy | null;
+  /** Personal notes: the notes copy, never "for everyone". */
+  notes?: boolean;
   /** Runs the delete; resolves ok (with a toast when files went), or the user copy to toast. */
   onDelete: () => Promise<{ ok: true; toast?: string } | { ok: false; message: string }>;
 }): ReactElement {
@@ -187,6 +189,7 @@ export function SelectionBar(props: {
         open: confirming,
         count: props.count,
         copy: props.confirmCopy ?? null,
+        notes: props.notes === true,
         busy,
         onCancel: () => setConfirming(false),
         onConfirm: () => void confirm(),
@@ -213,12 +216,14 @@ export function deleteMessagesConfirm(props: {
   count: number;
   /** The files confirm; null (or absent) keeps the text-only copy. */
   copy?: DeleteConfirmCopy | null;
+  /** Personal notes: the notes copy wins (nothing there is "for everyone"). */
+  notes?: boolean;
   busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }): ReactElement | null {
   if (!props.open) return null;
-  const copy = props.copy ?? null;
+  const copy = props.notes === true ? deleteNotesConfirmCopy(props.count) : (props.copy ?? null);
   return (
     <ConfirmDialog
       title={copy?.title ?? deleteMessagesTitle(props.count)}
@@ -245,15 +250,20 @@ export const DELETE_ONE_CONFIRM = 'Delete for everyone';
 export function deleteOneConfirm(props: {
   open: boolean;
   busy: boolean;
+  /** The files confirm (deleteConfirmCopy); null (or absent) keeps the text copy. */
+  copy?: DeleteConfirmCopy | null;
+  /** Personal notes: "Delete note?", never "for everyone". */
+  notes?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }): ReactElement | null {
   if (!props.open) return null;
+  const copy = props.notes === true ? deleteNotesConfirmCopy(1) : (props.copy ?? null);
   return (
     <ConfirmDialog
-      title={DELETE_ONE_TITLE}
-      message={DELETE_ONE_MESSAGE}
-      confirmLabel={DELETE_ONE_CONFIRM}
+      title={copy?.title ?? DELETE_ONE_TITLE}
+      message={copy?.message ?? DELETE_ONE_MESSAGE}
+      confirmLabel={copy?.confirmLabel ?? DELETE_ONE_CONFIRM}
       busyLabel="Deleting"
       destructive
       busy={props.busy}

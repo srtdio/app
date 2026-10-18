@@ -15,6 +15,7 @@ import {
   MENU_WIDTH_PX,
   MenuRow,
   messageMenuItems,
+  moreMenuItems,
   ownMessageActions,
   ReactionsRow,
   visibleViewportHeight,
@@ -76,13 +77,15 @@ const MARK: ChatMark = {
   resolvedAt: null,
 };
 
-/** The keys the thread's menu shows for a message (wiring as ThreadBody passes it). */
-function keysFor(
+type KeyOpts = { mark?: ChatMark; notes?: boolean; transcribe?: boolean };
+
+/** The menu wiring for a message, as ThreadBody passes it. */
+function propsFor(
   message: ThreadMessage,
-  opts: { mark?: ChatMark; notes?: boolean; transcribe?: boolean } = {},
-): string[] {
+  opts: KeyOpts = {},
+): Parameters<typeof messageMenuItems>[0] {
   const own = ownMessageActions(message, opts.mark, NOW, opts.notes === true);
-  return messageMenuItems({
+  return {
     canCopy: message.body.trim() !== '',
     onReply: () => {},
     onCopy: () => {},
@@ -98,101 +101,111 @@ function keysFor(
     canDelete: own.canDelete,
     lockedByMark: own.lockedByMark,
     notes: opts.notes === true,
-  }).map((item) => item.key);
+  };
+}
+
+/** The top-level keys the thread's menu shows for a message. */
+function keysFor(message: ThreadMessage, opts: KeyOpts = {}): string[] {
+  return messageMenuItems(propsFor(message, opts)).map((item) => item.key);
+}
+
+/** The keys under More for a message. */
+function moreKeysFor(message: ThreadMessage, opts: KeyOpts = {}): string[] {
+  return moreMenuItems(propsFor(message, opts)).map((item) => item.key);
 }
 
 describe('menu order', () => {
-  it('mine: Reply / Forward / Copy / Select / Star / Save / Remind / Mark / Edit / Delete', () => {
-    expect(keysFor(msg())).toEqual([
-      'reply',
-      'forward',
-      'copy',
-      'select-text',
-      'star',
-      'save-notes',
-      'remind',
-      'mark',
-      'edit',
-      'delete',
-    ]);
+  it('mine: Reply / Copy / Forward / Edit / Star / More / Delete', () => {
+    expect(keysFor(msg())).toEqual(['reply', 'copy', 'forward', 'edit', 'star', 'more', 'delete']);
+  });
+
+  it('mine, under More: Select / Save / Remind / Mark', () => {
+    expect(moreKeysFor(msg())).toEqual(['select-text', 'save-notes', 'remind', 'mark']);
   });
 
   it('theirs: no Edit or Delete', () => {
-    expect(keysFor(msg({ mine: false }))).toEqual([
-      'reply',
-      'forward',
-      'copy',
+    expect(keysFor(msg({ mine: false }))).toEqual(['reply', 'copy', 'forward', 'star', 'more']);
+    expect(moreKeysFor(msg({ mine: false }))).toEqual([
       'select-text',
-      'star',
       'save-notes',
       'remind',
       'mark',
     ]);
   });
 
-  it('voice only: Transcribe, no Copy and no Select', () => {
-    expect(
-      keysFor(msg({ mine: false, body: '', attachments: [VOICE] }), { transcribe: true }),
-    ).toEqual(['reply', 'forward', 'transcribe', 'star', 'save-notes', 'remind', 'mark']);
+  it('voice only: Transcribe under More, no Copy and no Select', () => {
+    const voice = msg({ mine: false, body: '', attachments: [VOICE] });
+    expect(keysFor(voice, { transcribe: true })).toEqual(['reply', 'forward', 'star', 'more']);
+    expect(moreKeysFor(voice, { transcribe: true })).toEqual([
+      'transcribe',
+      'save-notes',
+      'remind',
+      'mark',
+    ]);
   });
 
   it('photo with a caption and a post card with a body offer Select', () => {
-    expect(keysFor(msg({ mine: false, body: 'look', attachments: [PHOTO] }))).toContain(
+    expect(moreKeysFor(msg({ mine: false, body: 'look', attachments: [PHOTO] }))).toContain(
       'select-text',
     );
-    expect(keysFor(msg({ mine: false, body: 'this one', sharedPostIds: ['p1'] }))).toContain(
+    expect(moreKeysFor(msg({ mine: false, body: 'this one', sharedPostIds: ['p1'] }))).toContain(
       'select-text',
     );
   });
 
   it('bare photo and bare post card: no Select', () => {
-    expect(keysFor(msg({ mine: false, body: '', attachments: [PHOTO] }))).not.toContain(
+    expect(moreKeysFor(msg({ mine: false, body: '', attachments: [PHOTO] }))).not.toContain(
       'select-text',
     );
-    expect(keysFor(msg({ mine: false, body: ' ', sharedPostIds: ['p1'] }))).not.toContain(
+    expect(moreKeysFor(msg({ mine: false, body: ' ', sharedPostIds: ['p1'] }))).not.toContain(
       'select-text',
     );
   });
 
-  it('marked own: Remind me before "Marked as", then the locked line', () => {
+  it('marked own: Remind me before "Marked as" under More, the locked line last', () => {
     expect(keysFor(msg(), { mark: MARK })).toEqual([
       'reply',
-      'forward',
       'copy',
-      'select-text',
+      'forward',
       'star',
+      'more',
+      'locked',
+    ]);
+    expect(moreKeysFor(msg(), { mark: MARK })).toEqual([
+      'select-text',
       'save-notes',
       'remind',
       'marked',
-      'locked',
     ]);
   });
 
-  it('notes: no Mark as or Save to notes; Delete without a hint', () => {
+  it('notes: no Mark as or Save to notes; Edit and Delete without a window', () => {
     const old = msg({ createdAt: new Date(NOW - 90 * MIN).toISOString() });
     expect(keysFor(old, { notes: true })).toEqual([
       'reply',
-      'forward',
       'copy',
-      'select-text',
+      'forward',
+      'edit',
       'star',
-      'remind',
+      'more',
       'delete',
     ]);
+    expect(moreKeysFor(old, { notes: true })).toEqual(['select-text', 'remind']);
   });
 
   it('Remind me sits right before Mark as', () => {
-    const keys = keysFor(msg({ mine: false }));
+    const keys = moreKeysFor(msg({ mine: false }));
     expect(keys.indexOf('remind')).toBe(keys.indexOf('mark') - 1);
   });
 
   it('the old multi-select row and its divider are gone; no NEW badge', () => {
-    const items = messageMenuItems({
+    const props = {
       canCopy: true,
       onReply: () => {},
       onCopy: () => {},
       canSelectText: true,
-    });
+    };
+    const items = [...messageMenuItems(props), ...moreMenuItems(props)];
     expect(items.map((i) => i.key)).not.toContain('select');
     expect(items.map((i) => i.key)).not.toContain('select-divider');
     expect(items.every((i) => i.kind === 'action' || i.kind === 'note')).toBe(true);
@@ -235,7 +248,7 @@ function walk(node: ReactNode, visit: (el: ReactElement) => void): void {
 }
 
 describe('menu style', () => {
-  const items = messageMenuItems({
+  const styleProps: Parameters<typeof messageMenuItems>[0] = {
     canCopy: true,
     onReply: () => {},
     onCopy: () => {},
@@ -248,7 +261,8 @@ describe('menu style', () => {
     markOptions: ['decision'],
     canEdit: true,
     canDelete: true,
-  });
+  };
+  const items = [...messageMenuItems(styleProps), ...moreMenuItems(styleProps)];
 
   it('panel: 18px radius, border-border hairline, no inner padding, tokens only', () => {
     const cls = MENU_PANEL.split(' ');

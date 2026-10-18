@@ -40,7 +40,11 @@ import { runSend } from '@/lib/chat/send-flow';
 import { mentionTargets } from '@/lib/chat/mentions';
 import { windowFocusTrigger } from '@/lib/chat/catch-up';
 import { deleteSelectionBlock, forwardPickerChannels } from '@/lib/chat/forward';
-import { messageMenuItems, ownMessageActions } from '@/components/chat/MessageActionMenu';
+import {
+  messageMenuItems,
+  moreMenuItems,
+  ownMessageActions,
+} from '@/components/chat/MessageActionMenu';
 import { channelHasClient, draftTileEnabled, trayTiles } from '@/components/chat/ComposerTray';
 import { ThreadHeaderIdentity, threadStripSlot } from '@/components/chat/MessageThread';
 import { channelListContent, showSearchResults } from '@/components/chat/ChannelList';
@@ -298,8 +302,10 @@ describe('Save to notes', () => {
   });
 });
 
-function labels(props: Partial<Parameters<typeof messageMenuItems>[0]>): string[] {
-  return messageMenuItems({
+type MenuProps = Parameters<typeof messageMenuItems>[0];
+
+function menuProps(props: Partial<MenuProps>): MenuProps {
+  return {
     canCopy: true,
     onReply: () => {},
     onCopy: () => {},
@@ -310,40 +316,59 @@ function labels(props: Partial<Parameters<typeof messageMenuItems>[0]>): string[
     canRemind: true,
     onRemind: () => {},
     ...props,
-  }).map((item) => item.label);
+  };
+}
+
+/** The top-level rows. */
+function labels(props: Partial<MenuProps>): string[] {
+  return messageMenuItems(menuProps(props)).map((item) => item.label);
+}
+
+/** The rows under More. */
+function moreLabels(props: Partial<MenuProps>): string[] {
+  return moreMenuItems(menuProps(props)).map((item) => item.label);
 }
 
 describe('menu matrix', () => {
-  it('DM and group: Save to notes sits between Copy and Remind me', () => {
-    const rows = labels({
+  it('DM and group: Save to notes sits under More, after Select and before Remind me', () => {
+    const wiring = {
       canSaveToNotes: true,
       onSaveToNotes: () => {},
-      markOptions: ['commitment'],
+      markOptions: ['commitment' as const],
       onMark: () => {},
-    });
-    const copy = rows.indexOf('Copy');
+    };
+    expect(labels(wiring)).toContain('More');
+    expect(labels(wiring)).not.toContain('Save to notes');
+    const rows = moreLabels(wiring);
+    const select = rows.indexOf('Select');
     const save = rows.indexOf('Save to notes');
-    expect(save).toBeGreaterThan(copy);
+    expect(save).toBeGreaterThan(select);
     expect(rows.indexOf('Remind me')).toBeGreaterThan(save);
     expect(rows).toContain('Mark as');
   });
 
-  it('notes: no Mark as, no Save to notes, Delete for an hour-old own note with no hint', () => {
+  it('notes: no Mark as, no Save to notes; Edit and Delete for an hour-old own note, no hints', () => {
     const own = message({ mine: true, senderUserId: ME, body: 'note' });
     const actions = ownMessageActions(own, undefined, NOW, true);
     expect(actions.canDelete).toBe(true);
-    expect(actions.canEdit).toBe(false);
-    const items = messageMenuItems({
+    expect(actions.canEdit).toBe(true);
+    const props: MenuProps = {
       canCopy: true,
       onReply: () => {},
       onCopy: () => {},
+      canEdit: actions.canEdit,
+      onEdit: () => {},
       canDelete: actions.canDelete,
       onDelete: () => {},
       notes: true,
-    });
-    const rows = items.map((i) => i.label);
+    };
+    const items = messageMenuItems(props);
+    const rows = [...items, ...moreMenuItems(props)].map((i) => i.label);
     expect(rows).not.toContain('Mark as');
     expect(rows).not.toContain('Save to notes');
+    const edit = items.find((i) => i.kind === 'action' && i.key === 'edit');
+    expect(edit).toBeDefined();
+    expect(edit?.kind === 'action' ? edit.hint : 'x').toBeUndefined();
     const del = items.find((i) => i.kind === 'action' && i.key === 'delete');
     expect(del).toBeDefined();
     expect(del?.kind === 'action' ? del.hint : 'x').toBeUndefined();

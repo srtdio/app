@@ -35,7 +35,7 @@ import {
   ReminderOptions,
 } from '@/components/chat/ReminderSheet';
 import {
-  messageMenuItems,
+  moreMenuItems,
   REMINDER_SET_LABEL,
   reminderMenuTime,
   remindProps,
@@ -606,8 +606,9 @@ describe('UI-3 S10: reminder state in the long-press menu', () => {
     const row = { getAttribute: () => messageId };
     return { closest: () => row } as unknown as HTMLElement;
   }
-  const rowsOf = (props: Parameters<typeof messageMenuItems>[0]) =>
-    messageMenuItems(props).filter((i) => i.kind === 'action' && i.key === 'remind');
+  // Remind me sits under More.
+  const rowsOf = (props: Parameters<typeof moreMenuItems>[0]) =>
+    moreMenuItems(props).filter((i) => i.kind === 'action' && i.key === 'remind');
 
   it('"Remind me" without a pending reminder', () => {
     const props = remindProps(
