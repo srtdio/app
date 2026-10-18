@@ -1,4 +1,5 @@
-import { writeClipboard } from '@/components/comments/Comments';
+import { useOptionalToast } from '@/components/ui/toast';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatEntityRef, entityUrlPath } from '@/lib/entityRef';
 
 interface EntityRefChipProps {
@@ -21,11 +22,13 @@ interface EntityRefChipProps {
  */
 export function EntityRefChip({ kind, entityKey, number, onCopied }: EntityRefChipProps) {
   const label = formatEntityRef(entityKey, number);
+  const toast = useOptionalToast();
 
   const handleCopy = (): void => {
     const link = window.location.origin + entityUrlPath(kind, entityKey, number);
-    void writeClipboard(link).then((ok) => {
+    void copyText(link).then((ok) => {
       if (ok) onCopied();
+      else toast?.show({ title: COPY_FAILED });
     });
   };
 

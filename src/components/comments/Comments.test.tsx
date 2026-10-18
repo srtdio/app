@@ -53,8 +53,8 @@ import {
   tickInteractive,
   toCommentAttachments,
   tombstoneText,
-  writeClipboard,
 } from '@/components/comments/Comments';
+import { copyText } from '@/lib/clipboard';
 import type { PointMenuMode } from '@/components/comments/Comments';
 import { PAGE_SIZE } from '@srtdio/comments';
 import type { Client } from '@srtdio/comments';
@@ -838,7 +838,7 @@ describe('copy comment text', () => {
   it('writes the comment body to the clipboard and never throws', async () => {
     const writeText = vi.fn(async () => undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
-    await expect(writeClipboard('hello body')).resolves.toBe(true);
+    await expect(copyText('hello body')).resolves.toBe(true);
     expect(writeText).toHaveBeenCalledWith('hello body');
 
     vi.stubGlobal('navigator', {
@@ -848,7 +848,7 @@ describe('copy comment text', () => {
         },
       },
     });
-    await expect(writeClipboard('x')).resolves.toBe(false);
+    await expect(copyText('x')).resolves.toBe(false);
     vi.unstubAllGlobals();
   });
 });

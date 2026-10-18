@@ -42,6 +42,7 @@ import type { GalleryItem } from '@srtdio/posts';
 import { postPlansLine, readPostPlans, type PostPlanRef } from '@/lib/chat/plans';
 import { supabase } from '@/lib/supabase';
 import { MOVE_ROW_LABEL, PostSheetPlanRowsContext } from '@/components/chat/PlanMoveSheet';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 
 interface PostActionSheetProps {
   open: boolean;
@@ -188,12 +189,8 @@ export function PostActionSheet({
 
   async function handleCopyLink(): Promise<void> {
     const link = postCopyLink(window.location.origin, workspaceKey, postNumber, postId);
-    try {
-      await navigator.clipboard.writeText(link);
-      onToast('Link copied.');
-    } catch {
-      onToast('Could not copy the link.');
-    }
+    const ok = await copyText(link);
+    onToast(ok ? 'Link copied.' : COPY_FAILED);
     close();
   }
 

@@ -28,6 +28,7 @@ import {
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 
 // The file card's action: a 44px target, colour change only on press (the
 // shared Button's height and press scale do not fit this rule).
@@ -325,8 +326,7 @@ export function AssetLightbox({
 
   const handleCopy = (): void => {
     void withUrl(async (url) => {
-      await navigator.clipboard.writeText(url);
-      onToast('Link copied');
+      onToast((await copyText(url)) ? 'Link copied' : COPY_FAILED);
     });
   };
 

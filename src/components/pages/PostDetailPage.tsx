@@ -7,7 +7,8 @@ import { Sheet } from '@/components/ui/Sheet';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
-import { Comments, runCreateCommentBatch, writeClipboard } from '@/components/comments/Comments';
+import { Comments, runCreateCommentBatch } from '@/components/comments/Comments';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { dispatchInductionDid, dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
@@ -1506,7 +1507,9 @@ export function PostDetailPage({
                   <IconButton
                     label="Copy caption"
                     onClick={() => {
-                      void writeClipboard(post.caption ?? '').then(() => push('Caption copied'));
+                      void copyText(post.caption ?? '').then((ok) =>
+                        push(ok ? 'Caption copied' : COPY_FAILED),
+                      );
                     }}
                   >
                     <IconCopy size={18} />

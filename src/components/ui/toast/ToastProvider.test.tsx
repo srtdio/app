@@ -143,4 +143,81 @@ describe('createToastStore', () => {
     expect('action' in plain!).toBe(false);
     store.dispose();
   });
+
+  it('onExpire runs once when the timer ends', () => {
+    const store = createToastStore();
+    const onExpire = vi.fn();
+    store.show({ title: 'Deleted', durationMs: 1000, onExpire });
+    vi.advanceTimersByTime(999);
+    expect(onExpire).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(EXIT_MS + 5000);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot()).toHaveLength(0);
+    store.dispose();
+  });
+
+  it('expire() (the X) dismisses and calls onExpire once', () => {
+    const store = createToastStore();
+    const onExpire = vi.fn();
+    const id = store.show({ title: 'Deleted', durationMs: 1000, onExpire });
+    store.expire(id);
+    store.expire(id);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot()[0]!.leaving).toBe(true);
+    vi.advanceTimersByTime(5000);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('act() runs the action, dismisses, and never calls onExpire', () => {
+    const store = createToastStore();
+    const onExpire = vi.fn();
+    const onPress = vi.fn();
+    const id = store.show({
+      title: 'Deleted',
+      durationMs: 1000,
+      action: { label: 'Undo', onPress },
+      onExpire,
+    });
+    store.act(id);
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot()[0]!.leaving).toBe(true);
+    vi.advanceTimersByTime(5000);
+    expect(onExpire).not.toHaveBeenCalled();
+    expect(store.getSnapshot()).toHaveLength(0);
+    store.dispose();
+  });
+
+  it('a plain dismiss() does not call onExpire', () => {
+    const store = createToastStore();
+    const onExpire = vi.fn();
+    const id = store.show({ title: 'Deleted', durationMs: 1000, onExpire });
+    store.dismiss(id);
+    vi.advanceTimersByTime(5000);
+    expect(onExpire).not.toHaveBeenCalled();
+    store.dispose();
+  });
+
+  it('a toast pushed past the cap expires (accepted)', () => {
+    const store = createToastStore();
+    const onExpire = vi.fn();
+    store.show({ title: 'First', durationMs: 1000, onExpire });
+    for (let i = 0; i < MAX_VISIBLE; i += 1) store.show({ title: `n${i}` });
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('countdown carries the duration onto the toast only when it auto-dismisses', () => {
+    const store = createToastStore();
+    store.show({ title: 'A', durationMs: 7000, countdown: true });
+    store.show({ title: 'B', durationMs: null, countdown: true });
+    store.show({ title: 'C', durationMs: 7000 });
+    const [c, b, a] = store.getSnapshot();
+    expect(a!.countdownMs).toBe(7000);
+    expect(b!.countdownMs).toBeUndefined();
+    expect(c!.countdownMs).toBeUndefined();
+    store.dispose();
+  });
 });

@@ -329,6 +329,7 @@ import {
   WhoReactedSheet,
   type WhoReactedLoad,
 } from '@/components/chat/ReadingLayer';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 
 interface MessageThreadProps {
   title: string;
@@ -4162,8 +4163,9 @@ function ThreadBody(
                     menu.message.body,
                     profileNameOf(props.profiles, props.workspaceId ?? null),
                   );
-            void navigator.clipboard?.writeText(text);
-            toast.show({ title: 'Message copied' });
+            void copyText(text).then((ok) =>
+              toast.show({ title: ok ? 'Message copied' : COPY_FAILED }),
+            );
           }
         }}
       />

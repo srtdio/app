@@ -3,12 +3,15 @@ import type { MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
+import { useEscapeLayer } from '@/lib/escape-stack';
 import { DUR_BASE_MS } from '@/lib/motion';
 
 interface ConfirmDialogProps {
   title: string;
   message: string;
   confirmLabel: string;
+  /** Label for the dismiss action. Default "Cancel". */
+  cancelLabel?: string;
   /** Render the confirm action in destructive styling via the `bad` token. */
   destructive?: boolean;
   /** Disables both actions and switches the confirm label to its busy form. */
@@ -32,6 +35,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  cancelLabel = 'Cancel',
   destructive = false,
   busy = false,
   busyLabel,
@@ -55,15 +59,8 @@ export function ConfirmDialog({
     setTimeout(onCancel, EXIT_MS);
   }
 
-  // No dependency array: the listener re-binds each render so it always sees the
-  // current `busy`/`onCancel` via requestClose, without a stale closure.
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') requestClose();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  });
+  // Escape reaches this dialog only while it is the top layer (escape-stack).
+  useEscapeLayer(true, requestClose);
 
   function onOverlayClick(event: MouseEvent<HTMLDivElement>): void {
     if (event.target === event.currentTarget) requestClose();
@@ -90,7 +87,7 @@ export function ConfirmDialog({
         <p className="mt-2 text-sm text-fg-2">{message}</p>
         <div className="mt-5 flex justify-end gap-2">
           <Button size="lg" disabled={busy} onClick={requestClose}>
-            Cancel
+            {cancelLabel}
           </Button>
           <Button
             size="lg"
