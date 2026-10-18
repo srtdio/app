@@ -156,14 +156,14 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   await expect(page.getByRole('button', { name: 'Format', exact: true })).toHaveText(
     'Single image',
   );
-  // The photo tap attaches the bundled sample; nothing uploads until Send.
+  // The photo tap attaches the bundled sample and starts its upload at once.
   await check('c_post_media');
   await tapControl(page, step('c_post_media'));
   await expect(page.locator('img[src^="blob:"]').first()).toBeVisible();
-  expect(network.uploads).toEqual([]);
+  await expect.poll(() => network.uploads).toEqual([FIRST_POST_SAMPLE.photoName]);
   await check('c_post_send', undefined, '02-mid-route');
   await tapControl(page, step('c_post_send'));
-  // Send creates the post with the filled values: the sample photo uploads now, no target date.
+  // Send creates the post with the filled values (the photo uploaded once), no target date.
   await expect.poll(() => network.uploads).toEqual([FIRST_POST_SAMPLE.photoName]);
   await expect.poll(() => network.rpcCalls.some((c) => c.name === 'post_create')).toBe(true);
   const created = network.rpcCalls.find((c) => c.name === 'post_create');

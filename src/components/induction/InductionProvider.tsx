@@ -403,5 +403,12 @@ function useGuideFacts(input: {
     };
   }, [active, workspaceId, route, postId, key, refreshes, refetch]);
 
-  return read.key === key ? read : { workspaceId: '', facts: read.facts };
+  if (read.key === key) return read;
+  // Same workspace and route, a new post id (the first post just landed): keep
+  // the facts already read while the new read is out, so the next step is not
+  // held for it. Only the post title can lag, and only for that one read.
+  if (read.workspaceId === workspaceId && read.key.split('|')[1] === route) {
+    return { workspaceId: read.workspaceId, facts: read.facts };
+  }
+  return { workspaceId: '', facts: read.facts };
 }
