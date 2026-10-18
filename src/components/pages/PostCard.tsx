@@ -116,7 +116,8 @@ function PlayBadge() {
  * present). The thumbnail is the shared Thumbnail tile (same one Assets uses), so
  * an image post, an imageless post, and a glyph post all share ONE tile background
  * by state. The whole card navigates to the post detail (PCS) view; when the
- * board passes onMove, a 44px Move button beside the title opens the move sheet.
+ * board passes onMove, a 44px Move button on the thumbnail corner opens the move
+ * sheet.
  * Navigation is a full-bleed overlay button laid behind the card content.
  */
 export function PostCard({
@@ -146,6 +147,22 @@ export function PostCard({
         onClick={() => navigate(href)}
         className="absolute inset-0 rounded-lg"
       />
+      {onMove !== undefined ? (
+        // Over the thumbnail's top-left corner, above the Open post overlay (z-10)
+        // so a tap moves, not opens. Pointer down stops here so the feed's
+        // long-press never arms under it.
+        <button
+          type="button"
+          aria-label={`Move post ${post.title}`}
+          data-post-card-move=""
+          draggable={false}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => onMove(post)}
+          className="absolute left-1.5 top-1.5 z-10 inline-flex h-11 w-11 items-center justify-center rounded-md border border-border bg-panel/90 text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <SwapIcon />
+        </button>
+      ) : null}
       {/* The tile is relative, so it would paint over the absolute Open post button;
           pointer-events-none lets a tap on the thumbnail reach the button. */}
       <div data-post-card-thumb="" className="pointer-events-none">
@@ -165,28 +182,11 @@ export function PostCard({
         </Thumbnail>
       </div>
       <div className="flex flex-col gap-2 p-3">
-        <div className="flex items-start gap-1">
-          <div
-            data-post-card-title=""
-            className="line-clamp-2 min-w-0 flex-1 text-sm font-medium leading-snug [overflow-wrap:anywhere]"
-          >
-            {post.title}
-          </div>
-          {onMove !== undefined ? (
-            // Above the Open post overlay (relative z-10) so a tap moves, not opens.
-            // Pointer down stops here so the feed's long-press never arms under it.
-            <button
-              type="button"
-              aria-label={`Move post ${post.title}`}
-              data-post-card-move=""
-              draggable={false}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => onMove(post)}
-              className="relative z-10 -mr-2 -mt-2.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <SwapIcon />
-            </button>
-          ) : null}
+        <div
+          data-post-card-title=""
+          className="line-clamp-2 text-sm font-medium leading-snug [overflow-wrap:anywhere]"
+        >
+          {post.title}
         </div>
         {/* One quiet meta line: the stage (All view only), the platform mark, the
             format glyph, and the date pushed to the trailing edge. No two-pill
