@@ -7459,6 +7459,42 @@ export type Database = {
         }
         Relationships: []
       }
+      induction_sample_group_names: {
+        Row: {
+          created_at: string
+          group_id: string
+          original_name: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          original_name: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          original_name?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "induction_sample_group_names_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "induction_sample_group_names_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       induction_sample_rows: {
         Row: {
           created_at: string
