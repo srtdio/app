@@ -56,9 +56,9 @@ describe('delete chats confirm', () => {
       deleteChatsConfirm({ channels: [channel('a')], busy: false, onCancel, onConfirm }),
     );
     expect(one).toMatchObject({
-      title: 'Delete this chat?',
+      title: 'Hide this chat?',
       message: DELETE_CHATS_MESSAGE,
-      confirmLabel: 'Delete',
+      confirmLabel: 'Hide',
       destructive: true,
       busy: false,
     });
@@ -79,7 +79,7 @@ describe('delete chats confirm', () => {
         onConfirm,
       }),
     );
-    expect(many).toMatchObject({ title: 'Delete 3 chats?', busy: true });
+    expect(many).toMatchObject({ title: 'Hide 3 chats?', busy: true });
   });
 });
 

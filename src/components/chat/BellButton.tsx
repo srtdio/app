@@ -1,15 +1,26 @@
-// The chat bell: a 44x44 button in the Chat home search row, between "Select"
-// and the blue "+". The accent badge counts unread items in Now. It opens the
+// The bell: a 44x44 button in the top bar on every main screen (TopbarBell is
+// its one mount). The accent badge counts unread items in Now. It opens the
 // Notifications surface: the bottom Sheet on touch, a popover anchored to the
-// bell on a laptop. Renders nothing outside a BellProvider.
+// bell on a laptop. BellButton renders nothing outside a BellProvider.
 
 import { useRef } from 'react';
 import type { ReactElement } from 'react';
 import { IconBell } from '@/components/ui/icons';
 import { useChatLayout } from '@/components/chat/chat-type';
-import { useBellOptional } from '@/components/chat/BellContext';
-import { NotificationsSurface, NOTIFICATIONS_TITLE } from '@/components/chat/NotificationsPanel';
+import { BellProvider, useBellOptional } from '@/components/chat/BellContext';
+import {
+  NotificationsSheets,
+  NotificationsSurface,
+  NOTIFICATIONS_TITLE,
+} from '@/components/chat/NotificationsPanel';
 import { bellBadgeText } from '@/lib/chat/bell';
+import type { NameOf } from '@/lib/chat/mentions';
+import { useSession } from '@/lib/session-context';
+import { useWorkspace } from '@/lib/workspace-context';
+
+const NO_ROSTER: readonly never[] = [];
+const NO_MESSAGES: readonly never[] = [];
+const NO_NAMES: NameOf = () => undefined;
 
 /** The bell's accessible name: "Notifications" plus the unread count. Pure. */
 export function bellLabel(unread: number): string {
@@ -47,5 +58,32 @@ export function BellButton(): ReactElement | null {
       </button>
       <NotificationsSurface layout={layout} anchorRef={ref} />
     </>
+  );
+}
+
+/**
+ * The top bar's bell: its own BellProvider (the primary one, owning ?bell=1),
+ * the button with its unread badge, and the sheets it opens. Names resolve
+ * through the shared people registry; chat titles read "Chat" off the roster.
+ */
+export function TopbarBell(): ReactElement | null {
+  const { workspaceId } = useWorkspace();
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
+  if (workspaceId === null || userId === null) return null;
+  return (
+    <BellProvider
+      key={`${workspaceId}:${userId}`}
+      primary
+      workspaceId={workspaceId}
+      currentUserId={userId}
+      roster={NO_ROSTER}
+      openChannelId={null}
+      messages={NO_MESSAGES}
+      nameOf={NO_NAMES}
+    >
+      <BellButton />
+      <NotificationsSheets />
+    </BellProvider>
   );
 }

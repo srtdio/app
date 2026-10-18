@@ -31,11 +31,7 @@ import {
   type ChatLoadStatus,
   type ConversationSummary,
 } from '@/lib/chat/chat-store';
-import {
-  deleteChatFailedMessage,
-  deleteChatsTitle,
-  type ClearRunResult,
-} from '@/lib/chat/clear-flow';
+import { deleteChatFailedMessage, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { sortChannelsByRecency } from '@/lib/chat/sort-conversations';
 import { formatRelativeTime } from '@/lib/chat/format-relative-time';
 import { workspaceTimeZone } from '@/lib/chat/time-format';
@@ -57,7 +53,6 @@ import {
 import { NOTES_TILE_LINE } from '@/lib/chat/notes';
 import { NotesAvatar } from '@/components/chat/NotesBits';
 import { useSession } from '@/lib/session-context';
-import { BellButton } from '@/components/chat/BellButton';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import {
   COARSE_POINTER_QUERY,
@@ -754,12 +749,17 @@ export function ChannelCard(props: {
  */
 export function notesTile(props: {
   notes: ChannelSummary;
+  /** The notes chat's last note, when one is loaded: its preview and time replace the tagline. */
+  summary?: ConversationSummary | undefined;
+  nowMs?: number | undefined;
+  timeZone?: string | undefined;
   selected: boolean;
   /** Select mode is on: the tile is inert. */
   selecting: boolean;
   onSelect: (channel: ChannelSummary) => void;
 }): ReactElement {
-  const { notes } = props;
+  const { notes, summary } = props;
+  const last = notesLastLine(summary, props.nowMs ?? 0, workspaceTimeZone(props.timeZone));
   return (
     <div className={cn(CHAT_HOME_STACK, 'pb-2')}>
       <button
@@ -787,14 +787,41 @@ export function notesTile(props: {
           {...(!props.selected && !props.selecting ? { hoverSurface: 'panel-2' as const } : {})}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className={cn('min-w-0 truncate text-fg', GROUP_NAME_TYPE)}>{notes.title}</span>
-          <span className={cn('min-w-0 truncate text-fg-2', GROUP_PREVIEW_TYPE)}>
-            {NOTES_TILE_LINE}
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span className={cn('min-w-0 flex-1 truncate text-fg', GROUP_NAME_TYPE)}>
+              {notes.title}
+            </span>
+            {last !== null && last.time !== '' ? (
+              <span data-notes-time="" className="shrink-0 text-xs tabular-nums text-fg-3">
+                {last.time}
+              </span>
+            ) : null}
+          </span>
+          <span
+            data-notes-preview=""
+            className={cn('min-w-0 truncate text-fg-2', GROUP_PREVIEW_TYPE)}
+          >
+            {last !== null ? last.preview : NOTES_TILE_LINE}
           </span>
         </span>
       </button>
     </div>
   );
+}
+
+/**
+ * The notes tile's second line: the last note's preview and its time, or null
+ * when no note is loaded yet (the tile keeps its tagline). Pure.
+ */
+export function notesLastLine(
+  summary: ConversationSummary | undefined,
+  nowMs: number,
+  timeZone: string,
+): { preview: string; time: string } | null {
+  if (summary === undefined || summary.lastMessageTs <= 0) return null;
+  const preview = summary.lastMessageText;
+  if (preview === '') return null;
+  return { preview, time: formatRelativeTime(summary.lastMessageTs, nowMs, timeZone) };
 }
 
 /** A chat home chip: Starred, or one of the message search kinds. */
@@ -878,7 +905,7 @@ interface ChannelListContentProps extends ChannelListProps {
   nowMs?: number;
   /** Hidden-chat lookup; absent in pure tests (nothing is hidden). */
   isHidden?: HiddenLookup;
-  /** The chat bell, between Select and "+" (absent outside a BellProvider). */
+  /** An optional slot between Select and "+"; the bell itself lives in the top bar. */
   bell?: ReactNode;
   /** Select mode controls; absent hides the Select control. */
   select?: ChannelSelectMode;
@@ -950,7 +977,7 @@ function selectHeader(select: ChannelSelectMode): ReactElement {
   );
 }
 
-/** Bottom bar in select mode (SelectionBar styling): one Delete, disabled at 0. */
+/** Bottom bar in select mode (SelectionBar styling): one Hide, disabled at 0. */
 function selectBar(select: ChannelSelectMode): ReactElement {
   return (
     <div className="flex items-center gap-2 border-t border-border bg-panel px-4 py-3">
@@ -962,7 +989,7 @@ function selectBar(select: ChannelSelectMode): ReactElement {
         onClick={select.onDelete}
       >
         <IconTrash size={18} />
-        Delete
+        Hide
       </Button>
     </div>
   );
@@ -1034,6 +1061,9 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
         {props.notes !== undefined && !searching
           ? notesTile({
               notes: props.notes,
+              summary: summaryFor(props.notes.channelId),
+              nowMs: props.nowMs ?? 0,
+              timeZone: props.timeZone,
               selected: props.notes.channelId === props.selectedChannelId,
               selecting: selecting !== undefined,
               onSelect: props.onSelect,
@@ -1075,7 +1105,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
 }
 
 /**
- * The small menu a long-pressed row opens: one danger "Delete chat" row. Fixed
+ * The small menu a long-pressed row opens: one danger "Hide chat" row. Fixed
  * over the list (portal) and placed under the row, or above it when there is no
  * room; closes on backdrop tap, Escape, scroll or resize. Design tokens only.
  */
@@ -1163,7 +1193,7 @@ function ChannelRowMenu(props: {
         <div role="menuitem">
           <ActionRow
             icon={<IconTrash />}
-            label="Delete chat"
+            label="Hide chat"
             danger
             onClick={() => {
               onClose();
@@ -1177,7 +1207,12 @@ function ChannelRowMenu(props: {
   );
 }
 
-/** Confirm body: the delete is local to the caller and undone by a new message. */
+/** Confirm title: "Hide this chat?" / "Hide N chats?". Pure. */
+export function hideChatsTitle(count: number): string {
+  return count === 1 ? 'Hide this chat?' : `Hide ${count} chats?`;
+}
+
+/** Confirm body: the hide is local to the caller and undone by a new message. */
 export const DELETE_CHATS_MESSAGE =
   'Hidden for you only. It comes back if someone sends a new message.';
 
@@ -1194,10 +1229,10 @@ export function deleteChatsConfirm(props: {
   if (props.channels === null) return null;
   return (
     <ConfirmDialog
-      title={deleteChatsTitle(props.channels.length)}
+      title={hideChatsTitle(props.channels.length)}
       message={DELETE_CHATS_MESSAGE}
-      confirmLabel="Delete"
-      busyLabel="Deleting"
+      confirmLabel="Hide"
+      busyLabel="Hiding"
       destructive
       busy={props.busy}
       onCancel={props.onCancel}
@@ -1347,7 +1382,6 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     <>
       {channelListContent({
         ...props,
-        bell: <BellButton />,
         input,
         search,
         onSearchChange: setSearch,

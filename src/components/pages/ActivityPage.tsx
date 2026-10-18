@@ -18,7 +18,9 @@ import {
   fetchActivityEntries,
   filterByState,
   groupDigest,
-  isSnoozed,
+  ACTIVITY_LOAD_FAILED,
+  MARKED_READ_LABEL,
+  markAllTargets,
   markAllEntriesRead,
   markEntryRead,
   snoozeEntry,
@@ -40,6 +42,7 @@ import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
+import { useUndoableAction } from '@/lib/use-undoable-action';
 
 const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'newest', label: 'Newest' },
@@ -83,10 +86,11 @@ export function ActivityPage() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [mentionCount, setMentionCount] = useState(0);
   const { toasts, push, dismiss } = useToasts();
+  const { run: runUndoable } = useUndoableAction();
 
   // One presign cache for the whole feed: it bounds concurrency and caches URLs
   // so every card thumbnail shares a single cap, mirroring PipelinePage. Cards
@@ -110,12 +114,12 @@ export function ActivityPage() {
   const loadActivity = useCallback(async () => {
     if (workspaceId === null) return;
     setLoading(true);
-    setError(null);
+    setError(false);
     const result = await fetchActivityEntries(supabase, workspaceId, { state });
     setLoading(false);
     setNowMs(Date.now());
     if (!result.ok) {
-      setError(result.error);
+      setError(true);
       return;
     }
     setItems(result.data);
@@ -187,18 +191,16 @@ export function ActivityPage() {
     );
   }, []);
 
-  // Open a thread: mark every entry in the group read (optimistic) and navigate
-  // from the lead entry.
+  // Open a thread: mark only the lead entry read (optimistic) and navigate from
+  // it. The rest stay unread, so the card stays highlighted until they are seen.
   const handleOpenGroup = useCallback(
     (group: ActivityItem[]) => {
       if (workspaceId === null) return;
       const lead = group[0];
       if (lead === undefined) return;
-      for (const entry of group) {
-        if (entry.readAt === null) {
-          markReadLocal(entry.id);
-          void markEntryRead(supabase, entry, workspaceId, newTrace());
-        }
+      if (lead.readAt === null) {
+        markReadLocal(lead.id);
+        void markEntryRead(supabase, lead, workspaceId, newTrace());
       }
       const href = entityHref(lead, workspaceKey);
       if (href !== null) navigate(href);
@@ -238,28 +240,45 @@ export function ActivityPage() {
     [workspaceId, newTrace, markReadLocal, push, loadActivity, loadMentionCount],
   );
 
-  // Workspace-wide: mark every currently-loaded unread, non-snoozed item read,
-  // ignoring the active chip (matches inbox_mark_all_read).
+  // The active chip only: mark its unread, non-snoozed rows read at once, behind
+  // an Undo toast. The writes run when the window closes; Undo puts them back.
+  // The All chip uses the workspace-wide proc (matches inbox_mark_all_read).
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
-    const hasUnread = items.some((item) => item.readAt === null && !isSnoozed(item, nowMs));
-    if (!hasUnread) return;
+    const targets = markAllTargets(items, state, nowMs);
+    if (targets.length === 0) return;
+    const ids = new Set(targets.map((item) => item.id));
     const stamp = new Date().toISOString();
-    setItems((prev) =>
-      prev.map((item) =>
-        item.readAt === null && !isSnoozed(item, nowMs) ? { ...item, readAt: stamp } : item,
-      ),
-    );
-    void markAllEntriesRead(supabase, workspaceId, newTrace()).then((result) => {
-      if (!result.ok) {
-        push('Could not mark all as read');
-        void loadActivity();
-        return;
-      }
-      void loadMentionCount();
-      window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
+    const chip = state;
+    setItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
+    runUndoable({
+      label: MARKED_READ_LABEL,
+      commit: async () => {
+        const traceId = newTrace();
+        const results =
+          chip === 'all'
+            ? [await markAllEntriesRead(supabase, workspaceId, traceId)]
+            : await Promise.all(
+                targets.map((item) => markEntryRead(supabase, item, workspaceId, traceId)),
+              );
+        if (results.some((result) => !result.ok)) throw new Error('mark all read failed');
+        void loadMentionCount();
+        window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
+      },
+      revert: () => {
+        setItems((prev) =>
+          prev.map((item) =>
+            ids.has(item.id) && item.readAt === stamp ? { ...item, readAt: null } : item,
+          ),
+        );
+      },
     });
-  }, [workspaceId, items, nowMs, newTrace, push, loadActivity, loadMentionCount]);
+  }, [workspaceId, items, state, nowMs, newTrace, runUndoable, loadMentionCount]);
+
+  const chipUnread = useMemo(
+    () => markAllTargets(items, state, nowMs).length,
+    [items, state, nowMs],
+  );
 
   // Optimistic snooze: flip the row's snoozed_until locally first, then call the
   // proc; on failure revert and surface the error (matches handleMarkRead).
@@ -291,8 +310,8 @@ export function ActivityPage() {
         title="Activity"
         actions={
           <>
-            {totalUnread > 0 ? (
-              <Button variant="ghost" size="sm" onClick={handleMarkAll}>
+            {chipUnread > 0 ? (
+              <Button variant="ghost" size="lg" onClick={handleMarkAll}>
                 Mark all read
               </Button>
             ) : null}
@@ -313,13 +332,15 @@ export function ActivityPage() {
         mentionCount={mentionCount}
       />
 
-      {error !== null ? (
+      {error ? (
         <div className="px-4 md:px-6 mt-4">
           <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
-            Could not load activity. {error}
+            {ACTIVITY_LOAD_FAILED}
           </div>
           <div className="mt-3">
-            <Button onClick={() => void loadActivity()}>Retry</Button>
+            <Button size="lg" onClick={() => void loadActivity()}>
+              Retry
+            </Button>
           </div>
         </div>
       ) : listLoading ? (

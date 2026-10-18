@@ -84,10 +84,11 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
   const list = (
     <div role="menu" aria-label="Activity options" className="flex flex-col">
       {unread ? item('mark-read', 'Mark as read', <IconCheck size={16} />, pickMarkRead) : null}
+      <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-fg-3">
+        Snooze
+      </p>
       {SNOOZE_OPTIONS.map((option) =>
-        item(option.kind, `Snooze ${option.label}`, <IconClock size={16} />, () =>
-          pickSnooze(option.kind),
-        ),
+        item(option.kind, option.label, <IconClock size={16} />, () => pickSnooze(option.kind)),
       )}
       {snoozed
         ? item('clear', 'Un-snooze', <IconClock size={16} />, () => pickSnooze('clear'))

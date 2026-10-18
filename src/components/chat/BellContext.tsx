@@ -46,6 +46,7 @@ import {
   BELL_REFRESH_EVENT,
   EMPTY_BELL,
   announceRemindersChanged,
+  bellSections,
   bellUnreadCount,
   loadBell,
   markBellEventsRead,
@@ -108,6 +109,8 @@ export interface BellContextValue {
   snooze: (entry: BellEntry, kind: BellSnoozeKind) => Promise<void>;
   done: (entry: BellEntry) => Promise<void>;
   clearSent: () => Promise<void>;
+  /** The header's "Mark all read": every unread row in Now (a failed send stays). */
+  markAllRead?: () => Promise<void>;
   retryFailed: (entry: BellEntry) => Promise<void>;
   editFailed: (entry: BellEntry) => void;
   // Upcoming
@@ -189,6 +192,7 @@ export interface BellActions {
   snooze: (entry: BellEntry, kind: BellSnoozeKind) => Promise<void>;
   done: (entry: BellEntry) => Promise<void>;
   clearSent: () => Promise<void>;
+  markAllRead: () => Promise<void>;
   retryFailed: (entry: BellEntry) => Promise<void>;
   editFailed: (entry: BellEntry) => void;
   setReminderAt: (target: { messageId: string; channelId: string }, at: Date) => Promise<void>;
@@ -274,6 +278,25 @@ export function createBellActions(deps: BellActionDeps): BellActions {
       }
       deps.reload();
     },
+    async markAllRead() {
+      const rows = markAllReadRows(deps.entries(), Date.now());
+      if (rows.length === 0) return;
+      const traceId = deps.newTraceId();
+      const ids = rows.map((e) => e.id);
+      deps.hide(ids);
+      const results = await Promise.all(rows.map((e) => markBellRead(deps.client, e, traceId)));
+      const failedIds = ids.filter((_, i) => results[i]?.ok !== true);
+      if (failedIds.length > 0) {
+        deps.unhide(failedIds);
+        const first = results.find((r) => !r.ok);
+        deps.failed(
+          'mark all read',
+          traceId,
+          first !== undefined && !first.ok ? first.error.message : '',
+        );
+      }
+      deps.reload();
+    },
     async retryFailed(entry) {
       if (entry.scheduledId === null) return;
       // Sent, cancelled or edited elsewhere: the entry is stale, clear it.
@@ -331,6 +354,20 @@ export function createBellActions(deps: BellActionDeps): BellActions {
   };
 }
 
+/** The rows "Mark all read" clears: every unread row in Now except a failed send. Pure. */
+export function markAllReadRows(entries: readonly BellEntry[], nowMs: number): BellEntry[] {
+  const s = bellSections(entries, nowMs);
+  return [...s.reminders, ...s.mentions, ...s.scheduled, ...s.plans, ...s.tasks].filter(
+    (e) => e.eventType !== 'scheduled_failed',
+  );
+}
+
+/**
+ * How many primary providers (the top bar's) are mounted. While one is, it owns
+ * ?bell=1 and any other provider (the chat's, for Remind me) leaves the param alone.
+ */
+let primaryBells = 0;
+
 /** Every person a bell page names: actors, message senders and mentioned ids. Pure. */
 export function bellPeopleIds(data: BellData): string[] {
   const bodies = [
@@ -373,9 +410,19 @@ export function BellProvider(props: {
   openChannelId: string | null;
   messages: readonly ThreadMessage[];
   nameOf: NameOf;
+  /** The top bar's provider: it owns the bell surface and ?bell=1. */
+  primary?: boolean;
   children: ReactNode;
 }): ReactElement {
   const { workspaceId, currentUserId } = props;
+  const primary = props.primary === true;
+  useEffect(() => {
+    if (!primary) return;
+    primaryBells += 1;
+    return () => {
+      primaryBells -= 1;
+    };
+  }, [primary]);
   const toast = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -500,6 +547,7 @@ export function BellProvider(props: {
   // ?bell=1 (the missed-reminders toast): open the bell, then drop the param.
   useEffect(() => {
     if (searchParams.get(BELL_OPEN_PARAM) !== '1') return;
+    if (!primary && primaryBells > 0) return;
     setOpen(true);
     setSearchParams(
       (prev) => {
@@ -509,7 +557,7 @@ export function BellProvider(props: {
       },
       { replace: true },
     );
-  }, [searchParams, setSearchParams, setOpen]);
+  }, [searchParams, setSearchParams, setOpen, primary]);
 
   const channelOf = useCallback(
     (channelId: string | null): ChannelSummary | undefined =>
@@ -848,6 +896,7 @@ export function BellProvider(props: {
       snooze: actions.snooze,
       done: actions.done,
       clearSent: actions.clearSent,
+      markAllRead: actions.markAllRead,
       retryFailed: actions.retryFailed,
       editFailed: actions.editFailed,
       changeReminderTime,
