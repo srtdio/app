@@ -89,7 +89,7 @@ describe('seo routes', () => {
   });
 
   it('titles "/" with the approved line; /demo and legal keep their titles', () => {
-    const T = 'Sorted (free) | Approvals and chat for social media teams';
+    const T = 'Sorted (free) | Work chat for social media teams';
     expect(HOME_TITLE).toBe(T);
     const home = SEO_ROUTES.find((r) => r.path === '/');
     expect(home?.title).toBe(T);
@@ -141,6 +141,9 @@ describe('seo routes', () => {
     expect(app?.offers).toEqual({ '@type': 'Offer', price: '0', priceCurrency: 'INR' });
     expect(homeJsonLd()[0]).not.toHaveProperty('offers');
     expect(homeJsonLd()[1]).not.toHaveProperty('offers');
+    expect(homeJsonLd()[0]?.alternateName).toEqual(['SRTD', 'srtd.io']);
+    expect(homeJsonLd()[1]?.alternateName).toEqual(['SRTD', 'srtd.io']);
+    expect(homeJsonLd()[2]).not.toHaveProperty('alternateName');
     const keys: string[] = [];
     JSON.stringify(homeJsonLd(), (key: string, value: unknown) => {
       keys.push(key);
