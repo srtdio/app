@@ -11,6 +11,7 @@ import {
   cleanupWorkspaces,
   clientFor,
   createAdminClient,
+  createAnonClient,
   generateTraceId,
   loadRlsEnv,
   seedUser,
@@ -19,12 +20,11 @@ import {
   type SeededUser,
   type SeededWorkspace,
 } from '../../packages/test-utils/rls';
-import {
-  createActingClient,
-  writeInboxEntry,
-  type RpcClient,
-} from '../../packages/inbox/src/index';
-import { LOCAL_JWT_SECRET } from './helpers';
+
+/** A structural rpc surface, so the nullable p_scope_key is accepted as given. */
+interface RpcClient {
+  rpc(fn: string, params: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }>;
+}
 
 const INBOX_SUITE = process.env.INBOX_SUITE === '1';
 
@@ -72,31 +72,23 @@ describe.runIf(INBOX_SUITE)('inbox_entry_create grant check', () => {
     expect((res.data as unknown[] | null)?.length ?? 0).toBe(0);
   });
 
-  it('the service role, acting as an active member, CAN call it (control)', async () => {
-    // The privileged path the worker uses: a service_role token carrying an
-    // active member's sub satisfies both the EXECUTE grant and the membership
-    // gate. This must succeed where the authenticated call above failed.
-    const writer = (await createActingClient({
-      url: env.url,
-      serviceKey: env.serviceKey,
-      jwtSecret: LOCAL_JWT_SECRET,
-      actingUserId: owner.id,
-    })) as unknown as RpcClient;
-    const id = await writeInboxEntry(writer, {
-      userId: owner.id,
-      workspaceId: ws.id,
-      eventType: 'comment',
-      entityType: 'workspace',
-      entityId: ws.id,
-      scope: 'everything',
-      scopeKey: null,
-      tier: 'active',
-      payload: {},
-      traceId: generateTraceId(),
-    });
-    expect(typeof id).toBe('string');
-
+  it('the anon role cannot call inbox_entry_create either', async () => {
+    const anon = createAnonClient(env) as unknown as RpcClient;
+    const params: Record<string, unknown> = {
+      p_user_id: owner.id,
+      p_workspace_id: ws.id,
+      p_event_type: 'system',
+      p_entity_type: 'workspace',
+      p_entity_id: ws.id,
+      p_scope: 'everything',
+      p_scope_key: null,
+      p_tier: 'active',
+      p_payload: {},
+      p_trace_id: generateTraceId(),
+    };
+    const { error } = await anon.rpc('inbox_entry_create', params);
+    expect(error).not.toBeNull();
     const res = await asGeneric(admin).from('inbox_entries').select('id').eq('workspace_id', ws.id);
-    expect((res.data as unknown[] | null)?.length ?? 0).toBeGreaterThan(0);
+    expect((res.data as unknown[] | null)?.length ?? 0).toBe(0);
   });
 });

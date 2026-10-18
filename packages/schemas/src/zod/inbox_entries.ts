@@ -8,8 +8,8 @@ import { z } from 'zod';
  *  - this list is IDENTICAL to the live constraint's value set
  *    (tests/comments/event-type-constraint.test.ts reads pg_constraint and
  *    compares), and
- *  - every emitter subset (the inbox-writer worker's WORKER_INBOX_EVENT_TYPES,
- *    the catch-up email's CATCHUP_EVENT_TYPES) is a SUBSET of this list
+ *  - every emitter subset (the catch-up email's CATCHUP_EVENT_TYPES) is a
+ *    SUBSET of this list
  *    (src/lib/inbox/event-types.test.ts).
  *
  * That pair is what stops the drift bug class: an emitter can never ship a value

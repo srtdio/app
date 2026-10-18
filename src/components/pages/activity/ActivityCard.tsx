@@ -7,7 +7,6 @@ import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
 import { IconClock, IconPlan } from '@/components/ui/icons';
-import { useWorkspace } from '@/lib/workspace-context';
 import {
   ACTOR_ROW_EVENTS,
   MENTION_EVENT_TYPE,
@@ -179,15 +178,6 @@ function actorLine(item: ActivityItem, who: string | null): string {
   }
 }
 
-/** The active workspace's brand name for "on behalf of <Brand>", or null (as above). */
-function useWorkspaceBrand(): string | null {
-  try {
-    return useWorkspace().workspaceName ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /** The newest entry of a group, whatever the sort direction (ties keep the first). */
 export function newestEntry(group: readonly ActivityItem[]): ActivityItem | undefined {
   let newest: ActivityItem | undefined;
@@ -240,7 +230,6 @@ export function ActivityCard({
   selfName,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const brand = useWorkspaceBrand();
 
   const lead = group[0];
   if (lead === undefined) return null;
@@ -258,7 +247,7 @@ export function ActivityCard({
   // A deleted post's card is "<who> deleted" over its title: no body line repeats it.
   const showsBody = (hasEntity || assetsDeleted || welcome) && lead.eventType !== 'post_deleted';
   const title =
-    hasEntity || welcome ? cardTitle(lead) : assetsDeleted ? 'Assets' : activityLine(lead, brand);
+    hasEntity || welcome ? cardTitle(lead) : assetsDeleted ? 'Assets' : activityLine(lead);
   const leadTappable = !opensNothing(lead);
   const tag = SCOPE_TAG[lead.scope];
   // The header names the newest entry's actor (never an older row's).
@@ -327,7 +316,7 @@ export function ActivityCard({
 
             {showsBody ? (
               <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2">
-                {cardBodyLine(lead, brand)}
+                {cardBodyLine(lead)}
               </p>
             ) : null}
 
@@ -417,7 +406,7 @@ export function ActivityCard({
                     )}
                   >
                     {/* The author line above already names who: the text never repeats it. */}
-                    {cardBodyLine(entry, brand, { name: entry.actorName === null })}
+                    {cardBodyLine(entry, { name: entry.actorName === null })}
                   </p>
                   <p className="mt-0.5 text-xs text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
                 </div>

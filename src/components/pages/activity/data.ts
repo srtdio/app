@@ -11,7 +11,6 @@ import type { Database, InboxEventTypeValue, Json } from '@srtdio/schemas';
 import { INBOX_EVENT_TYPES } from '@srtdio/schemas';
 import { parseMentions } from '@srtdio/comments';
 import { entityUrlPath } from '@/lib/entityRef';
-import { onBehalfSuffix } from '@/components/pages/pcs/roles';
 import { logger } from '@/lib/logger';
 import {
   mentionNamesIn,
@@ -499,24 +498,15 @@ export interface ActorLineParts {
   name?: boolean;
 }
 
-/** The client's own decisions: only these carry "on behalf of client" (decision 136). */
-const ON_BEHALF_STAGES: ReadonlySet<string> = new Set(['approved', 'rejected', 'parked']);
-
 /**
  * The who-did-what line for an actor row (stage_change, post_deleted,
  * assets_deleted): "<Name> approved <Title>", "<Name> sent <Title> for review",
  * "<Name> deleted <Title>", "<Name> deleted brief.pdf" / "<Name> deleted 3
  * assets". An approval recorded on behalf of a client reads "<Name> approved for
- * <Client>"; otherwise only approve, reject and park by an agency-side actor add
- * "on behalf of client" (old rows with no actor_role: name only); send for
- * review and the deletes are always plain. A missing name reads "Someone". Null
- * for any other event type. Never a KEY-N code.
+ * <Client>"; nothing else names a brand or a client (decision 18 Oct 2026). A
+ * missing name reads "Someone". Null for any other event type. Never a KEY-N code.
  */
-export function actorRowLine(
-  item: ActivityItem,
-  brand: string | null = null,
-  parts: ActorLineParts = {},
-): string | null {
+export function actorRowLine(item: ActivityItem, parts: ActorLineParts = {}): string | null {
   if (!ACTOR_ROW_EVENTS.has(item.eventType)) return null;
   const withTitle = parts.title !== false;
   const lead = parts.name !== false ? `${item.actorName ?? UNKNOWN_ACTOR} ` : '';
@@ -524,11 +514,7 @@ export function actorRowLine(
     if (item.toStage === 'approved' && item.onBehalfOfName != null) {
       return `${lead}approved for ${item.onBehalfOfName}`;
     }
-    const suffix =
-      item.toStage !== null && ON_BEHALF_STAGES.has(item.toStage)
-        ? onBehalfSuffix(item.actorRole, brand)
-        : '';
-    return `${lead}${stagePhrase(item.toStage, withTitle ? postRef(item) : null)}${suffix}`;
+    return `${lead}${stagePhrase(item.toStage, withTitle ? postRef(item) : null)}`;
   }
   if (item.eventType === 'post_deleted') {
     const title = withTitle && item.title !== null && item.title !== '' ? ` ${item.title}` : '';
@@ -547,12 +533,12 @@ export function actorRowLine(
  * name entirely rather than printing a placeholder (actor rows read "Someone"),
  * and a missing title falls back to "a post" / "a brief" by entity type.
  */
-export function activityLine(item: ActivityItem, brand: string | null = null): string {
+export function activityLine(item: ActivityItem): string {
   const who = item.actorName;
   const target = entityTarget(item);
   if (isChatMention(item)) return chatMentionLine(item);
   if (isWelcome(item)) return `${welcomeTitle(item)} ${WELCOME_BODY}`;
-  const actorRow = actorRowLine(item, brand);
+  const actorRow = actorRowLine(item);
   if (actorRow !== null) return actorRow;
   const planLine = planEventLine(item);
   if (planLine !== null) return planLine;
@@ -618,14 +604,10 @@ export function cardTitle(item: ActivityItem): string {
  * (approve, reject, park, review, deletes) are the exception: who did it IS the
  * event, so they read the full who-did-what line.
  */
-export function shortLine(
-  item: ActivityItem,
-  brand: string | null = null,
-  parts: { name?: boolean } = {},
-): string {
+export function shortLine(item: ActivityItem, parts: { name?: boolean } = {}): string {
   if (isWelcome(item)) return WELCOME_BODY;
   // Inside a card the header already carries the post title: never repeat it.
-  const actorRow = actorRowLine(item, brand, { title: false, name: parts.name !== false });
+  const actorRow = actorRowLine(item, { title: false, name: parts.name !== false });
   if (actorRow !== null) return actorRow;
   const planLine = planEventLine(item);
   if (planLine !== null) return planLine;
@@ -675,11 +657,7 @@ function trimBody(text: string): string {
  * an empty/missing body) it falls back to the existing generic short line. Never
  * throws and never renders an empty string for a comment that has text.
  */
-export function cardBodyLine(
-  item: ActivityItem,
-  brand: string | null = null,
-  parts: { name?: boolean } = {},
-): string {
+export function cardBodyLine(item: ActivityItem, parts: { name?: boolean } = {}): string {
   const showsBody =
     item.eventType === 'comment' ||
     item.eventType === 'checkpoints_added' ||
@@ -687,7 +665,7 @@ export function cardBodyLine(
   if (showsBody && item.body !== null && item.body.trim().length > 0) {
     return trimBody(item.body);
   }
-  return shortLine(item, brand, parts);
+  return shortLine(item, parts);
 }
 
 /**

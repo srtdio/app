@@ -25,33 +25,9 @@ const state = vi.hoisted(() => ({
   thumbStorage: null as unknown as InMemoryStorageClient,
   renditions: null as unknown as InMemoryRenditionStore,
   /** Activity rows the (in-memory) store received, and the members it reports. */
-  activityRows: [] as Record<string, unknown>[],
-  activityMembers: [] as string[],
   /** Stands in for every R2StorageClient the worker builds. */
   r2: null as unknown as InMemoryMultipartStorage,
 }));
-
-// The Activity store writes through the service-role client; swap it for an
-// in-memory one so no test reaches the network.
-vi.mock('./asset-upload-activity', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./asset-upload-activity')>();
-  return {
-    ...actual,
-    createSupabaseActivityStore: () => ({
-      activeMemberIds: () => Promise.resolve(state.activityMembers),
-      batchRecorded: (_ws: string, batchId: string) =>
-        Promise.resolve(
-          state.activityRows.some(
-            (row) => (row.payload as { batch_id: string }).batch_id === batchId,
-          ),
-        ),
-      insertEntries: (rows: Record<string, unknown>[]) => {
-        state.activityRows.push(...rows);
-        return Promise.resolve();
-      },
-    }),
-  };
-});
 
 // GET /usage and the storage cap: the service-role store (workspace_bytes_used
 // RPC) is a per-test stand-in; the threshold, cap and exemption logic stays real.
@@ -213,8 +189,6 @@ beforeEach(() => {
   state.realPipeline = false;
   state.thumbStorage = new InMemoryStorageClient();
   state.renditions = new InMemoryRenditionStore();
-  state.activityRows = [];
-  state.activityMembers = [];
   state.r2 = new InMemoryMultipartStorage();
   usageState.bytes = 0;
   usageState.exempt = false;
@@ -1407,66 +1381,6 @@ describe('asset-upload thumbnail part', () => {
     expect(body).not.toHaveProperty('thumbnail');
     expect(body).toHaveProperty('asset');
     expect(state.renditions.rows).toHaveLength(0);
-  });
-});
-
-describe('upload Activity (asset_uploaded per batch)', () => {
-  const BATCH = '99999999-9999-7999-8999-999999999999';
-
-  it('writes one ambient entry per other active member, actor and payload set', async () => {
-    state.members.add(`${USER}:${WORKSPACE}`);
-    state.activityMembers = [USER, OTHER_USER, '12121212-1212-7212-8212-121212121212'];
-    const token = await mintToken(USER);
-    const res = await worker.fetch(
-      uploadRequest(token, { workspace_id: WORKSPACE, batch_id: BATCH, batch_size: '3' }),
-      env,
-    );
-    expect(res.status).toBe(201);
-    expect(state.activityRows).toHaveLength(2);
-    expect(state.activityRows.map((row) => row.user_id)).not.toContain(USER);
-    expect(state.activityRows[0]).toMatchObject({
-      workspace_id: WORKSPACE,
-      event_type: 'asset_uploaded',
-      tier: 'ambient',
-      actor_user_id: USER,
-      payload: { batch_id: BATCH, file_count: 3, filename: 'doc.pdf', asset_id: 'aaaa' },
-    });
-  });
-
-  it('writes nothing more for the second file of the same batch', async () => {
-    state.members.add(`${USER}:${WORKSPACE}`);
-    state.activityMembers = [USER, OTHER_USER];
-    const token = await mintToken(USER);
-    for (let i = 0; i < 2; i += 1) {
-      const res = await worker.fetch(
-        uploadRequest(token, { workspace_id: WORKSPACE, batch_id: BATCH, batch_size: '2' }),
-        env,
-      );
-      expect(res.status).toBe(201);
-    }
-    expect(state.activityRows).toHaveLength(1);
-  });
-
-  it('writes no entry for a chat upload', async () => {
-    state.members.add(`${USER}:${WORKSPACE}`);
-    state.activityMembers = [USER, OTHER_USER];
-    const token = await mintToken(USER);
-    const res = await worker.fetch(
-      uploadRequest(token, { workspace_id: WORKSPACE, origin: 'chat' }),
-      env,
-    );
-    expect(res.status).toBe(201);
-    expect(state.activityRows).toHaveLength(0);
-  });
-
-  it('treats an upload without a batch as a batch of one', async () => {
-    state.members.add(`${USER}:${WORKSPACE}`);
-    state.activityMembers = [USER, OTHER_USER];
-    const token = await mintToken(USER);
-    await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
-    await worker.fetch(uploadRequest(token, { workspace_id: WORKSPACE }), env);
-    expect(state.activityRows).toHaveLength(2);
-    expect(state.activityRows[0]).toMatchObject({ payload: { file_count: 1 } });
   });
 });
 

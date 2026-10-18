@@ -379,7 +379,7 @@ describe('A3 @all in the Activity preview', () => {
 });
 
 describe('ActivityCard actor rows', () => {
-  it('stage_change: "<Name> approved <title> on behalf of the approvers" with the avatar', () => {
+  it('stage_change: "<Name> approved" with the avatar, no brand suffix', () => {
     const html = renderCard([
       item({
         id: 'a',
@@ -391,7 +391,8 @@ describe('ActivityCard actor rows', () => {
         actorRole: 'agency',
       }),
     ]);
-    expect(html).toContain('Chitra approved on behalf of the approvers');
+    expect(html).toContain('Chitra approved');
+    expect(html).not.toContain('on behalf of');
     expect(html).not.toContain('Moved to');
     expect(html).toContain('role="button"');
   });

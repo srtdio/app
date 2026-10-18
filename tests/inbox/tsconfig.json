@@ -14,7 +14,6 @@
   "include": [
     "../../tests/inbox/**/*.ts",
     "../../packages/inbox/src/**/*.ts",
-    "../../workers/inbox-writer/src/**/*.ts",
     "../../packages/test-utils/**/*.ts"
   ]
 }

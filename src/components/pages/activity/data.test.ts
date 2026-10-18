@@ -993,7 +993,7 @@ describe('fetchActivityEntries enrichment', () => {
       const row = res.data[0]!;
       expect(row.actorName).toBe('Chitra');
       expect(row.actorAvatarUrl).toBe('https://a/c.png');
-      expect(activityLine(row)).toBe('Chitra approved Q3 Launch on behalf of the approvers');
+      expect(activityLine(row)).toBe('Chitra approved Q3 Launch');
     }
   });
 
@@ -1441,16 +1441,14 @@ describe('actor rows: who did what (approve, reject, park, review, deletes)', ()
     );
   });
 
-  it('an agency-side approve, reject or park adds "on behalf of the approvers"; never a workspace name', () => {
-    expect(activityLine(stage('parked', { actorRole: 'agency' }))).toBe(
-      'Chitra parked Q3 Launch on behalf of the approvers',
-    );
+  it('an agency-side approve, reject or park names no brand or client (decision 18 Oct 2026)', () => {
+    expect(activityLine(stage('parked', { actorRole: 'agency' }))).toBe('Chitra parked Q3 Launch');
     for (const role of ['agency', 'admin', 'owner']) {
       const line = activityLine(stage('approved', { actorRole: role }));
-      expect(line).toBe('Chitra approved Q3 Launch on behalf of the approvers');
+      expect(line).toBe('Chitra approved Q3 Launch');
     }
     expect(activityLine(stage('rejected', { actorRole: 'agency' }))).toBe(
-      'Chitra rejected Q3 Launch on behalf of the approvers',
+      'Chitra rejected Q3 Launch',
     );
   });
 
@@ -1474,7 +1472,7 @@ describe('actor rows: who did what (approve, reject, park, review, deletes)', ()
     expect(activityLine(del)).toBe('Chitra deleted Diwali teaser');
     // Inside the card the header carries the title: the line never repeats it.
     expect(cardBodyLine(del)).toBe('Chitra deleted');
-    expect(cardBodyLine(del, null, { name: false })).toBe('deleted');
+    expect(cardBodyLine(del, { name: false })).toBe('deleted');
     expect(entityHref(del, 'gbl')).toBeNull();
   });
 
@@ -1868,14 +1866,14 @@ describe('send for review wording in Activity lines', () => {
   });
   it('an expanded row drops the name (its author line carries it)', () => {
     const it2 = item({ ...base, eventType: 'stage_change', toStage: 'approved' });
-    expect(cardBodyLine(it2, null, { name: false })).toBe('approved');
+    expect(cardBodyLine(it2, { name: false })).toBe('approved');
     const behalf = item({
       ...base,
       eventType: 'stage_change',
       toStage: 'approved',
       onBehalfOfName: 'Kiran',
     });
-    expect(cardBodyLine(behalf, null, { name: false })).toBe('approved for Kiran');
+    expect(cardBodyLine(behalf, { name: false })).toBe('approved for Kiran');
   });
 });
 
