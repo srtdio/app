@@ -16,7 +16,10 @@ import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { relativeLong, relativeShort } from '@/lib/relative-time';
+import { relativeLong, relativeShort, shortDate } from '@/lib/relative-time';
+import { useUndoableAction } from '@/lib/use-undoable-action';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { friendlyCommentError } from '@/components/comments/comment-errors';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import { supabase } from '@/lib/supabase';
@@ -634,11 +637,45 @@ export function pointActions(
   return base;
 }
 
-/** The "edited · <when>" marker for a ledger point, or null when it was never
- *  edited. Reuses relativeLong (the same helper the card uses for created_at), so no
- *  date library is added. */
+/** The clock time of an edit: "2:14 pm" on the same day, else the calendar date
+ *  ("Jun 11"). Unparseable input yields '' so nothing raw is shown. */
+export function editedTime(ts: string, now: Date): string {
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return '';
+  if (date.toDateString() !== now.toDateString()) return shortDate(ts, now);
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours % 12 === 0 ? 12 : hours % 12}:${minutes} ${hours < 12 ? 'am' : 'pm'}`;
+}
+
+/** The "edited <time>" marker shared by comments and ledger points, or null when
+ *  it was never edited. */
 export function pointEditedMarker(editedAt: string | null, now: Date): string | null {
-  return editedAt === null ? null : `edited · ${relativeLong(editedAt, now)}`;
+  return editedAt === null ? null : `edited ${editedTime(editedAt, now)}`.trimEnd();
+}
+
+/** Reply drafts per thread, kept for as long as the page is open (they survive
+ *  the panel remounting, never a reload). Keyed by entity + thread root. */
+const replyDrafts = new Map<string, string>();
+
+/** True when a reply draft holds text the person typed beyond its seed. */
+export function replyHasTypedText(draft: string | undefined, seed: string): boolean {
+  if (draft === undefined) return false;
+  const typed = draft.trim();
+  return typed !== '' && typed !== seed.trim();
+}
+
+/** Show the optimistic delete: a hidden id reads as soft-deleted, so a root with
+ *  live replies becomes a tombstone and everything else drops out. */
+export function applyHidden(
+  rows: readonly CommentRow[],
+  hidden: ReadonlySet<string>,
+  now: string,
+): CommentRow[] {
+  if (hidden.size === 0) return [...rows];
+  return rows.map((row) =>
+    hidden.has(row.id) && row.deleted_at === null ? { ...row, deleted_at: now } : row,
+  );
 }
 
 /** The plain text copied to the clipboard: the stored body with each @[uuid]
@@ -873,10 +910,17 @@ export function Comments({
   // away; merged with the paginated `comments` below (de-duped, newest-first).
   const [checkpoints, setCheckpoints] = useState<CommentRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // An older page failed: the loaded list stays, a Retry sits at the bottom.
+  const [moreError, setMoreError] = useState(false);
+  // Deleted comments/points hidden while their Undo window runs.
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  // The thread whose reply composer is asking "Discard reply?".
+  const [discardFor, setDiscardFor] = useState<string | null>(null);
+  const undoable = useUndoableAction();
 
   const [profiles, setProfiles] = useState<Map<string, CommentProfile>>(new Map());
   const [attachmentMime, setAttachmentMime] = useState<Map<string, string>>(new Map());
@@ -942,9 +986,10 @@ export function Comments({
       const stale = (): boolean => !mounted.current || (seq !== null && seq !== page0Seq.current);
       if (nextPage === 0) {
         setLoading(true);
-        setLoadError(null);
+        setLoadError(false);
       } else {
         setLoadingMore(true);
+        setMoreError(false);
       }
       const result = await listComments(supabase, {
         workspace_id: workspaceId,
@@ -956,10 +1001,10 @@ export function Comments({
       if (!result.ok) {
         if (nextPage === 0) {
           setLoading(false);
-          setLoadError(result.error.message);
+          setLoadError(true);
         } else {
           setLoadingMore(false);
-          setLoadError(result.error.message);
+          setMoreError(true);
         }
         return;
       }
@@ -1124,8 +1169,9 @@ export function Comments({
         traceId: newTrace(),
       }),
     );
-    if (!result.ok) return { ok: false, error: result.error.message };
+    if (!result.ok) return { ok: false, error: friendlyCommentError(result.error) };
     const parentId = options.parentCommentId;
+    if (parentId !== null) replyDrafts.delete(draftKey(parentId));
     // The guide's reply landed: it moves on even if a phone lost the tap.
     if (parentId !== null && parentId === guideReplyCommentId) {
       dispatchInductionDid(INDUCTION_KEYS.postReplyPost);
@@ -1160,7 +1206,7 @@ export function Comments({
       points,
       traceId: newTrace(),
     });
-    if (!result.ok) return { ok: false, error: result.error.message };
+    if (!result.ok) return { ok: false, error: friendlyCommentError(result.error) };
     await loadPage(0);
     return { ok: true };
   }
@@ -1188,7 +1234,7 @@ export function Comments({
         id: commentId,
         message: isPoint
           ? friendlyPointFreezeError(result.error, target, 'edit')
-          : result.error.message,
+          : friendlyCommentError(result.error),
       });
       return;
     }
@@ -1197,21 +1243,39 @@ export function Comments({
     await loadPage(0);
   }
 
-  async function handleDelete(commentId: string): Promise<void> {
+  // Delete hides the row at once behind an Undo toast. The soft-delete RPC runs
+  // only once the window closes; Undo shows the row again and sends nothing.
+  function handleDelete(commentId: string): void {
     setRowError(null);
     const target = merged.find((c) => c.id === commentId) ?? null;
     const isPoint = target !== null && target.ledger_seq !== null;
-    const result = await runDeleteComment(supabase, commentId, newTrace());
-    if (!result.ok) {
-      setRowError({
-        id: commentId,
-        message: isPoint
-          ? friendlyPointFreezeError(result.error, target, 'delete')
-          : result.error.message,
+    const unhide = (): void =>
+      setHiddenIds((prev) => {
+        if (!prev.has(commentId)) return prev;
+        const next = new Set(prev);
+        next.delete(commentId);
+        return next;
       });
-      return;
-    }
-    await loadPage(0);
+    setHiddenIds((prev) => new Set(prev).add(commentId));
+    undoable.run({
+      label: isPoint ? 'Point deleted' : 'Comment deleted',
+      commit: async () => {
+        const result = await runDeleteComment(supabase, commentId, newTrace());
+        if (!result.ok) {
+          unhide();
+          setRowError({
+            id: commentId,
+            message: isPoint
+              ? friendlyPointFreezeError(result.error, target, 'delete')
+              : friendlyCommentError(result.error),
+          });
+          return;
+        }
+        await loadPage(0);
+        unhide();
+      },
+      revert: unhide,
+    });
   }
 
   // Toggle the thread-level resolved state on a root comment. Open to any active
@@ -1223,7 +1287,7 @@ export function Comments({
     const result = await resolveComment(supabase, { commentId: comment.id, resolved }, newTrace());
     setResolvingId((current) => (current === comment.id ? null : current));
     if (!result.ok) {
-      setRowError({ id: comment.id, message: result.error.message });
+      setRowError({ id: comment.id, message: friendlyCommentError(result.error) });
       return;
     }
     await loadPage(0);
@@ -1236,6 +1300,53 @@ export function Comments({
     window.setTimeout(() => {
       setCopiedId((current) => (current === comment.id ? null : current));
     }, 2000);
+  }
+
+  function draftKey(commentId: string): string {
+    return `${entityType}:${entityId}:${commentId}`;
+  }
+
+  function replySeedFor(comment: CommentRow): string {
+    return checkpointReplySeed(pushbackSeeds.has(comment.id), comment, currentUserId, candidates);
+  }
+
+  // Reply / Cancel. Cancelling with typed text asks "Discard reply?" first; an
+  // untouched (or seed-only) draft just closes.
+  function onReplyButton(comment: CommentRow): void {
+    const id = comment.id;
+    if (
+      replyOpen.has(id) &&
+      replyHasTypedText(replyDrafts.get(draftKey(id)), replySeedFor(comment))
+    ) {
+      setDiscardFor(id);
+      return;
+    }
+    if (replyOpen.has(id)) replyDrafts.delete(draftKey(id));
+    toggleReply(id);
+  }
+
+  function renderReplyComposer(comment: CommentRow): ReactNode {
+    const key = draftKey(comment.id);
+    return (
+      <div className="mt-3 border-l border-border pl-4">
+        <CommentComposer
+          onSubmit={(body, options) =>
+            handleCreate(body, { ...options, parentCommentId: comment.id })
+          }
+          members={candidates}
+          canAttach={canAttach}
+          uploadFile={uploadFile}
+          placeholder="Write a reply"
+          submitLabel="Reply"
+          {...(comment.id === guideReplyCommentId
+            ? { submitAnchor: INDUCTION_KEYS.postReplyPost }
+            : {})}
+          autoFocus
+          initialBody={replyDrafts.get(key) ?? replySeedFor(comment)}
+          onBodyChange={(body) => replyDrafts.set(key, body)}
+        />
+      </div>
+    );
   }
 
   function toggleReply(id: string): void {
@@ -1334,7 +1445,11 @@ export function Comments({
     setRowError(null);
   }
 
-  const threads = buildThreads(merged);
+  const displayed = useMemo(
+    () => applyHidden(merged, hiddenIds, new Date().toISOString()),
+    [merged, hiddenIds],
+  );
+  const threads = buildThreads(displayed);
   const groups = groupThreads(threads);
   const isClient = viewerIsClient === true;
 
@@ -1402,7 +1517,9 @@ export function Comments({
           />
           <span className="text-xs font-medium text-fg-2">{authorName}</span>
           {comment.edited_at !== null ? (
-            <span className="text-[11px] text-fg-3">edited</span>
+            <span className="text-[11px] text-fg-3">
+              {pointEditedMarker(comment.edited_at, new Date())}
+            </span>
           ) : null}
           <span className="ml-auto shrink-0 text-xs text-fg-3 tabular-nums">
             {relativeLong(comment.created_at, new Date())}
@@ -1454,7 +1571,7 @@ export function Comments({
                     className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     onClick={() => {
                       closeMenu();
-                      void handleDelete(comment.id);
+                      handleDelete(comment.id);
                     }}
                   >
                     Delete
@@ -1541,7 +1658,7 @@ export function Comments({
               data-induction={
                 comment.id === guideReplyCommentId ? INDUCTION_KEYS.postCommentReply : undefined
               }
-              onClick={() => toggleReply(comment.id)}
+              onClick={() => onReplyButton(comment)}
             >
               {isReplyOpen ? 'Cancel' : 'Reply'}
             </Button>
@@ -1562,30 +1679,7 @@ export function Comments({
 
         {renderReplyList(replies, (reply) => renderCommentCard(reply, true))}
 
-        {isReplyOpen ? (
-          <div className="mt-3 border-l border-border pl-4">
-            <CommentComposer
-              onSubmit={(body, options) =>
-                handleCreate(body, { ...options, parentCommentId: comment.id })
-              }
-              members={candidates}
-              canAttach={canAttach}
-              uploadFile={uploadFile}
-              placeholder="Write a reply"
-              submitLabel="Reply"
-              {...(comment.id === guideReplyCommentId
-                ? { submitAnchor: INDUCTION_KEYS.postReplyPost }
-                : {})}
-              autoFocus
-              initialBody={checkpointReplySeed(
-                pushbackSeeds.has(comment.id),
-                comment,
-                currentUserId,
-                candidates,
-              )}
-            />
-          </div>
-        ) : null}
+        {isReplyOpen ? renderReplyComposer(comment) : null}
       </>
     );
   }
@@ -1800,7 +1894,7 @@ export function Comments({
                               className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                               onClick={() => {
                                 setMenuOpenId(null);
-                                void handleDelete(comment.id);
+                                handleDelete(comment.id);
                               }}
                             >
                               Delete
@@ -1835,7 +1929,7 @@ export function Comments({
                             ? INDUCTION_KEYS.postCommentReply
                             : undefined
                         }
-                        onClick={() => toggleReply(comment.id)}
+                        onClick={() => onReplyButton(comment)}
                       >
                         {replyOpen.has(comment.id) ? 'Cancel' : 'Reply'}
                       </Button>
@@ -1964,30 +2058,7 @@ export function Comments({
 
                   <div className="pl-7">
                     {renderReplyList(replies, (reply) => renderCommentCard(reply, true))}
-                    {!tombstone && replyOpen.has(comment.id) ? (
-                      <div className="mt-3 border-l border-border pl-4">
-                        <CommentComposer
-                          onSubmit={(body, options) =>
-                            handleCreate(body, { ...options, parentCommentId: comment.id })
-                          }
-                          members={candidates}
-                          canAttach={canAttach}
-                          uploadFile={uploadFile}
-                          placeholder="Write a reply"
-                          submitLabel="Reply"
-                          {...(comment.id === guideReplyCommentId
-                            ? { submitAnchor: INDUCTION_KEYS.postReplyPost }
-                            : {})}
-                          autoFocus
-                          initialBody={checkpointReplySeed(
-                            pushbackSeeds.has(comment.id),
-                            comment,
-                            currentUserId,
-                            candidates,
-                          )}
-                        />
-                      </div>
-                    ) : null}
+                    {!tombstone && replyOpen.has(comment.id) ? renderReplyComposer(comment) : null}
                   </div>
                 </div>
               </li>
@@ -2013,9 +2084,20 @@ export function Comments({
 
       {loading ? (
         <p className="text-sm text-fg-3">Loading comments</p>
-      ) : loadError !== null ? (
-        <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
-          Could not load comments. {loadError}
+      ) : loadError ? (
+        <div
+          role="alert"
+          className="flex items-center gap-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+        >
+          <span>Couldn&apos;t load comments.</span>
+          <Button
+            size="lg"
+            variant="ghost"
+            className="ml-auto min-w-[44px]"
+            onClick={() => void loadPage(0)}
+          >
+            Retry
+          </Button>
         </div>
       ) : threads.length === 0 ? (
         <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
@@ -2029,7 +2111,25 @@ export function Comments({
         </ul>
       )}
 
-      {!loading && loadError === null && hasMore ? (
+      {!loading && !loadError && moreError ? (
+        <div
+          role="alert"
+          className="flex items-center gap-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+        >
+          <span>Couldn&apos;t load older comments.</span>
+          <Button
+            size="lg"
+            variant="ghost"
+            className="ml-auto min-w-[44px]"
+            disabled={loadingMore}
+            onClick={() => void loadPage(page + 1)}
+          >
+            {loadingMore ? 'Loading' : 'Retry'}
+          </Button>
+        </div>
+      ) : null}
+
+      {!loading && !loadError && !moreError && hasMore ? (
         <Button
           size="lg"
           className="self-start"
@@ -2038,6 +2138,23 @@ export function Comments({
         >
           {loadingMore ? 'Loading' : 'Load more'}
         </Button>
+      ) : null}
+
+      {discardFor !== null ? (
+        <ConfirmDialog
+          title="Discard reply?"
+          message="Your reply has not been sent."
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          destructive
+          onConfirm={() => {
+            const id = discardFor;
+            setDiscardFor(null);
+            replyDrafts.delete(draftKey(id));
+            toggleReply(id);
+          }}
+          onCancel={() => setDiscardFor(null)}
+        />
       ) : null}
 
       {lightbox !== null ? (

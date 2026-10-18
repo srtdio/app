@@ -7,6 +7,7 @@ import {
   buildPoints,
   counterTone,
   countWords,
+  filledCount,
   sendLabel,
   slotsSendable,
 } from '@/components/comments/SlotComposer';
@@ -76,9 +77,14 @@ describe('slotsSendable (every slot 1..50 words)', () => {
     expect(slotsSendable(['a point', words(50)])).toBe(true);
   });
 
-  it('blocks when any slot is empty', () => {
-    expect(slotsSendable(['fine', ''])).toBe(false);
-    expect(slotsSendable(['fine', '   '])).toBe(false);
+  it('ignores empty slots: sends when at least one slot has text', () => {
+    expect(slotsSendable(['fine', ''])).toBe(true);
+    expect(slotsSendable(['fine', '   ', 'also'])).toBe(true);
+    expect(filledCount(['fine', '   ', 'also'])).toBe(2);
+  });
+
+  it('blocks when every slot is empty', () => {
+    expect(slotsSendable(['', '   '])).toBe(false);
   });
 
   it('blocks when any slot is over 50 words', () => {
@@ -102,6 +108,15 @@ describe('buildPoints (p_points shape)', () => {
       { body: 'second' },
       { body: 'third', attachment_version_ids: ['v3'] },
     ]);
+  });
+
+  it('drops empty slots from p_points (client adds 3, leaves one empty)', () => {
+    const points = buildPoints([
+      { body: 'first', attachmentVersionIds: [] },
+      { body: '  ', attachmentVersionIds: [] },
+      { body: 'third', attachmentVersionIds: [] },
+    ]);
+    expect(points).toEqual([{ body: 'first' }, { body: 'third' }]);
   });
 
   it('omits the attachment key entirely for a slot with none', () => {

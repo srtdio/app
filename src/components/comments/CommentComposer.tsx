@@ -51,6 +51,9 @@ interface CommentComposerProps {
   initialBody?: string;
   /** The guide's data-induction key for the submit button, where its hand can sit. */
   submitAnchor?: string;
+  /** Every draft change (token form, the same shape initialBody takes), so a
+   *  parent can keep the draft across close/reopen. */
+  onBodyChange?: (body: string) => void;
 }
 
 export type PendingStatus =
@@ -87,6 +90,7 @@ export function CommentComposer({
   autoFocus = false,
   initialBody,
   submitAnchor,
+  onBodyChange,
 }: CommentComposerProps): ReactElement {
   const [body, setBody] = useState('');
   // The MentionInput is contentEditable and uncontrolled; clearing the draft
@@ -180,7 +184,10 @@ export function CommentComposer({
         members={members}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        onChange={setBody}
+        onChange={(next) => {
+          setBody(next);
+          onBodyChange?.(next);
+        }}
         initialBody={initialBody}
       />
 

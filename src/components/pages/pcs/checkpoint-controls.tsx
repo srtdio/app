@@ -7,6 +7,7 @@ import type { ReactElement } from 'react';
 import { IconCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { CommentResolveArgs, DomainError } from '@srtdio/rpc';
+import { NOT_FOUND_COPY } from '@/components/comments/comment-errors';
 
 /** The proc trims and caps the note at 500 chars; the input mirrors the cap. */
 export const MAX_NOTE_CHARS = 500;
@@ -79,6 +80,7 @@ export function friendlyPointFreezeError(
       ? 'This point is confirmed. It can no longer be deleted.'
       : 'This point is confirmed. It can no longer be edited.';
   }
+  if (/not[_ ]found/i.test(error.message)) return NOT_FOUND_COPY;
   switch (error.code) {
     case 'invalid_payload':
       return 'Points are limited to 50 words.';
