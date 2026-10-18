@@ -174,6 +174,8 @@ export interface BarCopy {
   legend: string;
   back: string;
   later: string;
+  /** The pause's button: "Next". */
+  next: string;
   aria: { bar: string; progress: string; back: string };
 }
 
@@ -182,6 +184,8 @@ export interface BarActions {
   onBack: (() => void) | undefined;
   /** undefined hides the optional step's secondary chip. */
   onLater: (() => void) | undefined;
+  /** A pause before the next screen: Next takes them on. undefined hides it. */
+  onNext?: (() => void) | undefined;
 }
 
 export interface DockAt {
@@ -273,6 +277,16 @@ function PhaseRow({ copy }: { copy: BarCopy }): ReactElement {
 function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): ReactElement {
   return (
     <div className="flex shrink-0 items-center gap-1">
+      {actions.onNext !== undefined ? (
+        <button
+          type="button"
+          data-induction-next=""
+          onClick={actions.onNext}
+          className={`${CHIP} ${AMBER_BG} ${AMBER_INK} px-4`}
+        >
+          {copy.next}
+        </button>
+      ) : null}
       {actions.onLater !== undefined ? (
         <button type="button" onClick={actions.onLater} className={`${CHIP} bg-panel-2 text-fg`}>
           {copy.later}

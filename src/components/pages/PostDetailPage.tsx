@@ -824,6 +824,10 @@ export function PostDetailPage({
   // surface an error and refresh the list, with no retry loop.
   async function submitAnnotation(body: string): Promise<void> {
     if (composer === null || detail === null || currentVersionId === null) return;
+    // The sheet closes at once and the comment posts behind it (a line under the
+    // caption says so): Post never holds the person on a "Posting" button.
+    const span = composer;
+    setComposer(null);
     setAnnotating(true);
     setAnnotateError(null);
     const traceId = newTrace();
@@ -840,8 +844,8 @@ export function PostDetailPage({
       postId: detail.post.id,
       postVersionId: currentVersionId,
       commentId: commentResult.data,
-      captionStart: composer.start,
-      captionEnd: composer.end,
+      captionStart: span.start,
+      captionEnd: span.end,
       traceId,
     });
     if (!annotationResult.ok) {
@@ -855,12 +859,11 @@ export function PostDetailPage({
       return;
     }
 
-    setAnnotating(false);
-    setComposer(null);
     // The comment is on the post: the guide moves on even if a phone lost the tap.
     dispatchInductionDid(INDUCTION_KEYS.postCommentPost);
     await load(true);
     setCommentsRefresh((n) => n + 1);
+    setAnnotating(false);
     dispatchInductionRefresh();
   }
 
@@ -1570,6 +1573,11 @@ export function PostDetailPage({
               ) : (
                 <p className="mt-3 text-sm text-fg-3">No caption yet.</p>
               )}
+              {annotating ? (
+                <p aria-live="polite" className="mt-3 text-sm text-fg-3">
+                  Posting your comment
+                </p>
+              ) : null}
               {annotateError !== null ? (
                 <div
                   role="alert"

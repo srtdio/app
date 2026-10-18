@@ -210,6 +210,9 @@ test('invited creator: welcome, name, role, then the first post and the look-aro
   await expect.poll(() => network.world.tables.comments?.length ?? 0).toBe(1);
 
   // Talk: the default group, the transcript step (skipped: no Transcribe link in the harness), then Activity.
+  // The comment stays in view: the guide waits on the post for Next.
+  await expectGuideId(page, 'i_group_open');
+  await page.locator('[data-induction-next]').click();
   await check('i_group_open');
   await tapControl(page, step('i_group_open'), narrow);
   // The harness has no transcribe Worker, so the voice note offers no

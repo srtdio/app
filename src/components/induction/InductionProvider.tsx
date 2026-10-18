@@ -43,6 +43,7 @@ import {
   NO_SAMPLE,
   readGuideFacts,
   seedSampleWeek,
+  forgetKnownGroups,
   type GuideFactsRead,
   type SampleWeek,
 } from './induction-data';
@@ -204,6 +205,8 @@ function useSampleSeed(input: { on: boolean; workspaceId: string | null }): void
     void seedSampleWeek(supabase, { workspaceId, traceId: newTraceId() }).then((seeded) => {
       document.documentElement.removeAttribute(SEEDING_ATTR);
       if (!seeded) return;
+      // The week renames the default group and gives it a picture: read it again.
+      forgetKnownGroups();
       dispatchInductionRefresh();
       // The pipeline, briefs, library, activity and chat list fetched before the
       // week landed: they re-read now, so the person sees it at once.
@@ -330,6 +333,7 @@ function buildValue(input: {
       const ws = env.workspaceId;
       if (ws !== null && read.sample.seeded) {
         void clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() }).then(() => {
+          forgetKnownGroups();
           dispatchInductionRefresh();
           dispatchWorkspaceDataChanged();
         });
@@ -341,6 +345,8 @@ function buildValue(input: {
       const ws = env.workspaceId;
       if (ws === null) return;
       await clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() });
+      // The group takes back its own name and picture.
+      forgetKnownGroups();
       dispatchInductionRefresh();
       dispatchWorkspaceDataChanged();
     },

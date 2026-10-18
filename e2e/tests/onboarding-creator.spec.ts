@@ -177,9 +177,10 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   // Step 4: the approver invite (a gate: leaving brings the person back), then
   // the optional team invite.
   await expect(page).toHaveURL(/\/settings\?panel=members/, { timeout: 15_000 });
-  // No address yet: Send invite cannot be used, so nothing dims.
+  // No address yet: Send invite cannot be used, so the email field is boxed.
   await expectGuideId(page, 'c_approver_invite');
-  await expect(page.locator('[data-induction-box]')).toHaveCount(0);
+  await expect(page.locator('[data-induction-box]')).toHaveCount(1);
+  await expect(page.locator('[data-induction-label]')).toHaveText("Type your approver's email");
   // A gate offers no way round it: no secondary chip, and no Skip.
   const later = step('c_team_invite').laterLabel ?? '';
   const bar = page.locator('[data-induction-bar]');
@@ -223,6 +224,11 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   await check('c_comment_post');
   await tapControl(page, step('c_comment_post'));
 
+  // The comment stays in view: the guide waits on the post for Next.
+  await expectGuideId(page, 'c_group_open');
+  await expect(page).toHaveURL(/\/posts\//);
+  await expect(page.locator('[data-induction-bar]')).toContainText('Your comment is on the post.');
+  await page.locator('[data-induction-next]').click();
   await check('c_group_open');
   await tapControl(page, step('c_group_open'), narrow);
   // The harness has no transcribe Worker, so the voice note offers no
