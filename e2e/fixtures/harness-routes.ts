@@ -678,11 +678,12 @@ const ONBOARDING_RPC: Record<string, RpcHandler> = {
 };
 
 // The default capability seed per role (workspace_role_permissions), as far as
-// the app reads it: brief.create is the client's, settings are owner/admin's.
+// the app reads it: brief.create is the client's, settings are owner/admin's,
+// post.create is the agency side's (owner, admin, agency).
 const ROLE_CAPABILITIES: Record<string, readonly string[]> = {
-  owner: ['workspace.manage_settings'],
-  admin: ['workspace.manage_settings'],
-  agency: [],
+  owner: ['workspace.manage_settings', 'post.create'],
+  admin: ['workspace.manage_settings', 'post.create'],
+  agency: ['post.create'],
   client: ['brief.create'],
 };
 
