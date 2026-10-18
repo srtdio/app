@@ -1,11 +1,11 @@
 // Test site only: a small "Start fresh" pill on every screen (sign-in and
-// sign-up carry their own button). One tap signs out, makes a brand-new test
-// account and reloads at the start of onboarding, so a run can restart from
-// any point. Renders nothing anywhere else.
+// sign-up carry their own button). One tap signs out and opens sign-up, the
+// first page, so a run can restart from any point. Renders nothing elsewhere.
 
 import { useState, type ReactElement } from 'react';
 import { useLocation } from 'react-router-dom';
-import { isTestSite, startTestSession } from '@/lib/test-site';
+import { supabase } from '@/lib/supabase';
+import { isTestSite } from '@/lib/test-site';
 
 const OWN_BUTTON = ['/signin', '/signup', '/test/'];
 
@@ -18,13 +18,10 @@ export function TestSiteAnywhereStart(): ReactElement | null {
 
   async function start(): Promise<void> {
     setBusy(true);
-    try {
-      await startTestSession(null);
-      // A full load, so no screen keeps the previous account's state.
-      window.location.assign('/chat');
-    } catch {
-      setBusy(false);
-    }
+    // Signs out and opens sign-up, where Start fresh makes the new account. A
+    // full load, so no screen keeps the previous account's state.
+    await supabase.auth.signOut({ scope: 'local' });
+    window.location.assign('/signup');
   }
 
   return (

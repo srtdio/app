@@ -62,7 +62,7 @@ Induction procs (20261015035000_induction_progress.sql; EXECUTE to authenticated
 Test-site quick testers (20261018010000_test_site_quick_testers.sql, applied 18 Oct 2026). Only for requests whose Origin is https://test.srtdio-app.pages.dev (checked from PostgREST's request.headers):
 
 - test_session_create(p_email, p_trace_id) SECURITY DEFINER, EXECUTE to anon and authenticated: with p_email NULL makes a new confirmed auth user tester-xxxxxxxx@test.srtd.io (raw_app_meta_data test_account=true, an email identity, a random password) and returns { email, password, invite_id: null }; with a test.srtd.io address that has a pending invite, sets a new password on that invitee and returns it with the newest pending invite id. test_site_only from any other origin; at most 100 new test accounts an hour (rate_limited). Audited.
-- member_invite_check: a test account may invite only test.srtd.io addresses (test_account_test_addresses_only). The invite-send function sends no email to test.srtd.io addresses.
+- The invite-send function sends no email to test.srtd.io addresses. (Test accounts may invite any address: 20261018020000 removed the test-addresses-only rule.)
 - _test_accounts_purge(), pg_cron job test-accounts-purge at minute 17 every hour: test accounts older than 24 hours have their owned workspaces soft-deleted (the normal workspace purge removes them) and are deleted once they own none.
 
 Induction sample week (20261017150000_induction_sample_week.sql, applied 17 Oct 2026). Every first tour runs in a seeded "Kestrel & Rowe" week inside the caller's own workspace:

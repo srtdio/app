@@ -585,7 +585,7 @@ export function OnboardingFlow({
           {photoPreview !== null ? (
             <Avatar name={name || 'You'} src={photoPreview} size="xl" />
           ) : (
-            <Avatar name={name || 'You'} size="xl" />
+            <Avatar size="xl" />
           )}
           <div className="flex min-w-0 flex-col gap-1">
             <Button size="lg" onClick={() => photoInputRef.current?.click()}>

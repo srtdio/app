@@ -204,7 +204,7 @@ export function clientDomainLabel(
 
 /** Inline copy when an approver invite uses a free mail address. */
 export const FREE_MAIL_APPROVER_MESSAGE =
-  'Your approver needs a work address, like name@theirbrand.com.';
+  'Approvers need a work email, like name@theirbrand.com. Free emails like Gmail or Yahoo are not allowed.';
 
 /** Toast copy when an approver invite is outside the workspace's client domain. */
 export function clientDomainMismatchMessage(domainLabel: string): string {
