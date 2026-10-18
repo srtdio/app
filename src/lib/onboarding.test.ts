@@ -150,7 +150,7 @@ describe('entryCopyContext with fillCopy', () => {
 
   it('fills the check-your-email body with the address', () => {
     expect(fillCopy(CHECK_EMAIL_COPY.body, entryCopyContext({ email: 'a@b.in' }))).toBe(
-      'We sent a sign-in link to a@b.in. Open it on this device to carry on.',
+      'We sent a link to a@b.in. Open it on this device to finish signing up.',
     );
   });
 

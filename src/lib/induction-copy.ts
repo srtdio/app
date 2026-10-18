@@ -10,12 +10,19 @@ import type { CopyContext } from './induction-model';
 export const CHECK_EMAIL_COPY = {
   signUpSubtitle: 'No card needed.',
   title: 'Check your email',
-  body: 'We sent a sign-in link to {email}. Open it on this device to carry on.',
+  body: 'We sent a link to {email}. Open it on this device to finish signing up.',
   resend: 'Resend link',
   differentEmail: 'Use a different email',
   createAccount: 'Create account',
   sending: 'Sending link',
   rateLimited: 'Too many links asked for. Wait a few minutes, then try again.',
+} as const;
+
+/** The email link's landing page when the link confirms a new account (type signup or email). */
+export const SIGNUP_CALLBACK_COPY = {
+  title: 'Confirm your email',
+  subtitle: 'Tap the button to finish creating your account.',
+  button: 'Continue',
 } as const;
 
 /** The invited welcome screen (replaces the invitee password step). */

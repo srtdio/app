@@ -58,4 +58,27 @@ describe('auth email templates', () => {
     expect(text).not.toContain('RedirectTo');
     expect(text).toContain('Sign in to Sorted');
   });
+
+  it.each(templates)('$name never uses {{ .ConfirmationURL }} or an em-dash', ({ html }) => {
+    expect(html).not.toContain('.ConfirmationURL');
+    expect(visibleText(html)).not.toMatch(/[\u2013\u2014]/);
+  });
+
+  it('confirm-signup links to our callback with type=email', () => {
+    const confirm = templates.find((t) => t.name === 'confirm-signup.html');
+    expect(confirm).toBeDefined();
+    expect(hrefs(confirm?.html ?? '')).toContain(
+      '{{ .RedirectTo }}/auth/callback?token_hash={{ .TokenHash }}&type=email',
+    );
+  });
+
+  it('confirm-signup carries the approved copy', () => {
+    const text = visibleText(templates.find((t) => t.name === 'confirm-signup.html')?.html ?? '');
+    expect(text).toContain('Confirm your email');
+    expect(text).toContain(
+      'Tap the button to finish creating your Sorted account. The link works on the device you open it on and expires in 1 hour.',
+    );
+    expect(text).toContain('Confirm and continue');
+    expect(text).toContain('Didn&rsquo;t sign up? Ignore this email.');
+  });
 });
