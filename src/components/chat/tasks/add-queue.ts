@@ -7,7 +7,7 @@
 // - A created item is never dropped: once the server returns its id the entry
 //   is `saved` and stays on screen until the list read brings that row.
 
-import type { TaskSide } from '@/lib/chat/tasks';
+import type { TaskPriority, TaskSide } from '@/lib/chat/tasks';
 
 export type PendingState = 'queued' | 'sending' | 'failed' | 'saved';
 
@@ -18,6 +18,10 @@ export interface PendingTask {
   title: string;
   /** The preview number it showed with. */
   number: number;
+  /** Picked on the add row; P2 when absent. */
+  priority?: TaskPriority;
+  /** Picked on the add row (Today / Tomorrow at 9 pm); none when absent. */
+  dueAt?: string | null;
   state: PendingState;
   /** The created task's id (saved only). */
   id?: string;

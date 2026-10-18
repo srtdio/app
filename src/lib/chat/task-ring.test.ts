@@ -95,6 +95,12 @@ describe('stillDue', () => {
     expect(stillDue(armed, { ...armed, status: 'todo', due_at: null })).toBe(false);
     expect(stillDue(armed, null)).toBe(false);
   });
+  it('W9 fix 4: a deleted item never rings', () => {
+    expect(stillDue(armed, { ...armed, status: 'todo', deleted_at: null })).toBe(true);
+    expect(stillDue(armed, { ...armed, status: 'todo', deleted_at: '2026-10-13T13:00:00Z' })).toBe(
+      false,
+    );
+  });
 });
 
 describe('armTaskRing', () => {

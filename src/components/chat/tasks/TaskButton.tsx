@@ -1,4 +1,4 @@
-// The composer's task list button: 44px round, the task-square icon, and an
+// The composer's Tasks button: 44px round, the task-square icon, and an
 // 8px accent dot (ringed in panel) while someone else changed the list since
 // this device last opened it. Pressable: no iOS selection callout.
 
@@ -8,7 +8,7 @@ import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
-export const TASK_BUTTON_LABEL = 'Task list';
+export const TASK_BUTTON_LABEL = 'Tasks';
 
 export function TaskButton(props: { unseen: boolean; onOpen: () => void }): ReactElement {
   return (

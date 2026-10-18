@@ -1,15 +1,21 @@
-// The chat's task list: one sheet, everything in place. A header line (the
-// accent tile, the counts and Share), then Agency, Client and Done today
-// (collapsed by default), each with its rows; Agency and Client end with an add
-// row (Enter adds and keeps focus, so a list types in one go). One row at a
-// time expands in place; the others dim (opacity only) and the order holds
-// until it collapses. The footer names the last change. The shared bottom
+// The chat's Tasks: one sheet, everything in place. A header line (the accent
+// tile, the counts and Share), then Agency, Client and Done today (collapsed by
+// default), each with its rows; Agency and Client end with an add row (a title,
+// optional priority and Today / Tomorrow chips; Enter adds and keeps focus, so
+// a list types in one go; the next number shows only in the row being typed
+// in). One row at a time expands in place in edit mode; the others dim (opacity
+// only) and the order holds until it collapses. Leaving an edit with changes
+// asks "Discard your changes?" first. Delete hides the row at once behind an
+// Undo toast. Opened for a closed item the list does not hold (a thread line,
+// an alert), that item shows on top, read first if needed. The footer names
+// the last change. The shared bottom
 // Sheet opens and closes it (translateY only). Share opens the forward picker
 // and runs through the thread's send and forward (useTaskShare); a confirmed
 // share closes both sheets. Tokens only.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { glowTarget } from '@/components/ui/SearchHighlight';
 import { ForwardPicker } from '@/components/chat/ForwardPicker';
@@ -20,20 +26,31 @@ import { TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
 import type { UseChatTasks } from '@/components/chat/tasks/useChatTasks';
 import { useTaskShare, type TaskShareWiring } from '@/components/chat/tasks/useTaskShare';
 import { cn } from '@/lib/cn';
+import { civilDay } from '@/lib/chat/time-format';
 import {
+  addCivilDays,
+  dueForDay,
+  dueLabel,
   groupTasks,
   holdOrder,
+  isDeleted,
   lastChangeLine,
   nextNumberPreview,
   SIDE_LABEL,
+  TASK_PRIORITIES,
   TASK_TITLE_MAX,
   type ChatTask,
+  type TaskPriority,
   type TaskSide,
 } from '@/lib/chat/tasks';
+import type { NewTaskOptions } from '@/components/chat/tasks/useChatTasks';
 
 export const TASK_SHEET_TITLE = 'Tasks';
-export const SHARE_TASKS_LABEL = 'Share task list';
+export const SHARE_TASKS_LABEL = 'Share tasks';
 export const ADD_PLACEHOLDER = 'Type, then Enter for the next';
+export const DISCARD_TITLE = 'Discard your changes?';
+export const DISCARD_MESSAGE = 'The edits to this task are not saved yet.';
+export const CLOSED_GROUP_LABEL = 'Closed';
 
 type GroupKey = 'agency' | 'client' | 'done';
 
@@ -55,52 +72,110 @@ function GroupTitle(props: { group: GroupKey; label: string; count: number }): R
   );
 }
 
+const CHIP = cn(
+  'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-[8px] border px-3 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  NO_TOUCH_SELECT,
+);
+const CHIP_ON = 'border-accent bg-accent-soft text-accent';
+const CHIP_OFF = 'border-border bg-panel text-fg-2 hover:bg-panel-2';
+
+type AddDay = 'today' | 'tomorrow' | null;
+
 function AddRow(props: {
   side: TaskSide;
   preview: number;
-  onAdd: (title: string) => void;
+  timeZone: string;
+  onAdd: (title: string, options: NewTaskOptions) => void;
 }): ReactElement {
   const [text, setText] = useState('');
+  const [priority, setPriority] = useState<TaskPriority>(2);
+  const [day, setDay] = useState<AddDay>(null);
+  const typing = text.trim() !== '';
   const submit = (event: FormEvent): void => {
     event.preventDefault();
-    if (text.trim() === '') return;
-    props.onAdd(text);
+    if (!typing) return;
+    const today = civilDay(Date.now(), props.timeZone);
+    const civil = day === 'today' ? today : day === 'tomorrow' ? addCivilDays(today, 1) : null;
+    props.onAdd(text, {
+      priority,
+      dueAt: civil !== null ? dueForDay(civil, null, Date.now(), props.timeZone) : null,
+    });
     // The field keeps focus: the next item types straight in.
     setText('');
+    setPriority(2);
+    setDay(null);
   };
+  // Chips never take focus from the field.
+  const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
   return (
     <li>
-      <form
-        data-task-add={props.side}
-        onSubmit={submit}
-        className="flex min-h-[44px] items-center gap-[10px] px-4"
-      >
-        <span aria-hidden="true" className="w-4 shrink-0" />
-        <span data-task-preview="" className="w-5 shrink-0 font-mono text-[12.5px] text-accent">
-          {props.preview}
-        </span>
-        <input
-          type="text"
-          aria-label={`Add to ${SIDE_LABEL[props.side]}`}
-          enterKeyHint="next"
-          autoComplete="off"
-          value={text}
-          maxLength={TASK_TITLE_MAX}
-          placeholder={ADD_PLACEHOLDER}
-          onChange={(e) => setText(e.target.value)}
-          className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] text-fg placeholder:text-fg-3 focus:outline-none"
-        />
-        {text.trim() !== '' ? (
-          <button
-            type="submit"
-            onMouseDown={(e) => e.preventDefault()}
-            className={cn(
-              'h-11 min-w-11 shrink-0 rounded-[6px] bg-accent px-3 text-[13px] font-semibold text-accent-fg',
-              NO_TOUCH_SELECT,
-            )}
+      <form data-task-add={props.side} onSubmit={submit} className="flex flex-col">
+        <div className="flex min-h-[44px] items-center gap-[10px] px-4">
+          <span aria-hidden="true" className="w-4 shrink-0" />
+          <span data-task-preview="" className="w-5 shrink-0 font-mono text-[12.5px] text-accent">
+            {/* Only the row being typed in shows the next number. */}
+            {typing ? props.preview : ''}
+          </span>
+          <input
+            type="text"
+            aria-label={`Add to ${SIDE_LABEL[props.side]}`}
+            enterKeyHint="next"
+            autoComplete="off"
+            value={text}
+            maxLength={TASK_TITLE_MAX}
+            placeholder={ADD_PLACEHOLDER}
+            onChange={(e) => setText(e.target.value)}
+            className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] text-fg placeholder:text-fg-3 focus:outline-none"
+          />
+          {typing ? (
+            <button
+              type="submit"
+              onMouseDown={keepFocus}
+              className={cn(
+                'h-11 min-w-11 shrink-0 rounded-[6px] bg-accent px-3 text-[13px] font-semibold text-accent-fg',
+                NO_TOUCH_SELECT,
+              )}
+            >
+              Add
+            </button>
+          ) : null}
+        </div>
+        {typing ? (
+          <div
+            data-task-add-options=""
+            className="flex items-center gap-1.5 overflow-x-auto pb-2 pl-[58px] pr-4"
           >
-            Add
-          </button>
+            {TASK_PRIORITIES.map((p) => (
+              <button
+                key={p}
+                type="button"
+                aria-pressed={priority === p}
+                data-task-add-p={p}
+                onMouseDown={keepFocus}
+                onClick={() => setPriority(p)}
+                onContextMenu={(e) => e.preventDefault()}
+                className={cn(CHIP, 'font-mono', priority === p ? CHIP_ON : CHIP_OFF)}
+              >
+                P{p}
+              </button>
+            ))}
+            <span aria-hidden="true" className="w-1 shrink-0" />
+            {(['today', 'tomorrow'] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={day === d}
+                data-task-add-day={d}
+                onMouseDown={keepFocus}
+                // Tapping the picked chip again leaves the item without a due.
+                onClick={() => setDay((v) => (v === d ? null : d))}
+                onContextMenu={(e) => e.preventDefault()}
+                className={cn(CHIP, day === d ? CHIP_ON : CHIP_OFF)}
+              >
+                {d === 'today' ? 'Today' : 'Tomorrow'}
+              </button>
+            ))}
+          </div>
         ) : null}
       </form>
     </li>
@@ -124,6 +199,9 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [frozen, setFrozen] = useState<Record<GroupKey, string[]> | null>(null);
   const [showDone, setShowDone] = useState(false);
+  // The expanded row's draft holds changes; leaving it asks first.
+  const [dirty, setDirty] = useState(false);
+  const [confirm, setConfirm] = useState<{ next: string | null; close: boolean } | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const taskShare = useTaskShare(props.share ?? null);
@@ -151,6 +229,8 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
         };
 
   const expand = (taskId: string | null): void => {
+    setConfirm(null);
+    if (taskId !== expanded) setDirty(false);
     setExpanded(taskId);
     setFrozen(
       taskId === null
@@ -163,8 +243,41 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
     );
   };
 
+  /** Collapse or switch rows; with unsaved changes, ask first. */
+  const requestExpand = (taskId: string | null): void => {
+    if (dirty && expanded !== null && taskId !== expanded) {
+      setConfirm({ next: taskId, close: false });
+      return;
+    }
+    expand(taskId);
+  };
+
+  const requestClose = (): void => {
+    if (dirty && expanded !== null) {
+      setConfirm({ next: null, close: true });
+      return;
+    }
+    props.onClose();
+  };
+
   // Each open starts fresh on the item it was opened for (if any).
   const focusTaskId = props.focusTaskId;
+  // Opened for an item no group holds (closed before today): it shows on top,
+  // read first when no line brought it.
+  const lineHasFocus = focusTaskId !== null && tasks.lineTasks.has(focusTaskId);
+  const ensureTask = tasks.ensureTask;
+  useEffect(() => {
+    if (props.open && focusTaskId !== null && !lineHasFocus) ensureTask(focusTaskId);
+  }, [props.open, focusTaskId, lineHasFocus, ensureTask]);
+  const focusTask = focusTaskId !== null ? tasks.lineTasks.get(focusTaskId) : undefined;
+  const inGroups =
+    focusTaskId !== null &&
+    (groups.agency.some((t) => t.id === focusTaskId) ||
+      groups.client.some((t) => t.id === focusTaskId) ||
+      groups.done.some((t) => t.id === focusTaskId));
+  const closedFocus =
+    focusTask !== undefined && !inGroups && !isDeleted(focusTask) ? focusTask : null;
+  const closedFocusShown = closedFocus !== null;
   useEffect(() => {
     if (!props.open) return;
     const now = Date.now();
@@ -172,6 +285,8 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
     const fresh = groupTasks(tasks.tasks, now, timeZone);
     const inDone = focusTaskId !== null && fresh.done.some((t) => t.id === focusTaskId);
     setShowDone(inDone);
+    setConfirm(null);
+    setDirty(false);
     setExpanded(focusTaskId);
     setFrozen(
       focusTaskId === null
@@ -212,27 +327,43 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
       cancelAnimationFrame(raf);
       clear?.();
     };
-  }, [props.open, focusTaskId]);
+    // A closed item read after the open glows once it is in.
+  }, [props.open, focusTaskId, closedFocusShown]);
 
   const preview = nextNumberPreview([...tasks.tasks, ...tasks.pending]);
   const footer = lastChangeLine(tasks.events, tasksById, tasks.nameOf, nowMs, timeZone);
 
-  const renderRows = (group: GroupKey): ReactElement[] =>
-    shown[group].map((task) => (
-      <TaskRow
-        key={task.id}
-        task={task}
-        expanded={expanded === task.id}
-        dimmed={expanded !== null && expanded !== task.id}
-        nowMs={nowMs}
-        timeZone={timeZone}
-        nameOf={tasks.nameOf}
-        failed={tasks.failed.has(task.id)}
-        onToggle={() => expand(expanded === task.id ? null : task.id)}
-        onSave={(field, value) => tasks.setField(task, field, value)}
-        onRetry={() => tasks.retryField(task.id)}
-      />
-    ));
+  const renderRow = (task: ChatTask): ReactElement => (
+    <TaskRow
+      key={task.id}
+      task={task}
+      expanded={expanded === task.id}
+      dimmed={expanded !== null && expanded !== task.id}
+      nowMs={nowMs}
+      timeZone={timeZone}
+      nameOf={tasks.nameOf}
+      failed={tasks.failed.has(task.id)}
+      onToggle={() => requestExpand(expanded === task.id ? null : task.id)}
+      onSave={(changes) => {
+        tasks.save(task, changes);
+        expand(null);
+      }}
+      onCancel={(changed) => {
+        if (changed) setConfirm({ next: null, close: false });
+        else expand(null);
+      }}
+      onDelete={() => {
+        expand(null);
+        tasks.remove(task);
+      }}
+      onDirtyChange={(d) => {
+        if (expanded === task.id) setDirty(d);
+      }}
+      onRetry={() => tasks.retryField(task.id)}
+    />
+  );
+
+  const renderRows = (group: GroupKey): ReactElement[] => shown[group].map(renderRow);
 
   const renderPending = (side: TaskSide): ReactElement[] =>
     tasks.pending
@@ -254,8 +385,10 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
               {p.title}
             </span>
             <span className="flex h-[21px] items-center gap-2">
-              <PriorityTag priority={2} />
-              <span className="font-mono text-[12.5px] text-fg-3">–</span>
+              <PriorityTag priority={p.priority ?? 2} />
+              <span className="font-mono text-[12.5px] text-fg-3">
+                {dueLabel({ dueAt: p.dueAt ?? null, duePassedAt: null }, nowMs, timeZone).text}
+              </span>
             </span>
           </div>
           {p.state === 'failed' ? (
@@ -278,7 +411,8 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
         <AddRow
           side={group}
           preview={preview}
-          onAdd={(title) => tasks.create(group, title, preview)}
+          timeZone={timeZone}
+          onAdd={(title, options) => tasks.create(group, title, preview, options)}
         />
       </ul>
     </section>
@@ -289,7 +423,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
     <>
       <Sheet
         open={props.open}
-        onClose={props.onClose}
+        onClose={requestClose}
         title={TASK_SHEET_TITLE}
         footer={
           <p
@@ -309,7 +443,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
             const target = event.target;
             if (!(target instanceof Element)) return;
             if (target.closest(`[data-task-row-id="${expanded}"]`) !== null) return;
-            expand(null);
+            requestExpand(null);
           }}
         >
           <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border pl-4 pr-2">
@@ -319,10 +453,11 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
             >
               <IconCheck size={16} />
             </span>
+            {/* Reads as taskCountsText: "2 open for creators · 2 for approvers". */}
             <p data-task-counts="" className="min-w-0 flex-1 truncate text-[13px] text-fg-2">
-              <span className="font-mono text-accent">{groups.agency.length}</span> creators ·{' '}
-              <span className="font-mono text-accent">{groups.client.length}</span> approvers ·{' '}
-              <span className="font-mono">{groups.done.length}</span> done
+              <span className="font-mono text-accent">{groups.agency.length}</span> open for
+              creators · <span className="font-mono text-accent">{groups.client.length}</span> for
+              approvers
             </p>
             {props.share !== undefined ? (
               <button
@@ -343,6 +478,14 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
               </button>
             ) : null}
           </div>
+          {closedFocus !== null ? (
+            <section data-task-group="closed" className="flex flex-col">
+              <div className="flex h-9 items-center px-4">
+                <GroupTitle group="done" label={CLOSED_GROUP_LABEL} count={1} />
+              </div>
+              <ul className="flex flex-col">{renderRow(closedFocus)}</ul>
+            </section>
+          ) : null}
           {section('agency')}
           {section('client')}
           <section data-task-group="done" className="flex flex-col">
@@ -361,6 +504,22 @@ export function TaskSheet(props: TaskSheetProps): ReactElement {
           </section>
         </div>
       </Sheet>
+      {confirm !== null ? (
+        // Outside the sheet body: its taps never reach the collapse-on-tap handler.
+        <ConfirmDialog
+          title={DISCARD_TITLE}
+          message={DISCARD_MESSAGE}
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          destructive
+          onConfirm={() => {
+            const { next, close } = confirm;
+            expand(next);
+            if (close) onClose();
+          }}
+          onCancel={() => setConfirm(null)}
+        />
+      ) : null}
       {props.share !== undefined ? (
         <ForwardPicker
           open={props.open && shareOpen}

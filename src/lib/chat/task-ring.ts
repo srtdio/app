@@ -21,6 +21,8 @@ export interface TaskDueRow {
 /** The row re-read just before ringing. */
 export interface TaskDueCheck extends TaskDueRow {
   status: string;
+  /** Soft-deleted items never ring. */
+  deleted_at?: string | null;
 }
 
 /** Fired on this device after a due write is recorded (BellRing re-arms). */
@@ -83,11 +85,13 @@ export function nextDue(
 }
 
 /**
- * Whether the re-read row still rings for what was armed: open, and the same
- * due time. A changed due, a closed item or a missing row never rings. Pure.
+ * Whether the re-read row still rings for what was armed: open, not deleted,
+ * and the same due time. A changed due, a closed or deleted item or a missing
+ * row never rings. Pure.
  */
 export function stillDue(armed: TaskDueRow, current: TaskDueCheck | null): boolean {
   if (current === null || current.id !== armed.id) return false;
+  if (current.deleted_at != null) return false;
   if (!(RINGING_STATUSES as readonly string[]).includes(current.status)) return false;
   return taskRungKey(current.id, current.due_at) === taskRungKey(armed.id, armed.due_at);
 }
@@ -218,7 +222,7 @@ function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };
 }
 
-/** The open items due after now in a workspace, soonest first. */
+/** The open, not deleted items due after now in a workspace, soonest first. */
 export async function readUpcomingTaskDues(
   client: Client,
   params: { workspaceId: string; nowMs: number; signal?: AbortSignal },
@@ -229,6 +233,7 @@ export async function readUpcomingTaskDues(
       .select(DUE_COLUMNS)
       .eq('workspace_id', params.workspaceId)
       .in('status', [...RINGING_STATUSES])
+      .is('deleted_at', null)
       .is('due_passed_at', null)
       .gt('due_at', new Date(params.nowMs).toISOString())
       .order('due_at', { ascending: true })
@@ -249,7 +254,7 @@ export async function readTaskDueCheck(
   try {
     const { data, error } = await client
       .from('chat_tasks')
-      .select(`${DUE_COLUMNS}, status`)
+      .select(`${DUE_COLUMNS}, status, deleted_at`)
       .eq('id', taskId)
       .maybeSingle();
     if (error) return fail(`readTaskDueCheck: ${error.message}`);

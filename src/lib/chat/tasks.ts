@@ -1,6 +1,6 @@
 // The chat task list: per-chat numbered items (public.chat_tasks), their change
-// log (public.chat_task_events) and the two writes (chat_task_create,
-// chat_task_set). The pure rules (sort, groups, due labels on the workspace
+// log (public.chat_task_events) and the writes (chat_task_create, chat_task_save
+// for an edit's changed fields, chat_task_delete). The pure rules (sort, groups, due labels on the workspace
 // clock, event text, thread-line collapse, the share snapshot, the civil
 // date + hour to UTC conversion) are framework-free and unit-tested; the reads
 // are one query each (tasks of a channel, events of a window, one task by id)
@@ -27,7 +27,9 @@ export type TaskEventKind =
   | 'side'
   | 'title'
   | 'note'
-  | 'due_passed';
+  | 'due_passed'
+  | 'edited'
+  | 'deleted';
 
 /** One task as the sheet renders it. */
 export interface ChatTask {
@@ -46,6 +48,8 @@ export interface ChatTask {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Soft-deleted (chat_task_delete), or hidden while its Undo window runs. */
+  deletedAt: string | null;
 }
 
 /** One change-log row. */
@@ -96,6 +100,8 @@ const KIND_SET = new Set<string>([
   'title',
   'note',
   'due_passed',
+  'edited',
+  'deleted',
 ]);
 
 function asStatus(value: string | null | undefined): TaskStatus | null {
@@ -133,6 +139,7 @@ export function rowToTask(row: TaskRow): ChatTask | null {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
   };
 }
 
@@ -364,23 +371,56 @@ export function isPastHour(civil: string, hour: number, nowMs: number, timeZone:
   return hour <= zonedParts(nowMs, timeZone).hour;
 }
 
-/** The Date strip: the 14 days after tomorrow on the workspace clock. Pure. */
+/**
+ * The Date strip: the 14 days after tomorrow on the workspace clock. The first
+ * tile and every 1st of a month carry the month ("Nov"), else null. Pure.
+ */
 export function dateStripDays(
   nowMs: number,
   timeZone: string,
-): { civil: string; weekday: string; day: number }[] {
+): { civil: string; weekday: string; day: number; month: string | null }[] {
   const today = civilDay(nowMs, timeZone);
   return Array.from({ length: 14 }, (_, k) => {
     const civil = addCivilDays(today, k + 2);
     const [y, m, d] = civil.split('-').map(Number);
     const weekday = WEEKDAYS[new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay()] ?? '';
-    return { civil, weekday, day: d ?? 0 };
+    const month = k === 0 || d === 1 ? (MONTHS[(m ?? 1) - 1] ?? null) : null;
+    return { civil, weekday, day: d ?? 0, month };
   });
+}
+
+/** A day picked without a time is due at 9 pm. */
+export const DEFAULT_DUE_HOUR = 21;
+
+/**
+ * The due instant for a picked day: the hour already chosen (on the workspace
+ * clock), else DEFAULT_DUE_HOUR. Pure.
+ */
+export function dueForDay(
+  civil: string,
+  currentDue: string | null,
+  nowMs: number,
+  timeZone: string,
+): string {
+  const hour = dueSelection(currentDue, nowMs, timeZone)?.hour ?? DEFAULT_DUE_HOUR;
+  return civilHourToUtcIso(civil, hour, timeZone);
+}
+
+/** The editor's due summary: "Due 9 pm"; '' for none. Pure. */
+export function dueSummary(dueAt: string | null, timeZone: string): string {
+  if (dueAt === null) return '';
+  const clock = clockLabel(dueAt, timeZone);
+  return clock === '' ? '' : `Due ${clock}`;
 }
 
 // ---------------------------------------------------------------------------
 // Groups and order
 // ---------------------------------------------------------------------------
+
+/** Deleted (or hidden for its Undo window): never in a list. Pure. */
+export function isDeleted(task: Pick<ChatTask, 'deletedAt'>): boolean {
+  return task.deletedAt !== null;
+}
 
 /** Open statuses (the Agency and Client groups); the rest are closed. */
 export function isOpenStatus(status: TaskStatus): boolean {
@@ -407,19 +447,26 @@ export interface TaskGroups {
 
 /**
  * The sheet's groups: open items per side (priority, then number) and the
- * items closed today (by number). Older closed items are not shown. Pure.
+ * items closed today (by number). Older closed items and deleted items are
+ * not shown. Pure.
  */
 export function groupTasks(
   tasks: readonly ChatTask[],
   nowMs: number,
   timeZone: string,
 ): TaskGroups {
-  const open = tasks.filter((t) => isOpenStatus(t.status)).sort(compareTasks);
+  const live = tasks.filter((t) => !isDeleted(t));
+  const open = live.filter((t) => isOpenStatus(t.status)).sort(compareTasks);
   return {
     agency: open.filter((t) => t.side === 'agency'),
     client: open.filter((t) => t.side === 'client'),
-    done: tasks.filter((t) => isDoneToday(t, nowMs, timeZone)).sort((a, b) => a.number - b.number),
+    done: live.filter((t) => isDoneToday(t, nowMs, timeZone)).sort((a, b) => a.number - b.number),
   };
+}
+
+/** The header counts: "2 open for creators · 2 for approvers". Pure. */
+export function taskCountsText(groups: Pick<TaskGroups, 'agency' | 'client'>): string {
+  return `${groups.agency.length} open for creators · ${groups.client.length} for approvers`;
 }
 
 /**
@@ -501,6 +548,113 @@ export function applyTaskField(
 }
 
 // ---------------------------------------------------------------------------
+// Edits (local until Save)
+// ---------------------------------------------------------------------------
+
+/** The editor's working copy of a task's editable fields. */
+export interface TaskDraft {
+  title: string;
+  note: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  side: TaskSide;
+  dueAt: string | null;
+}
+
+/**
+ * The changed fields chat_task_save takes (only keys that changed): status,
+ * side and title as text, priority as a number, note and due as text or null
+ * (cleared).
+ */
+// A type alias (not an interface) so it is assignable to the generated Json.
+export type TaskChanges = {
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  side?: TaskSide;
+  title?: string;
+  note?: string | null;
+  due?: string | null;
+};
+
+/** The field order every edit line and save uses. */
+export const TASK_FIELDS: readonly TaskField[] = [
+  'status',
+  'priority',
+  'side',
+  'title',
+  'note',
+  'due',
+];
+
+/** A fresh draft of a task. Pure. */
+export function draftOf(task: ChatTask): TaskDraft {
+  return {
+    title: task.title,
+    note: task.note ?? '',
+    status: task.status,
+    priority: task.priority,
+    side: task.side,
+    dueAt: task.dueAt,
+  };
+}
+
+function sameInstant(a: string | null, b: string | null): boolean {
+  if (a === null || b === null) return a === b;
+  return Date.parse(a) === Date.parse(b);
+}
+
+/**
+ * Only what the draft changed against the task. A blank title is no change
+ * (the title is required); a blank note clears it. Pure.
+ */
+export function taskChanges(task: ChatTask, draft: TaskDraft): TaskChanges {
+  const out: TaskChanges = {};
+  if (draft.status !== task.status) out.status = draft.status;
+  if (draft.priority !== task.priority) out.priority = draft.priority;
+  if (draft.side !== task.side) out.side = draft.side;
+  const title = draft.title.trim();
+  if (title !== '' && title !== task.title) out.title = title;
+  const note = draft.note.trim() === '' ? null : draft.note.trim();
+  if (note !== (task.note === '' ? null : task.note)) out.note = note;
+  if (!sameInstant(draft.dueAt, task.dueAt)) out.due = draft.dueAt;
+  return out;
+}
+
+/** Whether a changes object holds anything. Pure. */
+export function hasChanges(changes: TaskChanges): boolean {
+  return Object.keys(changes).length > 0;
+}
+
+/** A task as it looks after a save of `changes` by `actorId` at `nowIso`. Pure. */
+export function applyTaskChanges(
+  task: ChatTask,
+  changes: TaskChanges,
+  actorId: string,
+  nowIso: string,
+): ChatTask {
+  let next = task;
+  for (const field of TASK_FIELDS) {
+    if (!(field in changes)) continue;
+    const value = changes[field];
+    next = applyTaskField(next, field, value == null ? '' : String(value), actorId, nowIso);
+  }
+  return next;
+}
+
+/** The field names an 'edited' event's JSON names, in TASK_FIELDS order. Pure. */
+export function editedFields(json: string | null): TaskField[] {
+  if (json === null || json === '') return [];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    const keys = new Set(Object.keys(parsed));
+    return TASK_FIELDS.filter((f) => keys.has(f));
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Event text
 // ---------------------------------------------------------------------------
 
@@ -526,7 +680,8 @@ function priorityText(value: string | null): string {
  * A change as segments: created "added 12 Title · Agency", status "12 Title →
  * Shared", priority "12 P1 → P0", due "12 due today 8 pm" / "12 due cleared",
  * side "12 moved to Client", title "renamed 12 to New", note "12 note updated",
- * due_passed "3 pm passed · 12 Title". Pure.
+ * due_passed "3 pm passed · 12 Title", edited "#3 updated: priority, due",
+ * deleted "#3 deleted". Pure.
  */
 export function eventSegments(
   event: Pick<TaskEvent, 'kind' | 'oldValue' | 'newValue'>,
@@ -578,6 +733,16 @@ export function eventSegments(
       const at = event.oldValue !== null ? clockLabel(event.oldValue, timeZone) : 'Due time';
       return [{ text: `${at} passed · ` }, n, { text: ` ${task.title}` }];
     }
+    case 'edited': {
+      const fields = editedFields(event.newValue);
+      const named = fields.length > 0 ? fields : editedFields(event.oldValue);
+      return [
+        { text: `#${n.text}`, tone: 'mono' },
+        { text: named.length > 0 ? ` updated: ${named.join(', ')}` : ' updated' },
+      ];
+    }
+    case 'deleted':
+      return [{ text: `#${n.text}`, tone: 'mono' }, { text: ' deleted' }];
   }
 }
 
@@ -721,7 +886,7 @@ function snapshotItem(task: ChatTask, nowMs: number, timeZone: string): string {
 
 /**
  * The plain-text snapshot Share sends, on the workspace clock:
- *   Task list · Chat · 13 Oct, 7:30 pm
+ *   Tasks · Chat · 13 Oct, 7:30 pm
  *   Agency / items / Client / items / Done today: 3, 5
  * An empty side is left out, as is the done line when nothing closed today.
  * Past 5000 characters the done line goes first, then trailing items, ending
@@ -739,7 +904,7 @@ export function shareSnapshot(input: {
   const groups = groupTasks(input.tasks, nowMs, timeZone);
   const nowIso = new Date(nowMs).toISOString();
   const stamp = `${civilDayLabel(civilDay(nowMs, timeZone))}, ${clockLabel(nowIso, timeZone)}`;
-  const header = `Task list · ${input.chatName} · ${stamp}`;
+  const header = `Tasks · ${input.chatName} · ${stamp}`;
   const items: { side: TaskSide; line: string }[] = [
     ...groups.agency.map((t) => ({
       side: 'agency' as const,
@@ -777,7 +942,7 @@ export function shareSnapshot(input: {
 // ---------------------------------------------------------------------------
 
 const TASK_COLUMNS =
-  'id, channel_id, workspace_id, number, title, note, side, status, priority, due_at, due_set_by, due_set_at, due_passed_at, created_by, created_at, updated_at';
+  'id, channel_id, workspace_id, number, title, note, side, status, priority, due_at, due_set_by, due_set_at, due_passed_at, created_by, created_at, updated_at, deleted_at';
 const EVENT_COLUMNS =
   'id, task_id, channel_id, workspace_id, actor_user_id, kind, old_value, new_value, created_at';
 
@@ -803,7 +968,7 @@ export function openOrTodayFilter(nowMs: number, timeZone: string): string {
 
 /**
  * A channel's open items and the items changed today (RLS: members only), one
- * query; older closed items are never read.
+ * query; older closed items and deleted items are never read.
  */
 export async function readChannelTasks(
   client: Client,
@@ -817,6 +982,7 @@ export async function readChannelTasks(
         .from('chat_tasks')
         .select(TASK_COLUMNS)
         .eq('channel_id', channelId)
+        .is('deleted_at', null)
         .or(openOrTodayFilter(clock.nowMs, clock.timeZone)),
       signal,
     );
@@ -904,7 +1070,8 @@ export async function readTaskEvents(
 export type TaskWriteResult<T = null> = { ok: true; data: T } | { ok: false; message: string };
 
 /**
- * Add an item (chat_task_create): the server assigns the number. The
+ * Add an item (chat_task_create): title, note, side, priority and due in one
+ * call, so the chat gets one line. The server assigns the number. The
  * generated Args type declares p_note and p_due_at as plain strings; SQL NULL
  * is valid there, so the args are built nullable and narrowed once.
  */
@@ -914,18 +1081,21 @@ export async function createTask(params: {
   title: string;
   side: TaskSide;
   priority?: TaskPriority;
+  note?: string | null;
+  dueAt?: string | null;
   traceId: string;
 }): Promise<TaskWriteResult<string>> {
+  const note = params.note != null && params.note.trim() !== '' ? params.note.trim() : null;
   const args: Omit<Functions['chat_task_create']['Args'], 'p_note' | 'p_due_at'> & {
     p_note: string | null;
     p_due_at: string | null;
   } = {
     p_channel_id: params.channelId,
     p_title: params.title.trim(),
-    p_note: null,
+    p_note: note,
     p_side: params.side,
     p_priority: params.priority ?? 2,
-    p_due_at: null,
+    p_due_at: params.dueAt ?? null,
     p_trace_id: params.traceId,
   };
   try {
@@ -958,6 +1128,49 @@ export async function setTaskField(params: {
   };
   try {
     const { error } = await params.client.rpc('chat_task_set', args);
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, data: null };
+  } catch (error) {
+    return { ok: false, message: String(error) };
+  }
+}
+
+/**
+ * Save an edit (chat_task_save): only the changed keys, applied in one write
+ * that logs one 'edited' event.
+ */
+export async function saveTask(params: {
+  client: Client;
+  taskId: string;
+  changes: TaskChanges;
+  traceId: string;
+}): Promise<TaskWriteResult> {
+  const args: Functions['chat_task_save']['Args'] = {
+    p_task_id: params.taskId,
+    p_changes: { ...params.changes },
+    p_trace_id: params.traceId,
+  };
+  try {
+    const { error } = await params.client.rpc('chat_task_save', args);
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, data: null };
+  } catch (error) {
+    return { ok: false, message: String(error) };
+  }
+}
+
+/** Soft-delete an item (chat_task_delete); any member of the chat may. */
+export async function deleteTask(params: {
+  client: Client;
+  taskId: string;
+  traceId: string;
+}): Promise<TaskWriteResult> {
+  const args: Functions['chat_task_delete']['Args'] = {
+    p_task_id: params.taskId,
+    p_trace_id: params.traceId,
+  };
+  try {
+    const { error } = await params.client.rpc('chat_task_delete', args);
     if (error) return { ok: false, message: error.message };
     return { ok: true, data: null };
   } catch (error) {

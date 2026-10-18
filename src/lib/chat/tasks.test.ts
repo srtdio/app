@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyTaskChanges,
   applyTaskField,
   civilHourToUtcIso,
   collapseTaskRun,
   commitmentLine,
   createTask,
   dateStripDays,
+  deleteTask,
+  draftOf,
+  dueForDay,
   dueLabel,
   dueSelection,
+  dueSummary,
+  editedFields,
   eventText,
   eventsInWindow,
   groupTasks,
@@ -21,8 +27,11 @@ import {
   openOrTodayFilter,
   startOfTodayIso,
   readTaskEvents,
+  saveTask,
   setTaskField,
   shareSnapshot,
+  taskChanges,
+  taskCountsText,
   type ChatTask,
   type TaskEvent,
 } from '@/lib/chat/tasks';
@@ -49,6 +58,7 @@ function task(over: Partial<ChatTask>): ChatTask {
     createdBy: 'u1',
     createdAt: '2026-10-12T09:00:00.000Z',
     updatedAt: '2026-10-12T09:00:00.000Z',
+    deletedAt: null,
     ...over,
   };
 }
@@ -292,7 +302,7 @@ describe('date strip', () => {
   it('lists the 14 days after tomorrow', () => {
     const days = dateStripDays(NOW, UTC);
     expect(days).toHaveLength(14);
-    expect(days[0]).toEqual({ civil: '2026-10-15', weekday: 'Thu', day: 15 });
+    expect(days[0]).toEqual({ civil: '2026-10-15', weekday: 'Thu', day: 15, month: 'Oct' });
     expect(days[13]?.civil).toBe('2026-10-28');
   });
 });
@@ -315,7 +325,7 @@ describe('shareSnapshot', () => {
   it('formats the plain-text snapshot on the workspace clock', () => {
     expect(shareSnapshot({ chatName: 'Launch crew', tasks, nowMs: NOW, timeZone: UTC })).toBe(
       [
-        'Task list · Launch crew · 13 Oct, 2 pm',
+        'Tasks · Launch crew · 13 Oct, 2 pm',
         'Creators',
         '3. Hook copy · P0 · today 8 pm',
         '5. Reel cut · P2 · today 10 am (missed)',
@@ -333,9 +343,7 @@ describe('shareSnapshot', () => {
       nowMs: NOW,
       timeZone: UTC,
     });
-    expect(text).toBe(
-      'Task list · X · 13 Oct, 2 pm\nApprovers\n2. Approve grid · P2 · tomorrow 12 pm',
-    );
+    expect(text).toBe('Tasks · X · 13 Oct, 2 pm\nApprovers\n2. Approve grid · P2 · tomorrow 12 pm');
   });
   it('past the limit: drops the done line, then trailing items, ending "+k more"', () => {
     const full = shareSnapshot({ chatName: 'X', tasks, nowMs: NOW, timeZone: UTC });
@@ -372,6 +380,7 @@ function fakeClient(answer: { data: unknown; error: { message: string } | null }
     lt: (...args: unknown[]) => (calls.push({ method: 'lt', args }), query),
     or: (...args: unknown[]) => (calls.push({ method: 'or', args }), query),
     in: (...args: unknown[]) => (calls.push({ method: 'in', args }), query),
+    is: (...args: unknown[]) => (calls.push({ method: 'is', args }), query),
     order: (...args: unknown[]) => (calls.push({ method: 'order', args }), query),
     limit: (...args: unknown[]) => (calls.push({ method: 'limit', args }), query),
     then: (resolve: (v: unknown) => void) => resolve(answer),
@@ -391,9 +400,10 @@ describe('reads and writes', () => {
     const { client, calls } = fakeClient({ data: [], error: null });
     const res = await readChannelTasks(client, 'c1', { nowMs: NOW, timeZone: 'Asia/Kolkata' });
     expect(res).toEqual({ ok: true, data: [] });
-    expect(calls.map((c) => c.method)).toEqual(['from', 'select', 'eq', 'or']);
+    expect(calls.map((c) => c.method)).toEqual(['from', 'select', 'eq', 'is', 'or']);
     expect(String(calls[1]?.args[0])).toContain('due_set_by');
-    expect(calls[3]?.args).toEqual([
+    expect(calls[3]?.args).toEqual(['deleted_at', null]);
+    expect(calls[4]?.args).toEqual([
       'status.in.(todo,waiting),updated_at.gte.2026-10-12T18:30:00.000Z',
     ]);
   });
@@ -480,5 +490,157 @@ describe('reads and writes', () => {
       'chat_task_set',
       { p_task_id: 't1', p_field: 'due', p_value: '', p_trace_id: 'tr' },
     ]);
+  });
+});
+
+describe('W9 fix 1: edits are local until Save, which sends only changed fields', () => {
+  it('a draft diff holds only what changed', () => {
+    const t = task({ priority: 2, dueAt: '2026-10-13T20:00:00.000Z', note: 'x' });
+    expect(taskChanges(t, draftOf(t))).toEqual({});
+    // The same instant written another way is no change.
+    expect(taskChanges(t, { ...draftOf(t), dueAt: '2026-10-13T20:00:00+00:00' })).toEqual({});
+    const draft = { ...draftOf(t), priority: 0 as const, dueAt: '2026-10-14T21:00:00.000Z' };
+    expect(taskChanges(t, { ...draft, title: ' ' })).toEqual({
+      priority: 0,
+      due: '2026-10-14T21:00:00.000Z',
+    });
+    expect(taskChanges(t, { ...draftOf(t), note: '  ', dueAt: null })).toEqual({
+      note: null,
+      due: null,
+    });
+    const after = applyTaskChanges(t, { priority: 0, due: null }, 'me', '2026-10-13T14:00:00Z');
+    expect(after.priority).toBe(0);
+    expect(after.dueAt).toBeNull();
+    expect(after.title).toBe(t.title);
+  });
+  it('saves through chat_task_save with only the changed keys and an explicit trace id', async () => {
+    const { client, calls } = fakeClient({ data: null, error: null });
+    const res = await saveTask({
+      client,
+      taskId: 't1',
+      changes: { priority: 0, due: '2026-10-14T21:00:00.000Z' },
+      traceId: 'tr',
+    });
+    expect(res).toEqual({ ok: true, data: null });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args).toEqual([
+      'chat_task_save',
+      {
+        p_task_id: 't1',
+        p_changes: { priority: 0, due: '2026-10-14T21:00:00.000Z' },
+        p_trace_id: 'tr',
+      },
+    ]);
+  });
+});
+
+describe('W9 fix 2: a new item with priority and due is one chat_task_create', () => {
+  it('carries title, priority and due in the one call', async () => {
+    const { client, calls } = fakeClient({ data: 'id', error: null });
+    await createTask({
+      client,
+      channelId: 'c1',
+      title: 'Hook',
+      side: 'agency',
+      priority: 0,
+      dueAt: '2026-10-14T21:00:00.000Z',
+      traceId: 'tr',
+    });
+    expect(calls.filter((c) => c.method === 'rpc')).toHaveLength(1);
+    expect(calls[0]?.args).toEqual([
+      'chat_task_create',
+      {
+        p_channel_id: 'c1',
+        p_title: 'Hook',
+        p_note: null,
+        p_side: 'agency',
+        p_priority: 0,
+        p_due_at: '2026-10-14T21:00:00.000Z',
+        p_trace_id: 'tr',
+      },
+    ]);
+  });
+});
+
+describe('W9 fix 3: edited and deleted lines', () => {
+  const ref = { number: 3, title: 'Reel cut', side: 'agency' as const };
+  it('names the changed fields from the JSON, and reads a delete', () => {
+    const edited = ev({
+      kind: 'edited',
+      oldValue: '{"priority":2,"due":null}',
+      newValue: '{"due":"2026-10-14T21:00:00Z","priority":0}',
+    });
+    expect(eventText(edited, ref, NOW, UTC)).toBe('#3 updated: priority, due');
+    expect(eventText(ev({ kind: 'deleted', newValue: null }), ref, NOW, UTC)).toBe('#3 deleted');
+    expect(editedFields('not json')).toEqual([]);
+    // Existing kinds are unchanged.
+    expect(eventText(ev({ kind: 'note' }), ref, NOW, UTC)).toBe('3 note updated');
+  });
+  it('a burst of edits and a delete still collapses', () => {
+    const at = (s: number): string => new Date(NOW + s * 1000).toISOString();
+    const run = [0, 10, 20].map((s, k) =>
+      ev({ id: `x${k}`, kind: 'edited', newValue: '{"title":"A"}', createdAt: at(s) }),
+    );
+    run.push(ev({ id: 'x3', kind: 'deleted', newValue: null, createdAt: at(30) }));
+    expect(collapseTaskRun(run).map((l) => l.kind)).toEqual(['many']);
+  });
+});
+
+describe('W9 fix 4: deleted items never show in lists', () => {
+  it('groups and counts skip deleted items', () => {
+    const tasks = [
+      task({ id: 'a', number: 1 }),
+      task({ id: 'b', number: 2, deletedAt: '2026-10-13T13:00:00Z' }),
+      task({
+        id: 'c',
+        number: 3,
+        side: 'client',
+        status: 'approved',
+        updatedAt: '2026-10-13T13:00:00Z',
+        deletedAt: '2026-10-13T13:00:00Z',
+      }),
+    ];
+    const groups = groupTasks(tasks, NOW, UTC);
+    expect(groups.agency.map((t) => t.id)).toEqual(['a']);
+    expect(groups.done).toEqual([]);
+  });
+  it('deletes through chat_task_delete with an explicit trace id', async () => {
+    const { client, calls } = fakeClient({ data: null, error: null });
+    await deleteTask({ client, taskId: 't1', traceId: 'tr' });
+    expect(calls[0]?.args).toEqual(['chat_task_delete', { p_task_id: 't1', p_trace_id: 'tr' }]);
+  });
+});
+
+describe('W9 fix 5: a picked day keeps its hour, else 9 pm', () => {
+  it('sets 9 pm without a time and says "Due 9 pm"', () => {
+    const due = dueForDay('2026-10-14', null, NOW, UTC);
+    expect(due).toBe('2026-10-14T21:00:00.000Z');
+    expect(dueSummary(due, UTC)).toBe('Due 9 pm');
+    expect(dueForDay('2026-10-15', '2026-10-14T12:00:00.000Z', NOW, UTC)).toBe(
+      '2026-10-15T12:00:00.000Z',
+    );
+    expect(dueSummary(null, UTC)).toBe('');
+  });
+});
+
+describe('W9 fix 7: header counts and the month on the date strip', () => {
+  it('reads "2 open for creators · 2 for approvers"', () => {
+    const tasks = [
+      task({ id: 'a', number: 1 }),
+      task({ id: 'b', number: 2 }),
+      task({ id: 'c', number: 3, side: 'client' }),
+      task({ id: 'd', number: 4, side: 'client' }),
+    ];
+    expect(taskCountsText(groupTasks(tasks, NOW, UTC))).toBe(
+      '2 open for creators · 2 for approvers',
+    );
+  });
+  it('names the month on the first tile and on each 1st', () => {
+    // 25 Oct: the strip runs 27 Oct to 9 Nov.
+    const days = dateStripDays(Date.parse('2026-10-25T12:00:00.000Z'), UTC);
+    expect(days[0]?.month).toBe('Oct');
+    expect(days[1]?.month).toBeNull();
+    expect(days.find((d) => d.civil === '2026-11-01')?.month).toBe('Nov');
+    expect(days.filter((d) => d.month !== null)).toHaveLength(2);
   });
 });
