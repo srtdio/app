@@ -147,16 +147,23 @@ test('chat stars: star, list everywhere, jump, unstar from Edit', async ({ page 
   await page.goto('/chat');
   await openDm(page);
 
-  // Long-press: Copy, Select, Star, then Save to notes.
+  // Long-press: Copy, Forward, Star, then More (Select and Save to notes under it).
   await holdBubble(page, PEER_LINE);
   const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
-  const keys = await menu
-    .locator('[data-menu-item]')
-    .evaluateAll((els) => els.map((el) => el.getAttribute('data-menu-item')));
-  expect(keys.indexOf('select-text')).toBe(keys.indexOf('copy') + 1);
-  expect(keys.indexOf('star')).toBe(keys.indexOf('select-text') + 1);
-  expect(keys.indexOf('save-notes')).toBe(keys.indexOf('star') + 1);
+  const menuKeys = (): Promise<(string | null)[]> =>
+    menu
+      .locator('[data-menu-item]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('data-menu-item')));
+  const keys = await menuKeys();
+  expect(keys.indexOf('forward')).toBe(keys.indexOf('copy') + 1);
+  expect(keys.indexOf('star')).toBe(keys.indexOf('forward') + 1);
+  expect(keys.indexOf('more')).toBe(keys.indexOf('star') + 1);
+  await menu.locator('[data-menu-item="more"]').click();
+  const more = await menuKeys();
+  expect(more[0]).toBe('back');
+  expect(more.indexOf('save-notes')).toBe(more.indexOf('select-text') + 1);
+  await menu.locator('[data-menu-item="back"]').click();
   await expect(menu.locator('[data-menu-item="star"]')).toHaveText(/Star/);
   await noCallout(page, '[data-bubble]');
   await menu.locator('[data-menu-item="star"]').click();

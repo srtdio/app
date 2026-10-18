@@ -195,9 +195,8 @@ describe('ownMessageActions: the edit and delete windows', () => {
       canDelete: true,
       lockedByMark: false,
     });
-    expect(ownMessageActions(msg({ ...ago(40), body: ' ' }), undefined, NOW, true).canEdit).toBe(
-      false,
-    );
+    const blank = msg({ ...ago(40), body: ' ' });
+    expect(ownMessageActions(blank, undefined, NOW, true).canEdit).toBe(false);
   });
 
   it('judges the window from the server created_at against the given moment', () => {

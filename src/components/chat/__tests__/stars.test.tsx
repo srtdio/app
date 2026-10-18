@@ -32,7 +32,7 @@ vi.mock('react-dom', async (orig) => ({
 }));
 vi.stubGlobal('document', { body: {} });
 
-import { messageMenuItems } from '@/components/chat/MessageActionMenu';
+import { messageMenuItems, moreMenuItems } from '@/components/chat/MessageActionMenu';
 import { SelectionBarView } from '@/components/chat/SelectionBar';
 import { BubbleMetaView, MessageThread, type BubbleMeta } from '@/components/chat/MessageThread';
 import {
@@ -157,29 +157,34 @@ describe('menu row', () => {
     canSelectText: true,
   };
 
-  it('Star sits after Copy and Select, before Save to notes, in the locked order', () => {
+  it('Star sits after Edit, before More, in the locked order', () => {
     expect(messageMenuItems(base).map((i) => i.key)).toEqual([
       'reply',
-      'forward',
       'copy',
-      'select-text',
+      'forward',
+      'edit',
       'star',
+      'more',
+      'delete',
+    ]);
+    expect(moreMenuItems(base).map((i) => i.key)).toEqual([
+      'select-text',
       'save-notes',
       'remind',
       'mark',
-      'edit',
-      'delete',
     ]);
   });
 
-  it('after Transcribe on a voice note', () => {
-    const keys = messageMenuItems({
+  it('stays top level on a voice note; Transcribe sits under More', () => {
+    const voice = {
       ...base,
       canCopy: false,
       canTranscribe: true,
       canSelectText: false,
-    }).map((i) => i.key);
-    expect(keys.slice(0, 4)).toEqual(['reply', 'forward', 'transcribe', 'star']);
+    };
+    const keys = messageMenuItems(voice).map((i) => i.key);
+    expect(keys.slice(0, 5)).toEqual(['reply', 'forward', 'edit', 'star', 'more']);
+    expect(moreMenuItems(voice).map((i) => i.key)[0]).toBe('transcribe');
   });
 
   it('reads Star, or Unstar when starred', () => {

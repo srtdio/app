@@ -89,6 +89,8 @@ test('Remind me from a held message, then Upcoming', async ({ page }) => {
   await holdBubble(page, MENTION_PREVIEW);
   const menu = page.getByRole('menu', { name: 'Message actions' });
   await expect(menu).toBeVisible();
+  // Remind me and Mark as sit under More.
+  await menu.locator('[data-menu-item="more"]').click();
   const rows = await menu
     .locator('[data-menu-item],[data-menu-note]')
     .evaluateAll((els) =>
@@ -126,9 +128,12 @@ test('reminder state lives in the long-press menu: set, change, cancel', async (
   await page.waitForTimeout(400);
   const menu = page.getByRole('menu', { name: 'Message actions' });
   const remind = menu.locator('[data-menu-item="remind"]');
+  // Remind me sits under More.
+  const more = menu.locator('[data-menu-item="more"]');
 
   // Set one from "Remind me".
   await holdBubble(page, MENTION_PREVIEW);
+  await more.click();
   await expect(remind).toHaveText('Remind me');
   await remind.click();
   await page
@@ -142,6 +147,7 @@ test('reminder state lives in the long-press menu: set, change, cancel', async (
 
   // The same slot now reads "Reminder · <time>", the time in mono.
   await holdBubble(page, MENTION_PREVIEW);
+  await more.click();
   await expect(remind).toContainText('Reminder · ');
   await expect(remind.locator('[data-menu-mono]')).toHaveText('Tomorrow 9:00 AM');
 
@@ -157,6 +163,7 @@ test('reminder state lives in the long-press menu: set, change, cancel', async (
 
   // Back to "Remind me".
   await holdBubble(page, MENTION_PREVIEW);
+  await more.click();
   await expect(remind).toHaveText('Remind me');
   expectClean(network);
 });
