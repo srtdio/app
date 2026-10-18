@@ -227,6 +227,9 @@ export function OnboardingFlow({
   // profile save.
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  // The photo's upload, started when it is applied so it is done (or nearly)
+  // by the time the title is saved.
+  const photoUpload = useRef<{ file: File; url: Promise<string | null> } | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   // The positioning sheet's photo has loaded and can be used.
   const [cropReady, setCropReady] = useState(false);
@@ -353,24 +356,46 @@ export function OnboardingFlow({
     navigate(notYouPath(welcome.inviteId), { replace: true });
   }
 
-  /** Upload the photo, then save the whole profile in one call. */
+  /** The photo's upload: the one already started for this file, or a new one. */
+  function uploadPhoto(file: File): Promise<string | null> {
+    const started = photoUpload.current;
+    if (started !== null && started.file === file) return started.url;
+    const endpoint = env.VITE_AVATAR_UPLOAD_URL;
+    const url =
+      endpoint === undefined
+        ? Promise.resolve(null)
+        : supabase.auth
+            .getSession()
+            .then(({ data }) =>
+              uploadAvatarFile(file, {
+                endpoint,
+                token: data.session?.access_token ?? null,
+                fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+              }),
+            )
+            .then((up) => (up.ok ? up.data.avatarUrl : null))
+            .catch(() => null);
+    const entry = { file, url };
+    photoUpload.current = entry;
+    // A failed upload is not kept: the next save tries again.
+    void url.then((done) => {
+      if (done === null && photoUpload.current === entry) photoUpload.current = null;
+    });
+    return url;
+  }
+
+  /** The photo (already uploading since it was applied), then the whole profile in one call. */
   async function saveProfile(): Promise<void> {
     setBusy(true);
     setError(null);
     let avatarUrl: string | null = null;
     if (photoFile !== null && env.VITE_AVATAR_UPLOAD_URL !== undefined) {
-      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
-      const up = await uploadAvatarFile(photoFile, {
-        endpoint: env.VITE_AVATAR_UPLOAD_URL,
-        token,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
-      });
-      if (!up.ok) {
+      avatarUrl = await uploadPhoto(photoFile);
+      if (avatarUrl === null) {
         setBusy(false);
         setError("Your photo didn't upload. Check your connection and try again.");
         return;
       }
-      avatarUrl = up.data.avatarUrl;
     }
     const payload: Record<string, Json> = {
       display_name: name.trim(),
@@ -420,6 +445,7 @@ export function OnboardingFlow({
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
     setCropOpen(false);
+    void uploadPhoto(file);
   }
 
   /** brand_agency_request, then the wait is stored so a reload opens on it. */
@@ -559,7 +585,7 @@ export function OnboardingFlow({
           {photoPreview !== null ? (
             <Avatar name={name || 'You'} src={photoPreview} size="xl" />
           ) : (
-            <Avatar name={name || 'You'} size="xl" />
+            <Avatar size="xl" />
           )}
           <div className="flex min-w-0 flex-col gap-1">
             <Button size="lg" onClick={() => photoInputRef.current?.click()}>

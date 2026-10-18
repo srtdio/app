@@ -169,11 +169,11 @@ test('invited creator: welcome, name, role, then the first post and the look-aro
   await expect(page.getByRole('button', { name: 'Format', exact: true })).toHaveText(
     'Single image',
   );
-  // The photo tap attaches the bundled sample; nothing uploads until Send.
+  // The photo tap attaches the bundled sample and starts its upload at once.
   await check('i_post_media');
   await tapControl(page, step('i_post_media'));
   await expect(page.locator('img[src^="blob:"]').first()).toBeVisible();
-  expect(network.uploads).toEqual([]);
+  await expect.poll(() => network.uploads).toEqual([FIRST_POST_SAMPLE.photoName]);
   await check('i_post_send');
   await tapControl(page, step('i_post_send'));
 

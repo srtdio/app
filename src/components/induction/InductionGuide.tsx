@@ -34,7 +34,6 @@ import {
   placeLabel,
   placeRoute,
   progressOf,
-  RESULT_HOLD_MS,
   skipTarget,
   type Rect,
   type Resolution,
@@ -47,10 +46,10 @@ import { useInduction, type InductionContextValue } from './InductionProvider';
 import {
   GuideBar,
   GuideBox,
+  GuideDim,
   GuideCard,
   GuideHand,
   GuideLabel,
-  GuideResult,
   GuideStyle,
   type BarCopy,
   type DockAt,
@@ -70,6 +69,11 @@ import {
   useLegend,
   useStepCompletion,
   useTapGuard,
+  useScrolledByHand,
+  usePhotosSettled,
+  useDimHold,
+  useTypingNow,
+  APP_TYPING_PAUSE_MS,
 } from './guide-hooks';
 import { useLiveTick } from './useLiveTick';
 
@@ -126,12 +130,9 @@ function ActiveGuide({
           marks={hold.marks}
           holding={hold.result !== null}
         />
-      ) : hold.result === null ? (
+      ) : (
         <CardLayer ctx={ctx} resolution={resolution} dock={{ side: 'bottom', laptop, insets }} />
-      ) : null}
-      {hold.result !== null ? (
-        <GuideResult rect={hold.result.rect} radius={hold.result.radius} />
-      ) : null}
+      )}
     </div>,
     document.body,
   );
@@ -152,40 +153,22 @@ interface StepMarks {
 type Marks = MutableRefObject<StepMarks>;
 
 /**
- * The green result tick: when the step changes because the one before
- * finished (a tap on its control, or its data), its last box turns green with
- * a tick for RESULT_HOLD_MS and the next step (or card) waits. Back, the 4 s
- * rule and the optional chip move on quietly.
+ * The step marks (the last boxed place and a tap on the control). The green
+ * result tick that once held each finished step is gone: the box drew where the
+ * control had been after the page moved, and the hold slowed every step, so the
+ * next step now shows at once.
  */
 function useResultHold(ctx: InductionContextValue): {
   marks: Marks;
   result: { rect: Rect; radius: number } | null;
 } {
   const marks = useRef<StepMarks>({ boxed: null, tapped: '' });
-  const [result, setResult] = useState<{ rect: Rect; radius: number } | null>(null);
   const { resolution } = ctx;
   const id = resolution.kind === 'off' ? '' : stepIdOf(resolution);
-  const current = resolution.kind === 'step' ? resolution.step : undefined;
-  const latest = useRef({ current, isDone: ctx.isDone });
-  latest.current = { current, isDone: ctx.isDone };
-  const before = useRef<Step | undefined>(undefined);
-
   useLayoutEffect(() => {
-    const prev = before.current;
-    before.current = latest.current.current;
-    const seen = marks.current;
     marks.current = { boxed: null, tapped: '' };
-    if (prev === undefined || prev.id === id) return;
-    const finished = seen.tapped === prev.id || latest.current.isDone(prev);
-    if (!finished || seen.boxed === null || seen.boxed.id !== prev.id) return;
-    setResult({ rect: seen.boxed.rect, radius: seen.boxed.radius });
-    const timer = window.setTimeout(() => setResult(null), RESULT_HOLD_MS);
-    return () => {
-      window.clearTimeout(timer);
-      setResult(null);
-    };
   }, [id]);
-  return { marks, result };
+  return { marks, result: null };
 }
 
 /**
@@ -339,7 +322,19 @@ function StepLayer({
 
   // Nothing dims while the control cannot be used yet (Send invite with no
   // address, Post with no words): the bar alone shows until it can be tapped.
-  const waiting = el !== undefined && isUnavailable(el);
+  // Nor while the form shows a message the person must read (an invite refused):
+  // the screen brightens until they change the field.
+  // Nor while they are still typing into another field (an email before Send
+  // invite): the box lands once they stop, not the moment the address is valid.
+  const typing = useTypingNow(APP_TYPING_PAUSE_MS);
+  // Nor before the photos on screen have painted (the pipeline's posts).
+  const photosSettled = usePhotosSettled(step.id);
+  const waiting =
+    el !== undefined &&
+    (!photosSettled ||
+      isUnavailable(el) ||
+      el.closest('form')?.querySelector('[role="alert"]') != null ||
+      (typing && textFieldOf(el) === undefined));
   const boxed = el !== undefined && !moving && !holding && !waiting ? el : undefined;
   useTapMark(el, step.id, marks);
   const field = el !== undefined ? textFieldOf(el) : undefined;
@@ -386,6 +381,11 @@ function StepLayer({
       radius,
     };
   });
+  // The dim never blinks off for a moment between two dimmed states.
+  const dimHold = useDimHold(boxed !== undefined || (el !== undefined && moving && !waiting));
+  const optOut = step.kind === 'optional' && step.laterLabel !== undefined;
+  // The opt-out ("It's just me for now") waits until they have scrolled the page.
+  const optOutShown = useScrolledByHand(step.id, optOut);
   const back = index === 0 ? -1 : backIndex(steps, index, probe);
   const order = chapterOrder(steps);
   const copy: BarCopy = {
@@ -415,6 +415,9 @@ function StepLayer({
   };
   return (
     <>
+      {dimHold || (el !== undefined && boxed === undefined && moving && !waiting) ? (
+        <GuideDim />
+      ) : null}
       {control !== undefined && boxed !== undefined ? (
         <Spotlight
           control={control}
@@ -435,10 +438,7 @@ function StepLayer({
         dock={dock}
         actions={{
           onBack: back >= 0 ? () => quietMove(back) : undefined,
-          onLater:
-            step.kind === 'optional' && step.laterLabel !== undefined
-              ? () => quietMove(index + 1)
-              : undefined,
+          onLater: optOut && optOutShown ? () => quietMove(index + 1) : undefined,
         }}
       />
     </>

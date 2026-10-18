@@ -194,7 +194,11 @@ test('A: the panel docks at full size, opens on today, chat scrolls beside it; a
     const day = await dayBlock(panel, TODAY).boundingBox();
     const top = await body.boundingBox();
     if (day === null || top === null) throw new Error('boxes');
-    expect(Math.abs(day.y - top.y)).toBeLessThanOrEqual(2);
+    // On the plan's last days the list cannot scroll today to the top: it ends first.
+    const atEnd = await body.evaluate(
+      (el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1,
+    );
+    if (!atEnd) expect(Math.abs(day.y - top.y)).toBeLessThanOrEqual(2);
     if (TODAY > '2026-10-12') expect(await body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
   } else {
     expect(await body.evaluate((el) => el.scrollTop)).toBe(0);

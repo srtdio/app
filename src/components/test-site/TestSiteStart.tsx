@@ -30,7 +30,8 @@ export function TestSiteStart(): ReactElement | null {
   return (
     <div className="mb-4 flex flex-col gap-2 rounded-md border border-dashed border-accent p-3">
       <p className="text-xs text-fg-2">
-        Test site: a new throwaway account, no email. It is deleted after 24 hours.
+        Test site: any new email signs in at once, no link. Test accounts are deleted after 24
+        hours.
       </p>
       <Button
         variant="primary"

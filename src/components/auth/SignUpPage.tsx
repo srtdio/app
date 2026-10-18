@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { TestSiteStart } from '@/components/test-site/TestSiteStart';
+import { isTestSite, startTestSession } from '@/lib/test-site';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -100,7 +101,18 @@ function useCooldown(): [number, (seconds: number) => void] {
 
 const client = supabase as unknown as SignUpAuthClient;
 
+/** The test site's sign-up refusals, in words. */
+export function testSignUpMessage(code: string): string {
+  if (code.includes('account_exists')) {
+    return 'That email already has a real account. Use another email to test.';
+  }
+  if (code.includes('invalid_email')) return 'Enter a valid email address.';
+  if (code.includes('rate_limited')) return 'Too many test accounts this hour. Try again later.';
+  return "We couldn't start that. Try again.";
+}
+
 export function SignUpPage(): ReactElement {
+  const navigate = useNavigate();
   // The homepage signup band and the sign-in screen hand off ?email=; prefilled, still editable.
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
@@ -131,7 +143,24 @@ export function SignUpPage(): ReactElement {
   }
 
   async function handleSignUp(): Promise<void> {
+    if (isTestSite()) {
+      await testSignUp();
+      return;
+    }
     if (await sendLink()) setSent(true);
+  }
+
+  /** Test site: the typed email signs in at once as a test account (no link). */
+  async function testSignUp(): Promise<void> {
+    setError(null);
+    setSubmitting(true);
+    try {
+      await startTestSession(email);
+      navigate('/chat', { replace: true });
+    } catch (err) {
+      setSubmitting(false);
+      setError(testSignUpMessage(err instanceof Error ? err.message : String(err)));
+    }
   }
 
   function handleResend(): void {

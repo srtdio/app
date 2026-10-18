@@ -130,8 +130,8 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   await page.getByRole('radio', { name: 'LinkedIn' }).click();
   await check('c_workspace_continue');
   await tapControl(page, step('c_workspace_continue'));
-  // The finished step's box turns green with a tick before the next one shows.
-  await expect(page.locator('[data-induction-result]')).toHaveCount(1);
+  // The next step shows at once: no green tick on the finished one.
+  await expect(page.locator('[data-induction-result]')).toHaveCount(0);
   await check('c_workspace_create');
   await tapControl(page, step('c_workspace_create'));
 
@@ -156,14 +156,14 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   await expect(page.getByRole('button', { name: 'Format', exact: true })).toHaveText(
     'Single image',
   );
-  // The photo tap attaches the bundled sample; nothing uploads until Send.
+  // The photo tap attaches the bundled sample and starts its upload at once.
   await check('c_post_media');
   await tapControl(page, step('c_post_media'));
   await expect(page.locator('img[src^="blob:"]').first()).toBeVisible();
-  expect(network.uploads).toEqual([]);
+  await expect.poll(() => network.uploads).toEqual([FIRST_POST_SAMPLE.photoName]);
   await check('c_post_send', undefined, '02-mid-route');
   await tapControl(page, step('c_post_send'));
-  // Send creates the post with the filled values: the sample photo uploads now, no target date.
+  // Send creates the post with the filled values (the photo uploaded once), no target date.
   await expect.poll(() => network.uploads).toEqual([FIRST_POST_SAMPLE.photoName]);
   await expect.poll(() => network.rpcCalls.some((c) => c.name === 'post_create')).toBe(true);
   const created = network.rpcCalls.find((c) => c.name === 'post_create');
@@ -198,6 +198,9 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   // The team invite: the form is empty again, so nothing dims until an address is in.
   await expectGuideId(page, 'c_team_invite');
   await expect(page.locator('[data-induction-box]')).toHaveCount(0);
+  // "It's just me for now" waits until they have scrolled the page by hand.
+  await expect(bar.getByRole('button', { name: later, exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new WheelEvent('wheel', { deltaY: 120 })));
   await bar.getByRole('button', { name: later, exact: true }).click();
 
   // The look-around: no brief, no plan, so Review comes first.

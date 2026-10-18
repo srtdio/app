@@ -376,27 +376,56 @@ export interface GuideFactsRead {
   ownPostTitle: string;
 }
 
-/** Reads every guide fact for one workspace (read-only, RLS-scoped). */
+/**
+ * The default group never changes during a tour: once found it is kept, so a
+ * later read skips two dependent round trips (groups, then its channel).
+ */
+const knownGroups = new Map<string, DefaultGroup>();
+
+/** Forget the kept default groups (tests). */
+export function forgetKnownGroups(): void {
+  knownGroups.clear();
+}
+
+async function readGroupOnce(
+  client: Client,
+  workspaceId: string,
+): Promise<DefaultGroup | undefined> {
+  const known = knownGroups.get(workspaceId);
+  if (known !== undefined) return known;
+  const group = await readDefaultGroup(client, workspaceId);
+  if (group !== undefined) knownGroups.set(workspaceId, group);
+  return group;
+}
+
+/**
+ * Reads every guide fact for one workspace (read-only, RLS-scoped). Every read
+ * that does not need another's answer goes out at once: one round trip when the
+ * default group is known.
+ */
 export async function readGuideFacts(
   client: Client,
   input: { workspaceId: string; approver: boolean; postId: string | null },
 ): Promise<GuideFactsRead> {
   const { workspaceId, approver, postId } = input;
-  const sample = await readSampleWeek(client, workspaceId);
-  const [group, reviewPost, hasBrief, ownPostTitle] = await Promise.all([
-    readDefaultGroup(client, workspaceId),
-    approver
-      ? readOldestReviewPost(client, workspaceId, sample.postIds)
-      : Promise.resolve(undefined),
-    readHasBrief(client, workspaceId),
-    postId !== null ? readPostTitle(client, postId) : Promise.resolve(''),
-  ]);
-  const [hasPlan, hasVoiceNote] =
-    group === undefined
-      ? [false, false]
-      : await Promise.all([
-          readHasPlanCard(client, group.channelId),
-          readHasVoiceNote(client, group.channelId),
-        ]);
+  const samplePromise = readSampleWeek(client, workspaceId);
+  const groupFacts = readGroupOnce(client, workspaceId).then(async (group) => {
+    if (group === undefined) return { group, hasPlan: false, hasVoiceNote: false };
+    const [hasPlan, hasVoiceNote] = await Promise.all([
+      readHasPlanCard(client, group.channelId),
+      readHasVoiceNote(client, group.channelId),
+    ]);
+    return { group, hasPlan, hasVoiceNote };
+  });
+  const [sample, { group, hasPlan, hasVoiceNote }, reviewPost, hasBrief, ownPostTitle] =
+    await Promise.all([
+      samplePromise,
+      groupFacts,
+      approver
+        ? samplePromise.then((week) => readOldestReviewPost(client, workspaceId, week.postIds))
+        : Promise.resolve(undefined),
+      readHasBrief(client, workspaceId),
+      postId !== null ? readPostTitle(client, postId) : Promise.resolve(''),
+    ]);
   return { group, reviewPost, hasBrief, hasPlan, hasVoiceNote, ownPostTitle, sample };
 }

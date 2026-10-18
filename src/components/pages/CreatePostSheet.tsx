@@ -41,6 +41,8 @@ import {
 } from '@/lib/induction';
 import { FIRST_POST_SAMPLE } from '@/lib/induction-copy';
 import { logger } from '@/lib/logger';
+import { useOptionalToast } from '@/components/ui/toast';
+import { dispatchWorkspaceDataChanged } from '@/lib/events';
 import { sendMessageRecord } from '@/lib/chat/record';
 import { newMessageId } from '@/lib/chat/message-id';
 import { sharePostToChannel } from '@/lib/chat/share-post';
@@ -308,6 +310,8 @@ export async function uploadLocalAttachments(
   return { ok: true, items: out };
 }
 
+type UploadOutcome = { ok: true; versionId: string } | { ok: false; reason: string };
+
 export interface SubmitCreatePostDeps {
   client: Client;
   workspaceId: string;
@@ -357,8 +361,13 @@ export function CreatePostSheet({
   initialTargetDate,
   onClose,
   onCreated,
-  preset,
+  preset: presetProp,
 }: CreatePostSheetProps) {
+  // The preset as it was while open: the parent drops it once the first post is
+  // sent, and the closing sheet must not flash into the full form on its way out.
+  const presetSeen = useRef(presetProp);
+  if (open) presetSeen.current = presetProp;
+  const preset = open ? presetProp : presetSeen.current;
   const newTrace = useNewTrace();
   const { session } = useSession();
   const currentUserId = session?.user.id ?? null;
@@ -388,6 +397,8 @@ export function CreatePostSheet({
   const [share, setShare] = useState(true);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [shareGuard] = useState(createInFlightGuard);
+  const toast = useOptionalToast();
+  const uploads = useRef(new Map<File, Promise<UploadOutcome>>());
   // The soft file prompt: version ids of attached files the format does not
   // usually carry, awaiting keep or remove. Never blocks saving.
   const [promptIds, setPromptIds] = useState<string[]>([]);
@@ -597,25 +608,73 @@ export function CreatePostSheet({
     if (!shared.ok) logger.warn('first post share to group failed', { reason: shared.reason });
   }
 
+  /**
+   * The local photo's upload, started the moment it is attached (Instagram
+   * style: the bytes go up while the person reads on), shared by Send.
+   */
+  function uploadOnce(file: File): Promise<UploadOutcome> {
+    const known = uploads.current.get(file);
+    if (known !== undefined) return known;
+    const started =
+      workspaceId === null
+        ? Promise.resolve<UploadOutcome>({ ok: false, reason: 'No workspace' })
+        : uploadLocalFile({ file, workspaceId, newTrace });
+    uploads.current.set(file, started);
+    // A failed attempt is not kept: Try again starts a fresh one.
+    void started.then((out) => {
+      if (!out.ok) uploads.current.delete(file);
+    });
+    return started;
+  }
+
+  useEffect(() => {
+    if (!open || preset === undefined || workspaceId === null) return;
+    for (const item of form.attachments) {
+      if (item.localFile !== undefined) void uploadOnce(item.localFile);
+    }
+    // uploadOnce is stable in effect (keyed by file); only new attachments matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preset, workspaceId, form.attachments]);
+
+  /**
+   * After the sheet has closed: the photo (already uploading), the gallery and
+   * the group card. The post is already in review; a failure offers Try again.
+   */
+  async function finishInBackground(postId: string, items: AttachmentItem[]): Promise<void> {
+    const sent = await uploadLocalAttachments(items, uploadOnce);
+    const ids = sent.ok ? attachmentVersionIds(sent.items) : [];
+    let ok = sent.ok;
+    if (ok && ids.length > 0) {
+      const gallery = await gallerySet(supabase, {
+        p_post_id: postId,
+        p_asset_version_ids: ids,
+        p_trace_id: newTrace(),
+      });
+      ok = gallery.ok;
+      if (!gallery.ok)
+        logger.error('first post photo attach failed', { error: gallery.error.message });
+    }
+    if (!ok) {
+      toast?.show({
+        title: "Your photo didn't attach",
+        description: 'The post is in review. Try again to add the photo.',
+        durationMs: null,
+        action: { label: 'Try again', onPress: () => void finishInBackground(postId, items) },
+      });
+      dispatchWorkspaceDataChanged();
+      return;
+    }
+    await shareToGroup(postId);
+    dispatchWorkspaceDataChanged();
+  }
+
   async function handlePresetSubmit(): Promise<void> {
     if (workspaceId === null || preset === undefined) return;
     setSubmitting(true);
     setSubmitError(null);
+    const items = form.attachments;
     let postId = savedDraftId;
     if (postId === null) {
-      let attachments = form.attachments;
-      if (attachments.some((item) => item.localFile !== undefined)) {
-        const sent = await uploadLocalAttachments(attachments, (file) =>
-          uploadLocalFile({ file, workspaceId, newTrace }),
-        );
-        if (!sent.ok) {
-          setSubmitting(false);
-          setSubmitError(sent.reason);
-          return;
-        }
-        attachments = sent.items;
-        patch({ attachments });
-      }
       const built = buildPostCreatePayload({
         title: titleFromCaption(form.caption),
         caption: form.caption,
@@ -631,11 +690,12 @@ export function CreatePostSheet({
         setFieldErrors(built.errors);
         return;
       }
+      // The post first, with no gallery: the photo binds after the sheet closes.
       const result = await submitCreatePost({
         client: supabase,
         workspaceId,
         payload: built.payload,
-        versionIds: attachmentVersionIds(attachments),
+        versionIds: [],
         newTrace,
         postCreate,
         gallerySet,
@@ -656,10 +716,10 @@ export function CreatePostSheet({
       dispatchInductionRefresh();
       return;
     }
-    await shareToGroup(postId);
     setSubmitting(false);
     dispatchInductionRefresh();
     onCreated(postId);
+    void finishInBackground(postId, items);
   }
 
   async function handleSubmit(): Promise<void> {
