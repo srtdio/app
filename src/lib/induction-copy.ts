@@ -116,7 +116,7 @@ interface StepCopy {
 
 /** The pill and the why line per step, keyed by the step id without its route prefix. */
 export const STEP_COPY = {
-  workspace: { label: 'Tap Create your workspace', why: '' },
+  workspace: { label: 'Your brand first', why: '' },
   workspace_continue: { label: 'Tap Continue', why: '' },
   workspace_create: { label: 'Tap Create', why: '' },
   approved_chip: { label: 'Tap Approved to filter', why: 'Every post sits in one of five stages.' },

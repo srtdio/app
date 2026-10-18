@@ -42,18 +42,7 @@ const GUIDE_STYLE = `
 [data-guide-hand-svg] { transform-origin: 17px 1px; animation: sorted-guide-press 1.3s ease-in-out infinite; }
 [data-guide-ripple] { animation: sorted-guide-ripple 1.3s ease-out infinite; }
 [data-guide-nudge="on"] { animation: sorted-guide-nudge 300ms ease-in-out; }
-@keyframes sorted-guide-result {
-  from { opacity: 0; transform: scale(0.97); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes sorted-guide-tick {
-  from { opacity: 0; transform: scale(0.3); }
-  to { opacity: 1; transform: none; }
-}
-[data-induction-result] { animation: sorted-guide-result 220ms cubic-bezier(0.34, 1.4, 0.64, 1) both; }
-[data-guide-tick] { animation: sorted-guide-tick 240ms cubic-bezier(0.34, 1.4, 0.64, 1) 60ms both; }
 @media (prefers-reduced-motion: reduce) {
-  [data-induction-result], [data-guide-tick] { animation: none; }
   [data-guide-hand-svg] { animation: none; }
   [data-guide-ripple] { animation: none; transform: scale(0.8); opacity: 0.9; }
   [data-guide-nudge="on"] { animation: none; }
@@ -70,6 +59,20 @@ export function GuideStyle(): ReactElement {
  * under fixed elements and a fixed box drifts off its control. Its huge outer
  * shadow is the dim, so the control's own hole stays clear.
  */
+/**
+ * The dim alone, with no cut-out: held while the next control slides or scrolls
+ * into place, so the screen never flashes bright between two dimmed steps.
+ */
+export function GuideDim(): ReactElement {
+  return (
+    <div
+      data-induction-dim=""
+      aria-hidden="true"
+      className={`pointer-events-none fixed inset-0 ${GUIDE_Z} bg-[rgba(14,16,30,0.30)] dark:bg-[rgba(0,0,0,0.22)]`}
+    />
+  );
+}
+
 export function GuideBox({ rect, radius }: { rect: Rect; radius: number }): ReactElement {
   return (
     <div
@@ -84,47 +87,6 @@ export function GuideBox({ rect, radius }: { rect: Rect; radius: number }): Reac
         borderRadius: radius,
       }}
     />
-  );
-}
-
-/**
- * The result: when a step finishes by its tap or its data, the hairline turns
- * green (2px) with a small tick on its corner for a moment before the next
- * step shows. No dim. `rect` is in page coordinates, taken when the step
- * finished, so it stays where the control was.
- */
-export function GuideResult({ rect, radius }: { rect: Rect; radius: number }): ReactElement {
-  return (
-    <div
-      data-induction-result=""
-      aria-hidden="true"
-      className={`pointer-events-none absolute ${GUIDE_Z} border-2 border-good`}
-      style={{
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-        borderRadius: radius,
-      }}
-    >
-      <span
-        data-guide-tick=""
-        className="absolute -right-[11px] -top-[11px] grid h-[22px] w-[22px] place-items-center rounded-full bg-good text-panel shadow-md"
-      >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M5 12.5l4.5 4.5L19 7.5" />
-        </svg>
-      </span>
-    </div>
   );
 }
 

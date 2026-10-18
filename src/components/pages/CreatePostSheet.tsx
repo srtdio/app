@@ -361,8 +361,13 @@ export function CreatePostSheet({
   initialTargetDate,
   onClose,
   onCreated,
-  preset,
+  preset: presetProp,
 }: CreatePostSheetProps) {
+  // The preset as it was while open: the parent drops it once the first post is
+  // sent, and the closing sheet must not flash into the full form on its way out.
+  const presetSeen = useRef(presetProp);
+  if (open) presetSeen.current = presetProp;
+  const preset = open ? presetProp : presetSeen.current;
   const newTrace = useNewTrace();
   const { session } = useSession();
   const currentUserId = session?.user.id ?? null;

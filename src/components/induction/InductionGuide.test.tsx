@@ -3,7 +3,7 @@ import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { RESULT_HOLD_MS, type InductionState, type Rect } from '@/lib/induction';
+import type { InductionState, Rect } from '@/lib/induction';
 import { ROUTE_SCRIPTS } from '@/lib/induction-routes';
 import type { Step } from '@/lib/induction-model';
 import type { GuideFactsRead } from './induction-data';
@@ -347,6 +347,10 @@ describe('the guide bar', () => {
       { step: 'c_team_invite', postId: 'p1', clientInvited: true },
       { route: '/settings?panel=members' },
     );
+    // The chip shows once they have scrolled by hand.
+    act(() => {
+      window.dispatchEvent(new Event('wheel'));
+    });
     const later = Array.from(document.querySelectorAll('[data-induction-bar] button')).find(
       (b) => b.textContent === "It's just me for now",
     );
@@ -845,8 +849,8 @@ async function moveStored(state: Partial<InductionState>): Promise<void> {
   });
 }
 
-describe('the result tick', () => {
-  it('turns the finished box green with a tick, then shows the next step', async () => {
+describe('a finished step', () => {
+  it('shows the next step at once, with no green tick', async () => {
     const chip = control('pipeline-approved-chip', CHIP);
     control('pipeline-create', { top: 120, left: 320, width: 44, height: 44 });
     await mount({ step: 'c_approved_chip' });
@@ -855,51 +859,36 @@ describe('the result tick', () => {
       chip.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
     await moveStored({ step: 'c_post_create' });
-    const result = q('[data-induction-result]');
-    expect([
-      px(result, 'top'),
-      px(result, 'left'),
-      px(result, 'width'),
-      px(result, 'height'),
-    ]).toEqual([113, 9, 134, 58]);
-    expect(result.className).toContain('border-2');
-    expect(result.className).toContain('border-good');
-    expect(result.querySelector('[data-guide-tick]')).not.toBeNull();
-    expect(document.querySelector('[data-induction-box]')).toBeNull();
-    await wait(RESULT_HOLD_MS + 40);
+    expect(document.querySelector('[data-induction-result]')).toBeNull();
+    await wait(150);
     expect(document.querySelector('[data-induction-result]')).toBeNull();
     expect(document.querySelector('[data-induction-box]')).not.toBeNull();
   });
+});
 
-  it('shows when the data finishes the step', async () => {
-    control('members-invite', { top: 200, left: 16, width: 358, height: 300 }, { tag: 'section' });
-    await mount({ step: 'c_approver_invite', postId: 'p1' }, { route: '/settings?panel=members' });
-    await moveStored({ step: 'c_approver_invite', postId: 'p1', clientInvited: true });
-    expect(q('[data-induction-step]').getAttribute('data-induction-step')).toBe('c_team_invite');
-    expect(document.querySelector('[data-induction-result]')).not.toBeNull();
-  });
-
-  it('stays off for Back', async () => {
-    control('pipeline-approved-chip', CHIP);
-    control('pipeline-create', { top: 120, left: 320, width: 44, height: 44 });
-    await mount({ step: 'c_post_create' });
-    act(() => q('[data-induction-back]').click());
-    await moveStored({ step: 'c_approved_chip' });
-    expect(document.querySelector('[data-induction-result]')).toBeNull();
-  });
-
-  it('stays off for the optional chip', async () => {
+describe('the opt-out', () => {
+  async function teamInvite(): Promise<void> {
     control('members-invite', { top: 200, left: 16, width: 358, height: 300 }, { tag: 'section' });
     await mount(
       { step: 'c_team_invite', postId: 'p1', clientInvited: true },
       { route: '/settings?panel=members' },
     );
-    const later = Array.from(document.querySelectorAll('[data-induction-bar] button')).find(
+  }
+  const later = (): HTMLButtonElement | undefined =>
+    Array.from(document.querySelectorAll<HTMLButtonElement>('[data-induction-bar] button')).find(
       (b) => b.textContent === "It's just me for now",
-    ) as HTMLButtonElement;
-    act(() => later.click());
+    );
+
+  it('shows only once they scroll by hand, then moves on quietly', async () => {
+    await teamInvite();
+    expect(later()).toBeUndefined();
+    act(() => {
+      window.dispatchEvent(new Event('wheel'));
+    });
+    const button = later();
+    expect(button).toBeDefined();
+    act(() => button?.click());
     await moveStored({ step: 'c_intro', postId: 'p1', clientInvited: true });
-    expect(document.querySelector('[data-induction-result]')).toBeNull();
     expect(document.querySelector('[data-induction-card="intro"]')).not.toBeNull();
   });
 });

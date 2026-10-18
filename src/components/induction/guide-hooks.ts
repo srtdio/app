@@ -273,20 +273,103 @@ export const TYPING_PAUSE_MS = 900;
  * True while the person is typing (a keystroke in the last TYPING_PAUSE_MS),
  * re-rendering when the pause ends, so the hand never lands mid-word.
  */
-export function useTypingNow(): boolean {
+export function useTypingNow(pauseMs: number = TYPING_PAUSE_MS): boolean {
   const [typing, setTyping] = useState(false);
   useEffect(() => {
     let timer: number | undefined;
     const onInput = (): void => {
       setTyping(true);
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setTyping(false), TYPING_PAUSE_MS);
+      timer = window.setTimeout(() => setTyping(false), pauseMs);
     };
     document.addEventListener('input', onInput, true);
     return () => {
       document.removeEventListener('input', onInput, true);
       window.clearTimeout(timer);
     };
-  }, []);
+  }, [pauseMs]);
   return typing;
+}
+
+/** In the app: how long typing must pause before a button step's box shows. */
+export const APP_TYPING_PAUSE_MS = 1500;
+
+/** When nothing on the page scrolls, the opt-out still shows after this long. */
+export const NO_SCROLL_SHOW_MS = 8000;
+
+/**
+ * True once the person has scrolled by hand (a swipe or the wheel) since this
+ * step appeared: an opt-out shows only after they have looked at what it skips.
+ * The guide's own bring-into-view scrolls do not count. A page with nothing to
+ * scroll shows it after NO_SCROLL_SHOW_MS.
+ */
+export function useScrolledByHand(stepKey: string, enabled: boolean): boolean {
+  const [scrolled, setScrolled] = useState<{ key: string; done: boolean }>({
+    key: stepKey,
+    done: false,
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    setScrolled({ key: stepKey, done: false });
+    const done = (): void => setScrolled({ key: stepKey, done: true });
+    const onMove = (): void => done();
+    const onKey = (event: KeyboardEvent): void => {
+      if (['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', ' '].includes(event.key)) done();
+    };
+    window.addEventListener('touchmove', onMove, { passive: true, capture: true });
+    window.addEventListener('wheel', onMove, { passive: true, capture: true });
+    window.addEventListener('keydown', onKey, true);
+    const page = document.scrollingElement;
+    const scrollable =
+      (page != null && page.scrollHeight > page.clientHeight + 1) ||
+      Array.from(document.querySelectorAll('main, [data-scroll-root]')).some(
+        (el) => el.scrollHeight > el.clientHeight + 1,
+      );
+    const timer = scrollable ? undefined : window.setTimeout(done, NO_SCROLL_SHOW_MS);
+    return () => {
+      window.removeEventListener('touchmove', onMove, true);
+      window.removeEventListener('wheel', onMove, true);
+      window.removeEventListener('keydown', onKey, true);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [stepKey, enabled]);
+  return scrolled.key === stepKey && scrolled.done;
+}
+
+/** The longest a step waits for on-screen photos before it points anyway. */
+export const PHOTOS_WAIT_CAP_MS = 4000;
+
+function photosPending(): boolean {
+  const height = window.innerHeight;
+  return Array.from(document.querySelectorAll('[data-thumb-loading]')).some((el) => {
+    const r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < height && r.width > 0;
+  });
+}
+
+/**
+ * True once the photos on screen have painted (or PHOTOS_WAIT_CAP_MS passed):
+ * the guide points at a control only once the page behind it looks finished.
+ */
+export function usePhotosSettled(stepKey: string): boolean {
+  const [settled, setSettled] = useState<{ key: string; done: boolean }>({
+    key: stepKey,
+    done: false,
+  });
+  useEffect(() => {
+    const started = Date.now();
+    const check = (): boolean => {
+      if (!photosPending() || Date.now() - started >= PHOTOS_WAIT_CAP_MS) {
+        setSettled({ key: stepKey, done: true });
+        return true;
+      }
+      return false;
+    };
+    if (check()) return;
+    const id = window.setInterval(() => {
+      if (check()) window.clearInterval(id);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [stepKey]);
+  return settled.key === stepKey && settled.done;
 }

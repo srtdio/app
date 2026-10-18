@@ -36,12 +36,21 @@ export function useInductionData(workspaceId: string | null): InductionData {
   );
   const [polling, setPolling] = useState(false);
   const seq = useRef(0);
+  // The step being stored: a read that left before the store landed (a route
+  // change right after a tap) must not pull the guide back a step.
+  const storing = useRef<{ step: string; storedAt: number | null } | null>(null);
 
   const refresh = useCallback(() => {
     seq.current += 1;
     const mine = seq.current;
+    const startedAt = performance.now();
     void readInductionState(supabase, { workspaceId, traceId: newTrace() }).then((state) => {
-      if (mine === seq.current) setRead({ workspaceId, state });
+      if (mine !== seq.current) return;
+      const guard = storing.current;
+      // A read that left before the store landed still says the old step.
+      const stale = guard !== null && (guard.storedAt === null || startedAt < guard.storedAt);
+      if (guard !== null && !stale) storing.current = null;
+      setRead({ workspaceId, state: stale ? { ...state, step: guard.step } : state });
     });
   }, [workspaceId, newTrace]);
 
@@ -64,9 +73,11 @@ export function useInductionData(workspaceId: string | null): InductionData {
   const setStep = useCallback(
     async (step: string): Promise<boolean> => {
       seq.current += 1;
+      storing.current = { step, storedAt: null };
       setRead((prev) => (prev === null ? prev : { ...prev, state: { ...prev.state, step } }));
       const traceId = newTrace();
       const stored = await storeInductionStep(supabase, { step, traceId });
+      if (storing.current?.step === step) storing.current = { step, storedAt: performance.now() };
       if (!stored.ok) {
         logger.warn('induction_step_set failed', {
           error: stored.error.message,

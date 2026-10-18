@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { IconFile, IconLink } from '@/components/ui/icons';
 import { formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
@@ -130,10 +130,15 @@ export function Thumbnail({
     url,
     failed,
   });
+  // Which url has painted: the onboarding guide waits for on-screen photos
+  // (data-thumb-loading) before it points at anything.
+  const [painted, setPainted] = useState<string | null>(null);
+  const loading = state === 'shimmer' || (state === 'image' && url !== null && painted !== url);
 
   return (
     <div
       ref={ref}
+      {...(loading ? { 'data-thumb-loading': '' } : {})}
       className={cn(
         'relative flex w-full items-center justify-center overflow-hidden',
         ASPECT[aspect],
@@ -147,6 +152,7 @@ export function Thumbnail({
           src={url}
           alt={alt}
           loading="lazy"
+          onLoad={() => setPainted(url)}
           onError={onError}
           className="h-full w-full object-cover"
         />
