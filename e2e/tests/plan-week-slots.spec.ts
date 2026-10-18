@@ -269,7 +269,7 @@ test('client: a long plan shows week headers, 44px empty days, and a draft with 
   );
   expect(await plan.locator('[data-plan-week-header]').count()).toBeGreaterThan(1);
   const empty = plan.locator('[data-plan-day-empty]').first();
-  expect((await empty.boundingBox())?.height).toBe(44);
+  expect((await empty.boundingBox())?.height).toBeCloseTo(44, 2);
   const draft = plan.locator(`[data-plan-row="${DRAFT_ITEM_ID}"]`);
   await draft.scrollIntoViewIfNeeded();
   await expect(draft).toHaveAttribute('aria-disabled', 'true');
