@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ApproveConfirm, approveRef, approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { Sheet } from '@/components/ui/Sheet';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
@@ -30,7 +31,10 @@ import { PlatformPreviewPanel, PreviewChip } from '@/components/preview/Platform
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { CaptionView, firstHighlightCommentId } from '@/components/pages/pcs/CaptionView';
 import type { CaptionAnnotationView } from '@/components/pages/pcs/CaptionView';
-import { CaptionAnnotationComposer } from '@/components/pages/pcs/CaptionAnnotationComposer';
+import {
+  CaptionAnnotationComposer,
+  COMMENT_POST_FAILED,
+} from '@/components/pages/pcs/CaptionAnnotationComposer';
 import { PinAnnotationComposer } from '@/components/pages/pcs/PinAnnotationComposer';
 import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
 import { buildPinData } from '@/components/pages/pcs/pin-annotations';
@@ -54,8 +58,12 @@ import { canDeletePost, isAgencySide, isClient } from '@/components/pages/pcs/ro
 import {
   agencyReviewHelper,
   onBehalfConfirmLine,
+  STAGE_REASON_LABEL,
+  stageReasonComment,
+  stageReasonConfirm,
   visibleStageActions,
   type StageAction,
+  type StageReasonConfirmCopy,
 } from '@/components/pages/pcs/stage-actions';
 import { sheetTitle } from '@/components/chat/post-sheet';
 import {
@@ -84,6 +92,7 @@ import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { displayLabel, fetchMemberRole, listAssets } from '@/lib/assets';
 import { uploadAssetFile, type UploadOutcome } from '@/lib/asset-upload';
 import { useNewTrace } from '@/lib/trace-context';
+import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import {
@@ -273,6 +282,69 @@ export function PcsApproveConfirm(props: {
   );
 }
 
+/**
+ * The reject / park confirm (W2): the shared Sheet with an optional reason that
+ * goes to the comments, Cancel and the destructive Reject / Park. Confirm hands
+ * off to the page, which shows the new stage at once behind an Undo toast and
+ * only sends the move when the window ends. Hookless, so it is unit tested by
+ * walking the tree.
+ */
+export function StageReasonConfirm(props: {
+  copy: StageReasonConfirmCopy | null;
+  reason: string;
+  onReasonChange: (reason: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { copy } = props;
+  return (
+    <Sheet
+      open={copy !== null}
+      onClose={props.onCancel}
+      title={copy?.title ?? ''}
+      footer={
+        <>
+          <Button size="lg" className="ml-auto" onClick={props.onCancel}>
+            Cancel
+          </Button>
+          <Button size="lg" variant="danger" data-stage-confirm="" onClick={props.onConfirm}>
+            {copy?.confirmLabel ?? ''}
+          </Button>
+        </>
+      }
+    >
+      <label className="flex flex-col gap-2">
+        <span className="text-sm text-fg-2">{STAGE_REASON_LABEL}</span>
+        <Textarea
+          aria-label={STAGE_REASON_LABEL}
+          value={props.reason}
+          onChange={(event) => props.onReasonChange(event.target.value)}
+        />
+      </label>
+    </Sheet>
+  );
+}
+
+/** The caption Save label: the version this save creates, or plain Save before any version. */
+export function captionSaveLabel(currentVersionNumber: number | null): string {
+  return currentVersionNumber === null ? 'Save' : `Save as v${currentVersionNumber + 1}`;
+}
+
+/** The note beside caption Save: comments stay with the version they were made on. */
+export function captionSaveNote(currentVersionNumber: number | null): string | null {
+  return currentVersionNumber === null
+    ? null
+    : `Comments on v${currentVersionNumber} stay with it.`;
+}
+
+/** Per-selection draft keys, so each caption span and each pin keeps its own text. */
+export function captionDraftKey(start: number, end: number): string {
+  return `caption:${start}:${end}`;
+}
+export function pinDraftKey(index: number, x: number, y: number): string {
+  return `pin:${index}:${x}:${y}`;
+}
+
 export function PostDetailPage({
   postId: postIdProp,
   embedded = false,
@@ -370,6 +442,16 @@ export function PostDetailPage({
   const [transitioning, setTransitioning] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Reject / park (W2): the confirm's target and reason, then the stage shown
+  // optimistically while the Undo window runs. The move is sent only when the
+  // window ends; Undo clears the optimistic stage and sends nothing.
+  const [reasonTarget, setReasonTarget] = useState<Stage | null>(null);
+  const [reasonDraft, setReasonDraft] = useState('');
+  const [optimisticStage, setOptimisticStage] = useState<Stage | null>(null);
+  const { run: runUndoable, flush: flushUndoable } = useUndoableAction();
+  const postIdRef = useRef(postId);
+  postIdRef.current = postId;
+
   // Caption annotation state: the pending selection drives the composer, and a
   // bump of commentsRefresh re-fetches the comments list after a post.
   const [composer, setComposer] = useState<{ start: number; end: number; quote: string } | null>(
@@ -378,6 +460,22 @@ export function PostDetailPage({
   const [annotating, setAnnotating] = useState(false);
   const [annotateError, setAnnotateError] = useState<string | null>(null);
   const [commentsRefresh, setCommentsRefresh] = useState(0);
+  // Comment drafts keyed per selection (caption span or pin), kept while the
+  // page is open so a Cancel and a reselect bring the text back.
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const setDraft = useCallback((key: string, body: string): void => {
+    setCommentDrafts((prev) => ({ ...prev, [key]: body }));
+  }, []);
+  const dropDraft = useCallback((key: string): void => {
+    setCommentDrafts((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
+  // The failure shown inside the open composer sheet (text kept).
+  const [composerError, setComposerError] = useState<string | null>(null);
 
   // Checkpoint counts lifted from CheckpointStrip's one fetch (no duplicate
   // read): they drive the header "X of N" chip and the Feedback tab badge.
@@ -436,6 +534,12 @@ export function PostDetailPage({
   const [captionDraft, setCaptionDraft] = useState('');
   const [captionError, setCaptionError] = useState<string | null>(null);
   const [captionSaving, setCaptionSaving] = useState(false);
+  const [confirmCaptionDiscard, setConfirmCaptionDiscard] = useState(false);
+
+  // One full-list gallery write at a time: while one is in flight, reorder and
+  // remove taps do nothing and the gallery says "Saving…".
+  const [gallerySaving, setGallerySaving] = useState(false);
+  const gallerySavingRef = useRef(false);
 
   // Gallery slide-action state: the open sheet's slide index, the per-run upload
   // target (append vs insert-after), and the version ids collected during a run.
@@ -487,7 +591,13 @@ export function PostDetailPage({
     // A stale checkpoint chip never bleeds across posts; the ledger re-lifts
     // the real counts once its fetch for the new post lands.
     setCheckpointCounts({ resolved: 0, total: 0 });
-  }, [postId]);
+    // A pending reject / park commits for its own post (flush); the next post
+    // never shows that optimistic stage.
+    flushUndoable();
+    setOptimisticStage(null);
+    setReasonTarget(null);
+    setCommentDrafts({});
+  }, [postId, flushUndoable]);
 
   useEffect(() => {
     if (workspaceId === null || userId === null) {
@@ -772,6 +882,7 @@ export function PostDetailPage({
   // Open the composer for a captured caption selection.
   const handleAnnotate = useCallback((start: number, end: number, quote: string): void => {
     setAnnotateError(null);
+    setComposerError(null);
     setComposer({ start, end, quote });
   }, []);
 
@@ -825,20 +936,25 @@ export function PostDetailPage({
   // surface an error and refresh the list, with no retry loop.
   async function submitAnnotation(body: string): Promise<void> {
     if (composer === null || detail === null || currentVersionId === null) return;
-    // The sheet closes at once and the comment posts behind it (a line under the
-    // caption says so): Post never holds the person on a "Posting" button.
+    // The sheet stays open (busy) until the comment is saved; a failure keeps
+    // the text in it with a retry message.
     const span = composer;
-    setComposer(null);
+    const draftKey = captionDraftKey(span.start, span.end);
     setAnnotating(true);
     setAnnotateError(null);
+    setComposerError(null);
     const traceId = newTrace();
 
     const commentResult = await createAnchoredComment(body, traceId);
     if (!commentResult.ok) {
+      logger.warn('post page: caption comment failed', { error: commentResult.message });
       setAnnotating(false);
-      setAnnotateError(commentResult.message);
+      setComposerError(COMMENT_POST_FAILED);
       return;
     }
+    // The comment is saved: close the sheet and drop its draft.
+    setComposer(null);
+    dropDraft(draftKey);
 
     const annotationResult = await annotationCreate(supabase, {
       kind: 'caption_span',
@@ -876,6 +992,7 @@ export function PostDetailPage({
 
   const handlePlacePin = useCallback((index: number, x: number, y: number): void => {
     setPinError(null);
+    setComposerError(null);
     setPinComposer({ index, x, y });
   }, []);
 
@@ -886,16 +1003,21 @@ export function PostDetailPage({
     if (pinComposer === null || detail === null || currentVersionId === null) return;
     const item = gallery[pinComposer.index];
     if (item === undefined) return;
+    const draftKey = pinDraftKey(pinComposer.index, pinComposer.x, pinComposer.y);
     setPinSubmitting(true);
     setPinError(null);
+    setComposerError(null);
     const traceId = newTrace();
 
     const commentResult = await createAnchoredComment(body, traceId);
     if (!commentResult.ok) {
+      logger.warn('post page: pin comment failed', { error: commentResult.message });
       setPinSubmitting(false);
-      setPinError(commentResult.message);
+      setComposerError(COMMENT_POST_FAILED);
       return;
     }
+    // The comment is saved: the draft goes; the sheet closes below.
+    dropDraft(draftKey);
 
     const annotationResult = await annotationCreate(supabase, {
       kind: 'image_pin',
@@ -954,6 +1076,55 @@ export function PostDetailPage({
       else approveGate.settle();
     });
   });
+
+  // Reject / park confirmed: show the new stage now, commit after the Undo
+  // window. Commit is the existing stage RPC, then (when a reason was typed)
+  // the reason as a comment through the same create path as every comment. A
+  // failed move puts the old stage back with the friendly error; a failed
+  // reason comment leaves the move in place and says so.
+  function confirmReasonMove(): void {
+    const to = reasonTarget;
+    const copy = to === null ? null : stageReasonConfirm(to);
+    if (to === null || copy === null || postId === undefined) return;
+    const movedPostId = postId;
+    const reason = stageReasonComment(reasonDraft);
+    setReasonTarget(null);
+    setReasonDraft('');
+    setActionError(null);
+    setOptimisticStage(to);
+    runUndoable({
+      label: copy.undoLabel,
+      revert: () => setOptimisticStage(null),
+      commit: async () => {
+        const traceId = newTrace();
+        const result = await stageTransition(supabase, {
+          p_post_id: movedPostId,
+          p_to_stage: to,
+          p_trace_id: traceId,
+        });
+        const stillHere = postIdRef.current === movedPostId;
+        if (!result.ok) {
+          if (stillHere) {
+            setOptimisticStage(null);
+            setActionError(friendlyTransitionError(result.error));
+          }
+          return;
+        }
+        if (reason !== null) {
+          const comment = await createAnchoredComment(reason, traceId);
+          if (!comment.ok) {
+            logger.warn('post page: stage reason comment failed', { error: comment.message });
+            if (stillHere) push(COMMENT_POST_FAILED);
+          }
+        }
+        if (!stillHere) return;
+        await load(true);
+        setOptimisticStage(null);
+        setCommentsRefresh((n) => n + 1);
+        dispatchInductionRefresh();
+      },
+    });
+  }
 
   // Leaving the post: the host's own close when embedded, else the pipeline.
   function leave(): void {
@@ -1062,18 +1233,37 @@ export function PostDetailPage({
     setEditingCaption(false);
     await load(true);
   }
+  // Cancel with unsaved edits asks first; an unchanged draft just closes.
+  function cancelCaptionEdit(): void {
+    if (captionDraft !== (detail?.post.caption ?? '')) {
+      setConfirmCaptionDiscard(true);
+      return;
+    }
+    setEditingCaption(false);
+    setCaptionError(null);
+  }
 
   // Whole-gallery replace via gallery_set (auto-versions + re-stales annotations
   // server-side). load(true) refreshes the post; reloadGallery refreshes the grid.
+  // The ref guard drops a second write while one is in flight (a fast double
+  // tap lands before the state re-renders), so two full-list writes never
+  // overlap and the second never overwrites the first with a stale order.
   const commitGallery = useCallback(
     async (ids: string[]): Promise<void> => {
-      if (postId === undefined) return;
-      const result = await gallerySet(supabase, { postId, assetVersionIds: ids }, newTrace());
-      if (!result.ok) {
-        push('Could not update the gallery. Please try again.');
-        return;
+      if (postId === undefined || gallerySavingRef.current) return;
+      gallerySavingRef.current = true;
+      setGallerySaving(true);
+      try {
+        const result = await gallerySet(supabase, { postId, assetVersionIds: ids }, newTrace());
+        if (!result.ok) {
+          push('Could not update the gallery. Please try again.');
+          return;
+        }
+        await Promise.all([load(true), reloadGallery()]);
+      } finally {
+        gallerySavingRef.current = false;
+        setGallerySaving(false);
       }
-      await Promise.all([load(true), reloadGallery()]);
     },
     [postId, newTrace, load, reloadGallery, push],
   );
@@ -1222,21 +1412,30 @@ export function PostDetailPage({
   }
 
   const post = detail.post;
-  const currentStage = post.stage as Stage;
+  const currentStage = optimisticStage ?? (post.stage as Stage);
   const stageActions = visibleStageActions(currentStage, role);
   const ownerInfo = resolveOwner(post.owner_user_id, post.legacy_author_name);
   const bucket = buckets.find((b) => b.id === post.bucket_id) ?? null;
   const hasCaption = post.caption !== null && post.caption.trim() !== '';
   const { head: titleHead, last: titleLast } = splitLastWord(post.title);
+  const composerKey = composer !== null ? captionDraftKey(composer.start, composer.end) : null;
+  const pinKey =
+    pinComposer !== null ? pinDraftKey(pinComposer.index, pinComposer.x, pinComposer.y) : null;
 
   // The stage rail buttons, shared by the review helpers and the default branch.
   // Opening the approve confirm clears a stale error, as the chat sheet does.
   const stageButtons = (
     <StageButtons
       actions={stageActions}
-      transitioning={transitioning}
+      transitioning={transitioning || optimisticStage !== null}
       onPick={(to) => {
         if (to === 'approved') setActionError(null);
+        if (stageReasonConfirm(to) !== null) {
+          setActionError(null);
+          setReasonDraft('');
+          setReasonTarget(to);
+          return;
+        }
         approveGate.request(post.id, to);
       }}
     />
@@ -1310,14 +1509,16 @@ export function PostDetailPage({
               <button
                 type="button"
                 onClick={() => setShowDetails(true)}
-                className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="group -my-2 inline-flex min-h-[44px] items-center rounded-full focus:outline-none"
               >
-                <span
-                  aria-hidden
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: bucket.colorHex }}
-                />
-                {bucket.name}
+                <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg transition-colors group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent">
+                  <span
+                    aria-hidden
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: bucket.colorHex }}
+                  />
+                  {bucket.name}
+                </span>
               </button>
             ) : (
               <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg">
@@ -1467,10 +1668,15 @@ export function PostDetailPage({
                     : undefined
                 }
                 onRemove={agencySide && !readOnly ? handleRemove : undefined}
+                saving={gallerySaving}
               />
-              {gallery.length > 0 ? (
+              {gallerySaving ? (
+                <p aria-live="polite" className="mt-2.5 text-xs text-fg-3">
+                  Saving…
+                </p>
+              ) : gallery.length > 0 ? (
                 <p className="mt-2.5 text-xs text-fg-3">
-                  Tap a slide for full screen. Long-press to place a pin.
+                  Tap a slide to view it. Long-press to place a pin.
                 </p>
               ) : null}
               {pinError !== null ? (
@@ -1543,16 +1749,13 @@ export function PostDetailPage({
                       disabled={captionSaving}
                       onClick={() => void saveCaption()}
                     >
-                      {captionSaving ? 'Saving' : 'Save'}
+                      {captionSaving ? 'Saving' : captionSaveLabel(currentVersionNumber)}
                     </Button>
                     <Button
                       variant="ghost"
                       size="lg"
                       disabled={captionSaving}
-                      onClick={() => {
-                        setEditingCaption(false);
-                        setCaptionError(null);
-                      }}
+                      onClick={cancelCaptionEdit}
                     >
                       Cancel
                     </Button>
@@ -1560,6 +1763,9 @@ export function PostDetailPage({
                       {captionDraft.trim().length}/5000
                     </span>
                   </div>
+                  {captionSaveNote(currentVersionNumber) !== null ? (
+                    <p className="text-xs text-fg-3">{captionSaveNote(currentVersionNumber)}</p>
+                  ) : null}
                 </div>
               ) : hasCaption ? (
                 <>
@@ -1576,11 +1782,6 @@ export function PostDetailPage({
               ) : (
                 <p className="mt-3 text-sm text-fg-3">No caption yet.</p>
               )}
-              {annotating ? (
-                <p aria-live="polite" className="mt-3 text-sm text-fg-3">
-                  Posting your comment
-                </p>
-              ) : null}
               {annotateError !== null ? (
                 <div
                   role="alert"
@@ -1628,7 +1829,6 @@ export function PostDetailPage({
                 <span className="text-xs font-medium uppercase tracking-wide text-fg-3">
                   Comments
                 </span>
-                <span className="text-xs text-fg-3">Tap the menu for actions</span>
               </div>
               {workspaceId !== null && postId !== undefined ? (
                 <div data-induction={INDUCTION_KEYS.postCommentComposer}>
@@ -1671,9 +1871,19 @@ export function PostDetailPage({
       <CaptionAnnotationComposer
         open={composer !== null}
         quote={composer?.quote ?? ''}
+        body={composerKey !== null ? (commentDrafts[composerKey] ?? '') : ''}
+        onBodyChange={(body) => {
+          if (composerKey !== null) setDraft(composerKey, body);
+        }}
         submitting={annotating}
-        onClose={() => {
+        error={composerError}
+        onCancel={() => {
           if (!annotating) setComposer(null);
+        }}
+        onDiscard={() => {
+          if (annotating) return;
+          if (composerKey !== null) dropDraft(composerKey);
+          setComposer(null);
         }}
         onSubmit={submitAnnotation}
       />
@@ -1685,12 +1895,46 @@ export function PostDetailPage({
             ? (gallery[pinComposer.index]?.filename ?? `Slide ${pinComposer.index + 1}`)
             : ''
         }
+        body={pinKey !== null ? (commentDrafts[pinKey] ?? '') : ''}
+        onBodyChange={(body) => {
+          if (pinKey !== null) setDraft(pinKey, body);
+        }}
         submitting={pinSubmitting}
-        onClose={() => {
+        error={composerError}
+        onCancel={() => {
           if (!pinSubmitting) setPinComposer(null);
+        }}
+        onDiscard={() => {
+          if (pinSubmitting) return;
+          if (pinKey !== null) dropDraft(pinKey);
+          setPinComposer(null);
         }}
         onSubmit={submitPinAnnotation}
       />
+
+      <StageReasonConfirm
+        copy={reasonTarget !== null ? stageReasonConfirm(reasonTarget) : null}
+        reason={reasonDraft}
+        onReasonChange={setReasonDraft}
+        onCancel={() => setReasonTarget(null)}
+        onConfirm={confirmReasonMove}
+      />
+
+      {confirmCaptionDiscard ? (
+        <ConfirmDialog
+          title="Discard your changes?"
+          message="Your caption edits will be lost."
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          destructive
+          onConfirm={() => {
+            setConfirmCaptionDiscard(false);
+            setEditingCaption(false);
+            setCaptionError(null);
+          }}
+          onCancel={() => setConfirmCaptionDiscard(false)}
+        />
+      ) : null}
 
       <PostDetailsSheet
         open={showDetails}
@@ -1753,6 +1997,7 @@ export function PostDetailPage({
         onRemove={() => {
           if (slideIndex !== null) handleRemove(slideIndex);
         }}
+        saving={gallerySaving}
       />
 
       <AssetUploadSheet

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
@@ -9,52 +9,78 @@ import { INDUCTION_KEYS } from '@/lib/induction-keys';
 // selection and a comment field. It owns no RPC; PostDetailPage passes onSubmit,
 // which mints the comment and the annotation. Amber accent is the F1 annotation
 // token, so the note block flips correctly in light and dark.
+//
+// The draft is owned by the page (one per selection, kept while the page is
+// open), so this sheet is controlled. Typed text makes the sheet dirty: X,
+// backdrop and Escape ask before discarding it. Cancel closes and keeps the
+// draft for the same selection. The sheet stays open while posting and after a
+// failure (text kept, error shown); the page closes it once the comment lands.
+
+/** Discard confirm copy for both annotation composers. */
+export const COMMENT_DISCARD = {
+  title: 'Discard this comment?',
+  message: 'Your text will be lost.',
+};
+
+/** Failure copy for both annotation composers; the typed text stays. */
+export const COMMENT_POST_FAILED = "Couldn't post your comment. Try again.";
 
 interface CaptionAnnotationComposerProps {
   open: boolean;
   /** The selected caption text, shown as the note the comment is anchored to. */
   quote: string;
-  onClose: () => void;
+  /** The draft for this selection (page-owned). */
+  body: string;
+  onBodyChange: (body: string) => void;
+  /** Cancel: close and keep the draft for this selection. */
+  onCancel: () => void;
+  /** Close after the discard confirm (or with nothing typed): drop the draft. */
+  onDiscard: () => void;
   onSubmit: (body: string) => void | Promise<void>;
   submitting?: boolean;
+  /** Inline failure, shown under the field; null shows none. */
+  error?: string | null;
 }
 
 export function CaptionAnnotationComposer({
   open,
   quote,
-  onClose,
+  body,
+  onBodyChange,
+  onCancel,
+  onDiscard,
   onSubmit,
   submitting = false,
+  error = null,
 }: CaptionAnnotationComposerProps) {
-  const [body, setBody] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Start each annotation from an empty field so a prior draft never leaks into
-  // the next selection.
-  useEffect(() => {
-    if (open) setBody('');
-  }, [open]);
 
   const canPost = body.trim().length > 0 && !submitting;
 
   return (
     <Sheet
       open={open}
-      onClose={onClose}
+      onClose={onDiscard}
       title="Comment on caption"
+      dirty={body.trim() !== ''}
+      discard={COMMENT_DISCARD}
+      busy={submitting}
+      busyLabel="Posting…"
       footer={
         <>
           <Button
             size="lg"
             className="min-h-[44px] min-w-[44px]"
             disabled={submitting}
-            onClick={onClose}
+            onClick={onCancel}
           >
             Cancel
           </Button>
           <CommentEmojiButton
             disabled={submitting}
-            onPick={(char) => insertIntoTextarea(() => textareaRef.current, body, char, setBody)}
+            onPick={(char) =>
+              insertIntoTextarea(() => textareaRef.current, body, char, onBodyChange)
+            }
           />
           <Button
             size="lg"
@@ -76,12 +102,17 @@ export function CaptionAnnotationComposer({
         <Textarea
           ref={textareaRef}
           value={body}
-          onChange={(event) => setBody(event.target.value)}
+          onChange={(event) => onBodyChange(event.target.value)}
           placeholder="Add your comment"
           aria-label="Caption comment body"
           disabled={submitting}
           autoFocus
         />
+        {error !== null ? (
+          <p role="alert" className="text-sm text-bad">
+            {error}
+          </p>
+        ) : null}
       </div>
     </Sheet>
   );

@@ -27,6 +27,9 @@ import {
   slideViewerKind,
   markOpenFailed,
   PostLightbox,
+  removeImageConfirmCopy,
+  DOWNLOAD_DONE,
+  DOWNLOAD_FAILED,
 } from '@/components/pages/pcs/PostLightbox';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { DISMISS_DISTANCE, DISMISS_FLICK_VELOCITY } from '@/components/ui/ImageLightbox';
@@ -852,5 +855,39 @@ describe('a broken file never blanks the post or brief', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('W2 gallery and download', () => {
+  it('while a gallery save is in flight, reorder and delete are blocked and the bar says Saving…', () => {
+    const tree = lightboxView(props({ index: 1, manage: MANAGE, saving: true }));
+    for (const label of ['Make first', 'Move left', 'Move right', 'Make last', 'Delete image']) {
+      expect((byLabel(tree, label)!.props as { disabled?: boolean }).disabled).toBe(true);
+    }
+    expect(strings(tree)).toContain('Saving…');
+    const idle = lightboxView(props({ index: 1, manage: MANAGE }));
+    expect(strings(idle)).not.toContain('Saving…');
+  });
+
+  it('the remove confirm copy is the one shared helper, also used by the slide actions sheet', () => {
+    expect(removeImageConfirmCopy(1).title).toBe('Delete the only image?');
+    expect(removeImageConfirmCopy(3)).toEqual({ title: 'Remove this image?', message: null });
+    const sheet = readFileSync(
+      fileURLToPath(new URL('./SlideActionsSheet.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(sheet).toContain('removeImageConfirmCopy(count)');
+    // Remove image opens the confirm; only its Remove runs the handler.
+    expect(sheet).toContain('onClick={() => setConfirming(true)}');
+    expect(sheet).toContain('onClick={() => run(onRemove)}');
+  });
+
+  it('download toasts Downloaded on success and the retry copy on failure', () => {
+    expect(DOWNLOAD_DONE).toBe('Downloaded');
+    expect(DOWNLOAD_FAILED).toBe("Couldn't download. Try again.");
+    const src = readFileSync(fileURLToPath(new URL('./PostLightbox.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain('toast?.show({ title: DOWNLOAD_DONE });');
+    expect(src).toContain('toast?.show({ title: DOWNLOAD_FAILED });');
+    expect(src).not.toContain('.catch(() => {})');
   });
 });
