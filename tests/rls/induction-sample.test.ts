@@ -554,9 +554,19 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
     expect(
       num(
         `select count(*) from public.inbox_entries where workspace_id = '${ws}' ` +
-          `and (user_id = any(${PEOPLE_SQL}) or (user_id = '${main.owner.id}' and event_type <> 'system'))`,
+          `and (user_id = any(${PEOPLE_SQL}) or (user_id = '${main.owner.id}' and event_type <> 'system' ` +
+          `and entity_id is distinct from '${ownPostId}'))`,
       ),
     ).toBe(0);
+    // The owner's own already-read row for the comment on their real post stays
+    // (20261018140000); the comment on the sample post never wrote one (20261018150000).
+    expect(
+      num(
+        `select count(*) from public.inbox_entries where workspace_id = '${ws}' ` +
+          `and user_id = '${main.owner.id}' and actor_user_id = '${main.owner.id}' ` +
+          `and event_type = 'comment' and entity_id = '${ownPostId}' and read_at is not null`,
+      ),
+    ).toBe(1);
     // The only chat syncs are the default group's renames: to the sample name, then back.
     expect(
       num(
