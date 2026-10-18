@@ -7,8 +7,11 @@
 export const SITE_URL = 'https://srtd.io';
 export const SITE_NAME = 'Sorted';
 
+/** Other names people search for the brand by; JSON-LD alternateName on Organization and WebSite. */
+export const SITE_ALTERNATE_NAMES = ['SRTD', 'srtd.io'] as const;
+
 /** "/" <title>, og:title and twitter:title. */
-export const HOME_TITLE = 'Sorted (free) | Approvals and chat for social media teams';
+export const HOME_TITLE = 'Sorted (free) | Work chat for social media teams';
 
 /** "/" and /demo description, og:description and twitter:description; also the llms.txt summary. */
 export const HOME_DESCRIPTION =
@@ -110,10 +113,17 @@ export function homeJsonLd(): Record<string, unknown>[] {
       '@context': 'https://schema.org',
       '@type': 'Organization',
       name: SITE_NAME,
+      alternateName: SITE_ALTERNATE_NAMES,
       url: SITE_URL,
       logo: `${SITE_URL}/icon-512.png`,
     },
-    { '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: SITE_NAME,
+      alternateName: SITE_ALTERNATE_NAMES,
+      url: SITE_URL,
+    },
     {
       '@context': 'https://schema.org',
       '@type': 'SoftwareApplication',
