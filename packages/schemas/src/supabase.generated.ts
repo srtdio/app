@@ -9952,6 +9952,10 @@ export type Database = {
         Returns: string
       }
       uuidv7: { Args: never; Returns: string }
+      workspace_bucket_create: {
+        Args: { p_name: string; p_trace_id: string; p_workspace_id: string }
+        Returns: string
+      }
       workspace_bytes_used: {
         Args: { p_workspace_id: string }
         Returns: number
