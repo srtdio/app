@@ -2,23 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { IconChevronRight, IconCopy, IconDownload, IconX } from '@/components/ui/icons';
+import { IconChevronRight, IconCopy, IconDownload, IconTrash, IconX } from '@/components/ui/icons';
 import { IconChevronLeft, IconEdit, IconInfo } from '@/components/pages/assets/viewerIcons';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { RenameOutcome } from '@/lib/asset-upload';
-import {
-  DELETE_CONFIRM_MESSAGE,
-  displayLabel,
-  humanizeSize,
-  type AssetDeleteOutcome,
-  type AssetListItem,
-} from '@/lib/assets';
-import {
-  isInlineRenderable,
-  mediaKind,
-  resolveAssetUrl,
-  typeLabel,
-} from '@/components/pages/assets/media';
+import { displayLabel, humanizeSize, type AssetListItem } from '@/lib/assets';
+import { isInlineRenderable, mediaKind, typeLabel } from '@/components/pages/assets/media';
+import { assetLink } from '@/components/pages/assets/assets-nav';
 import { downloadFile } from '@/components/pages/assets/openExternal';
 import { Highlight } from '@/components/ui/SearchHighlight';
 import {
@@ -56,10 +46,10 @@ interface AssetLightboxProps {
   onIndexChange: (index: number) => void;
   onClose: () => void;
   /**
-   * Soft-delete. 'deleted' closes the viewer onto the new list; 'in_use' is
-   * handled by the parent (it closes the viewer and explains), 'failed' toasts.
+   * Delete: the parent closes the viewer, hides the file at once and offers
+   * Undo; the delete commits after the window. No confirm step.
    */
-  onDelete: (item: AssetListItem) => Promise<AssetDeleteOutcome>;
+  onDelete: (item: AssetListItem) => void;
   /** True when the current member may rename (owner/admin/agency); clients see no edit. */
   canRename: boolean;
   /** Commit a rename to the worker; resolves the mapped outcome for the toast. */
@@ -162,8 +152,6 @@ export function AssetLightbox({
   const [mediaFailed, setMediaFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [infoOpen, setInfoOpen] = useState(initialInfoOpen);
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -236,10 +224,9 @@ export function AssetLightbox({
     }
   }, [index, items, presignEnabled, cache]);
 
-  // Reset the delete confirm and any in-progress rename when navigating to
-  // another asset, or when the Info sheet closes.
+  // Reset any in-progress rename when navigating to another asset, or when the
+  // Info sheet closes.
   useEffect(() => {
-    setConfirming(false);
     setEditingName(false);
     setOpenFailed(false);
   }, [index]);
@@ -294,18 +281,6 @@ export function AssetLightbox({
   if (item === undefined) return null;
   const asset: AssetListItem = item;
 
-  async function withUrl(apply: (url: string) => void | Promise<void>): Promise<void> {
-    setBusy(true);
-    try {
-      const url = await resolveAssetUrl(asset, cache);
-      await apply(url);
-    } catch {
-      onToast(SIGN_FAIL);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   // Download saves the file in place via a content-disposition: attachment URL;
   // the lightbox (and the Sorted tab behind it) never navigates away.
   const handleDownload = (): void => {
@@ -324,24 +299,15 @@ export function AssetLightbox({
     setViewing(next);
   };
 
+  // Copy the in-app link (/assets?asset=<id>): it opens for workspace members
+  // and never expires, unlike a presigned storage URL.
   const handleCopy = (): void => {
-    void withUrl(async (url) => {
-      onToast((await copyText(url)) ? 'Link copied' : COPY_FAILED);
-    });
+    void copyText(assetLink(window.location.origin, asset.id)).then((ok) =>
+      onToast(ok ? 'Link copied' : COPY_FAILED),
+    );
   };
 
-  async function confirmDelete(): Promise<void> {
-    setDeleting(true);
-    const outcome = await onDelete(asset);
-    if (outcome === 'deleted') {
-      onClose();
-      onToast('Moved to Recently deleted');
-      return;
-    }
-    setDeleting(false);
-    setConfirming(false);
-    if (outcome === 'failed') onToast("Couldn't delete this asset. Try again.");
-  }
+  const handleDelete = (): void => onDelete(asset);
 
   // Commit an inline rename. Save is gated to a non-empty, changed name; on
   // success the parent updates the shared list, so the new name flows back into
@@ -489,6 +455,7 @@ export function AssetLightbox({
           disabled={busy}
         />
         <BarButton icon={<IconInfo size={18} />} label="Info" onClick={() => setInfoOpen(true)} />
+        <BarButton icon={<IconTrash size={18} />} label="Delete" onClick={handleDelete} />
       </div>
 
       {/* Info: bottom sheet sliding up inside the lightbox. */}
@@ -576,44 +543,9 @@ export function AssetLightbox({
             </dl>
 
             <div className="mt-4 border-t border-border pt-4">
-              {confirming ? (
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-fg [overflow-wrap:anywhere]">
-                      Delete {name}?
-                    </p>
-                    <p className="mt-1 text-sm text-fg-2">{DELETE_CONFIRM_MESSAGE}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="lg"
-                      className="flex-1"
-                      onClick={() => setConfirming(false)}
-                      disabled={deleting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="lg"
-                      className="flex-1"
-                      onClick={() => void confirmDelete()}
-                      disabled={deleting}
-                    >
-                      {deleting ? 'Deleting' : 'Delete'}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button
-                  variant="danger"
-                  size="lg"
-                  className="w-full"
-                  onClick={() => setConfirming(true)}
-                >
-                  Delete
-                </Button>
-              )}
+              <Button variant="danger" size="lg" className="w-full" onClick={handleDelete}>
+                Delete
+              </Button>
             </div>
           </div>
         </div>

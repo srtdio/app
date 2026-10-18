@@ -1,7 +1,7 @@
 import { cn } from '@/lib/cn';
 import { useLongPress } from '@/components/pages/assets/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
-import { IconCheck } from '@/components/ui/icons';
+import { IconCheck, IconEllipsis } from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
 import { FileTile } from '@/components/ui/FileTile';
 import { classifyFileKind } from '@/lib/chat/attachments';
@@ -21,7 +21,7 @@ interface AssetCardProps {
   cache: PresignCache;
   /** Tap: open the lightbox (files) or the external link (links). */
   onOpen: () => void;
-  /** Long-press: open the bottom action sheet. */
+  /** Long-press or the visible ⋯ button: open the bottom action sheet. */
   onLongPress: () => void;
   /** When true, a tap toggles selection instead of opening, and a tick is shown. */
   selectMode?: boolean;
@@ -59,45 +59,69 @@ export function AssetCard({
     : { ...longPress, 'aria-label': item.kind === 'link' ? `Open ${name}` : `View ${name}` };
 
   return (
+    <div className="relative">
+      <button
+        type="button"
+        {...interaction}
+        style={{ touchAction: 'manipulation' }}
+        className={cn(
+          'group relative flex h-full w-full flex-col overflow-hidden rounded-xl border bg-panel text-left transition-colors',
+          selectMode && selected ? 'border-accent' : 'border-border',
+          'hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        )}
+      >
+        {selectMode ? (
+          <span
+            aria-hidden="true"
+            className={cn(
+              'absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full',
+              selected ? 'bg-accent text-white' : 'border-2 border-white bg-black/40',
+            )}
+          >
+            {selected ? <IconCheck size={14} /> : null}
+          </span>
+        ) : null}
+
+        {item.kind !== 'image' && item.kind !== 'link' ? (
+          // PDF, video, Office and other files: the stored thumbnail (PDF and
+          // video) or the icon card, the name on two lines and kind, pages, size.
+          <FileTile
+            layout="card"
+            kind={classifyFileKind(item.mimeType ?? '')}
+            mime={item.mimeType ?? ''}
+            name={name}
+            versionId={item.currentVersionId}
+            size={item.sizeBytes}
+            pageCount={item.pageCount}
+            cache={cache}
+            presignEnabled={presignEnabled}
+          />
+        ) : (
+          <AssetMedia item={item} name={name} cache={cache} presignEnabled={presignEnabled} />
+        )}
+      </button>
+      {selectMode ? null : <CardMenuButton name={name} onPress={onLongPress} />}
+    </div>
+  );
+}
+
+/**
+ * The visible ⋯ on a card: a 44px hit area in the top-right corner holding a
+ * small chip, a sibling of the card button (buttons never nest). Opens the same
+ * menu as a long-press. Shared by the folder card.
+ */
+export function CardMenuButton({ name, onPress }: { name: string; onPress: () => void }) {
+  return (
     <button
       type="button"
-      {...interaction}
-      style={{ touchAction: 'manipulation' }}
-      className={cn(
-        'group relative flex flex-col overflow-hidden rounded-xl border bg-panel text-left transition-colors',
-        selectMode && selected ? 'border-accent' : 'border-border',
-        'hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-      )}
+      aria-label={`More actions for ${name}`}
+      data-card-menu=""
+      onClick={onPress}
+      className="absolute right-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      {selectMode ? (
-        <span
-          aria-hidden="true"
-          className={cn(
-            'absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full',
-            selected ? 'bg-accent text-white' : 'border-2 border-white bg-black/40',
-          )}
-        >
-          {selected ? <IconCheck size={14} /> : null}
-        </span>
-      ) : null}
-
-      {item.kind !== 'image' && item.kind !== 'link' ? (
-        // PDF, video, Office and other files: the stored thumbnail (PDF and
-        // video) or the icon card, the name on two lines and kind, pages, size.
-        <FileTile
-          layout="card"
-          kind={classifyFileKind(item.mimeType ?? '')}
-          mime={item.mimeType ?? ''}
-          name={name}
-          versionId={item.currentVersionId}
-          size={item.sizeBytes}
-          pageCount={item.pageCount}
-          cache={cache}
-          presignEnabled={presignEnabled}
-        />
-      ) : (
-        <AssetMedia item={item} name={name} cache={cache} presignEnabled={presignEnabled} />
-      )}
+      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-panel text-fg shadow-sm">
+        <IconEllipsis size={16} />
+      </span>
     </button>
   );
 }
@@ -125,8 +149,8 @@ function AssetMedia({
         alt={name}
       />
 
-      <div className="flex items-center gap-2 border-t border-border px-2.5 py-2">
-        <span className="flex-1 truncate text-xs font-medium" title={name}>
+      <div className="flex items-start gap-2 border-t border-border px-2.5 py-2">
+        <span className="line-clamp-2 flex-1 break-words text-xs font-medium" title={name}>
           {name}
         </span>
         {item.kind === 'image' ? (

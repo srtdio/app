@@ -101,6 +101,46 @@ export function buildUploadPlan(
   }));
 }
 
+/** The sheet header while a run is in flight: "Uploading 2 of 5…". Pure. */
+export function uploadBusyLabel(current: number, total: number): string {
+  if (total <= 1) return 'Uploading…';
+  return `Uploading ${Math.min(Math.max(current, 1), total)} of ${total}…`;
+}
+
+/** The one toast a finished run shows. A sticky toast stays until dismissed. */
+export interface UploadSummary {
+  title: string;
+  sticky: boolean;
+}
+
+/**
+ * The single summary toast for a run: any failure is sticky and says how many
+ * failed; an all-success run says how many uploaded. Null when nothing ran. Pure.
+ */
+export function uploadSummary(args: {
+  uploaded: number;
+  reused: number;
+  failed: number;
+}): UploadSummary | null {
+  const { uploaded, reused, failed } = args;
+  const ok = uploaded + reused;
+  if (failed > 0) {
+    if (ok === 0) {
+      return {
+        title:
+          failed === 1
+            ? "Couldn't upload the file. Try again."
+            : `${failed} uploads failed. Try again.`,
+        sticky: true,
+      };
+    }
+    return { title: `Uploaded ${ok} of ${ok + failed}. ${failed} failed.`, sticky: true };
+  }
+  if (ok === 0) return null;
+  if (uploaded === 0) return { title: 'Already in your assets', sticky: false };
+  return { title: ok === 1 ? 'Uploaded 1 file' : `Uploaded ${ok} files`, sticky: false };
+}
+
 /** Per-file lifecycle within an upload run. */
 type FileStatus =
   | { state: 'queued' }
@@ -122,6 +162,11 @@ interface AssetUploadSheetProps {
     | undefined;
   /** Toast sink (the page toast queue). */
   onToast?: ((message: string) => void) | undefined;
+  /**
+   * One summary toast per run (the Assets page). When set, the per-file toasts
+   * are not shown; the summary is sticky when any file failed.
+   */
+  onSummary?: ((summary: UploadSummary) => void) | undefined;
   /** Called once after a run in which every file succeeded, to refresh the grid. */
   onUploaded?: (() => void) | undefined;
   /** Current scope: a folder id, or null at the library root (the default). */
@@ -160,6 +205,7 @@ export function AssetUploadSheet({
   onClose,
   onSubmit,
   onToast,
+  onSummary,
   onUploaded,
   folderId = null,
   folderName = null,
@@ -169,6 +215,8 @@ export function AssetUploadSheet({
   const [uploads, setUploads] = useState<PendingUpload[]>([]);
   const [statuses, setStatuses] = useState<Record<string, FileStatus>>({});
   const [running, setRunning] = useState(false);
+  // Which file of the run is going up, for the busy header.
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
   // The single typed name: the file's name at the root with one file, or the
   // shared base at the root with several. Unused in folder mode (auto-named).
   const [nameInput, setNameInput] = useState('');
@@ -249,6 +297,8 @@ export function AssetUploadSheet({
     async (targets: PendingUpload[]): Promise<void> => {
       if (onSubmit === undefined || targets.length === 0) return;
       setRunning(true);
+      setProgress({ current: 0, total: targets.length });
+      let reused = 0;
       const plan = buildUploadPlan(targets, {
         inFolder: folderId !== null,
         folderName,
@@ -267,21 +317,36 @@ export function AssetUploadSheet({
         items,
         (item) => onSubmit(item.file, item.displayName ?? '', folderId),
         {
-          onStart: (id) => setStatus(id, { state: 'uploading' }),
+          onStart: (id) => {
+            setStatus(id, { state: 'uploading' });
+            setProgress((prev) => ({ ...prev, current: Math.min(prev.current + 1, prev.total) }));
+          },
           onResult: (id, outcome) => {
             const name = byId.get(id)?.displayName ?? 'file';
             if (outcome.ok) {
               setStatus(id, { state: 'done' });
-              onToast?.(outcome.reused ? 'Already in your assets' : `Uploaded ${name}`);
+              if (outcome.reused) reused += 1;
+              if (onSummary === undefined) {
+                onToast?.(outcome.reused ? 'Already in your assets' : `Uploaded ${name}`);
+              }
             } else {
               setStatus(id, { state: 'error', message: outcome.message });
-              onToast?.(outcome.message);
+              if (onSummary === undefined) onToast?.(outcome.message);
             }
           },
         },
       );
 
       setRunning(false);
+
+      if (onSummary !== undefined) {
+        const summary = uploadSummary({
+          uploaded: result.succeeded.length - reused,
+          reused,
+          failed: result.failed.length,
+        });
+        if (summary !== null) onSummary(summary);
+      }
 
       // Succeeded files leave the queue; failures stay for inline retry.
       if (result.succeeded.length > 0) {
@@ -292,7 +357,7 @@ export function AssetUploadSheet({
       if (result.succeeded.length > 0) dispatchInductionRefresh();
 
       if (result.failed.length === 0) {
-        if (result.succeeded.length > 1) {
+        if (onSummary === undefined && result.succeeded.length > 1) {
           onToast?.(`Uploaded ${result.succeeded.length} files`);
         }
         onUploaded?.();
@@ -302,6 +367,7 @@ export function AssetUploadSheet({
     [
       onSubmit,
       onToast,
+      onSummary,
       onUploaded,
       onClose,
       setStatus,
@@ -344,7 +410,14 @@ export function AssetUploadSheet({
   );
 
   return (
-    <Sheet open={open} onClose={onClose} title="Upload assets" footer={footer}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Upload assets"
+      footer={footer}
+      busy={running}
+      busyLabel={uploadBusyLabel(progress.current, progress.total)}
+    >
       <input
         ref={inputRef}
         id={inputId}

@@ -1,6 +1,7 @@
 import { cn } from '@/lib/cn';
 import { IconFolder } from '@/components/ui/icons';
 import { useLongPress } from '@/components/pages/assets/useLongPress';
+import { CardMenuButton } from '@/components/pages/assets/AssetCard';
 
 interface FolderCardProps {
   name: string;
@@ -9,8 +10,8 @@ interface FolderCardProps {
   /** Tap: open this folder (set it as the current level). */
   onOpen: () => void;
   /**
-   * Long-press: open the folder action sheet (rename / delete). Omitted for
-   * members without manage rights, in which case a long-press just opens.
+   * Long-press or the visible ⋯: open the folder action sheet. Omitted, there
+   * is no ⋯ and a long-press just opens.
    */
   onManage?: (() => void) | undefined;
 }
@@ -26,29 +27,32 @@ export function FolderCard({ name, count, onOpen, onManage }: FolderCardProps) {
   const longPress = useLongPress(onManage ?? onOpen, onOpen);
 
   return (
-    <button
-      type="button"
-      aria-label={`Open folder ${name}`}
-      {...longPress}
-      style={{ touchAction: 'manipulation' }}
-      className={cn(
-        'group relative flex flex-col overflow-hidden rounded-xl border border-border bg-panel text-left transition-colors',
-        'hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-      )}
-    >
-      <div className="aspect-[4/3] w-full bg-panel-2 grid place-items-center">
-        <IconFolder size={28} className="text-accent" />
-      </div>
+    <div className="relative">
+      <button
+        type="button"
+        aria-label={`Open folder ${name}`}
+        {...longPress}
+        style={{ touchAction: 'manipulation' }}
+        className={cn(
+          'group relative flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-panel text-left transition-colors',
+          'hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        )}
+      >
+        <div className="aspect-[4/3] w-full bg-panel-2 grid place-items-center">
+          <IconFolder size={28} className="text-accent" />
+        </div>
 
-      <div className="flex items-center gap-2 border-t border-border px-2.5 py-2">
-        <span className="flex-1 truncate text-xs font-medium" title={name}>
-          {name}
-        </span>
-      </div>
+        <div className="flex items-start gap-2 border-t border-border px-2.5 py-2">
+          <span className="line-clamp-2 flex-1 break-words text-xs font-medium" title={name}>
+            {name}
+          </span>
+        </div>
 
-      <div className="px-2.5 pb-2 text-[11px] text-fg-3">
-        {count} item{count === 1 ? '' : 's'}
-      </div>
-    </button>
+        <div className="px-2.5 pb-2 text-[11px] text-fg-3">
+          {count} item{count === 1 ? '' : 's'}
+        </div>
+      </button>
+      {onManage !== undefined ? <CardMenuButton name={name} onPress={onManage} /> : null}
+    </div>
   );
 }

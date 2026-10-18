@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { IconAssets, IconChevronRight, IconUpload } from '@/components/ui/icons';
@@ -20,8 +19,24 @@ import { FolderActionSheet } from '@/components/pages/assets/FolderActionSheet';
 import { FolderRenameSheet } from '@/components/pages/assets/FolderRenameSheet';
 import { NewFolderSheet } from '@/components/pages/assets/NewFolderSheet';
 import { MoveToFolderSheet } from '@/components/pages/assets/MoveToFolderSheet';
-import { Toasts } from '@/components/pages/assets/Toasts';
-import { useToasts } from '@/components/pages/assets/useToasts';
+import { AssetRenameSheet } from '@/components/pages/assets/AssetRenameSheet';
+import {
+  ASSET_PARAM,
+  ROOT_LABEL,
+  deleteFailedLabel,
+  deleteToastLabel,
+  folderFromParams,
+  folderLink,
+  folderStackOf,
+  folderStep,
+  selectAllIds,
+  selectedLabel,
+  withFolderParam,
+  type FolderHistoryState,
+} from '@/components/pages/assets/assets-nav';
+import { useOptionalToast } from '@/components/ui/toast';
+import { useUndoableAction } from '@/lib/use-undoable-action';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { openLinkInNewTab } from '@/components/pages/assets/openExternal';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
@@ -58,7 +73,6 @@ import {
   buildTabCounts,
   canBulkDelete,
   childFolders,
-  DELETE_CONFIRM_MESSAGE,
   displayLabel,
   fetchFolders,
   fetchMemberRole,
@@ -74,7 +88,6 @@ import {
   renameAssetInList,
   sortAssets,
   TAB_EMPTY,
-  type AssetDeleteOutcome,
   type AssetListItem,
   type AssetSort,
   type AssetTab,
@@ -101,7 +114,6 @@ export function AssetsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
-  const [folderId, setFolderId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   // A search jump's words: the viewer's file name keeps them coloured until this page unmounts.
   const searchJump = useSearchJump();
@@ -113,16 +125,33 @@ export function AssetsPage() {
   const [renameTarget, setRenameTarget] = useState<FolderItem | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  const [moveOpen, setMoveOpen] = useState(false);
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
+  // The asset ids the move sheet relocates: the selection, or one file from its menu.
+  const [moveIds, setMoveIds] = useState<string[] | null>(null);
+  const [renameItem, setRenameItem] = useState<AssetListItem | null>(null);
+  // Deleted but still inside the Undo window: hidden from every list until the
+  // delete commits (then the rows go) or Undo brings them back.
+  const [pendingDelete, setPendingDelete] = useState<ReadonlySet<string>>(() => new Set());
+  const [foldersLoaded, setFoldersLoaded] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [inUse, setInUse] = useState<AssetInUseState | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
-  const { toasts, push, dismiss } = useToasts();
+  // The shell's ui/toast. show is the provider's stable function (the wrapper
+  // object is new each render), so callbacks built on it stay stable.
+  const showToast = useOptionalToast()?.show;
+  const push = useCallback(
+    (message: string): void => {
+      showToast?.({ title: message });
+    },
+    [showToast],
+  );
+  const { run: runUndoable } = useUndoableAction();
   const [searchParams, setSearchParams] = useSearchParams();
   const openedAssetParam = useRef<string | null>(null);
+
+  // The open folder lives in ?folder=<id>, so refresh and Back keep it.
+  const folderId = folderFromParams(searchParams);
 
   // The tab lives in ?type= (default All, unknown is All), so it survives Back
   // and refresh. Switching only filters the loaded list: no read, instant.
@@ -176,7 +205,10 @@ export function AssetsPage() {
   const loadFolders = useCallback(async () => {
     if (workspaceId === null) return;
     const result = await fetchFolders(supabase, workspaceId);
-    if (result.ok) setFolders(result.data);
+    if (result.ok) {
+      setFolders(result.data);
+      setFoldersLoaded(true);
+    }
   }, [workspaceId]);
 
   useEffect(() => {
@@ -188,9 +220,20 @@ export function AssetsPage() {
     void loadFolders();
   });
 
-  // Reset folder + overlays when the active workspace changes.
+  // Back to All assets when the active workspace changes (not on the first
+  // mount, which keeps a ?folder= deep link).
+  const lastWorkspace = useRef(workspaceId);
   useEffect(() => {
-    setFolderId(null);
+    const previous = lastWorkspace.current;
+    lastWorkspace.current = workspaceId;
+    if (previous !== null && previous !== workspaceId) {
+      setSearchParams((prev) => withFolderParam(prev, null), { replace: true });
+      setFoldersLoaded(false);
+    }
+  }, [workspaceId, setSearchParams]);
+
+  // Reset overlays when the active workspace changes.
+  useEffect(() => {
     setViewer(null);
     setActionItem(null);
     setUploadOpen(false);
@@ -200,9 +243,9 @@ export function AssetsPage() {
     setRenameTarget(null);
     setSelectMode(false);
     setSelected(new Set());
-    setMoveOpen(false);
-    setBulkDeleteOpen(false);
-    setBulkDeleting(false);
+    setMoveIds(null);
+    setRenameItem(null);
+    setPendingDelete(new Set());
     setInUse(null);
   }, [workspaceId]);
 
@@ -229,18 +272,27 @@ export function AssetsPage() {
 
   const searching = search.trim() !== '';
 
+  // Every list reads the live rows: files inside an Undo window are hidden.
+  const liveItems = useMemo(
+    () => (pendingDelete.size === 0 ? items : items.filter((item) => !pendingDelete.has(item.id))),
+    [items, pendingDelete],
+  );
+
   // Tab counts reflect what the grid shows: the whole library while searching,
   // otherwise just the open folder's assets. Same loaded list, no extra read.
   const counts = useMemo(
-    () => buildTabCounts(searching ? items : items.filter((item) => item.folderId === folderId)),
-    [items, searching, folderId],
+    () =>
+      buildTabCounts(
+        searching ? liveItems : liveItems.filter((item) => item.folderId === folderId),
+      ),
+    [liveItems, searching, folderId],
   );
 
   const visible = useMemo(() => {
-    const byTab = filterAssets(items, tab, search);
+    const byTab = filterAssets(liveItems, tab, search);
     const scoped = searching ? byTab : byTab.filter((item) => item.folderId === folderId);
     return sortAssets(scoped, sort);
-  }, [items, tab, search, folderId, searching, sort]);
+  }, [liveItems, tab, search, folderId, searching, sort]);
 
   // The viewer iterates the currently visible list with links excluded; links
   // open their external URL directly and never enter the lightbox.
@@ -254,6 +306,36 @@ export function AssetsPage() {
 
   const segments = useMemo(() => folderBreadcrumb(folders, folderId), [folders, folderId]);
 
+  // Open a folder (null: All assets). A child is a new history entry, so Back
+  // goes up one folder; an ancestor steps Back through the entries this page
+  // pushed, so Back afterwards keeps going up and then leaves Assets.
+  const openFolder = useCallback(
+    (target: string | null): void => {
+      const trail = segments.map((segment) => segment.id);
+      const step = folderStep(trail, target, folderStackOf(location.state));
+      if (step.kind === 'back') {
+        navigate(-step.delta);
+        return;
+      }
+      const params = withFolderParam(searchParams, target);
+      const query = params.toString();
+      const state: FolderHistoryState = { assetsFolderStack: step.stack };
+      navigate(
+        { pathname: location.pathname, search: query === '' ? '' : `?${query}` },
+        { state, replace: step.kind === 'replace' },
+      );
+    },
+    [segments, location.state, location.pathname, navigate, searchParams],
+  );
+
+  // A ?folder= that no longer exists (deleted, or another workspace's) falls
+  // back to All assets once the folder list has loaded.
+  useEffect(() => {
+    if (!foldersLoaded || folderId === null) return;
+    if (folders.some((folder) => folder.id === folderId)) return;
+    setSearchParams((prev) => withFolderParam(prev, null), { replace: true });
+  }, [foldersLoaded, folderId, folders, setSearchParams]);
+
   // The open folder's name (null at the root), used to auto-name uploads into it.
   const currentFolderName = useMemo(
     () => (folderId === null ? null : (folders.find((f) => f.id === folderId)?.name ?? null)),
@@ -263,15 +345,15 @@ export function AssetsPage() {
   // Display labels of the assets already in the current scope, so the upload sheet
   // continues numbering past them (per-folder, or the root) when auto-naming.
   const siblingLabels = useMemo(
-    () => items.filter((item) => item.folderId === folderId).map(displayLabel),
-    [items, folderId],
+    () => liveItems.filter((item) => item.folderId === folderId).map(displayLabel),
+    [liveItems, folderId],
   );
 
-  // How many assets sit directly in the open folder. The "Select files to move"
-  // option only appears when this is > 0 (there is nothing to select otherwise).
+  // How many assets sit directly in the open folder. The "Select" option only
+  // appears when this is > 0 (there is nothing to select otherwise).
   const currentFolderAssetCount = useMemo(
-    () => items.filter((item) => item.folderId === folderId).length,
-    [items, folderId],
+    () => liveItems.filter((item) => item.folderId === folderId).length,
+    [liveItems, folderId],
   );
 
   // Toggle one asset's selection, capping the set at 200 (the move batch limit);
@@ -315,18 +397,41 @@ export function AssetsPage() {
   // list has loaded. Fired once per distinct id; only 'asset' is stripped,
   // preserving any sibling deep-link param. If the asset is not in the currently
   // loaded/visible set, openAsset no-ops (it can only open a navigable item).
+  // A copied link (/assets?asset=<id>) lands on the asset's own folder first,
+  // on the All tab, so it is in the navigable list when it opens.
   useEffect(() => {
     if (items.length === 0) return;
-    const asset = searchParams.get('asset');
+    const asset = searchParams.get(ASSET_PARAM);
     if (asset === null || asset === '') return;
     if (openedAssetParam.current === asset) return;
-    openedAssetParam.current = asset;
     const item = items.find((candidate) => candidate.id === asset);
+    if (item !== undefined && item.kind !== 'link' && !searching) {
+      const inScope = item.folderId === folderId && tab === ASSET_TAB_DEFAULT;
+      const target = item.folderId;
+      if (!inScope && target !== null && !foldersLoaded) return;
+      if (!inScope && (target === null || folders.some((folder) => folder.id === target))) {
+        const next = withFolderParam(searchParams, target);
+        next.delete('type');
+        setSearchParams(next, { replace: true });
+        return;
+      }
+    }
+    openedAssetParam.current = asset;
     if (item !== undefined) openAsset(item);
     const next = new URLSearchParams(searchParams);
-    next.delete('asset');
+    next.delete(ASSET_PARAM);
     setSearchParams(next, { replace: true });
-  }, [items, searchParams, setSearchParams, openAsset]);
+  }, [
+    items,
+    searchParams,
+    setSearchParams,
+    openAsset,
+    folderId,
+    tab,
+    searching,
+    foldersLoaded,
+    folders,
+  ]);
 
   // Mint an attachment-disposition presigned URL for a stored asset version, so
   // the browser saves the file instead of rendering it. Distinct from the cached
@@ -377,53 +482,65 @@ export function AssetsPage() {
     });
   }, []);
 
-  // Soft-delete one asset: remove the row optimistically and roll back on
-  // failure. 'deleted' lets the viewer close onto the new list; 'in_use' closes
-  // it here and opens the in-use sheet. Delete is offered to every member,
-  // matching asset_delete's policy.
-  const deleteOne = useCallback(
-    async (item: AssetListItem): Promise<AssetDeleteOutcome> => {
-      const snapshot = items;
-      setItems((prev) => removeAssetsById(prev, [item.id]));
-      const result = await assetDelete(supabase, { p_asset_id: item.id, p_trace_id: newTrace() });
-      if (!result.ok) {
-        setItems(snapshot);
-        if (!isAssetInUseError(result.error)) return 'failed';
-        setViewer(null);
-        await showInUse([item.id], snapshot);
-        return 'in_use';
-      }
-      return 'deleted';
+  // Delete files (menu, viewer or select mode): hide them at once and show the
+  // Undo toast; the soft-delete RPC runs only when the window ends. Undo, or a
+  // failed commit, brings the rows back; asset_in_use opens the in-use sheet.
+  // Delete is offered to every member, matching asset_delete's policy.
+  const unhide = useCallback((ids: readonly string[]): void => {
+    setPendingDelete((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  const deleteItems = useCallback(
+    (ids: string[]): void => {
+      if (ids.length === 0 || (ids.length > 1 && !canBulkDelete(ids.length))) return;
+      setPendingDelete((prev) => new Set([...prev, ...ids]));
+      runUndoable({
+        label: deleteToastLabel(ids.length),
+        revert: () => unhide(ids),
+        commit: async () => {
+          const traceId = newTrace();
+          const [only] = ids;
+          const result =
+            ids.length === 1 && only !== undefined
+              ? await assetDelete(supabase, { p_asset_id: only, p_trace_id: traceId })
+              : await assetDeleteMany(supabase, { p_asset_ids: ids, p_trace_id: traceId });
+          if (!result.ok) {
+            unhide(ids);
+            if (isAssetInUseError(result.error)) await showInUse(ids, itemsRef.current);
+            else push(deleteFailedLabel(ids.length));
+            return;
+          }
+          setItems((prev) => removeAssetsById(prev, ids));
+          unhide(ids);
+        },
+      });
     },
-    [items, newTrace, showInUse],
+    [runUndoable, unhide, newTrace, showInUse, push],
   );
 
-  // Soft-delete the whole selection in ONE atomic asset_delete_many call: remove
-  // every selected row optimistically, then on error roll back the full removal
-  // and toast, else clear selection, leave select mode, and toast the count.
-  // Mirrors deleteOne's optimistic+rollback shape. Only ids + trace cross the
-  // wire; the actor is auth.uid() server-side. Guarded by canBulkDelete so the
-  // RPC is never called with 0 or more than the cap.
-  const deleteSelected = useCallback(async (): Promise<void> => {
+  const deleteSelected = useCallback((): void => {
     const ids = Array.from(selected);
     if (!canBulkDelete(ids.length)) return;
-    setBulkDeleting(true);
-    const snapshot = items;
-    setItems((prev) => removeAssetsById(prev, ids));
-    const result = await assetDeleteMany(supabase, { p_asset_ids: ids, p_trace_id: newTrace() });
-    setBulkDeleting(false);
-    if (!result.ok) {
-      setItems(snapshot);
-      setBulkDeleteOpen(false);
-      if (isAssetInUseError(result.error)) await showInUse(ids, snapshot);
-      else push('Could not delete the files. Try again');
-      return;
-    }
-    setBulkDeleteOpen(false);
     setSelectMode(false);
     setSelected(new Set());
-    push('Moved to Recently deleted');
-  }, [selected, items, newTrace, push, showInUse]);
+    deleteItems(ids);
+  }, [selected, deleteItems]);
+
+  const copyFolderLink = useCallback(
+    (folder: FolderItem): void => {
+      void copyText(folderLink(window.location.origin, folder.id)).then((ok) =>
+        push(ok ? 'Link copied' : COPY_FAILED),
+      );
+    },
+    [push],
+  );
 
   // Commit one queued file to the asset-upload worker: the file part keeps its
   // ORIGINAL device name (stored as assets.filename, with its extension for type
@@ -540,12 +657,12 @@ export function AssetsPage() {
         endpoint: uploadEndpoint,
         token,
         workspaceId,
-        assetIds: Array.from(selected),
+        assetIds: moveIds ?? [],
         targetFolderId,
         fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
       });
     },
-    [uploadEndpoint, workspaceId, selected, newTrace],
+    [uploadEndpoint, workspaceId, moveIds, newTrace],
   );
 
   // Rename one folder via the worker's /folders/rename route. On success the
@@ -650,36 +767,42 @@ export function AssetsPage() {
   );
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
-  // The one selected file, for the single-file wording of the bulk confirm.
-  const soleSelected =
-    selected.size === 1 ? items.find((candidate) => selected.has(candidate.id)) : undefined;
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
+
+  const exitSelectMode = (): void => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
 
   return (
     <>
       {/* Breadcrumb only inside a folder; the root needs no lone "/" crumb. */}
       {!searching && segments.length > 0 ? (
-        <div className="px-4 md:px-6 pt-3 flex items-center gap-1 text-sm text-fg-3 flex-wrap">
+        <nav
+          aria-label="Folders"
+          className="px-4 md:px-6 pt-1 flex items-center gap-1 text-sm text-fg-3 flex-wrap"
+        >
           <button
             type="button"
-            onClick={() => setFolderId(null)}
-            className="hover:text-fg transition-colors"
+            onClick={() => openFolder(null)}
+            className="inline-flex min-h-[44px] items-center rounded-md px-1 hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            Assets
+            {ROOT_LABEL}
           </button>
-          {segments.map((segment) => (
+          {segments.map((segment, i) => (
             <span key={segment.id} className="flex items-center gap-1">
               <IconChevronRight size={14} className="text-fg-3" />
               <button
                 type="button"
-                onClick={() => setFolderId(segment.id)}
-                className="hover:text-fg transition-colors"
+                onClick={() => openFolder(segment.id)}
+                aria-current={i === segments.length - 1 ? 'page' : undefined}
+                className="inline-flex min-h-[44px] items-center rounded-md px-1 hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {segment.name}
               </button>
             </span>
           ))}
-        </div>
+        </nav>
       ) : null}
 
       {/* Search + sort + add, then the type tabs: shared page-header chrome. */}
@@ -706,34 +829,38 @@ export function AssetsPage() {
         stickyChildren={selectMode}
       >
         {selectMode ? (
-          <div className="flex w-full items-center gap-2">
-            <span className="text-sm font-medium text-fg-2">{selected.size} selected</span>
+          <div data-select-bar="" className="flex w-full flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-fg">Select</span>
+            <span className="text-sm text-fg-2" aria-live="polite">
+              {selectedLabel(selected.size)}
+            </span>
             {selected.size > BULK_DELETE_MAX ? (
               <span className="text-xs text-fg-3">Select 200 or fewer to delete at once.</span>
             ) : null}
-            <span className="ml-auto flex gap-2">
+            <span className="ml-auto flex flex-wrap gap-2">
               <Button
                 variant="ghost"
-                onClick={() => {
-                  setSelectMode(false);
-                  setSelected(new Set());
-                }}
+                disabled={visible.length === 0}
+                onClick={() => setSelected(new Set(selectAllIds(visible, BULK_DELETE_MAX)))}
               >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                disabled={!canBulkDelete(selected.size)}
-                onClick={() => setBulkDeleteOpen(true)}
-              >
-                Delete
+                Select all
               </Button>
               <Button
                 variant="primary"
                 disabled={selected.size === 0}
-                onClick={() => setMoveOpen(true)}
+                onClick={() => setMoveIds(Array.from(selected))}
               >
                 Move
+              </Button>
+              <Button
+                variant="danger"
+                disabled={!canBulkDelete(selected.size)}
+                onClick={deleteSelected}
+              >
+                Delete
+              </Button>
+              <Button variant="ghost" onClick={exitSelectMode}>
+                Done
               </Button>
             </span>
           </div>
@@ -749,9 +876,9 @@ export function AssetsPage() {
               <FolderCard
                 key={f.id}
                 name={f.name}
-                count={folderChildCount(folders, items, f.id)}
-                onOpen={() => setFolderId(f.id)}
-                onManage={canManageFolders ? () => setFolderAction(f) : undefined}
+                count={folderChildCount(folders, liveItems, f.id)}
+                onOpen={() => openFolder(f.id)}
+                onManage={() => setFolderAction(f)}
               />
             ))}
           </div>
@@ -784,7 +911,7 @@ export function AssetsPage() {
               </div>
             ))}
           </div>
-        ) : tab === 'all' && items.length === 0 && folders.length === 0 ? (
+        ) : tab === 'all' && liveItems.length === 0 && folders.length === 0 ? (
           <EmptyState
             icon={<IconAssets size={24} />}
             title="No assets yet"
@@ -807,7 +934,16 @@ export function AssetsPage() {
               {TAB_EMPTY[tab]}
             </div>
           ) : currentFolders.length === 0 ? (
-            <div className="px-4 md:px-6 py-10 text-sm text-fg-3">This folder is empty.</div>
+            <div
+              data-empty-folder=""
+              className="px-4 md:px-6 py-10 flex flex-col items-start gap-3"
+            >
+              <p className="text-sm text-fg-3">This folder is empty.</p>
+              <Button variant="primary" onClick={() => setUploadOpen(true)}>
+                <IconUpload size={16} />
+                Upload
+              </Button>
+            </div>
           ) : null
         ) : (
           <div className="px-4 md:px-6 py-4">
@@ -838,7 +974,10 @@ export function AssetsPage() {
               setViewer((prev) => (prev === null ? prev : { ...prev, index }))
             }
             onClose={() => setViewer(null)}
-            onDelete={deleteOne}
+            onDelete={(item) => {
+              setViewer(null);
+              deleteItems([item.id]);
+            }}
             canRename={canRename}
             onRename={handleRename}
             onToast={push}
@@ -850,16 +989,36 @@ export function AssetsPage() {
         <AssetActionSheet
           item={actionItem}
           presignEnabled={presignEnabled}
-          cache={cache}
           requestDownloadUrl={requestDownloadUrl}
+          canRename={canRename}
           onClose={() => setActionItem(null)}
           onInfo={(item) => {
             setActionItem(null);
             openAsset(item, true);
           }}
+          onMove={(item) => {
+            setActionItem(null);
+            setMoveIds([item.id]);
+          }}
+          onRename={(item) => {
+            setActionItem(null);
+            setRenameItem(item);
+          }}
+          onDelete={(item) => {
+            setActionItem(null);
+            deleteItems([item.id]);
+          }}
           onToast={push}
         />
       ) : null}
+
+      <AssetRenameSheet
+        open={renameItem !== null}
+        initialName={renameItem !== null ? displayLabel(renameItem) : ''}
+        onClose={() => setRenameItem(null)}
+        onSubmit={(name) => handleRename(renameItem!, name)}
+        onToast={push}
+      />
 
       <AssetUploadSheet
         open={uploadOpen}
@@ -868,6 +1027,14 @@ export function AssetsPage() {
           uploadEndpoint !== undefined && uploadEndpoint !== '' ? handleUploadFile : undefined
         }
         onToast={push}
+        onSummary={(summary) => {
+          // A failure stays until dismissed; a success times out as usual.
+          showToast?.({
+            title: summary.title,
+            ...(summary.sticky ? { durationMs: null } : {}),
+          });
+          void loadAssets();
+        }}
         onUploaded={() => {
           void loadAssets();
         }}
@@ -893,44 +1060,35 @@ export function AssetsPage() {
       />
 
       <MoveToFolderSheet
-        open={moveOpen}
-        count={selected.size}
+        open={moveIds !== null}
+        count={moveIds?.length ?? 0}
         folders={folders}
-        onClose={() => setMoveOpen(false)}
+        onClose={() => setMoveIds(null)}
         onMove={handleMoveAssets}
         onToast={push}
         onMoved={() => {
           void loadAssets();
           void loadFolders();
-          setSelectMode(false);
-          setSelected(new Set());
-          setMoveOpen(false);
+          exitSelectMode();
+          setMoveIds(null);
         }}
       />
-
-      {bulkDeleteOpen ? (
-        <ConfirmDialog
-          title={
-            soleSelected !== undefined ? `Delete ${displayLabel(soleSelected)}?` : 'Delete files?'
-          }
-          message={
-            soleSelected !== undefined
-              ? DELETE_CONFIRM_MESSAGE
-              : `Delete ${selected.size} files? They'll be removed from the library.`
-          }
-          confirmLabel="Delete"
-          destructive
-          busy={bulkDeleting}
-          busyLabel="Deleting…"
-          onConfirm={() => void deleteSelected()}
-          onCancel={() => setBulkDeleteOpen(false)}
-        />
-      ) : null}
 
       {folderAction !== null ? (
         <FolderActionSheet
           name={folderAction.name}
+          canManage={canManageFolders}
           onClose={() => setFolderAction(null)}
+          onOpen={() => {
+            const f = folderAction;
+            setFolderAction(null);
+            openFolder(f.id);
+          }}
+          onCopyLink={() => {
+            const f = folderAction;
+            setFolderAction(null);
+            copyFolderLink(f);
+          }}
           onRename={() => {
             const f = folderAction;
             setFolderAction(null);
@@ -958,8 +1116,6 @@ export function AssetsPage() {
           navigate(parent.href);
         }}
       />
-
-      <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }
