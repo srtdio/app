@@ -9647,6 +9647,13 @@ export type Database = {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: Json
       }
+      induction_sample_files: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: {
+          id: string
+          r2_key: string
+        }[]
+      }
       induction_sample_seed: {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: Json
