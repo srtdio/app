@@ -5,7 +5,6 @@ import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
-import { Avatar } from '@/components/ui/Avatar';
 import { Select, type SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import {
@@ -28,8 +27,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
 import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
 import { useWorkspace } from '@/lib/workspace-context';
-import { listBuckets, type BucketOption } from '@/lib/buckets';
-import { usePostMembers } from '@/components/pages/pcs/use-post-members';
+import { BUCKET_NAME_MAX, createBucket, listBuckets, type BucketOption } from '@/lib/buckets';
 import { postCreate, gallerySet, stageTransition, type Client, type Result } from '@srtdio/rpc';
 import { PresetMediaField, uploadLocalFile } from '@/components/induction/PresetMediaField';
 import {
@@ -186,6 +184,69 @@ function revokePreviews(items: readonly AttachmentItem[]): void {
 }
 
 type OriginValue = 'none' | 'brief';
+
+/** The Bucket select's last option: opens the inline new bucket form. */
+export const NEW_BUCKET_VALUE = '__new_bucket__';
+
+/** The discard confirm for a dirty sheet. */
+export const CREATE_POST_DISCARD = {
+  title: 'Discard this post?',
+  message: 'Your caption and files will be lost.',
+};
+
+/** Whether closing would lose work: any field with content, or any file (done or uploading). Pure. */
+export function createPostDirty(
+  form: Pick<
+    CreateFormState,
+    'title' | 'caption' | 'bucketId' | 'targetDate' | 'briefId' | 'attachments'
+  >,
+  pendingUploads: number,
+  initialTargetDate = '',
+): boolean {
+  return (
+    form.title.trim() !== '' ||
+    form.caption.trim() !== '' ||
+    form.bucketId !== '' ||
+    form.briefId !== '' ||
+    form.targetDate !== initialTargetDate ||
+    form.attachments.length > 0 ||
+    pendingUploads > 0
+  );
+}
+
+/** The primary's label while files upload: "Uploading 3 files…". Pure. */
+export function uploadingLabel(count: number): string {
+  return `Uploading ${count} ${count === 1 ? 'file' : 'files'}…`;
+}
+
+/** The inline line when the primary is tapped mid-upload. Pure. */
+export function waitForUploadsMessage(count: number): string {
+  return `Wait for ${count} ${count === 1 ? 'file' : 'files'} to finish`;
+}
+
+/** Each missing required field's inline error (caption and format). Pure. */
+export function requiredFieldErrors(
+  form: Pick<CreateFormState, 'caption' | 'format'>,
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (form.format === '') errors.format = 'Choose a format';
+  if (form.caption.trim() === '') errors.caption = 'Write a caption';
+  return errors;
+}
+
+/** The title sent: the typed one, else the caption's first line (80 chars max). Pure. */
+export function resolvedTitle(title: string, caption: string): string {
+  return title.trim() !== '' ? title : titleFromCaption(caption);
+}
+
+/** Whether this device is touch first (no autofocus there, so no keyboard jumps up). */
+function isTouchDevice(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches
+  );
+}
 
 export interface CreateFormState {
   title: string;
@@ -371,7 +432,6 @@ export function CreatePostSheet({
   const newTrace = useNewTrace();
   const { session } = useSession();
   const currentUserId = session?.user.id ?? null;
-  const { options: memberOptions } = usePostMembers(open ? workspaceId : null);
   // One workspace = one platform: the format list is that platform's own.
   const workspacePlatform = useWorkspacePlatform(open ? workspaceId : null);
   const { workspaceName } = useWorkspace();
@@ -397,6 +457,15 @@ export function CreatePostSheet({
   const [share, setShare] = useState(true);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [shareGuard] = useState(createInFlightGuard);
+  // Files still uploading in the full form, and whether Save was tapped meanwhile.
+  const [pendingUploads, setPendingUploads] = useState(0);
+  const [uploadWait, setUploadWait] = useState(false);
+  // The inline "+ New bucket" form.
+  const [newBucketOpen, setNewBucketOpen] = useState(false);
+  const [newBucketName, setNewBucketName] = useState('');
+  const [newBucketBusy, setNewBucketBusy] = useState(false);
+  const [newBucketError, setNewBucketError] = useState<string | null>(null);
+  const captionRef = useRef<HTMLTextAreaElement>(null);
   const toast = useOptionalToast();
   const uploads = useRef(new Map<File, Promise<UploadOutcome>>());
   // The soft file prompt: version ids of attached files the format does not
@@ -478,7 +547,26 @@ export function CreatePostSheet({
     setMediaBusy(false);
     setPromptIds([]);
     setPreviewOpen(false);
+    setPendingUploads(0);
+    setUploadWait(false);
+    setNewBucketOpen(false);
+    setNewBucketName('');
+    setNewBucketBusy(false);
+    setNewBucketError(null);
   }, [open, initialTargetDate]);
+
+  // Desktop: the caption takes focus on open. Touch: nothing autofocuses.
+  const hasPreset = preset !== undefined;
+  useEffect(() => {
+    if (!open || hasPreset || isTouchDevice()) return;
+    const raf = requestAnimationFrame(() => captionRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
+  }, [open, hasPreset]);
+
+  // The wait line goes once every file has finished.
+  useEffect(() => {
+    if (pendingUploads === 0) setUploadWait(false);
+  }, [pendingUploads]);
 
   // Unmounting frees whatever local previews the draft still holds.
   useEffect(() => () => revokePreviews(formRef.current.attachments), []);
@@ -536,26 +624,46 @@ export function CreatePostSheet({
         />
       ),
     })),
+    { value: NEW_BUCKET_VALUE, label: '+ New bucket' },
   ];
-  const ownerOptions: SelectOption[] = memberOptions.map((member) => ({
-    value: member.userId,
-    label: member.displayName,
-    renderLeft: (
-      <Avatar
-        name={member.displayName}
-        {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-        size="sm"
-      />
-    ),
-  }));
-  const originOptions: SelectOption[] = [
-    { value: 'none', label: 'None' },
-    { value: 'brief', label: 'From a brief' },
+  const briefOptions: SelectOption[] = [
+    { value: '', label: 'No brief' },
+    ...briefs.map((brief) => ({ value: brief.id, label: brief.title })),
   ];
-  const briefOptions: SelectOption[] = briefs.map((brief) => ({
-    value: brief.id,
-    label: brief.title,
-  }));
+
+  function onBucketChange(value: string): void {
+    if (value === NEW_BUCKET_VALUE) {
+      setNewBucketOpen(true);
+      setNewBucketName('');
+      setNewBucketError(null);
+      return;
+    }
+    patch({ bucketId: value });
+  }
+
+  async function submitNewBucket(): Promise<void> {
+    if (workspaceId === null || newBucketBusy) return;
+    const name = newBucketName.trim();
+    if (name === '' || name.length > BUCKET_NAME_MAX) {
+      setNewBucketError('Use 1 to 40 characters.');
+      return;
+    }
+    setNewBucketBusy(true);
+    setNewBucketError(null);
+    const res = await createBucket(supabase, workspaceId, name, newTrace());
+    setNewBucketBusy(false);
+    if (!res.ok) {
+      setNewBucketError(res.error.message);
+      return;
+    }
+    setBuckets((prev) => (prev.some((b) => b.id === res.data.id) ? prev : [...prev, res.data]));
+    patch({ bucketId: res.data.id });
+    setNewBucketOpen(false);
+    setNewBucketName('');
+  }
+
+  const dirty =
+    preset === undefined && createPostDirty(form, pendingUploads, initialTargetDate ?? '');
 
   const canSubmit =
     preset !== undefined
@@ -566,12 +674,8 @@ export function CreatePostSheet({
           attachments: form.attachments.length,
           busy: submitting || mediaBusy,
         })
-      : workspaceId !== null &&
-        form.title.trim() !== '' &&
-        form.caption.trim() !== '' &&
-        form.format !== '' &&
-        (form.origin !== 'brief' || form.briefId !== '') &&
-        !submitting;
+      : // Never disabled for a missing field: a tap shows each field's error.
+        workspaceId !== null && !submitting;
 
   /** Preset: move the saved post to review; a failure keeps it to retry the move only. */
   async function sendForReview(postId: string): Promise<boolean> {
@@ -729,14 +833,24 @@ export function CreatePostSheet({
       return;
     }
 
+    if (pendingUploads > 0) {
+      setUploadWait(true);
+      return;
+    }
+    const missing = requiredFieldErrors(form);
+    if (Object.keys(missing).length > 0) {
+      setFieldErrors(missing);
+      return;
+    }
+
     const built = buildPostCreatePayload({
-      title: form.title,
+      title: resolvedTitle(form.title, form.caption),
       caption: form.caption,
       format: form.format,
       ownerUserId: form.ownerUserId,
       bucketId: form.bucketId,
       targetDate: form.targetDate,
-      origin: form.origin,
+      origin: form.briefId !== '' ? 'brief' : 'none',
       briefId: form.briefId,
     });
     if (!built.ok) {
@@ -791,24 +905,43 @@ export function CreatePostSheet({
       onClose={onClose}
       wide
       title="New post"
+      dirty={dirty}
+      discard={CREATE_POST_DISCARD}
+      busy={preset === undefined && submitting}
       footer={
         <>
           <Button size="lg" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
-          <span className="ml-auto">
+          <span className="ml-auto flex flex-col items-end gap-1">
+            {preset === undefined && uploadWait && pendingUploads > 0 ? (
+              <span data-upload-wait="" role="status" className="text-[11px] text-fg-2">
+                {waitForUploadsMessage(pendingUploads)}
+              </span>
+            ) : null}
             <Button
               variant="primary"
               size="lg"
               data-induction={INDUCTION_KEYS.postSheetPrimary}
               onClick={() => void handleSubmit()}
               disabled={!canSubmit}
+              aria-busy={preset === undefined && pendingUploads > 0}
             >
-              {preset !== undefined
-                ? presetPrimaryLabel({ preset, submitting, savedDraft: savedDraftId !== null })
-                : submitting
-                  ? 'Creating'
-                  : 'Save as draft'}
+              {preset !== undefined ? (
+                presetPrimaryLabel({ preset, submitting, savedDraft: savedDraftId !== null })
+              ) : submitting ? (
+                'Creating'
+              ) : pendingUploads > 0 ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+                  />
+                  {uploadingLabel(pendingUploads)}
+                </>
+              ) : (
+                'Save as draft'
+              )}
             </Button>
           </span>
         </>
@@ -838,18 +971,33 @@ export function CreatePostSheet({
             />
           ) : (
             <>
-              <Field label="Title" htmlFor="post-title" required>
-                <Input
-                  id="post-title"
-                  value={form.title}
-                  onChange={(event) => patch({ title: event.target.value })}
-                  placeholder="Post title"
+              <Field label="Format">
+                <Select
+                  label="Format"
+                  value={form.format}
+                  options={formatOptions}
+                  onChange={onFormatChange}
                 />
-                {gridError('title')}
+                {gridError('format')}
+              </Field>
+
+              <Field label="Media">
+                <AttachmentsField
+                  workspaceId={workspaceId}
+                  value={form.attachments}
+                  onChange={onAttachmentsChange}
+                  onPendingChange={setPendingUploads}
+                  frame={
+                    workspacePlatform !== null
+                      ? { platform: workspacePlatform, format: form.format }
+                      : null
+                  }
+                />
               </Field>
 
               <Field label="Caption" htmlFor="post-caption" required>
                 <Textarea
+                  ref={captionRef}
                   id="post-caption"
                   value={form.caption}
                   onChange={(event) => patch({ caption: event.target.value })}
@@ -858,95 +1006,96 @@ export function CreatePostSheet({
                 {gridError('caption')}
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="min-w-0">
-                  <Field label="Format">
-                    <Select
-                      label="Format"
-                      value={form.format}
-                      options={formatOptions}
-                      onChange={onFormatChange}
-                    />
-                  </Field>
-                </div>
+              <Field label="Title (optional)" htmlFor="post-title">
+                <Input
+                  id="post-title"
+                  value={form.title}
+                  onChange={(event) => patch({ title: event.target.value })}
+                  placeholder="Uses the caption's first line if empty"
+                />
+                {gridError('title')}
+              </Field>
 
-                <div className="min-w-0">
-                  <Field label="Bucket">
-                    <Select
-                      label="Bucket"
-                      value={form.bucketId}
-                      options={bucketOptions}
-                      onChange={(value) => patch({ bucketId: value })}
-                      placeholder="No bucket"
+              <Field label="Bucket (optional)">
+                <Select
+                  label="Bucket"
+                  value={form.bucketId}
+                  options={bucketOptions}
+                  onChange={onBucketChange}
+                  placeholder="No bucket"
+                />
+                {newBucketOpen ? (
+                  <div
+                    data-new-bucket=""
+                    className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3"
+                  >
+                    <Input
+                      aria-label="New bucket name"
+                      placeholder="Bucket name"
+                      value={newBucketName}
+                      maxLength={BUCKET_NAME_MAX}
+                      disabled={newBucketBusy}
+                      onChange={(event) => {
+                        setNewBucketName(event.target.value);
+                        setNewBucketError(null);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void submitNewBucket();
+                        }
+                      }}
                     />
-                  </Field>
-                </div>
-
-                <div className="min-w-0">
-                  <Field label="Owner">
-                    <Select
-                      label="Owner"
-                      value={form.ownerUserId}
-                      options={ownerOptions}
-                      onChange={(value) => patch({ ownerUserId: value })}
-                      placeholder="Choose an owner"
-                    />
-                  </Field>
-                </div>
-
-                <div className="min-w-0">
-                  <Field label="Target date">
-                    <DatePicker
-                      label="Target date"
-                      value={form.targetDate}
-                      onChange={(value) => patch({ targetDate: value })}
-                    />
-                  </Field>
-                </div>
-
-                <div className="min-w-0">
-                  <Field label="Origin">
-                    <Select
-                      label="Origin"
-                      value={form.origin}
-                      options={originOptions}
-                      onChange={(value) =>
-                        patch({
-                          origin: value as OriginValue,
-                          ...(value === 'none' ? { briefId: '' } : {}),
-                        })
-                      }
-                    />
-                  </Field>
-                </div>
-
-                {form.origin === 'brief' ? (
-                  <div className="col-span-2 min-w-0">
-                    <Field label="Brief" required>
-                      <Select
-                        label="Brief"
-                        value={form.briefId}
-                        options={briefOptions}
-                        onChange={(value) => patch({ briefId: value })}
-                        placeholder="Choose a brief"
-                      />
-                      {gridError('briefId')}
-                    </Field>
+                    {newBucketError !== null ? (
+                      <p role="alert" className="text-[11px] text-bad">
+                        {newBucketError}
+                      </p>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="lg"
+                        variant="primary"
+                        disabled={newBucketBusy}
+                        onClick={() => void submitNewBucket()}
+                      >
+                        {newBucketBusy ? 'Creating' : 'Create'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="lg"
+                        variant="ghost"
+                        disabled={newBucketBusy}
+                        onClick={() => {
+                          setNewBucketOpen(false);
+                          setNewBucketName('');
+                          setNewBucketError(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 ) : null}
-              </div>
+              </Field>
 
-              <Field label="Attachments">
-                <AttachmentsField
-                  workspaceId={workspaceId}
-                  value={form.attachments}
-                  onChange={onAttachmentsChange}
-                  frame={
-                    workspacePlatform !== null
-                      ? { platform: workspacePlatform, format: form.format }
-                      : null
-                  }
+              <Field label="Target date (optional)">
+                <DatePicker
+                  label="Target date"
+                  value={form.targetDate}
+                  onChange={(value) => patch({ targetDate: value })}
                 />
+              </Field>
+
+              <Field label="Brief (optional)">
+                <Select
+                  label="Brief"
+                  value={form.briefId}
+                  options={briefOptions}
+                  onChange={(value) => patch({ briefId: value })}
+                  placeholder="No brief"
+                />
+                {gridError('briefId')}
               </Field>
             </>
           )}

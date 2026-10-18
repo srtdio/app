@@ -20,6 +20,7 @@ import type { ReactElement } from 'react';
 import type { PostCardFields } from '@srtdio/posts';
 import { planCreateWithItems } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconCalendar, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import {
@@ -89,6 +90,28 @@ export const COMPOSE_NO_ITEMS = 'No items yet. Add a concept, a Pipeline post or
 
 /** The day button while an item needs a day. */
 export const PICK_A_DAY = 'Pick a day';
+
+/** The close confirm when the plan holds anything. */
+export const PLAN_DISCARD = {
+  title: 'Discard this plan?',
+  message: 'Your concepts and posts will be lost.',
+};
+
+/** Whether closing would lose work: a name, any item, or an unsaved concept draft. Pure. */
+export function composeHasContent(input: {
+  title: string;
+  items: readonly unknown[];
+  conceptDraft: Pick<ConceptForm, 'title' | 'description' | 'files'>;
+}): boolean {
+  const d = input.conceptDraft;
+  return (
+    input.title.trim() !== '' ||
+    input.items.length > 0 ||
+    d.title.trim() !== '' ||
+    d.description.trim() !== '' ||
+    d.files.length > 0
+  );
+}
 
 /** Create's button while the one call is in flight. */
 export const CREATING_LABEL = 'Creating…';
@@ -190,6 +213,7 @@ export function PlanComposeScreen(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ComposeError | null>(null);
   const [triedShare, setTriedShare] = useState(false);
+  const [closeConfirm, setCloseConfirm] = useState(false);
   const inFlight = useRef(false);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const mounted = useRef(true);
@@ -227,8 +251,18 @@ export function PlanComposeScreen(props: {
     setBusy(false);
     setError(null);
     setTriedShare(false);
+    setCloseConfirm(false);
     inFlight.current = false;
   }, [open, timeZone]);
+
+  // Every close (X, back, Escape) asks first while the plan holds anything.
+  const requestClose = (): void => {
+    if (composeHasContent({ title, items, conceptDraft: conceptForm })) {
+      setCloseConfirm(true);
+      return;
+    }
+    props.onClose();
+  };
 
   const problem = draftProblem({ title, startsOn: range.startsOn, endsOn: range.endsOn });
   const today = civilToday(new Date(), timeZone);
@@ -312,6 +346,14 @@ export function PlanComposeScreen(props: {
 
   // Add appends a new concept; Edit replaces it in place (same key, same
   // position). Local only: nothing is written until Create.
+  // The concept sheet closes only when its draft is discarded (or was empty):
+  // the draft goes then, and is otherwise kept for the next Add concept.
+  const closeConcept = (): void => {
+    setConceptOpen(false);
+    setConceptForm(EMPTY_CONCEPT);
+    setEditKey(null);
+  };
+
   const submitConcept = (): void => {
     if (!conceptFormValid(conceptForm)) return;
     const key = editKey ?? newMessageId();
@@ -428,7 +470,7 @@ export function PlanComposeScreen(props: {
         title="New plan"
         backLabel="Close"
         backIcon={<IconX size={22} />}
-        onBack={props.onClose}
+        onBack={requestClose}
         closeLabel="Close"
         footer={footer}
       >
@@ -499,8 +541,11 @@ export function PlanComposeScreen(props: {
               type="button"
               data-plan-add-concept=""
               onClick={() => {
-                setConceptForm(EMPTY_CONCEPT);
-                setEditKey(null);
+                // A kept Add draft reopens as it was; an edit's form never carries over.
+                if (editKey !== null) {
+                  setConceptForm(EMPTY_CONCEPT);
+                  setEditKey(null);
+                }
                 setConceptOpen(true);
               }}
               className={addClass}
@@ -548,7 +593,7 @@ export function PlanComposeScreen(props: {
         form={conceptForm}
         onChange={setConceptForm}
         onSubmit={submitConcept}
-        onClose={() => setConceptOpen(false)}
+        onClose={closeConcept}
         range={range}
         today={today}
         dayCounts={counts}
@@ -576,6 +621,21 @@ export function PlanComposeScreen(props: {
         onSave={saveDates}
         onClose={() => setDatesOpen(false)}
       />
+
+      {props.open && closeConfirm ? (
+        <ConfirmDialog
+          title={PLAN_DISCARD.title}
+          message={PLAN_DISCARD.message}
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          destructive
+          onConfirm={() => {
+            setCloseConfirm(false);
+            props.onClose();
+          }}
+          onCancel={() => setCloseConfirm(false)}
+        />
+      ) : null}
     </>
   );
 }

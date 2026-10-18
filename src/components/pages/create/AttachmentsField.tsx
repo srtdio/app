@@ -374,7 +374,15 @@ type Pending = {
   kind: 'image' | 'file' | 'link';
   previewUrl: string | null;
   error: string | null;
+  /** The picked file and its pre-check branch, kept so a failed row can Retry. */
+  file?: File;
+  isPhoto?: boolean;
 };
+
+/** Rows still uploading (failed rows are not counted). Pure. */
+export function pendingUploadCount(rows: readonly { error: string | null }[]): number {
+  return rows.filter((row) => row.error === null).length;
+}
 
 let pendingSeq = 0;
 
@@ -388,6 +396,8 @@ interface AttachmentsFieldProps {
    * upload target. Absent (briefs), or a format with no frame: square tiles.
    */
   frame?: { platform: string; format: string } | null;
+  /** How many files are still uploading; called whenever that count changes. */
+  onPendingChange?: (count: number) => void;
 }
 
 export function AttachmentsField({
@@ -395,6 +405,7 @@ export function AttachmentsField({
   value,
   onChange,
   frame,
+  onPendingChange,
 }: AttachmentsFieldProps): ReactElement {
   const newTrace = useNewTrace();
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
@@ -423,6 +434,13 @@ export function AttachmentsField({
   // rather than a stale closure capture.
   const valueRef = useRef(value);
   valueRef.current = value;
+
+  const pendingCount = pendingUploadCount(pending);
+  const pendingChangeRef = useRef(onPendingChange);
+  pendingChangeRef.current = onPendingChange;
+  useEffect(() => {
+    pendingChangeRef.current?.(pendingCount);
+  }, [pendingCount]);
 
   // Upload one picked file via the shared chat upload runner (the comment
   // composer's path), returning an asset VERSION id. Never throws.
@@ -468,42 +486,63 @@ export function AttachmentsField({
     [uploadEndpoint, workspaceId, newTrace],
   );
 
+  // Every picked file shows its Uploading row at once; the uploads then run in
+  // pick order so the completed list keeps that order.
   async function addFiles(list: FileList | null, isPhoto: boolean): Promise<void> {
     if (list === null) return;
-    for (const file of Array.from(list)) {
-      const id = `att-${(pendingSeq += 1)}`;
-      const isImage = isPhoto || file.type.startsWith('image/');
-      const previewUrl =
-        isImage || file.type.startsWith('video/') ? URL.createObjectURL(file) : null;
-      setPending((prev) => [
-        ...prev,
-        { id, name: file.name, kind: isImage ? 'image' : 'file', previewUrl, error: null },
-      ]);
-      const result = await runFileAttachment(file, isPhoto, uploadFile);
-      if (!alive.current) {
-        if (previewUrl !== null) URL.revokeObjectURL(previewUrl);
-        return;
-      }
-      setPending((prev) => prev.filter((item) => item.id !== id));
-      if (result.ok) {
-        onChange([
-          ...valueRef.current,
-          { ...result.item, ...(previewUrl !== null ? { previewUrl } : {}) },
-        ]);
-      } else {
-        if (previewUrl !== null) URL.revokeObjectURL(previewUrl);
-        setPending((prev) => [
-          ...prev,
-          {
-            id: `${id}-err`,
-            name: file.name,
-            kind: isImage ? 'image' : 'file',
-            previewUrl: null,
-            error: result.message,
-          },
-        ]);
-      }
+    const rows = Array.from(list).map((file) => ({
+      id: `att-${(pendingSeq += 1)}`,
+      file,
+      isPhoto,
+    }));
+    setPending((prev) => [
+      ...prev,
+      ...rows.map(({ id, file }) => ({
+        id,
+        name: file.name,
+        kind: isPhoto || file.type.startsWith('image/') ? ('image' as const) : ('file' as const),
+        previewUrl: null,
+        error: null,
+        file,
+        isPhoto,
+      })),
+    ]);
+    for (const row of rows) {
+      if (!alive.current) return;
+      await uploadRow(row.id, row.file, row.isPhoto);
     }
+  }
+
+  // Upload one row's file; success moves it to the completed list, failure
+  // keeps the row (with its file) so Retry can run it again.
+  async function uploadRow(id: string, file: File, isPhoto: boolean): Promise<void> {
+    const isImage = isPhoto || file.type.startsWith('image/');
+    const previewUrl = isImage || file.type.startsWith('video/') ? URL.createObjectURL(file) : null;
+    const result = await runFileAttachment(file, isPhoto, uploadFile);
+    if (!alive.current) {
+      if (previewUrl !== null) URL.revokeObjectURL(previewUrl);
+      return;
+    }
+    if (result.ok) {
+      setPending((prev) => prev.filter((item) => item.id !== id));
+      onChange([
+        ...valueRef.current,
+        { ...result.item, ...(previewUrl !== null ? { previewUrl } : {}) },
+      ]);
+    } else {
+      if (previewUrl !== null) URL.revokeObjectURL(previewUrl);
+      setPending((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, error: result.message } : item)),
+      );
+    }
+  }
+
+  function retryPending(id: string): void {
+    const row = pending.find((item) => item.id === id);
+    if (row?.file === undefined) return;
+    const file = row.file;
+    setPending((prev) => prev.map((item) => (item.id === id ? { ...item, error: null } : item)));
+    void uploadRow(id, file, row.isPhoto === true);
   }
 
   async function submitLink(): Promise<void> {
@@ -652,6 +691,18 @@ export function AttachmentsField({
               >
                 {item.error ?? 'Uploading'}
               </span>
+              {item.error !== null && item.file !== undefined ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="ghost"
+                  className="min-w-[44px] shrink-0 px-2 text-accent"
+                  aria-label={`Retry ${item.name}`}
+                  onClick={() => retryPending(item.id)}
+                >
+                  Retry
+                </Button>
+              ) : null}
               {item.error !== null ? (
                 <IconButton label={`Dismiss ${item.name}`} onClick={() => dismissPending(item.id)}>
                   <IconX size={16} />
@@ -665,6 +716,7 @@ export function AttachmentsField({
       <input
         ref={photoInputRef}
         type="file"
+        multiple
         accept={IMAGE_ACCEPT}
         className="sr-only"
         onChange={(event) => {
@@ -686,6 +738,7 @@ export function AttachmentsField({
       <input
         ref={docInputRef}
         type="file"
+        multiple
         accept={UPLOAD_ACCEPT}
         className="sr-only"
         onChange={(event) => {
