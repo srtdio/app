@@ -15,7 +15,7 @@ import { humanizeSize } from '@/lib/assets';
 import { useWorkspaceFullSheet } from '@/lib/storage-full';
 import { useWorkspace } from '@/lib/workspace-context';
 
-export const RECENTLY_DELETED_PATH = '/assets/recently-deleted';
+export const RECENTLY_DELETED_PATH = '/deleted';
 
 /** The sheet's line for a refused file of this size. */
 export function workspaceFullCopy(fileSizeBytes: number): string {

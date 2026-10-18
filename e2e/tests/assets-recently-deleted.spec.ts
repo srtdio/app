@@ -21,8 +21,8 @@ import {
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Recently deleted: a delete refused with asset_in_use explains where the file
-// is used; a delete moves the file to Recently deleted (31 days); the Assets
-// row opens the list; the owner restores, deletes one now or empties it all
+// is used; a delete moves the file to Recently deleted (31 days); the profile
+// menu opens the list; the owner restores, deletes one now or empties it all
 // through the asset-upload Worker's /purge; a member can only restore.
 // Every test is tagged @theme so it runs in light and dark.
 
@@ -131,13 +131,13 @@ test('a delete refused with asset_in_use opens Used in a post with Open post @th
   finish(s, [/status of 400/]);
 });
 
-test('Delete confirms, moves the file to Recently deleted and the row opens it @theme', async ({
+test('Delete confirms, moves the file to Recently deleted and the profile menu opens it @theme', async ({
   page,
 }) => {
   const s = await setup(page);
   await page.goto('/assets');
-  const row = page.getByRole('button', { name: /^Recently deleted/ });
-  await expect(row).toContainText('2 files · Kept 31 days');
+  // No Recently deleted row under the library any more; it lives in the profile menu.
+  await expect(page.getByRole('button', { name: /^Recently deleted/ })).toHaveCount(0);
 
   const details = await openDeleteConfirm(page, FREE_NAME);
   // Soft: the viewer's confirm buttons pass className h-11 next to Button's
@@ -154,11 +154,12 @@ test('Delete confirms, moves the file to Recently deleted and the row opens it @
     { name: 'asset_delete', args: { p_asset_id: FREE_ID, p_trace_id: expect.any(String) } },
   ]);
 
-  // The row recounts after the delete, then opens the list.
-  await expect(row).toContainText('3 files · Kept 31 days');
-  expectMinTouchTarget(await row.boundingBox());
-  await row.click();
-  await expect(page).toHaveURL(/\/assets\/recently-deleted$/);
+  // Profile menu (top right) > Recently deleted opens the list at /deleted.
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  const item = page.getByRole('menuitem', { name: 'Recently deleted' });
+  expectMinTouchTarget(await item.boundingBox());
+  await item.click();
+  await expect(page).toHaveURL(/\/deleted$/);
   await expect(deletedRow(page, FREE_NAME)).toBeVisible();
   finish(s);
 });
@@ -167,7 +168,7 @@ test('owner: full names, days left, Restore, Delete now and their confirms @them
   page,
 }) => {
   const s = await setup(page);
-  await page.goto('/assets/recently-deleted');
+  await page.goto('/deleted');
   await expect(page.getByText(HINT, { exact: true })).toBeVisible();
 
   const recent = deletedRow(page, DELETED_RECENT_NAME);
@@ -260,7 +261,7 @@ test('owner: full names, days left, Restore, Delete now and their confirms @them
 
 test('owner: Empty now purges everything and frees the space @theme', async ({ page }) => {
   const s = await setup(page);
-  await page.goto('/assets/recently-deleted');
+  await page.goto('/deleted');
   await expect(deletedRow(page, DELETED_LONG_NAME)).toBeVisible();
   await page.getByRole('button', { name: 'Empty now', exact: true }).click();
   await page
@@ -275,7 +276,7 @@ test('owner: Empty now purges everything and frees the space @theme', async ({ p
 
 test('member: only Restore, with the owner-only note @theme', async ({ page }) => {
   const s = await setup(page, { member: true });
-  await page.goto('/assets/recently-deleted');
+  await page.goto('/deleted');
   const rows = page.getByRole('listitem').filter({ hasText: 'gone in' });
   await expect(rows).toHaveCount(2);
   for (const row of await rows.all()) {

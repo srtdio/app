@@ -9,7 +9,6 @@ import { AssetsPage } from '@/components/pages/AssetsPage';
 import { RecentlyDeletedPage } from '@/components/pages/RecentlyDeletedPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
 import { HelpPage } from '@/components/pages/HelpPage';
-import { DeletedPage } from '@/components/pages/DeletedPage';
 import { ActivityPlanLayout, PlanPage } from '@/components/pages/PlanPage';
 import { SignInPage } from '@/components/auth/SignInPage';
 import { AuthCallbackPage } from '@/components/auth/AuthCallbackPage';
@@ -76,10 +75,9 @@ export default function App() {
                 <Route path="/plans/:planId" element={<PlanPage />} />
               </Route>
               <Route path="/assets" element={<AssetsPage />} />
-              <Route path="/assets/recently-deleted" element={<RecentlyDeletedPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/help" element={<HelpPage />} />
-              <Route path="/deleted" element={<DeletedPage />} />
+              <Route path="/deleted" element={<RecentlyDeletedPage />} />
               <Route path="*" element={<Navigate to="/pipeline" replace />} />
             </Route>
           </Route>

@@ -13,7 +13,6 @@ import {
   listDeletedAssets,
   openParentLabel,
   purgeAssets,
-  recentlyDeletedSub,
   resolveAssetParents,
   type PurgeConfig,
 } from '@/lib/assets';
@@ -43,11 +42,6 @@ describe('daysLeft', () => {
 });
 
 describe('Recently deleted copy', () => {
-  it('formats the Assets row sub with a middle dot and file plural', () => {
-    expect(recentlyDeletedSub(1)).toBe('1 file · Kept 31 days');
-    expect(recentlyDeletedSub(4)).toBe('4 files · Kept 31 days');
-  });
-
   it('formats a row detail line with size and days left', () => {
     expect(goneInLine(2 * 1024 * 1024, 12)).toBe('2 MB · gone in 12 days');
     expect(goneInLine(512, 1)).toBe('512 B · gone in 1 day');

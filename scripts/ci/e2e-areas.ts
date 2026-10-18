@@ -189,7 +189,6 @@ export const AREAS: Area[] = [
     name: 'unvisited',
     entries: [
       'src/components/pages/HelpPage.tsx',
-      'src/components/pages/DeletedPage.tsx',
       'src/components/auth/SignInPage.tsx',
       'src/components/auth/SignUpPage.tsx',
       'src/components/auth/AuthCallbackPage.tsx',
