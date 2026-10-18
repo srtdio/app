@@ -201,12 +201,14 @@ describe.runIf(RPC_SUITE)('SECURITY DEFINER write procs (authenticated role)', (
   ): Promise<Set<string>> {
     const res = await asGeneric(admin)
       .from('inbox_entries')
-      .select('user_id')
+      .select('user_id, actor_user_id')
       .eq('workspace_id', workspaceId)
       .eq('event_type', eventType)
       .eq('entity_id', entityId);
-    const rows = res.data as Array<{ user_id: string }> | null;
-    return new Set((rows ?? []).map((r) => r.user_id));
+    const rows = res.data as Array<{ user_id: string; actor_user_id: string | null }> | null;
+    // Notification recipients only: the actor's own already-read row
+    // (20261018140000, inbox_self_entry) is not a notification.
+    return new Set((rows ?? []).filter((r) => r.user_id !== r.actor_user_id).map((r) => r.user_id));
   }
 
   // Active members of a workspace minus the actor. wsA accumulates members as

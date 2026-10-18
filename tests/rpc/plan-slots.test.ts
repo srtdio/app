@@ -174,11 +174,16 @@ describe.runIf(RPC_SUITE)('plan slot approval (authenticated role)', () => {
   async function deletedRecipients(postId: string): Promise<string[]> {
     const res = await admin
       .from('inbox_entries')
-      .select('user_id')
+      .select('user_id, actor_user_id')
       .eq('entity_id', postId)
       .eq('event_type', 'post_deleted');
     if (res.error !== null) throw new Error(`inbox_entries read failed: ${res.error.message}`);
-    return res.data.map((r) => r.user_id).sort();
+    // Notification recipients only: the actor's own already-read row
+    // (20261018140000, inbox_self_entry) is not a notification.
+    return res.data
+      .filter((r) => r.user_id !== r.actor_user_id)
+      .map((r) => r.user_id)
+      .sort();
   }
 
   beforeAll(async () => {

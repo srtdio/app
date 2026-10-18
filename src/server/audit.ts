@@ -5,11 +5,11 @@
 // SECURITY DEFINER procedures that surface their effect to operators).
 //
 // public.audit_log has RLS with a SELECT-only policy, so direct inserts are
-// rejected. The sanctioned write path is the SECURITY DEFINER RPC
-// `audit_log_write` (EXECUTE granted to authenticated). It is the only thing
-// that can append a row, and it derives actor_user_id from auth.uid() rather
-// than trusting a caller-supplied id - so there is no actor parameter here by
-// design (anti-spoofing). Everything else maps 1:1 to a column.
+// rejected. `audit_log_write` is EXECUTE owner-only (20261018130000): only
+// SECURITY DEFINER procs owned by postgres can call it, so this helper is NOT
+// callable from a signed-in user session. It derives actor_user_id from
+// auth.uid() rather than trusting a caller-supplied id - so there is no actor
+// parameter here by design (anti-spoofing). Everything else maps 1:1 to a column.
 
 import { supabase } from '@/lib/supabase';
 
