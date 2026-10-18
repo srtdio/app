@@ -178,7 +178,11 @@ test('approver: review, ask, talk with real taps, then Done @desktop', async ({ 
   await expect(page.locator('[data-induction-layer]')).toHaveCount(0);
   await expect.poll(() => inductionDone(network.world.tables)).toBe(true);
 
-  const writes = network.rpcCalls.map((c) => c.name).filter((n) => n.startsWith('induction_'));
+  // induction_sample_files is a read: the sample week's file keys, so its
+  // photos show from the site without a presign.
+  const writes = network.rpcCalls
+    .map((c) => c.name)
+    .filter((n) => n.startsWith('induction_') && n !== 'induction_sample_files');
   expect(new Set(writes)).toEqual(
     new Set(['induction_state', 'induction_step_set', 'induction_sample_seed', 'induction_finish']),
   );
