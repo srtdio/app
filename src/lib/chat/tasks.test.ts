@@ -292,7 +292,7 @@ describe('date strip', () => {
   it('lists the 14 days after tomorrow', () => {
     const days = dateStripDays(NOW, UTC);
     expect(days).toHaveLength(14);
-    expect(days[0]).toEqual({ civil: '2026-10-15', weekday: 'Thu', day: 15 });
+    expect(days[0]).toEqual({ civil: '2026-10-15', weekday: 'Thu', day: 15, month: 'Oct' });
     expect(days[13]?.civil).toBe('2026-10-28');
   });
 });
@@ -315,7 +315,7 @@ describe('shareSnapshot', () => {
   it('formats the plain-text snapshot on the workspace clock', () => {
     expect(shareSnapshot({ chatName: 'Launch crew', tasks, nowMs: NOW, timeZone: UTC })).toBe(
       [
-        'Task list · Launch crew · 13 Oct, 2 pm',
+        'Tasks · Launch crew · 13 Oct, 2 pm',
         'Creators',
         '3. Hook copy · P0 · today 8 pm',
         '5. Reel cut · P2 · today 10 am (missed)',
@@ -333,9 +333,7 @@ describe('shareSnapshot', () => {
       nowMs: NOW,
       timeZone: UTC,
     });
-    expect(text).toBe(
-      'Task list · X · 13 Oct, 2 pm\nApprovers\n2. Approve grid · P2 · tomorrow 12 pm',
-    );
+    expect(text).toBe('Tasks · X · 13 Oct, 2 pm\nApprovers\n2. Approve grid · P2 · tomorrow 12 pm');
   });
   it('past the limit: drops the done line, then trailing items, ending "+k more"', () => {
     const full = shareSnapshot({ chatName: 'X', tasks, nowMs: NOW, timeZone: UTC });

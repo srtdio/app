@@ -1,5 +1,5 @@
-// The chat task list in the harness: the two procs (chat_task_create,
-// chat_task_set) over the chat_tasks / chat_task_events fixture tables, and a
+// The chat Tasks in the harness: the procs (chat_task_create, chat_task_set,
+// chat_task_save, chat_task_delete) over the chat_tasks / chat_task_events fixture tables, and a
 // seed with a few items, their change lines and a missed-due bell row. The
 // procs mirror the SQL (next number per chat, an event per change, the due
 // setter stamped); RLS and the inbox fan-out are not emulated beyond what the
@@ -90,6 +90,49 @@ export const TASK_RPC: Record<string, RpcHandler> = {
       task.due_passed_at = null;
     }
     event(tables, task, field, before, after, ME, now);
+    return null;
+  },
+  chat_task_save: (args, tables) => {
+    const task = (tables.chat_tasks ?? []).find((t) => t.id === args.p_task_id);
+    if (task === undefined || task.deleted_at != null) return null;
+    const changes = (args.p_changes ?? {}) as Record<string, unknown>;
+    const now = new Date().toISOString();
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    for (const [field, raw] of Object.entries(changes)) {
+      const column = field === 'due' ? 'due_at' : field;
+      const after =
+        field === 'priority'
+          ? Number(raw)
+          : field === 'due' || field === 'note'
+            ? raw === '' || raw == null
+              ? null
+              : String(raw)
+            : String(raw);
+      const before = task[column] ?? null;
+      if (String(before) === String(after)) continue;
+      oldValue[field] = before;
+      newValue[field] = after;
+      task[column] = after;
+      if (field === 'due') {
+        task.due_set_by = ME;
+        task.due_set_at = now;
+        task.due_passed_at = null;
+      }
+    }
+    if (Object.keys(newValue).length === 0) return null;
+    task.updated_at = now;
+    event(tables, task, 'edited', JSON.stringify(oldValue), JSON.stringify(newValue), ME, now);
+    return null;
+  },
+  chat_task_delete: (args, tables) => {
+    const task = (tables.chat_tasks ?? []).find((t) => t.id === args.p_task_id);
+    if (task === undefined || task.deleted_at != null) return null;
+    const now = new Date().toISOString();
+    task.deleted_at = now;
+    task.deleted_by = ME;
+    task.updated_at = now;
+    event(tables, task, 'deleted', null, null, ME, now);
     return null;
   },
 };

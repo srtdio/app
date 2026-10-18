@@ -1,4 +1,4 @@
-// Share the task list through Forward, so other chats get the standard
+// Share the Tasks through Forward, so other chats get the standard
 // "Forwarded" label. On the picker's confirm:
 //   a) the snapshot text goes into the open chat through the thread's normal
 //      send (the composer's path: outbox bubble, recorded, published), and the
