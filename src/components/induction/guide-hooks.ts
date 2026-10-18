@@ -1,7 +1,7 @@
 // The guide's behaviour on the real DOM: what finishes a step (the tap, the
 // next control appearing, this one disappearing, a filled field losing focus),
 // the guard that keeps every other tap from reaching the app, the 4 s skip for
-// a control that never shows, the once-per-route legend and element sizes.
+// a control that never shows, and element sizes.
 // Every listener, observer and timer is removed on cleanup.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -214,35 +214,6 @@ export function useAbsentSkip(
     }, ABSENT_SKIP_MS);
     return () => window.clearTimeout(timer);
   }, [stepKey]);
-}
-
-function legendKey(route: string): string {
-  return `sorted:guide-legend:${route}`;
-}
-
-function legendSeen(route: string): boolean {
-  try {
-    return window.localStorage.getItem(legendKey(route)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function markLegendSeen(route: string): void {
-  try {
-    window.localStorage.setItem(legendKey(route), '1');
-  } catch {
-    // Private mode: the legend may show again, which is fine.
-  }
-}
-
-/** Whether the legend shows on this step: once per route, on the first step the guide shows. */
-export function useLegend(route: string, stepId: string): boolean {
-  const [legendStep] = useState(() => (legendSeen(route) ? '' : stepId));
-  useEffect(() => {
-    if (legendStep !== '') markLegendSeen(route);
-  }, [legendStep, route]);
-  return legendStep !== '' && legendStep === stepId;
 }
 
 /** An element's live size (its offset box), with a fallback before it renders. */

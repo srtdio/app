@@ -100,7 +100,8 @@ interface Pieces {
   box: R;
   hand: R;
   label: R;
-  bar: R;
+  /** null on a step with nothing to add (no why, no chips): the bar is not shown. */
+  bar: R | null;
   vp: { w: number; h: number };
 }
 
@@ -130,7 +131,7 @@ async function readPieces(page: Page, controlSelectors: string[]): Promise<Piece
     const hand = first('[data-induction-hand]');
     const label = first('[data-induction-label]');
     const bar = first('[data-induction-bar]');
-    if (control === null || box === null || hand === null || label === null || bar === null) {
+    if (control === null || box === null || hand === null || label === null) {
       return null;
     }
     return { control, box, hand, label, bar, vp: { w: window.innerWidth, h: window.innerHeight } };
@@ -277,9 +278,15 @@ export async function expectStep(page: Page, info: TestInfo, check: StepCheck): 
   if (step.why !== '')
     await expect(bar.getByText(fillCopy(step.why, ctx), { exact: true })).toBeVisible();
   const barRect = pieces.bar;
-  expect(overlaps(barRect, ctl), `bar clear of the control on ${step.id}`).toBe(false);
-  expect(overlaps(labelRect, barRect), `label clear of the bar on ${step.id}`).toBe(false);
-  await expectBarChips(page, { back: check.back });
+  if (barRect === null) {
+    // One message on screen: a step with no why and no chips shows the label only.
+    expect(step.why, `no bar only when there is no why, on ${step.id}`).toBe('');
+    expect(check.back ?? false, `no bar means no Back on ${step.id}`).toBe(false);
+  } else {
+    expect(overlaps(barRect, ctl), `bar clear of the control on ${step.id}`).toBe(false);
+    expect(overlaps(labelRect, barRect), `label clear of the bar on ${step.id}`).toBe(false);
+    await expectBarChips(page, { back: check.back });
+  }
   await expectNoHorizontalScroll(page);
 
   if (check.shot !== undefined)
@@ -297,7 +304,13 @@ export async function expectStep(page: Page, info: TestInfo, check: StepCheck): 
       .filter((r) => r.width > 0 && r.height > 0)
       .map((r) => ({ x: r.left, y: r.top, width: r.width, height: r.height })),
   );
-  const away = await pointAway(page, [boxRect, barRect, labelRect, hand, ...anchors]);
+  const away = await pointAway(page, [
+    boxRect,
+    ...(barRect !== null ? [barRect] : []),
+    labelRect,
+    hand,
+    ...anchors,
+  ]);
   await page.mouse.click(away.x, away.y);
   await page.waitForTimeout(150);
   expect(await guideId(page), `tap away keeps ${step.id}`).toBe(step.id);

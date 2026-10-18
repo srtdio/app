@@ -86,9 +86,6 @@ export function hasUnfilledPlaceholder(text: string): boolean {
 
 // ---------- guide bar ----------
 
-export const GUIDE_LEGEND =
-  'When the hand taps a control, it is your turn. Back goes one step back.';
-
 export const GUIDE_CHROME = {
   back: 'Back',
   next: 'Next',

@@ -171,7 +171,6 @@ export interface BarCopy {
   /** Look-around steps: the chapters in order, the current one named. */
   chapters: { names: readonly string[]; current: number };
   why: string;
-  legend: string;
   back: string;
   later: string;
   /** The pause's button: "Next". */
@@ -241,11 +240,6 @@ export const GuideBar = forwardRef<
           <PhaseRow copy={copy} />
           {copy.why !== '' ? (
             <p className="text-[13px] leading-snug text-fg [text-wrap:pretty]">{copy.why}</p>
-          ) : null}
-          {copy.legend !== '' ? (
-            <p data-induction-legend="" className="mt-0.5 text-[12px] leading-snug text-fg-2">
-              {copy.legend}
-            </p>
           ) : null}
         </div>
         <BarButtons copy={copy} actions={actions} />

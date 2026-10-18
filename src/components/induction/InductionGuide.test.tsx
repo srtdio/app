@@ -310,27 +310,24 @@ describe('the guide bar', () => {
     expect(q('[data-induction-bar]').textContent).toContain('Talk');
   });
 
-  it('shows the legend once per route', async () => {
-    control('pipeline-approved-chip', CHIP);
-    await mount({ step: 'c_approved_chip' });
-    expect(document.querySelector('[data-induction-legend]')).not.toBeNull();
-    act(() => root?.unmount());
+  it('shows no bar on a step with nothing to add: the label is the one message', async () => {
+    control('topbar-workspace-slot', { top: 8, left: 100, width: 190, height: 44 });
     root = createRoot(host!);
+    current = data({ step: null });
     await act(async () => {
       root!.render(
         <MemoryRouter initialEntries={['/pipeline']}>
-          <InductionProvider
-            data={data({ step: 'c_approved_chip' })}
-            workspaceId="ws-1"
-            workspaceLabel="Kite - Instagram"
-          >
-            <InductionGuide tabsShown />
+          <InductionProvider data={current!} workspaceId={null} workspaceLabel="">
+            <InductionGuide tabsShown={false} />
           </InductionProvider>
         </MemoryRouter>,
       );
     });
     await wait(160);
-    expect(document.querySelector('[data-induction-legend]')).toBeNull();
+    expect(q('[data-induction-step]').getAttribute('data-induction-step')).toBe('c_workspace');
+    expect(document.querySelector('[data-induction-bar]')).toBeNull();
+    expect(document.body.textContent).toContain('Your brand first');
+    expect(document.body.textContent).not.toContain('When the hand taps');
   });
 
   it('offers no Skip', async () => {

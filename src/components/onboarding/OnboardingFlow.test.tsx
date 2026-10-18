@@ -481,9 +481,10 @@ describe('refresh mid-onboarding', () => {
     );
     await render({});
     expect(stepLabel()).toBe('Step 3 of 3');
-    expect(document.querySelector<HTMLSelectElement>('select[aria-label="Job title"]')?.value).toBe(
-      'Copywriter',
-    );
+    const title = document.querySelector('select[aria-label="Job title"]') as unknown as {
+      value: string;
+    };
+    expect(title.value).toBe('Copywriter');
     await click(document.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!);
     expect(document.querySelector<HTMLInputElement>('#ob-name')?.value).toBe('Riya Menon');
     expect(document.querySelector<HTMLInputElement>('#ob-username')?.value).toBe('rm');
