@@ -15,6 +15,7 @@ import {
   RESEND_COOLDOWN_SECONDS,
   SignUpPage,
   performSignUp,
+  testSignUpMessage,
   type SignUpAuthClient,
 } from './SignUpPage';
 
@@ -210,5 +211,18 @@ describe('SignUpPage', () => {
     expect(input.value).toBe('dana@kite.in');
     expect(input.readOnly).toBe(false);
     expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
+});
+
+describe('testSignUpMessage', () => {
+  it('words the test site refusals', () => {
+    expect(testSignUpMessage('account_exists')).toBe(
+      'That email already has a real account. Use another email to test.',
+    );
+    expect(testSignUpMessage('invalid_email')).toBe('Enter a valid email address.');
+    expect(testSignUpMessage('rate_limited')).toBe(
+      'Too many test accounts this hour. Try again later.',
+    );
+    expect(testSignUpMessage('boom')).toBe("We couldn't start that. Try again.");
   });
 });
