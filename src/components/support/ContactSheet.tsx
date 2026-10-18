@@ -4,7 +4,8 @@
 
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
-import { logger } from '@/lib/logger';
+import { useOptionalToast } from '@/components/ui/toast';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { anotherWorkspaceBody, anotherWorkspaceMailto, SUPPORT_EMAIL } from '@/lib/support';
 
 export interface ContactSheetProps {
@@ -19,11 +20,10 @@ export function contactClipboardText(workspaceName: string): string {
 }
 
 export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps) {
+  const toast = useOptionalToast();
   async function copy(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(contactClipboardText(workspaceName));
-    } catch (err: unknown) {
-      logger.warn('support address copy failed', { error: String(err) });
+    if (!(await copyText(contactClipboardText(workspaceName)))) {
+      toast?.show({ title: COPY_FAILED });
     }
   }
 

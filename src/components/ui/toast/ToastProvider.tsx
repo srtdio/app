@@ -19,11 +19,13 @@ export const EXIT_MS = DUR_BASE_MS;
 /**
  * Enter/exit keyframes, scoped to this surface (no color, no hex). Durations and
  * easings are applied on the card via motion tokens, not here. Axis: translateY
- * only. Enter glides up from 16px; exit drops to 8px.
+ * only. Enter glides up from 16px; exit drops to 8px. The countdown bar's fill
+ * shrinks linearly (width), skipped under reduced motion.
  */
 const TOAST_KEYFRAMES =
   '@keyframes sorted-toast-in{from{opacity:0;transform:translateY(1rem)}to{opacity:1;transform:translateY(0)}}' +
-  '@keyframes sorted-toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(0.5rem)}}';
+  '@keyframes sorted-toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(0.5rem)}}' +
+  '@keyframes sorted-toast-countdown{from{width:100%}to{width:0}}';
 
 /** A toast plus its closing-phase flag. Kept local so ToastModel stays minimal. */
 export interface ManagedToast extends ToastModel {
@@ -38,6 +40,10 @@ export interface ManagedToast extends ToastModel {
  * nothing touches localStorage/sessionStorage.
  */
 export interface ToastStore extends ToastApi {
+  /** End a toast as accepted (its X or timer): onExpire once, then dismiss. */
+  expire: (id: string) => void;
+  /** Press a toast's action: run it, then dismiss; onExpire never runs. */
+  act: (id: string) => void;
   getSnapshot: () => ManagedToast[];
   subscribe: (listener: (toasts: ManagedToast[]) => void) => () => void;
   /** Clear every pending timer and listener. Called on provider unmount. */
@@ -49,6 +55,9 @@ export function createToastStore(): ToastStore {
   let seq = 0;
   const listeners = new Set<(toasts: ManagedToast[]) => void>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  // onExpire per live toast; deleted when it fires or the action is pressed, so
+  // it runs at most once.
+  const expires = new Map<string, () => void>();
 
   function emit(): void {
     for (const listener of listeners) listener(toasts);
@@ -86,6 +95,29 @@ export function createToastStore(): ToastStore {
     );
   }
 
+  // Run a toast's onExpire once, then forget it.
+  function runExpire(id: string): void {
+    const onExpire = expires.get(id);
+    if (onExpire === undefined) return;
+    expires.delete(id);
+    onExpire();
+  }
+
+  // The toast ended without its action (timer or X): accept, then close.
+  function expire(id: string): void {
+    runExpire(id);
+    dismiss(id);
+  }
+
+  // The action was pressed: run it, close, and never expire.
+  function act(id: string): void {
+    const current = toasts.find((toast) => toast.id === id);
+    if (current === undefined || current.leaving) return;
+    expires.delete(id);
+    current.action?.onPress();
+    dismiss(id);
+  }
+
   function show(options: ToastOptions): string {
     const id = String((seq += 1));
     const toast: ManagedToast = {
@@ -98,17 +130,23 @@ export function createToastStore(): ToastStore {
       ...(options.tone !== undefined ? { tone: options.tone } : {}),
       leaving: false,
     };
+    const ms = options.durationMs === undefined ? DEFAULT_DURATION_MS : options.durationMs;
+    const timedMs = ms !== null && ms > 0 ? ms : null;
+    if (options.countdown === true && timedMs !== null) toast.countdownMs = timedMs;
+    if (options.onExpire !== undefined) expires.set(id, options.onExpire);
 
     const kept = [toast, ...toasts];
-    for (const dropped of kept.slice(MAX_VISIBLE)) clearTimer(dropped.id);
+    const dropped = kept.slice(MAX_VISIBLE);
+    for (const old of dropped) clearTimer(old.id);
     toasts = kept.slice(0, MAX_VISIBLE);
     emit();
+    // A toast pushed past the cap can no longer be undone: accept it.
+    for (const old of dropped) runExpire(old.id);
 
-    const ms = options.durationMs === undefined ? DEFAULT_DURATION_MS : options.durationMs;
-    if (ms !== null && ms > 0) {
+    if (timedMs !== null) {
       timers.set(
         id,
-        setTimeout(() => dismiss(id), ms),
+        setTimeout(() => expire(id), timedMs),
       );
     }
     return id;
@@ -117,6 +155,7 @@ export function createToastStore(): ToastStore {
   function dispose(): void {
     for (const handle of timers.values()) clearTimeout(handle);
     timers.clear();
+    expires.clear();
     listeners.clear();
     toasts = [];
   }
@@ -124,6 +163,8 @@ export function createToastStore(): ToastStore {
   return {
     show,
     dismiss,
+    expire,
+    act,
     dispose,
     getSnapshot: () => toasts,
     subscribe: (listener) => {
@@ -137,6 +178,8 @@ export function createToastStore(): ToastStore {
 
 interface ToastContextValue extends ToastApi {
   toasts: ManagedToast[];
+  expire: (id: string) => void;
+  act: (id: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -168,7 +211,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [store]);
 
   const value = useMemo<ToastContextValue>(
-    () => ({ toasts, show: store.show, dismiss: store.dismiss }),
+    () => ({
+      toasts,
+      show: store.show,
+      dismiss: store.dismiss,
+      expire: store.expire,
+      act: store.act,
+    }),
     [toasts, store],
   );
 
@@ -191,7 +240,13 @@ export function ToastViewport() {
     >
       <style>{TOAST_KEYFRAMES}</style>
       {ctx.toasts.map((toast) => (
-        <Toast key={toast.id} toast={toast} leaving={toast.leaving} onDismiss={ctx.dismiss} />
+        <Toast
+          key={toast.id}
+          toast={toast}
+          leaving={toast.leaving}
+          onDismiss={ctx.expire}
+          onAction={ctx.act}
+        />
       ))}
     </div>
   );

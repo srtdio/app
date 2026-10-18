@@ -3,7 +3,10 @@ import type { ReactNode } from 'react';
 /** A toast's tint. */
 export type ToastTone = 'success';
 
-/** An optional trailing action on a toast (e.g. Undo): pressing it also dismisses the toast. */
+/**
+ * An optional trailing action on a toast (e.g. Undo): pressing it runs onPress,
+ * then dismisses the toast without calling onExpire.
+ */
 export interface ToastAction {
   label: string;
   onPress: () => void;
@@ -24,6 +27,14 @@ export interface ToastOptions {
    * (5000ms). `0` or `null` makes the toast sticky (no auto-dismiss).
    */
   durationMs?: number | null;
+  /**
+   * Called once when the toast ends without its action: the auto-dismiss timer
+   * runs out, the X is pressed (closing = accept), or a newer toast pushes it
+   * past the cap. Never called after the action is pressed.
+   */
+  onExpire?: () => void;
+  /** Show a 3px bar under the card that empties over durationMs. */
+  countdown?: boolean;
 }
 
 /** A live toast held by the provider. `id` is assigned on show(). */
@@ -35,6 +46,8 @@ export interface Toast {
   onPress?: () => void;
   action?: ToastAction;
   tone?: ToastTone;
+  /** Countdown bar length in ms; set only when countdown is on and the toast auto-dismisses. */
+  countdownMs?: number;
 }
 
 /** Public surface returned by useToast(). */

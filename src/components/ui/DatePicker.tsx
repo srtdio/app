@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
+import { useEscapeLayer } from '@/lib/escape-stack';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import type { IconProps } from '@/components/ui/icons';
@@ -170,16 +171,8 @@ export function DatePicker({
     if (parsed !== null) setView({ year: parsed.year, monthIndex: parsed.monthIndex });
   }, [open, value]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent): void {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  // Escape closes only this popover while it is the top layer, never the sheet under it.
+  useEscapeLayer(open, () => setOpen(false));
 
   function pick(iso: string): void {
     onChange(iso);

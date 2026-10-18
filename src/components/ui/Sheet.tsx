@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { useEscapeLayer } from '@/lib/escape-stack';
 import { DUR_BASE_MS } from '@/lib/motion';
 
 interface SheetProps {
@@ -20,7 +22,21 @@ interface SheetProps {
   fixedHeight?: boolean;
   /** At lg+ the box widens to 960px so a side column fits beside the form. */
   wide?: boolean;
+  /**
+   * Unsaved input. While true, every close path (X, backdrop tap, Escape)
+   * opens a discard confirm instead of closing. The caller's own actions (the
+   * primary button) are never blocked.
+   */
+  dirty?: boolean;
+  /** Discard confirm copy, passed by the caller, e.g. "Discard this post?". */
+  discard?: { title: string; message: string };
+  /** A save is in flight: every close path does nothing and the header shows busyLabel. */
+  busy?: boolean;
+  /** Header text while busy. Default "Saving…". */
+  busyLabel?: string;
 }
+
+const DEFAULT_DISCARD = { title: 'Discard changes?', message: 'Your changes will be lost.' };
 
 // Exit transition length; mirrors --dur-base so the closing phase stays mounted
 // exactly as long as the fade/slide-out takes, then unmounts. Under
@@ -28,7 +44,19 @@ interface SheetProps {
 // so unmount always happens.
 const EXIT_MS = DUR_BASE_MS;
 
-export function Sheet({ open, onClose, title, children, footer, fixedHeight, wide }: SheetProps) {
+export function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  fixedHeight,
+  wide,
+  dirty = false,
+  discard,
+  busy = false,
+  busyLabel = 'Saving…',
+}: SheetProps) {
   // `rendered` keeps the panel mounted through its exit; `entered` drives the
   // enter/exit transition (false = offscreen/faded, true = resting).
   const [rendered, setRendered] = useState(open);
@@ -45,17 +73,28 @@ export function Sheet({ open, onClose, title, children, footer, fixedHeight, wid
     return () => clearTimeout(timer);
   }, [open]);
 
+  const [confirming, setConfirming] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Drop a pending discard confirm when the caller closes the sheet itself.
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        onClose();
-      }
+    if (!open) setConfirming(false);
+  }, [open]);
+
+  // Every close path (X, backdrop, Escape) funnels here. Busy ignores it; dirty
+  // asks first.
+  function requestClose(): void {
+    if (busy) return;
+    if (dirty) {
+      setConfirming(true);
+      return;
     }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [onClose]);
+    onClose();
+  }
+
+  // Escape reaches the sheet only while it is the top layer, so Escape in a
+  // Select or DatePicker inside it closes just that.
+  useEscapeLayer(open, requestClose);
 
   if (!rendered) {
     return null;
@@ -63,7 +102,7 @@ export function Sheet({ open, onClose, title, children, footer, fixedHeight, wid
 
   function onOverlayClick(event: MouseEvent<HTMLDivElement>): void {
     if (event.target === event.currentTarget) {
-      onClose();
+      requestClose();
     }
   }
 
@@ -76,13 +115,15 @@ export function Sheet({ open, onClose, title, children, footer, fixedHeight, wid
       onClick={onOverlayClick}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-label={title}
         className={cn(
           // Axis: translateY only. Mobile slides from 100%; desktop rises 8px
           // and crossfades. No X, no rotate.
-          'flex w-full max-h-[90vh] flex-col overflow-hidden rounded-t-2xl border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          'flex w-full max-h-[90vh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
           fixedHeight === true && 'sm:h-[min(640px,84vh)]',
           wide === true && 'lg:w-[960px]',
           entered
@@ -92,8 +133,18 @@ export function Sheet({ open, onClose, title, children, footer, fixedHeight, wid
       >
         <div className="flex items-center gap-2.5 px-[18px] py-[15px] border-b border-border">
           <h2 className="font-semibold text-[15px]">{title}</h2>
-          <span className="ml-auto">
-            <IconButton label="Close" onClick={onClose}>
+          <span className="ml-auto flex items-center gap-2">
+            {busy ? <span className="text-xs text-fg-3">{busyLabel}</span> : null}
+            <IconButton
+              label="Close"
+              onClick={requestClose}
+              {...(busy
+                ? {
+                    'aria-disabled': 'true' as const,
+                    className: 'cursor-default !text-fg-3 hover:!bg-transparent active:!scale-100',
+                  }
+                : {})}
+            >
               <IconX />
             </IconButton>
           </span>
@@ -112,6 +163,23 @@ export function Sheet({ open, onClose, title, children, footer, fixedHeight, wid
           </div>
         ) : null}
       </div>
+      {confirming ? (
+        <ConfirmDialog
+          title={(discard ?? DEFAULT_DISCARD).title}
+          message={(discard ?? DEFAULT_DISCARD).message}
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          destructive
+          onConfirm={() => {
+            setConfirming(false);
+            onClose();
+          }}
+          onCancel={() => {
+            setConfirming(false);
+            panelRef.current?.focus();
+          }}
+        />
+      ) : null}
     </div>,
     document.body,
   );

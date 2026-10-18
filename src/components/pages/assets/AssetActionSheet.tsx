@@ -5,6 +5,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import { displayLabel, linkDomain, type AssetListItem } from '@/lib/assets';
 import { resolveAssetUrl } from '@/components/pages/assets/media';
 import { downloadFile, openLinkInNewTab } from '@/components/pages/assets/openExternal';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 
 const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
 
@@ -98,8 +99,7 @@ export function AssetActionSheet({
 
   const handleCopy = (): void => {
     void withUrl(async (url) => {
-      await navigator.clipboard.writeText(url);
-      onToast('Link copied');
+      onToast((await copyText(url)) ? 'Link copied' : COPY_FAILED);
       onClose();
     });
   };

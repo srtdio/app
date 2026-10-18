@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { IconCheck, IconX } from '@/components/ui/icons';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
 
@@ -5,7 +6,10 @@ interface ToastProps {
   toast: ToastModel;
   /** True while the card plays its exit before the provider unmounts it. */
   leaving?: boolean;
+  /** The X: the provider treats it as accept (onExpire runs). */
   onDismiss: (id: string) => void;
+  /** The action button. Omitted: runs action.onPress, then onDismiss. */
+  onAction?: (id: string) => void;
 }
 
 /**
@@ -14,11 +18,12 @@ interface ToastProps {
  * content area is the press target when `onPress` is set; the dismiss control
  * is always a separate 44x44 button so the two never nest. An optional action
  * (e.g. Undo) is its own 44px button at the card's right end, after the dismiss; pressing it runs the
- * action and dismisses the toast. Enter glides up and
+ * action and dismisses the toast. With a countdown, a 3px bar along the bottom
+ * edge empties over the toast's duration. Enter glides up and
  * fades in (--dur-slow); exit fades down (--dur-base); axis is translateY only.
  */
-export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
-  const { id, title, description, icon, onPress, action, tone } = toast;
+export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProps) {
+  const { id, title, description, icon, onPress, action, tone, countdownMs } = toast;
   const success = tone === 'success';
 
   // Motion via keyframes (defined once in the viewport) so the card stays
@@ -49,7 +54,7 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
     <div
       style={{ animation }}
       {...(success ? { 'data-toast-tone': 'success' } : {})}
-      className={`pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border pr-1 shadow-lg ${
+      className={`pointer-events-auto ${countdownMs !== undefined ? 'relative ' : ''}flex w-full max-w-sm items-center gap-2 rounded-lg border pr-1 shadow-lg ${
         success
           ? 'border-good bg-panel [background-image:linear-gradient(var(--good-soft),var(--good-soft))]'
           : 'border-border bg-panel'
@@ -79,6 +84,10 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
           type="button"
           data-toast-action=""
           onClick={() => {
+            if (onAction !== undefined) {
+              onAction(id);
+              return;
+            }
             action.onPress();
             onDismiss(id);
           }}
@@ -86,6 +95,21 @@ export function Toast({ toast, leaving = false, onDismiss }: ToastProps) {
         >
           {action.label}
         </button>
+      ) : null}
+      {countdownMs !== undefined ? (
+        // Track = border token, fill = accent token; the fill empties linearly
+        // over the toast's duration. Reduced motion: no animation, a static bar
+        // (the timer still runs).
+        <span
+          data-toast-countdown=""
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-lg bg-border"
+        >
+          <span
+            style={{ '--toast-countdown-ms': `${countdownMs}ms` } as CSSProperties}
+            className="block h-full w-full bg-accent motion-safe:[animation:sorted-toast-countdown_var(--toast-countdown-ms)_linear_forwards]"
+          />
+        </span>
       ) : null}
     </div>
   );

@@ -15,6 +15,7 @@ import { IconCheck, IconCopy, IconMore } from '@/components/ui/icons';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { relativeLong, relativeShort } from '@/lib/relative-time';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
@@ -666,16 +667,6 @@ export function editableBody(
   );
 }
 
-/** Copy text to the clipboard; never throws when the clipboard is unavailable. */
-export async function writeClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Write action helpers (one trace per action; mind the wrapper asymmetry)
 // ---------------------------------------------------------------------------
@@ -898,6 +889,7 @@ export function Comments({
   const [editPicks, setEditPicks] = useState<MentionPick[]>([]);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copyFailed, setCopyFailed] = useState(false);
   // The comment (thread root or checkpoint) whose resolve/accept request is in
   // flight; null when idle. Shared by the single-thread resolve and every
   // checkpoint tick / "Not done" / "Undo".
@@ -1238,8 +1230,8 @@ export function Comments({
   }
 
   async function handleCopy(comment: CommentRow): Promise<void> {
-    const ok = await writeClipboard(commentCopyText(comment.body, handleOf));
-    if (!ok) return;
+    const ok = await copyText(commentCopyText(comment.body, handleOf));
+    setCopyFailed(!ok);
     setCopiedId(comment.id);
     window.setTimeout(() => {
       setCopiedId((current) => (current === comment.id ? null : current));
@@ -1506,7 +1498,7 @@ export function Comments({
             )}
             {copiedId === comment.id ? (
               <span role="status" className="mt-1.5 block text-xs text-fg-3">
-                Comment copied
+                {copyFailed ? COPY_FAILED : 'Comment copied'}
               </span>
             ) : null}
           </>
@@ -1746,7 +1738,7 @@ export function Comments({
                           ) : null}
                           {copiedId === comment.id ? (
                             <span role="status" className="mt-1.5 block text-xs text-fg-3">
-                              Comment copied
+                              {copyFailed ? COPY_FAILED : 'Comment copied'}
                             </span>
                           ) : null}
                         </>

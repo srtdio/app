@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
+import { copyText } from '@/lib/clipboard';
 
 /** The URL parameter that turns the log on (1) or off (0). */
 export const PAINT_LOG_PARAM = 'paintlog';
@@ -233,15 +234,7 @@ function PaintLogPanel(): ReactElement {
       `path ${window.location.pathname}`,
     ]);
   const onCopy = (): void => {
-    const clipboard = 'clipboard' in navigator ? navigator.clipboard : null;
-    if (clipboard === null) {
-      setCopy('failed');
-      return;
-    }
-    clipboard.writeText(text()).then(
-      () => setCopy('copied'),
-      () => setCopy('failed'),
-    );
+    void copyText(text()).then((ok) => setCopy(ok ? 'copied' : 'failed'));
   };
   return (
     <div

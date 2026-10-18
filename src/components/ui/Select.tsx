@@ -5,9 +5,10 @@
 // presentational, controlled: no data fetching lives here. The placement
 // decision and the option rows are pure helpers so they unit-test without a DOM.
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { useEscapeLayer } from '@/lib/escape-stack';
 import { IconCheck, IconChevronDown } from '@/components/ui/icons';
 
 export interface SelectOption {
@@ -139,16 +140,8 @@ export function Select({
 
   const selected = options.find((option) => option.value === value);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent): void {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  // Escape closes only this popover while it is the top layer, never the sheet under it.
+  useEscapeLayer(open, () => setOpen(false));
 
   function toggle(): void {
     if (disabled) return;
