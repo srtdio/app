@@ -177,10 +177,10 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(over, 'no horizontal scroll').toBeLessThanOrEqual(0);
 }
 
-/** Every chip in the guide bar is a 44px touch target. No Skip; Back hides on the first step. */
+/** Every chip in the guide bar is a 44px touch target. Skip tour on every bar; Back hides on the first step. */
 async function expectBarChips(page: Page, opts: { back: boolean | undefined }): Promise<void> {
   const bar = page.locator('[data-induction-bar]');
-  await expect(bar.locator('[data-induction-skip]')).toHaveCount(0);
+  await expect(bar.locator('[data-induction-skip]')).toHaveText('Skip tour');
   if (opts.back !== undefined) {
     await expect(bar.locator('[data-induction-back]')).toHaveCount(opts.back ? 1 : 0);
   }
