@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconAssets, IconChevronRight, IconTrash, IconUpload } from '@/components/ui/icons';
+import { IconAssets, IconChevronRight, IconUpload } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
@@ -59,7 +58,6 @@ import {
   buildTabCounts,
   canBulkDelete,
   childFolders,
-  countDeletedAssets,
   DELETE_CONFIRM_MESSAGE,
   displayLabel,
   fetchFolders,
@@ -72,7 +70,6 @@ import {
   isAssetInUseError,
   listAssets,
   parseAssetTab,
-  recentlyDeletedSub,
   removeAssetsById,
   renameAssetInList,
   sortAssets,
@@ -121,7 +118,6 @@ export function AssetsPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [inUse, setInUse] = useState<AssetInUseState | null>(null);
-  const [deletedCount, setDeletedCount] = useState(0);
   const navigate = useNavigate();
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   const { toasts, push, dismiss } = useToasts();
@@ -183,19 +179,10 @@ export function AssetsPage() {
     if (result.ok) setFolders(result.data);
   }, [workspaceId]);
 
-  // How many files sit in Recently deleted, for the row under the library. A
-  // failed count leaves the last value (0 hides the row), never blocking the grid.
-  const loadDeletedCount = useCallback(async () => {
-    if (workspaceId === null) return;
-    const result = await countDeletedAssets(supabase, workspaceId);
-    if (result.ok) setDeletedCount(result.data);
-  }, [workspaceId]);
-
   useEffect(() => {
     void loadAssets();
     void loadFolders();
-    void loadDeletedCount();
-  }, [loadAssets, loadFolders, loadDeletedCount]);
+  }, [loadAssets, loadFolders]);
   useWorkspaceDataChanged(() => {
     void loadAssets();
     void loadFolders();
@@ -217,7 +204,6 @@ export function AssetsPage() {
     setBulkDeleteOpen(false);
     setBulkDeleting(false);
     setInUse(null);
-    setDeletedCount(0);
   }, [workspaceId]);
 
   // Resolve the current member's workspace role with one RLS-scoped read (no
@@ -407,10 +393,9 @@ export function AssetsPage() {
         await showInUse([item.id], snapshot);
         return 'in_use';
       }
-      void loadDeletedCount();
       return 'deleted';
     },
-    [items, newTrace, showInUse, loadDeletedCount],
+    [items, newTrace, showInUse],
   );
 
   // Soft-delete the whole selection in ONE atomic asset_delete_many call: remove
@@ -438,8 +423,7 @@ export function AssetsPage() {
     setSelectMode(false);
     setSelected(new Set());
     push('Moved to Recently deleted');
-    void loadDeletedCount();
-  }, [selected, items, newTrace, push, showInUse, loadDeletedCount]);
+  }, [selected, items, newTrace, push, showInUse]);
 
   // Commit one queued file to the asset-upload worker: the file part keeps its
   // ORIGINAL device name (stored as assets.filename, with its extension for type
@@ -840,21 +824,6 @@ export function AssetsPage() {
           </div>
         )}
       </div>
-
-      {/* Recently deleted sits under the library root, shown once it holds files. */}
-      {!searching && !selectMode && folderId === null && deletedCount > 0 ? (
-        <div className="px-4 md:px-6 pb-4">
-          <div className="rounded-xl border border-border bg-panel p-1">
-            <ActionRow
-              icon={<IconTrash size={18} />}
-              label="Recently deleted"
-              sub={recentlyDeletedSub(deletedCount)}
-              chevron
-              onClick={() => navigate('/assets/recently-deleted')}
-            />
-          </div>
-        </div>
-      ) : null}
 
       {viewer !== null && viewerItem !== undefined ? (
         <SearchWordsContext.Provider value={searchJump.words}>

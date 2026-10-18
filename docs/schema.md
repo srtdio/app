@@ -115,7 +115,7 @@ One workspace = one end-client = one platform.
 | subscription_state_expires_at / trial_ends_at / activated_at | timestamptz | nullable |
 | digest_default_time | time | default 09:00 |
 | target_distributions | jsonb | nullable |
-| asset_bucket | text | permanent R2 bucket name, set on insert by trigger, immutable thereafter. Unique among active (deleted_at null) workspaces. |
+| asset_bucket | text | permanent R2 bucket name, set on insert by trigger (set_workspace_asset_bucket), immutable thereafter. Unique among all workspaces including soft-deleted ones (20261018120000); never ends in "-". |
 | key | text | short workspace key used in entity numbers |
 | platform | text | not null: instagram / x / threads / linkedin / facebook / tiktok / youtube_shorts. Existing rows backfilled to linkedin |
 | client_domain | text | nullable, ^[a-z0-9.-]+\.[a-z]{2,}$. Recorded by member_invite from the first client invite; later client invites must pass the approver email rule (see workspace_client_domains) |
@@ -468,6 +468,7 @@ Workspace rules: storage, delete guards, purge list (20261017120000_workspace_ru
 - workspace_storage(p_workspace_id uuid) RETURNS TABLE (bytes_used, library_bytes, chat_bytes, voice_bytes, deleted_bytes bigint), SQL STABLE (authenticated): bytes_used = workspace_bytes_used; the rest sum asset_versions.size_bytes split by origin library / chat non-audio / chat audio (live assets) and soft-deleted assets. Zero rows unless is_active_workspace_member.
 - asset_in_use(p_asset_id uuid) RETURNS boolean, SQL STABLE (no client EXECUTE): true when a live asset_attachments row points at a non-deleted post, brief or comment.
 - asset_delete(p_asset_id, p_trace_id) / asset_delete_many(p_asset_ids, p_trace_id) (authenticated): raise 'asset_in_use' when asset_in_use is true for the asset (any asset in the set). Other checks and the assets_deleted inbox event as below.
+- Grants (20261018120000_purge_grants_bucket_names.sql, applied 18 Oct): service_role has SELECT on asset_attachments and comments, so the asset-upload Worker's purge routes can re-check asset_in_use before removing files from R2.
 - chat_message_delete(p_message_ids text[], p_channel_id text, p_trace_id uuid) (authenticated): also sets deleted_at (if null) and purge_requested_at = now() on the origin 'chat' assets attached to the messages it deletes.
 - asset_restore(p_asset_id, p_trace_id) RETURNS void (authenticated): active member clears deleted_at on a soft-deleted origin 'library' asset with purge_requested_at null; else 'invalid_payload' / 'workspace_member_only'. audit_log 'asset_restore'.
 - asset_purge_request(p_workspace_id, p_asset_ids uuid[], p_trace_id) RETURNS integer (authenticated): workspace owner only ('owner_only'); sets purge_requested_at on soft-deleted origin 'library' assets (all when p_asset_ids is null); returns rows updated. audit_log 'asset_purge_request'.

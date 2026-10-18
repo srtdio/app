@@ -591,11 +591,6 @@ function fileCount(count: number): string {
   return `${count} ${count === 1 ? 'file' : 'files'}`;
 }
 
-/** The Assets page row's sub line: "<n> files · Kept 31 days". */
-export function recentlyDeletedSub(count: number): string {
-  return `${fileCount(count)} · Kept ${RECENTLY_DELETED_DAYS} days`;
-}
-
 /** One Recently deleted row's detail line: "<size> · gone in <d> days". */
 export function goneInLine(sizeBytes: number | null, days: number): string {
   return `${humanizeSize(sizeBytes)} · gone in ${days} ${days === 1 ? 'day' : 'days'}`;
@@ -684,24 +679,6 @@ export async function listDeletedAssets(
     return { ok: false, error: { code: 'unknown', message: result.error.message } };
   }
   return { ok: true, data: shapeDeletedAssets((result.data ?? []) as unknown as RawDeletedRow[]) };
-}
-
-/** How many files Recently deleted holds: a head-only count, no rows fetched. */
-export async function countDeletedAssets(
-  client: Client,
-  workspaceId: string,
-): Promise<Result<number>> {
-  const result = await client
-    .from('assets')
-    .select('id', { count: 'exact', head: true })
-    .eq('workspace_id', workspaceId)
-    .eq('origin', 'library')
-    .not('deleted_at', 'is', null)
-    .is('purge_requested_at', null);
-  if (result.error) {
-    return { ok: false, error: { code: 'unknown', message: result.error.message } };
-  }
-  return { ok: true, data: result.count ?? 0 };
 }
 
 /** Restore one deleted file to the library via asset_restore. */
