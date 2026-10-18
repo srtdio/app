@@ -18,7 +18,8 @@
 // first load settles. Tokens only; 44px targets.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ReactElement, ReactNode, RefObject } from 'react';
+import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
@@ -33,7 +34,6 @@ import {
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
 import { ReminderSheet } from '@/components/chat/ReminderSheet';
-import { ScheduledListSheet } from '@/components/chat/ScheduledListSheet';
 import { useBellOptional, type BellContextValue } from '@/components/chat/BellContext';
 import {
   BELL_SNOOZE_OPTIONS,
@@ -52,7 +52,9 @@ import {
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import { eventText, type TaskEventKind } from '@/lib/chat/tasks';
 import { workspaceTimeZone } from '@/lib/chat/time-format';
-import { taskLinkToken } from '@/lib/inbox/bell-types';
+import { chatMessageHref, taskLinkToken } from '@/lib/inbox/bell-types';
+import type { ScheduledRow } from '@/lib/chat/scheduled';
+import type { NameOf } from '@/lib/chat/mentions';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import { useWorkspace } from '@/lib/workspace-context';
 
@@ -787,6 +789,39 @@ export function NotificationsSurface(props: {
   );
 }
 
+/** What the "Scheduled in this chat" sheet takes (ScheduledListSheet's props). */
+export type ScheduledSheetComponent = ComponentType<
+  {
+    open: boolean;
+    onClose: () => void;
+    rows: readonly ScheduledRow[];
+    nameOf: NameOf;
+  } & BellContextValue['scheduledActions']
+>;
+
+/**
+ * The "Scheduled in this chat" sheet, provided by the chat surface when it
+ * loads (ChannelList). The bell mounts in the top bar on every screen, and a
+ * static import here would pull the chat Composer into the app shell; so the
+ * sheet is handed in, and before chat has loaded a scheduled row opens its chat.
+ */
+let scheduledSheet: ScheduledSheetComponent | null = null;
+
+export function provideScheduledSheet(component: ScheduledSheetComponent): void {
+  scheduledSheet = component;
+}
+
+/** No sheet yet (chat not loaded): open that chat instead, then close the bell. */
+function OpenScheduledChat(props: { channelId: string; done: () => void }): null {
+  const navigate = useNavigate();
+  const { channelId, done } = props;
+  useEffect(() => {
+    done();
+    navigate(chatMessageHref(channelId, null));
+  }, [channelId, done, navigate]);
+  return null;
+}
+
 /**
  * The sheets the bell opens over the chat: the reminder sheet (Remind me and
  * Change time), the cancel-reminder confirm and "Scheduled in this chat" for
@@ -795,6 +830,7 @@ export function NotificationsSurface(props: {
 export function NotificationsSheets(): ReactElement | null {
   const bell = useBellOptional();
   if (bell === null) return null;
+  const ScheduledSheet = scheduledSheet;
   return (
     <>
       <ReminderSheet
@@ -830,13 +866,23 @@ export function NotificationsSheets(): ReactElement | null {
             : ''}
         </p>
       </Sheet>
-      <ScheduledListSheet
-        open={bell.scheduledSheet !== null}
-        onClose={bell.closeScheduledSheet}
-        rows={bell.scheduledSheet?.rows ?? []}
-        nameOf={bell.nameOf}
-        {...bell.scheduledActions}
-      />
+      {ScheduledSheet !== null ? (
+        <ScheduledSheet
+          open={bell.scheduledSheet !== null}
+          onClose={bell.closeScheduledSheet}
+          rows={bell.scheduledSheet?.rows ?? []}
+          nameOf={bell.nameOf}
+          {...bell.scheduledActions}
+        />
+      ) : bell.scheduledSheet !== null ? (
+        <OpenScheduledChat
+          channelId={bell.scheduledSheet.channelId}
+          done={() => {
+            bell.closeScheduledSheet();
+            bell.setOpen(false);
+          }}
+        />
+      ) : null}
     </>
   );
 }

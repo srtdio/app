@@ -52,6 +52,8 @@ import {
 } from '@/lib/chat/search';
 import { NOTES_TILE_LINE } from '@/lib/chat/notes';
 import { NotesAvatar } from '@/components/chat/NotesBits';
+import { ScheduledListSheet } from '@/components/chat/ScheduledListSheet';
+import { provideScheduledSheet } from '@/components/chat/NotificationsPanel';
 import { useSession } from '@/lib/session-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import {
@@ -61,6 +63,10 @@ import {
   useChatLayout,
   type ChatLayout,
 } from '@/components/chat/chat-type';
+
+// The bell's "Scheduled in this chat" sheet comes from the chat surface, so the
+// top-bar bell never pulls the Composer into the app shell (NotificationsPanel).
+provideScheduledSheet(ScheduledListSheet);
 
 /** Per-channel draft text lookup ('' when the chat has no draft). */
 type DraftLookup = (channelId: string) => string;
