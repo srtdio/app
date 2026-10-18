@@ -254,13 +254,18 @@ async function sendViaResend(opts: {
   return data.id;
 }
 
-// Resolve an existing auth user id by email via the admin API (paginated).
-async function findUserIdByEmail(admin: SupabaseClient, email: string): Promise<string | null> {
+// Resolve an existing auth user by email via the admin API (paginated).
+// confirmed is false while the address owner has never clicked a confirmation
+// link (email_confirmed_at unset).
+async function findUserByEmail(
+  admin: SupabaseClient,
+  email: string,
+): Promise<{ id: string; confirmed: boolean } | null> {
   for (let page = 1; ; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
     if (error || !data) return null;
     const match = data.users.find((u) => u.email?.toLowerCase() === email);
-    if (match) return match.id;
+    if (match) return { id: match.id, confirmed: Boolean(match.email_confirmed_at) };
     if (data.users.length < 200) return null;
   }
 }
@@ -417,7 +422,19 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
       invitedUserId = created.data.user.id;
       freshUser = true;
     } else {
-      invitedUserId = await findUserIdByEmail(adminClient, email);
+      const existingUser = await findUserByEmail(adminClient, email);
+      if (existingUser && !existingUser.confirmed) {
+        // A1: an account nobody has confirmed may belong to someone other than
+        // the address owner. Refuse before any invite row binds to it; the owner
+        // confirms by opening the confirmation email, then the invite can be sent.
+        return json(
+          { error: 'unconfirmed_account', error_detail: 'unconfirmed_account', trace_id: traceId },
+          409,
+          allowedOrigin,
+          traceId,
+        );
+      }
+      invitedUserId = existingUser?.id ?? null;
       if (!invitedUserId) {
         const message = created.error?.message ?? 'createUser returned no user';
         console.error(traceId, message);
