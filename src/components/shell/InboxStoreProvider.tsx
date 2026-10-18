@@ -17,9 +17,12 @@
 // reminder ring, chime and missed-on-open toast) is mounted here so it runs on
 // every page from app start.
 //
-// ASSUMPTION: the inbox writer does not fan an entry out to the actor's own action,
-// so a toast never reflects the current user's own activity and no self-filter is
-// applied here.
+// OWN ROWS: since 20261018140000 every action also writes the actor one
+// already-read row of their own (inbox_self_entry). Those are history, not news:
+// othersRows drops them before any toast or tone.
+//
+// TONE: new Activity rows from someone else play the chat's notification tone
+// (shared throttle, notify-sound.ts), except while the Activity screen is open.
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
@@ -32,7 +35,9 @@ import { useToast } from '@/components/ui/toast';
 import { Avatar } from '@/components/ui/Avatar';
 import { entityHref, mapEntry } from '@/components/pages/activity/data';
 import {
+  activityToneWanted,
   mentionToastFrom,
+  othersRows,
   pickNewest,
   splitNewRows,
   summarizeNew,
@@ -43,6 +48,7 @@ import { readProfiles } from '@/lib/chat-reads';
 import { requestBellRefresh } from '@/lib/chat/bell';
 import { listenForNameSignout, resetMentionNames } from '@/lib/chat/mentions';
 import { BellRing } from '@/components/chat/BellRing';
+import { playToneShared } from '@/lib/chat/notify-sound';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
 
 /** The slice the nav reads: the actionable unread count for the active workspace. */
@@ -62,6 +68,9 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   const location = useLocation();
   // The chat on screen (if any): its new mentions need no toast.
   const openChatRef = useRef<string | null>(null);
+  // The route on screen: new Activity rows never tone while Activity is open.
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
   openChatRef.current = location.pathname.startsWith('/chat')
     ? new URLSearchParams(location.search).get('channel')
     : null;
@@ -112,17 +121,22 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       }
       const summary = summarizeNew(sinceRes.data.rows, sinceMs);
       highWaterRef.current = summary.nextHighWaterMs;
-      const { activity: newRows, chatMentions } = splitNewRows(summary.newRows);
+      const { activity, chatMentions } = splitNewRows(summary.newRows);
       const elsewhere = chatMentions.filter((r) => r.entity_id !== openChatRef.current);
       if (elsewhere.length > 0) void toastMentions(elsewhere);
+      // The viewer's own already-read rows are history: no toast, no tone.
+      const newRows = othersRows(activity, uid);
       if (newRows.length === 0) return;
+      if (activityToneWanted(newRows.length, pathnameRef.current)) playToneShared();
 
-      // The count is exact (bell rows are filtered before the cap), not the page size.
+      // The server count is exact (bell rows are filtered before the cap); the own
+      // rows dropped from this page are taken off it.
+      const ownDropped = activity.length - newRows.length;
       const enriched = await enrichNewRows(
         supabase,
         newRows,
         undefined,
-        sinceRes.data.activityCount,
+        Math.max(newRows.length, sinceRes.data.activityCount - ownDropped),
       );
       const spec = toastFromEnriched(enriched);
       if (spec === null) return;

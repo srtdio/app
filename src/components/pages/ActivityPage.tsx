@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHead } from '@/components/shell/PageHead';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
-import { IconActivity, IconAt } from '@/components/ui/icons';
+import { IconActivity, IconAlarmClock, IconAt, IconBriefs } from '@/components/ui/icons';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
@@ -13,11 +13,9 @@ import { AvatarStack } from '@/components/pages/activity/AvatarStack';
 import { mentionHandle } from '@/lib/chat/mentions';
 import {
   ACTIVITY_PAGE_SIZE,
-  MENTION_EVENT_TYPE,
   bucketActorNames,
   entityHref,
   fetchActivityEntries,
-  filterByScope,
   filterByState,
   groupDigest,
   isSnoozed,
@@ -27,7 +25,6 @@ import {
   unreadCount,
   type ActivityDirection,
   type ActivityItem,
-  type ActivityScope,
   type ActivityState,
   type SnoozeKind,
 } from '@/components/pages/activity/data';
@@ -80,13 +77,7 @@ export function ActivityPage() {
       : null;
 
   const [state, setState] = useState<ActivityState>('all');
-  const [scope, setScope] = useState<ActivityScope>('everything');
   const { value: sort, setValue: setSort } = useSort<ActivityDirection>('activity', 'newest');
-
-  // The Mentions chip filters server-side to a single event_type so older mentions
-  // are never hidden behind the newest-page cap; every other state stays a
-  // client-side slice of the same all-types page (undefined = no server filter).
-  const eventType = state === 'mentions' ? MENTION_EVENT_TYPE : undefined;
 
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -112,17 +103,15 @@ export function ActivityPage() {
     [],
   );
 
-  // Load page one for the active view. Because `eventType` is a dependency, a
-  // switch to or away from the Mentions chip re-runs this and replaces `items`
-  // wholesale, which resets pagination: the keyset cursor lives in the loaded
-  // rows (loadMore reads the oldest), so clearing them clears the cursor and
-  // hasMore is recomputed here. Other state chips leave eventType unchanged and
-  // never refetch (they slice the loaded page client-side).
+  // Load page one for the active chip. Every chip filters server-side (All has
+  // no filter), so older matches are never hidden behind the newest-page cap.
+  // `state` is a dependency: switching chips replaces `items` wholesale, which
+  // resets pagination (the keyset cursor lives in the loaded rows).
   const loadActivity = useCallback(async () => {
     if (workspaceId === null) return;
     setLoading(true);
     setError(null);
-    const result = await fetchActivityEntries(supabase, workspaceId, { eventType });
+    const result = await fetchActivityEntries(supabase, workspaceId, { state });
     setLoading(false);
     setNowMs(Date.now());
     if (!result.ok) {
@@ -131,17 +120,17 @@ export function ActivityPage() {
     }
     setItems(result.data);
     setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
-  }, [workspaceId, eventType]);
+  }, [workspaceId, state]);
 
   // Fetch the next, older page (rows strictly before the oldest loaded created_at)
-  // and append it, re-running enrichment for just the new rows. The active
-  // eventType is carried so pagination stays within the Mentions filter.
+  // and append it, re-running enrichment for just the new rows. The active chip
+  // is carried so pagination stays within its filter.
   const loadMore = useCallback(async () => {
     if (workspaceId === null) return;
     const oldest = items[items.length - 1]?.createdAt;
     if (oldest === undefined) return;
     setLoadingMore(true);
-    const result = await fetchActivityEntries(supabase, workspaceId, { before: oldest, eventType });
+    const result = await fetchActivityEntries(supabase, workspaceId, { before: oldest, state });
     setLoadingMore(false);
     if (!result.ok) {
       push('Could not load more activity');
@@ -149,10 +138,10 @@ export function ActivityPage() {
     }
     setItems((prev) => [...prev, ...result.data]);
     setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
-  }, [workspaceId, eventType, items, push]);
+  }, [workspaceId, state, items, push]);
 
   // The unread-mention count for the Mentions chip. Independent of the active
-  // view (it is a HEAD count), so it is not affected by the state/scope chips.
+  // view (it is a HEAD count), so it is not affected by the chips.
   const loadMentionCount = useCallback(async () => {
     if (workspaceId === null || userId === null) return;
     const res = await fetchUnreadMentionCount(supabase, {
@@ -178,14 +167,12 @@ export function ActivityPage() {
   // Reset filters when the active workspace changes.
   useEffect(() => {
     setState('all');
-    setScope('everything');
   }, [workspaceId]);
 
-  const buckets = useMemo(() => {
-    const scoped = filterByScope(items, scope);
-    const stated = filterByState(scoped, state, nowMs);
-    return groupDigest(stated, sort);
-  }, [items, scope, state, sort, nowMs]);
+  const buckets = useMemo(
+    () => groupDigest(filterByState(items, state, nowMs), sort),
+    [items, state, sort, nowMs],
+  );
 
   const totalUnread = useMemo(() => unreadCount(items, nowMs), [items, nowMs]);
 
@@ -252,7 +239,7 @@ export function ActivityPage() {
   );
 
   // Workspace-wide: mark every currently-loaded unread, non-snoozed item read,
-  // ignoring the active scope / state chips (matches inbox_mark_all_read).
+  // ignoring the active chip (matches inbox_mark_all_read).
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
     const hasUnread = items.some((item) => item.readAt === null && !isSnoozed(item, nowMs));
@@ -322,8 +309,6 @@ export function ActivityPage() {
       <ActivityFilterBar
         state={state}
         onStateChange={setState}
-        scope={scope}
-        onScopeChange={setScope}
         totalUnread={totalUnread}
         mentionCount={mentionCount}
       />
@@ -345,6 +330,18 @@ export function ActivityPage() {
             icon={<IconAt size={24} />}
             title="No mentions yet"
             description="When someone types @ and your name in a comment, it lands here."
+          />
+        ) : state === 'briefs' ? (
+          <EmptyState
+            icon={<IconBriefs size={24} />}
+            title="No brief activity yet"
+            description="Briefs created or closed, brief comments and posts made from a brief will appear here."
+          />
+        ) : state === 'snoozed' ? (
+          <EmptyState
+            icon={<IconAlarmClock size={24} />}
+            title="Nothing snoozed"
+            description="Snoozed items wait here and come back on their own."
           />
         ) : (
           <EmptyState

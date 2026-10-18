@@ -9,7 +9,6 @@ import {
   entityHref,
   entityKey,
   fetchActivityEntries,
-  filterByScope,
   filterByState,
   groupDigest,
   isChatMention,
@@ -478,11 +477,15 @@ describe('segmentSelfMentions', () => {
   });
 });
 
-describe('filterByScope', () => {
-  it('everything passes all; a specific scope filters', () => {
-    const all = [item({ id: 'a', scope: 'posts' }), item({ id: 'b', scope: 'briefs' })];
-    expect(filterByScope(all, 'everything')).toHaveLength(2);
-    expect(filterByScope(all, 'briefs').map((i) => i.id)).toEqual(['b']);
+describe('filterByState briefs', () => {
+  it('keeps only brief-scope rows that are not snoozed', () => {
+    const now = Date.parse('2026-06-14T12:00:00.000Z');
+    const all = [
+      item({ id: 'a', scope: 'posts' }),
+      item({ id: 'b', scope: 'briefs' }),
+      item({ id: 'c', scope: 'briefs', snoozedUntil: '2026-06-15T00:00:00.000Z' }),
+    ];
+    expect(filterByState(all, 'briefs', now).map((i) => i.id)).toEqual(['b']);
   });
 });
 
@@ -1243,6 +1246,7 @@ describe('fetchActivityEntries query composition', () => {
         'in',
         'not',
         'or',
+        'gt',
       ]) {
         self[method] = (...args: unknown[]) => {
           if (record) calls.push({ method, args });
@@ -1274,9 +1278,9 @@ describe('fetchActivityEntries query composition', () => {
   ): boolean =>
     calls.some((c) => c.method === method && JSON.stringify(c.args) === JSON.stringify(args));
 
-  it('applies the event_type filter when eventType is given', async () => {
+  it('applies the event_type filter for the Mentions chip', async () => {
     const { client, calls } = recordingClient([]);
-    await fetchActivityEntries(client, 'w1', { eventType: 'mention' });
+    await fetchActivityEntries(client, 'w1', { state: 'mentions' });
     expect(hasCall(calls, 'eq', ['event_type', 'mention'])).toBe(true);
     expect(hasCall(calls, 'eq', ['workspace_id', 'w1'])).toBe(true);
     expect(hasCall(calls, 'order', ['created_at', { ascending: false }])).toBe(true);
@@ -1300,7 +1304,26 @@ describe('fetchActivityEntries query composition', () => {
     ).toBe(true);
   });
 
-  it('omits the event_type filter when eventType is absent', async () => {
+  it('filters the Briefs chip server-side by scope', async () => {
+    const { client, calls } = recordingClient([]);
+    await fetchActivityEntries(client, 'w1', { state: 'briefs' });
+    expect(hasCall(calls, 'eq', ['scope', 'briefs'])).toBe(true);
+  });
+
+  it('filters the Unread and Snoozed chips server-side against the snooze cut-off', async () => {
+    const nowIso = '2026-06-14T12:00:00.000Z';
+    const unread = recordingClient([]);
+    await fetchActivityEntries(unread.client, 'w1', { state: 'unread', nowIso });
+    expect(hasCall(unread.calls, 'is', ['read_at', null])).toBe(true);
+    expect(hasCall(unread.calls, 'or', [`snoozed_until.is.null,snoozed_until.lte.${nowIso}`])).toBe(
+      true,
+    );
+    const snoozed = recordingClient([]);
+    await fetchActivityEntries(snoozed.client, 'w1', { state: 'snoozed', nowIso });
+    expect(hasCall(snoozed.calls, 'gt', ['snoozed_until', nowIso])).toBe(true);
+  });
+
+  it('omits the event_type filter for the All chip', async () => {
     const { client, calls } = recordingClient([]);
     await fetchActivityEntries(client, 'w1');
     expect(calls.some((c) => c.method === 'eq' && c.args[0] === 'event_type')).toBe(false);
@@ -1310,7 +1333,7 @@ describe('fetchActivityEntries query composition', () => {
     const { client, calls } = recordingClient([]);
     await fetchActivityEntries(client, 'w1', {
       before: '2026-06-14T00:00:00.000Z',
-      eventType: 'mention',
+      state: 'mentions',
     });
     expect(hasCall(calls, 'lt', ['created_at', '2026-06-14T00:00:00.000Z'])).toBe(true);
     expect(hasCall(calls, 'eq', ['event_type', 'mention'])).toBe(true);
@@ -1853,5 +1876,49 @@ describe('send for review wording in Activity lines', () => {
       onBehalfOfName: 'Kiran',
     });
     expect(cardBodyLine(behalf, null, { name: false })).toBe('approved for Kiran');
+  });
+});
+
+describe('brief_post_created line', () => {
+  it('names the post and the brief it came from', () => {
+    expect(
+      activityLine(
+        item({
+          eventType: 'brief_post_created',
+          entityType: 'post',
+          actorName: 'Ada',
+          title: 'Launch reel',
+          fromBriefTitle: 'Diwali campaign',
+        }),
+      ),
+    ).toBe('Ada created Launch reel from Diwali campaign');
+  });
+});
+
+describe('mapEntry own rows', () => {
+  it('marks the viewer’s own row (actor is the recipient) and reads the brief title', () => {
+    const base = {
+      id: 'e1',
+      workspace_id: 'w1',
+      user_id: 'u1',
+      actor_user_id: 'u1',
+      event_type: 'brief_post_created',
+      entity_type: 'post',
+      entity_id: 'p1',
+      scope: 'briefs',
+      scope_key: 'b1',
+      tier: 'active',
+      payload: { post_title: 'Launch reel', brief_title: 'Diwali campaign' },
+      read_at: '2026-10-18T10:00:00.000Z',
+      snoozed_until: null,
+      email_sent_at: null,
+      deleted_at: null,
+      created_at: '2026-10-18T10:00:00.000Z',
+    } as unknown as Parameters<typeof mapEntry>[0];
+    const mine = mapEntry(base);
+    expect(mine.own).toBe(true);
+    expect(mine.title).toBe('Launch reel');
+    expect(mine.fromBriefTitle).toBe('Diwali campaign');
+    expect(mapEntry({ ...base, actor_user_id: 'u2' }).own).toBe(false);
   });
 });
