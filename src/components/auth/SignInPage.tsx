@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { TestSiteStart } from '@/components/test-site/TestSiteStart';
 import { Button } from '@/components/ui/Button';
@@ -8,9 +8,6 @@ import { Input } from '@/components/ui/Input';
 import { supabase } from '@/lib/supabase';
 
 const RESEND_COOLDOWN_SECONDS = 60;
-
-/** Where a signed-in user lands when no safe ?next= destination was given. */
-export const DEFAULT_AFTER_SIGN_IN = '/chat';
 
 /** localStorage key holding the ?next= destination while a magic link is in flight. */
 export const NEXT_STORAGE_KEY = 'srtd.auth.next';
@@ -114,21 +111,12 @@ export interface SignInAuthClient {
       email: string;
       options?: { shouldCreateUser?: boolean; emailRedirectTo?: string };
     }): Promise<{ error: { message: string } | null }>;
-    signInWithPassword?(params: {
-      email: string;
-      password: string;
-    }): Promise<{ error: { message: string } | null }>;
   };
 }
 
 export type SendLinkResult =
   | { status: 'sent' }
   | { status: 'no-account' }
-  | { status: 'error'; message: string };
-
-export type PasswordSignInResult =
-  | { status: 'signed-in' }
-  | { status: 'wrong' }
   | { status: 'error'; message: string };
 
 /** Supabase answers this when an email link is asked for an email with no account. */
@@ -159,36 +147,17 @@ export async function sendSignInLink(
   return { status: 'sent' };
 }
 
-/** Email and password sign-in. A bad pair reads as one plain message, never which part. */
-export async function signInWithPassword(
-  client: SignInAuthClient,
-  email: string,
-  password: string,
-): Promise<PasswordSignInResult> {
-  const signIn = client.auth.signInWithPassword;
-  if (signIn === undefined) return { status: 'error', message: 'Password sign-in unavailable.' };
-  const { error } = await signIn.call(client.auth, { email: email.trim(), password });
-  if (error) {
-    return /invalid login credentials/i.test(error.message)
-      ? { status: 'wrong' }
-      : { status: 'error', message: error.message };
-  }
-  return { status: 'signed-in' };
-}
-
 const client = supabase as unknown as SignInAuthClient;
 
 export function SignInPage() {
-  const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const next = resolveNext(searchParams.get('next'), location.state);
   const [sent, setSent] = useState(false);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [noAccount, setNoAccount] = useState(false);
-  const [submitting, setSubmitting] = useState<'password' | 'link' | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
@@ -202,28 +171,12 @@ export function SignInPage() {
     setNoAccount(false);
   }
 
-  async function handlePassword(): Promise<void> {
-    reset();
-    setSubmitting('password');
-    const result = await signInWithPassword(client, email, password);
-    setSubmitting(null);
-    if (result.status === 'wrong') {
-      setError('That email and password do not match. Try again, or email yourself a link.');
-      return;
-    }
-    if (result.status === 'error') {
-      setError(result.message);
-      return;
-    }
-    navigate(next || DEFAULT_AFTER_SIGN_IN, { replace: true });
-  }
-
   async function handleSend(): Promise<void> {
     reset();
-    setSubmitting('link');
+    setSubmitting(true);
     rememberNext(next);
     const result = await sendSignInLink(client, email);
-    setSubmitting(null);
+    setSubmitting(false);
     if (result.status === 'no-account') {
       setNoAccount(true);
       return;
@@ -283,16 +236,20 @@ export function SignInPage() {
     );
   }
 
-  const busy = submitting !== null;
+  const busy = submitting;
 
   return (
-    <AuthShell title="Sign in" subtitle="Welcome back to Sorted." footer={footer}>
+    <AuthShell
+      title="Sign in"
+      subtitle="We email you a link. Open it to sign in, no password needed."
+      footer={footer}
+    >
       <TestSiteStart />
       <form
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!busy && email.length > 0 && password.length > 0) void handlePassword();
+          if (!busy && email.trim().length > 0) void handleSend();
         }}
       >
         <Field label="Email" htmlFor="signin-email">
@@ -305,16 +262,6 @@ export function SignInPage() {
               setEmail(event.target.value);
               reset();
             }}
-          />
-        </Field>
-
-        <Field label="Password" htmlFor="signin-password">
-          <Input
-            id="signin-password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
           />
         </Field>
 
@@ -340,20 +287,9 @@ export function SignInPage() {
           size="lg"
           type="submit"
           className="w-full"
-          disabled={busy || email.length === 0 || password.length === 0}
+          disabled={busy || email.trim().length === 0}
         >
-          {submitting === 'password' ? 'Signing in' : 'Sign in'}
-        </Button>
-
-        <Button
-          variant="default"
-          size="lg"
-          type="button"
-          className="w-full"
-          onClick={() => void handleSend()}
-          disabled={busy || email.length === 0}
-        >
-          {submitting === 'link' ? 'Sending link' : 'Email me a sign-in link instead'}
+          {busy ? 'Sending link' : 'Email me a sign-in link'}
         </Button>
       </form>
     </AuthShell>

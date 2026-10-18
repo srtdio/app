@@ -134,6 +134,7 @@ beforeEach(() => {
   mockNavigate.mockClear();
   calls.length = 0;
   for (const key of Object.keys(rows)) delete rows[key];
+  window.localStorage.clear();
   host = document.createElement('div');
   document.body.appendChild(host);
 });
@@ -446,5 +447,101 @@ describe('pre-app screens', () => {
     expect(button('Resend')).toBeDefined();
     expect(document.body.textContent).not.toContain('after all');
     expect(onFinish).not.toHaveBeenCalled();
+  });
+});
+
+describe('refresh mid-onboarding', () => {
+  const DRAFT_KEY = 'srtd.onboarding.draft.u-1';
+
+  function storedDraft(): Record<string, unknown> | null {
+    const raw = window.localStorage.getItem(DRAFT_KEY);
+    return raw === null ? null : (JSON.parse(raw) as Record<string, unknown>);
+  }
+
+  it('keeps the answers on the device as the person goes', async () => {
+    await toNameScreen('Creator');
+    expect(storedDraft()).toMatchObject({ step: 'name', side: 'creator', name: 'Riya Menon' });
+  });
+
+  it('opens on the screen it stopped at, with the answers and photo back', async () => {
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        step: 'role',
+        side: 'creator',
+        name: 'Riya Menon',
+        username: 'rm',
+        usernameEdited: true,
+        role: 'Copywriter',
+        roleOther: '',
+        avatarUrl: 'https://cdn.test/riya.png',
+        teamEmail: '',
+        brandName: '',
+      }),
+    );
+    await render({});
+    expect(stepLabel()).toBe('Step 3 of 3');
+    expect(document.querySelector<HTMLSelectElement>('select[aria-label="Job title"]')?.value).toBe(
+      'Copywriter',
+    );
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!);
+    expect(document.querySelector<HTMLInputElement>('#ob-name')?.value).toBe('Riya Menon');
+    expect(document.querySelector<HTMLInputElement>('#ob-username')?.value).toBe('rm');
+    expect(document.body.textContent).toContain('Change photo');
+  });
+
+  it('saves the photo uploaded before the refresh, then forgets the draft', async () => {
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        step: 'role',
+        side: 'creator',
+        name: 'Riya Menon',
+        username: 'rm',
+        usernameEdited: true,
+        role: 'Copywriter',
+        roleOther: '',
+        avatarUrl: 'https://cdn.test/riya.png',
+        teamEmail: '',
+        brandName: '',
+      }),
+    );
+    await render({});
+    await click(button('Continue'));
+    const payload = mockSave.mock.calls[0]?.[1]?.p_payload as Record<string, unknown>;
+    expect(payload.avatar_url).toBe('https://cdn.test/riya.png');
+    expect(payload.username).toBe('rm');
+    expect(storedDraft()).toBeNull();
+  });
+
+  it('ignores a draft that is not one', async () => {
+    window.localStorage.setItem(DRAFT_KEY, '{not json');
+    await render({});
+    expect(stepLabel()).toBe('Step 1 of 3');
+  });
+});
+
+describe('username check', () => {
+  it('a check that gets no answer does not block Continue', async () => {
+    mockUsername.mockResolvedValue({ ok: false, error: { message: 'permission denied' } });
+    await toNameScreen('Creator');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.body.textContent).toContain("We'll check @riya.menon when you continue.");
+    await addPhoto();
+    expect(button('Continue').disabled).toBe(false);
+  });
+
+  it('takes a two-letter username', async () => {
+    await toNameScreen('Creator');
+    await type(document.querySelector<HTMLInputElement>('#ob-username')!, 'rm');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.body.textContent).toContain('@rm is yours.');
   });
 });

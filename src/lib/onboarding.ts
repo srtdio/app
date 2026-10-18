@@ -8,7 +8,7 @@ import type { CopyContext } from './induction-model';
 import { ROUTE_SCRIPTS } from './induction-routes';
 
 /** Mirrors users_username_format in the 20261014140000 migration. */
-export const USERNAME_PATTERN = /^[a-z0-9._]{3,20}$/;
+export const USERNAME_PATTERN = /^[a-z0-9._]{1,20}$/;
 
 /** Mirrors the reserved list in username_available / user_onboarding_save. */
 export const RESERVED_USERNAMES: readonly string[] = [

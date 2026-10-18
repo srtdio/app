@@ -12,7 +12,6 @@ import {
   resolveNext,
   safeNextPath,
   sendSignInLink,
-  signInWithPassword,
   withNext,
   type NextStore,
   type SignInAuthClient,
@@ -84,28 +83,6 @@ describe('no account for the email', () => {
     });
 
     expect(await sendSignInLink(client, 'new@brand.com')).toEqual({ status: 'no-account' });
-  });
-});
-
-describe('signInWithPassword', () => {
-  it('signs in with a trimmed email', async () => {
-    const signIn = vi.fn().mockResolvedValue({ error: null });
-    const client = authClient({ signInWithPassword: signIn });
-
-    expect(await signInWithPassword(client, ' a@b.com ', 'secret123')).toEqual({
-      status: 'signed-in',
-    });
-    expect(signIn).toHaveBeenCalledWith({ email: 'a@b.com', password: 'secret123' });
-  });
-
-  it('reports a wrong pair without saying which part', async () => {
-    const client = authClient({
-      signInWithPassword: vi
-        .fn()
-        .mockResolvedValue({ error: { message: 'Invalid login credentials' } }),
-    });
-
-    expect(await signInWithPassword(client, 'a@b.com', 'nope')).toEqual({ status: 'wrong' });
   });
 });
 
