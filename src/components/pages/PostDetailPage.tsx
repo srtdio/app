@@ -8,7 +8,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
 import { Comments, runCreateCommentBatch, writeClipboard } from '@/components/comments/Comments';
-import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
+import { dispatchInductionDid, dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
@@ -850,12 +850,15 @@ export function PostDetailPage({
       setAnnotateError(
         'Could not anchor the comment to the caption. It was posted as a plain comment.',
       );
+      dispatchInductionDid(INDUCTION_KEYS.postCommentPost);
       setCommentsRefresh((n) => n + 1);
       return;
     }
 
     setAnnotating(false);
     setComposer(null);
+    // The comment is on the post: the guide moves on even if a phone lost the tap.
+    dispatchInductionDid(INDUCTION_KEYS.postCommentPost);
     await load(true);
     setCommentsRefresh((n) => n + 1);
     dispatchInductionRefresh();

@@ -27,6 +27,13 @@ export function dispatchInductionRefresh(): void {
   window.dispatchEvent(new CustomEvent(INDUCTION_REFRESH_EVENT));
 }
 
+/** A control's action finished (its data landed): the guide moves on even if it missed the tap. */
+export const INDUCTION_DID_EVENT = 'sorted:induction-did';
+
+export function dispatchInductionDid(key: string): void {
+  window.dispatchEvent(new CustomEvent<string>(INDUCTION_DID_EVENT, { detail: key }));
+}
+
 /** The 4 s poll, only while a data-finished step is active. */
 export const INDUCTION_POLL_MS = 4000;
 
