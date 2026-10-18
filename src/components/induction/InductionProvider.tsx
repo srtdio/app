@@ -24,6 +24,7 @@ import {
   pastFilled,
   presetPrimaryFor,
   resolveGuide,
+  skippedStepId,
   stepDataDone,
   storedIdFor,
   type InductionKey,
@@ -68,6 +69,10 @@ export interface InductionContextValue {
   start: () => void;
   /** Done on the closing card. */
   finish: () => void;
+  /** Skip tour (any step bar, the intro card): the finish path, recorded as skipped. */
+  skip: () => void;
+  /** Restart tour (the avatar menu): the route's intro card again; undefined with no route. */
+  restart: (() => void) | undefined;
   /** The creator's sample week (Kestrel & Rowe) in this workspace. */
   sample: SampleWeek;
   /** Clear it on the clear card: every sample row and person goes, the person's own work stays. */
@@ -306,6 +311,18 @@ function buildValue(input: {
     const to = pastFilled(resolution.steps, resolution.index, filled);
     if (to >= 0) moveTo(to);
   };
+  // Done (and Skip tour) clears what is left of the sample (the creator cleared theirs on the clear card).
+  const end = (skippedAt?: string): void => {
+    const ws = env.workspaceId;
+    if (ws !== null && read.sample.seeded) {
+      void clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() }).then(() => {
+        forgetKnownGroups();
+        dispatchInductionRefresh();
+        dispatchWorkspaceDataChanged();
+      });
+    }
+    env.data.finish(skippedAt);
+  };
   return {
     ...base,
     place: {
@@ -340,18 +357,9 @@ function buildValue(input: {
       markStarted();
       void env.data.setStep(resolution.steps[resolution.index]?.id ?? resolution.card.id);
     },
-    // Done clears what is left of the sample (the creator cleared theirs on the clear card).
-    finish: () => {
-      const ws = env.workspaceId;
-      if (ws !== null && read.sample.seeded) {
-        void clearSampleWeek(supabase, { workspaceId: ws, traceId: newTraceId() }).then(() => {
-          forgetKnownGroups();
-          dispatchInductionRefresh();
-          dispatchWorkspaceDataChanged();
-        });
-      }
-      env.data.finish();
-    },
+    finish: () => end(),
+    skip: () => end(base.route === 'none' ? undefined : skippedStepId(base.route)),
+    restart: script === undefined ? undefined : () => env.data.restart(script.intro.id),
     sample: read.sample,
     clearSample: async () => {
       const ws = env.workspaceId;

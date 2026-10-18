@@ -30,6 +30,7 @@ vi.mock('./induction-data', () => ({
   forgetKnownGroups: () => undefined,
 }));
 
+import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { InductionGuide } from './InductionGuide';
 import { InductionProvider } from './InductionProvider';
 import { eventTrust } from './guide-hooks';
@@ -94,6 +95,7 @@ function data(state: Partial<InductionState>): InductionData {
     },
     setStep: vi.fn(async () => true),
     finish: vi.fn(),
+    restart: vi.fn(),
     setPolling: vi.fn(),
   };
 }
@@ -330,14 +332,15 @@ describe('the guide bar', () => {
     expect(document.body.textContent).not.toContain('When the hand taps');
   });
 
-  it('offers no Skip', async () => {
+  it('offers Skip tour, which ends the tour through finish recorded as skipped', async () => {
     control('pipeline-approved-chip', CHIP);
-    await mount({ step: 'c_approved_chip' });
-    expect(document.querySelector('[data-induction-skip]')).toBeNull();
-    const names = Array.from(document.querySelectorAll('[data-induction-bar] button')).map(
-      (b) => b.textContent,
-    );
-    expect(names).not.toContain('Skip');
+    const d = await mount({ step: 'c_approved_chip' });
+    const skip = q<HTMLButtonElement>('[data-induction-bar] [data-induction-skip]');
+    expect(skip.textContent).toBe('Skip tour');
+    expect(skip.className).toContain('min-h-[44px]');
+    act(() => skip.click());
+    expect(d.finish).toHaveBeenCalledWith('c_skipped');
+    expect(d.setStep).not.toHaveBeenCalled();
   });
 
   it('gives an optional step its later chip, which moves on', async () => {
@@ -346,10 +349,7 @@ describe('the guide bar', () => {
       { step: 'c_team_invite', postId: 'p1', clientInvited: true },
       { route: '/settings?panel=members' },
     );
-    // The chip shows once they have scrolled by hand.
-    act(() => {
-      window.dispatchEvent(new Event('wheel'));
-    });
+    // The chip shows at once: no scroll, no wait.
     const later = Array.from(document.querySelectorAll('[data-induction-bar] button')).find(
       (b) => b.textContent === "It's just me for now",
     );
@@ -592,7 +592,10 @@ describe('cards', () => {
     const card = q('[data-induction-card="intro"]');
     expect(card.textContent).toContain('Have a look around');
     expect(card.textContent).toContain('KESTREL & ROWE · SAMPLE WEEK');
-    act(() => card.querySelector('button')!.click());
+    const start = Array.from(card.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Start',
+    )!;
+    act(() => start.click());
     const first = ROUTE_SCRIPTS.creator.steps.find((s) => s.chapter !== undefined)!;
     expect(d.setStep).toHaveBeenCalledWith(first.id);
   });
@@ -951,5 +954,68 @@ describe('a control whose action finished', () => {
       );
     });
     expect(d.setStep).not.toHaveBeenCalled();
+  });
+});
+
+describe('W10 guided tour: Skip tour, Invite later, restart', () => {
+  it('shows Skip tour on the intro card, which finishes recorded as skipped', async () => {
+    const d = await mount({ step: 'c_intro', ...ALL_DATA });
+    const skip = q<HTMLButtonElement>('[data-induction-card="intro"] [data-induction-skip]');
+    expect(skip.textContent).toBe('Skip tour');
+    act(() => skip.click());
+    expect(d.finish).toHaveBeenCalledWith('c_skipped');
+    expect(d.setStep).not.toHaveBeenCalled();
+  });
+
+  it('offers Invite later on the approver invite, which continues the tour', async () => {
+    control('members-invite', { top: 200, left: 16, width: 358, height: 300 }, { tag: 'section' });
+    const d = await mount(
+      { step: 'c_approver_invite', postId: 'p1' },
+      { route: '/settings?panel=members' },
+    );
+    expect(q('[data-induction-step]').getAttribute('data-induction-step')).toBe(
+      'c_approver_invite',
+    );
+    const later = Array.from(document.querySelectorAll('[data-induction-bar] button')).find(
+      (b) => b.textContent === 'Invite later',
+    );
+    expect(later).toBeDefined();
+    act(() => (later as HTMLButtonElement).click());
+    expect(d.setStep).toHaveBeenCalledWith('c_team_invite');
+    expect(d.finish).not.toHaveBeenCalled();
+  });
+
+  it("shows It's just me for now at once, before any scroll or timer", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    control('members-invite', { top: 200, left: 16, width: 358, height: 300 }, { tag: 'section' });
+    await mount(
+      { step: 'c_team_invite', postId: 'p1', clientInvited: true },
+      { route: '/settings?panel=members' },
+    );
+    const names = Array.from(document.querySelectorAll('[data-induction-bar] button')).map(
+      (b) => b.textContent,
+    );
+    expect(names).toContain("It's just me for now");
+  });
+
+  it('restarts the tour for the current role from the avatar menu', async () => {
+    media.laptop = true;
+    current = data({ done: true, role: 'client', ...ALL_DATA });
+    root = createRoot(host!);
+    await act(async () => {
+      root!.render(
+        <MemoryRouter initialEntries={['/pipeline']}>
+          <InductionProvider data={current!} workspaceId="ws-1" workspaceLabel="Kite - Instagram">
+            <AvatarMenu open onClose={() => undefined} />
+          </InductionProvider>
+        </MemoryRouter>,
+      );
+    });
+    const row = Array.from(document.querySelectorAll('[role="menuitem"]')).find(
+      (b) => b.textContent === 'Restart tour',
+    );
+    expect(row).toBeDefined();
+    act(() => (row as HTMLButtonElement).click());
+    expect(current!.restart).toHaveBeenCalledWith(ROUTE_SCRIPTS.approver.intro.id);
   });
 });
