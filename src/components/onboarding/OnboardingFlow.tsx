@@ -874,7 +874,11 @@ function Heading({ title, lead }: { title: string; lead: string }): ReactElement
       <h1 className="text-[24px] font-semibold leading-[1.2] tracking-[-0.01em] text-fg [text-wrap:balance]">
         {title}
       </h1>
-      {stepLabel !== null ? <p className="mt-1.5 text-[15px] text-fg-3">{stepLabel}</p> : null}
+      {stepLabel !== null ? (
+        <p data-onboarding-step="" className="mt-1.5 text-[15px] text-fg-3">
+          {stepLabel}
+        </p>
+      ) : null}
       <p className="mt-3 text-[15px] leading-[1.45] text-fg-2 [text-wrap:balance]">{lead}</p>
     </div>
   );

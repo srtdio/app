@@ -226,7 +226,7 @@ async function toNameScreen(side: 'Creator' | 'Approver'): Promise<void> {
 }
 
 function stepLabel(): string {
-  return document.querySelector('[role="progressbar"]')?.getAttribute('aria-label') ?? '';
+  return document.querySelector('[data-onboarding-step]')?.textContent?.trim() ?? '';
 }
 
 /** An invitee whose membership, workspace and inviter read as given. */
@@ -320,7 +320,7 @@ describe('invited welcome', () => {
   it('shows no step count on the welcome, then Step 1 of 2 and Step 2 of 2', async () => {
     invitedAs({ role: 'client' });
     await renderInvitee();
-    expect(document.querySelector('[role="progressbar"]')).toBeNull();
+    expect(document.querySelector('[data-onboarding-step]')).toBeNull();
     expect(document.body.textContent).not.toContain('Step ');
     await click(button('Continue'));
     expect(stepLabel()).toBe('Step 1 of 2');
