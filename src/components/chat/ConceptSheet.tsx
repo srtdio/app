@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -126,6 +127,40 @@ export function conceptTileDay(date: string, range: ComposeRange): ComposeDay {
   return date >= range.startsOn && date <= range.endsOn ? date : null;
 }
 
+/** The discard confirm's title. */
+export const CONCEPT_DISCARD_TITLE = 'Discard this concept?';
+
+/** The discard confirm's copy: Add loses the concept, Edit loses the changes. Pure. */
+export function conceptDiscardCopy(mode: 'add' | 'edit'): { title: string; message: string } {
+  return {
+    title: CONCEPT_DISCARD_TITLE,
+    message: mode === 'add' ? 'Your concept will be lost.' : 'Your changes will be lost.',
+  };
+}
+
+/**
+ * Whether closing would lose work: an upload in flight, or the text, date or
+ * (Add) files differ from what the sheet opened with. Edit's files load after
+ * open, so they are not compared there. Pure.
+ */
+export function conceptDirty(input: {
+  mode: 'add' | 'edit';
+  form: ConceptForm;
+  baseline: ConceptForm;
+  uploads: number;
+}): boolean {
+  const { form, baseline } = input;
+  if (input.uploads > 0) return true;
+  if (form.title.trim() !== baseline.title.trim()) return true;
+  if (form.description.trim() !== baseline.description.trim()) return true;
+  if (form.date !== baseline.date) return true;
+  if (input.mode === 'add') {
+    const before = baseline.files.map((f) => f.versionId).join(',');
+    return form.files.map((f) => f.versionId).join(',') !== before;
+  }
+  return false;
+}
+
 /** Whether the form can be submitted: a title of 1 to 200 characters. Pure. */
 export function conceptFormValid(form: Pick<ConceptForm, 'title'>): boolean {
   const t = form.title.trim();
@@ -216,6 +251,31 @@ export function ConceptSheet(props: {
   }, [waiting, uploads, valid, showToast]);
 
   const edit = props.mode === 'edit';
+  // What the sheet opened with: Add compares against an empty concept (a kept
+  // draft still counts as work), Edit against the concept as it was.
+  const wasOpen = useRef(false);
+  const baseline = useRef<ConceptForm>(EMPTY_CONCEPT);
+  if (props.open && !wasOpen.current) baseline.current = edit ? form : EMPTY_CONCEPT;
+  wasOpen.current = props.open;
+  const dirty = conceptDirty({
+    mode: props.mode,
+    form,
+    baseline: baseline.current,
+    uploads: uploads.length,
+  });
+  const discardCopy = conceptDiscardCopy(props.mode);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  useEffect(() => {
+    if (!props.open) setCancelConfirm(false);
+  }, [props.open]);
+  const cancel = (): void => {
+    if (busy) return;
+    if (dirty) {
+      setCancelConfirm(true);
+      return;
+    }
+    props.onClose();
+  };
   const room = conceptFilesRoom(form.files.length, uploads.length);
   const atLimit = room === 0;
   const canUpload = props.uploadFile !== undefined;
@@ -238,6 +298,9 @@ export function ConceptSheet(props: {
         open={props.open}
         onClose={props.onClose}
         title={edit ? 'Edit concept' : 'Add concept'}
+        dirty={dirty}
+        discard={discardCopy}
+        busy={busy}
         footer={
           <div className="flex w-full flex-col gap-2">
             {props.note !== undefined && props.note !== null ? (
@@ -246,7 +309,7 @@ export function ConceptSheet(props: {
               </p>
             ) : null}
             <div className="grid w-full grid-cols-2 gap-2">
-              <Button size="lg" variant="ghost" disabled={busy} onClick={props.onClose}>
+              <Button size="lg" variant="ghost" disabled={busy} onClick={cancel}>
                 Cancel
               </Button>
               <Button
@@ -467,6 +530,20 @@ export function ConceptSheet(props: {
             </div>
           ) : null}
         </div>
+        {cancelConfirm ? (
+          <ConfirmDialog
+            title={discardCopy.title}
+            message={discardCopy.message}
+            confirmLabel="Discard"
+            cancelLabel="Keep editing"
+            destructive
+            onConfirm={() => {
+              setCancelConfirm(false);
+              props.onClose();
+            }}
+            onCancel={() => setCancelConfirm(false)}
+          />
+        ) : null}
       </Sheet>
 
       <AssetPicker
