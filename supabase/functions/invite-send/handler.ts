@@ -45,6 +45,12 @@ const inputSchema = z.object({
 export interface InviteSendDeps {
   env: (name: string) => string | undefined;
   createClient: typeof createClient;
+  /**
+   * The runtime's background hook (EdgeRuntime.waitUntil): when given, the email
+   * is sent after the response, so the inviter moves on at once. Absent (tests),
+   * the email is sent before answering.
+   */
+  waitUntil?: (work: Promise<unknown>) => void;
 }
 
 // Time-ordered UUID v7, generated inline (no dependency).
@@ -355,14 +361,19 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
       );
     }
 
-    const inviterMembership = await callerClient
-      .from('workspace_members')
-      .select('role')
-      .eq('workspace_id', workspace_id)
-      .eq('user_id', caller.data.user.id)
-      .eq('active', true)
-      .is('removed_at', null)
-      .maybeSingle();
+    // The membership read and the rule check are both read-only: run together.
+    const checkArgs = { p_workspace_id: workspace_id, p_email: email, p_role: role };
+    const [inviterMembership, checked] = await Promise.all([
+      callerClient
+        .from('workspace_members')
+        .select('role')
+        .eq('workspace_id', workspace_id)
+        .eq('user_id', caller.data.user.id)
+        .eq('active', true)
+        .is('removed_at', null)
+        .maybeSingle(),
+      callerClient.rpc('member_invite_check', checkArgs),
+    ]);
     if (inviterMembership.error) {
       const message = inviterMembership.error.message;
       console.error(traceId, message);
@@ -389,8 +400,6 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
     // or created: member_invite_check writes nothing and raises the same codes as
     // member_invite (free_mail_client, client_domain_mismatch, ...), so a refused
     // invite never leaves a provisioned auth user behind.
-    const checkArgs = { p_workspace_id: workspace_id, p_email: email, p_role: role };
-    const checked = await callerClient.rpc('member_invite_check', checkArgs);
     if (checked.error) {
       console.error(traceId, checked.error.message);
       return inviteErrorResponse(checked.error.message, allowedOrigin, traceId);
@@ -399,10 +408,17 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
     // Resolve the invitee; provision the auth user when absent so member_invite
     // can find the row. createUser mints a confirmed user without sending any
     // email; the login link is generated separately after the invite row exists.
-    let invitedUserId = await findUserIdByEmail(adminClient, email);
-    if (!invitedUserId) {
-      const created = await adminClient.auth.admin.createUser({ email, email_confirm: true });
-      if (created.error || !created.data?.user) {
+    // createUser first: a new address (the usual case) takes one call. An address
+    // that already has an account fails here and is looked up instead.
+    let invitedUserId: string | null = null;
+    let freshUser = false;
+    const created = await adminClient.auth.admin.createUser({ email, email_confirm: true });
+    if (!created.error && created.data?.user) {
+      invitedUserId = created.data.user.id;
+      freshUser = true;
+    } else {
+      invitedUserId = await findUserIdByEmail(adminClient, email);
+      if (!invitedUserId) {
         const message = created.error?.message ?? 'createUser returned no user';
         console.error(traceId, message);
         return json(
@@ -412,20 +428,21 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
           traceId,
         );
       }
-      invitedUserId = created.data.user.id;
     }
 
-    // Dedup: reuse a pending invite row instead of re-inviting.
-    const existing = await callerClient
-      .from('workspace_members')
-      .select('id')
-      .eq('workspace_id', workspace_id)
-      .eq('user_id', invitedUserId)
-      .eq('active', false)
-      .is('accepted_at', null)
-      .is('removed_at', null)
-      .limit(1)
-      .maybeSingle();
+    // Dedup: reuse a pending invite row instead of re-inviting (a new user has none).
+    const existing = freshUser
+      ? { data: null }
+      : await callerClient
+          .from('workspace_members')
+          .select('id')
+          .eq('workspace_id', workspace_id)
+          .eq('user_id', invitedUserId)
+          .eq('active', false)
+          .is('accepted_at', null)
+          .is('removed_at', null)
+          .limit(1)
+          .maybeSingle();
 
     let inviteId: string;
     if (existing.data?.id) {
@@ -474,90 +491,113 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
       );
     }
 
-    let emailed = false;
-    let errorDetail: string | null = null;
-    const resendKey = deps.env('RESEND_API_KEY');
-    const fromAddress = deps.env('INVITE_FROM_ADDRESS');
-    if (email.toLowerCase().endsWith('@test.srtd.io')) {
-      // A test-site address has no inbox: the invitee opens the invite from the
-      // test site instead, so nothing is sent (no bounce from the sending domain).
-      errorDetail = 'test_address_not_emailed';
-      await adminClient
-        .from('delivery_attempts')
-        .update({ status: 'failed', provider_message_id: null, error: errorDetail, sent_at: null })
-        .eq('id', attempt.data.id);
-    } else if (!resendKey || !fromAddress) {
-      errorDetail = 'resend_not_configured';
-      console.error(traceId, errorDetail);
-    } else {
-      // Passwordless login link for the email: lands the invitee on
-      // /invite/accept/{id}, which accepts the invite automatically. A failure here must not
-      // discard the provisioned user or the invite row.
-      const link = await adminClient.auth.admin.generateLink({
-        type: 'magiclink',
-        email,
-        options: { redirectTo: `${appBaseUrl}/invite/accept/${inviteId}` },
-      });
-      const actionLink = link.data?.properties?.action_link;
-      if (link.error || !actionLink) {
-        const message = link.error?.message ?? 'generateLink returned no action_link';
-        errorDetail = message;
-        console.error(traceId, message);
-        await adminClient
-          .from('delivery_attempts')
-          .update({ status: 'failed', provider_message_id: null, error: message, sent_at: null })
-          .eq('id', attempt.data.id);
-      } else {
-        const workspace = await callerClient
-          .from('workspaces')
-          .select('name, platform')
-          .eq('id', workspace_id)
-          .maybeSingle();
-        const brand = (workspace.data?.name as string | undefined) ?? '';
-        const platform = workspace.data?.platform as string | null | undefined;
-        const displayName = workspaceDisplayName(brand, platform);
-        const body = inviteEmailBody({ brand, displayName, role, acceptUrl: actionLink });
-        const inviterName = await readInviterName(adminClient, caller.data.user.id);
-
-        let status: 'sent' | 'failed' = 'sent';
-        let providerMessageId: string | null = null;
-        let sendError: string | null = null;
-        try {
-          providerMessageId = await sendViaResend({
-            apiKey: resendKey,
-            from: fromAddress,
-            to: email,
-            subject: inviteSubject({ brand, role, inviterName }),
-            html: body.html,
-            text: body.text,
-          });
-          emailed = true;
-        } catch (err) {
-          status = 'failed';
-          sendError = err instanceof Error ? err.message : String(err);
-          errorDetail = sendError;
-          console.error(traceId, sendError);
-        }
-
+    const attemptId = attempt.data.id;
+    const inviterId = caller.data.user.id;
+    const resolvedUserId = invitedUserId;
+    const deliver = async (): Promise<{ emailed: boolean; errorDetail: string | null }> => {
+      let emailed = false;
+      let errorDetail: string | null = null;
+      const resendKey = deps.env('RESEND_API_KEY');
+      const fromAddress = deps.env('INVITE_FROM_ADDRESS');
+      if (email.toLowerCase().endsWith('@test.srtd.io')) {
+        // A test-site address has no inbox: the invitee opens the invite from the
+        // test site instead, so nothing is sent (no bounce from the sending domain).
+        errorDetail = 'test_address_not_emailed';
         await adminClient
           .from('delivery_attempts')
           .update({
-            status,
-            provider_message_id: providerMessageId,
-            error: sendError,
-            sent_at: status === 'sent' ? new Date().toISOString() : null,
+            status: 'failed',
+            provider_message_id: null,
+            error: errorDetail,
+            sent_at: null,
           })
-          .eq('id', attempt.data.id);
+          .eq('id', attemptId);
+      } else if (!resendKey || !fromAddress) {
+        errorDetail = 'resend_not_configured';
+        console.error(traceId, errorDetail);
+      } else {
+        // Passwordless login link for the email: lands the invitee on
+        // /invite/accept/{id}, which accepts the invite automatically. A failure here must not
+        // discard the provisioned user or the invite row.
+        const link = await adminClient.auth.admin.generateLink({
+          type: 'magiclink',
+          email,
+          options: { redirectTo: `${appBaseUrl}/invite/accept/${inviteId}` },
+        });
+        const actionLink = link.data?.properties?.action_link;
+        if (link.error || !actionLink) {
+          const message = link.error?.message ?? 'generateLink returned no action_link';
+          errorDetail = message;
+          console.error(traceId, message);
+          await adminClient
+            .from('delivery_attempts')
+            .update({ status: 'failed', provider_message_id: null, error: message, sent_at: null })
+            .eq('id', attemptId);
+        } else {
+          const workspace = await callerClient
+            .from('workspaces')
+            .select('name, platform')
+            .eq('id', workspace_id)
+            .maybeSingle();
+          const brand = (workspace.data?.name as string | undefined) ?? '';
+          const platform = workspace.data?.platform as string | null | undefined;
+          const displayName = workspaceDisplayName(brand, platform);
+          const body = inviteEmailBody({ brand, displayName, role, acceptUrl: actionLink });
+          const inviterName = await readInviterName(adminClient, inviterId);
+
+          let status: 'sent' | 'failed' = 'sent';
+          let providerMessageId: string | null = null;
+          let sendError: string | null = null;
+          try {
+            providerMessageId = await sendViaResend({
+              apiKey: resendKey,
+              from: fromAddress,
+              to: email,
+              subject: inviteSubject({ brand, role, inviterName }),
+              html: body.html,
+              text: body.text,
+            });
+            emailed = true;
+          } catch (err) {
+            status = 'failed';
+            sendError = err instanceof Error ? err.message : String(err);
+            errorDetail = sendError;
+            console.error(traceId, sendError);
+          }
+
+          await adminClient
+            .from('delivery_attempts')
+            .update({
+              status,
+              provider_message_id: providerMessageId,
+              error: sendError,
+              sent_at: status === 'sent' ? new Date().toISOString() : null,
+            })
+            .eq('id', attemptId);
+        }
       }
+      return { emailed, errorDetail };
+    };
+
+    let outcome: { emailed: boolean; errorDetail: string | null };
+    if (deps.waitUntil) {
+      deps.waitUntil(
+        deliver().catch((err: unknown) => {
+          console.error(traceId, err instanceof Error ? err.message : String(err));
+        }),
+      );
+      outcome = { emailed: false, errorDetail: 'queued' };
+    } else {
+      outcome = await deliver();
     }
 
     return json(
       {
         invite_id: inviteId,
-        invited_user_id: invitedUserId,
+        invited_user_id: resolvedUserId,
         accept_url: acceptUrl,
-        emailed,
-        error_detail: errorDetail,
+        emailed: outcome.emailed,
+        error_detail: outcome.errorDetail,
         trace_id: traceId,
       },
       200,

@@ -196,3 +196,9 @@ export function ToastViewport() {
     </div>
   );
 }
+
+/** As useToast, or null outside a ToastProvider (a sheet rendered on its own). */
+export function useOptionalToast(): ToastApi | null {
+  const ctx = useContext(ToastContext);
+  return ctx === null ? null : { show: ctx.show, dismiss: ctx.dismiss };
+}

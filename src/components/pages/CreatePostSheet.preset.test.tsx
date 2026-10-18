@@ -269,7 +269,7 @@ describe('CreatePostSheet first post fill on tap', () => {
     expect(onFilled).toHaveBeenCalledWith(['post-sheet-format', 'post-sheet-format-single']);
   });
 
-  it('sends the filled post: sample caption, Single image, the sample photo uploaded at Send, no date', async () => {
+  it('sends the filled post: sample caption, Single image, the sample photo uploaded from the tap, no date', async () => {
     await renderSheet('instagram', FILL);
     await act(async () => document.querySelector<HTMLTextAreaElement>('#post-caption')!.focus());
     await act(async () => {
@@ -277,9 +277,11 @@ describe('CreatePostSheet first post fill on tap', () => {
     });
     await act(async () => button('Fake upload').click());
     expect(onFilled).toHaveBeenCalledTimes(3);
-    expect(mockUploadLocal).not.toHaveBeenCalled();
+    // The upload starts as soon as the photo is attached, not at Send.
+    expect(mockUploadLocal).toHaveBeenCalledTimes(1);
     await act(async () => button('Send for review').click());
 
+    // Send reuses that upload; the sheet closes once the post is in review.
     expect(mockUploadLocal).toHaveBeenCalledTimes(1);
     const args = mockPostCreate.mock.calls[0]![1] as { p_payload: Record<string, unknown> };
     expect(args.p_payload).toMatchObject({
@@ -296,8 +298,8 @@ describe('CreatePostSheet first post fill on tap', () => {
     expect(onCreated).toHaveBeenCalledWith('post-1');
   });
 
-  it('keeps the post unsent and says why when the sample photo does not upload', async () => {
-    mockUploadLocal.mockResolvedValueOnce({ ok: false, reason: 'The file did not reach us.' });
+  it('still sends the post when the sample photo does not upload, and binds no gallery', async () => {
+    mockUploadLocal.mockResolvedValue({ ok: false, reason: 'The file did not reach us.' });
     await renderSheet('instagram', FILL);
     await act(async () => document.querySelector<HTMLTextAreaElement>('#post-caption')!.focus());
     await act(async () => {
@@ -305,10 +307,9 @@ describe('CreatePostSheet first post fill on tap', () => {
     });
     await act(async () => button('Fake upload').click());
     await act(async () => button('Send for review').click());
-    expect(mockPostCreate).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="alert"]')?.textContent).toBe(
-      'The file did not reach us.',
-    );
+    expect(mockPostCreate).toHaveBeenCalledTimes(1);
+    expect(onCreated).toHaveBeenCalledWith('post-1');
+    expect(mockGallerySet).not.toHaveBeenCalled();
   });
 
   it('leaves the sheet as it was without fillOnTap', async () => {
