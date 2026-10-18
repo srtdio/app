@@ -535,7 +535,9 @@ export function PipelinePage() {
           </div>
         </div>
       ) : boardLoading ? (
-        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading posts</div>
+        <div data-guide-wait="" className="px-4 md:px-6 py-10 text-sm text-fg-3">
+          Loading posts
+        </div>
       ) : (
         pipelineSurface({
           stage,

@@ -198,7 +198,11 @@ function useSampleSeed(input: { on: boolean; workspaceId: string | null }): void
   useEffect(() => {
     if (!on || workspaceId === null || asked.current === workspaceId) return;
     asked.current = workspaceId;
+    // The guide waits while the week lands (guide-hooks: SEEDING_ATTR), so it never
+    // points at an empty pipeline that fills a moment later.
+    document.documentElement.setAttribute(SEEDING_ATTR, '');
     void seedSampleWeek(supabase, { workspaceId, traceId: newTraceId() }).then((seeded) => {
+      document.documentElement.removeAttribute(SEEDING_ATTR);
       if (!seeded) return;
       dispatchInductionRefresh();
       // The pipeline, briefs, library, activity and chat list fetched before the
@@ -207,6 +211,9 @@ function useSampleSeed(input: { on: boolean; workspaceId: string | null }): void
     });
   }, [on, workspaceId]);
 }
+
+/** On <html> while the sample week is being seeded. */
+export const SEEDING_ATTR = 'data-guide-seeding';
 
 const STARTED_KEY = 'srtdio.induction.lookAroundStartedAt';
 

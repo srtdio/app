@@ -336,34 +336,43 @@ export function useScrolledByHand(stepKey: string, enabled: boolean): boolean {
   return scrolled.key === stepKey && scrolled.done;
 }
 
-/** The longest a step waits for on-screen photos before it points anyway. */
-export const PHOTOS_WAIT_CAP_MS = 4000;
+/** The longest a step waits for the page behind it before it points anyway. */
+export const PHOTOS_WAIT_CAP_MS = 5000;
 
-function photosPending(): boolean {
+/**
+ * Something on screen is still arriving: a photo not yet painted, a list still
+ * loading (data-guide-wait), or the sample week being seeded.
+ */
+function pagePending(): boolean {
+  if (document.documentElement.hasAttribute('data-guide-seeding')) return true;
   const height = window.innerHeight;
-  return Array.from(document.querySelectorAll('[data-thumb-loading]')).some((el) => {
-    const r = el.getBoundingClientRect();
-    return r.bottom > 0 && r.top < height && r.width > 0;
-  });
+  return Array.from(document.querySelectorAll('[data-thumb-loading], [data-guide-wait]')).some(
+    (el) => {
+      const r = el.getBoundingClientRect();
+      return r.bottom > 0 && r.top < height && r.width > 0;
+    },
+  );
 }
 
 /**
- * True once the photos on screen have painted (or PHOTOS_WAIT_CAP_MS passed):
- * the guide points at a control only once the page behind it looks finished.
+ * True while the page behind the step has finished arriving (photos painted,
+ * lists loaded), checked live for the first PHOTOS_WAIT_CAP_MS of a step: the
+ * guide points at a control only once the page looks finished.
  */
 export function usePhotosSettled(stepKey: string): boolean {
-  const [settled, setSettled] = useState<{ key: string; done: boolean }>({
+  const [state, setState] = useState<{ key: string; settled: boolean }>({
     key: stepKey,
-    done: false,
+    settled: false,
   });
   useEffect(() => {
     const started = Date.now();
     const check = (): boolean => {
-      if (!photosPending() || Date.now() - started >= PHOTOS_WAIT_CAP_MS) {
-        setSettled({ key: stepKey, done: true });
-        return true;
-      }
-      return false;
+      const capped = Date.now() - started >= PHOTOS_WAIT_CAP_MS;
+      const settled = capped || !pagePending();
+      setState((prev) =>
+        prev.key === stepKey && prev.settled === settled ? prev : { key: stepKey, settled },
+      );
+      return capped;
     };
     if (check()) return;
     const id = window.setInterval(() => {
@@ -371,5 +380,31 @@ export function usePhotosSettled(stepKey: string): boolean {
     }, 100);
     return () => window.clearInterval(id);
   }, [stepKey]);
-  return settled.key === stepKey && settled.done;
+  return state.key === stepKey && state.settled;
+}
+
+/** A gap in the dim shorter than this stays dimmed: no bright flash between steps. */
+export const DIM_HOLD_MS = 600;
+
+let lastDimAt = 0;
+
+/**
+ * Keeps the screen dimmed across a short gap (a sheet sliding in, a button
+ * enabling a moment later): returns true while the dim is off but was on within
+ * DIM_HOLD_MS, and re-renders when that hold ends.
+ */
+export function useDimHold(dimmed: boolean): boolean {
+  const [, setTick] = useState(0);
+  const now = performance.now();
+  if (dimmed) lastDimAt = now;
+  const holding = !dimmed && lastDimAt > 0 && now - lastDimAt < DIM_HOLD_MS;
+  useEffect(() => {
+    if (!holding) return;
+    const id = window.setTimeout(
+      () => setTick((t) => t + 1),
+      DIM_HOLD_MS - (performance.now() - lastDimAt) + 5,
+    );
+    return () => window.clearTimeout(id);
+  });
+  return holding;
 }

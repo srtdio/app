@@ -71,6 +71,7 @@ import {
   useTapGuard,
   useScrolledByHand,
   usePhotosSettled,
+  useDimHold,
   useTypingNow,
   APP_TYPING_PAUSE_MS,
 } from './guide-hooks';
@@ -380,6 +381,8 @@ function StepLayer({
       radius,
     };
   });
+  // The dim never blinks off for a moment between two dimmed states.
+  const dimHold = useDimHold(boxed !== undefined || (el !== undefined && moving && !waiting));
   const optOut = step.kind === 'optional' && step.laterLabel !== undefined;
   // The opt-out ("It's just me for now") waits until they have scrolled the page.
   const optOutShown = useScrolledByHand(step.id, optOut);
@@ -412,7 +415,9 @@ function StepLayer({
   };
   return (
     <>
-      {el !== undefined && boxed === undefined && moving && !waiting ? <GuideDim /> : null}
+      {dimHold || (el !== undefined && boxed === undefined && moving && !waiting) ? (
+        <GuideDim />
+      ) : null}
       {control !== undefined && boxed !== undefined ? (
         <Spotlight
           control={control}
