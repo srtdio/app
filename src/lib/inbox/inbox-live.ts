@@ -441,6 +441,30 @@ export interface NewRowsSplit {
  * Reminders and scheduled outcomes get no live toast here (the ring and the
  * bell own them). Pure.
  */
+/**
+ * Rows written by someone else. The actor's own already-read row (inbox_self_entry,
+ * 20261018140000) is history, not news: it never toasts or plays the tone.
+ */
+export function othersRows<T extends { actor_user_id: string | null }>(
+  rows: readonly T[],
+  selfId: string,
+): T[] {
+  return rows.filter((row) => row.actor_user_id !== selfId);
+}
+
+/** The Activity route prefix: new Activity rows never tone while it is on screen. */
+export const ACTIVITY_PATH = '/activity';
+
+/**
+ * Whether new Activity rows play the shared notification tone: only when at least
+ * one is someone else's and the Activity screen is not the one open (the same
+ * rule as a chat that is already open). Throttling is shared with chat
+ * (notify-sound.ts).
+ */
+export function activityToneWanted(newOthersCount: number, pathname: string): boolean {
+  return newOthersCount > 0 && !pathname.startsWith(ACTIVITY_PATH);
+}
+
 export function splitNewRows(rows: readonly InboxRow[]): NewRowsSplit {
   return {
     activity: rows.filter((row) => !isBellRow(row)),

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
-import type { ActivityScope, ActivityState } from '@/components/pages/activity/data';
+import type { ActivityState } from '@/components/pages/activity/data';
 
+// The only chips, single-select, in this order (no separate scope row).
 const STATE_CHIPS: { key: ActivityState; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'mentions', label: 'Mentions' },
+  { key: 'briefs', label: 'Briefs' },
   { key: 'snoozed', label: 'Snoozed' },
 ];
 
@@ -25,23 +27,6 @@ function chipLabel(
   return item.label;
 }
 
-// Scope chips are single-select toggles; the 'everything' default is never a chip.
-const SCOPE_CHIPS: { key: Exclude<ActivityScope, 'everything'>; label: string }[] = [
-  { key: 'posts', label: 'Posts' },
-  { key: 'briefs', label: 'Briefs' },
-  { key: 'people', label: 'People' },
-  { key: 'groups', label: 'Groups' },
-  { key: 'clients', label: 'Approvers' },
-];
-
-const DEFAULT_SCOPE: ActivityScope = 'everything';
-
-// Single-select toggle: tap a scope to select it, tap the active scope to clear
-// back to the internal default. State chips are not handled here.
-export function nextScope(current: ActivityScope, clicked: ActivityScope): ActivityScope {
-  return current === clicked ? DEFAULT_SCOPE : clicked;
-}
-
 // Edge-cut fade applied only while the row overflows; alpha-based so it is
 // colour-agnostic and correct in light and dark with no token.
 const OVERFLOW_MASK = 'linear-gradient(to right, #000 0, #000 calc(100% - 26px), transparent 100%)';
@@ -49,8 +34,6 @@ const OVERFLOW_MASK = 'linear-gradient(to right, #000 0, #000 calc(100% - 26px),
 interface ActivityFilterBarProps {
   state: ActivityState;
   onStateChange: (state: ActivityState) => void;
-  scope: ActivityScope;
-  onScopeChange: (scope: ActivityScope) => void;
   totalUnread: number;
   mentionCount: number;
 }
@@ -58,8 +41,6 @@ interface ActivityFilterBarProps {
 export function ActivityFilterBar({
   state,
   onStateChange,
-  scope,
-  onScopeChange,
   totalUnread,
   mentionCount,
 }: ActivityFilterBarProps) {
@@ -79,7 +60,7 @@ export function ActivityFilterBar({
   const mask = overflowing ? OVERFLOW_MASK : 'none';
 
   return (
-    // One horizontally scrollable line: state chips then scope chips, never wraps.
+    // One horizontally scrollable line of chips, never wraps.
     // Runs full-bleed to the right edge (negative right margin cancels the page
     // gutter, paddingRight 0) so the boundary chip is clipped by the screen, with
     // an edge-cut fade applied only when the row overflows.
@@ -96,16 +77,6 @@ export function ActivityFilterBar({
           size="tap"
           className="flex-none whitespace-nowrap"
           onClick={() => onStateChange(item.key)}
-        />
-      ))}
-      {SCOPE_CHIPS.map((item) => (
-        <Chip
-          key={item.key}
-          label={item.label}
-          selected={scope === item.key}
-          size="tap"
-          className="flex-none whitespace-nowrap"
-          onClick={() => onScopeChange(nextScope(scope, item.key))}
         />
       ))}
     </div>

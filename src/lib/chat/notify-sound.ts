@@ -124,3 +124,27 @@ export function playNotifyTone(ctx: ToneContext | null = audioContext()): boolea
     return false;
   }
 }
+
+// The last tone from ANY source (chat or Activity), device clock: the two never
+// double up inside TONE_THROTTLE_MS.
+let lastSharedToneMs: number | null = null;
+
+/**
+ * Play the tone unless any source played it within TONE_THROTTLE_MS. Chat and
+ * Activity both call this, so a chat message and an Activity row arriving
+ * together sound once. Returns whether it played.
+ */
+export function playToneShared(
+  nowMs: number = Date.now(),
+  ctx: ToneContext | null = audioContext(),
+): boolean {
+  if (lastSharedToneMs !== null && nowMs - lastSharedToneMs < TONE_THROTTLE_MS) return false;
+  if (!playNotifyTone(ctx)) return false;
+  lastSharedToneMs = nowMs;
+  return true;
+}
+
+/** Test hook: forget the last shared tone. */
+export function resetSharedTone(): void {
+  lastSharedToneMs = null;
+}

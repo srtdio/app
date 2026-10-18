@@ -96,11 +96,12 @@ export function warnUnknownEventType(eventType: string): void {
  */
 export const MENTION_EVENT_TYPE: InboxEventTypeValue = 'mention';
 
-/** The state chips: which slice of the inbox is shown. */
-export type ActivityState = 'all' | 'unread' | 'mentions' | 'snoozed';
+/** The chips (single-select): which slice of the inbox is shown. */
+export type ActivityState = 'all' | 'unread' | 'mentions' | 'briefs' | 'snoozed';
 
-/** The scope chips. 'everything' is the no-filter sentinel. */
-export type ActivityScope = 'everything' | 'posts' | 'briefs' | 'people' | 'groups' | 'clients';
+/** The inbox scope every brief event is written with (brief comments, mentions,
+ *  brief created / closed, posts created from a brief). */
+export const BRIEFS_SCOPE = 'briefs';
 
 /** The sort direction, threaded straight from useSort('activity', ...). */
 export type ActivityDirection = 'newest' | 'oldest';
@@ -193,6 +194,10 @@ export interface ActivityItem {
   onBehalfOfId?: string | null;
   /** The resolved full name for onBehalfOfId ("Former member" once a read confirms they left). */
   onBehalfOfName?: string | null;
+  /** The viewer's own action (the already-read row written for the actor): reads "You". */
+  own?: boolean;
+  /** brief_post_created only: the brief the post was created from (payload.brief_title). */
+  fromBriefTitle?: string | null;
 }
 
 /** The workspace a welcome row names: payload.workspace_name and payload.platform. */
@@ -251,6 +256,7 @@ export const ROW_ACTOR_EVENTS: ReadonlySet<string> = new Set([
   'post_ready',
   'asset_uploaded',
   'asset_version_added',
+  'brief_post_created',
   'brief_created',
   'brief_closed',
 ]);
@@ -284,6 +290,9 @@ export function isPlanEvent(item: Pick<ActivityItem, 'eventType'>): boolean {
 
 /** The name an actor-row line uses when the actor's name did not resolve. */
 export const UNKNOWN_ACTOR = 'Someone';
+
+/** The actor name on the viewer's own rows ("You approved ..."). */
+export const SELF_ACTOR = 'You';
 
 /** Read a string array field from an `unknown` jsonb payload; non-strings are dropped. */
 export function payloadStrings(p: unknown, key: string): string[] {
@@ -350,7 +359,9 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     assetId: payloadStr(payload, 'asset_id'),
     toStage: payloadStr(payload, 'to_stage') ?? payloadStr(payload, 'to'),
     fromStage: payloadStr(payload, 'from_stage') ?? payloadStr(payload, 'from'),
-    title: payloadStr(payload, 'title'),
+    title:
+      payloadStr(payload, 'title') ??
+      (row.event_type === 'brief_post_created' ? payloadStr(payload, 'post_title') : null),
     actorId: rowActorId(row, payload),
     actorName: null,
     actorAvatarUrl: null,
@@ -362,6 +373,9 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     pointsAdded: payloadNum(payload, 'count'),
     checkpointTotal: payloadNum(payload, 'checkpoints'),
     batchId: row.event_type === 'checkpoints_added' ? payloadStr(payload, 'batch_id') : null,
+    own: row.actor_user_id !== null && row.actor_user_id === row.user_id,
+    fromBriefTitle:
+      row.event_type === 'brief_post_created' ? payloadStr(payload, 'brief_title') : null,
     messageId: payloadStr(payload, 'message_id'),
     channelType: null,
     actorRole: payloadStr(payload, 'actor_role'),
@@ -557,6 +571,8 @@ export function activityLine(item: ActivityItem, brand: string | null = null): s
         : item.title !== null
           ? `New brief: ${item.title}`
           : 'A new brief was created';
+    case 'brief_post_created':
+      return `${who ?? UNKNOWN_ACTOR} created ${target} from ${item.fromBriefTitle ?? 'a brief'}`;
     case 'brief_closed':
       return who !== null
         ? `${who} closed ${target}`
@@ -624,6 +640,10 @@ export function shortLine(
       return 'Brief created';
     case 'brief_closed':
       return 'Brief closed';
+    case 'brief_post_created':
+      return item.fromBriefTitle !== null && item.fromBriefTitle !== undefined
+        ? `Created from ${item.fromBriefTitle}`
+        : 'Created from a brief';
     case 'asset_uploaded':
       return 'New asset';
     case 'asset_version_added':
@@ -725,8 +745,9 @@ export function isSnoozed(item: ActivityItem, nowMs: number): boolean {
 }
 
 /**
- * Apply the state chip: All hides snoozed; Unread is unread + not snoozed;
- * Mentions is every mention (read AND unread) that is not snoozed. Input order is
+ * Apply the chip: All hides snoozed; Unread is unread + not snoozed;
+ * Mentions is every mention (read AND unread) that is not snoozed; Briefs is
+ * every brief event (scope 'briefs') that is not snoozed; Snoozed is only snoozed. Input order is
  * preserved, so a newest-first page stays newest-first through the filter.
  */
 export function filterByState(
@@ -743,6 +764,8 @@ export function filterByState(
       return items.filter(
         (item) => item.eventType === MENTION_EVENT_TYPE && !isSnoozed(item, nowMs),
       );
+    case 'briefs':
+      return items.filter((item) => item.scope === BRIEFS_SCOPE && !isSnoozed(item, nowMs));
     case 'all':
     default:
       return items.filter((item) => !isSnoozed(item, nowMs));
@@ -787,15 +810,6 @@ export function segmentSelfMentions(body: string, selfName: string | null): Ment
   }
   if (last < body.length) segments.push({ text: body.slice(last), self: false });
   return segments.length > 0 ? segments : [{ text: body, self: false }];
-}
-
-/** Apply the scope chip. 'everything' is the no-filter sentinel. */
-export function filterByScope(
-  items: readonly ActivityItem[],
-  scope: ActivityScope,
-): ActivityItem[] {
-  if (scope === 'everything') return [...items];
-  return items.filter((item) => item.scope === scope);
 }
 
 /** Count of currently-unread, non-snoozed rows (drives the chip badge / button). */
@@ -932,7 +946,7 @@ export const ACTIVITY_PAGE_SIZE = 50;
 const COMMENT_EVENTS = ['comment', 'mention'];
 
 const SELECT_COLS =
-  'id, workspace_id, event_type, entity_type, entity_id, scope, tier, created_at, read_at, snoozed_until, payload, actor_user_id';
+  'id, workspace_id, user_id, event_type, entity_type, entity_id, scope, tier, created_at, read_at, snoozed_until, payload, actor_user_id';
 
 // One row of the batched first-image lookup, mirroring the Pipeline loader's
 // firstImageByPost (packages/posts/src/reads.ts): an asset_attachments row with
@@ -1070,14 +1084,15 @@ async function readGroupNames(client: Client, groupIds: string[]): Promise<Map<s
  * best-effort: a failed sub-query leaves its field null rather than failing the
  * feed. Soft-deleted rows are excluded; the inbox is a permanent surface. Pass
  * `before` (the oldest loaded created_at) to fetch the next, older page. Pass
- * `eventType` to filter server-side to a single event_type (the Mentions chip),
- * so older matches are never hidden behind the newest-page cap: the DESC order,
- * the keyset `before` cursor and the page size are all preserved unchanged.
+ * `state` to filter server-side to the active chip (Unread, Mentions, Briefs,
+ * Snoozed; All has no filter), so older matches are never hidden behind the
+ * newest-page cap: the DESC order, the keyset `before` cursor and the page size
+ * are all preserved unchanged. `nowIso` is the snooze cut-off (defaults to now).
  */
 export async function fetchActivityEntries(
   client: Client,
   workspaceId: string,
-  input: { before?: string; eventType?: string | undefined } = {},
+  input: { before?: string; state?: ActivityState; nowIso?: string } = {},
 ): Promise<LoadResult> {
   // Activity is posts only: the chat bell's rows (chat mentions, reminders,
   // scheduled sent / failed) are filtered out server-side, so paging and the
@@ -1089,7 +1104,17 @@ export async function fetchActivityEntries(
       .eq('workspace_id', workspaceId)
       .is('deleted_at', null),
   );
-  const typed = input.eventType !== undefined ? base.eq('event_type', input.eventType) : base;
+  const nowIso = input.nowIso ?? new Date().toISOString();
+  const typed =
+    input.state === 'mentions'
+      ? base.eq('event_type', MENTION_EVENT_TYPE)
+      : input.state === 'briefs'
+        ? base.eq('scope', BRIEFS_SCOPE)
+        : input.state === 'unread'
+          ? base.is('read_at', null).or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
+          : input.state === 'snoozed'
+            ? base.gt('snoozed_until', nowIso)
+            : base;
   const scoped = input.before !== undefined ? typed.lt('created_at', input.before) : typed;
   const res = await scoped.order('created_at', { ascending: false }).limit(ACTIVITY_PAGE_SIZE);
   if (res.error) return { ok: false, error: res.error.message };
@@ -1312,7 +1337,8 @@ export async function fetchActivityEntries(
       actorUserId = item.actorId ?? comment?.authorId ?? null;
     }
     item.actorId = actorUserId;
-    item.actorName = actorUserId !== null ? nameOf(actorUserId) : null;
+    item.actorName =
+      item.own === true ? SELF_ACTOR : actorUserId !== null ? nameOf(actorUserId) : null;
     item.actorAvatarUrl = actorUserId !== null ? personAvatar(workspaceId, actorUserId) : null;
     item.onBehalfOfName = item.onBehalfOfId != null ? nameOf(item.onBehalfOfId) : null;
     if (isChatMention(item)) return;

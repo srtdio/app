@@ -7,7 +7,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useChatStore, useServerNow } from '@/components/chat/ChatStoreProvider';
-import { playNotifyTone, shouldPlayTone, tabTitle } from '@/lib/chat/notify-sound';
+import { playToneShared, shouldPlayTone, tabTitle } from '@/lib/chat/notify-sound';
 
 export function ChatTabSignals(): null {
   const { totalUnread, loadStatus, state, subscribeLiveIncoming } = useChatStore();
@@ -47,7 +47,7 @@ export function ChatTabSignals(): null {
         });
         if (!play) return;
         lastToneRef.current = nowMs;
-        playNotifyTone();
+        playToneShared();
       }),
     [subscribeLiveIncoming],
   );

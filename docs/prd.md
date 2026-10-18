@@ -204,8 +204,11 @@ Permanent in-app event feed. Source of truth for what happened. The only permane
 
 | Element | Decision |
 | --- | --- |
-| State chips | All, Unread, Snoozed |
-| Scopes | Everything, Posts, Briefs, People, Groups, Clients |
+| Chips | All, Unread, Mentions, Briefs, Snoozed (single-select, in that order; no separate scope row; each filters server-side). Decision 18 Oct 2026. |
+| Briefs chip | Brief created, brief closed, comments and mentions on briefs, posts created from a brief |
+| Own actions | The person who acted sees their own row ("You approved ..."), already read; never toasts or sounds |
+| New members | See only activity after they joined (from their welcome row) |
+| Sound | New activity from someone else plays the chat tone (shared 2s throttle with chat), never while Activity is open |
 | Snooze | 1h, 4h, tomorrow 9am, next week |
 | Inline approve | No. Click navigates to PCS. |
 | Inline reply (comments) | Lands on entity. |
@@ -214,7 +217,7 @@ Permanent in-app event feed. Source of truth for what happened. The only permane
 
 - Comments on posts and briefs
 - Post stage changes
-- Brief created, brief closed
+- Brief created, brief closed, post created from a brief
 - Asset uploaded, asset version added
 - @-mentions
 - Decision Records flagged

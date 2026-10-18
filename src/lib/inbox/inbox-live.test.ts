@@ -533,3 +533,24 @@ describe('send for review wording', () => {
     expect(spec?.title).not.toContain('for review on');
   });
 });
+
+describe('othersRows (own already-read rows never toast or tone)', () => {
+  it('drops rows whose actor is the viewer', async () => {
+    const { othersRows } = await import('@/lib/inbox/inbox-live');
+    const rows = [
+      { id: 'a', actor_user_id: 'me' },
+      { id: 'b', actor_user_id: 'them' },
+      { id: 'c', actor_user_id: null },
+    ];
+    expect(othersRows(rows, 'me').map((r) => r.id)).toEqual(['b', 'c']);
+  });
+});
+
+describe('activityToneWanted', () => {
+  it('tones for someone else’s new rows unless Activity is open', async () => {
+    const { activityToneWanted } = await import('@/lib/inbox/inbox-live');
+    expect(activityToneWanted(1, '/pipeline')).toBe(true);
+    expect(activityToneWanted(0, '/pipeline')).toBe(false);
+    expect(activityToneWanted(2, '/activity')).toBe(false);
+  });
+});
