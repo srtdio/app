@@ -909,3 +909,27 @@ describe('the chapter dots', () => {
     expect(dots[2]!.className).toContain('bg-border-strong');
   });
 });
+
+describe('a control whose action finished', () => {
+  it('moves the guide on even when the tap was missed', async () => {
+    control('pipeline-approved-chip', CHIP);
+    const d = await mount({ step: 'c_approved_chip' });
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('sorted:induction-did', { detail: 'pipeline-approved-chip' }),
+      );
+    });
+    expect(d.setStep).toHaveBeenCalledWith('c_post_create');
+  });
+
+  it('ignores another control', async () => {
+    control('pipeline-approved-chip', CHIP);
+    const d = await mount({ step: 'c_approved_chip' });
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('sorted:induction-did', { detail: 'post-comment-post' }),
+      );
+    });
+    expect(d.setStep).not.toHaveBeenCalled();
+  });
+});

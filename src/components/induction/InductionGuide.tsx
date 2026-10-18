@@ -38,6 +38,7 @@ import {
   type Rect,
   type Resolution,
   type StepProbe,
+  INDUCTION_DID_EVENT,
 } from '@/lib/induction';
 import { CLEAR_CARD_COPY, fillCopy, GUIDE_CHROME, GUIDE_LEGEND } from '@/lib/induction-copy';
 import type { RouteScript, Step } from '@/lib/induction-model';
@@ -356,6 +357,16 @@ function StepLayer({
     marks.current.tapped = '';
     ctx.moveTo(to);
   };
+  // The control's action finished (its data landed): move on even if the tap
+  // itself was missed (a phone keyboard closing under the finger).
+  useEffect(() => {
+    const onDid = (event: Event): void => {
+      const key = (event as CustomEvent<string>).detail;
+      if ((step.targets as readonly string[]).includes(key)) ctx.moveTo(index + 1);
+    };
+    window.addEventListener(INDUCTION_DID_EVENT, onDid);
+    return () => window.removeEventListener(INDUCTION_DID_EVENT, onDid);
+  }, [step.targets, ctx, index]);
   useAbsentSkip({ stepKey: step.id, found: el !== undefined }, () => {
     if (ctx.isDone(step)) return;
     const to = skipTarget(steps, index, probe);
