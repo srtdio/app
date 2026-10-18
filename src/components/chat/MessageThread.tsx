@@ -70,7 +70,6 @@ import {
   IconChevronLeft,
   IconForward,
   IconSearch,
-  IconSettings,
   IconStar,
   IconStarFilled,
   IconTrash,
@@ -171,7 +170,7 @@ import {
   selectionForwardable,
   scheduleWindowBoundary,
 } from '@/components/chat/MessageActionMenu';
-import { useCancelUpload, useServerNow } from '@/components/chat/ChatStoreProvider';
+import { useCancelUpload, useChatStore, useServerNow } from '@/components/chat/ChatStoreProvider';
 import { SharedBriefCards } from '@/components/chat/BriefCard';
 import { SharedPlanCards } from '@/components/chat/PlanCard';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
@@ -196,7 +195,7 @@ import {
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { ContactSheet } from '@/components/chat/ContactSheet';
 import type { GroupInfoTabsWiring } from '@/components/chat/GroupInfoSheet';
-import { SelectionBar, SelectionHeader } from '@/components/chat/SelectionBar';
+import { SelectionBar, SelectionHeader, deleteOneConfirm } from '@/components/chat/SelectionBar';
 import { StarredSheet, useStarToggle } from '@/components/chat/StarredList';
 import {
   canStar,
@@ -396,6 +395,12 @@ interface MessageThreadProps {
    * lost to a reload it is the Remove (the thread drops the entry).
    */
   onRetry?: (messageId: string) => void;
+  /**
+   * Delete a failed own send (never recorded): it leaves this device's outbox
+   * and the thread. Defaults to the chat store's outbox for this channel when
+   * a provider is present.
+   */
+  onDiscard?: (messageId: string) => void;
   /**
    * The X on an own uploading send: cancel it (its bubble goes). Defaults to
    * the chat store's outbox for this channel when a provider is present.
@@ -1427,6 +1432,68 @@ export function FailedLine({ status }: { status: 'failed' | 'files-missing' }): 
   );
 }
 
+/**
+ * A failed own text send (never recorded, nothing uploaded): "Not sent" with
+ * Retry and Delete beside it, and Delete in its menu. Pure.
+ */
+export function canDiscardFailed(
+  message: Pick<ThreadMessage, 'mine' | 'state' | 'filesMissing' | 'attachments'>,
+): boolean {
+  return (
+    message.mine &&
+    message.state === 'failed' &&
+    message.filesMissing !== true &&
+    message.attachments.length === 0
+  );
+}
+
+/** The failed line's text actions: 44px tall, the bad token for Delete. */
+const FAILED_ACTION_CLASS =
+  'flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-2 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+
+/**
+ * The line under a failed own text send: "Not sent" (announced), then Retry
+ * and Delete beside it. Hook-free.
+ */
+export function FailedActions(props: {
+  onRetry?: () => void;
+  onDelete?: () => void;
+}): ReactElement {
+  return (
+    <div data-failed-actions="" className="flex items-center gap-1">
+      <FailedLine status="failed" />
+      {props.onRetry !== undefined ? (
+        <button
+          type="button"
+          data-failed-line-retry=""
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onRetry?.();
+          }}
+          className={cn(FAILED_ACTION_CLASS, 'text-accent hover:bg-panel-2', BUBBLE_META_TYPE)}
+        >
+          Retry
+        </button>
+      ) : null}
+      {props.onDelete !== undefined ? (
+        <button
+          type="button"
+          data-failed-delete=""
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onDelete?.();
+          }}
+          className={cn(FAILED_ACTION_CLASS, 'text-bad hover:bg-bad-soft', BUBBLE_META_TYPE)}
+        >
+          Delete
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /** Where a bubble sits in its run and which size table draws it. */
 export interface BubbleShape {
   mine: boolean;
@@ -1982,6 +2049,8 @@ export function MessageBubble(props: {
   meta?: BubbleMeta;
   onBadgeClick: () => void;
   onRetry?: (messageId: string) => void;
+  /** Deletes this failed own send (the "Not sent" line's Delete). */
+  onDiscard?: (messageId: string) => void;
   /** Cancels this own send while its files upload (the UploadRing's X). */
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
@@ -2436,7 +2505,14 @@ export function MessageBubble(props: {
           rail,
           railEdge,
         )}
-        {meta.status === 'failed' || meta.status === 'files-missing' ? (
+        {meta.status === 'failed' && mine && canDiscardFailed(message) ? (
+          <FailedActions
+            {...(props.onRetry !== undefined ? { onRetry: () => props.onRetry?.(message.id) } : {})}
+            {...(props.onDiscard !== undefined
+              ? { onDelete: () => props.onDiscard?.(message.id) }
+              : {})}
+          />
+        ) : meta.status === 'failed' || meta.status === 'files-missing' ? (
           <FailedLine status={meta.status} />
         ) : null}
       </div>
@@ -2471,6 +2547,28 @@ export function MessageBubble(props: {
         </IconButton>
       ) : null}
     </li>
+  );
+}
+
+/** The info glyph (a circled "i") for the group info button, drawn like the icon set. */
+export function InfoGlyph(props: { size?: number }): ReactElement {
+  const size = props.size ?? 20;
+  return (
+    <svg
+      aria-hidden="true"
+      data-info-glyph=""
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.5h.01" />
+    </svg>
   );
 }
 
@@ -2717,6 +2815,7 @@ function MessageRow(props: {
     reactionsOnly?: boolean,
   ) => void;
   onRetry?: (messageId: string) => void;
+  onDiscard?: (messageId: string) => void;
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
   mark: ChatMark | undefined;
@@ -2897,6 +2996,7 @@ function MessageRow(props: {
           : {}),
       }}
       {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
+      {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
       {...(props.onCancelUpload !== undefined ? { onCancelUpload: props.onCancelUpload } : {})}
       {...(props.onJumpToMessage !== undefined ? { onJumpToMessage: props.onJumpToMessage } : {})}
       mark={props.mark}
@@ -3185,6 +3285,7 @@ function ThreadBody(
     | 'profiles'
     | 'onToggleReaction'
     | 'onRetry'
+    | 'onDiscard'
     | 'onCancelUpload'
     | 'timeZone'
   > & {
@@ -3212,7 +3313,7 @@ function ThreadBody(
     onForwardMessage?: (message: ThreadMessage) => boolean;
     /** Menu "Edit" picked; absent hides it. */
     onEditMessage?: (message: ThreadMessage) => void;
-    /** Menu "Delete" picked: selection mode with the message ticked; absent hides it. */
+    /** Menu "Delete" picked: the single-message confirm opens; absent hides it. */
     onDeleteMessage?: (message: ThreadMessage) => void;
     onChangePriority?: (messageId: string) => void;
     /** A jump-to request (seq makes a repeat of the same id fire again). */
@@ -3816,6 +3917,7 @@ function ThreadBody(
           props.notes === true,
         )
       : { canEdit: false, canDelete: false, lockedByMark: false };
+  const menuFailed = menu !== null && canDiscardFailed(menu.message);
   const viewerMessage =
     viewer !== null ? props.messages.find((m) => m.id === viewer.messageId) : undefined;
   const viewerData =
@@ -4005,6 +4107,9 @@ function ThreadBody(
                           }
                         : {})}
                       {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
+                      {...(props.onDiscard !== undefined && props.selection === undefined
+                        ? { onDiscard: props.onDiscard }
+                        : {})}
                       {...(props.onCancelUpload !== undefined
                         ? { onCancelUpload: props.onCancelUpload }
                         : {})}
@@ -4083,12 +4188,17 @@ function ThreadBody(
         onEdit={() => {
           if (menu) props.onEditMessage?.(menu.message);
         }}
-        canDelete={props.onDeleteMessage !== undefined && menuOwn.canDelete}
+        canDelete={
+          (props.onDeleteMessage !== undefined && menuOwn.canDelete) ||
+          (menuFailed && props.onDiscard !== undefined)
+        }
         onDelete={() => {
           if (!menu) return;
-          anchorSelection(menu.message);
-          props.onDeleteMessage?.(menu.message);
+          // A failed send never left the device: it goes at once, no confirm.
+          if (menuFailed) props.onDiscard?.(menu.message.id);
+          else props.onDeleteMessage?.(menu.message);
         }}
+        failedSend={menuFailed}
         lockedByMark={menuOwn.lockedByMark}
         notes={props.notes === true}
         canSaveToNotes={
@@ -4550,7 +4660,57 @@ export function resetSelectionHistory(): void {
 }
 
 /** The thread pane: header (+ optional back), message list, and composer. */
+/**
+ * The chat store's outbox settle, or null outside a provider (unit tests
+ * render the thread bare). The context read runs on every render either way.
+ */
+function useOutboxSettle(): ((channelId: string, id: string) => void) | null {
+  try {
+    return useChatStore().outbox.settle;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Which failed sends were deleted here: they leave the outbox (so a reload
+ * never brings them back) and the rows this thread draws, at once.
+ */
+export function withoutDiscarded(
+  messages: ThreadMessage[],
+  discarded: ReadonlySet<string>,
+): ThreadMessage[] {
+  if (discarded.size === 0) return messages;
+  return messages.filter((m) => !discarded.has(m.id));
+}
+
 export function MessageThread(props: MessageThreadProps): ReactElement {
+  const settle = useOutboxSettle();
+  const [discarded, setDiscarded] = useState<ReadonlySet<string>>(() => new Set());
+  const channelId = props.channelId;
+  const propDiscard = props.onDiscard;
+  const onDiscard = useMemo<((messageId: string) => void) | undefined>(() => {
+    if (propDiscard !== undefined) return propDiscard;
+    if (settle === null || channelId === undefined) return undefined;
+    return (messageId: string) => {
+      settle(channelId, messageId);
+      setDiscarded((prev) => new Set(prev).add(messageId));
+    };
+  }, [propDiscard, settle, channelId]);
+  const messages = useMemo(
+    () => withoutDiscarded(props.messages, discarded),
+    [props.messages, discarded],
+  );
+  return (
+    <MessageThreadView
+      {...props}
+      messages={messages}
+      {...(onDiscard !== undefined ? { onDiscard } : {})}
+    />
+  );
+}
+
+function MessageThreadView(props: MessageThreadProps): ReactElement {
   const { canAttach, presignEnabled, presignCache, uploadFile, transcribe, canTranscribe } =
     useChatAttachments();
   // Transcribe on tap: this device only. The Worker fetches the audio from the
@@ -4882,6 +5042,23 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     setEditing(null);
     setSelecting(true);
     setSelected(selectionOnEntry(message));
+  };
+  // Menu Delete on one message: the single-message confirm, no selection mode.
+  const [deleteOneFor, setDeleteOneFor] = useState<ThreadMessage | null>(null);
+  const [deleteOneBusy, setDeleteOneBusy] = useState(false);
+  const confirmDeleteOne = async (): Promise<void> => {
+    if (deleteOneFor === null || onDeleteMessages === undefined || deleteOneBusy) return;
+    const ids = [deleteOneFor.id];
+    setDeleteOneBusy(true);
+    const result = await onDeleteMessages(ids);
+    setDeleteOneBusy(false);
+    setDeleteOneFor(null);
+    if (!result.ok) {
+      toast.show({ title: result.message });
+      return;
+    }
+    threadView.update((rows) => markMessagesDeleted(rows, ids));
+    if (result.toast !== undefined) toast.show({ title: result.toast });
   };
   // Escape leaves selection mode (the laptop's Cancel).
   useEffect(() => {
@@ -5640,6 +5817,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           ? { onForward: () => setForwardFor(selectedForForward(selected, selectable)) }
           : {})}
         {...(selectionStar !== null ? { star: selectionStar } : {})}
+        notes={notes}
         confirmCopy={deleteConfirmCopy(
           [...selected].flatMap((id) => {
             const message = messagesById.get(id);
@@ -5721,7 +5899,9 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           onChangePriority: (messageId: string) => setPriorityFor({ messageId, mode: 'change' }),
         }
       : {}),
-    ...(onDeleteMessages !== undefined && !selecting ? { onDeleteMessage: enterSelection } : {}),
+    ...(onDeleteMessages !== undefined && !selecting
+      ? { onDeleteMessage: (message: ThreadMessage) => setDeleteOneFor(message) }
+      : {}),
     ...(onEditMessage !== undefined && !selecting ? { onEditMessage: startEdit } : {}),
     ...(canForwardHere && !selecting
       ? {
@@ -5752,6 +5932,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     isGroup: props.isGroup ?? false,
     timeZone: props.timeZone,
     ...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {}),
+    ...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {}),
     ...(onCancelUpload !== undefined ? { onCancelUpload } : {}),
     ...(props.onToggleReaction !== undefined && !selecting
       ? { onOpenReactions: (message: ThreadMessage) => setReactionsFor(message.id) }
@@ -5832,7 +6013,7 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
             ) : null}
             {props.onOpenInfo !== undefined ? (
               <IconButton label="Group info" onClick={props.onOpenInfo}>
-                <IconSettings size={20} />
+                <InfoGlyph size={20} />
               </IconButton>
             ) : null}
           </>
@@ -6090,6 +6271,14 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
           }}
         />
       ) : null}
+      {deleteOneConfirm({
+        open: deleteOneFor !== null,
+        busy: deleteOneBusy,
+        notes,
+        copy: deleteOneFor !== null ? deleteConfirmCopy([deleteOneFor]) : null,
+        onCancel: () => setDeleteOneFor(null),
+        onConfirm: () => void confirmDeleteOne(),
+      })}
       {taskChannel !== null ? (
         <SearchWordsContext.Provider value={headerWords}>
           <TaskSheet

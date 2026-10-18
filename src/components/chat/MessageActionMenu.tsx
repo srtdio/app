@@ -14,6 +14,7 @@ import {
   IconCopy,
   IconEdit,
   IconForward,
+  IconMore,
   IconNotePage,
   IconPlus,
   IconReply,
@@ -105,9 +106,10 @@ export function ownMessageActions(
   message: Pick<ThreadMessage, 'mine' | 'state' | 'createdAt' | 'body' | 'deleted'>,
   mark: ChatMark | undefined,
   nowMs: number,
-  /** Notes: Delete has no window (Edit keeps its 15 minutes). */
+  /** Notes: no window on Edit or Delete. */
   notes = false,
 ): OwnMessageActions {
+  // Notes: neither Edit nor Delete has a window.
   const none = { canEdit: false, canDelete: false, lockedByMark: false };
   if (!message.mine || message.state !== 'sent' || message.deleted === true) return none;
   if (mark !== undefined) return { ...none, lockedByMark: true };
@@ -116,7 +118,7 @@ export function ownMessageActions(
   if (Number.isNaN(created)) return none;
   const age = nowMs - created;
   return {
-    canEdit: message.body.trim() !== '' && age <= EDIT_WINDOW_MS,
+    canEdit: message.body.trim() !== '' && (notes || age <= EDIT_WINDOW_MS),
     canDelete: notes || age <= DELETE_WINDOW_MS,
     lockedByMark: false,
   };
@@ -194,12 +196,17 @@ interface MessageActionMenuProps {
   /** Own marked message: the single disabled line in place of Edit and Delete. */
   lockedByMark?: boolean;
   /**
+   * A failed own send (never recorded): Delete removes it from this device,
+   * so it carries no "30 min" hint.
+   */
+  failedSend?: boolean;
+  /**
    * Offers "Save to notes", between Copy and Remind me (a recorded, live
    * message in any chat but notes).
    */
   canSaveToNotes?: boolean;
   onSaveToNotes?: () => void;
-  /** The menu is in Personal notes: Delete carries no "30 min" hint. */
+  /** The menu is in Personal notes: Edit and Delete carry no time hint. */
   notes?: boolean;
   /**
    * Offers "Select": select part of this message's body text in place (a
@@ -262,6 +269,7 @@ type MenuItemProps = Pick<
   | 'canDelete'
   | 'onDelete'
   | 'lockedByMark'
+  | 'failedSend'
   | 'canSaveToNotes'
   | 'onSaveToNotes'
   | 'notes'
@@ -319,16 +327,20 @@ export function TranscribeGlyph(props: { size?: number }): ReactElement {
 /**
  * A row's tap, inside its click: the action runs before the menu closes, so
  * Reply focuses the composer within the user's own tap (decision 128) and the
- * menu's focus return finds focus already taken. Mark opens its submenu; Back
- * returns from it; neither closes. Pure.
+ * menu's focus return finds focus already taken. More and Mark open their
+ * submenus; Back returns from one; none of them closes. Pure.
  */
 export function runMenuItem(
   item: MessageMenuItem,
-  menu: { openMark: () => void; close: () => void },
+  menu: { openMark: () => void; openMore?: () => void; close: () => void },
 ): void {
   if (item.kind !== 'action') return;
   if (item.key === 'mark') {
     menu.openMark();
+    return;
+  }
+  if (item.key === 'more') {
+    menu.openMore?.();
     return;
   }
   if (item.key === 'back') {
@@ -345,15 +357,19 @@ export const MENU_ICON_SIZE = 22;
 /** The row that selects part of one message's text in place. */
 export const SELECT_TEXT_LABEL = 'Select';
 
+/** The top-level row that opens the rest of the actions. */
+export const MORE_LABEL = 'More';
+
 /**
- * The main view in display order: Reply, Forward, Copy, Transcribe, Select,
- * Star (or Unstar), "Save to notes", "Remind me" (or "Reminder · <time>"),
- * "Mark as" (or the static "Marked as <type>"), Edit, Delete (or the locked
- * line). No dividers. Rows that do not apply are not rendered. Pure (no hooks)
- * so the row set is unit-tested without a DOM.
+ * The main view in display order: Reply, Copy, Forward, Edit, Star (or
+ * Unstar), More, then Delete last (or the locked line). Everything else sits
+ * under More (see moreMenuItems); More shows only when it has a row. No
+ * dividers. Rows that do not apply are not rendered. Pure (no hooks) so the
+ * row set is unit-tested without a DOM.
  */
 export function messageMenuItems(props: MenuItemProps): MessageMenuItem[] {
   const size = MENU_ICON_SIZE;
+  const locked = props.lockedByMark === true;
   const items: MessageMenuItem[] = [
     {
       kind: 'action',
@@ -363,15 +379,6 @@ export function messageMenuItems(props: MenuItemProps): MessageMenuItem[] {
       run: props.onReply,
     },
   ];
-  if (props.canForward === true) {
-    items.push({
-      kind: 'action',
-      key: 'forward',
-      label: 'Forward',
-      icon: <IconForward size={size} />,
-      run: () => props.onForward?.(),
-    });
-  }
   if (props.canCopy) {
     items.push({
       kind: 'action',
@@ -381,6 +388,74 @@ export function messageMenuItems(props: MenuItemProps): MessageMenuItem[] {
       run: props.onCopy,
     });
   }
+  if (props.canForward === true) {
+    items.push({
+      kind: 'action',
+      key: 'forward',
+      label: 'Forward',
+      icon: <IconForward size={size} />,
+      run: () => props.onForward?.(),
+    });
+  }
+  if (!locked && props.canEdit === true) {
+    items.push({
+      kind: 'action',
+      key: 'edit',
+      label: 'Edit',
+      icon: <IconEdit size={size} />,
+      ...(props.notes === true ? {} : { hint: '15 min' }),
+      run: () => props.onEdit?.(),
+    });
+  }
+  if (props.canStar === true) {
+    const starred = props.starred === true;
+    items.push({
+      kind: 'action',
+      key: 'star',
+      label: starred ? UNSTAR_LABEL : STAR_LABEL,
+      icon: starred ? <IconStarFilled size={size} /> : <IconStar size={size} />,
+      run: () => props.onStar?.(),
+    });
+  }
+  if (moreMenuItems(props).length > 0) {
+    items.push({
+      kind: 'action',
+      key: 'more',
+      label: MORE_LABEL,
+      icon: <IconMore size={size} />,
+      run: () => {},
+      submenu: true,
+    });
+  }
+  if (locked) {
+    items.push({
+      kind: 'note',
+      key: 'locked',
+      label: MARKED_LOCKED_LABEL,
+      icon: <BanGlyph size={size} />,
+    });
+  } else if (props.canDelete === true) {
+    items.push({
+      kind: 'action',
+      key: 'delete',
+      label: 'Delete',
+      icon: <IconTrash size={size} />,
+      ...(props.notes === true || props.failedSend === true ? {} : { hint: '30 min' }),
+      danger: true,
+      run: () => props.onDelete?.(),
+    });
+  }
+  return items;
+}
+
+/**
+ * The rows under More, in display order: Transcribe, Select, "Save to notes",
+ * "Remind me" (or "Reminder · <time>"), "Mark as" (or the static "Marked as
+ * <type>"). Rows that do not apply are not rendered; empty hides More. Pure.
+ */
+export function moreMenuItems(props: MenuItemProps): MessageMenuItem[] {
+  const size = MENU_ICON_SIZE;
+  const items: MessageMenuItem[] = [];
   if (props.canTranscribe === true) {
     items.push({
       kind: 'action',
@@ -397,16 +472,6 @@ export function messageMenuItems(props: MenuItemProps): MessageMenuItem[] {
       label: SELECT_TEXT_LABEL,
       icon: <IconSelectText size={size} />,
       run: () => props.onSelectText?.(),
-    });
-  }
-  if (props.canStar === true) {
-    const starred = props.starred === true;
-    items.push({
-      kind: 'action',
-      key: 'star',
-      label: starred ? UNSTAR_LABEL : STAR_LABEL,
-      icon: starred ? <IconStarFilled size={size} /> : <IconStar size={size} />,
-      run: () => props.onStar?.(),
     });
   }
   if (props.canSaveToNotes === true) {
@@ -448,37 +513,22 @@ export function messageMenuItems(props: MenuItemProps): MessageMenuItem[] {
       submenu: true,
     });
   }
-  if (props.lockedByMark === true) {
-    items.push({
-      kind: 'note',
-      key: 'locked',
-      label: MARKED_LOCKED_LABEL,
-      icon: <BanGlyph size={size} />,
-    });
-  } else {
-    if (props.canEdit === true) {
-      items.push({
-        kind: 'action',
-        key: 'edit',
-        label: 'Edit',
-        icon: <IconEdit size={size} />,
-        hint: '15 min',
-        run: () => props.onEdit?.(),
-      });
-    }
-    if (props.canDelete === true) {
-      items.push({
-        kind: 'action',
-        key: 'delete',
-        label: 'Delete',
-        icon: <IconTrash size={size} />,
-        ...(props.notes === true ? {} : { hint: '30 min' }),
-        danger: true,
-        run: () => props.onDelete?.(),
-      });
-    }
-  }
   return items;
+}
+
+/** The More submenu: Back, then its rows (see moreMenuItems). */
+export function moreSubmenuItems(props: MenuItemProps, onBack: () => void): MessageMenuItem[] {
+  return [
+    {
+      kind: 'action',
+      key: 'back',
+      label: 'Back',
+      icon: <IconChevronLeft size={MENU_ICON_SIZE} />,
+      run: onBack,
+      submenu: true,
+    },
+    ...moreMenuItems(props),
+  ];
 }
 
 /** The "Mark as" submenu: Back, then each offered type with its colour dot. */
@@ -670,6 +720,15 @@ export function visibleViewportHeight(win: {
   return vv != null ? vv.offsetTop + vv.height : win.innerHeight;
 }
 
+/**
+ * The menu panel's max height: the visible viewport less 16px (8px each
+ * side), so a long menu on a small phone scrolls inside instead of running
+ * off screen. Pure.
+ */
+export function menuMaxHeight(viewportHeight: number): number {
+  return Math.max(0, viewportHeight - 16);
+}
+
 /** The held copy's transform: translateY only, never X, scale or rotate. */
 export function heldTransform(shiftY: number): string {
   return `translateY(${shiftY}px)`;
@@ -749,6 +808,16 @@ export function scrollFromPicker(target: EventTarget | null): boolean {
     typeof Element !== 'undefined' &&
     target instanceof Element &&
     target.closest('[data-emoji-picker]') !== null
+  );
+}
+
+/** Whether a scroll event came from the menu panel itself (a long menu scrolling inside). */
+export function scrollFromMenu(
+  menu: { contains: (node: Node | null) => boolean } | null,
+  target: EventTarget | null,
+): boolean {
+  return (
+    menu !== null && typeof Node !== 'undefined' && target instanceof Node && menu.contains(target)
   );
 }
 
@@ -1191,7 +1260,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   const [coords, setCoords] = useState<Placed | null>(null);
   const [heldRect, setHeldRect] = useState<DOMRect | null>(null);
   const [shown, setShown] = useState(false);
-  const [view, setView] = useState<'main' | 'mark'>('main');
+  const [view, setView] = useState<'main' | 'more' | 'mark'>('main');
   const [picking, setPicking] = useState(false);
   const pickingRef = useRef(false);
   pickingRef.current = picking;
@@ -1251,8 +1320,10 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     });
     const rawLeft = mine ? anchor.right - rect.width : anchor.left;
     const left = Math.max(8, Math.min(rawLeft, window.innerWidth - rect.width - 8));
+    // A menu at its max height still ends 8px above the visible bottom.
+    const lowest = Math.max(8, visibleViewportHeight(window) - 8 - rect.height);
     setCoords({
-      top: placement.menuTop,
+      top: Math.min(placement.menuTop, lowest),
       left,
       shift: placement.bubbleShiftY,
       clip: placement.clipBubbleHeight,
@@ -1329,6 +1400,8 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     // keyboard opening, iOS scrolling its input into view); otherwise a scroll
     // outside the picker or any resize closes it, at once (no glide back).
     function onScroll(event: Event): void {
+      // A long menu scrolls inside itself: that never closes it.
+      if (scrollFromMenu(containerRef.current, event.target)) return;
       if (menuClosesOnViewport('scroll', { picking: pickingRef.current, target: event.target })) {
         setInstantClose(true);
         onClose();
@@ -1359,12 +1432,18 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     : reactionsOnly
       ? []
       : view === 'mark'
-        ? markSubmenuItems(props, () => setView('main'))
-        : messageMenuItems({ ...props, ...remindProps(props, bell, held) });
+        ? markSubmenuItems(props, () => setView('more'))
+        : view === 'more'
+          ? moreSubmenuItems({ ...props, ...remindProps(props, bell, held) }, () => setView('main'))
+          : messageMenuItems({ ...props, ...remindProps(props, bell, held) });
   const run = (item: MessageMenuItem): void => {
     // Select hands the bubble to the native selection: no glide back.
     if (item.key === 'select-text') setInstantClose(true);
-    runMenuItem(item, { openMark: () => setView('mark'), close: onClose });
+    runMenuItem(item, {
+      openMark: () => setView('mark'),
+      openMore: () => setView('more'),
+      close: onClose,
+    });
   };
   // The copy's Y: the shift once shown (at once under reduced motion), home on the way out.
   const shift = coords?.shift ?? 0;
@@ -1419,11 +1498,14 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           className={cn(
             'fixed z-50 max-w-[calc(100vw-16px)]',
             MENU_PANEL,
+            // Past its max height the menu scrolls inside (the panel clips X only).
+            'overflow-y-auto overscroll-contain',
             mine ? 'origin-top-right' : 'origin-top-left',
             shown ? 'scale-100 opacity-100 ease-enter' : 'scale-[0.96] opacity-0 ease-exit',
           )}
           style={{
             width: MENU_WIDTH_PX,
+            maxHeight: menuMaxHeight(visibleViewportHeight(window)),
             top: coords?.top ?? 0,
             left: coords?.left ?? 0,
             visibility: coords === null ? 'hidden' : 'visible',

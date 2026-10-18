@@ -53,6 +53,19 @@ export interface DeleteConfirmCopy {
   confirmLabel: string;
 }
 
+/** Personal notes: the delete is private and final, never "for everyone". */
+export const DELETE_NOTE_TITLE = 'Delete note?';
+export const DELETE_NOTE_MESSAGE = "This can't be undone.";
+
+/** The confirm for deleting notes (one or several). Pure. */
+export function deleteNotesConfirmCopy(count: number): DeleteConfirmCopy {
+  return {
+    title: count === 1 ? DELETE_NOTE_TITLE : `Delete ${count} notes?`,
+    message: DELETE_NOTE_MESSAGE,
+    confirmLabel: 'Delete',
+  };
+}
+
 const DELETE_FILES_TITLE_ONE = 'Delete this message?';
 const DELETE_FILES_TITLE_MANY = 'Delete these messages?';
 const DELETE_FILES_MESSAGE_MANY =
