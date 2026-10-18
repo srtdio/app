@@ -604,6 +604,10 @@ describe('W9 fix 4: deleted items never show in lists', () => {
     expect(groups.agency.map((t) => t.id)).toEqual(['a']);
     expect(groups.done).toEqual([]);
   });
+  it('a row without deleted_at is not deleted', () => {
+    const groups = groupTasks([task({ deletedAt: undefined as unknown as null })], NOW, UTC);
+    expect(groups.agency).toHaveLength(1);
+  });
   it('deletes through chat_task_delete with an explicit trace id', async () => {
     const { client, calls } = fakeClient({ data: null, error: null });
     await deleteTask({ client, taskId: 't1', traceId: 'tr' });

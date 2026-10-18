@@ -139,7 +139,8 @@ export function rowToTask(row: TaskRow): ChatTask | null {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    deletedAt: row.deleted_at,
+    // Older rows (and fixtures) may lack the column: absent is not deleted.
+    deletedAt: row.deleted_at ?? null,
   };
 }
 
@@ -419,7 +420,7 @@ export function dueSummary(dueAt: string | null, timeZone: string): string {
 
 /** Deleted (or hidden for its Undo window): never in a list. Pure. */
 export function isDeleted(task: Pick<ChatTask, 'deletedAt'>): boolean {
-  return task.deletedAt !== null;
+  return task.deletedAt != null;
 }
 
 /** Open statuses (the Agency and Client groups); the rest are closed. */
