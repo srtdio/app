@@ -74,7 +74,7 @@ describe.runIf(INBOX_SUITE)('inbox_entry_create grant check', () => {
 
   it('the anon role cannot call inbox_entry_create either', async () => {
     const anon = createAnonClient(env) as unknown as RpcClient;
-    const { error } = await anon.rpc('inbox_entry_create', {
+    const params: Record<string, unknown> = {
       p_user_id: owner.id,
       p_workspace_id: ws.id,
       p_event_type: 'system',
@@ -85,7 +85,8 @@ describe.runIf(INBOX_SUITE)('inbox_entry_create grant check', () => {
       p_tier: 'active',
       p_payload: {},
       p_trace_id: generateTraceId(),
-    });
+    };
+    const { error } = await anon.rpc('inbox_entry_create', params);
     expect(error).not.toBeNull();
     const res = await asGeneric(admin).from('inbox_entries').select('id').eq('workspace_id', ws.id);
     expect((res.data as unknown[] | null)?.length ?? 0).toBe(0);
