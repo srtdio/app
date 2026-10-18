@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { MouseEvent, ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconCheck, IconClock, IconMore } from '@/components/ui/icons';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { LAPTOP_QUERY } from '@/lib/use-media-query';
 import { SNOOZE_OPTIONS, type SnoozeKind } from '@/components/pages/activity/data';
 
 interface ActivityRowMenuProps {
@@ -13,6 +13,28 @@ interface ActivityRowMenuProps {
   unread: boolean;
   onSnooze: (kind: SnoozeKind) => void;
   onMarkRead: () => void;
+}
+
+/**
+ * The laptop query, safe where there is no window (a server render, the node
+ * unit env): it reads as laptop there, which renders the plain popover markup.
+ * Every card mounts this menu, so a card render never touches matchMedia first.
+ */
+function useLaptop(): boolean {
+  const [laptop, setLaptop] = useState<boolean>(() =>
+    typeof window === 'undefined' || typeof window.matchMedia !== 'function'
+      ? true
+      : window.matchMedia(LAPTOP_QUERY).matches,
+  );
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const list = window.matchMedia(LAPTOP_QUERY);
+    const onChange = (): void => setLaptop(list.matches);
+    onChange();
+    list.addEventListener('change', onChange);
+    return () => list.removeEventListener('change', onChange);
+  }, []);
+  return laptop;
 }
 
 /** Stop a click from bubbling to the card (navigate / mark-read) underneath. */
@@ -28,7 +50,7 @@ function isolate(event: MouseEvent): void {
  */
 export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: ActivityRowMenuProps) {
   const [open, setOpen] = useState(false);
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isDesktop = useLaptop();
 
   function close(): void {
     setOpen(false);
