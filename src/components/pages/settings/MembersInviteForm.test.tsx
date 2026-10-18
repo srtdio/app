@@ -20,7 +20,7 @@ import {
   getInviteRoleOptions,
   parseInviteEmails,
 } from './MembersInviteForm';
-import { FREE_MAIL_APPROVER_MESSAGE } from './members-data';
+import { FREE_MAIL_APPROVER_MESSAGE, UNCONFIRMED_ACCOUNT_MESSAGE } from './members-data';
 
 describe('isValidInviteEmail', () => {
   it.each(['name@example.com', 'name@mail.example.co.uk', 'name@example.technology'])(
@@ -226,6 +226,23 @@ describe('sendInvite error mapping', () => {
       'Approvers need a work email, like name@theirbrand.com. Free emails like Gmail or Yahoo are not allowed.',
     );
     expect(onError).toHaveBeenCalledWith(FREE_MAIL_APPROVER_MESSAGE, 'free_mail_client');
+  });
+
+  it('words unconfirmed_account as the confirm-first line', async () => {
+    const { result, onError } = await send({
+      error: 'unconfirmed_account',
+      error_detail: 'unconfirmed_account',
+      trace_id: 't-1',
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: UNCONFIRMED_ACCOUNT_MESSAGE,
+      code: 'unconfirmed_account',
+    });
+    expect(UNCONFIRMED_ACCOUNT_MESSAGE).toBe(
+      'This email has an account that was never confirmed. Ask them to open the confirmation email from Sorted, then send the invite again.',
+    );
+    expect(onError).toHaveBeenCalledWith(UNCONFIRMED_ACCOUNT_MESSAGE, 'unconfirmed_account');
   });
 
   it('flags client_domain_mismatch so the panel shows the toast', async () => {

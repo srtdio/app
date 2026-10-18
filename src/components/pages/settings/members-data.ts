@@ -206,6 +206,10 @@ export function clientDomainLabel(
 export const FREE_MAIL_APPROVER_MESSAGE =
   'Approvers need a work email, like name@theirbrand.com. Free emails like Gmail or Yahoo are not allowed.';
 
+/** Inline copy when the invitee has an account whose email was never confirmed. */
+export const UNCONFIRMED_ACCOUNT_MESSAGE =
+  'This email has an account that was never confirmed. Ask them to open the confirmation email from Sorted, then send the invite again.';
+
 /** Toast copy when an approver invite is outside the workspace's client domain. */
 export function clientDomainMismatchMessage(domainLabel: string): string {
   return domainLabel === ''

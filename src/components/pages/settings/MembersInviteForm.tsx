@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
-import { FREE_MAIL_APPROVER_MESSAGE } from './members-data';
+import { FREE_MAIL_APPROVER_MESSAGE, UNCONFIRMED_ACCOUNT_MESSAGE } from './members-data';
 import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import {
   isTestEmail,
@@ -111,10 +111,14 @@ function readString(body: Record<string, unknown>, key: string): string | undefi
 }
 
 /** The invite-check codes the form words itself instead of echoing the detail. */
-export type InviteErrorCode = 'free_mail_client' | 'client_domain_mismatch';
+export type InviteErrorCode = 'free_mail_client' | 'client_domain_mismatch' | 'unconfirmed_account';
 
 function inviteErrorCode(value: string | undefined): InviteErrorCode | null {
-  return value === 'free_mail_client' || value === 'client_domain_mismatch' ? value : null;
+  return value === 'free_mail_client' ||
+    value === 'client_domain_mismatch' ||
+    value === 'unconfirmed_account'
+    ? value
+    : null;
 }
 
 /**
@@ -139,6 +143,7 @@ async function readInviteError(
   const record = body as Record<string, unknown>;
   const code = inviteErrorCode(readString(record, 'error'));
   if (code === 'free_mail_client') return { code, message: FREE_MAIL_APPROVER_MESSAGE };
+  if (code === 'unconfirmed_account') return { code, message: UNCONFIRMED_ACCOUNT_MESSAGE };
   const detail = readString(record, 'error_detail');
   if (detail === undefined) return { code, message: null };
   const traceId = readString(record, 'trace_id');

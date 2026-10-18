@@ -115,6 +115,58 @@ describe('invite-send member_invite_check pre-flight', () => {
   });
 });
 
+describe('invite-send A1: unconfirmed existing accounts', () => {
+  function existingAccount(confirmedAt: string | null) {
+    const s = setup(null);
+    s.createUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: 'A user with this email address has already been registered' },
+    } as never);
+    s.listUsers.mockResolvedValueOnce({
+      data: {
+        users: [
+          { id: 'existing-user', email: 'approver@brand.com', email_confirmed_at: confirmedAt },
+        ],
+      },
+      error: null,
+    } as never);
+    return s;
+  }
+
+  it('refuses an account whose email was never confirmed, before any invite row', async () => {
+    const s = existingAccount(null);
+    const res = await handleInviteSend(
+      request({ workspace_id: WORKSPACE_ID, email: 'approver@brand.com', role: 'client' }),
+      s.deps,
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: 'unconfirmed_account',
+      error_detail: 'unconfirmed_account',
+      trace_id: 'trace-1',
+    });
+    expect(s.callerRpc.mock.calls.map((c) => c[0])).toEqual(['member_invite_check']);
+    expect(s.admin.from).not.toHaveBeenCalled();
+  });
+
+  it('goes on to invite a confirmed existing account', async () => {
+    const s = existingAccount('2026-10-01T00:00:00Z');
+    s.admin.from.mockImplementation(() => {
+      throw new Error('stop after member_invite');
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await handleInviteSend(
+      request({ workspace_id: WORKSPACE_ID, email: 'approver@brand.com', role: 'client' }),
+      s.deps,
+    );
+    expect(s.callerRpc.mock.calls.map((c) => c[0])).toEqual([
+      'member_invite_check',
+      'member_invite',
+    ]);
+    errorSpy.mockRestore();
+  });
+});
+
 describe('firstName', () => {
   it.each([
     ['Priya Shah', 'Priya'],
