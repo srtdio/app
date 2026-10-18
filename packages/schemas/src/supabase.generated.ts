@@ -9632,6 +9632,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      inbox_self_entry: {
+        Args: {
+          p_entity_id: string
+          p_entity_type: string
+          p_event_type: string
+          p_payload: Json
+          p_scope: string
+          p_scope_key: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       inbox_snooze: {
         Args: {
           p_created_at: string
