@@ -122,7 +122,9 @@ describe.runIf(RLS_SUITE)('agency actions on behalf of client', () => {
       .eq('workspace_id', workspaceId)
       .eq('event_type', eventType);
     if (res.error) throw new Error(`inbox read failed: ${res.error.message}`);
-    return (res.data ?? []) as InboxRow[];
+    // Notification rows only: the actor's own already-read row
+    // (20261018140000, inbox_self_entry) is asserted in activity-own-and-brief.test.ts.
+    return ((res.data ?? []) as InboxRow[]).filter((row) => row.user_id !== row.actor_user_id);
   }
 
   async function inboxFor(entityId: string, eventType: string): Promise<InboxRow[]> {
@@ -318,12 +320,12 @@ describe.runIf(RLS_SUITE)('post_deleted recipients for a draft', () => {
   async function recipients(postId: string): Promise<string[]> {
     const res = await g
       .from('inbox_entries')
-      .select('user_id, entity_id')
+      .select('user_id, entity_id, actor_user_id')
       .eq('workspace_id', ws.id)
       .eq('event_type', 'post_deleted');
     if (res.error) throw new Error(`inbox read failed: ${res.error.message}`);
-    return (res.data as { user_id: string; entity_id: string }[])
-      .filter((row) => row.entity_id === postId)
+    return (res.data as { user_id: string; entity_id: string; actor_user_id: string | null }[])
+      .filter((row) => row.entity_id === postId && row.user_id !== row.actor_user_id)
       .map((row) => row.user_id)
       .sort();
   }

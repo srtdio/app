@@ -119,11 +119,15 @@ describe.runIf(DB_AVAILABLE)('post_ready_notify (authenticated role)', () => {
   async function readyEntries(postId: string): Promise<InboxRow[]> {
     const res = await asGeneric(admin)
       .from('inbox_entries')
-      .select('user_id, tier, payload')
+      .select('user_id, actor_user_id, tier, payload')
       .eq('event_type', 'post_ready')
       .eq('entity_id', postId);
     if (res.error) throw new Error(`inbox_entries read failed: ${res.error.message}`);
-    return (res.data ?? []) as InboxRow[];
+    // Notification recipients only: the actor's own already-read row
+    // (20261018140000, inbox_self_entry) is not a notification.
+    return ((res.data ?? []) as (InboxRow & { actor_user_id: string | null })[]).filter(
+      (row) => row.user_id !== row.actor_user_id,
+    );
   }
 
   beforeAll(async () => {

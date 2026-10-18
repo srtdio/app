@@ -198,7 +198,8 @@ describe.runIf(COMMENTS_SUITE)('comment_batch_create (feedback ledger)', () => {
       expect(row.ledger_batch_id).toBe(firstBatchId);
     }
 
-    // One 'checkpoints_added' entry for the other active member, none for the author.
+    // One 'checkpoints_added' entry for the other active member; the author gets
+    // only their own already-read row (20261018140000, inbox_self_entry).
     const ownerEntries = await countWhere(asGeneric(admin), 'inbox_entries', [
       ['event_type', 'checkpoints_added'],
       ['entity_id', reviewPostId],
@@ -210,7 +211,7 @@ describe.runIf(COMMENTS_SUITE)('comment_batch_create (feedback ledger)', () => {
       ['entity_id', reviewPostId],
       ['user_id', clientUser.id],
     ]);
-    expect(authorEntries).toBe(0);
+    expect(authorEntries).toBe(1);
   });
 
   it('a second batch continues the numbering from the post max', async () => {

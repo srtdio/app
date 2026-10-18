@@ -17,7 +17,7 @@ import { CATCHUP_EVENT_TYPES } from '@/server/cron/catchup-send';
 import { logger } from '@/lib/logger';
 import { warnUnknownEventType } from '@/components/pages/activity/data';
 
-/** The 29 values that must match the DB constraint. Spelled out so an accidental
+/** The 30 values that must match the DB constraint. Spelled out so an accidental
  *  edit to the canonical list (add/remove/reorder-away a value) fails here too. */
 const EXPECTED_CANONICAL = [
   'comment',
@@ -49,12 +49,13 @@ const EXPECTED_CANONICAL = [
   'plan_updated',
   'task_changed',
   'task_due',
+  'brief_post_created',
 ];
 
 describe('INBOX_EVENT_TYPES (canonical event_type list)', () => {
-  it('is exactly the expected 29 values, with no duplicates', () => {
+  it('is exactly the expected 30 values, with no duplicates', () => {
     expect([...INBOX_EVENT_TYPES]).toEqual(EXPECTED_CANONICAL);
-    expect(INBOX_EVENT_TYPES).toHaveLength(29);
+    expect(INBOX_EVENT_TYPES).toHaveLength(30);
     expect(new Set(INBOX_EVENT_TYPES).size).toBe(INBOX_EVENT_TYPES.length);
   });
 

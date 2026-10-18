@@ -254,14 +254,15 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
       ).toBe(1);
     }
 
-    // The author is excluded from the fan-out.
+    // The author is excluded from the fan-out; they get only their own
+    // already-read row (20261018140000, inbox_self_entry).
     expect(
       await countWhere(asGeneric(admin), 'inbox_entries', [
         ['event_type', 'checkpoints_added'],
         ['entity_id', postId],
         ['user_id', clientA.id],
       ]),
-    ).toBe(0);
+    ).toBe(1);
 
     // No mention entry is created for anyone.
     expect(
@@ -652,15 +653,21 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
           ]),
         ).toBe(1);
       }
-      for (const nonClient of [owner, agency]) {
-        expect(
-          await countWhere(asGeneric(admin), 'inbox_entries', [
-            ['event_type', 'post_ready'],
-            ['entity_id', postId],
-            ['user_id', nonClient.id],
-          ]),
-        ).toBe(0);
-      }
+      expect(
+        await countWhere(asGeneric(admin), 'inbox_entries', [
+          ['event_type', 'post_ready'],
+          ['entity_id', postId],
+          ['user_id', owner.id],
+        ]),
+      ).toBe(0);
+      // The agency actor gets only their own already-read row (20261018140000).
+      expect(
+        await countWhere(asGeneric(admin), 'inbox_entries', [
+          ['event_type', 'post_ready'],
+          ['entity_id', postId],
+          ['user_id', agency.id],
+        ]),
+      ).toBe(1);
     });
   });
 });
