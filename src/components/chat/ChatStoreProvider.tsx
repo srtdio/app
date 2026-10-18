@@ -197,7 +197,13 @@ export interface ChatStoreContextValue {
 }
 
 /** One committed live message from someone else: its chat and created_at. */
-export type LiveIncomingListener = (message: { channelId: string; createdAt: string }) => void;
+export type LiveIncomingListener = (message: {
+  channelId: string;
+  createdAt: string;
+  /** The chat's kind and list title (DM peer or group name), when the list knows it. */
+  channelType: string | null;
+  title: string | null;
+}) => void;
 
 const ChatStoreContext = createContext<ChatStoreContextValue | null>(null);
 
@@ -1388,10 +1394,15 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   }, []);
   afterIncomingRef.current = (row, text) => {
     debouncedRefresh.schedule(null);
-    for (const listener of liveListenersRef.current) {
-      listener({ channelId: row.channel_id, createdAt: row.created_at });
-    }
     const summary = summariesRef.current.get(row.channel_id);
+    for (const listener of liveListenersRef.current) {
+      listener({
+        channelId: row.channel_id,
+        createdAt: row.created_at,
+        channelType: summary?.channelType ?? null,
+        title: summary?.title ?? null,
+      });
+    }
     if (summary === undefined || row.channel_id === activeRef.current) return;
     toast.show({
       title: summary.title,

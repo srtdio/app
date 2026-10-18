@@ -209,6 +209,7 @@ Permanent in-app event feed. Source of truth for what happened. The only permane
 | Own actions | The person who acted sees their own row ("You approved ..."), already read; never toasts or sounds |
 | New members | See only activity after they joined (from their welcome row) |
 | Sound | New activity from someone else plays the chat tone (shared 2s throttle with chat), never while Activity is open |
+| Tab alert (desktop) | While Sorted is a background tab, new activity or chat makes the tab title alternate every 1.4s between "(N) Sorted" and each event's words (Activity word for word; chat "Chat · <name> sent a message", never the text), and the tab icon gets a dot (amber Activity, blue chat). Stops when the tab is opened. Never for your own actions. Decision 18 Oct 2026. |
 | Snooze | 1h, 4h, tomorrow 9am, next week |
 | Inline approve | No. Click navigates to PCS. |
 | Inline reply (comments) | Lands on entity. |

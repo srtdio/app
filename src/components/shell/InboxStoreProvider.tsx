@@ -7,9 +7,10 @@
 // the pure layer (inbox-live.ts); this file only wires it to PostgREST, React, the
 // toast surface and the nav badge (read via useInboxStore).
 //
-// POLL: 30s balances immediacy against battery/network for an approval tool, and a
-// backgrounded tab does no work (the tick is skipped while document.hidden and runs
-// immediately on the return to visible).
+// POLL: 30s balances immediacy against battery/network for an approval tool. A
+// backgrounded tab polls every second interval (60s) so the tab alert can tell
+// the viewer something happened (tab-alert.ts), and ticks immediately on the
+// return to visible.
 //
 // BELL: the chat bell's rows (bell-types.ts) never count or toast as Activity. A
 // new chat mention toasts "<name> mentioned you" with Open instead (the bell's
@@ -49,6 +50,7 @@ import { requestBellRefresh } from '@/lib/chat/bell';
 import { listenForNameSignout, resetMentionNames } from '@/lib/chat/mentions';
 import { BellRing } from '@/components/chat/BellRing';
 import { playToneShared } from '@/lib/chat/notify-sound';
+import { pushTabAlert } from '@/lib/tab-alert';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
 
 /** The slice the nav reads: the actionable unread count for the active workspace. */
@@ -127,7 +129,9 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       // The viewer's own already-read rows are history: no toast, no tone.
       const newRows = othersRows(activity, uid);
       if (newRows.length === 0) return;
-      if (activityToneWanted(newRows.length, pathnameRef.current)) playToneShared();
+      if (activityToneWanted(newRows.length, pathnameRef.current, document.hidden)) {
+        playToneShared();
+      }
 
       // The server count is exact (bell rows are filtered before the cap); the own
       // rows dropped from this page are taken off it.
@@ -140,6 +144,8 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       );
       const spec = toastFromEnriched(enriched);
       if (spec === null) return;
+      // Background tab: the tab speaks the same words as the toast.
+      pushTabAlert({ kind: 'activity', text: spec.title });
 
       const newest = pickNewest(newRows);
       const href =
@@ -228,8 +234,15 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       const uid = userIdRef.current;
       if (ws !== null && uid !== null) refreshCount(ws, uid);
     };
+    // Hidden: every second interval only (60s), to stay light on battery.
+    let hiddenSkip = false;
     const interval = window.setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden) {
+        hiddenSkip = !hiddenSkip;
+        if (hiddenSkip) return;
+      } else {
+        hiddenSkip = false;
+      }
       tickRef.current();
     }, POLL_MS);
     document.addEventListener('visibilitychange', onVisibility);

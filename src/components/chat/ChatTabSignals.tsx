@@ -8,6 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { useChatStore, useServerNow } from '@/components/chat/ChatStoreProvider';
 import { playToneShared, shouldPlayTone, tabTitle } from '@/lib/chat/notify-sound';
+import { chatAlertText, pushTabAlert } from '@/lib/tab-alert';
 
 export function ChatTabSignals(): null {
   const { totalUnread, loadStatus, state, subscribeLiveIncoming } = useChatStore();
@@ -32,7 +33,7 @@ export function ChatTabSignals(): null {
 
   useEffect(
     () =>
-      subscribeLiveIncoming(({ channelId, createdAt }) => {
+      subscribeLiveIncoming(({ channelId, createdAt, channelType, title }) => {
         const nowMs = serverNowRef.current();
         const messageAtMs = Date.parse(createdAt);
         const play = shouldPlayTone({
@@ -48,6 +49,10 @@ export function ChatTabSignals(): null {
         if (!play) return;
         lastToneRef.current = nowMs;
         playToneShared();
+        // Background tab: the tab speaks too (who wrote, never the text).
+        if (title !== null && channelType !== null && channelType !== 'notes') {
+          pushTabAlert({ kind: 'chat', text: chatAlertText(channelType, title) });
+        }
       }),
     [subscribeLiveIncoming],
   );

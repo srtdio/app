@@ -457,12 +457,16 @@ export const ACTIVITY_PATH = '/activity';
 
 /**
  * Whether new Activity rows play the shared notification tone: only when at least
- * one is someone else's and the Activity screen is not the one open (the same
- * rule as a chat that is already open). Throttling is shared with chat
- * (notify-sound.ts).
+ * one is someone else's and the Activity screen is not in front of the viewer (a
+ * background tab counts as not in front, even on Activity; the same rule as a
+ * chat that is already open). Throttling is shared with chat (notify-sound.ts).
  */
-export function activityToneWanted(newOthersCount: number, pathname: string): boolean {
-  return newOthersCount > 0 && !pathname.startsWith(ACTIVITY_PATH);
+export function activityToneWanted(
+  newOthersCount: number,
+  pathname: string,
+  tabHidden = false,
+): boolean {
+  return newOthersCount > 0 && (tabHidden || !pathname.startsWith(ACTIVITY_PATH));
 }
 
 export function splitNewRows(rows: readonly InboxRow[]): NewRowsSplit {
