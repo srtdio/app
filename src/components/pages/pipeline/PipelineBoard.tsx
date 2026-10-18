@@ -5,7 +5,7 @@ import { ApproveConfirm, approveRef, approveTargetDate } from '@/components/ui/A
 import { Sheet } from '@/components/ui/Sheet';
 import { sheetTitle } from '@/components/chat/post-sheet';
 import { PostCard } from '@/components/pages/PostCard';
-import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { StageDot, moveBlockedReason, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import {
   useApproveGate,
   type ApproveGate,
@@ -34,6 +34,10 @@ export interface PipelineBoardProps {
   onMovePost: (postId: string, toStage: Stage) => void;
   /** The viewer's workspace role: a client may only drop into Approved / Rejected. */
   role: string | null;
+  /** A card's Move button asks the page to open the move sheet for that post. */
+  onOpenMove?: (post: PipelinePost) => void;
+  /** A drop onto a column the post cannot move to: the page toasts the reason. */
+  onBlockedMove?: (reason: string) => void;
 }
 
 // Native HTML5 DnD keeps dataTransfer unreadable during dragover (it is exposed
@@ -61,11 +65,17 @@ function onColumnDragOver(
   toStage: Stage,
   role: string | null,
 ): void {
-  // Allow the drop (and show the affordance) only for a target legal for this role.
-  if (draggingFrom === null || !canRoleMove(role, draggingFrom, toStage)) {
+  if (draggingFrom === null || draggingFrom === toStage) {
     return;
   }
+  // Every other column accepts the drop so a blocked one can say why; only a
+  // target legal for this role shows the affordance.
   event.preventDefault();
+  // (dropEffect 'none' would cancel the drop event, so a blocked column keeps
+  // the default effect and just never lights up.)
+  if (!canRoleMove(role, draggingFrom, toStage)) {
+    return;
+  }
   event.dataTransfer.dropEffect = 'move';
   event.currentTarget.classList.add(...DROP_OK);
 }
@@ -79,6 +89,7 @@ function onColumnDrop(
   toStage: Stage,
   onMovePost: (postId: string, toStage: Stage) => void,
   role: string | null,
+  onBlockedMove?: (reason: string) => void,
 ): void {
   event.preventDefault();
   event.currentTarget.classList.remove(...DROP_OK);
@@ -87,9 +98,13 @@ function onColumnDrop(
   if (postId === undefined || postId === '') {
     return;
   }
-  // Bounce an illegal drop: no state change, no error toast (the proc would only
-  // re-reject it). canRoleMove is the same UI mirror the move sheet uses.
+  // Bounce an illegal drop with no state change; a drop back onto its own column
+  // is silent, any other names the reason from the stage map (the same mirror
+  // the move sheet uses).
   if (!canRoleMove(role, fromStage as Stage, toStage)) {
+    const reason =
+      fromStage === toStage ? null : moveBlockedReason(role, fromStage as Stage, toStage);
+    if (reason !== null) onBlockedMove?.(reason);
     return;
   }
   onMovePost(postId, toStage);
@@ -180,7 +195,10 @@ export function BoardApproveConfirm(props: {
         />
       }
     >
-      <p data-approve-title="" className="truncate text-sm font-medium text-fg">
+      <p
+        data-approve-title=""
+        className="line-clamp-2 text-sm font-medium text-fg [overflow-wrap:anywhere]"
+      >
         {post.title}
       </p>
       {props.onBehalf ? (
@@ -213,6 +231,8 @@ export function PipelineBoardView({
   onViewAll,
   onMovePost,
   role,
+  onOpenMove,
+  onBlockedMove,
 }: PipelineBoardProps): ReactElement {
   const only = stages.length === 1 ? stages[0] : undefined;
   if (only !== undefined) {
@@ -223,6 +243,7 @@ export function PipelineBoardView({
       cache,
       presignEnabled,
       workspaceKey,
+      ...(onOpenMove !== undefined ? { onOpenMove } : {}),
     });
   }
   return (
@@ -244,7 +265,7 @@ export function PipelineBoardView({
             data-stage={stage}
             onDragOver={(event) => onColumnDragOver(event, stage, role)}
             onDragLeave={onColumnDragLeave}
-            onDrop={(event) => onColumnDrop(event, stage, onMovePost, role)}
+            onDrop={(event) => onColumnDrop(event, stage, onMovePost, role, onBlockedMove)}
             className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2"
           >
             <div className="flex h-11 items-center gap-2 border-b border-border px-3">
@@ -273,6 +294,8 @@ export function PipelineBoardView({
                       cache={cache}
                       presignEnabled={presignEnabled}
                       workspaceKey={workspaceKey}
+                      showStage
+                      {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
                     />
                   </div>
                 ))}
@@ -301,9 +324,9 @@ export function PipelineBoardView({
 /**
  * Single-stage view: the one stage's cards as a full-width auto-fill grid, no
  * column chrome (the active chip already names the stage and count). Flows top
- * to bottom with the page owning vertical scroll; no inner scroll box. Cards
- * stay draggable items with the same payload; there is no drop target here
- * since the only column on screen is the cards' own stage.
+ * to bottom with the page owning vertical scroll; no inner scroll box. Cards are
+ * not draggable: the only column on screen is the cards' own stage, so there is
+ * nowhere to drop. Moves go through each card's Move button.
  */
 function SingleStageGrid({
   stage,
@@ -311,12 +334,14 @@ function SingleStageGrid({
   cache,
   presignEnabled,
   workspaceKey,
+  onOpenMove,
 }: {
   stage: Stage;
   posts: PipelinePost[];
   cache: PresignCache;
   presignEnabled: boolean;
   workspaceKey: string | null;
+  onOpenMove?: (post: PipelinePost) => void;
 }): ReactElement {
   if (posts.length === 0) {
     return (
@@ -336,20 +361,13 @@ function SingleStageGrid({
       className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 px-4 py-4 md:px-6"
     >
       {posts.map((post) => (
-        <div
-          key={post.id}
-          data-drag-item
-          data-post-id={post.id}
-          draggable
-          onDragStart={(event) => onCardDragStart(event, post)}
-          onDragEnd={onCardDragEnd}
-          className="min-w-0 rounded-lg"
-        >
+        <div key={post.id} data-post-id={post.id} className="min-w-0 rounded-lg">
           <PostCard
             post={post}
             cache={cache}
             presignEnabled={presignEnabled}
             workspaceKey={workspaceKey}
+            {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
           />
         </div>
       ))}

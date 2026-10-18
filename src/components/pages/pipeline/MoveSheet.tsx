@@ -6,8 +6,8 @@
 // Rows mirror the client-side transition map (canTransition) and the viewer's
 // role (canRoleMove): a client only ever sees the Approved and Rejected rows;
 // the agency side sees every stage. Targets that are legal from the post's
-// current stage for this role are enabled, the rest are disabled with a
-// "Blocked" hint. The server proc remains the real guard; this is UI gating only.
+// current stage for this role are enabled, the rest are disabled with the
+// reason read off the stage map (e.g. "Needs Review first"). The server proc remains the real guard; this is UI gating only.
 //
 // Approved asks first (decision 22): picking it swaps the rows and Cancel for
 // the shared approve confirm, as the chat post sheet swaps its footer. Only
@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { ApproveConfirm, approveRef, approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { cn } from '@/lib/cn';
 import { useWorkspace } from '@/lib/workspace-context';
-import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { StageDot, moveBlockedReason, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import {
   useApproveGate,
   type ApproveGate,
@@ -153,7 +153,12 @@ export function MoveSheetView({
     >
       <div className="flex flex-col gap-3">
         <div>
-          <div className="truncate text-sm font-medium">{post.title}</div>
+          <div
+            data-move-title=""
+            className="line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]"
+          >
+            {post.title}
+          </div>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-fg-3">
             <span>Currently in</span>
             <StageDot stage={currentStage} />
@@ -169,6 +174,7 @@ export function MoveSheetView({
           <ul className="flex flex-col gap-1">
             {targets.map((target) => {
               const allowed = canRoleMove(role, currentStage, target);
+              const reason = allowed ? null : moveBlockedReason(role, currentStage, target);
               return (
                 <li key={target}>
                   <button
@@ -186,7 +192,11 @@ export function MoveSheetView({
                   >
                     <StageDot stage={target} />
                     <span className="text-sm font-medium">{stageLabel(target)}</span>
-                    {!allowed ? <span className="ml-auto text-xs text-fg-3">Blocked</span> : null}
+                    {reason !== null ? (
+                      <span data-blocked-reason="" className="ml-auto text-right text-xs text-fg-3">
+                        {reason}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               );

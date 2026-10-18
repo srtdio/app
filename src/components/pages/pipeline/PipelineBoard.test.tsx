@@ -15,6 +15,7 @@ import {
 import { ApproveConfirm } from '@/components/ui/ApproveConfirm';
 import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
+import { PostCard } from '@/components/pages/PostCard';
 import { BOARD_CAP, emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
 import { groupByStage } from '@/lib/post-board';
 import { STAGE_TRANSITIONS } from '@srtdio/posts';
@@ -298,8 +299,10 @@ describe('PipelineBoard single-stage grid', () => {
     expect(className).not.toContain('overflow');
     expect(findAll(tree, (el) => Boolean(attr(el, 'data-drag-container')))).toHaveLength(0);
     expect(findAll(tree, (el) => Boolean(attr(el, 'data-board-scroll')))).toHaveLength(0);
-    // Every post renders (no cap, no View all) as a draggable card.
-    expect(findAll(tree, (el) => Boolean(attr(el, 'data-drag-item')))).toHaveLength(12);
+    // Every post renders (no cap, no View all); none is draggable (W4 fix 9).
+    expect(findAll(tree, (el) => Boolean(attr(el, 'data-post-id')))).toHaveLength(12);
+    expect(findAll(tree, (el) => Boolean(attr(el, 'data-drag-item')))).toHaveLength(0);
+    expect(findAll(tree, (el) => attr(el, 'draggable') === true)).toHaveLength(0);
   });
 
   it('an empty single-stage view keeps the Empty state', () => {
@@ -471,5 +474,138 @@ describe('PipelineBoard approve confirm (drop)', () => {
       );
       expect(html.includes(onBehalfConfirmLine(null))).toBe(onBehalf);
     }
+  });
+});
+
+describe('W4 board fixes', () => {
+  it('fix 8: a drop onto a column the post cannot reach toasts the reason', () => {
+    const onMovePost = vi.fn();
+    const onBlockedMove = vi.fn();
+    const tree = PipelineBoardView({
+      stages: STAGES,
+      grouped: groupByStage([makePost('p1', 'draft')], STAGES),
+      cap: BOARD_CAP,
+      cache,
+      presignEnabled: false,
+      onViewAll: () => {},
+      onMovePost,
+      role: 'agency',
+      onBlockedMove,
+    });
+    const drop = (stage: Stage, payload: string): void => {
+      const col = findAll(tree, (el) => dataStage(el) === stage && 'onDrop' in el.props)[0]!;
+      (col.props as { onDrop: (e: DragEvent<HTMLDivElement>) => void }).onDrop(dropEvent(payload));
+    };
+    drop('approved', 'draft:p1');
+    expect(onMovePost).not.toHaveBeenCalled();
+    expect(onBlockedMove).toHaveBeenCalledWith('Needs Review first');
+    // A drop back onto its own column is silent.
+    onBlockedMove.mockClear();
+    drop('draft', 'draft:p1');
+    expect(onBlockedMove).not.toHaveBeenCalled();
+  });
+
+  it('fix 8: dragging over a blocked column still accepts the drop event, without the ring', () => {
+    const tree = PipelineBoardView({
+      stages: STAGES,
+      grouped: groupByStage([makePost('p1', 'draft')], STAGES),
+      cap: BOARD_CAP,
+      cache,
+      presignEnabled: false,
+      onViewAll: () => {},
+      onMovePost: () => {},
+      role: 'agency',
+    });
+    const card = findAll(
+      tree,
+      (el) =>
+        (el.props as { 'data-post-id'?: string })['data-post-id'] === 'p1' &&
+        'onDragStart' in el.props,
+    )[0]!;
+    (card.props as { onDragStart: (e: unknown) => void }).onDragStart({
+      dataTransfer: { setData: () => {} },
+    });
+    const prevent = vi.fn();
+    const add = vi.fn();
+    const col = findAll(tree, (el) => dataStage(el) === 'approved' && 'onDragOver' in el.props)[0]!;
+    (col.props as { onDragOver: (e: unknown) => void }).onDragOver({
+      preventDefault: prevent,
+      dataTransfer: {},
+      currentTarget: { classList: { add } },
+    });
+    expect(prevent).toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
+    (card.props as { onDragEnd: () => void }).onDragEnd();
+  });
+
+  it('fix 1 and 5: every board card gets the Move button handler and, in All, the stage line', () => {
+    const onOpenMove = vi.fn();
+    const columns = PipelineBoardView({
+      stages: STAGES,
+      grouped: groupByStage([makePost('p1', 'draft'), makePost('p2', 'review')], STAGES),
+      cap: BOARD_CAP,
+      cache,
+      presignEnabled: false,
+      onViewAll: () => {},
+      onMovePost: () => {},
+      role: 'agency',
+      onOpenMove,
+    });
+    const cards = findAll(columns, (el) => el.type === PostCard);
+    expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      const props = card.props as { onMove?: unknown; showStage?: boolean };
+      expect(props.onMove).toBe(onOpenMove);
+      expect(props.showStage).toBe(true);
+    }
+    const grid = PipelineBoardView({
+      stages: ['review'],
+      grouped: groupByStage([makePost('p2', 'review')], STAGES),
+      cap: null,
+      cache,
+      presignEnabled: false,
+      onViewAll: () => {},
+      onMovePost: () => {},
+      role: 'agency',
+      onOpenMove,
+    });
+    const gridCard = findAll(grid, (el) => el.type === PostCard)[0]!;
+    expect((gridCard.props as { onMove?: unknown }).onMove).toBe(onOpenMove);
+  });
+
+  it('fix 1: the phone feed renders a Move button on every card', () => {
+    const markup = renderFeed({ posts: manyIn('review', 3), activeStage: 'review' });
+    expect((markup.match(/data-post-card-move=""/g) ?? []).length).toBe(3);
+  });
+
+  it('fix 5: the All feed leads each card with its stage; a single-stage feed does not', () => {
+    expect(renderFeed({ posts: [makePost('a', 'parked')], activeStage: 'all' })).toContain(
+      'data-post-card-stage',
+    );
+    expect(renderFeed({ posts: [makePost('a', 'parked')], activeStage: 'parked' })).not.toContain(
+      'data-post-card-stage',
+    );
+  });
+
+  it('fix 9: the approve confirm title wraps to two lines', () => {
+    let state: GateState = GATE_IDLE;
+    const gate = createApproveGate({
+      move: () => {},
+      read: () => state,
+      write: (next) => {
+        state = next;
+      },
+    });
+    gate.request('p1', 'approved');
+    const tree = BoardApproveConfirm({
+      post: makePost('p1', 'review'),
+      gate,
+      gateState: state,
+      workspaceKey: 'GBL',
+      timeZone: 'UTC',
+      onBehalf: false,
+    })!;
+    const title = findAll(tree, (el) => 'data-approve-title' in (el.props as object))[0]!;
+    expect((title.props as { className: string }).className).toContain('line-clamp-2');
   });
 });
