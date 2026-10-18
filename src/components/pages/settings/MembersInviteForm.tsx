@@ -440,7 +440,11 @@ export function MembersInviteForm({
               .
             </p>
           ) : null}
-          {singleError !== null ? <p className="text-sm text-bad">{singleError}</p> : null}
+          {singleError !== null ? (
+            <p role="alert" className="text-sm text-bad">
+              {singleError}
+            </p>
+          ) : null}
         </form>
       </section>
 

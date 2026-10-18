@@ -223,7 +223,7 @@ describe('sendInvite error mapping', () => {
       code: 'free_mail_client',
     });
     expect(FREE_MAIL_APPROVER_MESSAGE).toBe(
-      'Your approver needs a work address, like name@theirbrand.com.',
+      'Approvers need a work email, like name@theirbrand.com. Free emails like Gmail or Yahoo are not allowed.',
     );
     expect(onError).toHaveBeenCalledWith(FREE_MAIL_APPROVER_MESSAGE, 'free_mail_client');
   });

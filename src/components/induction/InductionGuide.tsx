@@ -339,7 +339,11 @@ function StepLayer({
 
   // Nothing dims while the control cannot be used yet (Send invite with no
   // address, Post with no words): the bar alone shows until it can be tapped.
-  const waiting = el !== undefined && isUnavailable(el);
+  // Nor while the form shows a message the person must read (an invite refused):
+  // the screen brightens until they change the field.
+  const waiting =
+    el !== undefined &&
+    (isUnavailable(el) || el.closest('form')?.querySelector('[role="alert"]') != null);
   const boxed = el !== undefined && !moving && !holding && !waiting ? el : undefined;
   useTapMark(el, step.id, marks);
   const field = el !== undefined ? textFieldOf(el) : undefined;
