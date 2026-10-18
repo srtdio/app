@@ -4845,6 +4845,8 @@ export type Database = {
           channel_id: string
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           due_at: string | null
           due_passed_at: string | null
           due_set_at: string | null
@@ -4863,6 +4865,8 @@ export type Database = {
           channel_id: string
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           due_at?: string | null
           due_passed_at?: string | null
           due_set_at?: string | null
@@ -4881,6 +4885,8 @@ export type Database = {
           channel_id?: string
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           due_at?: string | null
           due_passed_at?: string | null
           due_set_at?: string | null
@@ -9452,6 +9458,10 @@ export type Database = {
         }
         Returns: string
       }
+      chat_task_delete: {
+        Args: { p_task_id: string; p_trace_id: string }
+        Returns: undefined
+      }
       chat_task_event_write: {
         Args: {
           p_actor: string
@@ -9461,6 +9471,10 @@ export type Database = {
           p_task: Database["public"]["Tables"]["chat_tasks"]["Row"]
           p_tier: string
         }
+        Returns: undefined
+      }
+      chat_task_save: {
+        Args: { p_changes: Json; p_task_id: string; p_trace_id: string }
         Returns: undefined
       }
       chat_task_set: {
