@@ -411,11 +411,19 @@ function StepLayer({
   }, [step.targets, ctx, index]);
   usePauseReleases();
   const paused = pausedHere(step, onPlace(step.place, location, ctx.place));
-  useAbsentSkip({ stepKey: step.id, found: el !== undefined || paused }, () => {
-    if (ctx.isDone(step)) return;
-    const to = skipTarget(steps, index, probe);
-    if (to !== index) quietMove(to);
-  });
+  const found = el !== undefined || paused;
+  useAbsentSkip(
+    {
+      stepKey: step.id,
+      found,
+      earlierShown: !found && skipTarget(steps, index, probe) < index,
+    },
+    () => {
+      if (ctx.isDone(step)) return;
+      const to = skipTarget(steps, index, probe);
+      if (to !== index) quietMove(to);
+    },
+  );
   const nudge = useTapGuard(boxed, {
     next: field !== undefined ? nextEl : undefined,
     form: boxed !== undefined ? formOf(boxed, step.kind === 'gate') : undefined,

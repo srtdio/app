@@ -359,6 +359,27 @@ describe('the guide bar', () => {
   });
 });
 
+describe('after a refresh', () => {
+  it('goes back to the control that reopens a closed sheet, quickly', async () => {
+    // Stored on Continue, but the workspace form closed with the reload.
+    control('topbar-workspace-slot', { top: 8, left: 100, width: 190, height: 44 });
+    root = createRoot(host!);
+    current = data({ step: 'c_workspace_continue' });
+    await act(async () => {
+      root!.render(
+        <MemoryRouter initialEntries={['/pipeline']}>
+          <InductionProvider data={current!} workspaceId={null} workspaceLabel="">
+            <InductionGuide tabsShown={false} />
+          </InductionProvider>
+        </MemoryRouter>,
+      );
+    });
+    await wait(1000);
+    // Well before the 4 s wait for a control that never shows.
+    expect(current!.setStep).toHaveBeenCalledWith('c_workspace');
+  });
+});
+
 describe('Back', () => {
   it('is hidden on the first step', async () => {
     control('topbar-workspace-slot', { top: 8, left: 100, width: 190, height: 44 });
