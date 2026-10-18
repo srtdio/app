@@ -14,6 +14,7 @@ import {
 } from '@/lib/induction';
 import { logger } from '@/lib/logger';
 import { registerStaticAssets, staticThumbs, warmImages } from '@/lib/static-assets';
+import { generateTraceId as newTraceId } from '@/lib/trace';
 
 /** induction_state for the caller; p_workspace_id is null before a workspace exists. */
 export async function readInductionState(
@@ -438,12 +439,10 @@ export async function readGuideFacts(
  */
 export async function loadSampleAssets(client: Client, workspaceId: string): Promise<void> {
   try {
-    const { data, error } = await client
-      .from('asset_versions')
-      .select('id, r2_key')
-      .eq('workspace_id', workspaceId)
-      .like('r2_key', 'induction-sample/%')
-      .limit(500);
+    // Through the proc: asset_versions RLS shows library files only, and the
+    // week's chat photos and voice note need their keys too.
+    const args = { p_workspace_id: workspaceId, p_trace_id: newTraceId() };
+    const { data, error } = await client.rpc('induction_sample_files', args);
     if (error || data === null) return;
     registerStaticAssets(data);
     warmImages(staticThumbs());
