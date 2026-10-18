@@ -108,6 +108,17 @@ export function textFieldOf(el: HTMLElement): HTMLElement | undefined {
   return el.querySelector<HTMLElement>(TEXT_FIELD) ?? undefined;
 }
 
+/** The first visible empty text field in a form (the field a disabled submit waits on). */
+export function firstEmptyField(form: Element | null): HTMLElement | undefined {
+  if (form === null) return undefined;
+  return (
+    Array.from(form.querySelectorAll<HTMLElement>(TEXT_FIELD)).find((field) => {
+      const r = field.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && fieldValue(field) === '';
+    }) ?? undefined
+  );
+}
+
 /** A text field's current value, trimmed. */
 export function fieldValue(field: HTMLElement): string {
   if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {

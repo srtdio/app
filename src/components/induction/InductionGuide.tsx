@@ -59,6 +59,7 @@ import {
   findVisible,
   formOf,
   isUnavailable,
+  firstEmptyField,
   LAYER_ATTR,
   radiusOf,
   rectOf,
@@ -178,12 +179,38 @@ function useResultHold(ctx: InductionContextValue): {
  * changed). After that the person's own moves win, except on a gate, whose
  * screen cannot be left.
  */
+/** Paused steps (Step.pauseWhy) the person has taken on with Next, this page load. */
+const releasedPauses = new Set<string>();
+const PAUSE_RELEASE_EVENT = 'sorted:induction-pause-release';
+
+function releasePause(stepId: string): void {
+  releasedPauses.add(stepId);
+  window.dispatchEvent(new Event(PAUSE_RELEASE_EVENT));
+}
+
+/** Re-renders when a pause is released. */
+function usePauseReleases(): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const onRelease = (): void => setN((x) => x + 1);
+    window.addEventListener(PAUSE_RELEASE_EVENT, onRelease);
+    return () => window.removeEventListener(PAUSE_RELEASE_EVENT, onRelease);
+  }, []);
+  return n;
+}
+
+/** The step waits on the current screen for Next before its own screen opens. */
+function pausedHere(step: Step, onItsPlace: boolean): boolean {
+  return step.pauseWhy !== undefined && !releasedPauses.has(step.id) && !onItsPlace;
+}
+
 function useStepNavigation(ctx: InductionContextValue): void {
   const navigate = useNavigate();
   const location = useLocation();
   const { resolution, place } = ctx;
   const step = resolution.kind === 'step' ? resolution.step : undefined;
   const opened = useRef({ id: '', arrived: false, navigated: false });
+  const releases = usePauseReleases();
 
   useEffect(() => {
     if (step === undefined) return;
@@ -196,9 +223,10 @@ function useStepNavigation(ctx: InductionContextValue): void {
       return;
     }
     if (now.arrived && step.kind !== 'gate') return;
+    if (pausedHere(step, false)) return;
     navigate(placeRoute(step.place, place), { replace: now.navigated });
     now.navigated = true;
-  }, [step, location, place, navigate]);
+  }, [step, location, place, navigate, releases]);
 }
 
 function CardLayer({
@@ -336,7 +364,21 @@ function StepLayer({
       isUnavailable(el) ||
       el.closest('form')?.querySelector('[role="alert"]') != null ||
       (typing && textFieldOf(el) === undefined));
-  const boxed = el !== undefined && !moving && !holding && !waiting ? el : undefined;
+  // Send invite waits on an empty email: the field is boxed until it has one.
+  const emptyField =
+    el !== undefined && step.fieldLabel !== undefined && photosSettled && isUnavailable(el)
+      ? firstEmptyField(el.closest('form'))
+      : undefined;
+  const boxed =
+    el !== undefined && !moving && !holding
+      ? !waiting
+        ? el
+        : emptyField !== undefined && el.closest('form')?.querySelector('[role="alert"]') == null
+          ? emptyField
+          : undefined
+      : undefined;
+  const boxedLabel =
+    boxed !== undefined && boxed === emptyField ? (step.fieldLabel ?? '') : step.label;
   useTapMark(el, step.id, marks);
   const field = el !== undefined ? textFieldOf(el) : undefined;
 
@@ -367,7 +409,9 @@ function StepLayer({
     window.addEventListener(INDUCTION_DID_EVENT, onDid);
     return () => window.removeEventListener(INDUCTION_DID_EVENT, onDid);
   }, [step.targets, ctx, index]);
-  useAbsentSkip({ stepKey: step.id, found: el !== undefined }, () => {
+  usePauseReleases();
+  const paused = pausedHere(step, onPlace(step.place, location, ctx.place));
+  useAbsentSkip({ stepKey: step.id, found: el !== undefined || paused }, () => {
     if (ctx.isDone(step)) return;
     const to = skipTarget(steps, index, probe);
     if (to !== index) quietMove(to);
@@ -405,9 +449,10 @@ function StepLayer({
       names: order.map((chapter) => GUIDE_CHROME.chapters[chapter]),
       current: step.chapter !== undefined ? order.indexOf(step.chapter) : -1,
     },
-    why: fillCopy(step.why, ctx.copy),
+    why: fillCopy(paused && step.pauseWhy !== undefined ? step.pauseWhy : step.why, ctx.copy),
     legend: legend ? GUIDE_LEGEND : '',
     back: GUIDE_CHROME.back,
+    next: GUIDE_CHROME.next,
     later: step.laterLabel ?? '',
     aria: {
       bar: GUIDE_CHROME.barAria,
@@ -433,7 +478,7 @@ function StepLayer({
         <Spotlight
           control={control}
           radius={radius}
-          label={fillCopy(step.label, ctx.copy)}
+          label={fillCopy(boxedLabel, ctx.copy)}
           frame={{
             dock,
             nudge,
@@ -450,6 +495,7 @@ function StepLayer({
         actions={{
           onBack: back >= 0 ? () => quietMove(back) : undefined,
           onLater: optOut && optOutShown ? () => quietMove(index + 1) : undefined,
+          onNext: paused ? () => releasePause(step.id) : undefined,
         }}
       />
     </>

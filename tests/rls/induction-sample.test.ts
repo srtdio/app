@@ -407,9 +407,17 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
         `select count(*) from public.inbox_entries where workspace_id = '${ws}' and user_id <> '${main.owner.id}'`,
       ),
     ).toBe(0);
-    expect(num(`select count(*) from public.chat_sync_events where workspace_id = '${ws}'`)).toBe(
-      0,
-    );
+    // The only chat sync is the default group's rename to the sample name.
+    expect(
+      num(
+        `select count(*) from public.chat_sync_events where workspace_id = '${ws}' and event_type <> 'group_rename'`,
+      ),
+    ).toBe(0);
+    expect(
+      sql(
+        `select string_agg(payload->>'name', ',' order by id) from public.chat_sync_events where workspace_id = '${ws}' and event_type = 'group_rename'`,
+      ),
+    ).toBe('Kestrel and Rowe');
 
     // Storage: sample files use none of the workspace's space.
     expect(num(`select public.workspace_bytes_used('${ws}')`)).toBe(bytesBefore);
@@ -549,9 +557,22 @@ describe.runIf(RLS_SUITE)('induction sample workspace', () => {
           `and (user_id = any(${PEOPLE_SQL}) or (user_id = '${main.owner.id}' and event_type <> 'system'))`,
       ),
     ).toBe(0);
-    expect(num(`select count(*) from public.chat_sync_events where workspace_id = '${ws}'`)).toBe(
-      0,
-    );
+    // The only chat syncs are the default group's renames: to the sample name, then back.
+    expect(
+      num(
+        `select count(*) from public.chat_sync_events where workspace_id = '${ws}' and event_type <> 'group_rename'`,
+      ),
+    ).toBe(0);
+    expect(
+      num(
+        `select count(*) from public.chat_sync_events where workspace_id = '${ws}' and event_type = 'group_rename'`,
+      ),
+    ).toBe(2);
+    expect(
+      sql(
+        `select name from public.groups where workspace_id = '${ws}' and is_default and deleted_at is null`,
+      ),
+    ).not.toBe('Kestrel and Rowe');
     expect(
       sql(`select clear_reason from public.induction_sample_seeds where workspace_id = '${ws}'`),
     ).toBe('seeder');

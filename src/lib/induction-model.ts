@@ -81,6 +81,17 @@ export interface Step {
   why: string;
   /** The optional step's secondary chip. */
   laterLabel?: string;
+  /**
+   * While the control is disabled for an empty field in its form (Send invite
+   * with no address), the guide boxes that field with this label instead.
+   */
+  fieldLabel?: string;
+  /**
+   * When set, the guide does not take the person to this step's screen by
+   * itself: it stays on the screen they are on (their result in view) with
+   * this line and a Next button, and Next takes them on.
+   */
+  pauseWhy?: string;
   place: StepPlace;
   dataDone: DataDoneKey;
   skipWhen?: readonly SkipWhen[];

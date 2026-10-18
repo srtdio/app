@@ -143,13 +143,17 @@ function reviewCommentSteps(route: Route, skip: SkipWhen): Step[] {
   ];
 }
 
-function talkSteps(route: Route): Step[] {
+function talkSteps(route: Route, afterComment = false): Step[] {
+  const groupShape = inChapter('talk', teach('chat', K.chatDefaultGroupRow), ['noGroup']);
   return [
-    makeStep(
-      route,
-      'group_open',
-      inChapter('talk', teach('chat', K.chatDefaultGroupRow), ['noGroup']),
-    ),
+    // After their own comment, the guide waits on the post (the comment in view)
+    // until they tap Next, instead of leaving for the chat at once.
+    afterComment
+      ? makeStepWithCopy(route, 'group_open', {
+          key: 'group_open_after_comment',
+          shape: groupShape,
+        })
+      : makeStep(route, 'group_open', groupShape),
     makeStep(
       route,
       'transcript',
@@ -160,7 +164,11 @@ function talkSteps(route: Route): Step[] {
 }
 
 function teamLookAround(route: Route): Step[] {
-  return [...teamAskSteps(route), ...reviewCommentSteps(route, 'noOwnPost'), ...talkSteps(route)];
+  return [
+    ...teamAskSteps(route),
+    ...reviewCommentSteps(route, 'noOwnPost'),
+    ...talkSteps(route, true),
+  ];
 }
 
 function approverReviewSteps(): Step[] {

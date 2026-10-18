@@ -91,6 +91,7 @@ export const GUIDE_LEGEND =
 
 export const GUIDE_CHROME = {
   back: 'Back',
+  next: 'Next',
   chapters: { ask: 'Ask', review: 'Review', talk: 'Talk' },
   barAria: 'Guide',
   progressAria: 'Tour progress',
@@ -112,6 +113,8 @@ interface StepCopy {
   label: string;
   why: string;
   laterLabel?: string;
+  pauseWhy?: string;
+  fieldLabel?: string;
 }
 
 /** The pill and the why line per step, keyed by the step id without its route prefix. */
@@ -127,7 +130,11 @@ export const STEP_COPY = {
   post_media: { label: 'Tap to add a photo', why: 'It shows how {platform} will crop it.' },
   post_send: { label: 'Tap to send for review', why: 'Next, you invite your approver.' },
   post_send_invited: { label: 'Tap to send for review', why: 'The approvers get it.' },
-  approver_invite: { label: 'Tap Send invite', why: '' },
+  approver_invite: {
+    label: 'Tap Send invite',
+    why: '',
+    fieldLabel: "Type your approver's email",
+  },
   team_invite: { label: 'Tap Send invite', why: '', laterLabel: "It's just me for now" },
   brief_open: { label: 'Tap to open the brief', why: 'This is what the client asked for.' },
   plan_open: { label: 'Tap to open the plan', why: 'Plan the content together.' },
@@ -136,6 +143,11 @@ export const STEP_COPY = {
   comment_post: { label: 'Tap to post the comment', why: 'It stays on the post, not on WhatsApp.' },
   comment_post_approver: { label: 'Tap to post the comment', why: 'The team sees it on the post.' },
   group_open: { label: 'Tap to open the group', why: 'Team and client, in one place.' },
+  group_open_after_comment: {
+    label: 'Tap to open the group',
+    why: 'Team and client, in one place.',
+    pauseWhy: 'Your comment is on the post. Tap Next.',
+  },
   transcript: { label: 'Tap to show the transcript', why: 'Voice notes come written out.' },
   activity: { label: 'Tap to open Activity', why: 'Everything lands here, newest first.' },
   post_open: { label: 'Tap to open {post}', why: '{creator} sent it for your review.' },
