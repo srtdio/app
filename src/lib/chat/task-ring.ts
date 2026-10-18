@@ -21,6 +21,8 @@ export interface TaskDueRow {
 /** The row re-read just before ringing. */
 export interface TaskDueCheck extends TaskDueRow {
   status: string;
+  /** Set once the task was deleted: it never rings. */
+  deleted_at?: string | null;
 }
 
 /** Fired on this device after a due write is recorded (BellRing re-arms). */
@@ -84,10 +86,12 @@ export function nextDue(
 
 /**
  * Whether the re-read row still rings for what was armed: open, and the same
- * due time. A changed due, a closed item or a missing row never rings. Pure.
+ * due time. A changed due, a closed or deleted task or a missing row never
+ * rings. Pure.
  */
 export function stillDue(armed: TaskDueRow, current: TaskDueCheck | null): boolean {
   if (current === null || current.id !== armed.id) return false;
+  if (current.deleted_at != null) return false;
   if (!(RINGING_STATUSES as readonly string[]).includes(current.status)) return false;
   return taskRungKey(current.id, current.due_at) === taskRungKey(armed.id, armed.due_at);
 }
@@ -230,6 +234,7 @@ export async function readUpcomingTaskDues(
       .eq('workspace_id', params.workspaceId)
       .in('status', [...RINGING_STATUSES])
       .is('due_passed_at', null)
+      .is('deleted_at', null)
       .gt('due_at', new Date(params.nowMs).toISOString())
       .order('due_at', { ascending: true })
       .limit(UPCOMING_LIMIT);
@@ -249,7 +254,7 @@ export async function readTaskDueCheck(
   try {
     const { data, error } = await client
       .from('chat_tasks')
-      .select(`${DUE_COLUMNS}, status`)
+      .select(`${DUE_COLUMNS}, status, deleted_at`)
       .eq('id', taskId)
       .maybeSingle();
     if (error) return fail(`readTaskDueCheck: ${error.message}`);

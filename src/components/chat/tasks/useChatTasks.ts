@@ -1,4 +1,4 @@
-// The open chat's task list, for the thread (event lines, the composer button's
+// The open chat's Tasks, for the thread (event lines, the composer button's
 // dot) and the sheet. Reads: the channel's open items and the ones changed
 // today, with its newest page of events, together, on open (a chat opened
 // before this session paints its last list at once and revalidates), on the
@@ -9,11 +9,14 @@
 // as its rows. Tasks that event lines name but the list does not hold come
 // from one IN read; names the thread's profiles lack from one profile read.
 //
-// Writes are optimistic with a fresh uuid_v7 trace id each: a field write
-// shows at once and reverts if the record refuses it (the row then offers
-// "Not saved · Retry"). Adds go through the add queue (add-queue.ts): one at a
-// time in typed order; a failure pauses it; a created item stays until the
-// list holds its row. Only after the record accepts a write is a live Agora
+// Writes are optimistic with a fresh uuid_v7 trace id each: a Save (only the
+// changed fields, one chat_task_save, one chat line) shows at once and reverts
+// if the record refuses it (the row then offers "Not saved · Retry"). A delete
+// hides the task at once behind an Undo toast (useUndoableAction "Task
+// deleted"); chat_task_delete runs when the window ends, and a refused delete
+// brings it back. Deleted tasks never show in the list. Adds go through the add
+// queue (add-queue.ts): one chat_task_create each, one at a time in typed
+// order; a failure pauses it; a created item stays until the list holds its row. Only after the record accepts a write is a live Agora
 // command sent (ext { sorted_event: 'task', channel_id, task_id }), exactly
 // like marks; receivers re-read that one task and the events newer than their
 // latest.
@@ -24,6 +27,7 @@ import type { Client } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
+import { useUndoableAction } from '@/lib/use-undoable-action';
 import { readProfiles, type ChatProfile } from '@/lib/chat-reads';
 import { useChat } from '@/lib/chat/chat-context';
 import { createCmdMessage } from '@/lib/chat/message-factory';
@@ -31,18 +35,21 @@ import { sendSignal, type TypingConnection } from '@/lib/chat/typing';
 import { parseLiveEvent, taskEventExt, type ChannelTarget } from '@/lib/chat/thread';
 import type { ChatConnection, ChatContextValue } from '@/lib/chat/types';
 import {
-  applyTaskField,
+  applyTaskChanges,
   createTask,
+  deleteTask,
+  isDeleted,
   mergeEvents,
   readChannelTasks,
   readTask,
   readTaskEvents,
   readTasksByIds,
-  setTaskField,
+  saveTask,
   upsertTask,
   type ChatTask,
+  type TaskChanges,
   type TaskEvent,
-  type TaskField,
+  type TaskPriority,
   type TaskSide,
 } from '@/lib/chat/tasks';
 import { announceTaskDueChanged } from '@/lib/chat/task-ring';
@@ -59,17 +66,26 @@ import {
 
 export type { PendingTask } from '@/components/chat/tasks/add-queue';
 
-/** A refused field write, kept so the row can retry it. */
+/** A refused Save, kept so the row can retry it. */
 export interface FailedWrite {
-  field: TaskField;
-  value: string;
+  changes: TaskChanges;
+}
+
+/** The Undo toast's title for a delete. */
+export const TASK_DELETED_LABEL = 'Task deleted';
+
+/** What the add row may set besides the title. */
+export interface CreateOptions {
+  priority?: TaskPriority;
+  dueAt?: string | null;
 }
 
 export interface UseChatTasks {
+  /** The list: never a deleted task, nor one waiting out its Undo. */
   tasks: ChatTask[];
   /** Oldest first. */
   events: TaskEvent[];
-  /** Every task an event line may name: the list plus older items read by id. */
+  /** Every task an event line may name: the list plus older (or deleted) items read by id. */
   lineTasks: ReadonlyMap<string, ChatTask>;
   /** The open channel's first read settled (ok or not). */
   loaded: boolean;
@@ -81,16 +97,23 @@ export interface UseChatTasks {
   covers: (ms: number) => boolean;
   /** Adds not yet in the list, in typed order. */
   pending: PendingTask[];
-  /** Refused field writes by task id. */
+  /** Refused Saves by task id. */
   failed: ReadonlyMap<string, FailedWrite>;
+  /** Tasks hidden behind a pending delete Undo (or deleted here). */
+  hiddenIds: ReadonlySet<string>;
   /** A name for a user id: "You", a loaded profile, else "Member". */
   nameOf: (userId: string) => string;
   refetch: () => void;
   /** Older history loaded: read the events back to this instant (queued until the first read). */
   ensureEventsSince: (iso: string) => void;
-  create: (side: TaskSide, title: string, number: number) => void;
-  setField: (task: ChatTask, field: TaskField, value: string) => void;
+  create: (side: TaskSide, title: string, number: number, options?: CreateOptions) => void;
+  /** Save an edit: only the changed fields, one write. */
+  save: (task: ChatTask, changes: TaskChanges) => void;
   retryField: (taskId: string) => void;
+  /** Hide at once; delete when the Undo window ends. */
+  remove: (task: ChatTask) => void;
+  /** A task not in the list (closed before today): read it so the sheet can show it. */
+  loadTask: (taskId: string) => void;
   retryCreate: (key: string) => void;
   /** Drop a failed add (its x); the adds behind it go on. */
   removeCreate: (key: string) => void;
@@ -157,7 +180,7 @@ function freshState(channelId: string | null, from: Remembered | undefined): Tas
 }
 
 export function useChatTasks(params: {
-  /** Null: no task list here (Personal notes, no chat). */
+  /** Null: no Tasks here (Personal notes, no chat). */
   channelId: string | null;
   currentUserId: string;
   target: ChannelTarget | null;
@@ -184,6 +207,9 @@ export function useChatTasks(params: {
   const [failed, setFailed] = useState<Map<string, FailedWrite>>(new Map());
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [extra, setExtra] = useState<Map<string, ChatTask>>(new Map());
+  // Tasks hidden behind a pending Undo (or deleted here).
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const undoable = useUndoableAction();
 
   const channelRef = useRef(channelId);
   channelRef.current = channelId;
@@ -324,6 +350,7 @@ export function useChatTasks(params: {
     setPending([]);
     setFailed(new Map());
     setExtra(new Map());
+    setHidden(new Set());
     requestedTasks.current = new Set();
     wantSinceRef.current = null;
     staleRef.current = false;
@@ -377,6 +404,15 @@ export function useChatTasks(params: {
         return false;
       }
       const row = task.data;
+      if (isDeleted(row)) {
+        // Deleted: out of the list; its lines still name it.
+        apply(forChannel, (prev) => ({
+          ...prev,
+          tasks: prev.tasks.filter((t) => t.id !== row.id),
+        }));
+        setExtra((prev) => new Map(prev).set(row.id, row));
+        return false;
+      }
       apply(forChannel, (prev) => ({ ...prev, tasks: upsertTask(prev.tasks, row) }));
       return true;
     },
@@ -416,8 +452,8 @@ export function useChatTasks(params: {
     );
   }, []);
 
-  const runField = useCallback(
-    async (task: ChatTask, field: TaskField, value: string): Promise<void> => {
+  const runSave = useCallback(
+    async (task: ChatTask, changes: TaskChanges): Promise<void> => {
       const forChannel = task.channelId;
       const traceId = generateTraceId();
       const before = stateRef.current.tasks.find((t) => t.id === task.id) ?? task;
@@ -431,34 +467,36 @@ export function useChatTasks(params: {
         ...prev,
         tasks: upsertTask(
           prev.tasks,
-          applyTaskField(before, field, value, currentUserId, new Date().toISOString()),
+          applyTaskChanges(before, changes, currentUserId, new Date().toISOString()),
         ),
       }));
-      const result = await setTaskField({ client: db, taskId: task.id, field, value, traceId });
+      const result = await saveTask({ client: db, taskId: task.id, changes, traceId });
       if (!result.ok) {
-        logger.warn('chat: task write failed', {
+        logger.warn('chat: task save failed', {
           trace_id: traceId,
           task_id: task.id,
-          field,
+          fields: Object.keys(changes),
           error: result.message,
         });
         apply(forChannel, (prev) => ({ ...prev, tasks: upsertTask(prev.tasks, before) }));
         if (channelRef.current === forChannel) {
-          setFailed((prev) => new Map(prev).set(task.id, { field, value }));
+          setFailed((prev) => new Map(prev).set(task.id, { changes }));
         }
         return;
       }
       signal(forChannel, task.id, traceId);
       // The due ring (BellRing) re-arms for this device's new due time.
-      if (field === 'due' || field === 'status') announceTaskDueChanged();
+      if ('due' in changes || 'status' in changes) announceTaskDueChanged();
       await refreshOne(task.id);
     },
     [db, apply, currentUserId, signal, refreshOne],
   );
 
-  const setField = useCallback<UseChatTasks['setField']>(
-    (task, field, value) => void runField(task, field, value),
-    [runField],
+  const save = useCallback<UseChatTasks['save']>(
+    (task, changes) => {
+      if (Object.keys(changes).length > 0) void runSave(task, changes);
+    },
+    [runSave],
   );
 
   const retryField = useCallback<UseChatTasks['retryField']>(
@@ -466,9 +504,66 @@ export function useChatTasks(params: {
       const write = failed.get(taskId);
       const task = stateRef.current.tasks.find((t) => t.id === taskId);
       if (write === undefined || task === undefined) return;
-      void runField(task, write.field, write.value);
+      void runSave(task, write.changes);
     },
-    [failed, runField],
+    [failed, runSave],
+  );
+
+  const runUndoable = undoable.run;
+  const remove = useCallback<UseChatTasks['remove']>(
+    (task) => {
+      const forChannel = task.channelId;
+      const unhide = (): void =>
+        setHidden((prev) => {
+          if (!prev.has(task.id)) return prev;
+          const next = new Set(prev);
+          next.delete(task.id);
+          return next;
+        });
+      setHidden((prev) => new Set(prev).add(task.id));
+      runUndoable({
+        label: TASK_DELETED_LABEL,
+        commit: async () => {
+          const traceId = generateTraceId();
+          const result = await deleteTask({ client: db, taskId: task.id, traceId });
+          if (!result.ok) {
+            logger.warn('chat: task delete failed', {
+              trace_id: traceId,
+              task_id: task.id,
+              error: result.message,
+            });
+            // useUndoableAction reverts (unhides) and shows the failure toast.
+            throw new Error(result.message);
+          }
+          const deletedAt = new Date().toISOString();
+          apply(forChannel, (prev) => ({
+            ...prev,
+            tasks: prev.tasks.filter((t) => t.id !== task.id),
+          }));
+          setExtra((prev) => new Map(prev).set(task.id, { ...task, deletedAt }));
+          signal(forChannel, task.id, traceId);
+          announceTaskDueChanged();
+          await refreshOne(task.id);
+        },
+        revert: unhide,
+      });
+    },
+    [db, apply, signal, refreshOne, runUndoable],
+  );
+
+  const loadTask = useCallback<UseChatTasks['loadTask']>(
+    (taskId) => {
+      const forChannel = channelRef.current;
+      if (forChannel === null) return;
+      if (stateRef.current.tasks.some((t) => t.id === taskId)) return;
+      void readTask(db, taskId).then((res) => {
+        if (!res.ok || res.data === null || channelRef.current !== forChannel) return;
+        const row = res.data;
+        if (row.channelId !== forChannel) return;
+        setExtra((prev) => new Map(prev).set(row.id, row));
+      });
+    },
+    [db],
   );
 
   // The add queue's pump: one create at a time, in typed order; a failed head
@@ -482,11 +577,14 @@ export function useChatTasks(params: {
     setPending((queue) => markSending(queue, entry.key));
     void (async () => {
       const traceId = generateTraceId();
+      // One call carries everything the add row set: one chat line.
       const result = await createTask({
         client: db,
         channelId: forChannel,
         title: entry.title,
         side: entry.side,
+        ...(entry.priority !== undefined ? { priority: entry.priority } : {}),
+        dueAt: entry.dueAt ?? null,
         traceId,
       });
       if (channelRef.current !== forChannel) return;
@@ -510,11 +608,19 @@ export function useChatTasks(params: {
     setPending((queue) => reconcile(queue, taskIds));
   }, [taskIds]);
 
-  const create = useCallback<UseChatTasks['create']>((side, title, number) => {
+  const create = useCallback<UseChatTasks['create']>((side, title, number, options) => {
     const trimmed = title.trim();
     if (channelRef.current === null || trimmed === '') return;
     setPending((queue) =>
-      enqueue(queue, { key: generateTraceId(), side, title: trimmed, number, state: 'queued' }),
+      enqueue(queue, {
+        key: generateTraceId(),
+        side,
+        title: trimmed,
+        number,
+        state: 'queued',
+        ...(options?.priority !== undefined ? { priority: options.priority } : {}),
+        dueAt: options?.dueAt ?? null,
+      }),
     );
   }, []);
 
@@ -582,6 +688,11 @@ export function useChatTasks(params: {
 
   const coveredFromMs = current.coveredFromMs;
   const loaded = current.loaded;
+  // The list: no deleted task, none waiting out its Undo.
+  const visibleTasks = useMemo(
+    () => current.tasks.filter((t) => !isDeleted(t) && !hidden.has(t.id)),
+    [current.tasks, hidden],
+  );
   const covers = useCallback(
     (ms: number): boolean => !loaded || ms >= coveredFromMs,
     [loaded, coveredFromMs],
@@ -594,36 +705,42 @@ export function useChatTasks(params: {
 
   return useMemo(
     () => ({
-      tasks: current.tasks,
+      tasks: visibleTasks,
       events: current.events,
       lineTasks,
       loaded,
       covers,
       pending: shownPending,
       failed,
+      hiddenIds: hidden,
       nameOf,
       refetch,
       ensureEventsSince,
       create,
-      setField,
+      save,
       retryField,
+      remove,
+      loadTask,
       retryCreate,
       removeCreate,
     }),
     [
-      current.tasks,
+      visibleTasks,
       current.events,
       lineTasks,
       loaded,
       covers,
       shownPending,
       failed,
+      hidden,
       nameOf,
       refetch,
       ensureEventsSince,
       create,
-      setField,
+      save,
       retryField,
+      remove,
+      loadTask,
       retryCreate,
       removeCreate,
     ],

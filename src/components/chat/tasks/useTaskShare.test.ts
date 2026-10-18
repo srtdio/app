@@ -4,20 +4,20 @@ import type { ThreadMessage } from '@/lib/chat/thread';
 import { forwardTargets, snapshotState } from '@/components/chat/tasks/useTaskShare';
 
 function msg(over: Partial<ThreadMessage>): ThreadMessage {
-  return { id: 'm1', mine: true, body: 'Task list', state: 'sent', ...over } as ThreadMessage;
+  return { id: 'm1', mine: true, body: 'Tasks', state: 'sent', ...over } as ThreadMessage;
 }
 
 describe('snapshotState', () => {
   const before = new Set(['old']);
 
   it('waits until the new own bubble with the body is recorded or Not sent', () => {
-    expect(snapshotState([msg({ id: 'old' })], before, 'Task list').state).toBe('waiting');
-    expect(snapshotState([msg({ state: 'sending' })], before, 'Task list').state).toBe('waiting');
-    expect(snapshotState([msg({ mine: false })], before, 'Task list').state).toBe('waiting');
-    expect(snapshotState([msg({ body: 'other' })], before, 'Task list').state).toBe('waiting');
-    const sent = snapshotState([msg({ id: 'new' })], before, 'Task list');
+    expect(snapshotState([msg({ id: 'old' })], before, 'Tasks').state).toBe('waiting');
+    expect(snapshotState([msg({ state: 'sending' })], before, 'Tasks').state).toBe('waiting');
+    expect(snapshotState([msg({ mine: false })], before, 'Tasks').state).toBe('waiting');
+    expect(snapshotState([msg({ body: 'other' })], before, 'Tasks').state).toBe('waiting');
+    const sent = snapshotState([msg({ id: 'new' })], before, 'Tasks');
     expect(sent.state === 'sent' && sent.message.id).toBe('new');
-    expect(snapshotState([msg({ state: 'failed' })], before, 'Task list').state).toBe('failed');
+    expect(snapshotState([msg({ state: 'failed' })], before, 'Tasks').state).toBe('failed');
   });
 });
 

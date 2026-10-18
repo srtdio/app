@@ -1,12 +1,14 @@
 // One task row and its in-place editor. Collapsed: glyph, number, title (and
 // note), P tag and due label. Tapping it expands it in place (height and
-// opacity only, Y axis; nothing moves sideways): the commitment line, title
-// and note inputs, the status grid, priority and side, and the due picker.
-// The due time is required: picking a day shows the hourly strip and only a
-// time tap saves (one write); tapping the day already set clears the due.
-// A refused write reverts the row and shows "Not saved · Retry" on it only.
+// opacity only, Y axis; nothing moves sideways) in edit mode: the commitment
+// line, title and note inputs, the status grid, priority and side, the due
+// picker, then Delete, Cancel and Save. Every edit is local (a draft) until
+// Save, which sends only the changed fields in one write. Picking a day
+// without a time sets 9 pm ("Due 9 pm", the hour strip edits it); tapping the
+// day already picked keeps it, and "Clear date" removes the due. A refused
+// Save reverts the row and shows "Not saved · Retry" on it only.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { IconAlarmClock, IconCalendar, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -20,9 +22,14 @@ import {
   civilHourToUtcIso,
   commitmentLine,
   dateStripDays,
+  diffDraft,
+  draftOf,
+  dueForDay,
+  dueHourLine,
   dueLabel,
   DUE_HOURS,
   dueSelection,
+  hasChanges,
   hourLabel,
   isPastHour,
   isOpenStatus,
@@ -32,11 +39,13 @@ import {
   TASK_STATUSES,
   TASK_TITLE_MAX,
   type ChatTask,
-  type TaskField,
+  type TaskChanges,
+  type TaskDraft,
   type TaskPriority,
 } from '@/lib/chat/tasks';
 
 export const NOT_SAVED = 'Not saved';
+export const CLEAR_DATE = 'Clear date';
 
 const P_TAG: Record<TaskPriority, string> = {
   0: 'bg-bad-soft text-bad',
@@ -90,7 +99,11 @@ export function NotSaved(props: { onRetry: () => void; onRemove?: () => void }):
   );
 }
 
-function DueCell(props: { task: ChatTask; nowMs: number; timeZone: string }): ReactElement {
+export function DueCell(props: {
+  task: Pick<ChatTask, 'dueAt' | 'duePassedAt'>;
+  nowMs: number;
+  timeZone: string;
+}): ReactElement {
   const label = dueLabel(props.task, props.nowMs, props.timeZone);
   if (label.tone === 'none') {
     return <span className="shrink-0 font-mono text-[12.5px] text-fg-3">{label.text}</span>;
@@ -120,13 +133,14 @@ const SEG = cn(
 const SEG_ON = 'border-accent bg-accent-soft text-accent';
 const SEG_OFF = 'border-border bg-panel text-fg-2 hover:bg-panel-2';
 
-function Segment(props: {
+export function Segment(props: {
   selected: boolean;
   onClick: () => void;
   children: ReactNode;
   className?: string;
   label?: string;
   data?: string;
+  disabled?: boolean;
 }): ReactElement {
   return (
     <button
@@ -134,44 +148,41 @@ function Segment(props: {
       aria-pressed={props.selected}
       {...(props.label !== undefined ? { 'aria-label': props.label } : {})}
       {...(props.data !== undefined ? { 'data-task-opt': props.data } : {})}
-      onClick={props.onClick}
+      {...(props.disabled === true ? { 'aria-disabled': true } : {})}
+      onClick={() => {
+        if (props.disabled !== true) props.onClick();
+      }}
+      onMouseDown={(e) => e.preventDefault()}
       onContextMenu={(e) => e.preventDefault()}
-      className={cn(SEG, props.selected ? SEG_ON : SEG_OFF, props.className)}
+      className={cn(
+        SEG,
+        props.selected ? SEG_ON : SEG_OFF,
+        props.disabled === true && 'cursor-default text-fg-3',
+        props.className,
+      )}
     >
       {props.children}
     </button>
   );
 }
 
-/** A bare text input that saves on blur or Enter when changed. */
-function InlineInput(props: {
+/** A bare text input bound to the draft. */
+function DraftInput(props: {
   value: string;
   placeholder?: string;
   maxLength: number;
   className: string;
   label: string;
-  onSave: (value: string) => void;
+  onChange: (value: string) => void;
 }): ReactElement {
-  const [draft, setDraft] = useState(props.value);
-  useEffect(() => setDraft(props.value), [props.value]);
-  const commit = (): void => {
-    if (draft.trim() !== props.value.trim()) props.onSave(draft);
-  };
   return (
     <input
       type="text"
       aria-label={props.label}
-      value={draft}
+      value={props.value}
       maxLength={props.maxLength}
       placeholder={props.placeholder}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-          e.preventDefault();
-          commit();
-        }
-      }}
+      onChange={(e) => props.onChange(e.target.value)}
       className={cn(
         'w-full min-h-[44px] bg-transparent text-fg placeholder:text-fg-3 focus:outline-none',
         props.className,
@@ -180,31 +191,26 @@ function InlineInput(props: {
   );
 }
 
-function DuePicker(props: {
-  task: ChatTask;
+/**
+ * The due picker over a draft value. A day without a time gets 9 pm (or the
+ * hour already set); the day already picked stays picked; Clear date clears.
+ */
+export function DuePicker(props: {
+  value: string | null;
   nowMs: number;
   timeZone: string;
-  onSave: (value: string) => void;
+  onChange: (value: string | null) => void;
 }): ReactElement {
-  const { task, nowMs, timeZone } = props;
+  const { value, nowMs, timeZone } = props;
   const today = civilDay(nowMs, timeZone);
   const tomorrow = addCivilDays(today, 1);
-  const set = dueSelection(task.dueAt, nowMs, timeZone);
-  const [day, setDay] = useState<string | null>(set?.civil ?? null);
+  const set = dueSelection(value, nowMs, timeZone);
+  const day = set?.civil ?? null;
   const [strip, setStrip] = useState(set !== null && set.which === 'other');
-  useEffect(() => {
-    setDay(set?.civil ?? null);
-    // Only a new stored due moves the picker.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.dueAt]);
   const pick = (civil: string): void => {
-    // The day already set: clear the due.
-    if (set !== null && set.civil === civil) {
-      setDay(null);
-      props.onSave('');
-      return;
-    }
-    setDay(civil);
+    // The day already picked: nothing changes (Clear date clears).
+    if (day === civil) return;
+    props.onChange(dueForDay(civil, value, nowMs, timeZone));
   };
   const days = dateStripDays(nowMs, timeZone);
   const which =
@@ -257,10 +263,19 @@ function DuePicker(props: {
                 onClick={() => pick(d.civil)}
                 onContextMenu={(e) => e.preventDefault()}
                 className={cn(
-                  'flex h-[52px] w-11 shrink-0 flex-col items-center justify-center rounded-[8px] border',
+                  'flex h-[60px] w-11 shrink-0 flex-col items-center justify-center rounded-[8px] border',
                   on ? 'border-accent bg-accent text-accent-fg' : 'border-border bg-panel text-fg',
                 )}
               >
+                <span
+                  data-task-month={d.month ?? undefined}
+                  className={cn(
+                    'h-[13px] text-[10px] font-semibold uppercase leading-[13px]',
+                    on ? 'text-accent-fg' : 'text-accent',
+                  )}
+                >
+                  {d.month ?? ''}
+                </span>
                 <span className={cn('text-[11px]', on ? 'text-accent-fg' : 'text-fg-2')}>
                   {d.weekday}
                 </span>
@@ -270,44 +285,72 @@ function DuePicker(props: {
           })}
         </div>
       ) : null}
-      {day !== null ? (
-        <div
-          data-task-time-strip=""
-          className={cn('-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1', NO_TOUCH_SELECT)}
-        >
-          {DUE_HOURS.map((hour) => {
-            const on = set !== null && set.civil === day && set.hour === hour;
-            // Today's hours up to the current one are over: shown, not tappable.
-            const past = isPastHour(day, hour, nowMs, timeZone);
-            return (
-              <button
-                key={hour}
-                type="button"
-                aria-pressed={on}
-                aria-disabled={past || undefined}
-                data-task-hour={hour}
-                onClick={() => {
-                  if (!past) props.onSave(civilHourToUtcIso(day, hour, timeZone));
-                }}
-                onContextMenu={(e) => e.preventDefault()}
-                className={cn(
-                  'h-11 min-w-[56px] shrink-0 rounded-[8px] border px-2 font-mono text-[13px]',
-                  on
-                    ? 'border-accent bg-accent text-accent-fg'
-                    : past
-                      ? 'cursor-default border-border bg-panel text-fg-3'
-                      : 'border-border bg-panel text-fg',
-                )}
-              >
-                {hourLabel(hour)}
-              </button>
-            );
-          })}
-        </div>
+      {set !== null && day !== null ? (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <p data-task-due-line="" className="text-[13px] text-fg-2">
+              {dueHourLine(set.hour)}
+            </p>
+            <button
+              type="button"
+              data-task-clear-date=""
+              onClick={() => {
+                setStrip(false);
+                props.onChange(null);
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              onContextMenu={(e) => e.preventDefault()}
+              className={cn(
+                'h-11 min-w-11 shrink-0 rounded-[8px] px-3 text-[13px] text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                NO_TOUCH_SELECT,
+              )}
+            >
+              {CLEAR_DATE}
+            </button>
+          </div>
+          <div
+            data-task-time-strip=""
+            className={cn('-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1', NO_TOUCH_SELECT)}
+          >
+            {DUE_HOURS.map((hour) => {
+              const on = set.hour === hour;
+              // Today's hours up to the current one are over: shown, not tappable.
+              const past = !on && isPastHour(day, hour, nowMs, timeZone);
+              return (
+                <button
+                  key={hour}
+                  type="button"
+                  aria-pressed={on}
+                  aria-disabled={past || undefined}
+                  data-task-hour={hour}
+                  onClick={() => {
+                    if (!past && !on) props.onChange(civilHourToUtcIso(day, hour, timeZone));
+                  }}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className={cn(
+                    'h-11 min-w-[56px] shrink-0 rounded-[8px] border px-2 font-mono text-[13px]',
+                    on
+                      ? 'border-accent bg-accent text-accent-fg'
+                      : past
+                        ? 'cursor-default border-border bg-panel text-fg-3'
+                        : 'border-border bg-panel text-fg',
+                  )}
+                >
+                  {hourLabel(hour)}
+                </button>
+              );
+            })}
+          </div>
+        </>
       ) : null}
     </div>
   );
 }
+
+const ACTION = cn(
+  'h-11 min-w-11 shrink-0 rounded-[8px] px-4 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  NO_TOUCH_SELECT,
+);
 
 export interface TaskRowProps {
   task: ChatTask;
@@ -317,9 +360,16 @@ export interface TaskRowProps {
   timeZone: string;
   nameOf: (userId: string) => string;
   failed: boolean;
+  /** The row's header was tapped (expand, or collapse when expanded). */
   onToggle: () => void;
-  onSave: (field: TaskField, value: string) => void;
+  /** Cancel was tapped; the sheet asks first when the draft has changes. */
+  onCancel: () => void;
+  /** Save: only the changed fields. */
+  onSave: (changes: TaskChanges) => void;
+  onDelete: () => void;
   onRetry: () => void;
+  /** Whether the draft differs from the task (the sheet guards a collapse on it). */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export function TaskRow(props: TaskRowProps): ReactElement {
@@ -336,6 +386,23 @@ export function TaskRow(props: TaskRowProps): ReactElement {
     const timer = setTimeout(() => setMounted(false), DUR_BASE_MS);
     return () => clearTimeout(timer);
   }, [expanded]);
+  // Edits stay local until Save; each expand starts from the stored task.
+  const [draft, setDraft] = useState<TaskDraft>(() => draftOf(task));
+  useEffect(() => {
+    if (expanded) setDraft(draftOf(task));
+    // Only an expand starts a new draft (a live change never wipes one).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded]);
+  const changes = diffDraft(task, draft);
+  const dirty = expanded && hasChanges(changes);
+  const onDirtyChange = props.onDirtyChange;
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    if (dirtyRef.current === dirty) return;
+    dirtyRef.current = dirty;
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  const edit = (change: Partial<TaskDraft>): void => setDraft((prev) => ({ ...prev, ...change }));
   return (
     <li
       data-task-row-id={task.id}
@@ -403,38 +470,34 @@ export function TaskRow(props: TaskRowProps): ReactElement {
               >
                 {commitment.text}
               </p>
-              <InlineInput
+              <DraftInput
                 label="Title"
-                value={task.title}
+                value={draft.title}
                 maxLength={TASK_TITLE_MAX}
                 className="text-[16px]"
-                onSave={(v) => {
-                  if (v.trim() !== '') props.onSave('title', v);
-                }}
+                onChange={(title) => edit({ title })}
               />
-              <InlineInput
+              <DraftInput
                 label="Note"
-                value={task.note ?? ''}
+                value={draft.note}
                 placeholder="Add a note"
                 maxLength={TASK_NOTE_MAX}
                 className="text-[13px] text-fg-2"
-                onSave={(v) => props.onSave('note', v)}
+                onChange={(note) => edit({ note })}
               />
               <div className="grid grid-cols-5 gap-1.5" role="group" aria-label="Status">
                 {TASK_STATUSES.map((status) => (
                   <button
                     key={status}
                     type="button"
-                    aria-pressed={task.status === status}
+                    aria-pressed={draft.status === status}
                     data-task-status={status}
-                    onClick={() => {
-                      if (task.status !== status) props.onSave('status', status);
-                    }}
+                    onClick={() => edit({ status })}
                     onContextMenu={(e) => e.preventDefault()}
                     className={cn(
                       'flex h-11 flex-col items-center justify-center gap-0.5 rounded-[8px] border text-[11.5px] leading-[14px]',
                       NO_TOUCH_SELECT,
-                      task.status === status
+                      draft.status === status
                         ? 'border-accent bg-accent-soft text-fg'
                         : 'border-border bg-panel text-fg-2',
                     )}
@@ -449,12 +512,10 @@ export function TaskRow(props: TaskRowProps): ReactElement {
                   {TASK_PRIORITIES.map((p) => (
                     <Segment
                       key={p}
-                      selected={task.priority === p}
+                      selected={draft.priority === p}
                       data={`p${p}`}
                       className="font-mono"
-                      onClick={() => {
-                        if (task.priority !== p) props.onSave('priority', String(p));
-                      }}
+                      onClick={() => edit({ priority: p })}
                     >
                       P{p}
                     </Segment>
@@ -463,22 +524,63 @@ export function TaskRow(props: TaskRowProps): ReactElement {
                 <button
                   type="button"
                   data-task-move=""
-                  onClick={() => props.onSave('side', task.side === 'agency' ? 'client' : 'agency')}
+                  aria-pressed={draft.side !== task.side}
+                  onClick={() => edit({ side: draft.side === 'agency' ? 'client' : 'agency' })}
                   onContextMenu={(e) => e.preventDefault()}
                   className={cn(
-                    'h-11 shrink-0 rounded-[8px] border border-border bg-panel px-3 text-[13px] text-accent hover:bg-panel-2',
+                    'h-11 shrink-0 rounded-[8px] border px-3 text-[13px] text-accent hover:bg-panel-2',
+                    draft.side !== task.side
+                      ? 'border-accent bg-accent-soft'
+                      : 'border-border bg-panel',
                     NO_TOUCH_SELECT,
                   )}
                 >
-                  {task.side === 'agency' ? 'Move to Approvers →' : 'Move to Creators →'}
+                  {draft.side === 'agency' ? 'Move to Approvers →' : 'Move to Creators →'}
                 </button>
               </div>
               <DuePicker
-                task={task}
+                key={expanded ? 'open' : 'closed'}
+                value={draft.dueAt}
                 nowMs={nowMs}
                 timeZone={timeZone}
-                onSave={(value) => props.onSave('due', value)}
+                onChange={(dueAt) => edit({ dueAt })}
               />
+              <div data-task-actions="" className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  data-task-delete=""
+                  onClick={props.onDelete}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className={cn(ACTION, 'text-bad hover:bg-bad-soft')}
+                >
+                  Delete
+                </button>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  data-task-cancel=""
+                  onClick={props.onCancel}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className={cn(ACTION, 'border border-border bg-panel text-fg hover:bg-panel-2')}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  data-task-save=""
+                  disabled={!dirty}
+                  onClick={() => {
+                    if (dirty) props.onSave(changes);
+                  }}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className={cn(
+                    ACTION,
+                    'bg-accent text-accent-fg disabled:cursor-default disabled:bg-panel-3 disabled:text-fg-3',
+                  )}
+                >
+                  Save
+                </button>
+              </div>
             </div>
           ) : null}
         </div>

@@ -15,7 +15,7 @@ import {
   TASK_ROW_TITLE,
 } from '../fixtures/tasks-data';
 
-// The chat task list: the composer button, the sheet (groups, rows, add,
+// The chat Tasks: the composer button, the sheet (groups, rows, add,
 // expand and edit), the change lines in the thread, the bell's task rows,
 // Share through Forward, the due-time ring and numbered list continuation. The real app
 // tree runs against fixture data; Linux WebKit approximates iOS WebKit.
@@ -32,7 +32,7 @@ async function openChat(page: Page, name: string): Promise<void> {
 }
 
 async function openSheet(page: Page): Promise<ReturnType<Page['getByRole']>> {
-  const button = page.getByRole('button', { name: 'Task list' });
+  const button = page.getByRole('button', { name: 'Tasks', exact: true });
   await button.click();
   const sheet = page.getByRole('dialog', { name: 'Tasks' });
   await expect(sheet).toBeVisible();
@@ -47,7 +47,7 @@ test(
     seedTasks(network.world);
     await openChat(page, GROUP_NAME);
 
-    const button = page.getByRole('button', { name: 'Task list' });
+    const button = page.getByRole('button', { name: 'Tasks', exact: true });
     expectMinTouchTarget(await button.boundingBox());
     // Someone else changed the list and this device never opened it: the dot.
     await expect(button.locator('[data-task-dot]')).toBeVisible();
@@ -66,7 +66,7 @@ test(
     await expect(sheet.locator('[data-task-group="client"]')).toContainText('Approvers');
     await expect(sheet.locator('[data-task-group="done"]')).toContainText('Done today');
     await expect(sheet.locator('[data-task-counts]')).toHaveText(
-      '2 creators · 2 approvers · 0 done',
+      '2 open for creators · 2 for approvers',
     );
     // Agency: P1 (8) before P2 (9); Client: P0 (10) before P2 (11).
     const numbers = await sheet
@@ -84,7 +84,11 @@ test(
     await expect(button.locator('[data-task-dot]')).toHaveCount(0);
 
     const add = sheet.getByRole('textbox', { name: 'Add to Creators' });
+    // The next number shows only in the row being typed in.
+    await expect(sheet.locator('[data-task-preview]')).toHaveCount(0);
+    await add.focus();
     await expect(sheet.locator('[data-task-add="agency"] [data-task-preview]')).toHaveText('12');
+    await expect(sheet.locator('[data-task-add="client"] [data-task-preview]')).toHaveCount(0);
     await add.fill('Story frames');
     await add.press('Enter');
     await expect(add).toBeFocused();
@@ -107,9 +111,7 @@ test(
   },
 );
 
-test('expand a row: P0, Tomorrow 12 pm, Shared; the thread and footer show it', async ({
-  page,
-}) => {
+test('edit a row: P0, Tomorrow 12 pm, Shared, then Save: one write, one line', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
@@ -121,42 +123,78 @@ test('expand a row: P0, Tomorrow 12 pm, Shared; the thread and footer show it', 
   await expect(sheet.locator('[data-task-number="9"]')).toHaveClass(/opacity-45/);
 
   await row.locator('[data-task-opt="p0"]').click();
-  await expect(row.locator('[data-task-p="0"]')).toBeVisible();
   await row.locator('[data-task-opt="tomorrow"]').click();
-  // The time is required: nothing saved until it is tapped.
-  expect(network.rpcCalls.filter((c) => c.args.p_field === 'due')).toHaveLength(0);
+  // A day without a time is 9 pm, and says so.
+  await expect(row.locator('[data-task-due-line]')).toHaveText('Due 9 pm');
+  // Tapping the picked day again keeps it.
+  await row.locator('[data-task-opt="tomorrow"]').click();
+  await expect(row.locator('[data-task-due-line]')).toHaveText('Due 9 pm');
   await row.locator('[data-task-hour="12"]').click();
-  await expect(row.locator('[data-task-due]')).toHaveText('Tmrw 12 pm');
-  await expect(row.locator('[data-task-commitment]')).toContainText(
-    'Due tomorrow 12 pm · set by You',
-  );
+  await expect(row.locator('[data-task-due-line]')).toHaveText('Due 12 pm');
   await row.locator('[data-task-status="shared"]').click();
-  // Still in place while expanded (the order holds until it collapses).
-  await expect(row.locator('[data-task-glyph="shared"]').first()).toBeVisible();
+  // Nothing is written until Save.
+  expect(network.rpcCalls.filter((c) => c.name.startsWith('chat_task_'))).toHaveLength(0);
+  await row.locator('[data-task-save]').click();
 
-  const sets = network.rpcCalls.filter((c) => c.name === 'chat_task_set');
-  expect(sets.map((c) => [c.args.p_field, c.args.p_value])).toEqual([
-    ['priority', '0'],
-    ['due', sets[1]?.args.p_value],
-    ['status', 'shared'],
-  ]);
-  expect(String(sets[1]?.args.p_value)).toMatch(/T12:00:00\.000Z$/);
+  // The write leaves after the tap: wait for it to be recorded.
+  await expect
+    .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_task_save').length)
+    .toBe(1);
+  const saves = network.rpcCalls.filter((c) => c.name === 'chat_task_save');
+  const changes = saves[0]?.args.p_changes as Record<string, unknown>;
+  expect(Object.keys(changes).sort()).toEqual(['due', 'priority', 'status']);
+  expect(changes.priority).toBe(0);
+  expect(changes.status).toBe('shared');
+  expect(String(changes.due)).toMatch(/T12:00:00\.000Z$/);
+  expect(network.rpcCalls.filter((c) => c.name === 'chat_task_set')).toHaveLength(0);
   await expect(page.locator('[data-task-footer]')).toContainText(
-    `Last change: You · 8 ${TASK_ROW_TITLE} → Shared · `,
+    'Last change: You · #8 updated: status, priority, due · ',
   );
 
   await page.getByRole('button', { name: 'Close' }).last().click();
   await expect(page.getByRole('dialog', { name: 'Tasks' })).toHaveCount(0);
-  await expect(page.locator('[data-task-line="priority"]')).toContainText('You 8 P1 → P0');
-  await expect(page.locator('[data-task-line="due"]')).toContainText('You 8 due tomorrow 12 pm');
-  await expect(page.locator('[data-task-line="status"]')).toContainText(
-    `You 8 ${TASK_ROW_TITLE} → Shared`,
+  await expect(page.locator('[data-task-line="edited"]')).toHaveCount(1);
+  await expect(page.locator('[data-task-line="edited"]')).toContainText(
+    'You #8 updated: status, priority, due',
   );
-  // A tap on a line opens the sheet on that item.
-  await page.locator('[data-task-line="status"]').click();
+  // A tap on a line opens the sheet on that task.
+  await page.locator('[data-task-line="edited"]').click();
   await expect(
     page.getByRole('dialog', { name: 'Tasks' }).locator('[data-task-number="8"]'),
   ).toHaveAttribute('data-task-expanded', '');
+  expectClean(network);
+});
+
+test('Cancel with changes asks first; Delete hides at once and Undo brings it back', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  seedTasks(network.world);
+  await openChat(page, GROUP_NAME);
+  const sheet = await openSheet(page);
+
+  const row = sheet.locator('[data-task-number="9"]');
+  await row.locator('button[aria-expanded]').click();
+  await row.locator('[data-task-opt="p0"]').click();
+  await row.locator('[data-task-cancel]').click();
+  const ask = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(row).toHaveAttribute('data-task-expanded', '');
+  await row.locator('[data-task-cancel]').click();
+  await page
+    .getByRole('alertdialog', { name: 'Discard your changes?' })
+    .getByRole('button', { name: 'Discard' })
+    .click();
+  await expect(row).not.toHaveAttribute('data-task-expanded', '');
+
+  await row.locator('button[aria-expanded]').click();
+  await row.locator('[data-task-delete]').click();
+  await expect(sheet.locator('[data-task-number="9"]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(sheet.locator('[data-task-number="9"]')).toHaveCount(1);
+  expect(network.rpcCalls.filter((c) => c.name === 'chat_task_delete')).toHaveLength(0);
   expectClean(network);
 });
 
@@ -205,7 +243,7 @@ test('Share: the snapshot lands here and, Forwarded, in the picked chat and its 
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
   const sheet = await openSheet(page);
-  await sheet.getByRole('button', { name: 'Share task list' }).click();
+  await sheet.getByRole('button', { name: 'Share tasks' }).click();
 
   const picker = page.getByRole('dialog', { name: 'Forward to' });
   await expect(picker).toBeVisible();
@@ -215,7 +253,7 @@ test('Share: the snapshot lands here and, Forwarded, in the picked chat and its 
   await expect(page.getByRole('dialog', { name: 'Tasks' })).toHaveCount(0);
 
   // This chat: the normal send, then the thread's forward of that message.
-  const here = page.locator('[data-bubble]', { hasText: `Task list · ${GROUP_NAME} · ` });
+  const here = page.locator('[data-bubble]', { hasText: `Tasks · ${GROUP_NAME} · ` });
   await expect(here).toBeVisible();
   await expect(here.locator('[data-forwarded]')).toHaveCount(0);
   const sends = network.rpcCalls.filter((c) => c.name === 'chat_message_send');
@@ -224,7 +262,7 @@ test('Share: the snapshot lands here and, Forwarded, in the picked chat and its 
   expect(own).toHaveLength(1);
   expect(copy).toHaveLength(1);
   const body = String(own[0]?.args.p_body);
-  expect(body.startsWith(`Task list · ${GROUP_NAME} · `)).toBe(true);
+  expect(body.startsWith(`Tasks · ${GROUP_NAME} · `)).toBe(true);
   expect(body).toContain('\nCreators\n8. Hook options · P1\n9. Shot list · P2 · today');
   expect(body).toContain(`\nApprovers\n10. ${TASK_DUE_TITLE} · P0 · today`);
   expect(body).toContain('(missed)');
