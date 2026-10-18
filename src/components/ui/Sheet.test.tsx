@@ -45,9 +45,7 @@ async function mount(opts: Opts = {}) {
 
 const confirm = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
 const button = (label: string) =>
-  [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (b) => b.textContent === label,
-  );
+  [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label);
 
 async function pressEscape(): Promise<void> {
   await act(async () => {

@@ -57,12 +57,9 @@ describe('copy call sites', () => {
     expect(src).not.toContain('writeClipboard');
   });
 
-  it.each(sites.filter((p) => !p.endsWith('PaintLog.tsx')))(
-    '%s shows the failure copy',
-    (path) => {
-      expect(readFileSync(path, 'utf8')).toContain('COPY_FAILED');
-    },
-  );
+  it.each(sites.filter((p) => !p.endsWith('PaintLog.tsx')))('%s shows the failure copy', (path) => {
+    expect(readFileSync(path, 'utf8')).toContain('COPY_FAILED');
+  });
 
   it('PaintLog falls back to its failed state on false', () => {
     const src = readFileSync('src/components/chat/PaintLog.tsx', 'utf8');
