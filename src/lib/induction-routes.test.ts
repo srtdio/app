@@ -40,6 +40,17 @@ const TEAM_LOOK_AROUND = [
   'transcript',
   'activity',
 ];
+// The creator replies on a highlighted line of the sample post instead.
+const CREATOR_LOOK_AROUND = [
+  'brief_open',
+  'plan_open',
+  'highlight_tap',
+  'reply_button',
+  'reply_post',
+  'group_open',
+  'transcript',
+  'activity',
+];
 const FIRST_POST = [
   'post_create',
   'post_caption',
@@ -60,7 +71,7 @@ describe('route order', () => {
         ...FIRST_POST,
         'approver_invite',
         'team_invite',
-        ...TEAM_LOOK_AROUND,
+        ...CREATOR_LOOK_AROUND,
       ].map((id) => `c_${id}`),
     );
   });
@@ -180,7 +191,11 @@ describe('step shape', () => {
     expect(stepById('c_post_send')?.why).toBe('Next, you invite your approver.');
     expect(stepById('i_post_send')?.why).toBe('The approvers get it.');
     expect(stepById('a_comment_post')?.why).toBe('The team sees it on the post.');
-    expect(stepById('c_comment_post')?.why).toBe('It stays on the post, not on WhatsApp.');
+    expect(stepById('i_comment_post')?.why).toBe('It stays on the post, not on WhatsApp.');
+    expect(stepById('c_highlight_tap')?.label).toBe('Tap the highlighted text');
+    expect(stepById('c_reply_post')?.why).toBe('It stays on the post, not on WhatsApp.');
+    expect(stepById('c_group_open')?.pauseWhy).toBe('Your reply is on the post. Tap Next.');
+    expect(stepById('i_group_open')?.pauseWhy).toBe('Your comment is on the post. Tap Next.');
     expect(stepById('c_team_invite')).toMatchObject({
       kind: 'optional',
       dataDone: 'teamInvited',
@@ -244,7 +259,7 @@ describe('isApplicable', () => {
       false,
     );
     expect(
-      isApplicable(stepById('c_line_select') as Step, { ...ALL_FACTS, hasOwnPost: false }),
+      isApplicable(stepById('c_highlight_tap') as Step, { ...ALL_FACTS, hasOwnPost: false }),
     ).toBe(false);
     expect(
       isApplicable(stepById('a_transcript') as Step, { ...ALL_FACTS, hasVoiceNote: false }),

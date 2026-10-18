@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { staticAsset } from '@/lib/static-assets';
 import { useInView } from '@/lib/use-in-view';
 import type { PresignCache } from '@/lib/asset-presign';
 
@@ -105,15 +106,25 @@ export function useThumbnail<T extends Element = HTMLDivElement>({
 }: UseThumbnailArgs): ThumbnailHandle<T> {
   const { ref, inView } = useInView<T>();
   const active = enabled && assetVersionId !== null;
+  // A sample-week file shows its small static copy at once: no presign, no wait.
+  const fixed = active && assetVersionId !== null ? staticAsset(assetVersionId) : undefined;
   const [url, setUrl] = useState<string | null>(() =>
-    active && assetVersionId !== null ? (cache.peek(assetVersionId)?.url ?? null) : null,
+    active && assetVersionId !== null
+      ? (fixed?.thumb ?? cache.peek(assetVersionId)?.url ?? null)
+      : null,
   );
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!active || assetVersionId === null || !inView) return;
+    if (!active || assetVersionId === null) return;
+    if (fixed !== undefined) {
+      setUrl(fixed.thumb);
+      setFailed(false);
+      return;
+    }
+    if (!inView) return;
     return runThumbnailLoad(assetVersionId, cache, { setUrl, setFailed });
-  }, [active, assetVersionId, inView, cache]);
+  }, [active, assetVersionId, inView, cache, fixed]);
 
   // A presigned URL that 403s or is an unsupported image still must not render a
   // blank tile: fall back to the glyph on the <img>'s error event.

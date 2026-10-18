@@ -391,6 +391,7 @@ function StepLayer({
       nextEl,
       nextElsewhere: next === undefined || next.place !== step.place,
       where: `${location.pathname}${location.search}`,
+      ...(step.tapFirst === true ? { tapFirst: true } : {}),
     },
     () => ctx.moveTo(index + 1),
   );

@@ -27,7 +27,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconChevronLeft, IconChevronRight, IconCopy, IconPipeline } from '@/components/ui/icons';
 import { PlatformPreviewPanel, PreviewChip } from '@/components/preview/PlatformPreviewPanel';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
-import { CaptionView } from '@/components/pages/pcs/CaptionView';
+import { CaptionView, firstHighlightCommentId } from '@/components/pages/pcs/CaptionView';
 import type { CaptionAnnotationView } from '@/components/pages/pcs/CaptionView';
 import { CaptionAnnotationComposer } from '@/components/pages/pcs/CaptionAnnotationComposer';
 import { PinAnnotationComposer } from '@/components/pages/pcs/PinAnnotationComposer';
@@ -1640,6 +1640,7 @@ export function PostDetailPage({
                     refreshSignal={commentsRefresh}
                     focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
                     viewerIsClient={clientRole}
+                    guideReplyCommentId={firstHighlightCommentId(post.caption ?? '', highlights)}
                   />
                 </div>
               ) : (

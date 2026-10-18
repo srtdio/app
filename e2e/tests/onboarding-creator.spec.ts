@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
-import { GROUP_CHANNEL, GROUP_ID, ME, WORKSPACE_ID } from '../fixtures/chat-data';
+import { COLLEAGUE_A, GROUP_CHANNEL, GROUP_ID, ME, WORKSPACE_ID } from '../fixtures/chat-data';
 import { inductionDone, startInduction } from '../fixtures/induction-rpc';
 import type { Row } from '../fixtures/postgrest';
 import { ROUTE_SCRIPTS } from '../../src/lib/induction-routes';
@@ -13,7 +13,6 @@ import {
   expectCard,
   expectGuideId,
   expectStep,
-  selectCaptionWords,
   tapControl,
 } from '../helpers/guide';
 
@@ -35,6 +34,8 @@ const SUPABASE = 'https://harness.supabase.test';
 const script = ROUTE_SCRIPTS.creator;
 const NOISE = [/chat store: initial load failed.*read cancelled/];
 const POST_TITLE = 'Launch day';
+
+const HIGHLIGHT_COMMENT = '0190e000-0000-7000-8000-00000000c0a1';
 
 function step(id: string): Step {
   const found = script.steps.find((s) => s.id === id);
@@ -174,6 +175,45 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   });
   expect('target_date' in (created?.args.p_payload as Record<string, unknown>)).toBe(false);
 
+  // A teammate's comment on the post's first word, as the sample week's review
+  // post carries: the Review chapter replies on it.
+  const mine = network.world.tables.posts?.find((p) => p.created_by === ME);
+  if (mine === undefined) throw new Error('no own post');
+  const version = (mine.post_versions as Row[] | undefined)?.[0];
+  (network.world.tables.comments ??= []).push({
+    id: HIGHLIGHT_COMMENT,
+    workspace_id: mine.workspace_id,
+    entity_type: 'post',
+    entity_id: mine.id,
+    parent_comment_id: null,
+    author_user_id: COLLEAGUE_A,
+    body: 'Say lands, not drops.',
+    mentions: null,
+    attachment_asset_ids: null,
+    resolved_at: null,
+    resolved_by: null,
+    unaccepted_by: null,
+    created_at: new Date().toISOString(),
+    edited_at: null,
+    deleted_at: null,
+  });
+  mine.post_annotations = [
+    {
+      id: crypto.randomUUID(),
+      post_id: mine.id,
+      workspace_id: mine.workspace_id,
+      post_version_id: version?.id,
+      kind: 'caption_span',
+      caption_start: 0,
+      caption_end: 6,
+      asset_attachment_id: null,
+      image_x: null,
+      image_y: null,
+      comment_id: HIGHLIGHT_COMMENT,
+      created_at: new Date().toISOString(),
+    },
+  ];
+
   // Step 4: the approver invite (a gate: leaving brings the person back), then
   // the optional team invite.
   await expect(page).toHaveURL(/\/settings\?panel=members/, { timeout: 15_000 });
@@ -212,22 +252,28 @@ test('creator: workspace, first post, approver invite, then the look-around', as
     button: script.intro.button,
   });
   await page.getByRole('button', { name: script.intro.button, exact: true }).click();
-  await check('c_line_select');
-  // The tap alone selects nothing; the Comment button (the next control)
-  // shows once a line is selected, which finishes the step.
-  await tapControl(page, step('c_line_select'));
-  await selectCaptionWords(page);
-  await expectGuideId(page, 'c_comment_button');
-  await check('c_comment_button');
-  await tapControl(page, step('c_comment_button'));
-  await page.keyboard.type('Ready for Riya.');
-  await check('c_comment_post');
-  await tapControl(page, step('c_comment_post'));
+  // Review: tap the highlighted line, Reply on its comment, post the reply.
+  await check('c_highlight_tap');
+  await tapControl(page, step('c_highlight_tap'));
+  await expectGuideId(page, 'c_reply_button');
+  await check('c_reply_button');
+  await tapControl(page, step('c_reply_button'));
+  await expectGuideId(page, 'c_reply_post');
+  await page.keyboard.type('On it.');
+  await check('c_reply_post');
+  await tapControl(page, step('c_reply_post'));
+  await expect
+    .poll(
+      () =>
+        network.world.tables.comments?.filter((c) => c.parent_comment_id === HIGHLIGHT_COMMENT)
+          .length,
+    )
+    .toBe(1);
 
-  // The comment stays in view: the guide waits on the post for Next.
+  // The reply stays in view: the guide waits on the post for Next.
   await expectGuideId(page, 'c_group_open');
   await expect(page).toHaveURL(/\/posts\//);
-  await expect(page.locator('[data-induction-bar]')).toContainText('Your comment is on the post.');
+  await expect(page.locator('[data-induction-bar]')).toContainText('Your reply is on the post.');
   await page.locator('[data-induction-next]').click();
   await check('c_group_open');
   await tapControl(page, step('c_group_open'), narrow);

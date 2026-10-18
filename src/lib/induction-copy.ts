@@ -143,6 +143,17 @@ export const STEP_COPY = {
   comment_post: { label: 'Tap to post the comment', why: 'It stays on the post, not on WhatsApp.' },
   comment_post_approver: { label: 'Tap to post the comment', why: 'The team sees it on the post.' },
   group_open: { label: 'Tap to open the group', why: 'Team and client, in one place.' },
+  highlight_tap: {
+    label: 'Tap the highlighted text',
+    why: 'Each highlight is a comment on that line.',
+  },
+  reply_button: { label: 'Tap Reply', why: 'Answer right under that comment.' },
+  reply_post: { label: 'Tap to post your reply', why: 'It stays on the post, not on WhatsApp.' },
+  group_open_after_reply: {
+    label: 'Tap to open the group',
+    why: 'Team and client, in one place.',
+    pauseWhy: 'Your reply is on the post. Tap Next.',
+  },
   group_open_after_comment: {
     label: 'Tap to open the group',
     why: 'Team and client, in one place.',

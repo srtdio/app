@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
+import { dispatchInductionDid, INDUCTION_KEYS } from '@/lib/induction';
 import { Textarea } from '@/components/ui/Textarea';
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
@@ -104,6 +105,9 @@ interface CommentsProps {
    *  (comment_batch_create). Replies (any role), the agency composer, and the
    *  brief mount (which never passes this) keep CommentComposer unchanged. */
   viewerIsClient?: boolean;
+  /** The comment the onboarding guide teaches replying on (the first caption
+   *  highlight's): its Reply and reply Post carry the guide's keys. */
+  guideReplyCommentId?: string | null;
 }
 
 /** Stable DOM id for a comment row, so a caption highlight can scroll to it. */
@@ -866,6 +870,7 @@ export function Comments({
   refreshSignal,
   focusCommentId,
   viewerIsClient,
+  guideReplyCommentId = null,
 }: CommentsProps) {
   const newTrace = useNewTrace();
   const { canAttach, presignEnabled, presignCache, uploadFile } = useCommentAttachments();
@@ -1129,6 +1134,10 @@ export function Comments({
     );
     if (!result.ok) return { ok: false, error: result.error.message };
     const parentId = options.parentCommentId;
+    // The guide's reply landed: it moves on even if a phone lost the tap.
+    if (parentId !== null && parentId === guideReplyCommentId) {
+      dispatchInductionDid(INDUCTION_KEYS.postReplyPost);
+    }
     if (parentId !== null) {
       setReplyOpen((prev) => {
         const next = new Set(prev);
@@ -1537,6 +1546,9 @@ export function Comments({
               size="sm"
               variant="ghost"
               className="min-h-[44px] min-w-[44px]"
+              data-induction={
+                comment.id === guideReplyCommentId ? INDUCTION_KEYS.postCommentReply : undefined
+              }
               onClick={() => toggleReply(comment.id)}
             >
               {isReplyOpen ? 'Cancel' : 'Reply'}
@@ -1569,6 +1581,9 @@ export function Comments({
               uploadFile={uploadFile}
               placeholder="Write a reply"
               submitLabel="Reply"
+              {...(comment.id === guideReplyCommentId
+                ? { submitAnchor: INDUCTION_KEYS.postReplyPost }
+                : {})}
               autoFocus
               initialBody={checkpointReplySeed(
                 pushbackSeeds.has(comment.id),
@@ -1823,6 +1838,11 @@ export function Comments({
                         size="sm"
                         variant="ghost"
                         className="min-h-[44px] min-w-[44px]"
+                        data-induction={
+                          comment.id === guideReplyCommentId
+                            ? INDUCTION_KEYS.postCommentReply
+                            : undefined
+                        }
                         onClick={() => toggleReply(comment.id)}
                       >
                         {replyOpen.has(comment.id) ? 'Cancel' : 'Reply'}
@@ -1963,6 +1983,9 @@ export function Comments({
                           uploadFile={uploadFile}
                           placeholder="Write a reply"
                           submitLabel="Reply"
+                          {...(comment.id === guideReplyCommentId
+                            ? { submitAnchor: INDUCTION_KEYS.postReplyPost }
+                            : {})}
                           autoFocus
                           initialBody={checkpointReplySeed(
                             pushbackSeeds.has(comment.id),

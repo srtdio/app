@@ -16,6 +16,8 @@
 // and a PDF's bytes streamed through the Worker. The viewer never reuses a
 // cached link: freshUrl and pdf ask the Worker again on every open.
 
+import { staticAsset } from '@/lib/static-assets';
+
 /** A successfully minted URL with its absolute expiry in epoch milliseconds. */
 export interface PresignedUrl {
   url: string;
@@ -170,6 +172,9 @@ const DEFAULT_REFRESH_SKEW_MS = 60_000;
  * via the returned promise, dedupes concurrent requests for the same version,
  * and refreshes once the cached URL is within the skew window of expiry.
  */
+/** A static file does not expire; a week out keeps refresh timers in setTimeout's range. */
+const STATIC_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 export class PresignCache {
   private readonly cache = new Map<string, PresignedUrl>();
   private readonly inflight = new Map<string, Promise<PresignedUrl>>();
@@ -188,6 +193,8 @@ export class PresignCache {
 
   /** A cached, still-valid URL for synchronous render, or null. */
   peek(assetVersionId: string): PresignedUrl | null {
+    const fixed = staticAsset(assetVersionId);
+    if (fixed !== undefined) return { url: fixed.full, expiresAt: Date.now() + STATIC_TTL_MS };
     const hit = this.cache.get(assetVersionId);
     if (hit !== undefined && Date.now() < hit.expiresAt - this.refreshSkewMs) return hit;
     return null;
@@ -199,6 +206,10 @@ export class PresignCache {
    * Bounded by the same concurrency cap; concurrent asks share one request.
    */
   thumbnail(assetVersionId: string): Promise<PresignedUrl | null> {
+    const fixedThumb = staticAsset(assetVersionId);
+    if (fixedThumb !== undefined) {
+      return Promise.resolve({ url: fixedThumb.thumb, expiresAt: Date.now() + STATIC_TTL_MS });
+    }
     if (this.noThumbnail.has(assetVersionId)) return Promise.resolve(null);
     const cached = this.peekThumbnail(assetVersionId);
     if (cached !== null) return Promise.resolve(cached);
@@ -219,6 +230,9 @@ export class PresignCache {
 
   /** A cached, still-valid thumbnail URL for synchronous render, or null. */
   peekThumbnail(assetVersionId: string): PresignedUrl | null {
+    const fixedThumb = staticAsset(assetVersionId);
+    if (fixedThumb !== undefined)
+      return { url: fixedThumb.thumb, expiresAt: Date.now() + STATIC_TTL_MS };
     const hit = this.thumbCache.get(assetVersionId);
     if (hit !== undefined && Date.now() < hit.expiresAt - this.refreshSkewMs) return hit;
     return null;
