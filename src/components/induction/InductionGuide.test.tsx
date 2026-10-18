@@ -902,12 +902,8 @@ describe('the opt-out', () => {
       (b) => b.textContent === "It's just me for now",
     );
 
-  it('shows only once they scroll by hand, then moves on quietly', async () => {
+  it('shows at once with no scroll, then moves on quietly', async () => {
     await teamInvite();
-    expect(later()).toBeUndefined();
-    act(() => {
-      window.dispatchEvent(new Event('wheel'));
-    });
     const button = later();
     expect(button).toBeDefined();
     act(() => button?.click());
