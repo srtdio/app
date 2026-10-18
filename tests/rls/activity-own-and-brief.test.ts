@@ -71,6 +71,7 @@ describe.runIf(RLS_SUITE)('activity: own rows and brief activity', () => {
   let owner: SeededUser;
   let agency: SeededUser;
   let client: SeededUser;
+  let client2: SeededUser;
   let solo: SeededUser;
   let outsider: SeededUser;
   let ws: SeededWorkspace;
@@ -155,6 +156,7 @@ describe.runIf(RLS_SUITE)('activity: own rows and brief activity', () => {
     owner = await seedUser(env, admin);
     agency = await seedUser(env, admin);
     client = await seedUser(env, admin);
+    client2 = await seedUser(env, admin);
     solo = await seedUser(env, admin);
     outsider = await seedUser(env, admin);
     ws = await seedWorkspace(admin, owner, `Activity own ${owner.email}`);
@@ -162,12 +164,17 @@ describe.runIf(RLS_SUITE)('activity: own rows and brief activity', () => {
     other = await seedWorkspace(admin, outsider, `Activity other ${outsider.email}`);
     await seedMember(g, ws, agency, 'agency');
     await seedMember(g, ws, client, 'client');
+    await seedMember(g, ws, client2, 'client');
     bucketId = await bucketFor(ws.id);
     soloBucketId = await bucketFor(soloWs.id);
   });
 
   afterAll(async () => {
-    await cleanupWorkspaces(admin, [ws, soloWs, other], [owner, agency, client, solo, outsider]);
+    await cleanupWorkspaces(
+      admin,
+      [ws, soloWs, other],
+      [owner, agency, client, client2, solo, outsider],
+    );
   });
 
   it('stage_transition: the actor gets exactly one own row, already read', async () => {
@@ -186,7 +193,7 @@ describe.runIf(RLS_SUITE)('activity: own rows and brief activity', () => {
       to: 'approved',
       actor_role: 'agency',
     });
-    expect(others(list)).toEqual([owner.id, client.id].sort());
+    expect(others(list)).toEqual([owner.id, client.id, client2.id].sort());
   });
 
   it('one-member workspace: the actor still gets an own row', async () => {
@@ -220,20 +227,20 @@ describe.runIf(RLS_SUITE)('activity: own rows and brief activity', () => {
     const list = await rows(ws.id, 'comment', postId);
     expect(own(list, owner.id)).toHaveLength(1);
     const recipients = others(list);
-    expect(recipients).toEqual([agency.id, client.id].sort());
+    expect(recipients).toEqual([agency.id, client.id, client2.id].sort());
     expect(new Set(recipients).size).toBe(recipients.length);
   });
 
-  it('brief_create reaches the client; the creator gets an own row', async () => {
-    const briefId = await createBrief(agency, ws.id);
+  it('brief_create reaches every member incl. other clients; the creator gets an own row', async () => {
+    const briefId = await createBrief(client, ws.id);
     const list = await rows(ws.id, 'brief_created', briefId);
-    expect(others(list)).toEqual([owner.id, client.id].sort());
-    expect(own(list, agency.id)).toHaveLength(1);
-    for (const row of list) expect(row.actor_user_id).toBe(agency.id);
+    expect(others(list)).toEqual([owner.id, agency.id, client2.id].sort());
+    expect(own(list, client.id)).toHaveLength(1);
+    for (const row of list) expect(row.actor_user_id).toBe(client.id);
   });
 
-  it('brief comments and mentions reach the client', async () => {
-    const briefId = await createBrief(owner, ws.id);
+  it('brief comments and mentions reach clients who did not create the brief', async () => {
+    const briefId = await createBrief(client, ws.id);
     const res = await clientFor(agency.id).rpc(
       'comment_create',
       rpcArgs({
@@ -242,25 +249,25 @@ describe.runIf(RLS_SUITE)('activity: own rows and brief activity', () => {
         p_entity_id: briefId,
         p_parent_comment_id: null as unknown as string,
         p_body: 'Need references',
-        p_mentions: [client.id],
+        p_mentions: [client2.id],
         p_attachment_asset_ids: [],
         p_trace_id: uuidv7(),
       }),
     );
     expect(res.error).toBeNull();
-    expect(others(await rows(ws.id, 'mention', briefId))).toEqual([client.id]);
-    expect(others(await rows(ws.id, 'comment', briefId))).toEqual([owner.id]);
+    expect(others(await rows(ws.id, 'mention', briefId))).toEqual([client2.id]);
+    expect(others(await rows(ws.id, 'comment', briefId))).toEqual([owner.id, client.id].sort());
   });
 
   it('brief_close: every other member, client included, sees who closed it', async () => {
-    const briefId = await createBrief(agency, ws.id);
+    const briefId = await createBrief(client, ws.id);
     const res = await clientFor(owner.id).rpc(
       'brief_close',
       rpcArgs({ p_brief_id: briefId, p_trace_id: uuidv7() }),
     );
     expect(res.error).toBeNull();
     const list = await rows(ws.id, 'brief_closed', briefId);
-    expect(others(list)).toEqual([agency.id, client.id].sort());
+    expect(others(list)).toEqual([agency.id, client.id, client2.id].sort());
     expect(own(list, owner.id)).toHaveLength(1);
     for (const row of list) {
       expect(row.actor_user_id).toBe(owner.id);
@@ -269,7 +276,7 @@ describe.runIf(RLS_SUITE)('activity: own rows and brief activity', () => {
   });
 
   it('post_create from a brief: brief_post_created for draft viewers, not the client', async () => {
-    const briefId = await createBrief(owner, ws.id);
+    const briefId = await createBrief(client, ws.id);
     const res = await clientFor(agency.id).rpc(
       'post_create',
       rpcArgs({
@@ -289,7 +296,7 @@ describe.runIf(RLS_SUITE)('activity: own rows and brief activity', () => {
     const list = await rows(ws.id, 'brief_post_created', postId);
     expect(others(list)).toEqual([owner.id]);
     expect(own(list, agency.id)).toHaveLength(1);
-    expect(list.some((r) => r.user_id === client.id)).toBe(false);
+    expect(list.some((r) => r.user_id === client.id || r.user_id === client2.id)).toBe(false);
     expect(list[0]?.payload).toMatchObject({ brief_id: briefId });
   });
 
