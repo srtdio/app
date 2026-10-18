@@ -66,6 +66,7 @@ export const INDUCTION_RPC: Record<string, RpcHandler> = {
   },
   // The sample week: the harness has none unless a spec seeds induction_sample_rows itself.
   induction_sample_seed: () => ({ seeded: false }),
+  induction_sample_files: () => [],
   induction_sample_clear: (args, tables) => {
     tables.induction_sample_rows = (tables.induction_sample_rows ?? []).filter(
       (r) => r.workspace_id !== args.p_workspace_id,

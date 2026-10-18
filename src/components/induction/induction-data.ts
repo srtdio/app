@@ -13,6 +13,8 @@ import {
   type InductionState,
 } from '@/lib/induction';
 import { logger } from '@/lib/logger';
+import { registerStaticAssets, staticThumbs, warmImages } from '@/lib/static-assets';
+import { generateTraceId as newTraceId } from '@/lib/trace';
 
 /** induction_state for the caller; p_workspace_id is null before a workspace exists. */
 export async function readInductionState(
@@ -428,4 +430,23 @@ export async function readGuideFacts(
       postId !== null ? readPostTitle(client, postId) : Promise.resolve(''),
     ]);
   return { group, reviewPost, hasBrief, hasPlan, hasVoiceNote, ownPostTitle, sample };
+}
+
+/**
+ * The sample week's files ship with the app: remember their versions as static
+ * (no presign round trip) and fetch their small copies now, so the pipeline's
+ * photos paint the moment it renders. Fails soft: they then presign as usual.
+ */
+export async function loadSampleAssets(client: Client, workspaceId: string): Promise<void> {
+  try {
+    // Through the proc: asset_versions RLS shows library files only, and the
+    // week's chat photos and voice note need their keys too.
+    const args = { p_workspace_id: workspaceId, p_trace_id: newTraceId() };
+    const { data, error } = await client.rpc('induction_sample_files', args);
+    if (error || data === null) return;
+    registerStaticAssets(data);
+    warmImages(staticThumbs());
+  } catch {
+    // Presign as usual.
+  }
 }

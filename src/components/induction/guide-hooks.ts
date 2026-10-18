@@ -29,6 +29,11 @@ export interface CompletionInput {
   nextElsewhere: boolean;
   /** The current location (pathname + search); a change after a tap confirms it. */
   where: string;
+  /**
+   * Only a tap on the control finishes the step: the next control being on
+   * screen already (a Reply below a highlight) must not finish it by itself.
+   */
+  tapFirst?: boolean;
 }
 
 /** How long after a tap the DOM may confirm it; after that the step stays. */
@@ -77,7 +82,7 @@ export function domConfirms(now: Seen, input: CompletionInput): boolean {
   // means nothing: a sheet mounts its fields a frame after it opens.
   if (!now.found) return false;
   if (nextEl === undefined) now.nextAbsent = true;
-  else if (now.nextAbsent) return true;
+  else if (now.nextAbsent && input.tapFirst !== true) return true;
   return tapConfirmed(now, input);
 }
 

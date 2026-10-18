@@ -43,6 +43,7 @@ import {
   NO_SAMPLE,
   readGuideFacts,
   seedSampleWeek,
+  loadSampleAssets,
   forgetKnownGroups,
   type GuideFactsRead,
   type SampleWeek,
@@ -161,6 +162,14 @@ export function InductionProvider({
       !read.facts.sample.seeded,
     workspaceId,
   });
+  // A page load mid-tour (the week already there): its photos skip presign too.
+  const sampleSeeded = read.facts.sample.seeded;
+  const assetsFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sampleSeeded || workspaceId === null || assetsFor.current === workspaceId) return;
+    assetsFor.current = workspaceId;
+    void loadSampleAssets(supabase, workspaceId);
+  }, [sampleSeeded, workspaceId]);
   const { setPolling } = data;
   const gated = resolution.kind === 'step' && isGated(resolution.step);
   useEffect(() => {
@@ -202,7 +211,10 @@ function useSampleSeed(input: { on: boolean; workspaceId: string | null }): void
     // The guide waits while the week lands (guide-hooks: SEEDING_ATTR), so it never
     // points at an empty pipeline that fills a moment later.
     document.documentElement.setAttribute(SEEDING_ATTR, '');
-    void seedSampleWeek(supabase, { workspaceId, traceId: newTraceId() }).then((seeded) => {
+    void seedSampleWeek(supabase, { workspaceId, traceId: newTraceId() }).then(async (seeded) => {
+      // The week's photos are known (and their small copies fetching) before any
+      // page re-reads, so they paint with the posts, not after them.
+      if (seeded) await loadSampleAssets(supabase, workspaceId);
       document.documentElement.removeAttribute(SEEDING_ATTR);
       if (!seeded) return;
       // The week renames the default group and gives it a picture: read it again.

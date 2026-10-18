@@ -26,6 +26,8 @@ vi.mock('./induction-data', () => ({
   NO_SAMPLE: { seeded: false, reviewPostId: null, postIds: [] },
   seedSampleWeek: async () => false,
   clearSampleWeek: async () => true,
+  loadSampleAssets: async () => undefined,
+  forgetKnownGroups: () => undefined,
 }));
 
 import { InductionGuide } from './InductionGuide';
@@ -895,8 +897,8 @@ describe('the opt-out', () => {
 
 describe('the chapter dots', () => {
   it('marks finished chapters green, the current one amber, upcoming ones grey', async () => {
-    const comment = stepFor('creator', 'post-comment-button');
-    control('post-comment-button', { top: 300, left: 16, width: 120, height: 44 });
+    const comment = stepFor('creator', 'post-comment-reply');
+    control('post-comment-reply', { top: 300, left: 16, width: 120, height: 44 });
     await mount({ step: comment.id, ...ALL_DATA }, { route: '/posts/p1' });
     const dots = Array.from(document.querySelectorAll<HTMLElement>('[data-induction-chapter]'));
     expect(dots.map((d) => d.getAttribute('data-induction-chapter'))).toEqual([

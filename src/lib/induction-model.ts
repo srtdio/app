@@ -86,6 +86,8 @@ export interface Step {
    * with no address), the guide boxes that field with this label instead.
    */
   fieldLabel?: string;
+  /** Only a tap on the control finishes it (its next control may already be on screen). */
+  tapFirst?: boolean;
   /**
    * When set, the guide does not take the person to this step's screen by
    * itself: it stays on the screen they are on (their result in view) with

@@ -152,6 +152,19 @@ interface CaptionViewModel {
  * first. Returned as a walkable element tree so it can be unit-tested without a
  * DOM, mirroring the gallery view helper.
  */
+/** The comment behind the caption's first highlight (the guide's reply target), or null. */
+export function firstHighlightCommentId(
+  caption: string,
+  annotations: readonly CaptionAnnotationView[],
+): string | null {
+  const first = annotations
+    .filter(
+      (a) => a.captionStart >= 0 && a.captionEnd <= caption.length && a.captionStart < a.captionEnd,
+    )
+    .sort((a, b) => a.captionStart - b.captionStart)[0];
+  return first?.commentId ?? null;
+}
+
 export function captionView({
   caption,
   annotations,
@@ -168,8 +181,12 @@ export function captionView({
 
   const out: ReactNode[] = [];
   let cursor = 0;
+  let marks = 0;
   for (const a of valid) {
     if (a.captionStart < cursor) continue; // overlap: keep the earlier highlight
+    // The first highlight is the one the onboarding guide teaches replying on.
+    const firstMark = marks === 0;
+    marks += 1;
     if (a.captionStart > cursor) {
       out.push(<span key={`t-${cursor}`}>{marked(caption.slice(cursor, a.captionStart))}</span>);
     }
@@ -178,6 +195,7 @@ export function captionView({
       <mark
         key={`m-${a.id}`}
         id={`caption-mark-${a.commentId}`}
+        {...(firstMark ? { 'data-induction': INDUCTION_KEYS.postCaptionHighlight } : {})}
         role="button"
         tabIndex={0}
         aria-label={`Comment on "${quote}"`}

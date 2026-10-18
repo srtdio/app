@@ -49,6 +49,8 @@ interface CommentComposerProps {
   /** Seed the editor on mount (e.g. a reply pre-tagging the author); forwarded
    *  verbatim to MentionInput. Undefined leaves the composer blank as before. */
   initialBody?: string;
+  /** The guide's data-induction key for the submit button, where its hand can sit. */
+  submitAnchor?: string;
 }
 
 export type PendingStatus =
@@ -84,6 +86,7 @@ export function CommentComposer({
   submitLabel = 'Post',
   autoFocus = false,
   initialBody,
+  submitAnchor,
 }: CommentComposerProps): ReactElement {
   const [body, setBody] = useState('');
   // The MentionInput is contentEditable and uncontrolled; clearing the draft
@@ -215,6 +218,7 @@ export function CommentComposer({
           size="lg"
           variant="primary"
           className="ml-auto min-w-[44px]"
+          data-induction={submitAnchor}
           disabled={!canSubmit}
           onClick={() => void submit()}
         >

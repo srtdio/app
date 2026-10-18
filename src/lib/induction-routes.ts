@@ -143,17 +143,32 @@ function reviewCommentSteps(route: Route, skip: SkipWhen): Step[] {
   ];
 }
 
-function talkSteps(route: Route, afterComment = false): Step[] {
+/** Reply on a highlighted line of the sample post: tap the highlight, Reply, post. */
+function reviewReplySteps(route: Route, skip: SkipWhen): Step[] {
+  const review = (target: Step['targets'][number]): StepShape =>
+    inChapter('review', teach('post', target), [skip]);
+  return [
+    // The comment's Reply can already be on screen below the caption: only the
+    // tap on the highlight finishes this step.
+    { ...makeStep(route, 'highlight_tap', review(K.postCaptionHighlight)), tapFirst: true },
+    makeStep(route, 'reply_button', review(K.postCommentReply)),
+    makeStep(route, 'reply_post', review(K.postReplyPost)),
+  ];
+}
+
+type AfterReview = 'none' | 'comment' | 'reply';
+
+function talkSteps(route: Route, after: AfterReview = 'none'): Step[] {
   const groupShape = inChapter('talk', teach('chat', K.chatDefaultGroupRow), ['noGroup']);
   return [
-    // After their own comment, the guide waits on the post (the comment in view)
+    // After their own comment or reply, the guide waits on the post (it in view)
     // until they tap Next, instead of leaving for the chat at once.
-    afterComment
-      ? makeStepWithCopy(route, 'group_open', {
-          key: 'group_open_after_comment',
+    after === 'none'
+      ? makeStep(route, 'group_open', groupShape)
+      : makeStepWithCopy(route, 'group_open', {
+          key: after === 'reply' ? 'group_open_after_reply' : 'group_open_after_comment',
           shape: groupShape,
-        })
-      : makeStep(route, 'group_open', groupShape),
+        }),
     makeStep(
       route,
       'transcript',
@@ -164,11 +179,19 @@ function talkSteps(route: Route, afterComment = false): Step[] {
 }
 
 function teamLookAround(route: Route): Step[] {
-  return [
-    ...teamAskSteps(route),
-    ...reviewCommentSteps(route, 'noOwnPost'),
-    ...talkSteps(route, true),
-  ];
+  // The creator's sample post carries highlights: they reply on one. The invited
+  // creator's own post has none: they comment on a line.
+  return route === 'creator'
+    ? [
+        ...teamAskSteps(route),
+        ...reviewReplySteps(route, 'noOwnPost'),
+        ...talkSteps(route, 'reply'),
+      ]
+    : [
+        ...teamAskSteps(route),
+        ...reviewCommentSteps(route, 'noOwnPost'),
+        ...talkSteps(route, 'comment'),
+      ];
 }
 
 function approverReviewSteps(): Step[] {
