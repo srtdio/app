@@ -162,7 +162,7 @@ describe('fix 3: a failed text message', () => {
   });
 
   it('offers Delete in its menu, with no window hint, and the row leaves the thread', () => {
-    const failed = msg({ state: 'failed', status: 'failed' });
+    const failed = msg({ state: 'failed' });
     expect(canDiscardFailed(failed)).toBe(true);
     expect(canDiscardFailed({ ...failed, filesMissing: true })).toBe(false);
     expect(canDiscardFailed({ ...failed, mine: false })).toBe(false);
