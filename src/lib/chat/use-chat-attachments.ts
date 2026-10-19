@@ -9,14 +9,15 @@
 // stay in their chat; useCommentAttachments (post/brief comments) uploads
 // 'library' files readable by the workspace.
 
-import { useCallback, useMemo } from 'react';
+import { appPresignCache } from '@/lib/shared-presign';
+import type { PresignCache } from '@/lib/asset-presign';
+import { useCallback } from 'react';
 import { isAuthRetryableFetchError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
-import { PresignCache } from '@/lib/asset-presign';
 import type { AssetOrigin } from '@/lib/asset-upload';
 import {
   CHAT_UPLOAD_FAILED,
@@ -87,16 +88,7 @@ function useAttachments(origin: AssetOrigin): ChatAttachments {
   const canTranscribe = transcribeEndpoint !== undefined && transcribeEndpoint !== '';
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined && env.VITE_ASSET_READ_URL !== '';
 
-  const presignCache = useMemo(
-    () =>
-      new PresignCache({
-        endpoint: env.VITE_ASSET_READ_URL ?? null,
-        getAccessToken: async () =>
-          (await supabase.auth.getSession()).data.session?.access_token ?? null,
-        fetcher: (input, init) => fetchWithTrace(input, init),
-      }),
-    [],
-  );
+  const presignCache = appPresignCache();
 
   const uploadFile = useCallback(
     async (

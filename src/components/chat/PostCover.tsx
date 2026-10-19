@@ -103,8 +103,12 @@ function CoverMedia(props: {
     sharedCardPresignCache(),
     PRESIGN_ENABLED && near,
   );
+  // A small copy already known (this session or kept on the device) paints on the first frame.
+  const known = PRESIGN_ENABLED
+    ? (sharedCardPresignCache().peekThumbnail(props.assetVersionId)?.url ?? null)
+    : null;
   const [stillFailed, setStillFailed] = useState(false);
-  const still = stillFailed ? null : stored.url;
+  const still = stillFailed ? null : (stored.url ?? known);
   const fallback = stored.missing || stillFailed;
   return (
     <span ref={boxRef} className="relative flex h-full w-full items-center justify-center">
