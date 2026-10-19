@@ -10,6 +10,8 @@
 -- synced it); a task changed (or deleted) since is skipped and returned in
 -- conflicts [{task_id, deleted, title, priority, status, updated_at}].
 -- Returns {batch_id, created_ids, conflicts}.
+-- The cron.unschedule call is wrapped in to_regclass('cron.job') like 20261013043000; CI containers have no pg_cron.
+-- uuidv7 is public.uuidv7() (search_path is '' inside the function).
 
 -- (a) DESTRUCTIVE: narrows chat_tasks.status to ('todo','done') and rewrites
 -- existing rows (approved -> done; waiting, shared, rejected -> todo).
@@ -29,7 +31,7 @@ create index if not exists chat_task_events_channel_batch_idx
 
 create or replace function public.chat_task_save_batch(p_channel_id text, p_batch jsonb, p_trace_id uuid)
 returns jsonb language plpgsql security definer set search_path to '' as $$
-declare v_actor uuid := auth.uid(); v_ws uuid; v_scope text; v_batch uuid := uuidv7();
+declare v_actor uuid := auth.uid(); v_ws uuid; v_scope text; v_batch uuid := public.uuidv7();
   v_e jsonb; v_c jsonb; v_task public.chat_tasks; v_n int; v_old jsonb; v_new jsonb; v_id uuid;
   v_created uuid[] := '{}'; v_touched uuid[] := '{}';
   v_base timestamptz; v_conflicts jsonb := '[]';
@@ -121,4 +123,9 @@ end $$;
 revoke all on function public.chat_task_save_batch(text, jsonb, uuid) from public, anon;
 grant execute on function public.chat_task_save_batch(text, jsonb, uuid) to authenticated;
 
-select cron.unschedule('chat-tasks-fire-due');
+do $$
+begin
+  if to_regclass('cron.job') is not null then
+    perform cron.unschedule('chat-tasks-fire-due');
+  end if;
+end $$;
