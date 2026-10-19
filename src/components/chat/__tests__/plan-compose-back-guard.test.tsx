@@ -66,7 +66,12 @@ function Parent(): ReactElement {
   );
 }
 
+// jsdom keeps one history across the file's tests, so the entry each test
+// starts on is tagged: landing back on it means every step entry was popped.
+let baseTag = 0;
 async function mount(): Promise<void> {
+  baseTag += 1;
+  window.history.replaceState({ testBase: baseTag }, '', window.location.href);
   const host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -75,6 +80,8 @@ async function mount(): Promise<void> {
   });
   await settle();
 }
+const atBase = (): boolean =>
+  (window.history.state as { testBase?: number } | null)?.testBase === baseTag;
 
 const screen = () => document.querySelector<HTMLElement>('[data-plan-page="compose"]');
 const confirm = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
@@ -112,6 +119,8 @@ afterEach(async () => {
   root = null;
   setOpenOuter = null;
   document.body.innerHTML = '';
+  // Let every pop an unmount issued land before the next test tags its base.
+  await settle();
   await settle();
   resetHistorySteps();
 });
@@ -161,10 +170,13 @@ describe('New plan: system Back under a real planCompose step', () => {
     await type('Diwali week');
     await pressBack();
     await act(async () => button('Discard')?.click());
+    // Two pops land: the guard's, then the compose step's.
+    await settle();
     await settle();
     await settle();
     expect(guarded()).toBe(false);
     expect(composeStep()).toBe(false);
+    expect(atBase()).toBe(true);
     // The screen closed through its own onClose (the parent's state), not the step's callback.
     expect(parentClose).not.toHaveBeenCalled();
     expect(document.querySelector('[data-plan-page="compose"]')).toBeNull();
@@ -172,9 +184,12 @@ describe('New plan: system Back under a real planCompose step', () => {
 
   it('closing the screen another way while clean leaves no entry', async () => {
     await mount();
+    expect(composeStep()).toBe(true);
     await act(async () => setOpenOuter?.(false));
+    await settle();
     await settle();
     expect(composeStep()).toBe(false);
     expect(guarded()).toBe(false);
+    expect(atBase()).toBe(true);
   });
 });
