@@ -158,7 +158,9 @@ describe('long titles stay inside the column (view mode)', () => {
       );
     }
     for (const id of ['c1', 'p1']) {
-      expect(tag(html, `data-plan-row-wrap="${id}"`)).toContain('flex w-full min-w-0 items-start gap-1');
+      expect(tag(html, `data-plan-row-wrap="${id}"`)).toContain(
+        'flex w-full min-w-0 items-start gap-1',
+      );
       expect(tag(html, `data-plan-row="${id}"`)).toContain('min-w-0');
     }
   });

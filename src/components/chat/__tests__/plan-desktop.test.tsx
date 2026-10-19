@@ -117,7 +117,9 @@ describe('edit mode rows (agency, laptop and phone alike)', () => {
 
   it('grip 28x44, always shown, muted; the chip names the day; the remove is bad colour, 44px', () => {
     const html = paint('agency', edit());
-    expect(html).toMatch(/data-plan-grip=""[^>]*class="[^"]*h-11 w-7[^"]*cursor-grab[^"]*touch-none/);
+    expect(html).toMatch(
+      /data-plan-grip=""[^>]*class="[^"]*h-11 w-7[^"]*cursor-grab[^"]*touch-none/,
+    );
     expect(html).not.toMatch(/data-plan-grip=""[^>]*opacity-0/);
     expect(html).toMatch(/data-plan-row-day-chip=""[^>]*class="[^"]*min-h-\[44px\]/);
     expect(html).toContain('>Tue 13<');
@@ -144,7 +146,7 @@ describe('edit mode rows (agency, laptop and phone alike)', () => {
   it('the list takes the keys (rows are the targets) in edit mode only', () => {
     const src = read('PlanScreen.tsx');
     expect(src).toContain('{ onKeyDown: edit.onKeyDown, onKeyUp: edit.onKeyUp }');
-    expect(src).toContain("if (!deskEditing || !(event.target instanceof HTMLElement)) return;");
+    expect(src).toContain('if (!deskEditing || !(event.target instanceof HTMLElement)) return;');
   });
 });
 

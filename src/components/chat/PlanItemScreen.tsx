@@ -587,7 +587,11 @@ export function PlanItemScreen(props: {
     void moveItemTo(day, false);
   };
   // The one plan_item_move. True when it landed; a failure toasts its copy.
-  const writeMove = async (day: string | null, keep: boolean, order: string[]): Promise<boolean> => {
+  const writeMove = async (
+    day: string | null,
+    keep: boolean,
+    order: string[],
+  ): Promise<boolean> => {
     setPlanBusy(true);
     const traceId = generateTraceId();
     const result = await planItemMove(supabase, {

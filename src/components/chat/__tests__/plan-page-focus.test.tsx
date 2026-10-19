@@ -29,7 +29,13 @@ function Probe(): ReactElement {
   const [open, set] = useState(false);
   setOpen = set;
   return (
-    <PlanPage open={open} testId="plan" title="Week of 12 Oct" backLabel="Back" onBack={() => set(false)}>
+    <PlanPage
+      open={open}
+      testId="plan"
+      title="Week of 12 Oct"
+      backLabel="Back"
+      onBack={() => set(false)}
+    >
       <button type="button" data-row="">
         Row
       </button>

@@ -76,12 +76,42 @@ const BUNDLE: PlanBundle = {
 describe('concept photos (item 2)', () => {
   it('thumbsOfRows: a post keeps its first image; a concept gets its first image or a file tile', () => {
     const thumbs = thumbsOfRows([
-      { entity_id: 'post1', entity_type: 'post', asset_version_id: 'v-video', asset_versions: { mime_type: 'video/mp4' } },
-      { entity_id: 'post1', entity_type: 'post', asset_version_id: 'v-p', asset_versions: { mime_type: 'image/png' } },
-      { entity_id: 'c-doc', entity_type: 'plan_item', asset_version_id: 'v-pdf', asset_versions: { mime_type: 'application/pdf' } },
-      { entity_id: 'c-photo', entity_type: 'plan_item', asset_version_id: 'v-pdf2', asset_versions: { mime_type: 'application/pdf' } },
-      { entity_id: 'c-photo', entity_type: 'plan_item', asset_version_id: 'v-img', asset_versions: [{ mime_type: 'image/jpeg' }] },
-      { entity_id: 'c-photo', entity_type: 'plan_item', asset_version_id: 'v-img2', asset_versions: { mime_type: 'image/jpeg' } },
+      {
+        entity_id: 'post1',
+        entity_type: 'post',
+        asset_version_id: 'v-video',
+        asset_versions: { mime_type: 'video/mp4' },
+      },
+      {
+        entity_id: 'post1',
+        entity_type: 'post',
+        asset_version_id: 'v-p',
+        asset_versions: { mime_type: 'image/png' },
+      },
+      {
+        entity_id: 'c-doc',
+        entity_type: 'plan_item',
+        asset_version_id: 'v-pdf',
+        asset_versions: { mime_type: 'application/pdf' },
+      },
+      {
+        entity_id: 'c-photo',
+        entity_type: 'plan_item',
+        asset_version_id: 'v-pdf2',
+        asset_versions: { mime_type: 'application/pdf' },
+      },
+      {
+        entity_id: 'c-photo',
+        entity_type: 'plan_item',
+        asset_version_id: 'v-img',
+        asset_versions: [{ mime_type: 'image/jpeg' }],
+      },
+      {
+        entity_id: 'c-photo',
+        entity_type: 'plan_item',
+        asset_version_id: 'v-img2',
+        asset_versions: { mime_type: 'image/jpeg' },
+      },
     ]);
     expect(thumbs.posts).toEqual({ post1: 'v-p' });
     expect(thumbs.concepts).toEqual({
@@ -92,9 +122,11 @@ describe('concept photos (item 2)', () => {
 
   it('one asset_attachments read covers posts and concepts (no per-row fetch)', () => {
     const plans = readRoot('src/lib/chat/plans.ts');
-    expect(plans).toContain("readPlanThumbs(client, postIds, conceptIds, signal)");
+    expect(plans).toContain('readPlanThumbs(client, postIds, conceptIds, signal)');
     expect(plans).toContain(".in('entity_type', ['post', 'plan_item'])");
-    expect(plans).toContain("const conceptIds = bundle.items.flatMap((i) => (i.kind === 'concept' ? [i.id] : []));");
+    expect(plans).toContain(
+      "const conceptIds = bundle.items.flatMap((i) => (i.kind === 'concept' ? [i.id] : []));",
+    );
     const screen = read('PlanScreen.tsx');
     expect(screen).not.toMatch(/readItemFiles\(/);
   });
@@ -108,7 +140,10 @@ describe('concept photos (item 2)', () => {
           side="agency"
           timeZone="UTC"
           thumbs={{}}
-          conceptThumbs={{ 'c-photo': { kind: 'image', versionId: 'v-img' }, 'c-doc': { kind: 'file' } }}
+          conceptThumbs={{
+            'c-photo': { kind: 'image', versionId: 'v-img' },
+            'c-doc': { kind: 'file' },
+          }}
           drag={null}
           onOpenItem={() => undefined}
           onToggleSlot={() => undefined}
@@ -154,13 +189,21 @@ describe('edit mode header and copy (items 3, 4, 5)', () => {
     expect(planSaveErrorCopy('date_outside_plan')).toBe(PLAN_SAVE_ERROR_COPY.date_outside_plan);
     expect(planSaveErrorCopy('TypeError: Failed to fetch')).toBe(PLAN_SAVE_ERROR_COPY.network);
     expect(planSaveErrorCopy('boom')).toBe(PLAN_SAVE_FAILED_COPY);
-    for (const copy of Object.values(PLAN_SAVE_ERROR_COPY)) expect(copy).toContain('Nothing was saved');
+    for (const copy of Object.values(PLAN_SAVE_ERROR_COPY))
+      expect(copy).toContain('Nothing was saved');
   });
 
   it('the edit header: name and From / To fields, a problem line, the save error with Retry', () => {
     const draft = { title: 'Week of 12 Oct', startsOn: '2026-10-12', endsOn: '2026-10-18' };
     const html = renderToStaticMarkup(
-      <PlanEditHeader draft={draft} problem={null} saving={false} error={null} onChange={() => undefined} onRetry={() => undefined} />,
+      <PlanEditHeader
+        draft={draft}
+        problem={null}
+        saving={false}
+        error={null}
+        onChange={() => undefined}
+        onRetry={() => undefined}
+      />,
     );
     expect(html).toContain('data-plan-edit-title=""');
     expect(html).toContain('enterKeyHint="done"');
@@ -169,9 +212,18 @@ describe('edit mode header and copy (items 3, 4, 5)', () => {
     expect(html).toContain('value="2026-10-18"');
     expect(html).not.toContain('data-plan-save-error');
     const failed = renderToStaticMarkup(
-      <PlanEditHeader draft={draft} problem="To must be on or after From." saving={false} error={PLAN_SAVE_FAILED_COPY} onChange={() => undefined} onRetry={() => undefined} />,
+      <PlanEditHeader
+        draft={draft}
+        problem="To must be on or after From."
+        saving={false}
+        error={PLAN_SAVE_FAILED_COPY}
+        onChange={() => undefined}
+        onRetry={() => undefined}
+      />,
     );
-    expect(failed).toMatch(/data-plan-save-error=""[^>]*role="alert"|role="alert"[^>]*data-plan-save-error=""/);
+    expect(failed).toMatch(
+      /data-plan-save-error=""[^>]*role="alert"|role="alert"[^>]*data-plan-save-error=""/,
+    );
     expect(failed).toContain(PLAN_SAVE_FAILED_COPY);
     expect(failed).toMatch(/data-plan-save-retry=""[^>]*class="[^"]*min-h-\[44px\]/);
     expect(failed).toContain('>Retry<');
@@ -185,7 +237,9 @@ describe('edit mode header and copy (items 3, 4, 5)', () => {
     expect(src).toContain('backText: CANCEL_EDIT_LABEL');
     expect(src).toContain('titleSlot: editHeaderSlot');
     expect(src).toContain('{saving ? SAVING_LABEL : SAVE_CHANGES_LABEL}');
-    expect(src).toContain("planSave(supabase, { p_plan_id: planId, p_ops: ops, p_trace_id: traceId })");
+    expect(src).toContain(
+      'planSave(supabase, { p_plan_id: planId, p_ops: ops, p_trace_id: traceId })',
+    );
     expect(src.match(/planSave\(supabase/g)).toHaveLength(1);
     expect(src).toContain('toast.show({ title: PLAN_SAVED_TOAST })');
     expect(src).toContain('setSaveError(planSaveErrorCopy(result.error.message))');
@@ -203,12 +257,16 @@ describe('edit mode header and copy (items 3, 4, 5)', () => {
 
 describe('the footer (item 6)', () => {
   it('one primary action per state; a client never gets one', () => {
-    expect(planPrimaryAction({ side: 'agency', audience: 'team', chat: { name: 'Priya' } })).toEqual({
+    expect(
+      planPrimaryAction({ side: 'agency', audience: 'team', chat: { name: 'Priya' } }),
+    ).toEqual({
       kind: 'send-approvers',
       label: 'Send to approvers in Priya',
     });
     expect(sendToApproversLabel('Priya')).toBe('Send to approvers in Priya');
-    expect(planPrimaryAction({ side: 'agency', audience: 'client', chat: { name: 'Priya' } })).toEqual({
+    expect(
+      planPrimaryAction({ side: 'agency', audience: 'client', chat: { name: 'Priya' } }),
+    ).toEqual({
       kind: 'send',
       label: 'Send in Priya',
     });
@@ -216,17 +274,29 @@ describe('the footer (item 6)', () => {
       kind: 'open',
       label: 'Open for approvers',
     });
-    expect(planPrimaryAction({ side: 'agency', audience: 'client', chat: null })).toEqual({ kind: 'none' });
-    expect(planPrimaryAction({ side: 'client', audience: 'client', chat: { name: 'Priya' } })).toEqual({ kind: 'none' });
-    expect(planPrimaryAction({ side: 'unknown', audience: 'team', chat: { name: 'Priya' } })).toEqual({ kind: 'none' });
+    expect(planPrimaryAction({ side: 'agency', audience: 'client', chat: null })).toEqual({
+      kind: 'none',
+    });
+    expect(
+      planPrimaryAction({ side: 'client', audience: 'client', chat: { name: 'Priya' } }),
+    ).toEqual({ kind: 'none' });
+    expect(
+      planPrimaryAction({ side: 'unknown', audience: 'team', chat: { name: 'Priya' } }),
+    ).toEqual({ kind: 'none' });
   });
 
   it('Send to approvers runs open then the card; a failed second step keeps a Retry that only reposts', () => {
     const src = read('PlanScreen.tsx');
-    expect(src).toContain("onConfirm={() => void openForClient(primary.kind === 'send-approvers')}");
-    expect(src).toMatch(/toast\.show\(\{ title: OPEN_FOR_CLIENT_TOAST \}\);[\s\S]*?if \(thenSend\) await sendHere\(true\);/);
+    expect(src).toContain(
+      "onConfirm={() => void openForClient(primary.kind === 'send-approvers')}",
+    );
+    expect(src).toMatch(
+      /toast\.show\(\{ title: OPEN_FOR_CLIENT_TOAST \}\);[\s\S]*?if \(thenSend\) await sendHere\(true\);/,
+    );
     expect(src).toContain('? SEND_AFTER_OPEN_FAILED');
-    expect(SEND_AFTER_OPEN_FAILED).toBe("Plan is open for approvers, but the card didn't post. Try again.");
+    expect(SEND_AFTER_OPEN_FAILED).toBe(
+      "Plan is open for approvers, but the card didn't post. Try again.",
+    );
     // Retry only reposts.
     expect(src).toMatch(/if \(sendError !== null\) \{[\s\S]*?void sendHere\(true\);/);
     expect(src).not.toContain('data-plan-go-card');
@@ -240,9 +310,15 @@ describe('FT56 and FN25 copy', () => {
   });
 
   it('the New plan title placeholder follows the chosen range', () => {
-    expect(composeTitlePlaceholder({ startsOn: '2026-10-12', endsOn: '2026-10-18' })).toBe('Week of 12 Oct');
-    expect(composeTitlePlaceholder({ startsOn: '2026-10-12', endsOn: '2026-10-25' })).toBe('12 to 25 Oct');
-    expect(composeTitlePlaceholder({ startsOn: '2026-10-28', endsOn: '2026-11-03' })).toBe('28 Oct to 3 Nov');
+    expect(composeTitlePlaceholder({ startsOn: '2026-10-12', endsOn: '2026-10-18' })).toBe(
+      'Week of 12 Oct',
+    );
+    expect(composeTitlePlaceholder({ startsOn: '2026-10-12', endsOn: '2026-10-25' })).toBe(
+      '12 to 25 Oct',
+    );
+    expect(composeTitlePlaceholder({ startsOn: '2026-10-28', endsOn: '2026-11-03' })).toBe(
+      '28 Oct to 3 Nov',
+    );
     expect(composeTitlePlaceholder({ startsOn: '', endsOn: '' })).toBe('Plan name');
     const compose = read('PlanComposeScreen.tsx');
     expect(compose).toContain('placeholder={composeTitlePlaceholder(range)}');
@@ -259,13 +335,22 @@ describe('the plan_save migration record', () => {
     );
     expect(sql).toContain('SECURITY DEFINER');
     expect(sql).toContain("SET search_path TO ''");
-    expect(sql).toContain("jsonb_array_length(p_ops) not between 1 and 200");
-    for (const proc of ['plan_update', 'plan_item_remove', 'plan_item_move', 'plan_items_reorder']) {
+    expect(sql).toContain('jsonb_array_length(p_ops) not between 1 and 200');
+    for (const proc of [
+      'plan_update',
+      'plan_item_remove',
+      'plan_item_move',
+      'plan_items_reorder',
+    ]) {
       expect(sql).toContain(`perform public.${proc}(`);
     }
     expect(sql).toContain("coalesce((v_op->>'keep_reviews')::boolean, true)");
-    expect(sql).toContain('revoke all on function public.plan_save(uuid,jsonb,uuid) from public, anon;');
-    expect(sql).toContain('grant execute on function public.plan_save(uuid,jsonb,uuid) to authenticated;');
+    expect(sql).toContain(
+      'revoke all on function public.plan_save(uuid,jsonb,uuid) from public, anon;',
+    );
+    expect(sql).toContain(
+      'grant execute on function public.plan_save(uuid,jsonb,uuid) to authenticated;',
+    );
     expect(sql).toMatch(/-- Rollback:/);
     expect(sql).not.toMatch(/\bdb push\b/);
   });

@@ -89,7 +89,8 @@ const titleField = () => document.querySelector<HTMLInputElement>('[data-plan-ti
 const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label);
 const guarded = () => stepMarkerOf(window.history.state, BACK_GUARD_STEP_KEY) !== null;
-const composeStep = () => stepMarkerOf(window.history.state, HISTORY_STEP_KEYS.planCompose) !== null;
+const composeStep = () =>
+  stepMarkerOf(window.history.state, HISTORY_STEP_KEYS.planCompose) !== null;
 
 async function type(value: string): Promise<void> {
   const field = titleField();

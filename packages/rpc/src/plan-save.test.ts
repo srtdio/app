@@ -31,7 +31,9 @@ describe('planSave', () => {
     // A No date move goes through as null (never the string "null").
     await planSave({ rpc } as unknown as Client, {
       ...args,
-      p_ops: [{ op: 'move', item_id: 'i', target_date: null, item_ids: ['i'], keep_reviews: false }],
+      p_ops: [
+        { op: 'move', item_id: 'i', target_date: null, item_ids: ['i'], keep_reviews: false },
+      ],
     });
     const second = (rpc.mock.calls[1] as unknown[])[1] as { p_ops: PlanSaveOp[] };
     expect(second.p_ops[0]).toMatchObject({ target_date: null, keep_reviews: false });
@@ -45,7 +47,9 @@ describe('planSave', () => {
         error: { code, message: code },
       });
     }
-    const rpc = vi.fn(() => Promise.resolve({ data: null, error: { message: 'date_outside_plan' } }));
+    const rpc = vi.fn(() =>
+      Promise.resolve({ data: null, error: { message: 'date_outside_plan' } }),
+    );
     expect(await planSave({ rpc } as unknown as Client, args)).toEqual({
       ok: false,
       error: { code: 'unknown', message: 'date_outside_plan' },

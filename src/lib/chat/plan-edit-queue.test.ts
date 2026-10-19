@@ -57,7 +57,13 @@ describe('the header update op', () => {
     const draft = headerDraftOf(bundle.plan);
     expect(draft).toEqual({ title: 'Week', startsOn: '2026-10-12', endsOn: '2026-10-16' });
     const moved: PlanSaveOp[] = [
-      { op: 'move', item_id: 'a', target_date: '2026-10-14', item_ids: ['b', 'c', 'a'], keep_reviews: true },
+      {
+        op: 'move',
+        item_id: 'a',
+        target_date: '2026-10-14',
+        item_ids: ['b', 'c', 'a'],
+        keep_reviews: true,
+      },
     ];
     const once = withHeaderUpdate(moved, bundle.plan, { ...draft, title: ' Launch week ' });
     expect(once[0]).toEqual({
@@ -112,7 +118,13 @@ describe('applyPlanOps paints the queue without writing', () => {
 
   it('a kept move keeps the approval; an empty queue is the same bundle', () => {
     const kept = applyPlanOps(bundle, [
-      { op: 'move', item_id: 'a', target_date: '2026-10-15', item_ids: ['b', 'c', 'a'], keep_reviews: true },
+      {
+        op: 'move',
+        item_id: 'a',
+        target_date: '2026-10-15',
+        item_ids: ['b', 'c', 'a'],
+        keep_reviews: true,
+      },
     ]);
     expect(kept.reviews.some((r) => r.item_id === 'a')).toBe(true);
     expect(applyPlanOps(bundle, [])).toBe(bundle);

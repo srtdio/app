@@ -166,10 +166,7 @@ export function withHeaderUpdate(
   const same =
     title === plan.title && draft.startsOn === plan.starts_on && draft.endsOn === plan.ends_on;
   if (same) return rest;
-  return [
-    { op: 'update', title, starts_on: draft.startsOn, ends_on: draft.endsOn },
-    ...rest,
-  ];
+  return [{ op: 'update', title, starts_on: draft.startsOn, ends_on: draft.endsOn }, ...rest];
 }
 
 /** The queue with one more op at its end. Pure. */

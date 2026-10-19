@@ -111,7 +111,8 @@ async function mount() {
   return { onClose };
 }
 
-const q = <T extends HTMLElement>(selector: string): T | null => document.querySelector<T>(selector);
+const q = <T extends HTMLElement>(selector: string): T | null =>
+  document.querySelector<T>(selector);
 const confirm = () => q<HTMLElement>('[role="alertdialog"]');
 const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label);

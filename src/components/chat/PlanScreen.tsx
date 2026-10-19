@@ -1475,7 +1475,12 @@ export function PlanScreen(props: {
   // full new order and the day), painted at once. On an Open plan a day
   // change of a client-approved slot asks "Keep the approval?" first
   // (cancelling cancels the move); every other move resets (false).
-  const commitMove = (moved: string, toDay: string | null, toIndex: number, keep: boolean): void => {
+  const commitMove = (
+    moved: string,
+    toDay: string | null,
+    toIndex: number,
+    keep: boolean,
+  ): void => {
     if (bundle === null || !editMode) return;
     const days = planDayIds(groups);
     const from = findItem(days, moved);
@@ -1917,7 +1922,10 @@ export function PlanScreen(props: {
       />
     ) : undefined;
   const editHeaderSlot = (
-    <h2 data-plan-editing-title="" className="truncate text-[17px] font-[650] leading-[22px] text-fg">
+    <h2
+      data-plan-editing-title=""
+      className="truncate text-[17px] font-[650] leading-[22px] text-fg"
+    >
       {EDITING_TITLE}
     </h2>
   );
@@ -2092,7 +2100,10 @@ export function PlanScreen(props: {
                         ? {
                             onMenu: (id: string, row: HTMLElement, x: number, y: number) => {
                               const r = row.getBoundingClientRect();
-                              openPopover(id, { el: row, point: { dx: x - r.left, dy: y - r.top } });
+                              openPopover(id, {
+                                el: row,
+                                point: { dx: x - r.left, dy: y - r.top },
+                              });
                             },
                             onKeyDown: onRowKey,
                             onKeyUp: onRowKeyUp,

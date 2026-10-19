@@ -32,10 +32,14 @@ describe('FT55: Ask changes opens the composer first', () => {
     const src = read('PlanItemScreen.tsx');
     expect(src).toContain('onClick={askChanges}');
     expect(src).not.toMatch(/onClick=\{\(\) => void review\('changes'\)\}/);
-    expect(src).toMatch(/const askChanges = \(\): void => \{[\s\S]*?setAskingChanges\(true\);\s*commentRef\.current\?\.focus\(\);/);
+    expect(src).toMatch(
+      /const askChanges = \(\): void => \{[\s\S]*?setAskingChanges\(true\);\s*commentRef\.current\?\.focus\(\);/,
+    );
     expect(src).toContain('ref={commentRef}');
     expect(src).toContain("data-plan-comment-send={askingChanges ? 'changes' : 'comment'}");
-    expect(src).toMatch(/if \(steps\.includes\('changes'\)\) \{\s*if \(await review\('changes'\)\) setAskingChanges\(false\);/);
+    expect(src).toMatch(
+      /if \(steps\.includes\('changes'\)\) \{\s*if \(await review\('changes'\)\) setAskingChanges\(false\);/,
+    );
     // Approve keeps its confirm sheet.
     expect(src).toMatch(/data-plan-approve=""[\s\S]*?setConfirmOpen\(true\);/);
     expect(src).toContain("onConfirm={() => void review('approved')}");
@@ -59,7 +63,7 @@ describe('FT52: plan undo toasts use useUndoableAction (7s, countdown)', () => {
     expect(screen).toContain("import { useUndoableAction } from '@/lib/use-undoable-action';");
     expect(screen).toMatch(/undoable\.run\(\{\s*label: slotApprovedToast\(dayHeader\),/);
     expect(screen).not.toContain('SLOT_UNDO_MS');
-    expect(screen).not.toContain("label: SLOT_UNDO");
+    expect(screen).not.toContain('label: SLOT_UNDO');
     // useUndoableAction's toast carries the countdown.
     const hook = readFileSync(
       fileURLToPath(new URL('../../../lib/use-undoable-action.ts', import.meta.url)),
