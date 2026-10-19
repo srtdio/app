@@ -20,7 +20,7 @@ const {
   assetDelete,
   assetDeleteMany,
 } = vi.hoisted(() => ({
-  showToast: vi.fn((_options: unknown) => 'toast-1'),
+  showToast: vi.fn<(options: unknown) => string>(() => 'toast-1'),
   listAssets: vi.fn(),
   fetchFolders: vi.fn(),
   deleteFolderRequest: vi.fn(),
