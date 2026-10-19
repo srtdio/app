@@ -48,15 +48,7 @@ function makeCache(peekUrl: string | null) {
 function render(brief: BriefWithThumbnail, cache: PresignCache, presignEnabled = true): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <BriefCard
-        brief={brief}
-        cache={cache}
-        presignEnabled={presignEnabled}
-        closing={false}
-        closeError={null}
-        onConfirmClose={() => {}}
-        onOpen={() => {}}
-      />
+      <BriefCard brief={brief} cache={cache} presignEnabled={presignEnabled} href="/briefs/b1" />
     </MemoryRouter>,
   );
 }
@@ -136,7 +128,8 @@ describe('BriefCard thumbnail tile', () => {
       }),
       cache,
     );
-    expect(out.match(/<a /g) ?? []).toHaveLength(1);
+    // The title link plus exactly one reference link.
+    expect(out.match(/<a /g) ?? []).toHaveLength(2);
     expect(out).toContain('>first.example<');
     expect(out).not.toContain('second.example');
   });
@@ -153,7 +146,7 @@ describe('BriefCard thumbnail tile', () => {
       cache,
     );
     expect(out).toContain('<img');
-    expect(out).not.toContain('<a ');
+    expect(out.match(/<a /g) ?? []).toHaveLength(1);
     expect(out).not.toContain('figma.com');
   });
 
@@ -169,11 +162,11 @@ describe('BriefCard thumbnail tile', () => {
       }),
       cache,
     );
-    expect(out).not.toContain('<a ');
+    expect(out.match(/<a /g) ?? []).toHaveLength(1);
     expect(out).not.toContain('javascript:');
   });
 
-  it('falls back to the objective text when there is no thumbnail and no usable link', () => {
+  it('shows the brief icon tile, never the objective text, when there is no image', () => {
     const { cache } = makeCache(null);
     const out = render(
       makeBrief({
@@ -184,41 +177,22 @@ describe('BriefCard thumbnail tile', () => {
       cache,
     );
     expect(out).not.toContain('<img');
-    expect(out).toContain('italic');
-    expect(out).toContain('Tease the spring drop');
-  });
-
-  it('falls back to the glyph when there is no thumbnail, no link and no text', () => {
-    const { cache } = makeCache(null);
-    const out = render(
-      makeBrief({
-        thumbnailAssetVersionId: null,
-        reference_links: null,
-        objective: '   ',
-        title: '   ',
-      }),
-      cache,
-    );
-    expect(out).not.toContain('<img');
     expect(out).not.toContain('italic');
-    expect(out).toContain('<svg');
+    expect(out).toContain('data-brief-tile="icon"');
   });
 
-  it('keeps the existing card fields (title, status, date, Close) after the thumbnail', () => {
+  it('keeps the card fields (title, status, due date) after the thumbnail', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({ status: 'open', target_date: '2026-07-01' }), cache);
     expect(out).toContain('Spring launch');
     expect(out).toContain('Open');
-    expect(out).toContain('Close');
-    // The target date is rendered (month-name format), proving the meta row survives.
-    expect(out).toMatch(/Jul|2026/);
+    expect(out).toContain('Due Jul 1');
   });
 
-  it('shows the Closed marker and hides the Close action for a closed brief', () => {
+  it('shows the Closed marker for a closed brief', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({ status: 'closed' }), cache);
     expect(out).toContain('Closed');
-    expect(out).not.toContain('>Close<');
   });
 });
 

@@ -20,10 +20,18 @@ export interface StageChipsProps {
   onChange: (key: string) => void;
 }
 
-// Edge-cut fade applied only while the row overflows; alpha-based so it is
-// colour-agnostic and correct in light and dark with no token. Replicated from
-// ActivityFilterBar rather than imported, so the two surfaces stay decoupled.
-const OVERFLOW_MASK = 'linear-gradient(to right, #000 0, #000 calc(100% - 26px), transparent 100%)';
+// The scroll hint: a fade at each edge that still has chips past it. A mask is
+// alpha only (the keyword colours carry no hue), so it reads the same in light
+// and dark with no token.
+const FADE = '26px';
+
+/** The mask for the row's scroll position; 'none' when nothing is cut off. */
+export function chipRowMask(fadeStart: boolean, fadeEnd: boolean): string {
+  if (!fadeStart && !fadeEnd) return 'none';
+  const left = fadeStart ? `transparent 0, black ${FADE}` : 'black 0';
+  const right = fadeEnd ? `black calc(100% - ${FADE}), transparent 100%` : 'black 100%';
+  return `linear-gradient(to right, ${left}, ${right})`;
+}
 
 /**
  * The Pipeline stage switcher: one horizontally scrollable, non-wrapping row of
@@ -36,23 +44,35 @@ const OVERFLOW_MASK = 'linear-gradient(to right, #000 0, #000 calc(100% - 26px),
  */
 export function StageChips({ items, active, onChange }: StageChipsProps): ReactElement {
   const rowRef = useRef<HTMLDivElement>(null);
-  const [overflowing, setOverflowing] = useState(false);
+  const [edges, setEdges] = useState({ start: false, end: false });
 
   useEffect(() => {
     const row = rowRef.current;
     if (row === null) return;
-    const measure = () => setOverflowing(row.scrollWidth - row.clientWidth > 2);
+    const measure = (): void => {
+      const max = row.scrollWidth - row.clientWidth;
+      const next = {
+        start: max > 2 && row.scrollLeft > 2,
+        end: max > 2 && row.scrollLeft < max - 2,
+      };
+      setEdges((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
+    };
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(row);
-    return () => observer.disconnect();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(row);
+    row.addEventListener('scroll', measure, { passive: true });
+    return () => {
+      observer?.disconnect();
+      row.removeEventListener('scroll', measure);
+    };
   }, []);
 
-  const mask = overflowing ? OVERFLOW_MASK : 'none';
+  const mask = chipRowMask(edges.start, edges.end);
 
   return (
     <div
       ref={rowRef}
+      data-chip-row=""
       className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 pl-4 -mr-4 md:pl-6 md:-mr-6"
       style={{ paddingRight: 0, WebkitMaskImage: mask, maskImage: mask }}
     >

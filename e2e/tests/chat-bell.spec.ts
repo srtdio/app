@@ -102,7 +102,8 @@ test('Remind me from a held message, then Upcoming', async ({ page }) => {
   expect(stored[0]?.channel_id).toBe(DM_CHANNEL);
 
   // Back to the Chat home, open the bell, Upcoming lists it.
-  await page.getByRole('button', { name: /back/i }).first().click();
+  // Exact: chat tiles now name their preview (X7 FT44), which may say "back".
+  await page.getByRole('button', { name: 'Back to conversations' }).first().click();
   await openBell(page);
   await page.locator('[data-bell-tab="upcoming"]').click();
   const row = page.locator('[data-bell-row="upcoming-reminder"]');

@@ -554,7 +554,7 @@ describe('canRenameAssets gates the edit affordance by role', () => {
 
 describe('renameErrorMessage', () => {
   it('maps a 403 to the agency-only line and everything else to retry', () => {
-    expect(renameErrorMessage(403)).toBe('Only creators can rename assets');
+    expect(renameErrorMessage(403)).toBe('Only creators and admins can rename files.');
     expect(renameErrorMessage(0)).toBe("Couldn't rename this asset. Try again.");
     expect(renameErrorMessage(500)).toBe("Couldn't rename this asset. Try again.");
   });
@@ -581,7 +581,7 @@ describe('renameAsset', () => {
   it('maps a 403 to the agency-only message', async () => {
     const fetcher = vi.fn().mockResolvedValue(jsonResponse(403, { error: { code: 'forbidden' } }));
     const out = await renameAsset(renameConfig(fetcher));
-    expect(out).toEqual({ ok: false, message: 'Only creators can rename assets' });
+    expect(out).toEqual({ ok: false, message: 'Only creators and admins can rename files.' });
   });
 
   it('maps a transport failure to the rename retry message', async () => {
@@ -643,7 +643,7 @@ describe('renameFolderRequest', () => {
     expect(out).toEqual({
       ok: false,
       nameTaken: false,
-      message: 'Only creators can rename folders',
+      message: 'Only creators and admins can rename folders.',
     });
   });
 
@@ -683,7 +683,7 @@ describe('deleteFolderRequest', () => {
   it('maps a 403 to the agency-only delete message', async () => {
     const fetcher = vi.fn().mockResolvedValue(jsonResponse(403, { error: { code: 'forbidden' } }));
     const out = await deleteFolderRequest(deleteFolderConfig(fetcher));
-    expect(out).toEqual({ ok: false, message: 'Only creators can delete folders' });
+    expect(out).toEqual({ ok: false, message: 'Only creators and admins can delete folders.' });
   });
 
   it('maps a transport failure to the generic retry message', async () => {

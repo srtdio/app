@@ -68,6 +68,16 @@ export interface Pending {
   file: File;
   previewUrl: string | null;
   status: PendingStatus;
+  /**
+   * False when the failure was the pre-check (too big, a refused type), which a
+   * retry cannot change; absent or true, a failed upload offers Retry (FT17).
+   */
+  retryable?: boolean;
+}
+
+/** Whether a chip offers Retry: a failed upload, not a failed pre-check. Pure. */
+export function canRetryPending(item: Pick<Pending, 'status' | 'retryable'>): boolean {
+  return item.status.state === 'error' && item.retryable !== false;
 }
 
 let pendingSeq = 0;
@@ -111,6 +121,25 @@ export function CommentComposer({
   const canSubmit =
     (trimmed.length > 0 || hasReadyAttachment) && !tooLong && !uploading && !submitting;
 
+  // Upload one chip's file and settle its status; a failure keeps the chip
+  // (with its file) so Retry can run it again.
+  async function uploadPending(id: string, file: File): Promise<void> {
+    if (uploadFile === undefined) return;
+    const outcome = await uploadFile(file);
+    setPending((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: outcome.ok
+                ? { state: 'done', versionId: outcome.versionId }
+                : { state: 'error', message: outcome.message },
+            }
+          : item,
+      ),
+    );
+  }
+
   async function addFiles(list: FileList | null): Promise<void> {
     if (list === null || uploadFile === undefined) return;
     for (const file of Array.from(list)) {
@@ -119,26 +148,30 @@ export function CommentComposer({
       if (!check.ok) {
         setPending((prev) => [
           ...prev,
-          { id, file, previewUrl: null, status: { state: 'error', message: check.message } },
+          {
+            id,
+            file,
+            previewUrl: null,
+            status: { state: 'error', message: check.message },
+            retryable: false,
+          },
         ]);
         continue;
       }
       const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
       setPending((prev) => [...prev, { id, file, previewUrl, status: { state: 'uploading' } }]);
-      const outcome = await uploadFile(file);
-      setPending((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                status: outcome.ok
-                  ? { state: 'done', versionId: outcome.versionId }
-                  : { state: 'error', message: outcome.message },
-              }
-            : item,
-        ),
-      );
+      await uploadPending(id, file);
     }
+  }
+
+  // FT17: a failed upload's chip offers Retry, which re-runs the same upload.
+  function retryPending(id: string): void {
+    const target = pending.find((item) => item.id === id);
+    if (target === undefined || !canRetryPending(target)) return;
+    setPending((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: { state: 'uploading' } } : item)),
+    );
+    void uploadPending(id, target.file);
   }
 
   function removePending(id: string): void {
@@ -200,7 +233,12 @@ export function CommentComposer({
       {pending.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {pending.map((item) => (
-            <PendingChip key={item.id} item={item} onRemove={() => removePending(item.id)} />
+            <PendingChip
+              key={item.id}
+              item={item}
+              onRemove={() => removePending(item.id)}
+              onRetry={() => retryPending(item.id)}
+            />
           ))}
         </ul>
       ) : null}
@@ -257,9 +295,12 @@ export function CommentComposer({
 export function PendingChip({
   item,
   onRemove,
+  onRetry,
 }: {
   item: Pending;
   onRemove: () => void;
+  /** FT17: re-run a failed upload; the chip shows Retry only when given and retryable. */
+  onRetry?: (() => void) | undefined;
 }): ReactElement {
   const error = item.status.state === 'error';
   return (
@@ -289,6 +330,18 @@ export function PendingChip({
               : fileExtension(item.file.name)}
         </span>
       </span>
+      {onRetry !== undefined && canRetryPending(item) ? (
+        <Button
+          type="button"
+          size="lg"
+          variant="ghost"
+          className="min-w-[44px] shrink-0 px-2 text-accent"
+          aria-label={`Retry ${item.file.name}`}
+          onClick={onRetry}
+        >
+          Retry
+        </Button>
+      ) : null}
       <IconButton label={`Remove ${item.file.name}`} onClick={onRemove}>
         <IconX size={16} />
       </IconButton>

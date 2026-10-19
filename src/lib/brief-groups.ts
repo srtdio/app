@@ -188,3 +188,21 @@ export function groupBriefsByDay<T extends { created_at: string }>(
 
   return groups;
 }
+
+/**
+ * A date-only column value ("YYYY-MM-DD", briefs.target_date) as "Oct 8", or
+ * "Oct 8, 2026" with the year. The string's own parts are read, never
+ * new Date(value) in the browser zone, so the day never shifts west of UTC.
+ * Anything that is not a valid civil date is returned unchanged. Pure.
+ */
+export function formatCivilDay(value: string, withYear = false): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (match === null) return value;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const name = MONTH_NAMES[month - 1];
+  if (name === undefined || day < 1 || day > 31) return value;
+  const short = `${name.slice(0, 3)} ${day}`;
+  return withYear ? `${short}, ${year}` : short;
+}

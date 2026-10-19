@@ -81,6 +81,7 @@ import {
   classifyRecordFailure,
   classifyUploadFailure,
   uploadFailureStatus,
+  refusalReason,
   uploadRefusalContext,
   type SendErrorClass,
 } from '@/lib/chat/send-errors';
@@ -634,9 +635,20 @@ export function createOutboxSender(deps: OutboxSenderDeps, initial: Outbox = {})
     }
   };
 
-  const setState = (channelId: string, id: string, state: OutboxEntry['state']): void => {
-    commit(outboxSetState(outbox, channelId, id, state));
-    deps.onEvent({ type: 'state', channelId, id, state });
+  const setState = (
+    channelId: string,
+    id: string,
+    state: OutboxEntry['state'],
+    refusal?: string,
+  ): void => {
+    commit(outboxSetState(outbox, channelId, id, state, refusal));
+    deps.onEvent({
+      type: 'state',
+      channelId,
+      id,
+      state,
+      ...(refusal !== undefined ? { refusal } : {}),
+    });
   };
 
   /** The entry as the outbox holds it now; undefined once settled or dropped. */
@@ -774,9 +786,15 @@ export function createOutboxSender(deps: OutboxSenderDeps, initial: Outbox = {})
       return;
     }
     if (failure.errorClass === 'permanent') {
-      // The server refused this message: "Not sent" + Retry; the rest go on.
+      // The server refused this message for good: "Not sent" with the reason
+      // and Delete only (a Retry would be refused again); the rest go on.
       lane.failures = 0;
-      setState(channelId, head.id, 'failed');
+      setState(
+        channelId,
+        head.id,
+        'failed',
+        refusalReason(reason === 'upload' ? 'upload' : 'record', failure.error),
+      );
       pump(channelId);
       return;
     }
@@ -877,7 +895,9 @@ export function createOutboxSender(deps: OutboxSenderDeps, initial: Outbox = {})
       const entry = selectOutbox(outbox, channelId).find((e) => e.id === id);
       if (entry === undefined || entry.state !== 'failed' || entry.filesMissing === true) return;
       // The tap re-stamps it: it moves to the bottom now and keeps that place.
-      commit(outboxPut(outbox, channelId, { ...entry, createdMs: now() }));
+      const again: OutboxEntry = { ...entry, createdMs: now() };
+      delete again.refusal;
+      commit(outboxPut(outbox, channelId, again));
       setState(channelId, id, 'sending');
       // Back in line at once: a backoff wait for the head restarts now.
       const lane = laneFor(channelId);
@@ -888,10 +908,19 @@ export function createOutboxSender(deps: OutboxSenderDeps, initial: Outbox = {})
     settle: (channelId, id) => {
       if (disposed) return;
       const wasHead = headOf(selectOutbox(outbox, channelId))?.id === id;
+      const lane = lanes.get(channelId);
+      // A pending upload of this send (a Delete on a failed one, or a
+      // catch-up) stops now; its answer is ignored and the lane is free.
+      controllers.get(id)?.abort();
+      const running = lane?.attempt?.id === id ? lane.attempt : null;
       commit(outboxRemove(outbox, channelId, id));
       forget(id);
-      const lane = lanes.get(channelId);
-      if (!wasHead || lane === undefined) return;
+      if (lane !== undefined && running !== null) {
+        running.release();
+        lane.attempt = null;
+        lane.busy = false;
+      }
+      if ((!wasHead && running === null) || lane === undefined) return;
       stopTimer(lane);
       lane.failures = 0;
       pump(channelId);

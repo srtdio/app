@@ -31,6 +31,8 @@ import {
   rowsForTab,
   type WhoReacted,
 } from '@/lib/chat/reactors';
+import { useHistoryStep } from '@/lib/chat/use-history-step';
+import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
 /** A sheet read that failed or timed out. */
 export const SHEET_LOAD_FAILED = "Couldn't load";
@@ -340,6 +342,8 @@ export function WhoReactedSheet(props: {
   onRemove: (messageId: string, emoji: string) => void;
 }): ReactElement {
   const { messageId, viewerId } = props;
+  // System Back closes only this sheet; the chat under it stays.
+  useHistoryStep(messageId !== null, SHEET_STEP_KEYS.whoReacted, props.onClose);
   // The reader is read through a ref: a new function identity never reloads an open sheet.
   const loadRef = useRef(props.load);
   loadRef.current = props.load;

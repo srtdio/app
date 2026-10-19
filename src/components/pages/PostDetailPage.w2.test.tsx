@@ -102,13 +102,16 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
     const body = PAGE.slice(PAGE.indexOf('function confirmReasonMove'));
     const optimistic = body.indexOf('setOptimisticStage(to);');
     const run = body.indexOf('runUndoable({');
-    const commit = body.indexOf('commit: async () => {');
+    const commit = body.indexOf('commit: () => {');
+    const runner = body.indexOf('return runStageMoveCommit({');
     const rpc = body.indexOf('await stageTransition(supabase');
-    const comment = body.indexOf('await createAnchoredComment(reason, traceId)');
+    const comment = body.indexOf('postReason: (body) => createAnchoredComment(body, traceId)');
     expect(optimistic).toBeGreaterThan(-1);
     expect(optimistic).toBeLessThan(run);
-    // The RPC lives only inside commit, and the reason posts after it.
-    expect(commit).toBeLessThan(rpc);
+    // The RPC lives only inside commit (X2: through runStageMoveCommit, whose
+    // transition runs first and whose reason comment posts after it).
+    expect(commit).toBeLessThan(runner);
+    expect(runner).toBeLessThan(rpc);
     expect(rpc).toBeLessThan(comment);
     // Undo restores the old stage locally and sends nothing.
     expect(body).toContain('revert: () => setOptimisticStage(null),');
@@ -178,10 +181,10 @@ describe('5. caption edit', () => {
 });
 
 describe('7. small copy and hit areas', () => {
-  it('drops the static menu hint and words the slide tap as it behaves', () => {
+  it('drops every static gallery hint (X2: the visible Add pin and slide ⋯ replace them)', () => {
     expect(PAGE).not.toContain('Tap the menu for actions');
     expect(PAGE).not.toContain('Tap a slide for full screen');
-    expect(PAGE).toContain('Tap a slide to view it.');
+    expect(PAGE).not.toContain('Tap a slide to view it.');
   });
 
   it('the bucket chip button is at least 44px tall', () => {

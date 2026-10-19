@@ -25,6 +25,13 @@ import {
 
 const RETRY = 'Something went wrong. Try again.';
 
+/**
+ * What a member who is not the owner reads under the list. It matches
+ * asset_purge_request: only the workspace owner (workspaces.owner_user_id)
+ * deletes for good early; any member restores (the Restore button says so).
+ */
+export const MEMBER_PURGE_NOTE = 'Only the workspace owner can delete files early.';
+
 // Delete now: a ghost button in the `bad` token, 44px like the rest.
 const DELETE_NOW_CLASS =
   'inline-flex h-11 items-center justify-center rounded-md px-4 text-sm font-medium text-bad ' +
@@ -130,7 +137,7 @@ export function RecentlyDeletedView({
                 <p className="text-xs text-fg-3">{freesLine(deletedBytes(items))}</p>
               </div>
             ) : (
-              <p className="text-xs text-fg-3">Only the workspace owner can delete files early.</p>
+              <p className="text-xs text-fg-3">{MEMBER_PURGE_NOTE}</p>
             )}
           </div>
         </>

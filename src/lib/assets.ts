@@ -786,7 +786,7 @@ export function isAssetInUseError(error: { message: string }): boolean {
   return error.message === 'asset_in_use';
 }
 
-type AssetParentKind = 'post' | 'brief' | 'comment';
+export type AssetParentKind = 'post' | 'brief' | 'comment';
 
 /** Where a blocked file is used, and the route that opens it. */
 export interface AssetParent {
@@ -794,7 +794,7 @@ export interface AssetParent {
   href: string;
 }
 
-interface AssetInUse {
+export interface AssetInUse {
   assetId: string;
   parent: AssetParent;
 }
@@ -807,13 +807,56 @@ export function openParentLabel(kind: AssetParentKind): string {
 }
 
 /**
- * The in-use sheet body. `more` is how many other selected files are also in
- * use: 0 reads "<name> is part of a post.", more reads "<name> and <k> more are
- * part of a post."
+ * The in-use sheet body, matching where the file is used. `more` is how many
+ * other selected files are also in use. A post or comment names what to delete
+ * first; a brief never does (briefs are read-only once created), so the file
+ * simply stays. A failed lookup (kind null) says only that it is in use. Pure.
  */
-export function assetInUseMessage(name: string, more: number): string {
+export function assetInUseMessage(
+  name: string,
+  more: number,
+  kind: AssetParentKind | null = 'post',
+): string {
   const subject = more > 0 ? `${name} and ${more} more are` : `${name} is`;
+  if (kind === 'brief') {
+    return `${subject} attached to a brief. Briefs can't be changed once created, so the file stays.`;
+  }
+  if (kind === 'comment') {
+    return `${subject} attached to a comment. Delete the comment first, then the file.`;
+  }
+  if (kind === null) return `${subject} still in use, so it can't be deleted.`;
   return `${subject} part of a post. Delete the post first, then the file.`;
+}
+
+/** The in-use sheet title for where the file is used. Pure. */
+export function inUseTitle(kind: AssetParentKind | null): string {
+  if (kind === 'brief') return 'Used in a brief';
+  if (kind === 'comment') return 'Used in a comment';
+  if (kind === 'post') return 'Used in a post';
+  return 'File in use';
+}
+
+/** The toast after a bulk delete kept the files that are in use. Pure. */
+export function inUseKeptLabel(count: number): string {
+  return count === 1
+    ? '1 file is in use and was kept.'
+    : `${count} files are in use and were kept.`;
+}
+
+/**
+ * Split a bulk delete into the files that are free to delete and the ones in
+ * use. asset_delete_many is all-or-nothing (one in-use file refuses the whole
+ * call), so the page checks once, then deletes only the free subset. Pure.
+ */
+export function splitFreeAssets(
+  ids: readonly string[],
+  inUse: readonly { assetId: string }[],
+): { free: string[]; kept: string[] } {
+  const used = new Set(inUse.map((row) => row.assetId));
+  return {
+    free: ids.filter((id) => !used.has(id)),
+    kept: ids.filter((id) => used.has(id)),
+  };
 }
 
 function entityHref(entityType: string, entityId: string): string | null {

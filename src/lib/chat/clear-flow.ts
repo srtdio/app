@@ -15,9 +15,9 @@ export function deleteChatsTitle(count: number): string {
   return count === 1 ? 'Delete this chat?' : `Delete ${count} chats?`;
 }
 
-/** Toast when a chat could not be deleted. */
+/** Toast when a chat could not be hidden (the list's action reads "Hide"). */
 export function deleteChatFailedMessage(title: string): string {
-  return `Could not delete ${title}.`;
+  return `Couldn't hide ${title}.`;
 }
 
 export type ClearRunResult<T> = { ok: true } | { ok: false; failed: T; message: string };

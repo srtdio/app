@@ -50,6 +50,7 @@ import {
   type StarTarget,
   type StarWriteResult,
 } from '@/lib/chat/stars';
+import { ModalPanel } from '@/components/chat/ModalPanel';
 
 /** Typing settles this long before a narrowed list is read. */
 export const STARRED_DEBOUNCE_MS = 250;
@@ -702,12 +703,10 @@ export function StarredSheet(props: {
   }, [open, onClose]);
   if (!open) return null;
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
+    <ModalPanel
       aria-label={STARRED_TITLE}
       data-starred-sheet=""
-      className="fixed inset-0 z-50 flex flex-col bg-bg"
+      className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
       <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-panel px-2 md:px-4">
         <IconButton label="Back" onClick={onClose}>
@@ -747,7 +746,7 @@ export function StarredSheet(props: {
           />
         </div>
       </div>
-    </div>,
+    </ModalPanel>,
     document.body,
   );
 }

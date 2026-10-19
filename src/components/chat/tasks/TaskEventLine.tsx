@@ -1,8 +1,10 @@
 // Task changes as thread lines: a centred pill like the day pill, merged into
 // the thread by time (an event line ends a message run). The actor's name is
 // semibold ("You" for self), numbers are mono and a move to P0 reads in bad.
-// A missed due time has its own pill (bad border, alarm clock). A burst of 4+
-// changes by one person within 2 minutes is one pill that expands in place.
+// A missed due time has its own pill (bad border, alarm clock). A batch of
+// adds (2+ by one person within 10 seconds, one Save) is one "Name added N
+// tasks" pill that opens the Tasks sheet. A burst of 4+ other changes by one
+// person within 2 minutes is one pill that expands in place.
 // Tapping a single pill opens the task sheet with that item expanded. Pills
 // are pressable: no iOS selection callout. No motion.
 
@@ -12,9 +14,11 @@ import { IconAlarmClock } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import {
+  addedLabel,
   burstLabel,
   eventSegments,
   taskRefOf,
+  TASKS_SHEET_ONLY,
   type ChatTask,
   type TaskEvent,
   type TaskLine,
@@ -143,12 +147,38 @@ function TaskBurst(props: {
   );
 }
 
+/** A batch of adds: one pill, "Name added N tasks"; a tap opens the Tasks sheet. */
+function TaskAdded(props: {
+  line: Extract<TaskLine, { kind: 'added' }>;
+  ctx: TaskLineContext;
+}): ReactElement {
+  const { line, ctx } = props;
+  const name = ctx.nameOf(line.actorId);
+  const count = line.events.length;
+  return (
+    <button
+      type="button"
+      data-task-added={count}
+      onClick={() => ctx.onOpenTask(TASKS_SHEET_ONLY)}
+      onContextMenu={(e) => e.preventDefault()}
+      className={PRESS}
+    >
+      <span className={cn(PILL, 'block min-w-0 truncate border-border')}>
+        <span className="font-semibold text-fg-2">{name}</span>
+        {addedLabel('', count)}
+      </span>
+    </button>
+  );
+}
+
 /** One thread row of task changes (a list item, like the day pill). */
 export function TaskEventLine(props: { line: TaskLine; ctx: TaskLineContext }): ReactElement {
   return (
     <li data-task-row="" className="flex justify-center">
       {props.line.kind === 'one' ? (
         <TaskEventPill event={props.line.event} ctx={props.ctx} />
+      ) : props.line.kind === 'added' ? (
+        <TaskAdded line={props.line} ctx={props.ctx} />
       ) : (
         <TaskBurst line={props.line} ctx={props.ctx} />
       )}

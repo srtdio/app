@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
@@ -13,6 +13,8 @@ import {
   type AttachmentItem,
 } from '@/components/pages/create/AttachmentsField';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/error-copy';
+import { isTouchDevice } from '@/lib/modal-focus';
 import { useNewTrace } from '@/lib/trace-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
@@ -25,7 +27,13 @@ interface CreateBriefSheetProps {
   open: boolean;
   workspaceId: string | null;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (created: BriefCreated) => void;
+}
+
+/** What the sheet hands back after a create: the new id, and whether the note failed to post. */
+export interface BriefCreated {
+  briefId: string;
+  noteFailed: boolean;
 }
 
 // 'Any' is the absence of a format requirement: when selected, format_requested
@@ -55,6 +63,7 @@ export function briefFormatOptions(platform: PostPlatform | null): SelectOption[
 export interface CreateBriefFormState {
   title: string;
   objective: string;
+  brandRequirements: string;
   format: string;
   targetDate: string;
   initialComment: string;
@@ -69,6 +78,7 @@ export function initialBriefState(): CreateBriefFormState {
   return {
     title: '',
     objective: '',
+    brandRequirements: '',
     format: FORMAT_ANY,
     targetDate: '',
     initialComment: '',
@@ -79,6 +89,8 @@ export function initialBriefState(): CreateBriefFormState {
 export interface BuildBriefPayloadInput {
   title: string;
   objective: string;
+  /** Optional; sent as brand_requirements only when it has text. */
+  brandRequirements?: string;
   format: string;
   targetDate: string;
   versionIds: readonly string[];
@@ -103,6 +115,8 @@ export function buildBriefCreatePayload(
     title: input.title.trim(),
     objective: input.objective.trim(),
   };
+  const brand = (input.brandRequirements ?? '').trim();
+  if (brand !== '') payload.brand_requirements = brand;
   if (input.format !== FORMAT_ANY) payload.format_requested = input.format;
   if (input.targetDate !== '') payload.target_date = input.targetDate;
   if (input.versionIds.length > 0) {
@@ -135,26 +149,102 @@ export interface SubmitCreateBriefDeps {
  */
 export async function submitCreateBrief(
   deps: SubmitCreateBriefDeps,
-): Promise<{ ok: true; briefId: string } | { ok: false; message: string }> {
+): Promise<{ ok: true; briefId: string; noteFailed: boolean } | { ok: false; message: string }> {
   const created = await deps.briefCreate(deps.client, {
     p_workspace_id: deps.workspaceId,
     p_payload: deps.payload,
     p_trace_id: deps.newTrace(),
   });
-  if (!created.ok) return { ok: false, message: created.error.message };
+  // Plain copy only: the server's own text never reaches the sheet.
+  if (!created.ok) return { ok: false, message: plainError(created.error) };
 
   const comment = deps.initialComment.trim();
+  let noteFailed = false;
   if (comment !== '') {
     // Best-effort: do not re-create the brief and do not block on a failure here.
-    await deps.createComment(deps.client, {
+    // The caller tells the writer the note didn't post so they can add it.
+    const posted = await deps.createComment(deps.client, {
       workspace_id: deps.workspaceId,
       entity_type: 'brief',
       entity_id: created.data,
       body: comment,
       trace_id: deps.newTrace(),
     });
+    noteFailed = !posted.ok;
   }
-  return { ok: true, briefId: created.data };
+  return { ok: true, briefId: created.data, noteFailed };
+}
+
+/** "1 file" / "3 files". */
+function fileCount(count: number): string {
+  return `${count} ${count === 1 ? 'file' : 'files'}`;
+}
+
+/**
+ * Whether the sheet holds anything a close would lose: any typed field, a
+ * picked format or date, a completed attachment, or an upload in flight or
+ * failed. Drives the Sheet's discard confirm (X, backdrop, Escape, Back). Pure.
+ */
+export function isBriefFormDirty(
+  form: CreateBriefFormState,
+  pendingUploads: number,
+  failedUploads: number,
+): boolean {
+  const typed = [form.title, form.objective, form.brandRequirements, form.initialComment].some(
+    (value) => value.trim() !== '',
+  );
+  return (
+    typed ||
+    form.format !== FORMAT_ANY ||
+    form.targetDate !== '' ||
+    form.attachments.length > 0 ||
+    pendingUploads > 0 ||
+    failedUploads > 0
+  );
+}
+
+/**
+ * Whether Create may send now. Uploads still running: wait (the button stays
+ * enabled and says so). A failed upload: blocked until it is removed or
+ * retried. Pure.
+ */
+export function briefUploadGate(
+  pendingUploads: number,
+  failedUploads: number,
+): { ok: true } | { ok: false; message: string } {
+  if (pendingUploads > 0)
+    return { ok: false, message: `Wait for ${fileCount(pendingUploads)} to finish` };
+  if (failedUploads > 0) return { ok: false, message: 'Remove or retry the failed file' };
+  return { ok: true };
+}
+
+/** The Create button's label: in flight, uploading, or ready. Pure. */
+export function createBriefLabel(submitting: boolean, pendingUploads: number): string {
+  if (submitting) return 'Creating…';
+  if (pendingUploads > 0) return `Uploading ${fileCount(pendingUploads)}…`;
+  return 'Create brief';
+}
+
+// A failed AttachmentsField row is the only one with a Dismiss button; the field
+// reports pending uploads but not failures, so the sheet counts those rows.
+const FAILED_ROW_SELECTOR = 'button[aria-label^="Dismiss "]';
+
+/** Live count of failed upload rows under `root` (0 while it is unmounted). */
+function useFailedUploadCount(root: HTMLElement | null): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (root === null) {
+      setCount(0);
+      return;
+    }
+    const read = (): void => setCount(root.querySelectorAll(FAILED_ROW_SELECTOR).length);
+    read();
+    if (typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver(read);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [root]);
+  return count;
 }
 
 export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: CreateBriefSheetProps) {
@@ -163,33 +253,60 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
   const [form, setForm] = useState<CreateBriefFormState>(() => initialBriefState());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState(0);
+  const [attachmentsRoot, setAttachmentsRoot] = useState<HTMLDivElement | null>(null);
+  const failedUploads = useFailedUploadCount(attachmentsRoot);
+  const attachmentsRef = useCallback((node: HTMLDivElement | null) => setAttachmentsRoot(node), []);
 
   function patch(next: Partial<CreateBriefFormState>): void {
     setForm((prev) => ({ ...prev, ...next }));
   }
 
   // Reset the form each time the sheet opens so a prior draft never lingers,
-  // including the attachments list and the initial comment.
+  // including the attachments list and the note.
   useEffect(() => {
     if (!open) return;
     setForm(initialBriefState());
     setFieldErrors({});
     setSubmitError(null);
+    setUploadNotice(null);
     setSubmitting(false);
+    setPendingUploads(0);
   }, [open]);
 
-  const canSubmit =
-    workspaceId !== null && form.title.trim() !== '' && form.objective.trim() !== '' && !submitting;
+  // The upload notice answers a tap; it goes once the uploads settle.
+  useEffect(() => {
+    if (uploadNotice !== null && briefUploadGate(pendingUploads, failedUploads).ok) {
+      setUploadNotice(null);
+    }
+  }, [uploadNotice, pendingUploads, failedUploads]);
 
+  // Desktop: the Title takes focus once the sheet has settled its own focus.
+  // Touch: nothing is focused, so no keyboard covers the sheet.
+  useEffect(() => {
+    if (!open || isTouchDevice()) return;
+    let raf = 0;
+    const timer = setTimeout(() => {
+      raf = requestAnimationFrame(() => document.getElementById('brief-title')?.focus());
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(raf);
+    };
+  }, [open]);
+
+  const dirty = isBriefFormDirty(form, pendingUploads, failedUploads);
   const formatOptions = briefFormatOptions(workspacePlatform);
 
   async function handleSubmit(): Promise<void> {
-    if (workspaceId === null) return;
+    if (workspaceId === null || submitting) return;
 
     const built = buildBriefCreatePayload({
       title: form.title,
       objective: form.objective,
+      brandRequirements: form.brandRequirements,
       format: form.format,
       targetDate: form.targetDate,
       versionIds: attachmentVersionIds(form.attachments),
@@ -198,8 +315,14 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       setFieldErrors(built.errors);
       return;
     }
-
     setFieldErrors({});
+
+    const gate = briefUploadGate(pendingUploads, failedUploads);
+    if (!gate.ok) {
+      setUploadNotice(gate.message);
+      return;
+    }
+    setUploadNotice(null);
     setSubmitting(true);
     setSubmitError(null);
 
@@ -218,7 +341,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       setSubmitError(result.message);
       return;
     }
-    onCreated();
+    onCreated({ briefId: result.briefId, noteFailed: result.noteFailed });
   }
 
   function fieldError(key: string): ReactElement | null {
@@ -232,9 +355,19 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       open={open}
       onClose={onClose}
       title="New brief"
+      dirty={dirty}
+      discard={{ title: 'Discard this brief?', message: 'Your brief and files will be lost.' }}
+      busy={submitting}
+      busyLabel="Creating…"
       footer={
         <>
-          <Button size="lg" onClick={onClose} disabled={submitting}>
+          <Button
+            size="lg"
+            onClick={() => {
+              if (!submitting) onClose();
+            }}
+            disabled={submitting}
+          >
             Cancel
           </Button>
           <span className="ml-auto">
@@ -243,25 +376,31 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
               size="lg"
               data-induction={INDUCTION_KEYS.briefSheetCreate}
               onClick={() => void handleSubmit()}
-              disabled={!canSubmit}
+              disabled={submitting}
+              aria-busy={submitting}
             >
-              {submitting ? 'Creating' : 'Create brief'}
+              {createBriefLabel(submitting, pendingUploads)}
             </Button>
           </span>
         </>
       }
     >
       <div className="flex flex-col gap-4 overflow-x-hidden">
-        <p className="text-xs text-fg-3">
-          Briefs are written by approvers and are read-only once created.
-        </p>
+        <p className="text-xs text-fg-3">Once sent, a brief can&apos;t be edited.</p>
 
         <Field label="Title" htmlFor="brief-title" required>
           <Input
             id="brief-title"
             data-induction={INDUCTION_KEYS.briefSheetTitle}
             value={form.title}
+            enterKeyHint="next"
             onChange={(event) => patch({ title: event.target.value })}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                document.getElementById('brief-objective')?.focus();
+              }
+            }}
             placeholder="Brief title"
           />
           {fieldError('title')}
@@ -271,6 +410,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
           <Textarea
             id="brief-objective"
             data-induction={INDUCTION_KEYS.briefSheetObjective}
+            autoGrow
             value={form.objective}
             onChange={(event) => patch({ objective: event.target.value })}
             placeholder="What should this brief achieve?"
@@ -278,19 +418,21 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
           {fieldError('objective')}
         </Field>
 
-        <Field label="Attachments">
-          <AttachmentsField
-            workspaceId={workspaceId}
-            value={form.attachments}
-            onChange={(attachments) => patch({ attachments })}
+        <Field label="Brand requirements (optional)" htmlFor="brief-brand-requirements">
+          <Textarea
+            id="brief-brand-requirements"
+            autoGrow
+            value={form.brandRequirements}
+            onChange={(event) => patch({ brandRequirements: event.target.value })}
+            placeholder="Colours, tone, logo use, words to avoid"
           />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="min-w-0">
-            <Field label="Format requested">
+            <Field label="Format (optional)">
               <Select
-                label="Format requested"
+                label="Format"
                 value={form.format}
                 options={formatOptions}
                 onChange={(value) => patch({ format: value })}
@@ -299,7 +441,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
           </div>
 
           <div className="min-w-0">
-            <Field label="Target date">
+            <Field label="Target date (optional)">
               <DatePicker
                 label="Target date"
                 value={form.targetDate}
@@ -309,12 +451,29 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
           </div>
         </div>
 
-        <Field label="Initial comment" htmlFor="brief-initial-comment">
+        <Field label="Attachments">
+          <div ref={attachmentsRef}>
+            <AttachmentsField
+              workspaceId={workspaceId}
+              value={form.attachments}
+              onChange={(attachments) => patch({ attachments })}
+              onPendingChange={setPendingUploads}
+            />
+          </div>
+          {uploadNotice !== null ? (
+            <p role="status" className="mt-1.5 text-[11px] text-bad">
+              {uploadNotice}
+            </p>
+          ) : null}
+        </Field>
+
+        <Field label="Note to agency (optional)" htmlFor="brief-initial-comment">
           <Textarea
             id="brief-initial-comment"
+            autoGrow
             value={form.initialComment}
             onChange={(event) => patch({ initialComment: event.target.value })}
-            placeholder="Add an opening note for the creators"
+            placeholder="Anything the agency should know first"
           />
         </Field>
 

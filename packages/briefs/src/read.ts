@@ -13,6 +13,8 @@ export type Brief = Database['public']['Tables']['briefs']['Row'];
 export const BRIEFS_PAGE_SIZE = 50;
 
 export interface ListBriefsFilters {
+  /** Restrict to one workspace on the server (RLS alone spans every membership). */
+  workspaceId?: string;
   /** Restrict to open or closed briefs. */
   status?: 'open' | 'closed';
   /** Restrict to briefs created by this user id. */
@@ -97,7 +99,9 @@ async function firstImageByBrief(
 }
 
 /**
- * List briefs visible to the caller, newest first. Soft-deleted briefs are
+ * List briefs visible to the caller, newest first, one page at a time
+ * (limit/offset). Pass workspaceId to scope the read to one workspace on the
+ * server instead of filtering every membership's briefs client-side. Soft-deleted briefs are
  * excluded; the "recently deleted" surface is a separate concern. One additional
  * batched query then resolves each row's first reference image's asset_version_id
  * for the card thumbnail ({@link firstImageByBrief}); briefs with no image carry
@@ -108,6 +112,7 @@ export async function listBriefs(
   filters: ListBriefsFilters = {},
 ): Promise<Result<BriefWithThumbnail[]>> {
   let query = client.from('briefs').select('*').is('deleted_at', null);
+  if (filters.workspaceId !== undefined) query = query.eq('workspace_id', filters.workspaceId);
   if (filters.status !== undefined) query = query.eq('status', filters.status);
   if (filters.createdBy !== undefined) query = query.eq('created_by', filters.createdBy);
   if (filters.targetDateFrom !== undefined)

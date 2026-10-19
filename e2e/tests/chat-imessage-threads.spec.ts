@@ -127,12 +127,15 @@ test('DM: the thread view opens, sends "Reply in thread", and shows a refused re
     view.locator('li[data-msg-id]', { hasText: 'Reply in thread' }).locator('[data-rail="tick"]'),
   ).toHaveCount(1);
 
-  // A refused reply on the rail: its alert sits on the page fill, the tick under it.
+  // A refused reply on the rail (a 400 P0001, refused for good): X7 FB5 shows
+  // "Not sent" with the reason and Delete only, no Retry; the tick stays.
   await input.fill(REFUSED_SEND);
   await view.getByRole('button', { name: 'Send' }).click();
   const failed = view.locator('li[data-msg-id]', { hasText: REFUSED_SEND });
-  await expect(failed.locator('[data-failed-retry]')).toBeVisible({ timeout: 8000 });
-  await expect(failed.locator('[data-failed-retry]')).toHaveClass(/bg-bg/);
+  await expect(failed.locator('[data-failed-reason]')).toBeVisible({ timeout: 8000 });
+  await expect(failed.locator('[data-failed-delete]')).toBeVisible();
+  await expect(failed.locator('[data-failed-retry]')).toHaveCount(0);
+  await expect(failed.locator('[data-failed-line-retry]')).toHaveCount(0);
   await expect(failed.locator('[data-rail="tick"]')).toHaveCount(1);
 
   await close.click();

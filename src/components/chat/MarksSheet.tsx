@@ -52,6 +52,8 @@ import {
   type MarkTab,
   type MarkTransition,
 } from '@/lib/chat/marks';
+import { useHistoryStep } from '@/lib/chat/use-history-step';
+import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
 /** The marks section body when posts are listed but no mark is open. */
 export const NO_OPEN_MARKS = 'No open marks';
@@ -548,6 +550,8 @@ export function PrioritySheet(props: {
   onChoose: (priority: MarkPriority) => void;
   onClose: () => void;
 }): ReactElement {
+  // System Back closes only this sheet; the chat under it stays.
+  useHistoryStep(props.open, SHEET_STEP_KEYS.priority, props.onClose);
   return (
     <Sheet
       open={props.open}

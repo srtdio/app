@@ -3,6 +3,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { IconFolder } from '@/components/ui/icons';
 import { flattenFolders, type FolderItem } from '@/lib/assets';
 import type { MoveAssetsOutcome } from '@/lib/asset-upload';
+import { ROOT_LABEL } from './assets-nav';
 
 interface MoveToFolderSheetProps {
   open: boolean;
@@ -16,6 +17,19 @@ interface MoveToFolderSheetProps {
   onToast: (message: string) => void;
   /** Called once after a successful move, to refresh the lists and exit select mode. */
   onMoved: () => void;
+  /**
+   * Where the files are now (null: All assets). That row is marked "Current"
+   * and cannot be picked; undefined marks none.
+   */
+  currentFolderId?: string | null | undefined;
+}
+
+/** Whether a destination row is the folder the files are already in. Pure. */
+export function isCurrentDestination(
+  rowId: string | null,
+  currentFolderId: string | null | undefined,
+): boolean {
+  return currentFolderId !== undefined && rowId === currentFolderId;
 }
 
 /**
@@ -57,6 +71,7 @@ export function MoveToFolderSheet({
   onMove,
   onToast,
   onMoved,
+  currentFolderId,
 }: MoveToFolderSheetProps) {
   const [busy, setBusy] = useState(false);
 
@@ -80,34 +95,26 @@ export function MoveToFolderSheet({
   return (
     <Sheet open={open} onClose={onClose} title={`Move ${count} file${count === 1 ? '' : 's'} to`}>
       <div className="flex flex-col">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void pick(null)}
-          style={{ paddingLeft: 12 }}
-          className={rowClass}
-        >
-          <span className="shrink-0 text-fg-2">
-            <IconFolder size={18} />
-          </span>
-          <span className="truncate">All assets</span>
-        </button>
-
-        {destinations.map((dest) => (
-          <button
-            key={dest.id}
-            type="button"
-            disabled={busy}
-            onClick={() => void pick(dest.id)}
-            style={{ paddingLeft: 12 + dest.depth * 16 }}
-            className={rowClass}
-          >
-            <span className="shrink-0 text-fg-2">
-              <IconFolder size={18} />
-            </span>
-            <span className="truncate">{dest.name}</span>
-          </button>
-        ))}
+        {[{ id: null, name: ROOT_LABEL, depth: 0 }, ...destinations].map((dest) => {
+          const current = isCurrentDestination(dest.id, currentFolderId);
+          return (
+            <button
+              key={dest.id ?? 'root'}
+              type="button"
+              disabled={busy || current}
+              aria-current={current ? 'true' : undefined}
+              onClick={() => void pick(dest.id)}
+              style={{ paddingLeft: 12 + dest.depth * 16 }}
+              className={rowClass}
+            >
+              <span className={current ? 'shrink-0 text-accent' : 'shrink-0 text-fg-2'}>
+                <IconFolder size={18} />
+              </span>
+              <span className="min-w-0 flex-1 truncate">{dest.name}</span>
+              {current ? <span className="shrink-0 text-xs text-fg-3">Current</span> : null}
+            </button>
+          );
+        })}
       </div>
     </Sheet>
   );

@@ -123,6 +123,19 @@ import {
   useChatLayout,
 } from '@/components/chat/chat-type';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useBackGuard } from '@/lib/back-guard';
+import {
+  VOICE_DRAFT_DELETE_TITLE,
+  VOICE_DRAFT_REPLACE_TITLE,
+  deleteVoiceDraft,
+  draftRecording,
+  dropSnapshotOf,
+  restoreVoiceDraft,
+  saveVoiceDraft,
+  useVoiceDraft,
+} from '@/lib/chat/voice-draft';
+import { StopRecordingDialog, VoiceDraftBar, leaveAfterGuard } from '@/components/chat/VoiceDraft';
 
 export interface ComposerProps {
   /**
@@ -1006,7 +1019,7 @@ function PendingThumb(props: {
 }
 
 /** The Send button while a schedule uploads and writes. */
-export const SCHEDULING_LABEL = 'Scheduling...';
+export const SCHEDULING_LABEL = 'Scheduling…';
 
 /** The toast after a draft was scheduled: "Scheduled for tomorrow 9:00 AM". Pure. */
 export function scheduledToast(sendAt: Date, now: Date): string {
@@ -1113,7 +1126,32 @@ export function Composer(props: ComposerProps): ReactElement {
     },
     [inputRef],
   );
-  const recorder = useAudioRecorder();
+  // FT42: a recording still running when this composer goes away (Back, a
+  // chat switch, a tab change, sign-out) becomes this chat's voice draft; a
+  // page hide keeps a snapshot of it. Too-short recordings are dropped.
+  const recorder = useAudioRecorder({
+    onUnmountRecording: (rec) => {
+      saveVoiceDraft(channelId, rec);
+    },
+    onBackground: (rec, recordingId) => {
+      saveVoiceDraft(channelId, rec, recordingId);
+    },
+  });
+  const voiceDraft = useVoiceDraft(channelId);
+  // After a reload the draft comes back from IndexedDB when it was copied there.
+  useEffect(() => {
+    void restoreVoiceDraft(channelId);
+  }, [channelId]);
+  const [draftAsk, setDraftAsk] = useState<'delete' | 'replace' | null>(null);
+  // 7d: system Back while recording asks Keep recording / Save as draft / Discard.
+  const [stopAsk, setStopAsk] = useState(false);
+  const recordGuard = useBackGuard({
+    active: recorder.recording,
+    onBack: () => setStopAsk(true),
+  });
+  useEffect(() => {
+    if (!recorder.recording) setStopAsk(false);
+  }, [recorder.recording]);
   const toast = useToast();
   // 17px on every touch device (never under 16, so iOS never zooms), 15px on a laptop.
   const layout = useChatLayout();
@@ -1682,13 +1720,67 @@ export function Composer(props: ComposerProps): ReactElement {
   const holdToSchedule = layout === 'touch' && schedulable;
   const showChevron = layout === 'laptop' && schedulable;
 
-  async function start(): Promise<void> {
+  async function startNow(): Promise<void> {
     const ok = await recorder.start();
     if (!ok) toast.show({ title: 'Microphone access is needed to record.' });
   }
 
+  // One draft per chat: a new recording while one is saved asks first.
+  async function start(): Promise<void> {
+    if (voiceDraft !== null) {
+      setDraftAsk('replace');
+      return;
+    }
+    await startNow();
+  }
+
   function cancel(): void {
+    const id = recorder.recordingId;
     recorder.cancel();
+    dropSnapshotOf(channelId, id);
+  }
+
+  // Back while recording, "Save as draft": keep it (the 7b path), then leave.
+  async function saveRecordingAsDraft(): Promise<void> {
+    setStopAsk(false);
+    // Stop first so the last chunk lands, keep it, then leave. The guard's
+    // own entry is popped once recording ends; leaveAfterGuard waits for it.
+    const rec = await recorder.stop();
+    if (!saveVoiceDraft(channelId, rec)) toast.show({ title: VOICE_TOO_SHORT_COPY });
+    leaveAfterGuard(recordGuard.release);
+  }
+
+  // Back while recording, "Discard": the recording goes, then leave.
+  function discardRecordingAndLeave(): void {
+    setStopAsk(false);
+    leaveAfterGuard(recordGuard.release);
+    cancel();
+  }
+
+  async function sendDraft(): Promise<void> {
+    const draft = voiceDraft;
+    if (draft === null || voiceBusy) return;
+    setVoiceBusy(true);
+    try {
+      const outcome = await sendVoiceRecording(
+        draftRecording(draft),
+        props.onSend,
+        props.uploadFile,
+        props.reply?.quote ?? null,
+      );
+      if (outcome === 'sent') {
+        deleteVoiceDraft(channelId);
+        props.onCancelReply?.();
+      } else if (outcome === 'too-short') {
+        deleteVoiceDraft(channelId);
+        toast.show({ title: VOICE_TOO_SHORT_COPY });
+      } else toast.show({ title: 'Could not send the voice note.' });
+    } catch (error) {
+      logger.error('chat composer: voice draft send failed', { error: String(error) });
+      toast.show({ title: 'Could not send the voice note.' });
+    } finally {
+      setVoiceBusy(false);
+    }
   }
 
   // The recording goes to the outbox like a picked file: the bubble shows its
@@ -1696,9 +1788,12 @@ export function Composer(props: ComposerProps): ReactElement {
   // upload runs in the background with retries. Never transcribed at send time.
   async function stopSend(): Promise<void> {
     setVoiceBusy(true);
+    const recordingId = recorder.recordingId;
     try {
       // stop() releases the mic before resolving, on every path.
       const rec = await recorder.stop();
+      // A page-hide snapshot of this same recording is superseded by the send.
+      dropSnapshotOf(channelId, recordingId);
       const outcome = await sendVoiceRecording(
         rec,
         props.onSend,
@@ -1986,6 +2081,43 @@ export function Composer(props: ComposerProps): ReactElement {
           />
         ) : null}
 
+        {voiceDraft !== null && !recorder.recording && editing === undefined ? (
+          <VoiceDraftBar
+            draft={voiceDraft}
+            busy={voiceBusy}
+            onSend={() => void sendDraft()}
+            onDelete={() => setDraftAsk('delete')}
+          />
+        ) : null}
+
+        {draftAsk !== null ? (
+          <ConfirmDialog
+            title={draftAsk === 'delete' ? VOICE_DRAFT_DELETE_TITLE : VOICE_DRAFT_REPLACE_TITLE}
+            message={
+              draftAsk === 'delete'
+                ? 'The saved voice note will be gone.'
+                : 'Recording a new one replaces the saved voice note.'
+            }
+            confirmLabel={draftAsk === 'delete' ? 'Delete' : 'Replace'}
+            destructive
+            onCancel={() => setDraftAsk(null)}
+            onConfirm={() => {
+              const ask = draftAsk;
+              setDraftAsk(null);
+              deleteVoiceDraft(channelId);
+              if (ask === 'replace') void startNow();
+            }}
+          />
+        ) : null}
+
+        {stopAsk && recorder.recording ? (
+          <StopRecordingDialog
+            onKeep={() => setStopAsk(false)}
+            onSave={() => void saveRecordingAsDraft()}
+            onDiscard={discardRecordingAndLeave}
+          />
+        ) : null}
+
         <div className="flex items-end gap-2">
           {recorder.recording ? (
             <>
@@ -2081,7 +2213,7 @@ export function Composer(props: ComposerProps): ReactElement {
                 onSelect={trackCaret}
                 onKeyDown={handleKeyDown}
                 placeholder={
-                  // Locked while scheduling: the wider "Scheduling..." never wraps it.
+                  // Locked while scheduling: the wider "Scheduling…" never wraps it.
                   scheduleBusy
                     ? ''
                     : props.placeholder !== undefined && editing === undefined

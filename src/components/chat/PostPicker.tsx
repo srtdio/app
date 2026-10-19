@@ -87,6 +87,7 @@ import {
   type PickerQuery,
   type PickerSection,
 } from '@/components/chat/post-picker';
+import { listSkeleton } from '@/components/chat/ListSkeleton';
 
 /** Search debounce, in milliseconds. */
 export const SEARCH_DEBOUNCE_MS = 200;
@@ -795,7 +796,7 @@ function BriefPickerList(props: {
   timeZone: string;
 }): ReactElement {
   if (props.loading) {
-    return <p className="px-1 py-3 text-sm text-fg-3">Loading briefs</p>;
+    return listSkeleton('Loading briefs');
   }
   if (props.error !== null) {
     return (

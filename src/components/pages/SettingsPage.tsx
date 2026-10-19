@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHead } from '@/components/shell/PageHead';
 import { Tabs } from '@/components/shell/Tabs';
@@ -24,9 +24,25 @@ function isPanelKey(value: string | null): value is string {
 }
 
 export function SettingsPage() {
-  const [params] = useSearchParams();
+  // ?panel= is the active tab: a tap writes it (replace, so Back leaves
+  // Settings instead of stepping through tabs) and a later ?panel= change while
+  // mounted (a link, the induction tour) switches the tab.
+  const [params, setParams] = useSearchParams();
   const requested = params.get('panel');
-  const [active, setActive] = useState(isPanelKey(requested) ? requested : 'workspace');
+  const active = isPanelKey(requested) ? requested : 'workspace';
+  const setActive = useCallback(
+    (key: string) => {
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.set('panel', key);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
   // One usage read for the Storage row and the Storage panel.
   const { usage } = useStorageWarning();
 

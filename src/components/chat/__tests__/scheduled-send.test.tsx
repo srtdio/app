@@ -292,8 +292,8 @@ describe('UI-3 S2 / S3: upload first, all or nothing', () => {
     expect(composer).toContain('...attachmentArgs,');
     expect(composer).toContain('scheduleWithFiles<');
   });
-  it('the composer locks and Send reads "Scheduling..."', () => {
-    expect(SCHEDULING_LABEL).toBe('Scheduling...');
+  it('the composer locks and Send reads "Scheduling…"', () => {
+    expect(SCHEDULING_LABEL).toBe('Scheduling…');
     expect(composer).toContain('readOnly={held || scheduleBusy}');
     expect(composer).toMatch(/function removePending[\s\S]{0,120}if \(scheduleBusy\) return;/);
   });

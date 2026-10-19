@@ -749,6 +749,13 @@ export interface OutboxEntry {
    * the files are back (or turns filesMissing when they are not).
    */
   restoring?: true;
+  /**
+   * 'failed' because the server or the upload Worker refused this message
+   * for good (a permanent class in send-errors.ts): the reason in plain
+   * words. The bubble shows it with Delete only (a Retry would be refused
+   * again). Not persisted: a reload resumes the send and it is asked again.
+   */
+  refusal?: string;
 }
 
 /** Unrecorded own sends keyed by our channel_id, oldest first per channel. */
@@ -769,10 +776,17 @@ export function outboxSetState(
   channelId: string,
   id: string,
   state: OutboxEntry['state'],
+  refusal?: string,
 ): Outbox {
   const list = outbox[channelId];
   if (list === undefined || !list.some((e) => e.id === id)) return outbox;
-  return { ...outbox, [channelId]: list.map((e) => (e.id === id ? { ...e, state } : e)) };
+  const apply = (e: OutboxEntry): OutboxEntry => {
+    const next: OutboxEntry = { ...e, state };
+    if (refusal !== undefined) next.refusal = refusal;
+    else delete next.refusal;
+    return next;
+  };
+  return { ...outbox, [channelId]: list.map((e) => (e.id === id ? apply(e) : e)) };
 }
 
 /** Replace one entry's attachments (upload progress, a returned version id). */
@@ -855,7 +869,14 @@ export function selectOutbox(outbox: Outbox, channelId: string): readonly Outbox
 
 /** What the outbox tells the open thread: a bubble changed state, or its row landed. */
 export type OutboxEvent =
-  | { type: 'state'; channelId: string; id: string; state: OutboxEntry['state'] }
+  | {
+      type: 'state';
+      channelId: string;
+      id: string;
+      state: OutboxEntry['state'];
+      /** A permanent refusal's reason in plain words (Delete only, no Retry). */
+      refusal?: string;
+    }
   | { type: 'recorded'; channelId: string; message: ThreadMessage }
   | {
       type: 'progress';

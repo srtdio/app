@@ -75,7 +75,9 @@ async function firstPaintTile(page: Page): Promise<void> {
   const tile = page.locator('[data-notes-tile]');
   await tile.waitFor({ state: 'visible', timeout: 30_000 });
   await expect(tile).toContainText(NOTES_TITLE);
-  await expect(tile).toContainText('Only you can see this');
+  // The tagline until the previews read lands, then the last note (W8): which
+  // one the first look catches depends on how fast that read answers.
+  await expect(tile).toContainText(/Only you can see this|Moodboard for the spring shoot/);
   const atFirst = await page.evaluate(
     () => (window as unknown as { __tileAtFirstList?: boolean }).__tileAtFirstList,
   );

@@ -13,6 +13,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { IconCheck, IconChevronRight } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { sortVersionsDesc, type PostVersionView } from '@/lib/post-versions';
+import { shortDate } from '@/lib/relative-time';
 
 interface VersionHistorySheetProps {
   open: boolean;
@@ -39,12 +40,12 @@ interface VersionHistorySheetModel extends VersionHistorySheetProps {
 const ROW_BASE =
   'flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
-// Localized date + time, matching the timestamp convention used elsewhere in the
-// app (Comments). No hardcoded timezone; falls back to the raw value if unparseable.
+// The app's calendar formatter (FN7): "Jun 11", with the year once it differs
+// from now's. Falls back to the raw value if unparseable.
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return shortDate(value, new Date());
 }
 
 /** Toggle an id in the compare selection, a max-two queue: re-picking a selected

@@ -18,7 +18,8 @@ import { SelectCheck } from '@/components/ui/SelectCheck';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ActionRow, useLongPress } from '@/components/ui';
-import { IconChat, IconEllipsis, IconPlus, IconStarFilled, IconTrash } from '@/components/ui/icons';
+import { IconChat, IconEllipsis, IconPlus, IconStarFilled } from '@/components/ui/icons';
+import { IconEyeOff } from '@/components/chat/chat-icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -63,6 +64,7 @@ import {
   useChatLayout,
   type ChatLayout,
 } from '@/components/chat/chat-type';
+import { moveMenuFocus } from '@/lib/chat/menu-keys';
 
 // The bell's "Scheduled in this chat" sheet comes from the chat surface, so the
 // top-bar bell never pulls the Composer into the app shell (NotificationsPanel).
@@ -380,6 +382,27 @@ export function previewLine(summary: ConversationSummary): string {
   return `${prefix}${summary.lastMessageText}`;
 }
 
+/**
+ * The tile's accessible name: the chat, its unread count, the preview (or
+ * draft) and the time, so a screen reader hears what a sighted user sees.
+ * "Open Priya, 3 unread, Draft: see you, 10:42". Pure.
+ */
+export function channelTileLabel(props: {
+  title: string;
+  unread: number;
+  preview: string;
+  time: string;
+  draft?: string | null;
+}): string {
+  const parts = [`Open ${props.title}`];
+  if (props.unread > 0) parts.push(`${props.unread} unread`);
+  const draft = props.draft ?? null;
+  const line = draft !== null ? `${DRAFT_PREFIX}${draft}` : props.preview;
+  if (line !== '') parts.push(line);
+  if (props.time !== '') parts.push(props.time);
+  return parts.join(', ');
+}
+
 /** Devices that get the hover ⋯ control (a mouse or trackpad, not touch). */
 const HOVER_POINTER_QUERY = '(hover: hover) and (pointer: fine)';
 
@@ -461,11 +484,11 @@ export const TILE_PILL =
  * positioned for its corner pill. Shared by the skeleton so swapping in the list
  * shifts nothing.
  */
-export function tileBoxClass(kind: TileKind): string {
+export function tileBoxClass(kind: TileKind, more = false): string {
   return cn(
     'flex w-full rounded-[18px] border',
     kind === 'wide'
-      ? 'h-[100px] items-center gap-3 py-3 pl-3 pr-4'
+      ? cn('h-[100px] items-center gap-3 py-3 pl-3', more ? 'pr-14' : 'pr-4')
       : 'relative h-[168px] flex-col items-center px-3 pt-4 pb-[14px] text-center',
   );
 }
@@ -479,6 +502,8 @@ export interface ChannelRowState {
   selecting: boolean;
   /** Select mode: this tile is checked. */
   checked: boolean;
+  /** The tile's ⋯ sits at its right: a wide tile leaves room for it. */
+  more?: boolean;
 }
 
 /**
@@ -490,7 +515,7 @@ export function channelRowClass(state: ChannelRowState): string {
   const checked = state.selecting && state.checked;
   const open = state.selected && !state.selecting;
   return cn(
-    tileBoxClass(state.kind),
+    tileBoxClass(state.kind, state.more === true),
     CHANNEL_ROW_BUTTON,
     checked ? 'border-accent-line bg-accent-soft' : 'border-border',
     checked ? undefined : open ? 'bg-panel-2' : 'bg-panel hover:bg-panel-2',
@@ -625,9 +650,25 @@ export function channelRowBody(props: {
 }
 
 /**
+ * The tile's ⋯ (H5): always visible at the tile's right (a wide tile's middle,
+ * a square tile's bottom corner), 44px, fg-3,
+ * opening the same menu a long-press opens. Tokens only.
+ */
+const ROW_MORE_BASE =
+  'flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors duration-fast hover:bg-panel-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+
+export function rowMoreClass(kind: TileKind): string {
+  return cn(
+    'absolute right-1',
+    kind === 'wide' ? 'top-1/2 -translate-y-1/2' : 'bottom-1',
+    ROW_MORE_BASE,
+  );
+}
+
+/**
  * One conversation tile; the whole tile is one button ("Open <name>"). A touch
  * long-press (moving or scrolling cancels it), right-click, Shift+F10, or the
- * hover ⋯ in the tile's corner (pointer devices only) opens the tile menu; the
+ * always-visible ⋯ at the tile's right opens the tile menu; the
  * trailing click is swallowed so a long-press never also opens the chat. In
  * select mode a check circle shows and a tap toggles.
  */
@@ -650,7 +691,7 @@ export function ChannelCard(props: {
   const { channel, summary } = props;
   const rowRef = useRef<HTMLButtonElement>(null);
   const selecting = props.onToggle !== undefined;
-  const { hoverMenu, coarsePointer } = props.input;
+  const { coarsePointer } = props.input;
   const menuEnabled = !selecting && props.onLongPress !== undefined;
   // This gesture's hold already opened the menu; reset on every pointerdown.
   const holdFiredRef = useRef(false);
@@ -711,13 +752,23 @@ export function ChannelCard(props: {
           // A thread selecting messages exits that first (history.back()).
           leaveSelectionThen(() => props.onSelect(channel));
         }}
-        aria-label={`Open ${channel.title}`}
+        aria-label={channelTileLabel({
+          title: channel.title,
+          unread: summary?.unread ?? 0,
+          preview: summary !== undefined && summary.lastMessageTs > 0 ? previewLine(summary) : '',
+          time:
+            summary !== undefined && summary.lastMessageTs > 0
+              ? formatRelativeTime(summary.lastMessageTs, props.nowMs, props.timeZone)
+              : '',
+          draft: props.draft ?? null,
+        })}
         {...(selecting ? { 'aria-pressed': checked } : {})}
         className={channelRowClass({
           kind: tileKind(channel),
           selected: props.selected,
           selecting,
           checked,
+          more: menuEnabled,
         })}
       >
         {channelRowBody({
@@ -730,14 +781,15 @@ export function ChannelCard(props: {
           checked,
         })}
       </button>
-      {menuEnabled && hoverMenu ? (
+      {menuEnabled ? (
         <button
           type="button"
           data-more=""
+          data-row-more=""
           aria-label={`Actions for ${channel.title}`}
           aria-haspopup="menu"
           onClick={(e) => openMenu(e.currentTarget.getBoundingClientRect())}
-          className="absolute bottom-1 right-1 flex h-11 w-11 items-center justify-center rounded-md bg-panel text-fg-3 opacity-0 hover:bg-panel-3 hover:text-fg focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent group-hover:opacity-100 group-focus-within:opacity-100"
+          className={rowMoreClass(tileKind(channel))}
         >
           <IconEllipsis size={20} />
         </button>
@@ -988,13 +1040,13 @@ function selectBar(select: ChannelSelectMode): ReactElement {
   return (
     <div className="flex items-center gap-2 border-t border-border bg-panel px-4 py-3">
       <Button
-        variant="danger"
+        variant="primary"
         size="lg"
         className="ml-auto"
         disabled={select.selectedIds.size === 0}
         onClick={select.onDelete}
       >
-        <IconTrash size={18} />
+        <IconEyeOff size={18} />
         Hide
       </Button>
     </div>
@@ -1111,7 +1163,8 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
 }
 
 /**
- * The small menu a long-pressed row opens: one danger "Hide chat" row. Fixed
+ * The small menu a long-pressed row (or its ⋯) opens: one "Hide chat" row
+ * (non-destructive: the eye-off icon, never red; FT43). Fixed
  * over the list (portal) and placed under the row, or above it when there is no
  * room; closes on backdrop tap, Escape, scroll or resize. Design tokens only.
  */
@@ -1186,6 +1239,10 @@ function ChannelRowMenu(props: {
         ref={ref}
         role="menu"
         aria-label="Chat actions"
+        onKeyDown={(event) => {
+          // FB2: a popover menu (no aria-modal): arrow keys move between items.
+          if (moveMenuFocus(ref.current, event.key)) event.preventDefault();
+        }}
         className={cn(
           'fixed z-50 min-w-[200px] origin-top-left whitespace-nowrap',
           popoverClass(shown),
@@ -1198,9 +1255,8 @@ function ChannelRowMenu(props: {
       >
         <div role="menuitem">
           <ActionRow
-            icon={<IconTrash />}
+            icon={<IconEyeOff />}
             label="Hide chat"
-            danger
             onClick={() => {
               onClose();
               props.onDelete();
@@ -1239,7 +1295,6 @@ export function deleteChatsConfirm(props: {
       message={DELETE_CHATS_MESSAGE}
       confirmLabel="Hide"
       busyLabel="Hiding"
-      destructive
       busy={props.busy}
       onCancel={props.onCancel}
       onConfirm={props.onConfirm}

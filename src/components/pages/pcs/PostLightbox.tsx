@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/FileViewer';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { useOptionalToast } from '@/components/ui/toast';
+import { useEscapeLayer } from '@/lib/escape-stack';
 import { fileKindLabel } from '@/lib/files/display-name';
 import type { GalleryItem } from '@srtdio/posts';
 
@@ -914,15 +915,20 @@ export function PostLightbox({
     setConfirmingRemove(false);
   }, [index]);
 
-  // Esc closes; arrows nudge the native scroller. The viewer is in-flow now, so
-  // it never locks body scroll.
+  // Escape goes through the shared escape stack (FT16), so it reaches the
+  // viewer only while it is the top layer: a sheet or dialog opened above it
+  // takes the key, and the FileViewer owns every key while it is open.
+  useEscapeLayer(true, () => {
+    if (!viewingRef.current) onClose();
+  });
+
+  // Arrows nudge the native scroller. The viewer is in-flow now, so it never
+  // locks body scroll.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       // The FileViewer owns the keys while it is open.
       if (viewingRef.current) return;
-      if (event.key === 'Escape') {
-        onClose();
-      } else if (event.key === 'ArrowLeft') {
+      if (event.key === 'ArrowLeft') {
         onIndexChange(wrapIndex(indexRef.current, -1, items.length));
       } else if (event.key === 'ArrowRight') {
         onIndexChange(wrapIndex(indexRef.current, 1, items.length));
@@ -932,7 +938,7 @@ export function PostLightbox({
     return () => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [onClose, onIndexChange, items.length]);
+  }, [onIndexChange, items.length]);
 
   const handleTrackScroll = useCallback(
     (event: ReactUIEvent<HTMLDivElement>): void => {

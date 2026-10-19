@@ -24,6 +24,8 @@ import {
   shortZoneName,
   timeInputValue,
 } from '@/lib/chat/scheduled';
+import { useHistoryStep } from '@/lib/chat/use-history-step';
+import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
 export const SCHEDULE_SHEET_TITLE = 'Schedule message';
 export const SCHEDULE_HELPER = 'Any time from 1 minute to 1 year ahead.';
@@ -199,6 +201,8 @@ export function ScheduleSheet(props: {
   useEffect(() => {
     if (props.open) setOpenings((n) => n + 1);
   }, [props.open]);
+  // System Back closes only this sheet; the chat under it stays.
+  useHistoryStep(props.open, SHEET_STEP_KEYS.schedule, props.onClose);
   return (
     <Sheet
       open={props.open}

@@ -31,7 +31,9 @@ import {
 import { ScheduledAttachments } from '@/components/chat/ScheduledStrip';
 
 export const SCHEDULED_LIST_TITLE = 'Scheduled in this chat';
-export const CANCEL_CONFIRM_TITLE = 'Cancel this scheduled message?';
+/** FN23: the card's action reads "Don't send", so the message is never confused with a dismiss. */
+export const CANCEL_CONFIRM_TITLE = "Don't send this message?";
+export const DONT_SEND_LABEL = "Don't send";
 
 /** A card's preview: the body (names shown), else what it carries. Pure. */
 export function scheduledPreviewText(row: ScheduledRow, nameOf: NameOf): string {
@@ -164,7 +166,7 @@ export function ScheduledListSheet(
                       disabled={busyId !== null}
                       onClick={() => setCancelFor(row)}
                     >
-                      Cancel
+                      {DONT_SEND_LABEL}
                     </CardAction>
                   </div>
                 </>
@@ -206,7 +208,7 @@ export function ScheduledListSheet(
                 if (row !== null) void run(row, () => props.onCancel(row));
               }}
             >
-              Cancel message
+              {DONT_SEND_LABEL}
             </Button>
           </div>
         }

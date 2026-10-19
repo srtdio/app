@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { workspaceCreate } from '@srtdio/rpc';
@@ -9,11 +9,13 @@ import { ContactSheet } from '@/components/support/ContactSheet';
 import { SupportRows } from '@/components/support/SupportRows';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field } from '@/components/ui/Field';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
 import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
+import { storeInductionStep } from '@/components/induction/induction-data';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import {
@@ -24,6 +26,12 @@ import {
 } from '@/lib/workspace-context';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
+import { APPROVER_BRAND_STEP, type InductionState } from '@/lib/induction';
+import { WORKSPACE_CREATE_COPY } from '@/lib/induction-copy';
+import { ROUTE_PREFIX } from '@/lib/induction-model';
+import { useBackGuard } from '@/lib/back-guard';
+import { useEscapeLayer } from '@/lib/escape-stack';
+import { useModalFocus } from '@/lib/modal-focus';
 
 const NAME_MIN = 1;
 const NAME_MAX = 80;
@@ -50,13 +58,46 @@ export function workspaceCreatePayload(input: {
 }
 
 /**
+ * Whether the create step offers "I approve posts instead": only to a person
+ * with no workspace who signed up on their own (an invitee's stored steps carry
+ * the invited route prefix) and whose induction is not done (a done induction
+ * reads as no approver stage, so the switch could not reopen the flow). Pure.
+ */
+export function approverSwitchShown(input: {
+  workspaceCount: number;
+  state: Pick<InductionState, 'step' | 'done'>;
+}): boolean {
+  if (input.workspaceCount > 0 || input.state.done) return false;
+  return !(input.state.step ?? '').startsWith(ROUTE_PREFIX.invited);
+}
+
+/** Whether the create step holds input worth asking about before it goes. Pure. */
+export function createStepDirty(input: {
+  mode: Mode;
+  name: string;
+  platform: PostPlatform | null;
+}): boolean {
+  return input.mode !== 'list' && (input.name.trim() !== '' || input.platform !== null);
+}
+
+interface WorkspaceSwitcherProps {
+  /**
+   * The induction's setStep, passed only by the no-workspace shell for a person
+   * who may still switch to Approver (approverSwitchShown). Storing
+   * APPROVER_BRAND_STEP makes AppLayout's gate read approverStageOf as 'brand'
+   * and open OnboardingFlow on the brand screen.
+   */
+  onInductionStep?: (step: string) => Promise<boolean>;
+}
+
+/**
  * Centered modal (identical on desktop and mobile) that lets the signed-in user
  * switch the active workspace or create a new one. Opens in response to the
  * shell-wide 'sorted:switch-workspace' CustomEvent dispatched by Sidebar /
  * AvatarMenu; the listener is registered on mount and torn down on unmount.
  * Active-workspace state stays in React only (no localStorage/URL persistence).
  */
-export function WorkspaceSwitcher() {
+export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = {}) {
   const {
     workspaceId,
     workspaces,
@@ -77,6 +118,11 @@ export function WorkspaceSwitcher() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [support, setSupport] = useState<'contact' | 'book' | null>(null);
+  // The two asks over the dialog: discard a half-filled form, switch to Approver.
+  const [discarding, setDiscarding] = useState(false);
+  const [askingSwitch, setAskingSwitch] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   const hasDeleted = deletedWorkspace !== null;
 
   const close = useCallback(() => {
@@ -87,8 +133,35 @@ export function WorkspaceSwitcher() {
     setFormError(null);
     setSubmitting(false);
     setSupport(null);
+    setDiscarding(false);
+    setAskingSwitch(false);
+    setSwitching(false);
     clearDeletedWorkspace();
   }, [clearDeletedWorkspace]);
+
+  const dirty = open && createStepDirty({ mode, name, platform });
+  const busy = submitting || switching;
+
+  // Every dismiss (X, backdrop, Escape, system Back) funnels here: busy keeps
+  // the dialog, a typed brand name or picked platform asks first.
+  function requestClose(): void {
+    if (busy) return;
+    if (dirty) {
+      setDiscarding(true);
+      return;
+    }
+    close();
+  }
+
+  // System or browser Back with something to lose asks the same discard
+  // confirm; released right before a confirmed Discard or the switch.
+  const guard = useBackGuard({
+    active: dirty || (open && busy),
+    onBack: () => {
+      if (busy) return;
+      setDiscarding(true);
+    },
+  });
 
   // Open on the shell event; a fresh open starts on the list, or straight on
   // the create form right after a workspace was deleted or when there is none
@@ -118,18 +191,51 @@ export function WorkspaceSwitcher() {
     setOpen(true);
   }, [hasDeleted]);
 
-  // Escape closes, matching the rest of the shell's overlays; while a support
-  // sheet is on top, Escape is that sheet's.
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape' && support === null) close();
+  // Escape reaches the dialog only while it is the top layer: a support sheet
+  // or a confirm over it takes Escape for itself.
+  useEscapeLayer(open, requestClose);
+
+  // Focus moves into the dialog on open (the brand name on the create step;
+  // never a text field on a phone), Tab stays inside, and the opener gets it
+  // back on close.
+  useModalFocus(panelRef, open, {
+    initial: () =>
+      mode === 'create'
+        ? panelRef.current?.querySelector<HTMLInputElement>('#workspace-name')
+        : null,
+  });
+
+  const switchOffered = onInductionStep !== undefined && !loading && workspaces.length === 0;
+
+  /**
+   * Switch to Approver: the step is stored first (awaited, so a failure keeps
+   * the dialog and says so), then handed to the induction's setStep, which
+   * flips the gate's state at once and AppLayout opens the brand screen.
+   */
+  async function switchToApprover(): Promise<void> {
+    if (onInductionStep === undefined || switching) return;
+    setSwitching(true);
+    setFormError(null);
+    const stored = await storeInductionStep(supabase, {
+      step: APPROVER_BRAND_STEP,
+      traceId: newTrace(),
+    });
+    if (!stored.ok) {
+      setSwitching(false);
+      setAskingSwitch(false);
+      setFormError(WORKSPACE_CREATE_COPY.switchFailed);
+      return;
     }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, close, support]);
+    guard.release();
+    const saved = await onInductionStep(APPROVER_BRAND_STEP);
+    // The gate has opened the flow and this dialog is gone; a refused second
+    // write (the step already stored above) only leaves it to say so.
+    if (!saved) {
+      setSwitching(false);
+      setAskingSwitch(false);
+      setFormError(WORKSPACE_CREATE_COPY.switchFailed);
+    }
+  }
 
   function selectWorkspace(id: string): void {
     setActiveWorkspaceId(id);
@@ -168,6 +274,8 @@ export function WorkspaceSwitcher() {
       }
       await refreshWorkspaces();
       setActiveWorkspaceId(res.data);
+      // Created: nothing left to lose, so the Back guard goes before the dialog.
+      guard.release();
       close();
     } catch (err: unknown) {
       setFormError(String(err));
@@ -179,7 +287,7 @@ export function WorkspaceSwitcher() {
   if (!open) return null;
 
   function onOverlayClick(event: MouseEvent<HTMLDivElement>): void {
-    if (event.target === event.currentTarget) close();
+    if (event.target === event.currentTarget) requestClose();
   }
 
   const title = switcherTitle(mode);
@@ -190,15 +298,17 @@ export function WorkspaceSwitcher() {
       onClick={onOverlayClick}
     >
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex w-full max-w-[420px] max-h-[84vh] flex-col overflow-hidden rounded-xl border border-border-strong bg-panel shadow-2xl"
+        className="flex w-full max-w-[420px] max-h-[84vh] flex-col overflow-hidden rounded-xl border border-border-strong bg-panel shadow-2xl outline-none"
       >
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-[15px]">
           <h2 className="text-[15px] font-semibold">{title}</h2>
           <span className="ml-auto">
-            <IconButton label="Close" onClick={close}>
+            <IconButton label="Close" onClick={requestClose}>
               <IconX />
             </IconButton>
           </span>
@@ -280,7 +390,6 @@ export function WorkspaceSwitcher() {
                 onChange={(e) => setName(e.target.value)}
                 maxLength={NAME_MAX}
                 placeholder="Ramy Group"
-                autoFocus
               />
             </Field>
             <div>
@@ -340,11 +449,24 @@ export function WorkspaceSwitcher() {
                 variant="primary"
                 size="lg"
                 data-induction={INDUCTION_KEYS.workspaceCreateContinue}
-                disabled={preview === null}
+                disabled={preview === null || switching}
               >
                 Continue
               </Button>
             </div>
+            {switchOffered ? (
+              <button
+                type="button"
+                disabled={switching}
+                onClick={() => {
+                  setFormError(null);
+                  setAskingSwitch(true);
+                }}
+                className="min-h-[44px] w-full rounded-lg text-sm font-medium text-accent transition-colors duration-fast ease-enter hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-35"
+              >
+                {WORKSPACE_CREATE_COPY.approveInstead}
+              </button>
+            ) : null}
           </form>
         ) : (
           <div className="flex flex-col gap-4 p-[18px]">
@@ -381,6 +503,34 @@ export function WorkspaceSwitcher() {
           </div>
         )}
       </div>
+      {askingSwitch ? (
+        <ConfirmDialog
+          title={WORKSPACE_CREATE_COPY.switchTitle}
+          message={WORKSPACE_CREATE_COPY.switchMessage}
+          cancelLabel={WORKSPACE_CREATE_COPY.keepCreator}
+          confirmLabel={WORKSPACE_CREATE_COPY.switchConfirm}
+          busy={switching}
+          busyLabel={WORKSPACE_CREATE_COPY.switching}
+          onConfirm={() => void switchToApprover()}
+          onCancel={() => setAskingSwitch(false)}
+        />
+      ) : null}
+      {discarding ? (
+        <ConfirmDialog
+          title={WORKSPACE_CREATE_COPY.discardTitle}
+          message={WORKSPACE_CREATE_COPY.discardMessage}
+          confirmLabel={WORKSPACE_CREATE_COPY.discardConfirm}
+          cancelLabel={WORKSPACE_CREATE_COPY.keepEditing}
+          destructive
+          onConfirm={() => {
+            setDiscarding(false);
+            // Release first: the guard's entry pops before the dialog goes.
+            guard.release();
+            close();
+          }}
+          onCancel={() => setDiscarding(false)}
+        />
+      ) : null}
       <ContactSheet
         open={support === 'contact'}
         onClose={() => setSupport(null)}

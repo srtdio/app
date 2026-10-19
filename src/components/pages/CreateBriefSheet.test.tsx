@@ -7,6 +7,7 @@ import {
   type BuildBriefPayloadInput,
   type SubmitCreateBriefDeps,
 } from '@/components/pages/CreateBriefSheet';
+import { GENERIC_ERROR } from '@/lib/error-copy';
 import type { Client, Result } from '@srtdio/rpc';
 import type { CommentResult } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
@@ -33,12 +34,19 @@ describe('buildBriefCreatePayload', () => {
     });
   });
 
-  it('never sends brand_requirements or reference_links', () => {
-    const result = buildBriefCreatePayload(base);
+  it('sends brand_requirements trimmed when given, and never reference_links', () => {
+    const result = buildBriefCreatePayload({ ...base, brandRequirements: '  Navy only  ' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect((result.payload as Record<string, unknown>).brand_requirements).toBe('Navy only');
+    expect('reference_links' in (result.payload as object)).toBe(false);
+  });
+
+  it('omits brand_requirements when it is blank', () => {
+    const result = buildBriefCreatePayload({ ...base, brandRequirements: '   ' });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect('brand_requirements' in (result.payload as object)).toBe(false);
-    expect('reference_links' in (result.payload as object)).toBe(false);
   });
 
   it('omits format_requested when the format is Any', () => {
@@ -88,7 +96,7 @@ describe('submitCreateBrief', () => {
   it('creates the brief and passes the payload + trace to brief_create', async () => {
     const d = deps({});
     const result = await submitCreateBrief(d);
-    expect(result).toEqual({ ok: true, briefId: 'brief-1' });
+    expect(result).toEqual({ ok: true, briefId: 'brief-1', noteFailed: false });
     expect(d.briefCreate).toHaveBeenCalledWith(client, {
       p_workspace_id: 'w1',
       p_payload: { title: 'T', objective: 'O' },
@@ -102,7 +110,7 @@ describe('submitCreateBrief', () => {
     );
     const d = deps({ initialComment: '  Welcome aboard  ', createComment });
     const result = await submitCreateBrief(d);
-    expect(result).toEqual({ ok: true, briefId: 'brief-1' });
+    expect(result).toEqual({ ok: true, briefId: 'brief-1', noteFailed: false });
     expect(createComment).toHaveBeenCalledWith(client, {
       workspace_id: 'w1',
       entity_type: 'brief',
@@ -119,14 +127,14 @@ describe('submitCreateBrief', () => {
     expect(createComment).not.toHaveBeenCalled();
   });
 
-  it('still resolves when the seed comment fails (best-effort)', async () => {
+  it('still resolves when the seed comment fails (best-effort), flagging noteFailed', async () => {
     const createComment = vi.fn(
       async () =>
         ({ ok: false, error: { code: 'unknown', message: 'seed boom' } }) as CommentResult<string>,
     );
     const d = deps({ initialComment: 'note', createComment });
     const result = await submitCreateBrief(d);
-    expect(result).toEqual({ ok: true, briefId: 'brief-1' });
+    expect(result).toEqual({ ok: true, briefId: 'brief-1', noteFailed: true });
   });
 
   it('surfaces a brief_create failure and skips the comment', async () => {
@@ -139,7 +147,7 @@ describe('submitCreateBrief', () => {
       createComment,
     });
     const result = await submitCreateBrief(d);
-    expect(result).toEqual({ ok: false, message: 'boom' });
+    expect(result).toEqual({ ok: false, message: GENERIC_ERROR });
     expect(createComment).not.toHaveBeenCalled();
   });
 });
@@ -149,6 +157,7 @@ describe('initialBriefState (reset-on-open)', () => {
     expect(initialBriefState()).toEqual({
       title: '',
       objective: '',
+      brandRequirements: '',
       format: '',
       targetDate: '',
       initialComment: '',

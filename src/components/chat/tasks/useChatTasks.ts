@@ -14,9 +14,14 @@
 // if the record refuses it (the row then offers "Not saved · Retry"). A delete
 // hides the task at once behind an Undo toast (useUndoableAction "Task
 // deleted"); chat_task_delete runs when the window ends, and a refused delete
-// brings it back. Deleted tasks never show in the list. Adds go through the add
-// queue (add-queue.ts): one chat_task_create each, one at a time in typed
-// order; a failure pauses it; a created item stays until the list holds its row. Only after the record accepts a write is a live Agora
+// brings it back ("Couldn't delete the task. Try again."). Deleted tasks never
+// show in the list. The sheet's drafts save in one chat_task_create_many
+// (createMany: one Save, one batch chat line, one bell alert per member); the
+// list is re-read before it resolves, so the drafts become real rows in one
+// step. The older add queue (add-queue.ts, one chat_task_create each) stays
+// for single adds. A list read that fails with no list held reads 'failed'
+// (the sheet shows the load error and Retry, never an empty list). Only after
+// the record accepts a write is a live Agora
 // command sent (ext { sorted_event: 'task', channel_id, task_id }), exactly
 // like marks; receivers re-read that one task and the events newer than their
 // latest.
@@ -37,6 +42,7 @@ import type { ChatConnection, ChatContextValue } from '@/lib/chat/types';
 import {
   applyTaskChanges,
   createTask,
+  createTasks,
   deleteTask,
   isDeleted,
   mergeEvents,
@@ -47,6 +53,7 @@ import {
   saveTask,
   upsertTask,
   type ChatTask,
+  type NewTask,
   type TaskChanges,
   type TaskEvent,
   type TaskPriority,
@@ -73,6 +80,11 @@ export interface FailedWrite {
 
 /** The Undo toast's title for a delete. */
 export const TASK_DELETED_LABEL = 'Task deleted';
+/** The toast when a delete the Undo window let through is refused. */
+export const TASK_DELETE_FAILED = "Couldn't delete the task. Try again.";
+
+/** The list read: in flight with nothing to show, failed with nothing to show, or a list. */
+export type TasksLoadState = 'loading' | 'failed' | 'ready';
 
 /** What the add row may set besides the title. */
 export interface CreateOptions {
@@ -89,6 +101,10 @@ export interface UseChatTasks {
   lineTasks: ReadonlyMap<string, ChatTask>;
   /** The open channel's first read settled (ok or not). */
   loaded: boolean;
+  /** Whether the list can show: 'ready' once a read succeeded (or a remembered list). */
+  loadState: TasksLoadState;
+  /** A Retry of a failed list read is in flight. */
+  retrying: boolean;
   /**
    * Whether every event at or after this instant is read (a message at this
    * time can paint with its lines). True before the first read settles: the
@@ -107,6 +123,12 @@ export interface UseChatTasks {
   /** Older history loaded: read the events back to this instant (queued until the first read). */
   ensureEventsSince: (iso: string) => void;
   create: (side: TaskSide, title: string, number: number, options?: CreateOptions) => void;
+  /**
+   * Save the sheet's drafts in one chat_task_create_many. Resolves true once
+   * the record took them and the list was re-read (the drafts can go), false
+   * when refused (the drafts stay for Retry).
+   */
+  createMany: (tasks: readonly NewTask[]) => Promise<boolean>;
   /** Save an edit: only the changed fields, one write. */
   save: (task: ChatTask, changes: TaskChanges) => void;
   retryField: (taskId: string) => void;
@@ -133,6 +155,10 @@ interface TasksState {
   /** Every event at or after this instant is read; -Infinity: all of them. */
   coveredFromMs: number;
   loaded: boolean;
+  /** A list read succeeded for this chat (or a remembered list painted). */
+  listOk: boolean;
+  /** The last list read failed. */
+  readFailed: boolean;
 }
 
 interface Remembered {
@@ -176,6 +202,8 @@ function freshState(channelId: string | null, from: Remembered | undefined): Tas
     events: from?.events ?? [],
     coveredFromMs: from?.coveredFromMs ?? Number.POSITIVE_INFINITY,
     loaded: from !== undefined,
+    listOk: from !== undefined,
+    readFailed: false,
   };
 }
 
@@ -209,6 +237,7 @@ export function useChatTasks(params: {
   const [extra, setExtra] = useState<Map<string, ChatTask>>(new Map());
   // Tasks hidden behind a pending Undo (or deleted here).
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const [retrying, setRetrying] = useState(false);
   const undoable = useUndoableAction();
 
   const channelRef = useRef(channelId);
@@ -308,12 +337,12 @@ export function useChatTasks(params: {
   );
 
   const load = useCallback(
-    async (forChannel: string): Promise<void> => {
+    async (forChannel: string): Promise<boolean> => {
       const [tasks, events] = await Promise.all([
         readChannelTasks(db, forChannel, { nowMs: Date.now(), timeZone: zoneRef.current }),
         readTaskEvents(db, forChannel),
       ]);
-      if (channelRef.current !== forChannel) return;
+      if (channelRef.current !== forChannel) return false;
       if (!tasks.ok || !events.ok) {
         logger.warn('chat: tasks load failed', {
           channel_id: forChannel,
@@ -322,16 +351,22 @@ export function useChatTasks(params: {
         // Settled (nothing holds on it, no page waits), but not remembered as a list.
         setState((prev) =>
           prev.channelId === forChannel
-            ? { ...prev, loaded: true, coveredFromMs: -Infinity }
+            ? { ...prev, loaded: true, coveredFromMs: -Infinity, readFailed: true }
             : prev,
         );
-        return;
+        return false;
       }
       staleRef.current = false;
       const page = events.data;
       const oldest = page.events[0];
       const cover = page.full && oldest !== undefined ? Date.parse(oldest.createdAt) : -Infinity;
-      stateRef.current = { ...stateRef.current, loaded: true, coveredFromMs: cover };
+      stateRef.current = {
+        ...stateRef.current,
+        loaded: true,
+        coveredFromMs: cover,
+        listOk: true,
+        readFailed: false,
+      };
       apply(forChannel, (prev) => ({
         ...prev,
         tasks: tasks.data,
@@ -339,9 +374,12 @@ export function useChatTasks(params: {
         events: mergeEvents(prev.events, page.events),
         coveredFromMs: cover,
         loaded: true,
+        listOk: true,
+        readFailed: false,
       }));
       // Older history asked before this read (or reaches past it): read on down.
       void runEnsure(forChannel);
+      return true;
     },
     [db, apply, runEnsure],
   );
@@ -360,7 +398,13 @@ export function useChatTasks(params: {
 
   const refetch = useCallback((): void => {
     const forChannel = channelRef.current;
-    if (forChannel !== null) void load(forChannel);
+    if (forChannel === null) return;
+    // A Retry after a failed read shows "Retrying…" until it settles.
+    const retry = stateRef.current.readFailed && !stateRef.current.listOk;
+    if (retry) setRetrying(true);
+    void load(forChannel).finally(() => {
+      if (retry) setRetrying(false);
+    });
   }, [load]);
 
   // The due timer has no live push: a tab back after a minute re-reads (at
@@ -523,6 +567,7 @@ export function useChatTasks(params: {
       setHidden((prev) => new Set(prev).add(task.id));
       runUndoable({
         label: TASK_DELETED_LABEL,
+        failure: TASK_DELETE_FAILED,
         commit: async () => {
           const traceId = generateTraceId();
           const result = await deleteTask({ client: db, taskId: task.id, traceId });
@@ -624,6 +669,38 @@ export function useChatTasks(params: {
     );
   }, []);
 
+  const createMany = useCallback<UseChatTasks['createMany']>(
+    async (items) => {
+      const forChannel = channelRef.current;
+      if (forChannel === null || items.length === 0) return false;
+      const traceId = generateTraceId();
+      const result = await createTasks({
+        client: db,
+        channelId: forChannel,
+        tasks: items,
+        traceId,
+      });
+      if (!result.ok) {
+        logger.warn('chat: task batch create failed', {
+          trace_id: traceId,
+          count: items.length,
+          error: result.message,
+        });
+        return false;
+      }
+      if (channelRef.current !== forChannel) return true;
+      // Peers re-read each new task (cmd signals only; the one chat line and
+      // the one bell alert come from the record).
+      for (const id of result.data) signal(forChannel, id, traceId);
+      if (items.some((t) => t.dueAt != null)) announceTaskDueChanged();
+      // The rows and the batch line arrive together; a missed read re-reads later.
+      const listed = await load(forChannel);
+      if (!listed && channelRef.current === forChannel) staleRef.current = true;
+      return true;
+    },
+    [db, signal, load],
+  );
+
   const retryCreate = useCallback<UseChatTasks['retryCreate']>((key) => {
     setPending((queue) => retryEntry(queue, key));
   }, []);
@@ -688,6 +765,11 @@ export function useChatTasks(params: {
 
   const coveredFromMs = current.coveredFromMs;
   const loaded = current.loaded;
+  const loadState: TasksLoadState = current.listOk
+    ? 'ready'
+    : current.readFailed
+      ? 'failed'
+      : 'loading';
   // The list: no deleted task, none waiting out its Undo.
   const visibleTasks = useMemo(
     () => current.tasks.filter((t) => !isDeleted(t) && !hidden.has(t.id)),
@@ -709,6 +791,8 @@ export function useChatTasks(params: {
       events: current.events,
       lineTasks,
       loaded,
+      loadState,
+      retrying,
       covers,
       pending: shownPending,
       failed,
@@ -717,6 +801,7 @@ export function useChatTasks(params: {
       refetch,
       ensureEventsSince,
       create,
+      createMany,
       save,
       retryField,
       remove,
@@ -729,6 +814,8 @@ export function useChatTasks(params: {
       current.events,
       lineTasks,
       loaded,
+      loadState,
+      retrying,
       covers,
       shownPending,
       failed,
@@ -737,6 +824,7 @@ export function useChatTasks(params: {
       refetch,
       ensureEventsSince,
       create,
+      createMany,
       save,
       retryField,
       remove,

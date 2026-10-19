@@ -45,12 +45,6 @@ const inputSchema = z.object({
 export interface InviteSendDeps {
   env: (name: string) => string | undefined;
   createClient: typeof createClient;
-  /**
-   * The runtime's background hook (EdgeRuntime.waitUntil): when given, the email
-   * is sent after the response, so the inviter moves on at once. Absent (tests),
-   * the email is sent before answering.
-   */
-  waitUntil?: (work: Promise<unknown>) => void;
 }
 
 // Time-ordered UUID v7, generated inline (no dependency).
@@ -166,6 +160,30 @@ function roleCopy(role: string, brand: string): { line: string; button: string }
       };
 }
 
+// The button opens the app's Join page; nothing signs in until the invitee taps Join.
+const INVITE_TAP_NOTE =
+  "Tap Join on the page that opens. If you weren't expecting it, you can ignore this email.";
+
+/**
+ * The email button's link: the app's Join page with the token hash (?th=), never
+ * Supabase's verify action_link, which signs in on the first GET (a mail scanner
+ * opening it would use it up). ws and by name the workspace and inviter on the
+ * Join card, which the signed-out invitee cannot read yet.
+ */
+export function inviteJoinUrl(input: {
+  appBaseUrl: string;
+  inviteId: string;
+  hashedToken: string;
+  workspace: string;
+  inviter: string;
+}): string {
+  const params = new URLSearchParams({ th: input.hashedToken });
+  if (input.workspace.trim() !== '') params.set('ws', input.workspace.trim());
+  if (input.inviter.trim() !== '') params.set('by', input.inviter.trim());
+  const base = input.appBaseUrl.replace(/\/$/, '');
+  return `${base}/invite/accept/${encodeURIComponent(input.inviteId)}?${params.toString()}`;
+}
+
 export function inviteEmailBody(input: {
   brand: string;
   displayName: string;
@@ -177,8 +195,7 @@ export function inviteEmailBody(input: {
 } {
   const heading = `Join ${input.displayName} on Sorted`;
   const copy = roleCopy(input.role, input.brand);
-  const signInNote =
-    "This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.";
+  const signInNote = INVITE_TAP_NOTE;
   const footer = `Sent by Sorted for the ${input.displayName} workspace.`;
   const text =
     `${heading}\n\n` +
@@ -213,7 +230,7 @@ export function inviteEmailBody(input: {
     `<td height="52" align="center" valign="middle" style="height:52px;border-radius:10px;background-color:#5a3fe0;box-shadow:0 4px 10px rgba(30,27,46,0.20);">` +
     `<a href="${safeUrl}" style="display:block;height:52px;line-height:52px;padding:0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;text-align:center;">${safeButton}</a>` +
     `</td></tr></table></td></tr>` +
-    `<tr><td align="left" style="padding:10px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#8b8799;">This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.</p></td></tr>` +
+    `<tr><td align="left" style="padding:10px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#8b8799;">${INVITE_TAP_NOTE}</p></td></tr>` +
     `<tr><td style="padding:26px 40px 0 40px;"><div style="height:1px;background-color:#eeecf4;line-height:1px;font-size:1px;">&nbsp;</div></td></tr>` +
     `<tr><td align="left" style="padding:20px 40px 36px 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#a8a4b5;">Sent by <strong style="color:#5a3fe0;font-weight:600;">Sorted</strong> for the ${safeWorkspace} workspace.</p></td></tr>` +
     `</table></td></tr></table></body></html>`;
@@ -533,17 +550,18 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
         errorDetail = 'resend_not_configured';
         console.error(traceId, errorDetail);
       } else {
-        // Passwordless login link for the email: lands the invitee on
-        // /invite/accept/{id}, which accepts the invite automatically. A failure here must not
-        // discard the provisioned user or the invite row.
+        // Passwordless login token for the email. Only its hashed_token is used:
+        // the email links to the app's Join page (/invite/accept/{id}?th=), which
+        // calls verifyOtp on the tap. A failure here must not discard the
+        // provisioned user or the invite row.
         const link = await adminClient.auth.admin.generateLink({
           type: 'magiclink',
           email,
           options: { redirectTo: `${appBaseUrl}/invite/accept/${inviteId}` },
         });
-        const actionLink = link.data?.properties?.action_link;
-        if (link.error || !actionLink) {
-          const message = link.error?.message ?? 'generateLink returned no action_link';
+        const hashedToken = link.data?.properties?.hashed_token;
+        if (link.error || !hashedToken) {
+          const message = link.error?.message ?? 'generateLink returned no hashed_token';
           errorDetail = message;
           console.error(traceId, message);
           await adminClient
@@ -559,8 +577,15 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
           const brand = (workspace.data?.name as string | undefined) ?? '';
           const platform = workspace.data?.platform as string | null | undefined;
           const displayName = workspaceDisplayName(brand, platform);
-          const body = inviteEmailBody({ brand, displayName, role, acceptUrl: actionLink });
           const inviterName = await readInviterName(adminClient, inviterId);
+          const joinUrl = inviteJoinUrl({
+            appBaseUrl,
+            inviteId,
+            hashedToken,
+            workspace: displayName,
+            inviter: firstName(inviterName),
+          });
+          const body = inviteEmailBody({ brand, displayName, role, acceptUrl: joinUrl });
 
           let status: 'sent' | 'failed' = 'sent';
           let providerMessageId: string | null = null;
@@ -596,17 +621,9 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
       return { emailed, errorDetail };
     };
 
-    let outcome: { emailed: boolean; errorDetail: string | null };
-    if (deps.waitUntil) {
-      deps.waitUntil(
-        deliver().catch((err: unknown) => {
-          console.error(traceId, err instanceof Error ? err.message : String(err));
-        }),
-      );
-      outcome = { emailed: false, errorDetail: 'queued' };
-    } else {
-      outcome = await deliver();
-    }
+    // Delivery runs before the response so the inviter learns whether the email
+    // went out (emailed / error_detail); the browser cannot read delivery_attempts.
+    const outcome = await deliver();
 
     return json(
       {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadError } from '@/components/ui/LoadError';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { IconAssets, IconChevronRight, IconUpload } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
@@ -21,15 +22,22 @@ import { NewFolderSheet } from '@/components/pages/assets/NewFolderSheet';
 import { MoveToFolderSheet } from '@/components/pages/assets/MoveToFolderSheet';
 import { AssetRenameSheet } from '@/components/pages/assets/AssetRenameSheet';
 import {
+  ASSET_GONE_TOAST,
   ASSET_PARAM,
+  FOLDER_DELETED_LABEL,
+  RECENTLY_DELETED_LABEL,
+  RECENTLY_DELETED_PATH,
   ROOT_LABEL,
+  assetParamIsGone,
   deleteFailedLabel,
   deleteToastLabel,
   folderFromParams,
   folderLink,
   folderStackOf,
   folderStep,
+  selectAllCapLabel,
   selectAllIds,
+  selectCapLabel,
   selectedLabel,
   withFolderParam,
   type FolderHistoryState,
@@ -47,6 +55,7 @@ import { useSession } from '@/lib/session-context';
 import { useSort } from '@/lib/use-sort';
 import { PresignCache } from '@/lib/asset-presign';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
+import { logger } from '@/lib/logger';
 import {
   addAssetLink,
   canRenameAssets,
@@ -81,7 +90,10 @@ import {
   folderBreadcrumb,
   folderChildCount,
   assetInUseMessage,
+  inUseKeptLabel,
+  inUseTitle,
   isAssetInUseError,
+  splitFreeAssets,
   listAssets,
   parseAssetTab,
   removeAssetsById,
@@ -111,7 +123,12 @@ export function AssetsPage() {
   const [items, setItems] = useState<AssetListItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // A failed read of the files or the folders is a page load error: the grid,
+  // folders and counts never render from a partial read. The cause is logged.
+  const [assetsFailed, setAssetsFailed] = useState(false);
+  const [foldersFailed, setFoldersFailed] = useState(false);
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const [search, setSearch] = useState('');
   const [viewer, setViewer] = useState<ViewerState | null>(null);
@@ -131,6 +148,12 @@ export function AssetsPage() {
   // Deleted but still inside the Undo window: hidden from every list until the
   // delete commits (then the rows go) or Undo brings them back.
   const [pendingDelete, setPendingDelete] = useState<ReadonlySet<string>>(() => new Set());
+  // Folders inside their Undo window: hidden until the delete commits or Undo.
+  const [pendingFolderDelete, setPendingFolderDelete] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // Where the files the move sheet relocates are now (null: All assets).
+  const [moveFrom, setMoveFrom] = useState<string | null | undefined>(undefined);
   const [foldersLoaded, setFoldersLoaded] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [inUse, setInUse] = useState<AssetInUseState | null>(null);
@@ -189,27 +212,43 @@ export function AssetsPage() {
   const loadAssets = useCallback(async () => {
     if (workspaceId === null) return;
     setLoading(true);
-    setError(null);
     const result = await listAssets(supabase, workspaceId);
     setLoading(false);
     if (!result.ok) {
-      setError(result.error.message);
+      logger.warn('assets: list read failed', { error: result.error.message });
+      setAssetsFailed(true);
       return;
     }
+    setAssetsFailed(false);
     setItems(result.data);
+    setAssetsLoaded(true);
   }, [workspaceId]);
 
-  // Load the workspace's folder rows alongside the assets. A failed read leaves
-  // the folder list empty (every asset then sits at the root), never blocking the
-  // grid, which is why this does not feed the page error banner.
+  // Load the workspace's folder rows alongside the assets. A failed read is a
+  // page load error too: with no folder list every file would look like it sits
+  // in All assets and every folder would look empty, so nothing renders from it.
   const loadFolders = useCallback(async () => {
     if (workspaceId === null) return;
     const result = await fetchFolders(supabase, workspaceId);
-    if (result.ok) {
-      setFolders(result.data);
-      setFoldersLoaded(true);
+    if (!result.ok) {
+      logger.warn('assets: folders read failed', { error: result.error.message });
+      setFoldersFailed(true);
+      return;
     }
+    setFoldersFailed(false);
+    setFolders(result.data);
+    setFoldersLoaded(true);
   }, [workspaceId]);
+
+  // Retry re-reads both, so a page that failed on either comes back whole.
+  const retryLoad = useCallback(async () => {
+    setRetrying(true);
+    try {
+      await Promise.all([loadAssets(), loadFolders()]);
+    } finally {
+      setRetrying(false);
+    }
+  }, [loadAssets, loadFolders]);
 
   useEffect(() => {
     void loadAssets();
@@ -229,6 +268,9 @@ export function AssetsPage() {
     if (previous !== null && previous !== workspaceId) {
       setSearchParams((prev) => withFolderParam(prev, null), { replace: true });
       setFoldersLoaded(false);
+      setAssetsLoaded(false);
+      setAssetsFailed(false);
+      setFoldersFailed(false);
     }
   }, [workspaceId, setSearchParams]);
 
@@ -246,6 +288,8 @@ export function AssetsPage() {
     setMoveIds(null);
     setRenameItem(null);
     setPendingDelete(new Set());
+    setPendingFolderDelete(new Set());
+    setMoveFrom(undefined);
     setInUse(null);
   }, [workspaceId]);
 
@@ -300,8 +344,11 @@ export function AssetsPage() {
 
   // Child folders of the current level (none while searching, which spans folders).
   const currentFolders = useMemo(
-    () => (searching ? [] : childFolders(folders, folderId)),
-    [folders, folderId, searching],
+    () =>
+      searching
+        ? []
+        : childFolders(folders, folderId).filter((f) => !pendingFolderDelete.has(f.id)),
+    [folders, folderId, searching, pendingFolderDelete],
   );
 
   const segments = useMemo(() => folderBreadcrumb(folders, folderId), [folders, folderId]);
@@ -366,8 +413,8 @@ export function AssetsPage() {
           next.delete(item.id);
           return next;
         }
-        if (next.size >= 200) {
-          push('You can move up to 200 files at once');
+        if (next.size >= BULK_DELETE_MAX) {
+          push(selectCapLabel(BULK_DELETE_MAX));
           return prev;
         }
         next.add(item.id);
@@ -394,13 +441,13 @@ export function AssetsPage() {
   );
 
   // Email deep-link: ?asset={assetId} opens that asset in the lightbox once the
-  // list has loaded. Fired once per distinct id; only 'asset' is stripped,
-  // preserving any sibling deep-link param. If the asset is not in the currently
-  // loaded/visible set, openAsset no-ops (it can only open a navigable item).
-  // A copied link (/assets?asset=<id>) lands on the asset's own folder first,
-  // on the All tab, so it is in the navigable list when it opens.
+  // list has loaded (an empty library counts as loaded). Fired once per distinct
+  // id; only 'asset' is stripped, preserving any sibling deep-link param. A
+  // copied link (/assets?asset=<id>) lands on the asset's own folder first, on
+  // the All tab, so it is in the navigable list when it opens. An id that is not
+  // in the library (deleted, or never here) says so, with a way to Recently deleted.
   useEffect(() => {
-    if (items.length === 0) return;
+    if (!assetsLoaded) return;
     const asset = searchParams.get(ASSET_PARAM);
     if (asset === null || asset === '') return;
     if (openedAssetParam.current === asset) return;
@@ -418,11 +465,20 @@ export function AssetsPage() {
     }
     openedAssetParam.current = asset;
     if (item !== undefined) openAsset(item);
+    else if (assetParamIsGone(assetsLoaded, items, asset)) {
+      showToast?.({
+        title: ASSET_GONE_TOAST,
+        action: { label: RECENTLY_DELETED_LABEL, onPress: () => navigate(RECENTLY_DELETED_PATH) },
+      });
+    }
     const next = new URLSearchParams(searchParams);
     next.delete(ASSET_PARAM);
     setSearchParams(next, { replace: true });
   }, [
     items,
+    assetsLoaded,
+    showToast,
+    navigate,
     searchParams,
     setSearchParams,
     openAsset,
@@ -476,8 +532,12 @@ export function AssetsPage() {
     const firstId = blocked[0]?.assetId ?? ids[0];
     const first = snapshot.find((candidate) => candidate.id === firstId);
     const name = first !== undefined ? displayLabel(first) : '';
+    // The copy follows where the first blocked file is used (post, brief or
+    // comment); a failed lookup says only that it is in use.
+    const kind = blocked[0]?.parent.kind ?? null;
     setInUse({
-      message: assetInUseMessage(name, Math.max(0, blocked.length - 1)),
+      title: inUseTitle(kind),
+      message: assetInUseMessage(name, Math.max(0, blocked.length - 1), kind),
       parent: blocked[0]?.parent ?? null,
     });
   }, []);
@@ -506,19 +566,34 @@ export function AssetsPage() {
         revert: () => unhide(ids),
         commit: async () => {
           const traceId = newTrace();
-          const [only] = ids;
+          // asset_delete_many is all-or-nothing: one file in use refuses the
+          // whole call. A bulk delete checks once which files are in use, deletes
+          // the free ones in one call and keeps the rest, saying how many.
+          let targets = ids;
+          let kept: string[] = [];
+          if (ids.length > 1) {
+            const found = await findAssetsInUse(supabase, ids);
+            if (found.ok) ({ free: targets, kept } = splitFreeAssets(ids, found.data));
+          }
+          if (targets.length === 0) {
+            unhide(ids);
+            await showInUse(ids, itemsRef.current);
+            return;
+          }
+          const [only] = targets;
           const result =
-            ids.length === 1 && only !== undefined
+            targets.length === 1 && only !== undefined
               ? await assetDelete(supabase, { p_asset_id: only, p_trace_id: traceId })
-              : await assetDeleteMany(supabase, { p_asset_ids: ids, p_trace_id: traceId });
+              : await assetDeleteMany(supabase, { p_asset_ids: targets, p_trace_id: traceId });
           if (!result.ok) {
             unhide(ids);
-            if (isAssetInUseError(result.error)) await showInUse(ids, itemsRef.current);
+            if (isAssetInUseError(result.error)) await showInUse(targets, itemsRef.current);
             else push(deleteFailedLabel(ids.length));
             return;
           }
-          setItems((prev) => removeAssetsById(prev, ids));
+          setItems((prev) => removeAssetsById(prev, targets));
           unhide(ids);
+          if (kept.length > 0) push(inUseKeptLabel(kept.length));
         },
       });
     },
@@ -532,6 +607,41 @@ export function AssetsPage() {
     setSelected(new Set());
     deleteItems(ids);
   }, [selected, deleteItems]);
+
+  // Delete a folder behind the 7s Undo toast: the card hides at once and the
+  // worker delete (files inside move to All assets) runs when the window ends.
+  // Undo, or a refused delete, brings the card back.
+  const unhideFolder = useCallback((id: string): void => {
+    setPendingFolderDelete((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const handleDeleteFolderRef = useRef<
+    ((folder: FolderItem) => Promise<FolderDeleteOutcome>) | null
+  >(null);
+
+  const deleteFolderUndoable = useCallback(
+    (folder: FolderItem): void => {
+      setPendingFolderDelete((prev) => new Set([...prev, folder.id]));
+      runUndoable({
+        label: FOLDER_DELETED_LABEL,
+        revert: () => unhideFolder(folder.id),
+        commit: async () => {
+          const run = handleDeleteFolderRef.current;
+          const outcome: FolderDeleteOutcome =
+            run !== null
+              ? await run(folder)
+              : { ok: false, message: "Couldn't delete the folder. Try again." };
+          unhideFolder(folder.id);
+          if (!outcome.ok) push(outcome.message);
+        },
+      });
+    },
+    [runUndoable, unhideFolder, push],
+  );
 
   const copyFolderLink = useCallback(
     (folder: FolderItem): void => {
@@ -554,6 +664,7 @@ export function AssetsPage() {
       file: File,
       displayName: string,
       targetFolderId: string | null,
+      signal?: AbortSignal,
     ): Promise<UploadOutcome> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
         return { ok: false, message: "Couldn't upload. Try again." };
@@ -573,7 +684,9 @@ export function AssetsPage() {
         filename: file.name,
         displayName,
         folderId: targetFolderId,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+        // XHR so Stop can abort the request in flight (fetchWithTrace takes no
+        // signal); the transport sets X-Trace-Id itself.
+        xhr: { traceId: newTrace(), ...(signal !== undefined ? { signal } : {}) },
       });
     },
     [uploadEndpoint, workspaceId, newTrace],
@@ -731,6 +844,7 @@ export function AssetsPage() {
     },
     [uploadEndpoint, workspaceId, newTrace, loadFolders, loadAssets],
   );
+  handleDeleteFolderRef.current = handleDeleteFolder;
 
   // Rename one asset via the worker's /rename route. On success the name is
   // updated in place (grid card + open lightbox) without a full reload; a 403
@@ -767,6 +881,7 @@ export function AssetsPage() {
   );
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
+  const loadFailed = assetsFailed || foldersFailed;
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
 
   const exitSelectMode = (): void => {
@@ -816,8 +931,11 @@ export function AssetsPage() {
               onUploadFiles={() => setUploadOpen(true)}
               onAddLink={() => setAddLinkOpen(true)}
               onSelect={
-                currentFolderAssetCount > 0
+                currentFolderAssetCount > 0 && !loadFailed
                   ? () => {
+                      // Select spans every file here: a type tab scope would hide
+                      // files from Select all, so it clears to All.
+                      setTab(ASSET_TAB_DEFAULT);
                       setSelected(new Set());
                       setSelectMode(true);
                     }
@@ -841,14 +959,20 @@ export function AssetsPage() {
               <Button
                 variant="ghost"
                 disabled={visible.length === 0}
-                onClick={() => setSelected(new Set(selectAllIds(visible, BULK_DELETE_MAX)))}
+                onClick={() => {
+                  setSelected(new Set(selectAllIds(visible, BULK_DELETE_MAX)));
+                  if (visible.length > BULK_DELETE_MAX) push(selectAllCapLabel(BULK_DELETE_MAX));
+                }}
               >
                 Select all
               </Button>
               <Button
                 variant="primary"
                 disabled={selected.size === 0}
-                onClick={() => setMoveIds(Array.from(selected))}
+                onClick={() => {
+                  setMoveFrom(searching ? undefined : folderId);
+                  setMoveIds(Array.from(selected));
+                }}
               >
                 Move
               </Button>
@@ -864,12 +988,12 @@ export function AssetsPage() {
               </Button>
             </span>
           </div>
-        ) : (
+        ) : loadFailed ? null : (
           <AssetTabs value={tab} counts={counts} onChange={setTab} />
         )}
       </SectionHeader>
 
-      {!searching && !selectMode && currentFolders.length > 0 ? (
+      {!searching && !selectMode && !loadFailed && currentFolders.length > 0 ? (
         <div className="px-4 md:px-6 mt-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
             {currentFolders.map((f) => (
@@ -890,14 +1014,13 @@ export function AssetsPage() {
         id={ASSET_TABPANEL_ID}
         aria-labelledby={selectMode ? undefined : assetTabId(tab)}
       >
-        {error !== null ? (
+        {loadFailed ? (
           <div className="px-4 md:px-6 mt-4">
-            <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
-              Could not load assets. {error}
-            </div>
-            <div className="mt-3">
-              <Button onClick={() => void loadAssets()}>Retry</Button>
-            </div>
+            <LoadError
+              title={assetsFailed ? 'your files' : 'your folders'}
+              onRetry={() => void retryLoad()}
+              retrying={retrying}
+            />
           </div>
         ) : listLoading ? (
           <div className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
@@ -915,7 +1038,7 @@ export function AssetsPage() {
           <EmptyState
             icon={<IconAssets size={24} />}
             title="No assets yet"
-            description="Files and links used in posts and briefs will show up here."
+            description="Upload photos, videos, PDFs and docs, or add a link. Files used in posts and briefs show up here too."
             action={
               <Button variant="primary" onClick={() => setUploadOpen(true)}>
                 <IconUpload size={16} />
@@ -961,6 +1084,20 @@ export function AssetsPage() {
         )}
       </div>
 
+      {/* Deleted files wait 31 days in Recently deleted; the way there from Assets. */}
+      {!selectMode ? (
+        <div className="px-4 md:px-6 pb-6 pt-2">
+          <button
+            type="button"
+            data-recently-deleted-link=""
+            onClick={() => navigate(RECENTLY_DELETED_PATH)}
+            className="inline-flex min-h-[44px] items-center rounded-md px-1 text-sm text-fg-2 transition-colors duration-fast hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {RECENTLY_DELETED_LABEL}
+          </button>
+        </div>
+      ) : null}
+
       {viewer !== null && viewerItem !== undefined ? (
         <SearchWordsContext.Provider value={searchJump.words}>
           <AssetLightbox
@@ -998,6 +1135,7 @@ export function AssetsPage() {
           }}
           onMove={(item) => {
             setActionItem(null);
+            setMoveFrom(item.folderId);
             setMoveIds([item.id]);
           }}
           onRename={(item) => {
@@ -1063,6 +1201,7 @@ export function AssetsPage() {
         open={moveIds !== null}
         count={moveIds?.length ?? 0}
         folders={folders}
+        currentFolderId={moveFrom}
         onClose={() => setMoveIds(null)}
         onMove={handleMoveAssets}
         onToast={push}
@@ -1094,7 +1233,10 @@ export function AssetsPage() {
             setFolderAction(null);
             setRenameTarget(f);
           }}
-          onConfirmDelete={() => handleDeleteFolder(folderAction)}
+          onConfirmDelete={async () => {
+            deleteFolderUndoable(folderAction);
+            return { ok: true };
+          }}
           onToast={push}
         />
       ) : null}

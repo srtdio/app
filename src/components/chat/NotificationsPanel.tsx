@@ -50,7 +50,7 @@ import {
   type BellEntry,
 } from '@/lib/chat/bell';
 import { formatSendLabel } from '@/lib/chat/scheduled';
-import { eventText, type TaskEventKind } from '@/lib/chat/tasks';
+import { addedLabel, eventText, TASKS_SHEET_ONLY, type TaskEventKind } from '@/lib/chat/tasks';
 import { workspaceTimeZone } from '@/lib/chat/time-format';
 import { chatMessageHref, taskLinkToken } from '@/lib/inbox/bell-types';
 import type { ScheduledRow } from '@/lib/chat/scheduled';
@@ -300,17 +300,31 @@ const TASK_KINDS = new Set<string>([
   'due_passed',
 ]);
 
+/** The bell row label of a task alert. */
+export const TASK_BELL_PREVIEW = 'Tasks';
+
+/** A batch add's alert (one Save of several tasks): payload kind created_many. Pure. */
+export function isTaskBatch(entry: Pick<BellEntry, 'eventType' | 'task'>): boolean {
+  return entry.eventType === 'task_changed' && entry.task?.kind === 'created_many';
+}
+
 /**
  * A task row's line: task_changed "<actor> · <change>", task_due "<time>
- * passed · <n> <title>" (the payload's number and title; no extra read). Pure.
+ * passed · <n> <title>" (the payload's number and title; no extra read); a
+ * batch add "<actor> added N tasks in <chat>". Pure.
  */
 export function taskBellLine(
   entry: Pick<BellEntry, 'eventType' | 'task'>,
   actor: string | null,
   nowMs: number,
   timeZone: string,
+  chat?: string | null,
 ): string {
   const f = entry.task;
+  if (isTaskBatch(entry)) {
+    const line = addedLabel(actor ?? 'Someone', f?.count ?? 1);
+    return chat != null && chat !== '' ? `${line} in ${chat}` : line;
+  }
   const kind: TaskEventKind =
     entry.eventType === 'task_due'
       ? 'due_passed'
@@ -337,9 +351,16 @@ function TaskBellRowView(props: { bell: BellContextValue; entry: BellEntry }): R
   const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
   const due = entry.eventType === 'task_due';
   const actor = entry.actorId !== null ? (bell.nameOf(entry.actorId) ?? null) : null;
-  const taskId = entry.task?.taskId ?? null;
+  const batch = isTaskBatch(entry);
+  const chat = bell.chatNameOf(entry.channelId);
+  // A batch opens the sheet with no row expanded; one task opens on that row.
+  const taskId = batch ? TASKS_SHEET_ONLY : (entry.task?.taskId ?? null);
   return (
-    <li data-bell-row={due ? 'task-due' : 'task'} data-bell-entry={entry.id} className={ROW}>
+    <li
+      data-bell-row={due ? 'task-due' : batch ? 'task-batch' : 'task'}
+      data-bell-entry={entry.id}
+      className={ROW}
+    >
       <RowBody
         testId={entry.id}
         icon={
@@ -349,12 +370,12 @@ function TaskBellRowView(props: { bell: BellContextValue; entry: BellEntry }): R
         }
         title={
           <span className={due ? 'text-bad' : undefined}>
-            {taskBellLine(entry, actor, Date.now(), timeZone)}
+            {taskBellLine(entry, actor, Date.now(), timeZone, batch ? chat : null)}
           </span>
         }
         time={rowTime(entry.createdAt, new Date())}
-        preview="Task list"
-        chat={bell.chatNameOf(entry.channelId)}
+        preview={TASK_BELL_PREVIEW}
+        chat={chat}
         onClick={() =>
           bell.openEntry(taskId !== null ? { ...entry, messageId: taskLinkToken(taskId) } : entry)
         }

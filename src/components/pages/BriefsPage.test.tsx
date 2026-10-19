@@ -135,9 +135,7 @@ interface BriefCardElementProps {
   brief: BriefWithThumbnail;
   cache: PresignCache;
   presignEnabled: boolean;
-  closing: boolean;
-  closeError: string | null;
-  onOpen: () => void;
+  href: string;
 }
 
 describe('briefCardList presign wiring', () => {
@@ -154,10 +152,7 @@ describe('briefCardList presign wiring', () => {
       briefs,
       cache,
       presignEnabled: true,
-      closingId: null,
-      closeError: null,
-      onClose: () => {},
-      onOpen: () => {},
+      hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
     });
     expect(cards).toHaveLength(3);
     for (const card of cards) {
@@ -175,32 +170,21 @@ describe('briefCardList presign wiring', () => {
       briefs: [makeBrief('a')],
       cache,
       presignEnabled: false,
-      closingId: null,
-      closeError: null,
-      onClose: () => {},
-      onOpen: () => {},
+      hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
     });
     expect((cards[0]!.props as BriefCardElementProps).presignEnabled).toBe(false);
   });
 
-  it('wires per-brief closing, close error and open from the brief id', () => {
-    const onOpen = vi.fn();
+  it('wires each card to its own detail link', () => {
     const cards = briefCardList({
       briefs: [makeBrief('a'), makeBrief('b')],
       cache,
       presignEnabled: true,
-      closingId: 'b',
-      closeError: { id: 'b', message: 'nope' },
-      onClose: () => {},
-      onOpen,
+      hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
     });
     const [first, second] = cards.map((c) => c.props as BriefCardElementProps);
-    expect(first!.closing).toBe(false);
-    expect(first!.closeError).toBeNull();
-    expect(second!.closing).toBe(true);
-    expect(second!.closeError).toBe('nope');
-    second!.onOpen();
-    expect(onOpen).toHaveBeenCalledWith('b');
+    expect(first!.href).toBe('/briefs/a');
+    expect(second!.href).toBe('/briefs/b');
   });
 });
 
@@ -318,10 +302,7 @@ describe('briefSections', () => {
       timeZone: CAL.timeZone,
       cache,
       presignEnabled: true,
-      closingId: null,
-      closeError: null,
-      onClose: () => {},
-      onOpen: () => {},
+      hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
     });
   }
 
@@ -384,10 +365,7 @@ describe('briefSections', () => {
       groups,
       cache,
       presignEnabled: true,
-      closingId: null,
-      closeError: null,
-      onClose: () => {},
-      onOpen: () => {},
+      hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
     };
     expect(
       readSection(briefSections({ ...shared, timeZone: 'Asia/Kolkata' })[0]!).days[0]!.label,
@@ -399,11 +377,11 @@ describe('briefSections', () => {
 });
 
 describe('briefsCountLine', () => {
-  it('formats total and open, using the plural brief unit', () => {
-    expect(briefsCountLine(3, 2)).toBe('3 briefs · 2 open');
+  it('shows the total alone when nothing is filtered out', () => {
+    expect(briefsCountLine(12, 12)).toBe('12 briefs');
   });
 
   it('uses the singular brief unit for a single brief', () => {
-    expect(briefsCountLine(1, 1)).toBe('1 brief · 1 open');
+    expect(briefsCountLine(1, 1)).toBe('1 brief');
   });
 });

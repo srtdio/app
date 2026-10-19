@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { IconCalendar, IconPipeline, IconPlus, IconX } from '@/components/ui/icons';
@@ -35,7 +36,11 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useSort } from '@/lib/use-sort';
 import { useSession } from '@/lib/session-context';
-import { fetchMemberRole } from '@/lib/assets';
+import {
+  ROLE_READ_ERROR,
+  readMemberRole,
+  type RoleStatus,
+} from '@/components/pages/pipeline/member-role';
 import { canRoleMove, roleMayTarget } from '@/components/pages/pcs/stage-actions';
 import {
   DATE_WINDOW_DEFAULT,
@@ -219,6 +224,100 @@ export function postCountLabel(count: number): string {
   return `${count} ${count === 1 ? 'post' : 'posts'}`;
 }
 
+/**
+ * The header count. With no stage, search or date filter on it is the plain
+ * total ("12 posts"); with any of them on it is honest about the narrowing:
+ * "{shown} of {total} posts", where shown is what the active view lists.
+ */
+export function headerCountLabel(shown: number, total: number, filtered: boolean): string {
+  if (!filtered) return postCountLabel(total);
+  return `${shown} of ${total} ${total === 1 ? 'post' : 'posts'}`;
+}
+
+/** Whether a stage chip, search or date window narrows the view. */
+export function viewFiltered(query: PipelineQuery): boolean {
+  return query.stage !== ALL_KEY || filtersActive(query);
+}
+
+/** The board's load failure: the shared plain line and a Retry that re-reads. */
+export function postsLoadError(onRetry: () => void, retrying: boolean): ReactElement {
+  return (
+    <div data-posts-load-error="" className="mt-4 px-4 md:px-6">
+      <LoadError title="posts" onRetry={onRetry} retrying={retrying} />
+    </div>
+  );
+}
+
+/** Skeleton cards: one board page's worth. */
+const SKELETON_CARDS = BOARD_CAP;
+
+/** Card-shaped placeholders while the first read is in flight. */
+export function postsSkeleton(isDesktop: boolean): ReactElement {
+  return (
+    <div
+      data-guide-wait=""
+      data-posts-skeleton=""
+      role="status"
+      aria-busy="true"
+      className={
+        isDesktop
+          ? 'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 px-4 py-4 md:px-6'
+          : 'grid grid-cols-2 gap-2 px-4 py-4'
+      }
+    >
+      <span className="sr-only">Loading posts</span>
+      {Array.from({ length: SKELETON_CARDS }, (_unused, index) => (
+        <div
+          key={index}
+          aria-hidden="true"
+          className="flex flex-col overflow-hidden rounded-lg border border-border bg-panel motion-safe:animate-pulse"
+        >
+          <div className="aspect-square bg-panel-2" />
+          <div className="flex flex-col gap-2 p-3">
+            <div className="h-3.5 w-3/4 rounded bg-panel-3" />
+            <div className="h-3 w-1/2 rounded bg-panel-3" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The pipeline with no posts at all (not a filter): a headline, and for people
+ * with post.create a button that opens the create sheet. Its name is "Create
+ * your first post", not "Create post": the header's "+" (the induction's
+ * pipeline-create anchor) keeps that exact name, so each control has one.
+ */
+export function emptyPipeline(canCreate: boolean): ReactElement {
+  return (
+    <div data-pipeline-empty="" className="px-4 md:px-6">
+      <EmptyState
+        icon={<IconPipeline size={22} />}
+        title="No posts yet"
+        description={
+          canCreate
+            ? 'Create the first post to start the pipeline.'
+            : 'Posts show up here once the agency creates them.'
+        }
+        {...(canCreate
+          ? {
+              action: (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => dispatchSorted('sorted:create-post')}
+                >
+                  Create your first post
+                </Button>
+              ),
+            }
+          : {})}
+      />
+    </div>
+  );
+}
+
 /** The searchable fields of a post; one source for both list derivations. */
 function postSearchFields(post: PipelinePost): (string | null)[] {
   return [post.title, post.caption, post.platform];
@@ -245,6 +344,8 @@ export interface PipelineSurfaceProps {
   onBlockedMove: (reason: string) => void;
   /** sessionStorage key for the feed's Show more depth (keyed by the filter query). */
   shownKey: string;
+  /** The workspace zone each card reads its target day in. */
+  timeZone?: string;
 }
 
 /**
@@ -279,6 +380,7 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
       workspaceKey={props.workspaceKey}
       onLongPressPost={props.onLongPressPost}
       shownKey={props.shownKey}
+      {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
     />
   );
 }
@@ -526,8 +628,10 @@ export function PipelinePage() {
   const weekStartDay = activeWorkspace?.week_start_day ?? 1;
 
   const [posts, setPosts] = useState<PipelinePost[]>([]);
-  const [postsLoading, setPostsLoading] = useState(false);
-  const [postsError, setPostsError] = useState<string | null>(null);
+  // True from the first render so the empty pipeline never flashes before the read.
+  const [postsLoading, setPostsLoading] = useState(true);
+  // A failed read: the plain LoadError shows; the raw message never reaches the UI.
+  const [postsFailed, setPostsFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [movePostTarget, setMovePostTarget] = useState<PipelinePost | null>(null);
   // Reactive mirror of the in-flight guard for the open move sheet: the guard
@@ -548,6 +652,11 @@ export function PipelinePage() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const [role, setRole] = useState<string | null>(null);
+  // Where the role read stands: the move sheet waits while 'loading' and
+  // offers Retry on 'error' instead of blaming the role.
+  const [roleStatus, setRoleStatus] = useState<RoleStatus>('loading');
+  const [roleAttempt, setRoleAttempt] = useState(0);
+  const retryRole = useCallback((): void => setRoleAttempt((n) => n + 1), []);
   // Per-post in-flight guard for the move handler (a ref so a re-render never
   // resets it mid-flight); shared by the desktop drop and mobile sheet paths.
   const inFlight = useRef<Set<string>>(new Set());
@@ -571,14 +680,18 @@ export function PipelinePage() {
   const loadPosts = useCallback(async () => {
     if (workspaceId === null) return;
     setPostsLoading(true);
-    setPostsError(null);
-    const result = await listPosts(supabase, { workspaceId, limit: 500 });
-    setPostsLoading(false);
-    if (!result.ok) {
-      setPostsError(result.error.message);
-      return;
+    let ok = false;
+    try {
+      const result = await listPosts(supabase, { workspaceId, limit: 500 });
+      if (result.ok) {
+        ok = true;
+        setPosts(result.data);
+      }
+    } catch {
+      // A transport throw (offline) is the same plain failure as an error Result.
     }
-    setPosts(result.data);
+    setPostsFailed(!ok);
+    setPostsLoading(false);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -590,16 +703,35 @@ export function PipelinePage() {
   useEffect(() => {
     if (workspaceId === null || userId === null) {
       setRole(null);
+      setRoleStatus('loading');
       return;
     }
     let cancelled = false;
-    void fetchMemberRole(supabase, workspaceId, userId).then((next) => {
-      if (!cancelled) setRole(next);
+    setRoleStatus('loading');
+    void readMemberRole(supabase, workspaceId, userId).then((read) => {
+      if (cancelled) return;
+      if (read.ok) {
+        setRole(read.role);
+        setRoleStatus('ready');
+      } else {
+        setRole(null);
+        setRoleStatus('error');
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, userId]);
+  }, [workspaceId, userId, roleAttempt]);
+
+  // A blocked desktop drop names its reason only once the role is known; a
+  // failed role read says so instead of blaming the role.
+  const onBlockedMove = useCallback(
+    (reason: string): void => {
+      if (roleStatus === 'ready') push(reason);
+      else if (roleStatus === 'error') push(ROLE_READ_ERROR);
+    },
+    [push, roleStatus],
+  );
 
   // The Create (+) button and command palette dispatch this event; the sheet
   // lives here so the board can re-fetch on success.
@@ -636,11 +768,12 @@ export function PipelinePage() {
   // Per-tab counts over the filtered list: each stage plus the 'all' total.
   const counts = useMemo(() => stageCounts(grouped, STAGES), [grouped]);
 
-  // The header counter: the filtered board total.
-  const shownCount = counts.all ?? 0;
-
   // The empty view under active search/date filters gets "No matches".
   const visibleCount = (stage === ALL_KEY ? counts.all : counts[stage]) ?? 0;
+
+  // The header counter: what the active view lists out of every post, honest
+  // about a stage, search or date filter.
+  const countLabel = headerCountLabel(visibleCount, posts.length, viewFiltered(query));
   const showFilteredEmpty = filtersActive(query) && visibleCount === 0;
 
   // Single source for the move: both the desktop drop and the mobile sheet call
@@ -691,7 +824,9 @@ export function PipelinePage() {
     [posts, push, role, runUndoable],
   );
 
-  const boardLoading = workspaceId === null || (postsLoading && posts.length === 0);
+  const boardLoading = workspaceId === null || (postsLoading && posts.length === 0 && !postsFailed);
+  // No posts at all (not a filter hiding them) once a read has succeeded.
+  const pipelineEmpty = !boardLoading && !postsFailed && !postsLoading && posts.length === 0;
 
   return (
     <>
@@ -711,43 +846,40 @@ export function PipelinePage() {
         canCreate,
       })}
 
-      {/* Honest counter: the FILTERED total (counts.all, summed from the same
-          grouped list the board/feed render), so it tracks the active search
-          instead of freezing at the unfiltered posts.length. */}
+      {/* Honest counter: "{shown} of {total} posts" while a stage, search or
+          date filter narrows the view, the plain total otherwise. */}
       <div className="flex min-h-[44px] flex-wrap items-center gap-2 px-4 pt-3 md:px-6">
-        <span className="text-sm text-fg-3">{postCountLabel(shownCount)}</span>
+        <span data-posts-count="" className="text-sm text-fg-3">
+          {countLabel}
+        </span>
         {dateFilterActive(query) ? dateFilterChip(dateChipLabel(query), clearDate) : null}
       </div>
 
-      {postsError !== null ? (
-        <div className="px-4 md:px-6 mt-4">
-          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
-            Could not load posts. {postsError}
-          </div>
-        </div>
-      ) : boardLoading ? (
-        <div data-guide-wait="" className="px-4 md:px-6 py-10 text-sm text-fg-3">
-          Loading posts
-        </div>
-      ) : showFilteredEmpty ? (
-        filteredEmpty(clearFilters)
-      ) : (
-        pipelineSurface({
-          stage,
-          isDesktop,
-          sorted,
-          grouped,
-          cache,
-          presignEnabled,
-          workspaceKey,
-          onViewAll: setStage,
-          onMovePost: movePost,
-          onLongPressPost: setMovePostTarget,
-          role,
-          onBlockedMove: push,
-          shownKey,
-        })
-      )}
+      {/* The chips and filters above stay usable through a failed read. */}
+      {postsFailed
+        ? postsLoadError(() => void loadPosts(), postsLoading)
+        : boardLoading
+          ? postsSkeleton(isDesktop)
+          : pipelineEmpty
+            ? emptyPipeline(canCreate)
+            : showFilteredEmpty
+              ? filteredEmpty(clearFilters)
+              : pipelineSurface({
+                  stage,
+                  isDesktop,
+                  sorted,
+                  grouped,
+                  cache,
+                  presignEnabled,
+                  workspaceKey,
+                  onViewAll: setStage,
+                  onMovePost: movePost,
+                  onLongPressPost: setMovePostTarget,
+                  role,
+                  onBlockedMove,
+                  shownKey,
+                  timeZone,
+                })}
 
       <MoveSheet
         open={movePostTarget !== null}
@@ -756,6 +888,8 @@ export function PipelinePage() {
         onClose={() => setMovePostTarget(null)}
         onMove={movePost}
         role={role}
+        roleStatus={roleStatus}
+        onRetryRole={retryRole}
       />
 
       <CreatePostSheet

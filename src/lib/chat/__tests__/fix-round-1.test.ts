@@ -223,7 +223,11 @@ describe('F1 upload refusals are permanent', () => {
     sender.enqueue(CHANNEL, entry('m2'));
     await vi.waitFor(() => expect(recorded).toEqual(['m2']));
     expect(sender.entries(CHANNEL).map((e) => [e.id, e.state])).toEqual([['m1', 'failed']]);
-    expect(events).toContainEqual({ type: 'state', channelId: CHANNEL, id: 'm1', state: 'failed' });
+    // X7 FB5: refused for good, so the event carries the reason (Delete only).
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: 'state', channelId: CHANNEL, id: 'm1', state: 'failed' }),
+    );
+    expect(sender.entries(CHANNEL)[0]?.refusal).toBeDefined();
     expect(upload).toHaveBeenCalledOnce();
   });
 });

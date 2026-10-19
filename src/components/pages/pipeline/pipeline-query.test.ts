@@ -94,6 +94,6 @@ describe('W4 fixes 4 and 6: filter state', () => {
         dateWindow: 'custom',
         customRange: { start: '2026-06-24', end: '2026-06-27' },
       }),
-    ).toBe('24 Jun – 27 Jun');
+    ).toBe('24 Jun to 27 Jun');
   });
 });

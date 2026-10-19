@@ -3,10 +3,16 @@ import { useSearchJump } from '@/lib/search/jump';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconBriefs } from '@/components/ui/icons';
+import { IconButton } from '@/components/ui/IconButton';
+import { LoadError } from '@/components/ui/LoadError';
+import { popoverClass } from '@/components/ui/popover-classes';
+import { useOptionalToast } from '@/components/ui/toast';
+import { IconBriefs, IconChevronLeft, IconCopy, IconMore } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
@@ -24,10 +30,18 @@ import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { civilDate } from '@/lib/list-sort';
-import { formatRaisedDay } from '@/lib/brief-groups';
+import { formatCivilDay, formatRaisedDay } from '@/lib/brief-groups';
+import { copyText, COPY_FAILED } from '@/lib/clipboard';
+import { plainError } from '@/lib/error-copy';
+import { useEscapeLayer } from '@/lib/escape-stack';
+import { hasPreviousEntry } from '@/lib/chat/use-history-step';
+import { useSession } from '@/lib/session-context';
+import { useUndoableAction } from '@/lib/use-undoable-action';
+import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
+import { cn } from '@/lib/cn';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import { getBrief, getBriefGallery } from '@srtdio/briefs';
-import type { BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
+import type { BriefGalleryItem, BriefWithLinkedCount } from '@srtdio/briefs';
 import { briefClose } from '@srtdio/rpc';
 
 // Status badge styling. Open reads as the active/good state, Closed as muted;
@@ -43,11 +57,31 @@ function statusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-// Render an ISO date as date only (no time), matching the Briefs reference.
-function formatTargetDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+/**
+ * briefs.target_date is a date-only column: "2026-10-08" reads "Oct 8, 2026" on
+ * every machine, whatever the browser zone (never new Date(value)). Pure.
+ */
+export function briefDueDateLabel(targetDate: string | null): string {
+  return targetDate !== null ? formatCivilDay(targetDate, true) : 'Not set';
+}
+
+/**
+ * Whether the viewer may close this brief: brief.close, or brief.close_own on a
+ * brief they created. The proc re-checks the same rule. Pure.
+ */
+export function canCloseBrief(
+  canCloseAny: boolean | null,
+  canCloseOwn: boolean | null,
+  createdBy: string | null,
+  viewerId: string | null,
+): boolean {
+  if (canCloseAny === true) return true;
+  return canCloseOwn === true && viewerId !== null && createdBy === viewerId;
+}
+
+/** Back goes one in-app step back when there is one, else to the list. Pure. */
+export function briefBackTarget(historyState: unknown): 'pop' | '/briefs' {
+  return hasPreviousEntry(historyState) ? 'pop' : '/briefs';
 }
 
 /**
@@ -94,22 +128,6 @@ export function briefMediaItems(gallery: readonly BriefGalleryItem[]): BriefGall
   return gallery.filter((item) => item.kind !== 'link');
 }
 
-// Map the proc's domain errors to friendly, inline copy. The proc owns the
-// policy: forbidden_role when the caller lacks brief.close, invalid_payload for
-// a malformed request.
-function friendlyCloseError(error: DomainError): string {
-  switch (error.code) {
-    case 'forbidden_role':
-      return 'You do not have permission to close this brief.';
-    case 'invalid_payload':
-      return 'That request was not valid. Please try again.';
-    case 'workspace_member_only':
-      return 'You must be a member of this workspace to close this brief.';
-    default:
-      return 'Something went wrong. Please try again.';
-  }
-}
-
 // Resolve a brief's "Created by" to a display name: prefer the current member
 // name for created_by, then the ETL-frozen legacy author name, then the shared
 // "Former member" label for a creator confirmed not to be a current member (no
@@ -129,6 +147,58 @@ export function briefAuthorLabel(
   return hasCreator && !membersLoaded ? '' : FORMER_MEMBER;
 }
 
+const SECTION_LABEL = 'text-xs font-medium uppercase tracking-wide text-fg-3';
+
+/** A section label with a 44px copy button beside it. */
+function CopyHeading({ label, onCopy }: { label: string; onCopy: () => void }): ReactElement {
+  return (
+    <div className="mb-1 flex items-center justify-between gap-2">
+      <div className={SECTION_LABEL}>{label}</div>
+      <IconButton label={`Copy ${label.toLowerCase()}`} className="-my-2 shrink-0" onClick={onCopy}>
+        <IconCopy size={16} />
+      </IconButton>
+    </div>
+  );
+}
+
+/** The header ⋯ menu: one action today, Close brief. Escape or a tap outside closes it. */
+function BriefActionsMenu({ onCloseBrief }: { onCloseBrief: () => void }): ReactElement {
+  const [open, setOpen] = useState(false);
+  useEscapeLayer(open, () => setOpen(false));
+  return (
+    <div className="relative shrink-0">
+      <IconButton
+        label="Brief actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <IconMore size={18} />
+      </IconButton>
+      {open ? (
+        <>
+          <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
+          <div className={cn('absolute right-0 top-full z-50 mt-1.5 w-52', popoverClass(true))}>
+            <div role="menu" aria-label="Brief actions" className="flex flex-col">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onCloseBrief();
+                }}
+                className="flex min-h-[44px] w-full items-center rounded-md px-3 text-left text-sm text-fg-2 transition-colors duration-fast hover:bg-panel-2 hover:text-fg"
+              >
+                Close brief
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } = {}) {
   const params = useParams();
   // The pretty-link resolver (/b/:ref) passes the resolved id as a prop; the
@@ -139,6 +209,14 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const newTrace = useNewTrace();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const { toasts, push, dismiss } = useToasts();
+  const toast = useOptionalToast();
+  const { run: runUndoable } = useUndoableAction();
+  const { session } = useSession();
+  const viewerId = session?.user.id ?? null;
+  const canCloseAny = useWorkspaceCapability('brief.close');
+  const canCloseOwn = useWorkspaceCapability('brief.close_own');
+  // Approvers write briefs, so the "from the approvers" hint is for everyone else.
+  const isApprover = useWorkspaceCapability('brief.create') === true;
 
   // The active workspace's zone, derived exactly as the Pipeline surface derives
   // it, so the Raised row reads on the workspace calendar rather than whatever
@@ -184,12 +262,10 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const [detail, setDetail] = useState<BriefWithLinkedCount | null>(null);
   const [gallery, setGallery] = useState<BriefGalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
-  const [confirming, setConfirming] = useState(false);
-  const [closing, setClosing] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // One presign setup for this page, built exactly as the post detail page does:
   // the asset-read endpoint env, the existing access-token source, and the trace
@@ -208,7 +284,9 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const cache = useMemo(() => new PresignCache(deps), [deps]);
 
   // `silent` skips the full-page loading flip so the post-close refetch updates
-  // the badge and the action in place rather than blanking the screen.
+  // the badge in place rather than blanking the screen. A failed read is a load
+  // error (LoadError + Retry, never the server's text); a missing brief is its
+  // own not-found state.
   const load = useCallback(
     async (silent = false): Promise<void> => {
       if (briefId === undefined) {
@@ -217,11 +295,11 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
         return;
       }
       if (!silent) setLoading(true);
-      setLoadError(null);
+      setLoadFailed(false);
       const result = await getBrief(supabase, briefId);
       if (!silent) setLoading(false);
       if (!result.ok) {
-        setLoadError(result.error.message);
+        if (!silent) setLoadFailed(true);
         return;
       }
       if (result.data === null) {
@@ -256,50 +334,69 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     };
   }, [briefId]);
 
-  async function handleClose(): Promise<void> {
-    if (briefId === undefined) return;
-    setClosing(true);
-    setActionError(null);
-    const result = await briefClose(supabase, { p_brief_id: briefId, p_trace_id: newTrace() });
-    if (!result.ok) {
-      setClosing(false);
-      setActionError(friendlyCloseError(result.error));
-      return;
-    }
-    // Reflect server truth: re-fetch so the badge flips to Closed and the Close
-    // action disappears. No optimistic UI.
-    await load(true);
-    setClosing(false);
-    setConfirming(false);
+  // Close behind a 7s Undo: the badge flips to Closed at once, Undo puts it
+  // back, and brief_close runs only once the window passes. A failed close
+  // restores Open and says so in plain words.
+  function closeWithUndo(): void {
+    if (briefId === undefined || detail === null) return;
+    setConfirmingClose(false);
+    const before = detail.brief.status;
+    const setStatus = (status: string): void =>
+      setDetail((prev) => (prev === null ? prev : { ...prev, brief: { ...prev.brief, status } }));
+    setStatus(BRIEF_STATUS.closed);
+    runUndoable({
+      label: 'Brief closed',
+      revert: () => setStatus(before),
+      commit: async () => {
+        const result = await briefClose(supabase, { p_brief_id: briefId, p_trace_id: newTrace() });
+        if (!result.ok) {
+          setStatus(before);
+          toast?.show({ title: plainError(result.error) });
+          return;
+        }
+        await load(true);
+      },
+    });
   }
 
+  async function copy(text: string): Promise<void> {
+    push((await copyText(text)) ? 'Copied' : COPY_FAILED);
+  }
+
+  function goBack(): void {
+    const target = briefBackTarget(window.history.state);
+    if (target === 'pop') navigate(-1);
+    else navigate(target);
+  }
+
+  // The same chevron as Post detail.
   const backButton = (
-    <Button size="lg" onClick={() => navigate('/briefs')}>
-      Back
-    </Button>
+    <IconButton label="Back" className="shrink-0" onClick={goBack}>
+      <IconChevronLeft size={20} />
+    </IconButton>
+  );
+
+  const bareHeader = (
+    <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+      {backButton}
+    </div>
   );
 
   if (loading) {
     return (
       <>
-        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
-          {backButton}
-        </div>
+        {bareHeader}
         <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading brief</div>
       </>
     );
   }
 
-  if (loadError !== null) {
+  if (loadFailed) {
     return (
       <>
-        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
-          {backButton}
-        </div>
+        {bareHeader}
         <div className="px-4 md:px-6 mt-4">
-          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
-            Could not load this brief. {loadError}
-          </div>
+          <LoadError title="this brief" onRetry={() => void load()} />
         </div>
       </>
     );
@@ -308,9 +405,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   if (notFound || detail === null) {
     return (
       <>
-        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
-          {backButton}
-        </div>
+        {bareHeader}
         <EmptyState
           icon={<IconBriefs size={22} />}
           title="Brief not found"
@@ -329,14 +424,34 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const closed = isBriefClosed(brief);
   const links = briefExternalLinks(brief.reference_links, gallery);
   const mediaItems = briefMediaItems(gallery);
+  const showClose = !closed && canCloseBrief(canCloseAny, canCloseOwn, brief.created_by, viewerId);
+  const hasBrand = brief.brand_requirements !== null && brief.brand_requirements.trim() !== '';
+  const hasFormat = brief.format_requested !== null && brief.format_requested.trim() !== '';
+  const authorLabel = briefAuthorLabel(
+    brief.created_by,
+    brief.legacy_author_name,
+    (id) => memberById.get(id) ?? null,
+    membersLoaded,
+  );
+  const statusBadge = (
+    <span
+      className={`shrink-0 inline-flex items-center rounded-full border px-3 h-7 text-xs font-medium ${
+        STATUS_BADGE[brief.status] ?? 'border-border text-fg-3'
+      }`}
+    >
+      {statusLabel(brief.status)}
+    </span>
+  );
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
         {backButton}
-        <h1 className="min-w-0 flex-1 text-[15px] font-semibold truncate">
+        {/* Phone: the title gets its own line below; the bar keeps the chevron. */}
+        <h1 className="hidden md:block min-w-0 flex-1 text-[15px] font-semibold truncate">
           <Highlight text={brief.title} />
         </h1>
+        <div className="flex-1 md:hidden" />
         {workspaceKey !== null ? (
           <EntityRefChip
             kind="brief"
@@ -345,23 +460,45 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             onCopied={() => push('Link copied')}
           />
         ) : null}
-        <span
-          className={`shrink-0 inline-flex items-center rounded-full border px-3 h-7 text-xs font-medium ${
-            STATUS_BADGE[brief.status] ?? 'border-border text-fg-3'
-          }`}
-        >
-          {statusLabel(brief.status)}
-        </span>
+        <span className="hidden md:inline-flex">{statusBadge}</span>
+        {showClose ? <BriefActionsMenu onCloseBrief={() => setConfirmingClose(true)} /> : null}
       </div>
 
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 flex flex-col gap-6">
+          {/* Phone order: title, Details, Objective, Brand requirements,
+              Attachments, Comments. md:order-none hands desktop back its DOM
+              order (gallery first), unchanged. */}
+          <h2 className="md:hidden text-[22px] font-semibold leading-tight tracking-tight text-fg">
+            <Highlight text={brief.title} />
+          </h2>
+
+          <section className="order-1 md:hidden">
+            <div className={`${SECTION_LABEL} mb-2`}>Details</div>
+            <dl className="grid grid-cols-3 gap-3 text-sm">
+              <div className="flex min-w-0 flex-col gap-1">
+                <dt className="text-fg-3">Due date</dt>
+                <dd className="tabular-nums">{briefDueDateLabel(brief.target_date)}</dd>
+              </div>
+              <div className="flex min-w-0 flex-col gap-1">
+                <dt className="text-fg-3">Format</dt>
+                <dd className="truncate">{hasFormat ? brief.format_requested : 'Any'}</dd>
+              </div>
+              <div className="flex min-w-0 flex-col items-start gap-1">
+                <dt className="text-fg-3">Status</dt>
+                <dd>{statusBadge}</dd>
+              </div>
+            </dl>
+          </section>
+
           {mediaItems.length > 0 ? (
-            <section>
-              <p className="mb-3 text-sm text-fg-3">
-                Reference images from the approvers. Tap for full screen or download. Briefs are
-                read-only after creation.
-              </p>
+            <section className="order-4 md:order-none">
+              {!isApprover ? (
+                <p className="mb-3 text-sm text-fg-3">
+                  Reference images from the approvers. Tap for full screen or download. Briefs are
+                  read-only after creation.
+                </p>
+              ) : null}
               <PostGallery
                 items={mediaItems}
                 cache={cache}
@@ -374,20 +511,19 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             </section>
           ) : null}
 
-          <section>
-            <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-              Objective
-            </div>
+          <section className="order-2 md:order-none">
+            <CopyHeading label="Objective" onCopy={() => void copy(brief.objective)} />
             <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">
               <Highlight text={brief.objective} />
             </p>
           </section>
 
-          {brief.brand_requirements !== null && brief.brand_requirements.trim() !== '' ? (
-            <section>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-                Brand requirements
-              </div>
+          {hasBrand ? (
+            <section className="order-3 md:order-none">
+              <CopyHeading
+                label="Brand requirements"
+                onCopy={() => void copy(brief.brand_requirements ?? '')}
+              />
               <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">
                 {brief.brand_requirements}
               </p>
@@ -395,10 +531,8 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           ) : null}
 
           {links.length > 0 ? (
-            <section>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-                Reference links
-              </div>
+            <section className="order-4 md:order-none">
+              <div className={`${SECTION_LABEL} mb-2`}>Reference links</div>
               <ul className="flex flex-col gap-2">
                 {links.map((link, index) => (
                   <li key={link.href}>
@@ -421,10 +555,8 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             </section>
           ) : null}
 
-          <section>
-            <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-              Comments
-            </div>
+          <section className="order-5 md:order-none">
+            <div className={`${SECTION_LABEL} mb-2`}>Comments</div>
             {workspaceId !== null && briefId !== undefined ? (
               <Comments
                 workspaceId={workspaceId}
@@ -440,51 +572,11 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           </section>
         </div>
 
-        <aside className="flex flex-col gap-6">
-          {!closed ? (
-            <section>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-                Actions
-              </div>
-              {confirming ? (
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm text-fg-2">Close this brief?</p>
-                  <div className="flex items-center gap-2">
-                    <Button size="lg" disabled={closing} onClick={() => setConfirming(false)}>
-                      Cancel
-                    </Button>
-                    <Button
-                      size="lg"
-                      variant="primary"
-                      disabled={closing}
-                      onClick={() => void handleClose()}
-                    >
-                      {closing ? 'Closing' : 'Close brief'}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button size="lg" className="w-full" onClick={() => setConfirming(true)}>
-                  Close brief
-                </Button>
-              )}
-              {actionError !== null ? (
-                <div
-                  role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-                >
-                  {actionError}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
+        <aside className="hidden md:flex flex-col gap-6">
           <section>
-            <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">
-              Details
-            </div>
+            <div className={`${SECTION_LABEL} mb-2`}>Details</div>
             <dl className="flex flex-col gap-3 text-sm">
-              {brief.format_requested !== null && brief.format_requested.trim() !== '' ? (
+              {hasFormat ? (
                 <div className="flex flex-col gap-1">
                   <dt className="text-fg-3">Format requested</dt>
                   <dd className="text-fg">{brief.format_requested}</dd>
@@ -496,9 +588,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
               </div>
               <div className="flex flex-col gap-1">
                 <dt className="text-fg-3">Target date</dt>
-                <dd className="tabular-nums">
-                  {brief.target_date !== null ? formatTargetDate(brief.target_date) : 'Not set'}
-                </dd>
+                <dd className="tabular-nums">{briefDueDateLabel(brief.target_date)}</dd>
               </div>
               <div className="flex flex-col gap-1">
                 <dt className="text-fg-3">Linked posts</dt>
@@ -507,11 +597,14 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
               <div className="flex flex-col gap-1">
                 <dt className="text-fg-3">Created by</dt>
                 <dd className="break-all">
-                  {briefAuthorLabel(
-                    brief.created_by,
-                    brief.legacy_author_name,
-                    (id) => memberById.get(id) ?? null,
-                    membersLoaded,
+                  {authorLabel === '' && membersLoading ? (
+                    <span
+                      data-testid="created-by-skeleton"
+                      aria-label="Loading"
+                      className="block h-4 w-28 rounded bg-panel-3"
+                    />
+                  ) : (
+                    authorLabel
                   )}
                 </dd>
               </div>
@@ -519,6 +612,16 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           </section>
         </aside>
       </div>
+
+      {confirmingClose ? (
+        <ConfirmDialog
+          title="Close this brief?"
+          message="It leaves Open but stays readable and commentable."
+          confirmLabel="Close brief"
+          onConfirm={closeWithUndo}
+          onCancel={() => setConfirmingClose(false)}
+        />
+      ) : null}
       <Toasts toasts={toasts} onDismiss={dismiss} />
     </SearchWordsContext.Provider>
   );

@@ -25,6 +25,9 @@ interface SlideActionsSheetProps {
   count: number;
   onMoveLeft: () => void;
   onMoveRight: () => void;
+  /** Make first / make last over the same gallery_set commit; rows hidden when absent. */
+  onMakeFirst?: (() => void) | undefined;
+  onMakeLast?: (() => void) | undefined;
   onAddAfter: () => void;
   onRemove: () => void;
   /** A gallery write is in flight: moves and Remove are disabled. */
@@ -77,6 +80,8 @@ export function SlideActionsSheet({
   count,
   onMoveLeft,
   onMoveRight,
+  onMakeFirst,
+  onMakeLast,
   onAddAfter,
   onRemove,
   saving = false,
@@ -128,6 +133,22 @@ export function SlideActionsSheet({
             disabled={saving || index >= count - 1}
             onClick={() => run(onMoveRight)}
           />
+          {onMakeFirst !== undefined ? (
+            <SlideRow
+              icon={<IconChevronLeft size={18} />}
+              label="Make first"
+              disabled={saving || index <= 0}
+              onClick={() => run(onMakeFirst)}
+            />
+          ) : null}
+          {onMakeLast !== undefined ? (
+            <SlideRow
+              icon={<IconChevronRight size={18} />}
+              label="Make last"
+              disabled={saving || index >= count - 1}
+              onClick={() => run(onMakeLast)}
+            />
+          ) : null}
           <SlideRow
             icon={<IconPlus size={18} />}
             label="Add image after this"

@@ -5,7 +5,12 @@ import { ApproveConfirm, approveRef, approveTargetDate } from '@/components/ui/A
 import { Sheet } from '@/components/ui/Sheet';
 import { sheetTitle } from '@/components/chat/post-sheet';
 import { PostCard } from '@/components/pages/PostCard';
-import { StageDot, moveBlockedReason, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import {
+  StageDot,
+  emptyStageMessage,
+  moveBlockedReason,
+  stageLabel,
+} from '@/components/pages/pipeline/stage-meta';
 import {
   useApproveGate,
   type ApproveGate,
@@ -38,6 +43,8 @@ export interface PipelineBoardProps {
   onOpenMove?: (post: PipelinePost) => void;
   /** A drop onto a column the post cannot move to: the page toasts the reason. */
   onBlockedMove?: (reason: string) => void;
+  /** The workspace zone each card reads its target day in. Default UTC. */
+  timeZone?: string;
 }
 
 // Native HTML5 DnD keeps dataTransfer unreadable during dragover (it is exposed
@@ -130,7 +137,7 @@ export function PipelineBoard(props: PipelineBoardProps): ReactElement {
   }, [pending]);
   return (
     <>
-      <PipelineBoardView {...props} onMovePost={gate.request} />
+      <PipelineBoardView {...props} timeZone={timeZone} onMovePost={gate.request} />
       <BoardApproveConfirm
         post={pending ?? shown}
         gate={gate}
@@ -233,6 +240,7 @@ export function PipelineBoardView({
   role,
   onOpenMove,
   onBlockedMove,
+  timeZone = 'UTC',
 }: PipelineBoardProps): ReactElement {
   const only = stages.length === 1 ? stages[0] : undefined;
   if (only !== undefined) {
@@ -243,6 +251,7 @@ export function PipelineBoardView({
       cache,
       presignEnabled,
       workspaceKey,
+      timeZone,
       ...(onOpenMove !== undefined ? { onOpenMove } : {}),
     });
   }
@@ -274,8 +283,11 @@ export function PipelineBoardView({
               <span className="ml-auto text-xs tabular-nums text-fg-3">{all.length}</span>
             </div>
             {all.length === 0 ? (
-              <div className="flex min-h-[160px] items-center justify-center px-3 py-6 text-sm text-fg-3">
-                Empty
+              <div
+                data-column-empty=""
+                className="flex min-h-[160px] items-center justify-center px-3 py-6 text-center text-sm text-fg-3"
+              >
+                {emptyStageMessage(stage)}
               </div>
             ) : (
               <div className="flex flex-col gap-2 p-2">
@@ -295,6 +307,7 @@ export function PipelineBoardView({
                       presignEnabled={presignEnabled}
                       workspaceKey={workspaceKey}
                       showStage
+                      timeZone={timeZone}
                       {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
                     />
                   </div>
@@ -334,6 +347,7 @@ function SingleStageGrid({
   cache,
   presignEnabled,
   workspaceKey,
+  timeZone,
   onOpenMove,
 }: {
   stage: Stage;
@@ -341,6 +355,7 @@ function SingleStageGrid({
   cache: PresignCache;
   presignEnabled: boolean;
   workspaceKey: string | null;
+  timeZone: string;
   onOpenMove?: (post: PipelinePost) => void;
 }): ReactElement {
   if (posts.length === 0) {
@@ -348,9 +363,9 @@ function SingleStageGrid({
       <div
         data-board-grid
         data-stage={stage}
-        className="flex min-h-[160px] items-center justify-center px-4 py-6 text-sm text-fg-3 md:px-6"
+        className="flex min-h-[160px] items-center justify-center px-4 py-6 text-center text-sm text-fg-3 md:px-6"
       >
-        Empty
+        {emptyStageMessage(stage)}
       </div>
     );
   }
@@ -367,6 +382,7 @@ function SingleStageGrid({
             cache={cache}
             presignEnabled={presignEnabled}
             workspaceKey={workspaceKey}
+            timeZone={timeZone}
             {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
           />
         </div>

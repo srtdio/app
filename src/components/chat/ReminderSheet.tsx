@@ -29,6 +29,8 @@ import {
   reminderSummary,
   type ReminderPreset,
 } from '@/lib/chat/reminders';
+import { useHistoryStep } from '@/lib/chat/use-history-step';
+import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
 export const REMINDER_SHEET_TITLE = 'Remind me';
 /** The sheet's title while a reminder is pending (change mode). */
@@ -199,6 +201,8 @@ export function ReminderSheet(props: {
   onPick: (at: Date) => void;
   change?: { onCancelReminder: () => void } | undefined;
 }): ReactElement {
+  // System Back closes only this sheet; the chat or bell under it stays.
+  useHistoryStep(props.open, SHEET_STEP_KEYS.reminder, props.onClose);
   const bell = useBellOptional();
   const live =
     props.change ??

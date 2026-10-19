@@ -7,7 +7,7 @@ import { Topbar } from '@/components/shell/Topbar';
 import { CommandPalette, type PaletteCloseReason } from '@/components/shell/CommandPalette';
 import { isPaletteShortcut, isTextEntry, usesCmdKey } from '@/lib/search/palette-keys';
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
-import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
+import { approverSwitchShown, WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { StorageWarningBanner } from '@/components/storage/StorageWarningBanner';
 import { WorkspaceFullSheet } from '@/components/storage/WorkspaceFullSheet';
@@ -308,7 +308,14 @@ function AppLayoutBody() {
           </div>
           <ToastViewport />
           <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
-          <WorkspaceSwitcher />
+          {/* A self-signed-up Creator can still say "I approve posts": storing the
+              approver's brand step flips approverStageOf to 'brand', so the
+              onboarding gate above opens OnboardingFlow on the brand screen. */}
+          <WorkspaceSwitcher
+            {...(approverSwitchShown({ workspaceCount: workspaces.length, state: induction.state })
+              ? { onInductionStep: induction.setStep }
+              : {})}
+          />
           <InductionGuide tabsShown={false} />
         </div>
       </InductionProvider>

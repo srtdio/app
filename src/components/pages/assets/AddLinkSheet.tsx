@@ -5,6 +5,17 @@ import { Sheet } from '@/components/ui/Sheet';
 import { IconLink } from '@/components/ui/icons';
 import { isValidLinkUrl, type LinkOutcome } from '@/lib/asset-upload';
 
+/** The Sheet's discard confirm for a typed link. */
+export const ADD_LINK_DISCARD = {
+  title: 'Discard this link?',
+  message: 'The link and name you typed will be lost.',
+};
+
+/** Whether the Add link sheet holds typed input. Pure. */
+export function addLinkDirty(url: string, name: string): boolean {
+  return url !== '' || name !== '';
+}
+
 interface AddLinkSheetProps {
   open: boolean;
   onClose: () => void;
@@ -45,6 +56,8 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
   const urlValid = isValidLinkUrl(url);
   const nameValid = name.trim() !== '';
   const canSubmit = urlValid && nameValid && !submitting;
+  // Anything typed is unsaved work: X, Escape, the backdrop and system Back ask first.
+  const dirty = addLinkDirty(url, name);
   const showUrlError = urlTouched && !urlValid;
   const showNameError = nameTouched && !nameValid;
 
@@ -81,7 +94,16 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
   );
 
   return (
-    <Sheet open={open} onClose={onClose} title="Add link" footer={footer}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Add link"
+      footer={footer}
+      dirty={dirty}
+      discard={ADD_LINK_DISCARD}
+      busy={submitting}
+      busyLabel="Adding…"
+    >
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-medium text-fg-2">Link</span>

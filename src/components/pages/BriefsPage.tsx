@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadError } from '@/components/ui/LoadError';
+import { useOptionalToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { IconBriefs, IconPlus } from '@/components/ui/icons';
-import { BriefCard, BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
-import { CreateBriefSheet } from '@/components/pages/CreateBriefSheet';
+import { BriefCard, BRIEF_STATUS } from '@/components/pages/BriefCard';
+import { CreateBriefSheet, type BriefCreated } from '@/components/pages/CreateBriefSheet';
 import { dispatchSorted } from '@/lib/events';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { env } from '@/lib/env';
@@ -17,9 +19,14 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { entityUrlPath } from '@/lib/entityRef';
-import { useNewTrace } from '@/lib/trace-context';
 import { filterByTitle } from '@/lib/list-sort';
-import { filterBriefsByStatus, type BriefFilter } from '@/lib/brief-list';
+import {
+  briefListParams,
+  filterBriefsByStatus,
+  listWorkspaceBriefs,
+  parseBriefFilter,
+  type BriefFilter,
+} from '@/lib/brief-list';
 import {
   groupBriefsByDay,
   groupBriefsByTime,
@@ -27,8 +34,7 @@ import {
   type BriefGroup,
 } from '@/lib/brief-groups';
 import { cn } from '@/lib/cn';
-import { briefClose } from '@srtdio/rpc';
-import { listBriefs } from '@srtdio/briefs';
+import { BRIEFS_PAGE_SIZE, listBriefs } from '@srtdio/briefs';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
@@ -101,16 +107,14 @@ interface BriefCardListDeps {
   /** The ONE page-owned cache, threaded unchanged into every card (no per-card cache). */
   cache: PresignCache;
   presignEnabled: boolean;
-  closingId: string | null;
-  closeError: { id: string; message: string } | null;
-  onClose: (briefId: string) => void;
-  onOpen: (briefId: string) => void;
+  /** The detail path for a brief (pretty /b/KEY-N when known). */
+  hrefFor: (brief: BriefWithThumbnail) => string;
 }
 
 /**
  * Map the visible briefs to their cards, threading the single shared presign cache
  * and presignEnabled into each. Pure (no hooks) so the wiring (one cache shared
- * across cards, per-brief closing/error/open) is unit-tested without rendering the
+ * across cards, per-brief link) is unit-tested without rendering the
  * page, mirroring briefsHeader.
  */
 export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
@@ -120,10 +124,7 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
       brief={brief}
       cache={deps.cache}
       presignEnabled={deps.presignEnabled}
-      closing={deps.closingId === brief.id}
-      closeError={deps.closeError?.id === brief.id ? deps.closeError.message : null}
-      onConfirmClose={() => deps.onClose(brief.id)}
-      onOpen={() => deps.onOpen(brief.id)}
+      href={deps.hrefFor(brief)}
     />
   ));
 }
@@ -133,9 +134,13 @@ function briefUnit(count: number): string {
   return count === 1 ? 'brief' : 'briefs';
 }
 
-/** The summary line under the header: total briefs and how many are open. */
-export function briefsCountLine(total: number, open: number): string {
-  return `${total} ${briefUnit(total)} · ${open} open`;
+/**
+ * The summary line under the header, reflecting the chip and search: "12 briefs"
+ * when everything shows, "3 of 12 briefs" when the filter narrows it.
+ */
+export function briefsCountLine(shown: number, total: number): string {
+  if (shown === total) return `${total} ${briefUnit(total)}`;
+  return `${shown} of ${total} ${briefUnit(total)}`;
 }
 
 /**
@@ -217,10 +222,10 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
 
 export function BriefsPage() {
   const navigate = useNavigate();
+  const toast = useOptionalToast();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   // New brief is an approver action: the "+" shows only where the role holds brief.create.
   const canCreateBrief = useWorkspaceCapability('brief.create') === true;
-  const newTrace = useNewTrace();
   // The active workspace's civil calendar: the sections and the day headings are
   // read on the WORKSPACE zone and week start, never the browser's. Derived the
   // same way the Pipeline surface derives it; the helpers re-validate the zone,
@@ -228,15 +233,23 @@ export function BriefsPage() {
   const activeWorkspace = workspaces.find((w) => w.id === workspaceId);
   const timeZone = activeWorkspace?.timezone ?? 'UTC';
   const weekStartDay = activeWorkspace?.week_start_day ?? 1;
-  const [filter, setFilter] = useState<BriefFilter>('all');
-  const [search, setSearch] = useState('');
+
+  // The chip and the search live in the URL (?status=&q=), so a Back from a
+  // brief lands on the same filtered list. Default chip: Open.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filter = parseBriefFilter(searchParams.get('status'));
+  const search = searchParams.get('q') ?? '';
+  const setListState = useCallback(
+    (nextFilter: BriefFilter, nextSearch: string) => {
+      setSearchParams((prev) => briefListParams(prev, nextFilter, nextSearch), { replace: true });
+    },
+    [setSearchParams],
+  );
 
   const [briefs, setBriefs] = useState<BriefWithThumbnail[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [closingId, setClosingId] = useState<string | null>(null);
-  const [closeError, setCloseError] = useState<{ id: string; message: string } | null>(null);
 
   // One presign cache + presignEnabled for the WHOLE list (the wiring fix: the page
   // previously built none, so image thumbnails could never resolve). Built exactly as
@@ -254,16 +267,19 @@ export function BriefsPage() {
     [],
   );
 
-  // One read for the whole surface (no N+1): listBriefs once, then group and
-  // filter in memory. Reads are direct RLS selects, no proc, no per-status call.
+  // The active workspace's briefs, read on the server by workspace_id page by
+  // page, then grouped and filtered in memory. A failure shows LoadError (never
+  // the server's text); Retry runs this same read again.
   const loadBriefs = useCallback(async () => {
     if (workspaceId === null) return;
     setLoading(true);
-    setError(null);
-    const result = await listBriefs(supabase);
+    setLoadFailed(false);
+    const result = await listWorkspaceBriefs(workspaceId, BRIEFS_PAGE_SIZE, (filters) =>
+      listBriefs(supabase, filters),
+    );
     setLoading(false);
     if (!result.ok) {
-      setError(result.error.message);
+      setLoadFailed(true);
       return;
     }
     setBriefs(result.data);
@@ -286,8 +302,8 @@ export function BriefsPage() {
     };
   }, []);
 
-  // Scope to the active workspace client-side (listBriefs is RLS-scoped to the
-  // caller's memberships, which can span workspaces).
+  // The read is already workspace-scoped; this guards a stale list for a moment
+  // after a workspace switch.
   const workspaceBriefs = useMemo(
     () => briefs.filter((brief) => brief.workspace_id === workspaceId),
     [briefs, workspaceId],
@@ -302,22 +318,31 @@ export function BriefsPage() {
     [workspaceBriefs, filter, search, timeZone, weekStartDay],
   );
 
-  const openCount = useMemo(
-    () => workspaceBriefs.filter((brief) => !isBriefClosed(brief)).length,
-    [workspaceBriefs],
+  const shownCount = useMemo(
+    () => groups.reduce((sum, group) => sum + group.items.length, 0),
+    [groups],
   );
 
-  async function handleClose(briefId: string): Promise<void> {
-    setClosingId(briefId);
-    setCloseError(null);
-    const result = await briefClose(supabase, { p_brief_id: briefId, p_trace_id: newTrace() });
-    setClosingId(null);
-    if (!result.ok) {
-      setCloseError({ id: briefId, message: result.error.message });
-      return;
-    }
-    // Reflect server truth: re-fetch so the brief shows Closed, no optimism.
-    await loadBriefs();
+  const hrefFor = useCallback(
+    (brief: BriefWithThumbnail): string =>
+      // Prefer the pretty link (/b/KEY-N); the classic /briefs/:id route stays a
+      // working fallback when the key is unavailable.
+      workspaceKey !== null
+        ? entityUrlPath('brief', workspaceKey, brief.number)
+        : `/briefs/${brief.id}`,
+    [workspaceKey],
+  );
+
+  function onCreated(created: BriefCreated): void {
+    setCreateOpen(false);
+    void loadBriefs();
+    toast?.show({
+      title: created.noteFailed
+        ? "Brief created, but your note didn't post. Add it in the comments."
+        : 'Brief created',
+      tone: 'success',
+      action: { label: 'Open', onPress: () => navigate(`/briefs/${created.briefId}`) },
+    });
   }
 
   const listLoading = workspaceId === null || (loading && briefs.length === 0);
@@ -329,7 +354,7 @@ export function BriefsPage() {
   useEffect(() => {
     const root = listRef.current;
     if (root === null) return;
-    const cards = root.querySelectorAll('[role="link"]');
+    const cards = root.querySelectorAll('[data-brief-card]');
     cards.forEach((card, index) => {
       if (index === 0) card.setAttribute('data-induction', INDUCTION_KEYS.briefsFirstCard);
       else if (card.getAttribute('data-induction') === INDUCTION_KEYS.briefsFirstCard) {
@@ -342,51 +367,56 @@ export function BriefsPage() {
     <>
       {briefsHeader({
         search,
-        onSearchChange: setSearch,
+        onSearchChange: (value) => setListState(filter, value),
         filter,
-        onFilterChange: setFilter,
+        onFilterChange: (value) => setListState(value, search),
         canCreate: canCreateBrief,
       })}
 
-      <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">
-        {briefsCountLine(workspaceBriefs.length, openCount)}
-      </div>
+      {!loadFailed && !listLoading ? (
+        <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">
+          {briefsCountLine(shownCount, workspaceBriefs.length)}
+        </div>
+      ) : null}
 
-      {error !== null ? (
+      {loadFailed ? (
         <div className="px-4 md:px-6 mt-4">
-          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
-            Could not load briefs. {error}
-          </div>
+          <LoadError title="briefs" onRetry={() => void loadBriefs()} retrying={loading} />
         </div>
       ) : listLoading ? (
         <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading briefs</div>
-      ) : groups.length === 0 ? (
+      ) : workspaceBriefs.length === 0 ? (
         <EmptyState
           icon={<IconBriefs size={24} />}
           title="No briefs yet"
-          description="Briefs from approvers will show up here."
+          description={
+            canCreateBrief
+              ? 'Tell the agency what you need next.'
+              : 'Briefs from approvers will show up here.'
+          }
+          {...(canCreateBrief
+            ? {
+                action: (
+                  <Button variant="primary" size="lg" onClick={() => setCreateOpen(true)}>
+                    Write your first brief
+                  </Button>
+                ),
+              }
+            : {})}
+        />
+      ) : groups.length === 0 ? (
+        <EmptyState
+          icon={<IconBriefs size={24} />}
+          title="No matches"
+          action={
+            <Button size="lg" onClick={() => setListState('all', '')}>
+              Clear search
+            </Button>
+          }
         />
       ) : (
         <div ref={listRef} className="px-4 md:px-6 py-4 flex flex-col gap-6">
-          {briefSections({
-            groups,
-            timeZone,
-            cache,
-            presignEnabled,
-            closingId,
-            closeError,
-            onClose: (briefId) => void handleClose(briefId),
-            onOpen: (briefId) => {
-              // Prefer the pretty link (/b/KEY-N); the classic /briefs/:id route
-              // stays a working fallback when the number or key is unavailable.
-              const target = briefs.find((b) => b.id === briefId);
-              navigate(
-                target !== undefined && workspaceKey !== null
-                  ? entityUrlPath('brief', workspaceKey, target.number)
-                  : `/briefs/${briefId}`,
-              );
-            },
-          })}
+          {briefSections({ groups, timeZone, cache, presignEnabled, hrefFor })}
         </div>
       )}
 
@@ -394,10 +424,7 @@ export function BriefsPage() {
         open={createOpen}
         workspaceId={workspaceId}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => {
-          setCreateOpen(false);
-          void loadBriefs();
-        }}
+        onCreated={onCreated}
       />
     </>
   );

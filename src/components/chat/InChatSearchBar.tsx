@@ -68,9 +68,12 @@ export interface InChatSearchBarProps {
   fetchPage?: SearchPageFetch;
 }
 
-/** The mono "N of M" ink, the 44px arrows and the input, on the header's panel. */
-const BAR_INPUT =
-  'h-11 min-w-0 flex-1 rounded-md border border-border bg-bg px-3 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none';
+/**
+ * The mono "N of M" ink, the 44px arrows and the input, on the header's panel.
+ * FN23: 16px on a phone (iOS never zooms the page on focus), 14px from sm up.
+ */
+export const BAR_INPUT =
+  'h-11 min-w-0 flex-1 rounded-md border border-border bg-bg px-3 text-base text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none sm:text-sm';
 
 /**
  * The in-chat search bar, in place of the thread header: close, the input,

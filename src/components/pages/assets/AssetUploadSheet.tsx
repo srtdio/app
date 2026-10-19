@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconButton } from '@/components/ui/IconButton';
@@ -13,7 +14,9 @@ import {
   type QueueItem,
   type UploadOutcome,
 } from '@/lib/asset-upload';
+import { useBackGuard } from '@/lib/back-guard';
 import { dispatchInductionRefresh } from '@/lib/induction';
+import { ROOT_LABEL } from '@/components/pages/assets/assets-nav';
 
 /** One queued file with an optional image preview. Names are derived per mode. */
 export interface PendingUpload {
@@ -141,12 +144,94 @@ export function uploadSummary(args: {
   return { title: ok === 1 ? 'Uploaded 1 file' : `Uploaded ${ok} files`, sticky: false };
 }
 
+/**
+ * The run was stopped (Stop, or the sheet went away mid-run): the file in flight
+ * was aborted, or the file was never started. Never shown as a failure.
+ */
+export const STOPPED_MESSAGE = 'Not uploaded';
+
+const STOPPED_OUTCOME: UploadOutcome = { ok: false, message: STOPPED_MESSAGE };
+
+/** Whether an outcome is the stopped marker, not a real failure. Pure. */
+export function isStoppedOutcome(outcome: UploadOutcome): boolean {
+  return !outcome.ok && outcome.message === STOPPED_MESSAGE;
+}
+
+/** The Stop confirm (from the Stop button or system Back while uploading). */
+export const STOP_CONFIRM = {
+  title: 'Stop uploading?',
+  message: 'Files already uploaded stay. The rest are cancelled.',
+  confirmLabel: 'Stop',
+  cancelLabel: 'Keep uploading',
+};
+
+/** The Sheet's discard confirm for files picked but not started. */
+export const UPLOAD_DISCARD = {
+  title: 'Discard these files?',
+  message: 'The files you picked are not uploaded.',
+};
+
+/** The toast after a stopped run: "Upload stopped. 2 of 5 files uploaded." Pure. */
+export function uploadStoppedLabel(done: number, total: number): string {
+  return `Upload stopped. ${done} of ${total} ${total === 1 ? 'file' : 'files'} uploaded.`;
+}
+
+/**
+ * Wrap the per-file upload so a run can stop without changing runUploads: once
+ * `stopped()` is true every file not started returns the stopped outcome at
+ * once, and the file in flight (aborted through `signal`) reports stopped too
+ * unless it had already finished. Pure orchestration, tested directly.
+ */
+export function stoppableUpload(
+  upload: (item: QueueItem, signal: AbortSignal) => Promise<UploadOutcome>,
+  control: { stopped: () => boolean; signal: AbortSignal },
+): (item: QueueItem) => Promise<UploadOutcome> {
+  return async (item) => {
+    if (control.stopped()) return STOPPED_OUTCOME;
+    const outcome = await upload(item, control.signal);
+    if (!outcome.ok && control.stopped()) return STOPPED_OUTCOME;
+    return outcome;
+  };
+}
+
+/**
+ * One toast for every file the pre-check turned away: one file names itself and
+ * the reason; several share one line. Null when nothing was turned away. Pure.
+ */
+export function precheckSummary(
+  rejected: readonly { name: string; message: string }[],
+): string | null {
+  const [first] = rejected;
+  if (first === undefined) return null;
+  if (rejected.length === 1) return `${first.name}: ${first.message}`;
+  const reasons = new Set(rejected.map((item) => item.message));
+  const reason =
+    reasons.size > 1
+      ? 'Files up to 100MB only, in a supported type.'
+      : first.message === "This file type isn't supported"
+        ? "Their file type isn't supported."
+        : `${first.message}.`;
+  return `${rejected.length} files weren't added. ${reason}`;
+}
+
 /** Per-file lifecycle within an upload run. */
 type FileStatus =
   | { state: 'queued' }
   | { state: 'uploading' }
   | { state: 'done' }
+  | { state: 'stopped' }
   | { state: 'error'; message: string };
+
+/** The live run, held in a ref so Stop, Back and an unmount reach the same one. */
+interface RunControl {
+  controller: AbortController;
+  /** Stop was confirmed, or the sheet went away: no more files start. */
+  stopped: boolean;
+  /** The sheet went away mid-run: the toast is out, the sheet does nothing more. */
+  abandoned: boolean;
+  done: number;
+  total: number;
+}
 
 interface AssetUploadSheetProps {
   open: boolean;
@@ -155,10 +240,16 @@ interface AssetUploadSheetProps {
    * Per-file commit: POST one file to the asset-upload worker with its resolved
    * display_name and destination folder, reporting its outcome. When omitted, the
    * sheet stays a naming surface only (no upload endpoint configured) and the
-   * confirm action explains that uploading is not wired yet.
+   * confirm action explains that uploading is not wired yet. `signal` aborts
+   * the request in flight when the run is stopped.
    */
   onSubmit?:
-    | ((file: File, displayName: string, folderId: string | null) => Promise<UploadOutcome>)
+    | ((
+        file: File,
+        displayName: string,
+        folderId: string | null,
+        signal?: AbortSignal,
+      ) => Promise<UploadOutcome>)
     | undefined;
   /** Toast sink (the page toast queue). */
   onToast?: ((message: string) => void) | undefined;
@@ -222,6 +313,35 @@ export function AssetUploadSheet({
   const [nameInput, setNameInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
+  // The Stop confirm, from the Stop button or system Back while uploading.
+  const [stopAsk, setStopAsk] = useState(false);
+  const runRef = useRef<RunControl | null>(null);
+  const onToastRef = useRef(onToast);
+  onToastRef.current = onToast;
+
+  // The sheet went away (closed by code, unmounted by sign-out, a workspace
+  // switch or a route change) while files were going up: abort the one in
+  // flight, start no more, and say how far it got in an app-wide toast.
+  const abandonRun = useCallback((): void => {
+    const control = runRef.current;
+    if (control === null || control.abandoned) return;
+    control.stopped = true;
+    control.abandoned = true;
+    control.controller.abort();
+    runRef.current = null;
+    onToastRef.current?.(uploadStoppedLabel(control.done, control.total));
+  }, []);
+
+  useEffect(() => () => abandonRun(), [abandonRun]);
+
+  // Stop confirmed: abort the file in flight; the rest return stopped at once.
+  const confirmStop = useCallback((): void => {
+    setStopAsk(false);
+    const control = runRef.current;
+    if (control === null) return;
+    control.stopped = true;
+    control.controller.abort();
+  }, []);
 
   // Revoke any object URLs we created when the queue changes or the sheet closes,
   // so previews never leak.
@@ -233,6 +353,8 @@ export function AssetUploadSheet({
 
   useEffect(() => {
     if (!open) {
+      abandonRun();
+      setStopAsk(false);
       setUploads((prev) => {
         revokeAll(prev);
         return [];
@@ -241,7 +363,7 @@ export function AssetUploadSheet({
       setRunning(false);
       setNameInput('');
     }
-  }, [open, revokeAll]);
+  }, [open, revokeAll, abandonRun]);
 
   useEffect(() => () => revokeAll(uploads), [uploads, revokeAll]);
 
@@ -250,15 +372,16 @@ export function AssetUploadSheet({
   }, []);
 
   // Client-side pre-checks run here, before any bytes leave the device. A file
-  // over the size cap or outside the shared MIME allowlist is rejected with a
-  // toast naming it and never enters the queue.
+  // over the size cap or outside the shared MIME allowlist never enters the
+  // queue; every one turned away is reported in one summary toast.
   function addFiles(fileList: FileList | null): void {
     if (fileList === null || fileList.length === 0) return;
     const accepted: PendingUpload[] = [];
+    const rejected: { name: string; message: string }[] = [];
     for (const file of Array.from(fileList)) {
       const check = precheckFile(file);
       if (!check.ok) {
-        onToast?.(`${file.name}: ${check.message}`);
+        rejected.push({ name: file.name, message: check.message });
         continue;
       }
       accepted.push({
@@ -267,6 +390,8 @@ export function AssetUploadSheet({
         previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
       });
     }
+    const summary = precheckSummary(rejected);
+    if (summary !== null) onToast?.(summary);
     if (accepted.length === 0) return;
     // Seed the name field the first time the queue fills (the caller's default, or
     // the first file's name), so a root upload starts with a sensible name. A name
@@ -296,6 +421,14 @@ export function AssetUploadSheet({
   const startRun = useCallback(
     async (targets: PendingUpload[]): Promise<void> => {
       if (onSubmit === undefined || targets.length === 0) return;
+      const control: RunControl = {
+        controller: new AbortController(),
+        stopped: false,
+        abandoned: false,
+        done: 0,
+        total: targets.length,
+      };
+      runRef.current = control;
       setRunning(true);
       setProgress({ current: 0, total: targets.length });
       let reused = 0;
@@ -313,31 +446,54 @@ export function AssetUploadSheet({
         displayName: item.displayName,
       }));
 
-      const result = await runUploads(
-        items,
-        (item) => onSubmit(item.file, item.displayName ?? '', folderId),
-        {
-          onStart: (id) => {
-            setStatus(id, { state: 'uploading' });
-            setProgress((prev) => ({ ...prev, current: Math.min(prev.current + 1, prev.total) }));
-          },
-          onResult: (id, outcome) => {
-            const name = byId.get(id)?.displayName ?? 'file';
-            if (outcome.ok) {
-              setStatus(id, { state: 'done' });
-              if (outcome.reused) reused += 1;
-              if (onSummary === undefined) {
-                onToast?.(outcome.reused ? 'Already in your assets' : `Uploaded ${name}`);
-              }
-            } else {
-              setStatus(id, { state: 'error', message: outcome.message });
-              if (onSummary === undefined) onToast?.(outcome.message);
-            }
-          },
-        },
+      const uploadOne = stoppableUpload(
+        (item, signal) => onSubmit(item.file, item.displayName ?? '', folderId, signal),
+        { stopped: () => control.stopped, signal: control.controller.signal },
       );
 
+      const result = await runUploads(items, uploadOne, {
+        onStart: (id) => {
+          if (control.stopped) return;
+          setStatus(id, { state: 'uploading' });
+          setProgress((prev) => ({ ...prev, current: Math.min(prev.current + 1, prev.total) }));
+        },
+        onResult: (id, outcome) => {
+          const name = byId.get(id)?.displayName ?? 'file';
+          if (isStoppedOutcome(outcome)) {
+            setStatus(id, { state: 'stopped' });
+          } else if (outcome.ok) {
+            control.done += 1;
+            setStatus(id, { state: 'done' });
+            if (outcome.reused) reused += 1;
+            if (onSummary === undefined) {
+              onToast?.(outcome.reused ? 'Already in your assets' : `Uploaded ${name}`);
+            }
+          } else {
+            setStatus(id, { state: 'error', message: outcome.message });
+            if (onSummary === undefined) onToast?.(outcome.message);
+          }
+        },
+      });
+
+      if (runRef.current === control) runRef.current = null;
+      // The sheet went away mid-run: the toast is out; nothing here is shown.
+      if (control.abandoned) {
+        if (result.succeeded.length > 0) dispatchInductionRefresh();
+        return;
+      }
+
       setRunning(false);
+
+      // Stopped: finished files stay, the rest are cancelled, and the sheet closes.
+      if (control.stopped) {
+        const title = uploadStoppedLabel(result.succeeded.length, targets.length);
+        if (onSummary !== undefined) onSummary({ title, sticky: false });
+        else onToast?.(title);
+        if (result.succeeded.length > 0) dispatchInductionRefresh();
+        onUploaded?.();
+        onClose();
+        return;
+      }
 
       if (onSummary !== undefined) {
         const summary = uploadSummary({
@@ -388,6 +544,12 @@ export function AssetUploadSheet({
     : [];
   const canUpload = canCommit && hasFiles && nameError === null && !running;
 
+  // System Back while files are going up asks the Stop confirm (the Sheet's
+  // own busy guard sits under this one and only keeps the sheet). Keep
+  // uploading leaves the same run going. While running, the guard also asks
+  // the browser's leave prompt on a reload or tab close.
+  useBackGuard({ active: open && running, onBack: () => setStopAsk(true) });
+
   const footer = (
     <>
       {!canCommit ? (
@@ -398,9 +560,15 @@ export function AssetUploadSheet({
         <span className="mr-auto text-xs text-fg-3">{nameError}</span>
       ) : null}
       <span className={canCommit && nameError === null ? 'ml-auto flex gap-2.5' : 'flex gap-2.5'}>
-        <Button variant="ghost" onClick={onClose} disabled={running}>
-          Cancel
-        </Button>
+        {running ? (
+          <Button size="lg" variant="ghost" onClick={() => setStopAsk(true)}>
+            Stop
+          </Button>
+        ) : (
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        )}
         <Button variant="primary" disabled={!canUpload} onClick={() => void startRun(uploads)}>
           <IconUpload size={16} />
           {running ? 'Uploading' : hasFiles ? `Upload ${uploads.length}` : 'Upload'}
@@ -417,6 +585,8 @@ export function AssetUploadSheet({
       footer={footer}
       busy={running}
       busyLabel={uploadBusyLabel(progress.current, progress.total)}
+      dirty={hasFiles && !running}
+      discard={UPLOAD_DISCARD}
     >
       <input
         ref={inputRef}
@@ -442,7 +612,7 @@ export function AssetUploadSheet({
           <span className="text-xs text-fg-3">
             {inFolder
               ? `Files are named after this folder automatically.`
-              : `Name your upload before it is added to the library.`}
+              : `Name your upload before it is added to ${ROOT_LABEL}.`}
           </span>
         </button>
       ) : (
@@ -527,9 +697,26 @@ export function AssetUploadSheet({
           </button>
         </div>
       )}
+      {stopAsk && running ? (
+        <ConfirmDialog
+          title={STOP_CONFIRM.title}
+          message={STOP_CONFIRM.message}
+          confirmLabel={STOP_CONFIRM.confirmLabel}
+          cancelLabel={STOP_CONFIRM.cancelLabel}
+          destructive
+          onConfirm={confirmStop}
+          onCancel={() => setStopAsk(false)}
+        />
+      ) : null}
     </Sheet>
   );
 }
+
+/** The per-file Retry: a 44px target, colour change only. */
+export const RETRY_BUTTON =
+  'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-3 ' +
+  'text-xs font-medium text-fg transition-colors duration-fast hover:bg-panel-3 ' +
+  'disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 /** Per-file progress / outcome line: an indeterminate bar while uploading, a
  *  success marker on done, and an inline Retry on error. */
@@ -561,16 +748,14 @@ function UploadStatusRow({
       </span>
     );
   }
+  if (status.state === 'stopped') {
+    return <span className="text-[11px] text-fg-3">{STOPPED_MESSAGE}</span>;
+  }
   if (status.state === 'error') {
     return (
-      <span className="flex items-center gap-2 text-[11px] text-bad">
-        <span className="truncate">{status.message}</span>
-        <button
-          type="button"
-          onClick={onRetry}
-          disabled={disabled}
-          className="shrink-0 rounded px-1.5 py-0.5 font-medium text-fg underline-offset-2 hover:underline disabled:opacity-50"
-        >
+      <span className="flex items-center justify-between gap-2 text-[11px] text-bad">
+        <span className="min-w-0 truncate">{status.message}</span>
+        <button type="button" onClick={onRetry} disabled={disabled} className={RETRY_BUTTON}>
           Retry
         </button>
       </span>

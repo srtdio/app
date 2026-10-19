@@ -8,6 +8,12 @@
 
 import { Button } from '@/components/ui/Button';
 
+/** "1 image" / "3 images" / "No images". Pure. */
+export function imageCountLabel(count: number): string {
+  if (count <= 0) return 'No images';
+  return count === 1 ? '1 image' : `${count} images`;
+}
+
 interface ReadOnlyVersionViewProps {
   versionNumber: number;
   currentVersionNumber: number;
@@ -32,7 +38,7 @@ export function ReadOnlyVersionView({
         role="status"
         className="flex flex-wrap items-center gap-2 rounded-xl border border-warn px-4 py-3 text-sm text-warn"
       >
-        <span className="font-medium">Versions are immutable</span>
+        <span className="font-medium">Versions can&apos;t be changed</span>
         <span aria-hidden>·</span>
         <span>Read only, viewing v{versionNumber}</span>
         <Button variant="default" size="lg" className="ml-auto" onClick={onBack}>
@@ -43,7 +49,7 @@ export function ReadOnlyVersionView({
       <section>
         <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">Gallery</div>
         <div className="rounded-lg border border-border bg-panel-2 px-4 py-6 text-center text-sm text-fg-3">
-          {imageCount} image(s)
+          {imageCountLabel(imageCount)}
         </div>
       </section>
 

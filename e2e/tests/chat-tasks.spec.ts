@@ -12,7 +12,6 @@ import {
   TASK_CHANNEL,
   TASK_DUE_ID,
   TASK_DUE_TITLE,
-  TASK_ROW_TITLE,
 } from '../fixtures/tasks-data';
 
 // The chat Tasks: the composer button, the sheet (groups, rows, add,
@@ -40,7 +39,7 @@ async function openSheet(page: Page): Promise<ReturnType<Page['getByRole']>> {
 }
 
 test(
-  'task sheet: groups, rows, P tags, due labels; Enter adds and keeps focus',
+  'task sheet: groups, rows, P tags, due labels; Enter adds drafts, one Save writes them',
   { tag: '@theme' },
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
@@ -51,15 +50,10 @@ test(
     expectMinTouchTarget(await button.boundingBox());
     // Someone else changed the list and this device never opened it: the dot.
     await expect(button.locator('[data-task-dot]')).toBeVisible();
-    // The four adds (one person, seconds apart) paint as one line with the
-    // messages, and expand in place on tap.
-    const burst = page.locator('[data-task-burst]');
-    await expect(burst).toHaveText('Leo Martins made 4 task changes');
-    await burst.click();
-    await expect(page.locator('[data-task-line="created"]')).toHaveCount(4);
-    await expect(page.locator('[data-task-line="created"]').first()).toContainText(
-      `Leo Martins added 8 ${TASK_ROW_TITLE} · Creators`,
-    );
+    // The four adds (one person, seconds apart) paint as one batch line with
+    // the messages: "added 4 tasks" (a tap opens the sheet).
+    await expect(page.locator('[data-task-added]')).toHaveText('Leo Martins added 4 tasks');
+    await expect(page.locator('[data-task-line="created"]')).toHaveCount(0);
 
     const sheet = await openSheet(page);
     await expect(sheet.locator('[data-task-group="agency"]')).toContainText('Creators');
@@ -89,6 +83,7 @@ test(
     await add.focus();
     await expect(sheet.locator('[data-task-add="agency"] [data-task-preview]')).toHaveText('12');
     await expect(sheet.locator('[data-task-add="client"] [data-task-preview]')).toHaveCount(0);
+    await expect(add).toHaveAttribute('placeholder', 'Add a task');
     await add.fill('Story frames');
     await add.press('Enter');
     await expect(add).toBeFocused();
@@ -97,16 +92,26 @@ test(
     await add.fill('Grid preview');
     await add.press('Enter');
     await expect(add).toBeFocused();
+    // Enter adds drafts marked "new"; nothing is written until Save.
+    await expect(sheet.locator('[data-task-draft] [data-task-new]')).toHaveCount(2);
+    expect(network.rpcCalls.some((c) => c.name.startsWith('chat_task_create'))).toBe(false);
+    const save = sheet.getByRole('button', { name: 'Save 2 tasks' });
+    expectMinTouchTarget(await save.boundingBox());
+    await save.click();
     await expect(sheet.locator('[data-task-row-id][data-task-number="12"]')).toContainText(
       'Story frames',
     );
     await expect(sheet.locator('[data-task-row-id][data-task-number="13"]')).toContainText(
       'Grid preview',
     );
-    const created = network.rpcCalls.filter((c) => c.name === 'chat_task_create');
-    expect(created.map((c) => c.args.p_title)).toEqual(['Story frames', 'Grid preview']);
-    expect(created.every((c) => c.args.p_side === 'agency' && c.args.p_priority === 2)).toBe(true);
-    expect(created.every((c) => typeof c.args.p_trace_id === 'string')).toBe(true);
+    await expect(sheet.locator('[data-task-draft]')).toHaveCount(0);
+    const created = network.rpcCalls.filter((c) => c.name === 'chat_task_create_many');
+    expect(created).toHaveLength(1);
+    const items = created[0]?.args.p_tasks as { title: string; side: string; priority: number }[];
+    expect(items.map((t) => t.title)).toEqual(['Story frames', 'Grid preview']);
+    expect(items.every((t) => t.side === 'agency' && t.priority === 2)).toBe(true);
+    expect(typeof created[0]?.args.p_trace_id).toBe('string');
+    expect(network.rpcCalls.some((c) => c.name === 'chat_task_create')).toBe(false);
     expectClean(network);
   },
 );
@@ -250,7 +255,7 @@ test('Share: the snapshot lands here and, Forwarded, in the picked chat and its 
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
   const sheet = await openSheet(page);
-  await sheet.getByRole('button', { name: 'Share tasks' }).click();
+  await sheet.getByRole('button', { name: 'Send to chat' }).click();
 
   const picker = page.getByRole('dialog', { name: 'Forward to' });
   await expect(picker).toBeVisible();
@@ -277,9 +282,10 @@ test('Share: the snapshot lands here and, Forwarded, in the picked chat and its 
   expect(copy[0]?.args.p_forwarded_from_message_id).toBe(own[0]?.args.p_id);
 
   // The list: the DM's preview is the snapshot's first line.
-  await page.getByRole('button', { name: /back/i }).first().click();
+  // Exact: chat tiles now name their preview (X7 FT44), which may say "back".
+  await page.getByRole('button', { name: 'Back to conversations' }).first().click();
   const firstLine = body.split('\n')[0] ?? '';
-  const dmRow = page.getByRole('button', { name: new RegExp(PEER_NAME) }).first();
+  const dmRow = page.getByRole('button', { name: new RegExp(`^Open ${PEER_NAME}`) }).first();
   await expect(dmRow).toContainText(firstLine);
   await dmRow.click();
   const there = page.locator('[data-bubble]', { hasText: firstLine });
