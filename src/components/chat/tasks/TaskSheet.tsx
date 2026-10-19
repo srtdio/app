@@ -276,7 +276,10 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
     const before = prevById.current;
     prevById.current = byId;
     if (!props.open || savingRef.current || before === byId) return;
-    const { notices: found } = liveMerge({ draft, before, after: byId });
+    // A change whose newest event is this person's own (their Save landing) is no notice.
+    const found = liveMerge({ draft, before, after: byId }).notices.filter(
+      (c) => lastActorOf(tasks.events, c.taskId, '') !== currentUserId,
+    );
     if (found.length === 0) return;
     setNotices((prev) => {
       const next = new Map(prev);

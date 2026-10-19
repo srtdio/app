@@ -24,7 +24,10 @@ vi.mock('@/components/ui/toast', () => ({
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
 import { undoFailureTitle, useUndoableAction } from '@/lib/use-undoable-action';
-import { TASK_DELETE_FAILED, TASK_DELETED_LABEL } from '@/components/chat/tasks/useChatTasks';
+
+// A caller's own done-label and failure message (the shape a delete passes).
+const TASK_DELETED_LABEL = 'Task deleted';
+const TASK_DELETE_FAILED = "Couldn't delete the task. Try again.";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

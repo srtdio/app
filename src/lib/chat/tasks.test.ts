@@ -1,36 +1,48 @@
 import { describe, expect, it } from 'vitest';
+import type { Client } from '@srtdio/rpc';
 import {
-  applyTaskField,
-  civilHourToUtcIso,
+  EDITING_REFRESH_MS,
+  EDITING_TTL_MS,
+  EMPTY_DRAFT,
+  applyChanges,
+  batchPayload,
+  batchRowText,
+  batchRows,
   collapseTaskRun,
-  commitmentLine,
-  createTask,
-  dateStripDays,
-  dueLabel,
-  dueSelection,
-  eventText,
+  conflictLine,
+  dropTask,
+  editField,
+  editedTasksLabel,
+  editingLabel,
+  editingSignalStep,
   eventsInWindow,
-  groupTasks,
   hasUnseenChanges,
-  holdOrder,
-  lastChangeLine,
-  nextNumberPreview,
+  isDraftDirty,
+  isEmptyPayload,
+  keepMine,
+  liveEditors,
+  liveMerge,
+  markText,
+  marksSince,
+  marksStrip,
+  parseBatchResult,
+  queueDelete,
   readChannelTasks,
-  readTasksByIds,
-  isPastHour,
-  openOrTodayFilter,
-  startOfTodayIso,
   readTaskEvents,
-  setTaskField,
+  readTasksByIds,
+  rowToTask,
+  saveTaskBatch,
   shareSnapshot,
+  taskRefOf,
   type ChatTask,
+  type SheetDraft,
   type TaskEvent,
 } from '@/lib/chat/tasks';
-import type { Client } from '@srtdio/rpc';
 
-// 13 Oct 2026, 2 pm UTC (7:30 pm in Kolkata).
+// 13 Oct 2026, 2 pm UTC.
 const NOW = Date.parse('2026-10-13T14:00:00.000Z');
 const UTC = 'UTC';
+const T0 = '2026-10-12T09:00:00.000Z';
 
 function task(over: Partial<ChatTask>): ChatTask {
   return {
@@ -38,17 +50,13 @@ function task(over: Partial<ChatTask>): ChatTask {
     channelId: 'c1',
     number: 1,
     title: 'Reel cut',
-    note: null,
     side: 'agency',
     status: 'todo',
     priority: 2,
-    dueAt: null,
-    dueSetBy: null,
-    dueSetAt: null,
-    duePassedAt: null,
     createdBy: 'u1',
-    createdAt: '2026-10-12T09:00:00.000Z',
-    updatedAt: '2026-10-12T09:00:00.000Z',
+    createdAt: T0,
+    updatedAt: T0,
+    deletedAt: null,
     ...over,
   };
 }
@@ -63,294 +71,420 @@ function ev(over: Partial<TaskEvent>): TaskEvent {
     oldValue: null,
     newValue: 'Reel cut',
     createdAt: '2026-10-13T10:00:00.000Z',
+    batchId: null,
     ...over,
   };
 }
 
-describe('civilHourToUtcIso: the workspace civil date + hour as UTC', () => {
-  it('Asia/Kolkata (+5:30, no DST)', () => {
-    expect(civilHourToUtcIso('2026-10-14', 20, 'Asia/Kolkata')).toBe('2026-10-14T14:30:00.000Z');
-    expect(civilHourToUtcIso('2026-10-14', 10, 'Asia/Kolkata')).toBe('2026-10-14T04:30:00.000Z');
+const at = (s: number): string => new Date(NOW + s * 1000).toISOString();
+const mapOf = (...tasks: ChatTask[]) => new Map(tasks.map((t) => [t.id, t] as const));
+
+describe('rows', () => {
+  it('maps status to todo/done (older statuses read as to do) and drops due/side columns', () => {
+    const row = {
+      id: 'a',
+      channel_id: 'c1',
+      workspace_id: 'w',
+      number: 4,
+      title: 'Hook',
+      side: 'client',
+      status: 'waiting',
+      priority: 0,
+      created_by: null,
+      created_at: T0,
+      updated_at: T0,
+      deleted_at: null,
+    };
+    expect(rowToTask(row as never)?.status).toBe('todo');
+    expect(rowToTask({ ...row, status: 'done' } as never)?.status).toBe('done');
+    expect(rowToTask({ ...row, priority: 7 } as never)).toBeNull();
   });
-  it('America/New_York across both DST changes', () => {
-    expect(civilHourToUtcIso('2026-03-07', 12, 'America/New_York')).toBe(
-      '2026-03-07T17:00:00.000Z',
-    );
-    expect(civilHourToUtcIso('2026-03-08', 12, 'America/New_York')).toBe(
-      '2026-03-08T16:00:00.000Z',
-    );
-    expect(civilHourToUtcIso('2026-11-01', 10, 'America/New_York')).toBe(
-      '2026-11-01T15:00:00.000Z',
-    );
+});
+
+describe('draft: diff and no-op detection', () => {
+  const a = task({ id: 'a', number: 1, title: 'Hook', priority: 2 });
+  const b = task({ id: 'b', number: 2, title: 'Grid', priority: 1, updatedAt: at(-60) });
+  const byId = mapOf(a, b);
+
+  it('an empty draft is clean; a real change is dirty', () => {
+    expect(isDraftDirty(EMPTY_DRAFT, byId)).toBe(false);
+    expect(isDraftDirty(editField(EMPTY_DRAFT, a, { priority: 0 }), byId)).toBe(true);
   });
-  it('round-trips through dueSelection', () => {
-    const iso = civilHourToUtcIso('2026-10-16', 17, 'Asia/Kolkata');
-    expect(dueSelection(iso, NOW, 'Asia/Kolkata')).toEqual({
-      civil: '2026-10-16',
-      hour: 17,
-      which: 'other',
+
+  it('change then revert is no change (title trimmed, priority back, untick)', () => {
+    let d = editField(EMPTY_DRAFT, a, { priority: 0 });
+    d = editField(d, a, { priority: 2 });
+    d = editField(d, a, { title: '  Hook ' });
+    d = editField(d, a, { status: 'done' });
+    d = editField(d, a, { status: 'todo' });
+    expect(isDraftDirty(d, byId)).toBe(false);
+    expect(isEmptyPayload(batchPayload(d, byId))).toBe(true);
+  });
+
+  it('an empty title is no change; a new task needs a title', () => {
+    expect(isDraftDirty(editField(EMPTY_DRAFT, a, { title: '   ' }), byId)).toBe(false);
+    const blank: SheetDraft = {
+      ...EMPTY_DRAFT,
+      creates: [{ key: 'n', title: '  ', priority: 1, side: 'agency' }],
+    };
+    expect(isDraftDirty(blank, byId)).toBe(false);
+  });
+
+  it('remembers each task base the first time it is touched', () => {
+    let d = editField(EMPTY_DRAFT, b, { priority: 0 });
+    d = editField(d, { ...b, updatedAt: at(10) }, { title: 'Grid v2' });
+    expect(d.bases.b).toBe(b.updatedAt);
+  });
+});
+
+describe('batch payload', () => {
+  const a = task({ id: 'a', number: 1, title: 'Hook', priority: 2 });
+  const b = task({ id: 'b', number: 2, title: 'Grid', priority: 1 });
+  const c = task({ id: 'c', number: 3, title: 'Copy' });
+  const byId = mapOf(a, b, c);
+
+  it('edits send only changed fields with base_updated_at; deletes are objects; creates keep side', () => {
+    let d = editField(EMPTY_DRAFT, a, { priority: 0, title: 'Hook' });
+    d = editField(d, b, { title: ' Grid v2 ', status: 'done' });
+    d = queueDelete(d, c);
+    d = { ...d, creates: [{ key: 'n1', title: ' Story ', priority: 1, side: 'client' }] };
+    expect(batchPayload(d, byId)).toEqual({
+      creates: [{ title: 'Story', priority: 1, side: 'client' }],
+      edits: [
+        { task_id: 'a', base_updated_at: T0, changes: { priority: 0 } },
+        { task_id: 'b', base_updated_at: T0, changes: { title: 'Grid v2', status: 'done' } },
+      ],
+      deletes: [{ task_id: 'c', base_updated_at: T0 }],
+    });
+  });
+
+  it('a task queued for delete sends no edit', () => {
+    const d = queueDelete(editField(EMPTY_DRAFT, a, { priority: 0 }), a);
+    expect(batchPayload(d, byId).edits).toEqual([]);
+    expect(batchPayload(d, byId).deletes).toHaveLength(1);
+  });
+
+  it('applyChanges paints the edit', () => {
+    expect(applyChanges(a, { title: 'X', status: 'done' })).toMatchObject({
+      title: 'X',
+      status: 'done',
+      priority: 2,
     });
   });
 });
 
-describe('dueLabel', () => {
-  it('today, tomorrow, another date, none', () => {
-    expect(dueLabel(task({ dueAt: '2026-10-13T20:00:00Z' }), NOW, UTC)).toEqual({
-      text: '8 pm',
-      tone: 'today',
-    });
-    expect(dueLabel(task({ dueAt: '2026-10-14T12:00:00Z' }), NOW, UTC)).toEqual({
-      text: 'Tmrw 12 pm',
-      tone: 'later',
-    });
-    expect(dueLabel(task({ dueAt: '2026-10-16T17:00:00Z' }), NOW, UTC)).toEqual({
-      text: '16 Oct 5 pm',
-      tone: 'later',
-    });
-    expect(dueLabel(task({}), NOW, UTC)).toEqual({ text: '–', tone: 'none' });
-    expect(dueLabel(task({ dueAt: '2026-10-13T20:30:00Z' }), NOW, UTC).text).toBe('8:30 pm');
-  });
-  it('missed: the clock is past it, or the timer fired', () => {
-    expect(dueLabel(task({ dueAt: '2026-10-13T13:00:00Z' }), NOW, UTC)).toEqual({
-      text: '1 pm',
-      tone: 'missed',
-    });
-    expect(
-      dueLabel(
-        task({ dueAt: '2026-10-13T20:00:00Z', duePassedAt: '2026-10-13T13:59:00Z' }),
-        NOW,
-        UTC,
-      ).tone,
-    ).toBe('missed');
-  });
-  it('reads on the workspace clock (Kolkata: 2 pm UTC is already 7:30 pm)', () => {
-    expect(dueLabel(task({ dueAt: '2026-10-13T18:30:00Z' }), NOW, 'Asia/Kolkata').text).toBe(
-      'Tmrw 12 am',
-    );
-  });
-});
+describe('conflicts (both edited)', () => {
+  const a = task({ id: 'a', number: 1, title: 'Hook', priority: 2 });
+  const raw = {
+    batch_id: 'b9',
+    created_ids: ['n1'],
+    conflicts: [
+      {
+        task_id: 'a',
+        deleted: false,
+        title: 'Hook (Leo)',
+        priority: 0,
+        status: 'todo',
+        updated_at: at(5),
+      },
+      {
+        task_id: 'z',
+        deleted: true,
+        title: 'Gone',
+        priority: 1,
+        status: 'done',
+        updated_at: at(6),
+      },
+      { bogus: true },
+    ],
+  };
 
-describe('commitmentLine', () => {
-  const nameOf = (id: string): string => (id === 'u3' ? 'Chitra' : 'Member');
-  it('names who set it and when', () => {
-    expect(
-      commitmentLine(
-        task({ dueAt: '2026-10-13T20:00:00Z', dueSetBy: 'u3', dueSetAt: '2026-10-13T11:05:00Z' }),
-        nameOf,
-        NOW,
-        UTC,
-      ),
-    ).toEqual({ text: 'Due today 8 pm · set by Chitra at 11:05 am', missed: false });
+  it('parses the result, skipping malformed conflicts', () => {
+    const r = parseBatchResult(raw);
+    expect(r?.batchId).toBe('b9');
+    expect(r?.createdIds).toEqual(['n1']);
+    expect(r?.conflicts.map((c) => c.taskId)).toEqual(['a', 'z']);
+    expect(r?.conflicts[1]?.deleted).toBe(true);
+    expect(parseBatchResult({ batch_id: null, created_ids: [] })?.conflicts).toEqual([]);
+    expect(parseBatchResult(null)).toBeNull();
   });
-  it('missed and none', () => {
-    expect(
-      commitmentLine(
-        task({ dueAt: '2026-10-13T15:00:00Z', duePassedAt: 'x', dueSetBy: 'u3', dueSetAt: null }),
-        nameOf,
-        NOW,
-        UTC,
-      ),
-    ).toEqual({ text: 'Missed: due today 3 pm · set by Chitra', missed: true });
-    expect(commitmentLine(task({}), nameOf, NOW, UTC).text).toBe('No due time yet');
-  });
-});
 
-describe('groups and order', () => {
-  const tasks = [
-    task({ id: 'a', number: 3, priority: 2 }),
-    task({ id: 'b', number: 5, priority: 0 }),
-    task({ id: 'c', number: 1, priority: 2 }),
-    task({ id: 'd', number: 2, priority: 1, side: 'client', status: 'waiting' }),
-    task({ id: 'e', number: 4, status: 'shared', updatedAt: '2026-10-13T09:00:00Z' }),
-    task({ id: 'f', number: 6, status: 'approved', updatedAt: '2026-10-12T09:00:00Z' }),
-  ];
-  it('open by priority then number, per side; done today only', () => {
-    const g = groupTasks(tasks, NOW, UTC);
-    expect(g.agency.map((t) => t.id)).toEqual(['b', 'c', 'a']);
-    expect(g.client.map((t) => t.id)).toEqual(['d']);
-    expect(g.done.map((t) => t.id)).toEqual(['e']);
+  it('names their value for the fields I changed; a delete says so', () => {
+    const [mine, gone] = parseBatchResult(raw)?.conflicts ?? [];
+    if (mine === undefined || gone === undefined) throw new Error('no conflicts');
+    expect(conflictLine('Leo', mine, { priority: 1 })).toBe('Leo changed this to P0');
+    expect(conflictLine('Leo', mine, { title: 'Mine' })).toBe('Leo changed this to "Hook (Leo)"');
+    expect(conflictLine('Leo', mine, { status: 'done' })).toBe('Leo changed this to not done');
+    expect(conflictLine('Leo', gone, { title: 'x' })).toBe('Leo deleted this');
   });
-  it('holds the order while a row is expanded, appending newcomers', () => {
-    const fresh = [task({ id: 'x' }), task({ id: 'a' }), task({ id: 'n' })];
-    expect(holdOrder(fresh, ['a', 'gone', 'x']).map((t) => t.id)).toEqual(['a', 'x', 'n']);
-    // A row that left the group (closed) stays where it was until collapse,
-    // and is not shown twice in the group it moved to.
-    const moved = task({ id: 'm', status: 'shared' });
-    const all = new Map([...fresh, moved].map((t) => [t.id, t] as const));
-    const held = new Set(['m', 'a']);
-    expect(holdOrder([task({ id: 'a' })], ['m', 'a'], all, held).map((t) => t.id)).toEqual([
-      'm',
-      'a',
+
+  it('Keep mine re-bases on their version so the edit goes again', () => {
+    const [c] = parseBatchResult(raw)?.conflicts ?? [];
+    if (c === undefined) throw new Error('no conflict');
+    const d = keepMine(editField(EMPTY_DRAFT, a, { priority: 1 }), c);
+    const theirs = { ...a, title: c.title, priority: c.priority, updatedAt: c.updatedAt };
+    expect(batchPayload(d, mapOf(theirs)).edits).toEqual([
+      { task_id: 'a', base_updated_at: at(5), changes: { priority: 1 } },
     ]);
-    expect(holdOrder([moved], [], all, held)).toEqual([]);
   });
-  it('previews the next number', () => {
-    expect(nextNumberPreview(tasks)).toBe(7);
-    expect(nextNumberPreview([])).toBe(1);
+
+  it('Keep theirs drops my edit', () => {
+    const d = dropTask(editField(EMPTY_DRAFT, a, { priority: 1 }), 'a');
+    expect(isDraftDirty(d, mapOf(a))).toBe(false);
+    expect(d.bases).toEqual({});
   });
-  it('applies a write optimistically', () => {
-    const t = task({});
-    expect(applyTaskField(t, 'priority', '0', 'me', 'now').priority).toBe(0);
-    expect(applyTaskField(t, 'status', 'shared', 'me', 'now').status).toBe('shared');
-    expect(applyTaskField(t, 'note', '  ', 'me', 'now').note).toBeNull();
-    const due = applyTaskField(t, 'due', '2026-10-14T12:00:00Z', 'me', 'now');
-    expect(due).toMatchObject({ dueAt: '2026-10-14T12:00:00Z', dueSetBy: 'me', dueSetAt: 'now' });
-    expect(applyTaskField(due, 'due', '', 'me', 'now').dueAt).toBeNull();
+
+  it('live merge: untouched rows need nothing; touched rows changed or deleted there get a notice', () => {
+    const b = task({ id: 'b', number: 2, title: 'Grid' });
+    const d = editField(EMPTY_DRAFT, a, { priority: 0 });
+    const after = mapOf(
+      { ...a, title: 'Hook (Leo)', updatedAt: at(9) },
+      { ...b, priority: 0, updatedAt: at(9) },
+    );
+    const { notices } = liveMerge({ draft: d, before: mapOf(a, b), after });
+    expect(notices.map((n) => [n.taskId, n.deleted, n.title])).toEqual([
+      ['a', false, 'Hook (Leo)'],
+    ]);
+    const deleted = liveMerge({ draft: d, before: mapOf(a, b), after: mapOf(b) });
+    expect(deleted.notices.map((n) => [n.taskId, n.deleted])).toEqual([['a', true]]);
+    const same = liveMerge({ draft: d, before: mapOf(a, b), after: mapOf(a, b) });
+    expect(same.notices).toEqual([]);
   });
 });
 
-describe('event text: every kind', () => {
-  const ref = { number: 12, title: 'Reel cut', side: 'agency' as const };
-  const text = (over: Partial<TaskEvent>): string => eventText(ev(over), ref, NOW, UTC);
-  it('reads each change', () => {
-    expect(text({ kind: 'created', newValue: 'Reel cut' })).toBe('added 12 Reel cut · Creators');
-    expect(text({ kind: 'status', oldValue: 'todo', newValue: 'shared' })).toBe(
-      '12 Reel cut → Shared',
-    );
-    expect(text({ kind: 'priority', oldValue: '1', newValue: '0' })).toBe('12 P1 → P0');
-    expect(text({ kind: 'due', newValue: '2026-10-13T20:00:00+00:00' })).toBe('12 due today 8 pm');
-    expect(text({ kind: 'due', newValue: null })).toBe('12 due cleared');
-    expect(text({ kind: 'side', newValue: 'client' })).toBe('12 moved to Approvers');
-    expect(text({ kind: 'title', oldValue: 'Old', newValue: 'New cut' })).toBe(
-      'renamed 12 to New cut',
-    );
-    expect(text({ kind: 'note', newValue: 'x' })).toBe('12 note updated');
-    expect(text({ kind: 'due_passed', oldValue: '2026-10-13T15:00:00+00:00', actorId: null })).toBe(
-      '3 pm passed · 12 Reel cut',
-    );
-  });
-  it('the footer names who, what and when', () => {
-    const byId = new Map([['t1', task({ number: 12 })]]);
-    expect(
-      lastChangeLine(
-        [ev({ kind: 'status', newValue: 'approved', createdAt: '2026-10-13T13:30:00Z' })],
-        byId,
-        () => 'Chitra',
-        NOW,
-        UTC,
-      ),
-    ).toBe('Last change: Chitra · 12 Reel cut → Approved · 1:30 pm');
-    expect(lastChangeLine([], byId, () => 'x', NOW, UTC)).toBeNull();
-  });
-});
-
-describe('thread lines', () => {
-  const at = (s: number): string => new Date(NOW + s * 1000).toISOString();
-  it('collapses 4+ by one actor within 2 minutes; fewer stay single', () => {
-    const burst = [0, 20, 40, 60].map((s, k) => ev({ id: `b${k}`, createdAt: at(s) }));
+describe('thread lines: one Save is one line', () => {
+  it('events sharing a batch id are ONE line wherever they sit; older rows keep their collapse', () => {
     const lines = collapseTaskRun([
-      ...burst,
-      ev({ id: 'other', actorId: 'u9', createdAt: at(70) }),
+      ev({ id: 'a', kind: 'edited', batchId: 'B1', createdAt: at(0) }),
+      ev({ id: 'b', kind: 'created', batchId: 'B1', createdAt: at(0) }),
+      ev({ id: 'c', kind: 'edited', batchId: 'B2', actorId: 'u3', createdAt: at(1) }),
+      ev({ id: 'd', kind: 'deleted', batchId: 'B1', createdAt: at(0) }),
+      ev({ id: 'e', kind: 'note', createdAt: at(2) }),
     ]);
-    expect(lines.map((l) => l.kind)).toEqual(['many', 'one']);
-    const three = [0, 20, 40].map((s, k) => ev({ id: `t${k}`, createdAt: at(s) }));
-    expect(collapseTaskRun(three).map((l) => l.kind)).toEqual(['one', 'one', 'one']);
-    const slow = [0, 50, 100, 150].map((s, k) => ev({ id: `s${k}`, createdAt: at(s) }));
-    expect(collapseTaskRun(slow).map((l) => l.kind)).toEqual(['one', 'one', 'one', 'one']);
+    expect(lines.map((l) => l.kind)).toEqual(['batch', 'batch', 'one']);
+    const first = lines[0];
+    expect(first?.kind === 'batch' && first.events.map((e) => e.id)).toEqual(['a', 'b', 'd']);
+    const legacy = collapseTaskRun([0, 1, 2].map((k) => ev({ id: `x${k}`, createdAt: at(k) })));
+    expect(legacy.map((l) => l.kind)).toEqual(['added']);
   });
-  it('the timer never collapses', () => {
-    const timer = [0, 1, 2, 3].map((s, k) => ev({ id: `d${k}`, actorId: null, createdAt: at(s) }));
-    expect(collapseTaskRun(timer).every((l) => l.kind === 'one')).toBe(true);
+
+  it('expands to its rows', () => {
+    const ref = taskRefOf(task({ number: 7, title: 'Grid v2', priority: 0 }));
+    const rows = [
+      ...batchRows(ev({ kind: 'created', newValue: 'Story' }), { ...ref, priority: 1 }),
+      ...batchRows(
+        ev({
+          kind: 'edited',
+          oldValue: '{"title":"Grid","priority":2}',
+          newValue: '{"title":"Grid v2","priority":0}',
+        }),
+        ref,
+      ),
+      ...batchRows(
+        ev({ kind: 'edited', oldValue: '{"status":"todo"}', newValue: '{"status":"done"}' }),
+        ref,
+      ),
+      ...batchRows(
+        ev({ kind: 'edited', oldValue: '{"status":"done"}', newValue: '{"status":"todo"}' }),
+        ref,
+      ),
+      ...batchRows(ev({ kind: 'deleted', oldValue: 'Old', newValue: null }), ref),
+    ].map(batchRowText);
+    expect(rows).toEqual([
+      'Added #7 Story · P1',
+      'Edited #7 Grid → Grid v2',
+      'Priority #7 P2 → P0',
+      'Done #7 Grid v2',
+      'Reopened #7 Grid v2',
+      'Deleted #7 Old',
+    ]);
+    expect(editedTasksLabel('You')).toBe('You edited tasks');
   });
+
   it('keeps only the loaded window while older history exists', () => {
     const events = [ev({ id: 'old', createdAt: at(-100) }), ev({ id: 'new', createdAt: at(10) })];
     expect(eventsInWindow(events, NOW, true).map((e) => e.id)).toEqual(['new']);
     expect(eventsInWindow(events, NOW, false).map((e) => e.id)).toEqual(['old', 'new']);
   });
-  it('the dot: a newer change by someone else (the timer counts)', () => {
+
+  it('the dot: a newer change by someone else', () => {
     const mine = ev({ actorId: 'me', createdAt: at(10) });
     const theirs = ev({ actorId: 'u2', createdAt: at(5) });
     expect(hasUnseenChanges([theirs, mine], 'me', null)).toBe(true);
     expect(hasUnseenChanges([theirs, mine], 'me', NOW + 6000)).toBe(false);
-    expect(hasUnseenChanges([theirs], 'me', NOW)).toBe(true);
     expect(hasUnseenChanges([mine], 'me', null)).toBe(false);
-    expect(hasUnseenChanges([ev({ actorId: null })], 'me', null)).toBe(true);
   });
 });
 
-describe('today on the workspace clock', () => {
-  it('starts today at local midnight', () => {
-    expect(startOfTodayIso(NOW, UTC)).toBe('2026-10-13T00:00:00.000Z');
-    expect(startOfTodayIso(NOW, 'Asia/Kolkata')).toBe('2026-10-12T18:30:00.000Z');
-    expect(openOrTodayFilter(NOW, UTC)).toBe(
-      'status.in.(todo,waiting),updated_at.gte.2026-10-13T00:00:00.000Z',
+describe('marks: changed since you looked', () => {
+  const b1 = [
+    ev({
+      id: '1',
+      taskId: 'a',
+      kind: 'edited',
+      batchId: 'B1',
+      actorId: 'u2',
+      createdAt: at(0),
+      oldValue: '{"title":"Hook"}',
+      newValue: '{"title":"Hook v2"}',
+    }),
+    ev({
+      id: '2',
+      taskId: 'b',
+      kind: 'edited',
+      batchId: 'B1',
+      actorId: 'u2',
+      createdAt: at(0),
+      oldValue: '{"priority":2}',
+      newValue: '{"priority":0}',
+    }),
+  ];
+  const b2 = [
+    ev({
+      id: '3',
+      taskId: 'c',
+      kind: 'edited',
+      batchId: 'B2',
+      actorId: 'u3',
+      createdAt: at(60),
+      oldValue: '{"status":"todo"}',
+      newValue: '{"status":"done"}',
+    }),
+    ev({
+      id: '4',
+      taskId: 'd',
+      kind: 'created',
+      batchId: 'B2',
+      actorId: 'u3',
+      createdAt: at(60),
+      newValue: 'New',
+    }),
+  ];
+  const mineB = [
+    ev({
+      id: '5',
+      taskId: 'e',
+      kind: 'edited',
+      batchId: 'B3',
+      actorId: 'me',
+      createdAt: at(90),
+      oldValue: '{"priority":2}',
+      newValue: '{"priority":1}',
+    }),
+  ];
+  const all = [...b1, ...b2, ...mineB];
+
+  it('no seen time: only the latest batch by someone else', () => {
+    const m = marksSince(all, 'me', null);
+    expect([...m.byTask.keys()]).toEqual(['c', 'd']);
+    expect(m.actorIds).toEqual(['u3']);
+    expect(m.byTask.get('c')?.map(markText)).toEqual(['marked done']);
+    expect(m.byTask.get('d')?.map(markText)).toEqual(['New task']);
+  });
+
+  it('a seen time: every other batch after it, never my own', () => {
+    const m = marksSince(all, 'me', NOW - 1000);
+    expect([...m.byTask.keys()].sort()).toEqual(['a', 'b', 'c', 'd']);
+    expect(m.byTask.get('a')?.map(markText)).toEqual(['was Hook']);
+    expect(m.byTask.get('b')?.map(markText)).toEqual(['priority was P2']);
+    expect(m.byTask.has('e')).toBe(false);
+    expect(marksSince(all, 'me', NOW + 30_000).byTask.has('a')).toBe(false);
+  });
+
+  it('both directions: the other person sees my Save marked', () => {
+    const m = marksSince(all, 'u2', NOW + 30_000);
+    expect([...m.byTask.keys()].sort()).toEqual(['c', 'd', 'e']);
+    expect(m.byTask.get('e')?.map(markText)).toEqual(['priority was P2']);
+  });
+
+  it('the oldest "was" wins across two Saves; a deleted task has no mark', () => {
+    const two = [
+      ev({
+        id: 'x',
+        taskId: 'a',
+        kind: 'edited',
+        batchId: 'X',
+        createdAt: at(0),
+        oldValue: '{"title":"One"}',
+        newValue: '{"title":"Two"}',
+      }),
+      ev({
+        id: 'y',
+        taskId: 'a',
+        kind: 'edited',
+        batchId: 'Y',
+        createdAt: at(5),
+        oldValue: '{"title":"Two"}',
+        newValue: '{"title":"Three"}',
+      }),
+      ev({ id: 'z', taskId: 'b', kind: 'created', batchId: 'Y', createdAt: at(5) }),
+      ev({ id: 'w', taskId: 'b', kind: 'deleted', batchId: 'Z', createdAt: at(6) }),
+    ];
+    const m = marksSince(two, 'me', NOW - 1);
+    expect(m.byTask.get('a')?.map(markText)).toEqual(['was One']);
+    expect(m.byTask.has('b')).toBe(false);
+  });
+
+  it('the strip', () => {
+    expect(marksStrip(['Leo'], 3)).toBe('Leo changed 3 tasks · marked below');
+    expect(marksStrip(['Leo', 'Ana'], 1)).toBe('Leo and Ana changed 1 task · marked below');
+  });
+});
+
+describe('editing signal timing', () => {
+  it('starts on the first unsaved change, refreshes every 5s, stops once clean', () => {
+    expect(editingSignalStep({ dirty: false, lastSentMs: null, nowMs: 0 })).toBe('none');
+    expect(editingSignalStep({ dirty: true, lastSentMs: null, nowMs: 0 })).toBe('start');
+    expect(editingSignalStep({ dirty: true, lastSentMs: 0, nowMs: EDITING_REFRESH_MS - 1 })).toBe(
+      'none',
     );
+    expect(editingSignalStep({ dirty: true, lastSentMs: 0, nowMs: EDITING_REFRESH_MS })).toBe(
+      'refresh',
+    );
+    expect(editingSignalStep({ dirty: false, lastSentMs: 0, nowMs: 1 })).toBe('stop');
   });
-  it('past hours: today up to and including the current hour, never another day', () => {
-    // 2 pm UTC: 10 am to 2 pm are over today; 3 pm is open; tomorrow is open.
-    expect(isPastHour('2026-10-13', 14, NOW, UTC)).toBe(true);
-    expect(isPastHour('2026-10-13', 10, NOW, UTC)).toBe(true);
-    expect(isPastHour('2026-10-13', 15, NOW, UTC)).toBe(false);
-    expect(isPastHour('2026-10-14', 10, NOW, UTC)).toBe(false);
-    // Kolkata: it is already 7:30 pm there, so 7 pm is over and 8 pm is not.
-    expect(isPastHour('2026-10-13', 19, NOW, 'Asia/Kolkata')).toBe(true);
-    expect(isPastHour('2026-10-13', 20, NOW, 'Asia/Kolkata')).toBe(false);
-  });
-});
 
-describe('date strip', () => {
-  it('lists the 14 days after tomorrow', () => {
-    const days = dateStripDays(NOW, UTC);
-    expect(days).toHaveLength(14);
-    expect(days[0]).toEqual({ civil: '2026-10-15', weekday: 'Thu', day: 15, month: 'Oct' });
-    expect(days[13]?.civil).toBe('2026-10-28');
+  it('a receiver drops an editor 12s after the last refresh', () => {
+    const heard = new Map([
+      ['u2', 0],
+      ['u3', 4000],
+    ]);
+    expect(liveEditors(heard, EDITING_TTL_MS - 1)).toEqual(['u3', 'u2']);
+    expect(liveEditors(heard, EDITING_TTL_MS)).toEqual(['u3']);
+    expect(liveEditors(heard, EDITING_TTL_MS + 4000)).toEqual([]);
+    expect(editingLabel(['Leo'])).toBe('Leo is editing…');
+    expect(editingLabel([])).toBeNull();
   });
 });
 
 describe('shareSnapshot', () => {
   const tasks = [
-    task({ id: 'a', number: 3, title: 'Hook copy', priority: 0, dueAt: '2026-10-13T20:00:00Z' }),
-    task({ id: 'b', number: 5, title: 'Reel cut', dueAt: '2026-10-13T10:00:00Z' }),
-    task({
-      id: 'c',
-      number: 2,
-      title: 'Approve grid',
-      side: 'client',
-      dueAt: '2026-10-14T12:00:00Z',
-    }),
-    task({ id: 'd', number: 7, title: 'Moodboard', side: 'client', dueAt: '2026-10-16T17:00:00Z' }),
-    task({ id: 'e', number: 4, status: 'approved', updatedAt: '2026-10-13T09:00:00Z' }),
-    task({ id: 'f', number: 6, status: 'rejected', updatedAt: '2026-10-13T09:30:00Z' }),
+    task({ id: 'a', number: 3, title: 'Hook copy', priority: 0 }),
+    task({ id: 'b', number: 1, title: 'Reel cut', priority: 1, side: 'client' }),
+    task({ id: 'c', number: 2, title: 'Approve grid', status: 'done' }),
+    task({ id: 'd', number: 4, title: 'Gone', deletedAt: at(0) }),
   ];
-  it('formats the plain-text snapshot on the workspace clock', () => {
+  it('flat numbered list, done items under Done; no side, no due', () => {
     expect(shareSnapshot({ chatName: 'Launch crew', tasks, nowMs: NOW, timeZone: UTC })).toBe(
       [
         'Tasks · Launch crew · 13 Oct, 2 pm',
-        'Creators',
-        '3. Hook copy · P0 · today 8 pm',
-        '5. Reel cut · P2 · today 10 am (missed)',
-        'Approvers',
-        '2. Approve grid · P2 · tomorrow 12 pm',
-        '7. Moodboard · P2 · 16 Oct 5 pm',
-        'Done today: 4, 6',
+        '1. Reel cut · P1',
+        '3. Hook copy · P0',
+        'Done',
+        '2. Approve grid · P2',
       ].join('\n'),
     );
   });
-  it('leaves out an empty side and the done line when nothing closed today', () => {
+  it('no Done section when nothing is done', () => {
     const text = shareSnapshot({
       chatName: 'X',
-      tasks: [tasks[2] as ChatTask],
+      tasks: [tasks[0] as ChatTask],
       nowMs: NOW,
       timeZone: UTC,
     });
-    expect(text).toBe('Tasks · X · 13 Oct, 2 pm\nApprovers\n2. Approve grid · P2 · tomorrow 12 pm');
+    expect(text).toBe('Tasks · X · 13 Oct, 2 pm\n3. Hook copy · P0');
   });
-  it('past the limit: drops the done line, then trailing items, ending "+k more"', () => {
-    const full = shareSnapshot({ chatName: 'X', tasks, nowMs: NOW, timeZone: UTC });
-    const noDone = shareSnapshot({
-      chatName: 'X',
-      tasks,
-      nowMs: NOW,
-      timeZone: UTC,
-      max: full.length - 1,
-    });
-    expect(noDone).not.toContain('Done today');
-    expect(noDone).toContain('7. Moodboard');
-    const cut = shareSnapshot({ chatName: 'X', tasks, nowMs: NOW, timeZone: UTC, max: 110 });
-    expect(cut.length).toBeLessThanOrEqual(110);
-    expect(cut).toMatch(/\n\+\d more$/);
-    expect(cut).toContain('3. Hook copy');
-    expect(cut).not.toContain('Moodboard');
+  it('past the limit: drops Done, then trailing items, ending "+k more"', () => {
     const many = Array.from({ length: 300 }, (_, k) =>
       task({ id: `m${k}`, number: k + 1, title: 'A long enough item title for the limit' }),
     );
@@ -366,9 +500,9 @@ function fakeClient(answer: { data: unknown; error: { message: string } | null }
   const query = {
     select: (...args: unknown[]) => (calls.push({ method: 'select', args }), query),
     eq: (...args: unknown[]) => (calls.push({ method: 'eq', args }), query),
+    is: (...args: unknown[]) => (calls.push({ method: 'is', args }), query),
     gt: (...args: unknown[]) => (calls.push({ method: 'gt', args }), query),
     lt: (...args: unknown[]) => (calls.push({ method: 'lt', args }), query),
-    or: (...args: unknown[]) => (calls.push({ method: 'or', args }), query),
     in: (...args: unknown[]) => (calls.push({ method: 'in', args }), query),
     order: (...args: unknown[]) => (calls.push({ method: 'order', args }), query),
     limit: (...args: unknown[]) => (calls.push({ method: 'limit', args }), query),
@@ -384,99 +518,60 @@ function fakeClient(answer: { data: unknown; error: { message: string } | null }
   return { client: client as unknown as Client, calls };
 }
 
-describe('reads and writes', () => {
-  it("reads open items plus today's changes: one query, explicit columns, one or()", async () => {
+describe('reads and the write', () => {
+  it('reads the live list in one query, explicit columns, no deleted rows', async () => {
     const { client, calls } = fakeClient({ data: [], error: null });
-    const res = await readChannelTasks(client, 'c1', { nowMs: NOW, timeZone: 'Asia/Kolkata' });
-    expect(res).toEqual({ ok: true, data: [] });
-    expect(calls.map((c) => c.method)).toEqual(['from', 'select', 'eq', 'or']);
-    expect(String(calls[1]?.args[0])).toContain('due_set_by');
-    expect(calls[3]?.args).toEqual([
-      'status.in.(todo,waiting),updated_at.gte.2026-10-12T18:30:00.000Z',
-    ]);
+    expect(await readChannelTasks(client, 'c1')).toEqual({ ok: true, data: [] });
+    expect(calls.map((c) => c.method)).toEqual(['from', 'select', 'eq', 'is']);
+    expect(String(calls[1]?.args[0])).not.toContain('due');
+    expect(calls[3]?.args).toEqual(['deleted_at', null]);
   });
   it('reads tasks by id in one IN read, none for no ids', async () => {
     const { client, calls } = fakeClient({ data: [], error: null });
     expect(await readTasksByIds(client, [])).toEqual({ ok: true, data: [] });
     expect(calls).toHaveLength(0);
     await readTasksByIds(client, ['a', 'b']);
-    expect(calls.map((c) => c.method)).toEqual(['from', 'select', 'in']);
     expect(calls[2]?.args).toEqual(['id', ['a', 'b']]);
   });
-  it('reads a window of events newest first and returns them oldest first', async () => {
-    const rows = [
-      {
-        id: 'e2',
-        task_id: 't',
-        channel_id: 'c1',
-        workspace_id: 'w',
-        actor_user_id: 'u',
-        kind: 'note',
-        old_value: null,
-        new_value: null,
-        created_at: '2026-10-13T11:00:00Z',
-      },
-      {
-        id: 'e1',
-        task_id: 't',
-        channel_id: 'c1',
-        workspace_id: 'w',
-        actor_user_id: 'u',
-        kind: 'bogus',
-        old_value: null,
-        new_value: null,
-        created_at: '2026-10-13T10:00:00Z',
-      },
-    ];
-    const { client, calls } = fakeClient({ data: rows, error: null });
+  it('reads events with their batch id, oldest first', async () => {
+    const row = {
+      id: 'e2',
+      task_id: 't',
+      channel_id: 'c1',
+      workspace_id: 'w',
+      actor_user_id: 'u',
+      kind: 'edited',
+      old_value: null,
+      new_value: null,
+      created_at: '2026-10-13T11:00:00Z',
+      batch_id: 'B',
+    };
+    const { client, calls } = fakeClient({ data: [row], error: null });
     const res = await readTaskEvents(client, 'c1', { sinceIso: 'a', untilIso: 'b' });
-    expect(res.ok && res.data.events.map((e) => e.id)).toEqual(['e2']);
-    expect(calls.map((c) => c.method)).toEqual([
-      'from',
-      'select',
-      'eq',
-      'gt',
-      'lt',
-      'order',
-      'limit',
-    ]);
+    expect(res.ok && res.data.events.map((e) => e.batchId)).toEqual(['B']);
+    expect(String(calls[1]?.args[0])).toContain('batch_id');
   });
-  it('writes pass an explicit p_trace_id', async () => {
-    const created = fakeClient({ data: 'new-id', error: null });
-    expect(
-      await createTask({
-        client: created.client,
-        channelId: 'c1',
-        title: ' Hook ',
-        side: 'client',
-        traceId: 'tr',
-      }),
-    ).toEqual({ ok: true, data: 'new-id' });
-    expect(created.calls[0]?.args).toEqual([
-      'chat_task_create',
+  it('a Save is one chat_task_save_batch call with the payload and an explicit trace id', async () => {
+    const { client, calls } = fakeClient({
+      data: { batch_id: 'B', created_ids: ['n'], conflicts: [] },
+      error: null,
+    });
+    const payload = {
+      creates: [{ title: 'Story', priority: 1 as const, side: 'agency' as const }],
+      edits: [],
+      deletes: [{ task_id: 'a', base_updated_at: T0 }],
+    };
+    const res = await saveTaskBatch({ client, channelId: 'c1', payload, traceId: 'tr' });
+    expect(res).toEqual({ ok: true, data: { batchId: 'B', createdIds: ['n'], conflicts: [] } });
+    expect(calls).toEqual([
       {
-        p_channel_id: 'c1',
-        p_title: 'Hook',
-        p_note: null,
-        p_side: 'client',
-        p_priority: 2,
-        p_due_at: null,
-        p_trace_id: 'tr',
+        method: 'rpc',
+        args: ['chat_task_save_batch', { p_channel_id: 'c1', p_batch: payload, p_trace_id: 'tr' }],
       },
     ]);
-    const set = fakeClient({ data: null, error: { message: 'not a member of this chat' } });
+    const refused = fakeClient({ data: null, error: { message: 'not a member of this chat' } });
     expect(
-      await setTaskField({
-        client: set.client,
-        taskId: 't1',
-        field: 'due',
-        value: '',
-        traceId: 'tr',
-      }),
+      await saveTaskBatch({ client: refused.client, channelId: 'c1', payload, traceId: 'tr' }),
     ).toEqual({ ok: false, message: 'not a member of this chat' });
-    expect(set.calls[0]?.args).toEqual([
-      'chat_task_set',
-      { p_task_id: 't1', p_field: 'due', p_value: '', p_trace_id: 'tr' },
-    ]);
   });
 });

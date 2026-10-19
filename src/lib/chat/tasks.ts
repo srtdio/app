@@ -461,7 +461,7 @@ export function conflictLine(
   const all = mine === undefined || !hasChanges(mine);
   if (all || mine?.title !== undefined) parts.push(`"${conflict.title}"`);
   if (all || mine?.priority !== undefined) parts.push(`P${conflict.priority}`);
-  if (mine?.status !== undefined) parts.push(conflict.status === 'done' ? 'done' : 'to do');
+  if (mine?.status !== undefined) parts.push(conflict.status === 'done' ? 'done' : 'not done');
   return `${name} changed this to ${parts.join(' · ')}`;
 }
 

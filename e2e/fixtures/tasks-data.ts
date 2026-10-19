@@ -1,9 +1,10 @@
-// The chat Tasks in the harness: the procs (chat_task_create, chat_task_create_many, chat_task_set,
-// chat_task_save, chat_task_delete) over the chat_tasks / chat_task_events fixture tables, and a
-// seed with a few items, their change lines and a missed-due bell row. The
-// procs mirror the SQL (next number per chat, an event per change, the due
-// setter stamped); RLS and the inbox fan-out are not emulated beyond what the
-// seed writes.
+// The chat Tasks in the harness: the procs (chat_task_save_batch, and the
+// older chat_task_create, chat_task_create_many, chat_task_set,
+// chat_task_save, chat_task_delete) over the chat_tasks / chat_task_events
+// fixture tables, and a seed with a few items and their change lines. The
+// procs mirror the SQL (next number per chat, an event per change, one batch
+// id per Save, conflicts when a task changed after the caller's base);
+// RLS and the inbox fan-out are not emulated beyond what the seed writes.
 
 import type { Row, Tables } from './postgrest';
 import { GROUP_CHANNEL, ME, COLLEAGUE_A, WORKSPACE_ID, type ChatWorld } from './chat-data';
@@ -24,8 +25,10 @@ function event(
   newValue: string | null,
   actor: string | null,
   at: string,
+  batchId: string | null = null,
 ): void {
   (tables.chat_task_events ??= []).push({
+    batch_id: batchId,
     id: nextId('e00'),
     task_id: task.id,
     channel_id: task.channel_id,
@@ -38,8 +41,121 @@ function event(
   });
 }
 
-/** chat_task_create / chat_task_set as the SQL behaves (actor: the signed-in user). */
+/** A Save's payload, as chat_task_save_batch takes it. */
+export interface TaskBatch {
+  creates?: { title: string; priority?: number; side: string }[];
+  edits?: { task_id: string; base_updated_at: string; changes: Record<string, unknown> }[];
+  deletes?: { task_id: string; base_updated_at: string }[];
+}
+
+// Strictly increasing instants: two Saves in one millisecond still order.
+let lastStamp = 0;
+function stamp(): string {
+  lastStamp = Math.max(Date.now(), lastStamp + 1);
+  return new Date(lastStamp).toISOString();
+}
+
+/** chat_task_save_batch as the SQL behaves, for any actor (the harness's "other person" too). */
+export function applyTaskBatch(
+  tables: Tables,
+  channelId: string,
+  batch: TaskBatch,
+  actor: string,
+): { batch_id: string | null; created_ids: string[]; conflicts: Row[] } {
+  const rows = (tables.chat_tasks ??= []);
+  const batchId = nextId('b00');
+  const now = stamp();
+  const conflicts: Row[] = [];
+  let touched = 0;
+  const conflict = (task: Row, deleted: boolean): void => {
+    conflicts.push({
+      task_id: task.id,
+      deleted,
+      title: task.title,
+      priority: task.priority,
+      status: task.status,
+      updated_at: task.updated_at,
+    });
+  };
+  const changed = (task: Row, base: string): boolean =>
+    Date.parse(String(task.updated_at)) > Date.parse(base);
+  for (const edit of batch.edits ?? []) {
+    const task = rows.find((t) => t.id === edit.task_id && t.channel_id === channelId);
+    if (task === undefined) continue;
+    if (task.deleted_at != null || changed(task, edit.base_updated_at)) {
+      conflict(task, task.deleted_at != null);
+      continue;
+    }
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    for (const [field, raw] of Object.entries(edit.changes)) {
+      const after = field === 'priority' ? Number(raw) : String(raw).trim();
+      if (String(task[field]) === String(after)) continue;
+      oldValue[field] = task[field];
+      newValue[field] = after;
+      task[field] = after;
+    }
+    if (Object.keys(newValue).length === 0) continue;
+    task.updated_at = now;
+    event(
+      tables,
+      task,
+      'edited',
+      JSON.stringify(oldValue),
+      JSON.stringify(newValue),
+      actor,
+      now,
+      batchId,
+    );
+    touched += 1;
+  }
+  for (const del of batch.deletes ?? []) {
+    const task = rows.find((t) => t.id === del.task_id && t.channel_id === channelId);
+    if (task === undefined || task.deleted_at != null) continue;
+    if (changed(task, del.base_updated_at)) {
+      conflict(task, false);
+      continue;
+    }
+    task.deleted_at = now;
+    task.deleted_by = actor;
+    task.updated_at = now;
+    event(tables, task, 'deleted', String(task.title), null, actor, now, batchId);
+    touched += 1;
+  }
+  const created: string[] = [];
+  for (const item of batch.creates ?? []) {
+    const mine = rows.filter((t) => t.channel_id === channelId).map((t) => Number(t.number));
+    const task: Row = {
+      id: nextId('t00'),
+      channel_id: channelId,
+      workspace_id: WORKSPACE_ID,
+      number: mine.length > 0 ? Math.max(...mine) + 1 : 1,
+      title: item.title.trim(),
+      note: null,
+      side: item.side,
+      status: 'todo',
+      priority: typeof item.priority === 'number' ? item.priority : 1,
+      due_at: null,
+      due_set_by: null,
+      due_set_at: null,
+      due_passed_at: null,
+      created_by: actor,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    };
+    rows.push(task);
+    event(tables, task, 'created', null, String(task.title), actor, now, batchId);
+    created.push(String(task.id));
+  }
+  if (created.length + touched === 0) return { batch_id: null, created_ids: [], conflicts };
+  return { batch_id: batchId, created_ids: created, conflicts };
+}
+
+/** The older procs, and chat_task_save_batch, as the SQL behaves (actor: the signed-in user). */
 export const TASK_RPC: Record<string, RpcHandler> = {
+  chat_task_save_batch: (args, tables) =>
+    applyTaskBatch(tables, String(args.p_channel_id), (args.p_batch ?? {}) as TaskBatch, ME),
   chat_task_create: (args, tables) => {
     const rows = (tables.chat_tasks ??= []);
     const channelId = String(args.p_channel_id);
@@ -162,9 +278,9 @@ function iso(ms: number): string {
 }
 
 /**
- * Seed the group chat's list: items 8 to 11 (agency and client, P0 to P2, a
- * due today, a missed one), each with its created line after the newest
- * message, and an unread task_due bell row for the missed item.
+ * Seed the group chat's list: items 8 to 11 (P0 to P2), each with its created
+ * line after the newest message (older rows, no batch id), and an older
+ * unread task_due bell row for item 10.
  */
 export function seedTasks(world: ChatWorld, now: number = Date.now()): void {
   const tables = world.tables;
@@ -255,32 +371,6 @@ export function seedTasks(world: ChatWorld, now: number = Date.now()): void {
       created_at: iso(now - 3_540_000),
     });
   }
-}
-
-export const DUE_SOON_ID = '0190e100-0000-7000-8000-000000000012';
-export const DUE_SOON_TITLE = 'Reel cover';
-
-/** One more open Agency item (12) in the group chat, due at `dueMs` (after seedTasks). */
-export function seedDueSoon(world: ChatWorld, dueMs: number): void {
-  const at = iso(dueMs - 3_600_000);
-  (world.tables.chat_tasks ??= []).push({
-    id: DUE_SOON_ID,
-    channel_id: TASK_CHANNEL,
-    workspace_id: WORKSPACE_ID,
-    number: 12,
-    title: DUE_SOON_TITLE,
-    note: null,
-    side: 'agency',
-    status: 'todo',
-    priority: 1,
-    due_at: iso(dueMs),
-    due_set_by: ME,
-    due_set_at: at,
-    due_passed_at: null,
-    created_by: ME,
-    created_at: at,
-    updated_at: at,
-  });
 }
 
 export const OLDER_LINE_TITLE = 'Moodboard refs';
