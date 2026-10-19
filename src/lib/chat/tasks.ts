@@ -320,16 +320,15 @@ export function isDraftDirty(draft: SheetDraft, byId: ReadonlyMap<string, ChatTa
 }
 
 /** Set one field of a task's edit, remembering its base the first time it is touched. Pure. */
-export function editField(
-  draft: SheetDraft,
-  task: ChatTask,
-  change: TaskChanges,
-): SheetDraft {
+export function editField(draft: SheetDraft, task: ChatTask, change: TaskChanges): SheetDraft {
   const prev = draft.edits[task.id] ?? {};
   return {
     ...draft,
     edits: { ...draft.edits, [task.id]: { ...prev, ...change } },
-    bases: draft.bases[task.id] !== undefined ? draft.bases : { ...draft.bases, [task.id]: task.updatedAt },
+    bases:
+      draft.bases[task.id] !== undefined
+        ? draft.bases
+        : { ...draft.bases, [task.id]: task.updatedAt },
   };
 }
 
@@ -339,7 +338,10 @@ export function queueDelete(draft: SheetDraft, task: ChatTask): SheetDraft {
   return {
     ...draft,
     deletes: [...draft.deletes, task.id],
-    bases: draft.bases[task.id] !== undefined ? draft.bases : { ...draft.bases, [task.id]: task.updatedAt },
+    bases:
+      draft.bases[task.id] !== undefined
+        ? draft.bases
+        : { ...draft.bases, [task.id]: task.updatedAt },
   };
 }
 
@@ -586,7 +588,9 @@ export function batchRows(event: TaskEvent, ref: TaskRef): BatchRow[] {
   const number = ref.number;
   switch (event.kind) {
     case 'created':
-      return [{ kind: 'added', number, title: event.newValue ?? ref.title, priority: ref.priority }];
+      return [
+        { kind: 'added', number, title: event.newValue ?? ref.title, priority: ref.priority },
+      ];
     case 'deleted':
       return [{ kind: 'deleted', number, title: event.oldValue ?? ref.title }];
     case 'edited': {
@@ -877,7 +881,8 @@ export function marksSince(
       if (at < 0) list.push(mark);
       else if (mark.kind === 'done' || mark.kind === 'reopened') list[at] = mark;
     };
-    if (next.title !== undefined && old.title !== undefined) add({ kind: 'renamed', was: old.title });
+    if (next.title !== undefined && old.title !== undefined)
+      add({ kind: 'renamed', was: old.title });
     if (next.priority !== undefined && old.priority !== undefined) {
       add({ kind: 'priority', was: old.priority });
     }
@@ -947,10 +952,7 @@ export function editingSignalStep(input: {
 }
 
 /** The people still editing: their last signal is younger than the TTL. Pure. */
-export function liveEditors(
-  heard: ReadonlyMap<string, number>,
-  nowMs: number,
-): string[] {
+export function liveEditors(heard: ReadonlyMap<string, number>, nowMs: number): string[] {
   return [...heard.entries()]
     .filter(([, at]) => nowMs - at < EDITING_TTL_MS)
     .sort((a, b) => b[1] - a[1])
