@@ -6,8 +6,8 @@
 // opens the chat, "Clear sent" clears them all; failed: "Not sent" with the
 // reason, Retry and Edit), Plans (the plan alerts: a tap marks it read and
 // opens the plan, a deleted plan's row only toasts "This plan was deleted"),
-// Tasks (a change or a missed due time: a tap marks it read and opens the chat
-// with its task sheet on that item).
+// Tasks (one Save by someone else, "<Name> edited tasks": a tap marks it read
+// and opens the chat with its task sheet).
 // Sections hide when empty; all empty reads "You're all caught up".
 // Upcoming: pending Reminders (Change time, Cancel) and Scheduled messages (a
 // tap opens that chat's scheduled sheet), soonest first; empty reads "Nothing
@@ -50,8 +50,13 @@ import {
   type BellEntry,
 } from '@/lib/chat/bell';
 import { formatSendLabel } from '@/lib/chat/scheduled';
-import { addedLabel, eventText, TASKS_SHEET_ONLY, type TaskEventKind } from '@/lib/chat/tasks';
-import { workspaceTimeZone } from '@/lib/chat/time-format';
+import {
+  addedLabel,
+  editedTasksLabel,
+  eventText,
+  TASKS_SHEET_ONLY,
+  type TaskEventKind,
+} from '@/lib/chat/tasks';
 import { chatMessageHref, taskLinkToken } from '@/lib/inbox/bell-types';
 import type { ScheduledRow } from '@/lib/chat/scheduled';
 import type { NameOf } from '@/lib/chat/mentions';
@@ -293,51 +298,44 @@ const TASK_KINDS = new Set<string>([
   'created',
   'status',
   'priority',
-  'due',
-  'side',
   'title',
   'note',
-  'due_passed',
+  'edited',
+  'deleted',
 ]);
 
 /** The bell row label of a task alert. */
 export const TASK_BELL_PREVIEW = 'Tasks';
 
-/** A batch add's alert (one Save of several tasks): payload kind created_many. Pure. */
+/**
+ * A one-Save alert (payload kind 'batch', or an older batch add
+ * 'created_many'): it opens the sheet, not one row. Pure.
+ */
 export function isTaskBatch(entry: Pick<BellEntry, 'eventType' | 'task'>): boolean {
-  return entry.eventType === 'task_changed' && entry.task?.kind === 'created_many';
+  return (
+    entry.eventType === 'task_changed' &&
+    (entry.task?.kind === 'batch' || entry.task?.kind === 'created_many')
+  );
 }
 
 /**
- * A task row's line: task_changed "<actor> · <change>", task_due "<time>
- * passed · <n> <title>" (the payload's number and title; no extra read); a
- * batch add "<actor> added N tasks in <chat>". Pure.
+ * A task row's line: a Save "<Name> edited tasks"; an older batch add
+ * "<Name> added N tasks"; an older single change "<Name> · <change>"; an
+ * older missed due time "#n Title". Pure.
  */
 export function taskBellLine(
   entry: Pick<BellEntry, 'eventType' | 'task'>,
   actor: string | null,
-  nowMs: number,
-  timeZone: string,
-  chat?: string | null,
 ): string {
   const f = entry.task;
-  if (isTaskBatch(entry)) {
-    const line = addedLabel(actor ?? 'Someone', f?.count ?? 1);
-    return chat != null && chat !== '' ? `${line} in ${chat}` : line;
-  }
+  const who = actor ?? 'Someone';
+  if (entry.eventType === 'task_changed' && f?.kind === 'batch') return editedTasksLabel(who);
+  if (isTaskBatch(entry)) return addedLabel(who, f?.count ?? 1);
+  const ref = { number: f?.number ?? null, title: f?.title ?? 'Item', priority: null };
+  if (entry.eventType === 'task_due') return `#${ref.number ?? '?'} ${ref.title}`;
   const kind: TaskEventKind =
-    entry.eventType === 'task_due'
-      ? 'due_passed'
-      : f?.kind != null && TASK_KINDS.has(f.kind)
-        ? (f.kind as TaskEventKind)
-        : 'note';
-  const text = eventText(
-    { kind, oldValue: f?.old ?? null, newValue: f?.new ?? null },
-    { number: f?.number ?? null, title: f?.title ?? 'Item', side: null },
-    nowMs,
-    timeZone,
-  );
-  return entry.eventType === 'task_due' ? text : `${actor ?? 'Someone'} · ${text}`;
+    f?.kind != null && TASK_KINDS.has(f.kind) ? (f.kind as TaskEventKind) : 'note';
+  return `${who} · ${eventText({ kind, oldValue: f?.old ?? null, newValue: f?.new ?? null }, ref)}`;
 }
 
 /**
@@ -347,8 +345,6 @@ export function taskBellLine(
  */
 function TaskBellRowView(props: { bell: BellContextValue; entry: BellEntry }): ReactElement {
   const { bell, entry } = props;
-  const { workspaces, workspaceId } = useWorkspace();
-  const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
   const due = entry.eventType === 'task_due';
   const actor = entry.actorId !== null ? (bell.nameOf(entry.actorId) ?? null) : null;
   const batch = isTaskBatch(entry);
@@ -368,11 +364,7 @@ function TaskBellRowView(props: { bell: BellContextValue; entry: BellEntry }): R
             {due ? <IconAlarmClock size={18} /> : <IconTaskSquare size={18} />}
           </RowIcon>
         }
-        title={
-          <span className={due ? 'text-bad' : undefined}>
-            {taskBellLine(entry, actor, Date.now(), timeZone, batch ? chat : null)}
-          </span>
-        }
+        title={<span className={due ? 'text-bad' : undefined}>{taskBellLine(entry, actor)}</span>}
         time={rowTime(entry.createdAt, new Date())}
         preview={TASK_BELL_PREVIEW}
         chat={chat}

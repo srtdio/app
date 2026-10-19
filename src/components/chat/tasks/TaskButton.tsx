@@ -1,6 +1,8 @@
 // The composer's Tasks button: 44px round, the task-square icon, and an
 // 8px accent dot (ringed in panel) while someone else changed the list since
-// this device last opened it. Pressable: no iOS selection callout.
+// this device last opened it. While another member holds unsaved changes in
+// their sheet the icon pulses gently (opacity only; still under reduced
+// motion). Pressable: no iOS selection callout.
 
 import type { ReactElement } from 'react';
 import { IconTaskSquare } from '@/components/ui/icons';
@@ -10,7 +12,12 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 
 export const TASK_BUTTON_LABEL = 'Tasks';
 
-export function TaskButton(props: { unseen: boolean; onOpen: () => void }): ReactElement {
+export function TaskButton(props: {
+  unseen: boolean;
+  /** Someone else is editing the list right now. */
+  editing?: boolean;
+  onOpen: () => void;
+}): ReactElement {
   return (
     <button
       type="button"
@@ -18,6 +25,7 @@ export function TaskButton(props: { unseen: boolean; onOpen: () => void }): Reac
       data-task-button=""
       data-induction={INDUCTION_KEYS.chatTasks}
       {...(props.unseen ? { 'data-task-unseen': '' } : {})}
+      {...(props.editing === true ? { 'data-task-editing': '' } : {})}
       onClick={props.onOpen}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
@@ -25,7 +33,14 @@ export function TaskButton(props: { unseen: boolean; onOpen: () => void }): Reac
         NO_TOUCH_SELECT,
       )}
     >
-      <IconTaskSquare size={22} />
+      <span
+        className={cn(
+          'inline-flex',
+          props.editing === true && 'animate-pulse motion-reduce:animate-none',
+        )}
+      >
+        <IconTaskSquare size={22} />
+      </span>
       {props.unseen ? (
         <span
           aria-hidden="true"

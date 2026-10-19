@@ -4963,12 +4963,14 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     currentUserId: props.currentUserId ?? '',
     target: taskTarget,
     profiles: props.profiles,
-    timeZone: props.timeZone,
   });
-  const [taskSheet, setTaskSheet] = useState<{ open: boolean; focus: string | null }>({
-    open: false,
-    focus: null,
-  });
+  // `seenAtOpen`: this device's seen time when the sheet opened (its marks are
+  // the changes after it); the new seen time is written when the sheet closes.
+  const [taskSheet, setTaskSheet] = useState<{
+    open: boolean;
+    focus: string | null;
+    seenAtOpen: number | null;
+  }>({ open: false, focus: null, seenAtOpen: null });
   const seenKey = taskChannel !== null ? tasksSeenKey(taskChannel) : null;
   const [seenMs, setSeenMs] = useState<{ key: string | null; ms: number | null }>(() => ({
     key: seenKey,
@@ -4980,24 +4982,29 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const refetchTasks = chatTasks.refetch;
   const openTasks = useCallback(
     (focus: string | null): void => {
-      if (seenKey !== null) {
-        const now = Date.now();
-        writeTasksSeen(seenKey, now);
-        setSeenMs({ key: seenKey, ms: now });
-      }
-      setTaskSheet({ open: true, focus });
+      setTaskSheet({
+        open: true,
+        focus,
+        seenAtOpen: seenKey !== null ? readTasksSeen(seenKey) : null,
+      });
       refetchTasks();
     },
     [seenKey, refetchTasks],
   );
+  const closeTasks = useCallback((): void => {
+    if (seenKey !== null) {
+      const now = Date.now();
+      writeTasksSeen(seenKey, now);
+      setSeenMs({ key: seenKey, ms: now });
+    }
+    setTaskSheet((prev) => (prev.open ? { ...prev, open: false } : prev));
+  }, [seenKey]);
   // Leaving the chat closes its sheet.
   useEffect(() => {
-    setTaskSheet({ open: false, focus: null });
+    setTaskSheet({ open: false, focus: null, seenAtOpen: null });
   }, [taskChannel]);
   // One layer, one back step: back from the sheet is the thread.
-  useHistoryStep(taskSheet.open, 'chatTasks', () =>
-    setTaskSheet((prev) => ({ ...prev, open: false })),
-  );
+  useHistoryStep(taskSheet.open, 'chatTasks', closeTasks);
   // Open loops: posts in review (two reads per thread open) and the viewer's side.
   const viewerSide = useViewerSide(workspaceId);
   const openPosts = useOpenPosts(workspaceId, channelKey, undefined, {
@@ -5542,8 +5549,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const taskLineCtx: TaskLineContext = {
     tasksById: chatTasks.lineTasks,
     nameOf: chatTasks.nameOf,
-    nowMs: Date.now(),
-    timeZone: props.timeZone,
     onOpenTask: (taskId) => openTasks(taskId),
   };
   // Reading layer. Everything comes from the channel's cursors (one batched
@@ -6327,7 +6332,15 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           {...(notes ? { noSchedule: true } : {})}
           onCancelAbout={() => setAboutDraft(null)}
           {...(taskChannel !== null
-            ? { taskButton: <TaskButton unseen={taskUnseen} onOpen={() => openTasks(null)} /> }
+            ? {
+                taskButton: (
+                  <TaskButton
+                    unseen={taskUnseen}
+                    editing={chatTasks.editors.length > 0}
+                    onOpen={() => openTasks(null)}
+                  />
+                ),
+              }
             : {})}
           sharedPostIds={sharedInChat}
           onBringPost={bringPost}
@@ -6457,9 +6470,17 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         <SearchWordsContext.Provider value={headerWords}>
           <TaskSheet
             open={taskSheet.open}
-            onClose={() => setTaskSheet((prev) => (prev.open ? { ...prev, open: false } : prev))}
+            onClose={closeTasks}
             tasks={chatTasks}
-            timeZone={props.timeZone}
+            currentUserId={props.currentUserId ?? ''}
+            side={
+              viewerSide.side === 'client'
+                ? 'client'
+                : viewerSide.side === 'agency' || viewerSide.ready
+                  ? 'agency'
+                  : null
+            }
+            seenMs={taskSheet.seenAtOpen}
             focusTaskId={taskSheet.focus}
             {...(onForward !== undefined && forwardChannels !== undefined
               ? {
