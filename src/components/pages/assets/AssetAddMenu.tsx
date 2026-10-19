@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
-import { IconCheck, IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
+import { IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 interface AssetAddMenuProps {
@@ -8,19 +8,18 @@ interface AssetAddMenuProps {
   onUploadFiles: () => void;
   /** Open the Add link sheet (the "Add link" option). */
   onAddLink: () => void;
-  /** Enter select-to-move mode. When undefined the option is hidden (empty folder). */
-  onSelect?: (() => void) | undefined;
 }
 
 /**
  * The Assets toolbar add control: a 44x44 accent trigger that opens a small
  * menu anchored beneath it. "Upload files" opens the upload sheet; "Add link"
  * opens the link sheet. Folder creation is not offered here (existing folders
- * still open, rename, move and delete). Outside tap and Esc dismiss
+ * still open, rename, move and delete), and selecting starts from the round box
+ * on each file card. Outside tap and Esc dismiss
  * via MenuPopover. Themed with tokens so light and dark match; no hover-only
  * behaviour (tap toggles the menu).
  */
-export function AssetAddMenu({ onUploadFiles, onAddLink, onSelect }: AssetAddMenuProps) {
+export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -67,23 +66,6 @@ export function AssetAddMenu({ onUploadFiles, onAddLink, onSelect }: AssetAddMen
           </span>
           <span>Add link</span>
         </button>
-
-        {onSelect !== undefined ? (
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onSelect();
-            }}
-            className="flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
-          >
-            <span className="shrink-0 text-fg-3">
-              <IconCheck size={18} />
-            </span>
-            <span>Select</span>
-          </button>
-        ) : null}
       </MenuPopover>
     </div>
   );

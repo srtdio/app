@@ -156,11 +156,11 @@ describe('AssetCard select mode', () => {
     expect(out).toContain('<svg');
   });
 
-  it('shows a translucent ring and no check when not selected', () => {
+  it('shows an empty square and no check when not selected', () => {
     const out = renderSelect(false);
     expect(out).toContain('aria-pressed="false"');
     expect(out).toContain('border-2 border-white');
-    expect(out).toContain('bg-black/40');
+    expect(out).toContain('bg-black/15');
   });
 
   it('keeps the open behaviour and no selection affordance out of select mode', () => {
@@ -177,5 +177,40 @@ describe('AssetCard select mode', () => {
     expect(out).toContain('aria-label="View report.pdf"');
     expect(out).not.toContain('aria-pressed');
     expect(out).not.toContain('Select report.pdf');
+  });
+});
+
+// The round box at the top left: shown out of select mode when the page wires
+// onStartSelect, a separate 44px button that starts selecting with this card.
+describe('AssetCard select box', () => {
+  function renderBox(withStart: boolean, selectMode = false): string {
+    const { cache } = makeCache(null);
+    return renderToStaticMarkup(
+      <AssetCard
+        item={makeAsset({ filename: 'report.pdf' })}
+        cache={cache}
+        presignEnabled={false}
+        onOpen={vi.fn()}
+        onLongPress={vi.fn()}
+        selectMode={selectMode}
+        onToggleSelect={vi.fn()}
+        onStartSelect={withStart ? vi.fn() : undefined}
+      />,
+    );
+  }
+
+  it('shows a 44px Select box next to the open target', () => {
+    const out = renderBox(true);
+    expect(out).toContain('data-card-select=""');
+    expect(out).toContain('aria-label="Select report.pdf"');
+    expect(out).toContain('h-11 w-11');
+    expect(out).toContain('left-0 top-0');
+    // The card itself still opens the file.
+    expect(out).toContain('aria-label="View report.pdf"');
+  });
+
+  it('hides the box when onStartSelect is absent or already selecting', () => {
+    expect(renderBox(false)).not.toContain('data-card-select');
+    expect(renderBox(true, true)).not.toContain('data-card-select');
   });
 });

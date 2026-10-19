@@ -29,6 +29,11 @@ interface AssetCardProps {
   selected?: boolean;
   /** Toggle this card's selection (select mode only). */
   onToggleSelect?: () => void;
+  /**
+   * Tap the round box at the card's top left (outside select mode): start
+   * selecting with this card already ticked. When undefined the box is hidden.
+   */
+  onStartSelect?: (() => void) | undefined;
 }
 
 /** The non-image tile for a card: a link domain, or a file extension glyph. */
@@ -46,6 +51,7 @@ export function AssetCard({
   selectMode = false,
   selected = false,
   onToggleSelect,
+  onStartSelect,
 }: AssetCardProps) {
   const name = displayLabel(item);
   // Called unconditionally to satisfy the rules of hooks; its handlers are only
@@ -74,11 +80,13 @@ export function AssetCard({
           <span
             aria-hidden="true"
             className={cn(
-              'absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full',
-              selected ? 'bg-accent text-white' : 'border-2 border-white bg-black/40',
+              'absolute left-3 top-3 z-10 flex h-5 w-5 items-center justify-center rounded',
+              selected
+                ? 'bg-accent text-white'
+                : 'border-2 border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]',
             )}
           >
-            {selected ? <IconCheck size={14} /> : null}
+            {selected ? <IconCheck size={12} /> : null}
           </span>
         ) : null}
 
@@ -101,6 +109,9 @@ export function AssetCard({
         )}
       </button>
       {selectMode ? null : <CardMenuButton name={name} onPress={onLongPress} />}
+      {selectMode || onStartSelect === undefined ? null : (
+        <CardSelectBox name={name} onPress={onStartSelect} />
+      )}
     </div>
   );
 }
@@ -122,6 +133,26 @@ export function CardMenuButton({ name, onPress }: { name: string; onPress: () =>
       <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-panel text-fg shadow-sm">
         <IconEllipsis size={16} />
       </span>
+    </button>
+  );
+}
+
+/**
+ * The round select box on a card: a 44px hit area in the top-left corner
+ * holding an empty 20px square, a sibling of the card button (buttons never
+ * nest). One tap starts selecting with this card ticked. The square sits in the
+ * same spot as the select-mode tick, so the tap lands where the tick appears.
+ */
+export function CardSelectBox({ name, onPress }: { name: string; onPress: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Select ${name}`}
+      data-card-select=""
+      onClick={onPress}
+      className="absolute left-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <span className="h-5 w-5 rounded border-2 border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]" />
     </button>
   );
 }
