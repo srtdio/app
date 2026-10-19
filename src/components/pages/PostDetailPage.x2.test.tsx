@@ -177,8 +177,10 @@ describe('8 / 9 / 10. reason sheet dirty, Back, delete', () => {
       PAGE.indexOf('function goPipeline'),
     );
     expect(body).toContain('if (hasInAppHistory(window.history.state)) navigate(-1);');
-    expect(body).toContain("else navigate('/pipeline');");
+    expect(body).toContain('else goPipeline();');
     expect(PAGE).toContain('onClick={goPipeline}');
+    // The one hard navigation to the pipeline, still gated by onNavigateAway.
+    expect(PAGE.match(/navigate\('\/pipeline'\)/g)).toHaveLength(1);
   });
 
   it('FT14: delete is a 7s undoable ("Post deleted"), leaves as the commit starts, honest copy', () => {

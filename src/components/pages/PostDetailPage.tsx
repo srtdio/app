@@ -1195,10 +1195,11 @@ export function PostDetailPage({
       return;
     }
     if (hasInAppHistory(window.history.state)) navigate(-1);
-    else navigate('/pipeline');
+    else goPipeline();
   }
 
-  // The explicit "Back to pipeline" (not found): never history back.
+  // The explicit "Back to pipeline" (not found), and leave()'s fallback: the
+  // one hard navigation to the pipeline, gated by the host's close when embedded.
   function goPipeline(): void {
     if (onNavigateAway !== undefined) onNavigateAway();
     else navigate('/pipeline');
