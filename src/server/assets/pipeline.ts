@@ -544,7 +544,8 @@ export async function getAssetSummary(
 }
 
 // ---------------------------------------------------------------------------
-// Thumbnail rendition (sender-made JPEG for a pdf/video upload).
+// Thumbnail rendition (sender-made JPEG for a pdf/video/office upload, or a
+// raster image's small list copy).
 // ---------------------------------------------------------------------------
 
 /** Server-side caps; the client's numbers are never trusted. */
@@ -583,7 +584,8 @@ export function parsePageCount(field: string | null): number | null | 'invalid' 
 
 /**
  * Validate a thumbnail part against the server's own reading of it: the
- * parent version must be a pdf, video, docx or xlsx (never pptx), the bytes a JPEG (FF D8 FF) of at
+ * parent version must be a pdf, video, docx, xlsx or raster image (never pptx or svg), the
+ * bytes a JPEG (FF D8 FF) of at
  * most 300 KiB whose SOF frame (parsed here) is at most 580 x 1160, and the
  * page count absent or 1..10000. Pure; the reason names the first miss.
  */
@@ -601,7 +603,9 @@ export function checkThumbnail(
         : parent === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
             parent === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           ? 'office'
-          : null;
+          : parent.startsWith('image/') && parent !== 'image/svg+xml'
+            ? 'image'
+            : null;
   if (kind === null) return { ok: false, reason: 'parent_not_pdf_or_video' };
   const { bytes } = input;
   if (bytes.byteLength === 0 || bytes.byteLength > THUMBNAIL_MAX_BYTES) {

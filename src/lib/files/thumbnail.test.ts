@@ -10,6 +10,10 @@ import {
   type PdfJsLike,
   type PdfLoadingTaskLike,
   type ThumbnailDeps,
+  IMAGE_THUMBNAIL_MAX_WIDTH,
+  imageThumbnailBox,
+  isListCopyImage,
+  makeImageThumbnail,
 } from '@/lib/files/thumbnail';
 import { handleOfficeRequest } from '@/lib/files/office/handle';
 import type { OfficeWorkerLike } from '@/lib/files/office/run';
@@ -385,5 +389,26 @@ describe('makeThumbnail', () => {
   it('with no DOM the browser defaults bail out at once', async () => {
     const result = await makeThumbnail(pdfFile(1), new AbortController().signal);
     expect(result).toEqual({ ok: false, reason: 'unsupported' });
+  });
+});
+
+describe('image list copy', () => {
+  it('fits 320 wide and 1160 tall, never upscaled', () => {
+    expect(imageThumbnailBox(1080, 1350)).toEqual({
+      width: IMAGE_THUMBNAIL_MAX_WIDTH,
+      height: 400,
+    });
+    expect(imageThumbnailBox(200, 100)).toEqual({ width: 200, height: 100 });
+    expect(imageThumbnailBox(1000, 8000)).toEqual({ width: 145, height: 1160 });
+  });
+  it('is made for raster images only, never svg', () => {
+    expect(isListCopyImage('image/jpeg')).toBe(true);
+    expect(isListCopyImage('IMAGE/PNG')).toBe(true);
+    expect(isListCopyImage('image/svg+xml')).toBe(false);
+    expect(isListCopyImage('video/mp4')).toBe(false);
+  });
+  it('never throws without a DOM: no copy, the upload goes on', async () => {
+    const file = new File([new Uint8Array(4)], 'a.jpg', { type: 'image/jpeg' });
+    await expect(makeImageThumbnail(file)).resolves.toEqual({ ok: false, reason: 'unsupported' });
   });
 });

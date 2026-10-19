@@ -1325,10 +1325,6 @@ describe('asset-upload thumbnail part', () => {
     ['a frame taller than 1160', { thumbnail: jpegThumb(100, 1200) }],
     ['an invalid page count', { thumbnail: jpegThumb(100, 100), pageCount: '0' }],
     ['a text field instead of a file', { thumbnail: 'not-a-file' }],
-    [
-      'an image parent',
-      { name: 'a.png', type: MIME.png, bytes: png(), thumbnail: jpegThumb(100, 100) },
-    ],
   ];
   for (const [label, options] of ignored) {
     it(`ignores ${label}: 201, no thumbnail field, no row`, async () => {
@@ -1341,6 +1337,20 @@ describe('asset-upload thumbnail part', () => {
       expect(state.thumbStorage.objects.size).toBe(0);
     });
   }
+
+  it("stores an image's small list copy as its thumbnail rendition, no page count", async () => {
+    const res = await postWithThumb({
+      name: 'a.png',
+      type: MIME.png,
+      bytes: png(),
+      thumbnail: jpegThumb(320, 400),
+      pageCount: '3',
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as UploadBody;
+    expect(body.thumbnail).toEqual({ width: 320, height: 400 });
+    expect(state.renditions.rows).toHaveLength(1);
+  });
 
   it('dedups a reused upload: existing rendition, no second row or put, 200', async () => {
     state.realPipeline = true;

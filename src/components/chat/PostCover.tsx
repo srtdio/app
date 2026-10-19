@@ -1,9 +1,10 @@
 // A post's picture in chat lists: the Share a post / Pick a post rows, the
 // status drop-down rows and the composer's shared-post chip. It shows the
-// post's first photo or video in display order (PostCardRow.firstMedia, the
-// same pick the chat post card uses): a photo as itself, a video as its stored
-// thumbnail or, without one, the video paused on its first frame, with a small
-// play mark. A post with no photo or video keeps the neutral glyph.
+// post's first photo or video in display order (the same pick the chat post
+// card uses). Every cover asks for the version's small stored copy first (an
+// image's list copy, a video's frame), a few KB instead of the original; a
+// photo without one falls back to the original, a video to its first frame,
+// with a small play mark. A post with no photo or video keeps the neutral glyph.
 // While the post's media is still unknown the box stays empty (no glyph), so
 // a glyph never paints and then swaps for a picture. Tokens only, so light and
 // dark follow the theme.
@@ -14,19 +15,10 @@ import { IconPipeline, IconPlay } from '@/components/ui/icons';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
 import { PRESIGN_ENABLED, firstFrameSrc, sharedCardPresignCache } from '@/components/chat/PostCard';
-import type { CardFirstMedia, PostCardRow } from '../../../packages/posts/src/reads';
+import type { CardFirstMedia } from '../../../packages/posts/src/reads';
 
 /** A post's cover: its first photo or video, null for none, undefined while unknown. */
 export type PostCoverState = CardFirstMedia | null | undefined;
-
-/**
- * The cover state for a looked-up post: undefined while the lookup is pending,
- * null when the post is not visible or has no photo or video. Pure.
- */
-export function coverOf(post: PostCardRow | null | undefined): PostCoverState {
-  if (post === undefined) return undefined;
-  return post?.firstMedia ?? null;
-}
 
 /** The 48px rounded box every chat post list row uses for its picture. */
 export const POST_COVER_BOX =
@@ -60,44 +52,50 @@ export function PostCoverContent(props: {
   if (cover === undefined) return null;
   const glyph = props.fallback ?? <IconPipeline size={18} />;
   if (cover === null) return <>{glyph}</>;
-  return cover.kind === 'video' ? (
-    <CoverVideo assetVersionId={cover.assetVersionId} glyph={glyph} />
-  ) : (
-    <CoverImage assetVersionId={cover.assetVersionId} glyph={glyph} />
-  );
-}
-
-/** A photo, presigned lazily once its row scrolls into view. */
-function CoverImage(props: { assetVersionId: string; glyph: ReactNode }): ReactElement {
-  const thumb = useThumbnail<HTMLSpanElement>({
-    assetVersionId: props.assetVersionId,
-    cache: sharedCardPresignCache(),
-    enabled: PRESIGN_ENABLED,
-  });
   return (
-    <span ref={thumb.ref} className="flex h-full w-full items-center justify-center">
-      {thumb.failed ? (
-        props.glyph
-      ) : thumb.url !== null ? (
-        <img
-          src={thumb.url}
-          alt=""
-          loading="lazy"
-          draggable={false}
-          onError={thumb.onError}
-          className="h-full w-full object-cover"
-        />
-      ) : null}
-    </span>
+    <CoverMedia
+      key={cover.assetVersionId}
+      assetVersionId={cover.assetVersionId}
+      video={cover.kind === 'video'}
+      glyph={glyph}
+    />
   );
 }
 
 /**
- * A video: its stored thumbnail rendition, asked for once near the viewport; a
- * version without one (older uploads), or a broken one, falls back to the video
- * itself paused on its first frame. The play mark sits bottom right.
+ * Warm the small copies of covers a list is about to show: presign each
+ * version's stored copy and start its download, so the list paints its
+ * pictures at once. Bounded by the shared presign cache's concurrency; a
+ * version without a small copy is skipped (it loads when shown). Never throws.
  */
-function CoverVideo(props: { assetVersionId: string; glyph: ReactNode }): ReactElement {
+export function warmCoverImages(covers: ReadonlyArray<CardFirstMedia | null | undefined>): void {
+  if (!PRESIGN_ENABLED || typeof Image === 'undefined') return;
+  const cache = sharedCardPresignCache();
+  for (const cover of covers) {
+    if (cover === null || cover === undefined) continue;
+    if (cache.peekThumbnail(cover.assetVersionId) !== null) continue;
+    void cache
+      .thumbnail(cover.assetVersionId)
+      .then((presigned) => {
+        if (presigned === null) return;
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = presigned.url;
+      })
+      .catch(() => undefined);
+  }
+}
+
+/**
+ * One cover: the version's small stored copy, asked for once near the
+ * viewport (painted at once when already warmed). Without one, or when it
+ * breaks, a photo falls back to its original and a video to its first frame.
+ */
+function CoverMedia(props: {
+  assetVersionId: string;
+  video: boolean;
+  glyph: ReactNode;
+}): ReactElement {
   const boxRef = useRef<HTMLSpanElement>(null);
   const near = useNearViewport(boxRef);
   const stored = useStoredThumbnail(
@@ -105,10 +103,9 @@ function CoverVideo(props: { assetVersionId: string; glyph: ReactNode }): ReactE
     sharedCardPresignCache(),
     PRESIGN_ENABLED && near,
   );
-  // A broken image drops only that version's thumbnail, never a newer one's.
-  const [failedVersion, setFailedVersion] = useState<string | null>(null);
-  const failed = failedVersion === props.assetVersionId;
-  const still = failed ? null : stored.url;
+  const [stillFailed, setStillFailed] = useState(false);
+  const still = stillFailed ? null : stored.url;
+  const fallback = stored.missing || stillFailed;
   return (
     <span ref={boxRef} className="relative flex h-full w-full items-center justify-center">
       {still !== null ? (
@@ -116,45 +113,67 @@ function CoverVideo(props: { assetVersionId: string; glyph: ReactNode }): ReactE
           data-post-cover-still=""
           src={still}
           alt=""
+          decoding="async"
           draggable={false}
-          onError={() => setFailedVersion(props.assetVersionId)}
+          onError={() => setStillFailed(true)}
           className="h-full w-full object-cover"
         />
-      ) : stored.missing || failed ? (
-        <CoverVideoFrame assetVersionId={props.assetVersionId} glyph={props.glyph} />
+      ) : fallback ? (
+        <CoverOriginal
+          assetVersionId={props.assetVersionId}
+          video={props.video}
+          glyph={props.glyph}
+        />
       ) : null}
-      <span
-        data-post-cover-play=""
-        className="pointer-events-none absolute bottom-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-overlay text-overlay-fg"
-      >
-        <IconPlay size={8} />
-      </span>
+      {props.video ? (
+        <span
+          data-post-cover-play=""
+          className="pointer-events-none absolute bottom-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-overlay text-overlay-fg"
+        >
+          <IconPlay size={8} />
+        </span>
+      ) : null}
     </span>
   );
 }
 
-/** The video file itself, paused on its first frame (no stored thumbnail). */
-function CoverVideoFrame(props: { assetVersionId: string; glyph: ReactNode }): ReactElement {
+/** The original file: a photo as itself, a video paused on its first frame. */
+function CoverOriginal(props: {
+  assetVersionId: string;
+  video: boolean;
+  glyph: ReactNode;
+}): ReactElement {
   const thumb = useThumbnail<HTMLSpanElement>({
     assetVersionId: props.assetVersionId,
     cache: sharedCardPresignCache(),
     enabled: PRESIGN_ENABLED,
   });
+  const url = thumb.failed ? null : thumb.url;
   return (
     <span ref={thumb.ref} className="flex h-full w-full items-center justify-center">
       {thumb.failed ? (
         props.glyph
-      ) : thumb.url !== null ? (
+      ) : url === null ? null : props.video ? (
         <video
           data-post-cover-frame=""
-          src={firstFrameSrc(thumb.url)}
+          src={firstFrameSrc(url)}
           preload="metadata"
           muted
           playsInline
           onError={thumb.onError}
           className="pointer-events-none h-full w-full object-cover"
         />
-      ) : null}
+      ) : (
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={thumb.onError}
+          className="h-full w-full object-cover"
+        />
+      )}
     </span>
   );
 }

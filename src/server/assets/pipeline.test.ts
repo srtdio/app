@@ -378,10 +378,23 @@ describe('checkThumbnail', () => {
     }
   });
 
-  it('rejects an image, pptx or audio parent', () => {
+  it('accepts a raster image parent (its list copy), with no page count', () => {
+    for (const mimeType of ['image/png', 'image/jpeg', 'image/webp']) {
+      expect(
+        checkThumbnail(
+          thumbInput({
+            summary: summary({ mimeType }),
+            bytes: jpeg(320, 400),
+            pageCountField: '3',
+          }),
+        ),
+      ).toEqual({ ok: true, width: 320, height: 400, pageCount: null });
+    }
+  });
+
+  it('rejects an svg, pptx or audio parent', () => {
     for (const mimeType of [
-      'image/png',
-      'image/jpeg',
+      'image/svg+xml',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'audio/mp4',
     ]) {
@@ -544,7 +557,7 @@ describe('storeThumbnailRendition', () => {
 
   it('ignores an invalid thumbnail without writing anything', async () => {
     const cases: ReadonlyArray<[string, ReturnType<typeof thumbInput>]> = [
-      ['parent_not_pdf_or_video', thumbInput({ summary: summary({ mimeType: 'image/png' }) })],
+      ['parent_not_pdf_or_video', thumbInput({ summary: summary({ mimeType: 'image/svg+xml' }) })],
       ['size', thumbInput({ bytes: jpeg(100, 100, THUMBNAIL_MAX_BYTES + 1) })],
       ['not_jpeg', thumbInput({ bytes: Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x2d]) })],
       ['dimensions', thumbInput({ bytes: jpeg(600, 100) })],

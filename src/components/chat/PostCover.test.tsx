@@ -9,45 +9,12 @@ vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: { user: { id: 'u-1' } } }),
 }));
 
-import { PostCover, coverKind, coverOf } from '@/components/chat/PostCover';
+import { PostCover, coverKind } from '@/components/chat/PostCover';
 import { PostRow, type PostRowContext } from '@/components/chat/PostPicker';
-import type { CardFirstMedia, PostCardRow } from '../../../packages/posts/src/reads';
+import type { CardFirstMedia } from '../../../packages/posts/src/reads';
 
 const IMAGE: CardFirstMedia = { assetVersionId: 'v-img', kind: 'image', width: 1080, height: 1080 };
 const VIDEO: CardFirstMedia = { assetVersionId: 'v-vid', kind: 'video', width: 1080, height: 1920 };
-
-function cardRow(firstMedia: CardFirstMedia | null): PostCardRow {
-  return {
-    id: 'p-1',
-    number: 301,
-    title: 'FICCI Awards 2026',
-    format: 'carousel',
-    platform: 'linkedin',
-    stage: 'review',
-    target_date: null,
-    stage_entered_at: '2026-10-19T00:00:00Z',
-    approved_by: null,
-    approved_at: null,
-    thumbnailAssetVersionId: firstMedia?.kind === 'image' ? firstMedia.assetVersionId : null,
-    firstMedia,
-    mediaCount: firstMedia === null ? 0 : 1,
-    hasVideo: firstMedia?.kind === 'video',
-  } as PostCardRow;
-}
-
-describe('coverOf', () => {
-  it('is undefined while the post is still being looked up', () => {
-    expect(coverOf(undefined)).toBeUndefined();
-  });
-  it('is null for a hidden post or one with no photo or video', () => {
-    expect(coverOf(null)).toBeNull();
-    expect(coverOf(cardRow(null))).toBeNull();
-  });
-  it('is the first photo or video', () => {
-    expect(coverOf(cardRow(IMAGE))).toEqual(IMAGE);
-    expect(coverOf(cardRow(VIDEO))).toEqual(VIDEO);
-  });
-});
 
 describe('PostCover', () => {
   it('is a 48px box in every state', () => {
@@ -91,7 +58,7 @@ describe('PostRow cover', () => {
   it('shows the post picture from the cover lookup, centred in the row', () => {
     const html = renderToStaticMarkup(
       <ul>
-        <PostRow post={post} {...ctx} cover={() => cardRow(VIDEO)} />
+        <PostRow post={post} {...ctx} cover={() => VIDEO} />
       </ul>,
     );
     expect(html).toContain('data-post-cover="video"');
@@ -105,5 +72,29 @@ describe('PostRow cover', () => {
       </ul>,
     );
     expect(html).toContain('data-post-cover="none"');
+  });
+});
+
+describe('picker warm-up helpers', () => {
+  it('keys the warm list on everything the default list depends on', async () => {
+    const { sectionsMemoKey } = await import('@/components/chat/PostPicker');
+    const base = { workspaceId: 'ws-1', mode: 'posts' as const, allowDrafts: false, role: 'admin' };
+    expect(sectionsMemoKey(base)).not.toBe(sectionsMemoKey({ ...base, allowDrafts: true }));
+    expect(sectionsMemoKey(base)).not.toBe(sectionsMemoKey({ ...base, role: 'client' }));
+    expect(sectionsMemoKey(base)).not.toBe(sectionsMemoKey({ ...base, workspaceId: 'ws-2' }));
+  });
+
+  it('warms the first rows in display order across sections', async () => {
+    const { leadingPostIds } = await import('@/components/chat/PostPicker');
+    const row = (id: string) => ({ id }) as never;
+    const data = {
+      sections: [
+        { key: 'review', label: 'Waiting', rows: [row('a'), row('b')] },
+        { key: 'approved', label: 'Approved', rows: [row('c')] },
+      ],
+      olderApprovedCount: 0,
+    } as never;
+    expect(leadingPostIds(data, 2)).toEqual(['a', 'b']);
+    expect(leadingPostIds(data, 8)).toEqual(['a', 'b', 'c']);
   });
 });

@@ -50,7 +50,7 @@ import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostC
 import { Thumbnail } from '@/components/media';
 import { ComposerEmoji, showsEmojiButton } from '@/components/chat/ComposerEmoji';
 import { insertAtCaret } from '@/lib/chat/emoji-list';
-import { PostPicker } from '@/components/chat/PostPicker';
+import { PostPicker, warmPostPicker } from '@/components/chat/PostPicker';
 import { MentionPicker, stepActive } from '@/components/chat/MentionPicker';
 import { PendingChip } from '@/components/chat/PendingChip';
 import { PostRefThumb, postRefKey, type PostRefPost } from '@/components/chat/PostRefChip';
@@ -122,8 +122,9 @@ import {
   useChatLayout,
 } from '@/components/chat/chat-type';
 import { INDUCTION_KEYS } from '@/lib/induction';
-import { PostCoverContent, coverOf } from '@/components/chat/PostCover';
-import { useChipBatch } from '@/components/chat/PostRefChip';
+import { PostCoverContent } from '@/components/chat/PostCover';
+import { usePostCovers } from '@/lib/chat/post-covers';
+import { useSession } from '@/lib/session-context';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useBackGuard } from '@/lib/back-guard';
 import {
@@ -452,6 +453,9 @@ export function EditingBar(props: { text: string; onCancel: () => void }): React
 }
 
 /** The hash picker's trigger, assembled so chat stays free of the raw literal. */
+/** Wait after a chat opens before warming Share a post: its first paint goes first. */
+const PICKER_WARM_DELAY_MS = 600;
+
 const HASH = String.fromCharCode(35);
 
 /**
@@ -1074,6 +1078,18 @@ export function Composer(props: ComposerProps): ReactElement {
   // a chat switch; the textarea shows "@Name" and the picks come back with it.
   // Until this chat's names are in, a body with tokens stays held (verbatim).
   const { workspaceId, workspaceKey } = useWorkspace();
+  const { session } = useSession();
+  const viewerId = session?.user.id ?? null;
+  const channelHasClient = props.channelHasClient ?? null;
+  // Warm Share a post shortly after the chat opens (after its first paint), so
+  // the list and its pictures are ready before the picker is tapped.
+  useEffect(() => {
+    if (workspaceId === null || viewerId === null) return;
+    const handle = setTimeout(() => {
+      void warmPostPicker({ workspaceId, userId: viewerId, channelHasClient });
+    }, PICKER_WARM_DELAY_MS);
+    return () => clearTimeout(handle);
+  }, [workspaceId, viewerId, channelHasClient]);
   const nameOf = mentionNameOf(props.mentions, workspaceId);
   // The body a send or edit stores: picked mentions become tokens, and so does
   // any "@username" of this chat's members typed without the picker.
@@ -1099,7 +1115,7 @@ export function Composer(props: ComposerProps): ReactElement {
   const [sharedPosts, setSharedPosts] = useState<PostCardFields[]>(initial.sharedPosts);
   // The shared posts' covers for their chips: one batched read per new set.
   const chipPostIds = useMemo(() => sharedPosts.map((post) => post.id), [sharedPosts]);
-  const sharedPostCovers = useChipBatch(chipPostIds);
+  const sharedPostCovers = usePostCovers(chipPostIds);
   const [sharedBriefs, setSharedBriefs] = useState<BriefCardFields[]>(initial.sharedBriefs);
   // Which picker a tray tile opened (the share picker in a mode, or Assets).
   const [picker, setPicker] = useState<TrayPicker | null>(null);
@@ -2051,7 +2067,7 @@ export function Composer(props: ComposerProps): ReactElement {
             {sharedPosts.map((post) => (
               <PendingChip
                 key={post.id}
-                thumb={<PostCoverContent cover={coverOf(sharedPostCovers.postRef(post.id))} />}
+                thumb={<PostCoverContent cover={sharedPostCovers(post.id)} />}
                 title={post.title}
                 meta={stageLabel(post.stage)}
                 onRemove={() => toggleSharedPost(post)}

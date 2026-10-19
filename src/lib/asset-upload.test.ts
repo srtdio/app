@@ -883,7 +883,7 @@ describe('xhrPost honours an AbortSignal (cancelled chat send)', () => {
   });
 });
 
-describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx)', () => {
+describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image list copy)', () => {
   const okBody = { asset: { assetId: 'a-1', versionId: 'v-1', reused: false } };
   const thumbBlob = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' });
 
@@ -930,8 +930,25 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx)', () =
     expect(form.get('thumbnail_page_count')).toBeNull();
   });
 
+  it('an image adds its small list copy as the thumbnail part, no page count', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+    const makeThumbnail = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: new Blob(['x'], { type: 'image/jpeg' }),
+      width: 320,
+      height: 400,
+    });
+    await uploadAssetFile(fakeFile('post.jpg', 'image/jpeg', 10), {
+      ...baseConfig(fetcher, 'post.jpg'),
+      makeThumbnail,
+    });
+    expect(makeThumbnail).toHaveBeenCalledTimes(1);
+    expect(sentForm(fetcher).get('thumbnail')).toBeInstanceOf(Blob);
+    expect(sentForm(fetcher).get('thumbnail_page_count')).toBeNull();
+  });
+
   it.each([
-    ['image', 'logo.png', 'image/png'],
+    ['svg', 'logo.svg', 'image/svg+xml'],
     ['audio', 'note.webm', 'audio/webm'],
     [
       'pptx',

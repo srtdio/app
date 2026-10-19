@@ -12,6 +12,8 @@ import { ALLOWED_MIME_TYPES, isAllowedMime } from '@srtdio/storage';
 import { reportWorkspaceFull } from '@/lib/storage-full';
 import { TRACE_ID_HEADER } from '@/lib/trace';
 import {
+  isListCopyImage,
+  makeImageThumbnail,
   sharedThumbnail,
   thumbnailKind,
   THUMBNAIL_TIMEOUT_MS,
@@ -102,7 +104,7 @@ export type UploadOutcome =
     }
   | UploadFailure;
 
-/** Makes the thumbnail sent with a pdf/video upload; tests inject a fake. */
+/** Makes the thumbnail sent with a pdf/video upload or an image's list copy; tests inject a fake. */
 export type ThumbnailMaker = (file: File) => Promise<ThumbnailResult>;
 
 export type UploadConfig = UploadConfigBase & UploadTransport;
@@ -295,8 +297,10 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   if (config.folderId != null) {
     form.append('folder_id', config.folderId);
   }
-  if (thumbnailKind(file.type) !== null) {
-    const thumbnail = await boundedThumbnail(file, config.makeThumbnail ?? sharedThumbnail);
+  const listCopy = thumbnailKind(file.type) === null && isListCopyImage(file.type);
+  if (thumbnailKind(file.type) !== null || listCopy) {
+    const maker = listCopy ? makeImageThumbnail : sharedThumbnail;
+    const thumbnail = await boundedThumbnail(file, config.makeThumbnail ?? maker);
     if (thumbnail.ok) {
       form.append('thumbnail', thumbnail.blob, 'thumbnail.jpg');
       if (thumbnail.pageCount !== undefined) {

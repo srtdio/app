@@ -48,8 +48,13 @@ import { logger } from '@/lib/logger';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
-import { PostCover, coverOf } from '@/components/chat/PostCover';
-import { useChipBatch, type PostRefLookup } from '@/components/chat/PostRefChip';
+import { PostCover, warmCoverImages } from '@/components/chat/PostCover';
+import {
+  coverFor,
+  requestPostCovers,
+  usePostCovers,
+  type CoverLookup,
+} from '@/lib/chat/post-covers';
 import type { Client } from '@srtdio/rpc';
 import type { PostCardFields } from '@srtdio/posts';
 import {
@@ -295,6 +300,118 @@ function postRowClass(active: boolean): string {
   return cn(ROW_BASE, 'items-center', active ? 'bg-accent-soft' : 'hover:bg-panel-2');
 }
 
+// ---------------------------------------------------------------------------
+// Session warm store: the viewer's role and the default list per workspace,
+// so the picker paints at once when it opens. A chat warms it when it opens
+// (warmPostPicker); the picker still reads fresh on every open and replaces
+// the warm list when that read lands.
+// ---------------------------------------------------------------------------
+
+/** A warm list younger than this paints on open; older ones wait for the read. */
+export const WARM_TTL_MS = 2 * 60_000;
+/** Rows whose covers a warm-up reads and downloads ahead: about one screen. */
+export const WARM_COVER_ROWS = 8;
+
+const roleMemo = new Map<string, string | null>();
+const roleInflight = new Map<string, Promise<string | null>>();
+const sectionsMemo = new Map<string, { data: PickerSectionsData; at: number }>();
+
+function roleMemoKey(workspaceId: string, userId: string): string {
+  return `${workspaceId}|${userId}`;
+}
+
+/** The role read for this viewer this session, or undefined when never read. */
+function rememberedRole(workspaceId: string, userId: string): string | null | undefined {
+  const key = roleMemoKey(workspaceId, userId);
+  return roleMemo.has(key) ? (roleMemo.get(key) ?? null) : undefined;
+}
+
+/** The viewer's role: one fetchMemberRole read per session, shared by concurrent asks. */
+function roleFor(workspaceId: string, userId: string): Promise<string | null> {
+  const key = roleMemoKey(workspaceId, userId);
+  const known = rememberedRole(workspaceId, userId);
+  if (known !== undefined) return Promise.resolve(known);
+  const running = roleInflight.get(key);
+  if (running !== undefined) return running;
+  const read = fetchMemberRole(supabase, workspaceId, userId)
+    .then((next) => {
+      roleMemo.set(key, next);
+      return next;
+    })
+    .finally(() => {
+      roleInflight.delete(key);
+    });
+  roleInflight.set(key, read);
+  return read;
+}
+
+/** The warm-list key: everything the default list depends on. Pure. */
+export function sectionsMemoKey(params: {
+  workspaceId: string;
+  mode: PostListMode;
+  allowDrafts: boolean;
+  role: string | null;
+}): string {
+  return [params.workspaceId, params.mode, params.allowDrafts, params.role ?? ''].join('|');
+}
+
+function rememberSections(key: string, data: PickerSectionsData): void {
+  sectionsMemo.set(key, { data, at: Date.now() });
+}
+
+function freshSections(key: string): PickerSectionsData | null {
+  const hit = sectionsMemo.get(key);
+  return hit !== undefined && Date.now() - hit.at < WARM_TTL_MS ? hit.data : null;
+}
+
+/** The first `limit` post ids of a default list, in display order. Pure. */
+export function leadingPostIds(data: PickerSectionsData, limit: number): string[] {
+  return data.sections.flatMap((section) => section.rows.map((row) => row.id)).slice(0, limit);
+}
+
+/**
+ * Warm the Share a post list for a chat: the viewer's role, the default list,
+ * and the first rows' covers and their small pictures, so tapping Share a post
+ * paints everything at once. Skips the list read when a fresh one is held.
+ * Never throws; a failed step just leaves the picker to read on open.
+ */
+export async function warmPostPicker(params: {
+  workspaceId: string;
+  userId: string;
+  channelHasClient: boolean | null;
+}): Promise<void> {
+  try {
+    const role = await roleFor(params.workspaceId, params.userId);
+    const allowDrafts = draftsAllowed(role, params.channelHasClient);
+    const key = sectionsMemoKey({
+      workspaceId: params.workspaceId,
+      mode: 'posts',
+      allowDrafts,
+      role,
+    });
+    let data = freshSections(key);
+    if (data === null) {
+      const result = await loadPickerSections(supabase, {
+        workspaceId: params.workspaceId,
+        role,
+        now: new Date(),
+        mode: 'posts',
+        allowDrafts,
+      });
+      if (!result.ok) return;
+      rememberSections(key, result.data);
+      data = result.data;
+    }
+    const ids = leadingPostIds(data, WARM_COVER_ROWS);
+    await requestPostCovers(supabase, params.workspaceId, ids);
+    warmCoverImages(ids.map((id) => coverFor(params.workspaceId, id)));
+  } catch (error) {
+    logger.warn('post picker: warm-up failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export function PostPicker(props: PostPickerProps): ReactElement {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
@@ -317,8 +434,14 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   // The viewer's role, read once per open through fetchMemberRole (the
   // workspace context does not carry it). No post read starts until it lands,
   // so drafts never appear and then vanish. Brief mode reads no post, so no role.
-  const [role, setRole] = useState<string | null>(null);
-  const [roleLoaded, setRoleLoaded] = useState(false);
+  // A role already read this session (by a warm-up or an earlier open) is used
+  // at once, so a warmed picker paints its list on the first frame.
+  const [fetchedRole, setRole] = useState<string | null>(null);
+  const [fetchedLoaded, setRoleLoaded] = useState(false);
+  const memoRole =
+    workspaceId !== null && userId !== null ? rememberedRole(workspaceId, userId) : undefined;
+  const roleLoaded = fetchedLoaded || memoRole !== undefined;
+  const role = fetchedLoaded ? fetchedRole : (memoRole ?? null);
   const allowDrafts = roleLoaded && draftsAllowed(role, props.channelHasClient ?? null);
   // The live search box text, read by async handlers to drop stale responses.
   const queryRef = useRef('');
@@ -344,7 +467,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     let cancelled = false;
     setRole(null);
     setRoleLoaded(false);
-    void fetchMemberRole(supabase, workspaceId, userId).then((next) => {
+    void roleFor(workspaceId, userId).then((next) => {
       if (cancelled) return;
       setRole(next);
       setRoleLoaded(true);
@@ -364,6 +487,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   useEffect(() => {
     if (!props.open || listMode === null || workspaceId === null || !roleLoaded) return;
     let cancelled = false;
+    const memoKey = sectionsMemoKey({ workspaceId, mode: listMode, allowDrafts, role });
     void loadPickerSections(supabase, {
       workspaceId,
       role,
@@ -372,8 +496,10 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       allowDrafts,
     }).then((result) => {
       if (cancelled) return;
-      if (result.ok) setSections(result.data);
-      else setPostError(result.message);
+      if (result.ok) {
+        rememberSections(memoKey, result.data);
+        setSections(result.data);
+      } else setPostError(result.message);
     });
     return () => {
       cancelled = true;
@@ -471,20 +597,28 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     excludePostIds: props.excludePostIds,
   };
 
+  // A list warmed or read in the last WARM_TTL_MS paints at once; the fresh
+  // read above replaces it when it lands.
+  const baseSections =
+    sections ??
+    (props.open && listMode !== null && workspaceId !== null && roleLoaded
+      ? freshSections(sectionsMemoKey({ workspaceId, mode: listMode, allowDrafts, role }))
+      : null);
+
   // Posts already in a plan are left out before rendering, so a section
   // never shows a heading over nothing and the match count stays honest.
   const exclude = props.excludePostIds;
   const shownSections = useMemo(
     () =>
-      sections === null || exclude === undefined || exclude.size === 0
-        ? sections
+      baseSections === null || exclude === undefined || exclude.size === 0
+        ? baseSections
         : {
-            ...sections,
-            sections: sections.sections
+            ...baseSections,
+            sections: baseSections.sections
               .map((s) => ({ ...s, rows: s.rows.filter((r) => !exclude.has(r.id)) }))
               .filter((s) => s.rows.length > 0),
           },
-    [sections, exclude],
+    [baseSections, exclude],
   );
   const searchRows =
     search === null || exclude === undefined
@@ -501,8 +635,8 @@ export function PostPicker(props: PostPickerProps): ReactElement {
         : searchRows.map((r) => r.id),
     [trimmed, shownSections, searchRows],
   );
-  const covers = useChipBatch(coverIds);
-  const listProps: PostRowContext = { ...rowProps, cover: covers.postRef };
+  const covers = usePostCovers(coverIds);
+  const listProps: PostRowContext = { ...rowProps, cover: covers };
 
   let postBody: ReactElement;
   if (postError !== null) {
@@ -624,7 +758,7 @@ export interface PostRowContext {
   /** Post ids whose rows are not rendered (already in the plan being added to). */
   excludePostIds?: ReadonlySet<string> | undefined;
   /** Each row's post with its cover; absent, rows show the neutral glyph. */
-  cover?: PostRefLookup | undefined;
+  cover?: CoverLookup | undefined;
 }
 
 const LIST_CLASS =
@@ -771,7 +905,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
         onClick={() => props.onToggle(post)}
         className={postRowClass(active)}
       >
-        <PostCover cover={props.cover !== undefined ? coverOf(props.cover(post.id)) : null} />
+        <PostCover cover={props.cover !== undefined ? props.cover(post.id) : null} />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex min-w-0 items-baseline gap-1.5">
             {props.workspaceKey !== null ? (
