@@ -29,6 +29,7 @@ import { ToastProvider } from '@/components/ui/toast';
 import { BACK_GUARD_STEP_KEY } from '@/lib/back-guard';
 import {
   HISTORY_STEP_KEYS,
+  isStepEntry,
   resetHistorySteps,
   stepMarkerOf,
   useHistoryStep,
@@ -68,6 +69,8 @@ function Parent(): ReactElement {
 
 // jsdom keeps one history across the file's tests, so the entry each test
 // starts on is tagged: landing back on it means every step entry was popped.
+// A step entry copies the entry below it (the tag included) and adds its
+// marker, so the base is the tagged entry with no marker.
 let baseTag = 0;
 async function mount(): Promise<void> {
   baseTag += 1;
@@ -81,7 +84,8 @@ async function mount(): Promise<void> {
   await settle();
 }
 const atBase = (): boolean =>
-  (window.history.state as { testBase?: number } | null)?.testBase === baseTag;
+  (window.history.state as { testBase?: number } | null)?.testBase === baseTag &&
+  !isStepEntry(window.history.state);
 
 const screen = () => document.querySelector<HTMLElement>('[data-plan-page="compose"]');
 const confirm = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
