@@ -74,8 +74,8 @@ interface PostActionSheetProps {
   readPlans?: (postId: string) => Promise<Result<PostPlanRef[]>>;
 }
 
-/** The delete confirm's base copy. */
-export const DELETE_CONFIRM_BASE = 'Delete this post? This cannot be undone.';
+/** The delete confirm's base copy: honest about the 7s Undo and the recovery surface. */
+export const DELETE_CONFIRM_BASE = 'Delete this post? Moves to Recently deleted.';
 
 /**
  * The delete confirm's copy: the base, then the plans line once the read

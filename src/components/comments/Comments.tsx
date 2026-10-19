@@ -12,6 +12,8 @@ import { parseExternalLink } from '@/lib/links';
 import { firstExternalUrl } from '@/lib/chat/message-links';
 import { glowById, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { IconCheck, IconCopy, IconMore } from '@/components/ui/icons';
+import { LoadError } from '@/components/ui/LoadError';
+import { roleLabel } from '@/components/pages/settings/members-data';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
@@ -112,6 +114,32 @@ interface CommentsProps {
   /** The comment the onboarding guide teaches replying on (the first caption
    *  highlight's): its Reply and reply Post carry the guide's keys. */
   guideReplyCommentId?: string | null;
+  /**
+   * Posts: the "Comments" header row (open-count chip + the Open / All filter).
+   * Briefs keep their own heading and pass nothing.
+   */
+  showHeader?: boolean;
+  /** Rendered under the header, above the list (the post's CheckpointStrip). */
+  belowHeader?: ReactNode;
+}
+
+/** The top-level thread filter: open threads only, or every thread. */
+export type CommentFilter = 'open' | 'all';
+
+/**
+ * Top-level threads by resolved state; replies follow their thread. 'all' keeps
+ * every thread, 'open' keeps the unresolved ones (a tombstone root counts as
+ * whatever its resolved state says). Pure.
+ */
+export function filterThreads(threads: readonly ThreadRoot[], filter: CommentFilter): ThreadRoot[] {
+  if (filter === 'all') return [...threads];
+  return threads.filter((thread) => thread.comment.resolved_at === null);
+}
+
+/** The open-count chip's number: live, unresolved top-level threads. Pure. */
+export function openThreadCount(threads: readonly ThreadRoot[]): number {
+  return threads.filter((thread) => !thread.tombstone && thread.comment.resolved_at === null)
+    .length;
 }
 
 /** Stable DOM id for a comment row, so a caption highlight can scroll to it. */
@@ -135,10 +163,11 @@ export function commentImageNav(
 }
 
 /**
- * The caption-annotation chip for one comment row. Live (current copy) renders
- * as a clickable amber chip with its quote; stale renders greyed and inert as
- * "copy changed" with the version it was made on. Absent annotation (every
- * brief comment) renders nothing, so the brief path is byte-unchanged.
+ * The caption quote inside one comment (T9): a quoted line with a left rule in
+ * fg-2, above the body. Live (current copy) is a button whose tap flashes the
+ * caption mark; stale is inert and reads "copy changed" with the version it was
+ * made on. Absent annotation (every brief comment) renders nothing, so the
+ * brief path is byte-unchanged.
  */
 export function annotationChip(
   commentId: string,
@@ -148,29 +177,29 @@ export function annotationChip(
   if (annotation === undefined) return null;
   if (annotation.stale) {
     return (
-      <div className="mt-2 min-w-0">
-        <span className="flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-md border border-border bg-panel-3 px-2.5 py-1 text-xs text-fg-3">
-          <span className="font-medium shrink-0">copy changed · v{annotation.versionNumber}</span>
-          {annotation.quote !== '' ? (
-            <span className="min-w-0 truncate">{annotation.quote}</span>
-          ) : null}
+      <div
+        data-caption-quote="stale"
+        className="mb-2 min-w-0 border-l-2 border-border pl-3 text-sm text-fg-2"
+      >
+        <span className="block text-[11px] text-fg-3">
+          copy changed · v{annotation.versionNumber}
         </span>
+        {annotation.quote !== '' ? (
+          <span className="block [overflow-wrap:anywhere]">{annotation.quote}</span>
+        ) : null}
       </div>
     );
   }
   return (
-    <div className="mt-2 min-w-0">
-      <button
-        type="button"
-        onClick={() => onClick?.(commentId)}
-        className="flex w-fit max-w-full min-w-0 min-h-[44px] items-center gap-1.5 rounded-md border border-annotation-line bg-annotation-bg px-2.5 py-1 text-xs text-fg hover:opacity-90"
-      >
-        <sup className="shrink-0 text-[10px] font-semibold text-annotation-line">
-          {annotation.n}
-        </sup>
-        <span className="min-w-0 truncate">{annotation.quote}</span>
-      </button>
-    </div>
+    <button
+      type="button"
+      data-caption-quote="live"
+      onClick={() => onClick?.(commentId)}
+      className="mb-2 flex w-full min-h-[44px] min-w-0 items-start gap-2 border-l-2 border-border-strong pl-3 text-left text-sm text-fg-2 transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <sup className="shrink-0 text-[10px] font-semibold text-annotation-line">{annotation.n}</sup>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{annotation.quote}</span>
+    </button>
   );
 }
 
@@ -899,8 +928,12 @@ export function Comments({
   focusCommentId,
   viewerIsClient,
   guideReplyCommentId = null,
+  showHeader = false,
+  belowHeader,
 }: CommentsProps) {
   const newTrace = useNewTrace();
+  // The Open / All thread filter (posts' header); All by default.
+  const [filter, setFilter] = useState<CommentFilter>('all');
   const { canAttach, presignEnabled, presignCache, uploadFile } = useCommentAttachments();
   // Members for the @-mention picker; resolved once and shared by both composers.
   const { candidates } = useMentionCandidates(workspaceId);
@@ -1450,8 +1483,42 @@ export function Comments({
     [merged, hiddenIds],
   );
   const threads = buildThreads(displayed);
-  const groups = groupThreads(threads);
+  // The header's Open / All filter applies to top-level threads; replies follow
+  // their thread. The open count is over every thread, whatever the filter.
+  const openCount = openThreadCount(threads);
+  const groups = groupThreads(filterThreads(threads, filter));
   const isClient = viewerIsClient === true;
+
+  // The author's workspace role label ("Creator", "Approver") from the same
+  // members read the mention picker uses; null until it loads or for someone gone.
+  function roleOf(userId: string): string | null {
+    const role = candidates.find((candidate) => candidate.id === userId)?.role;
+    return role === undefined || role === '' ? null : roleLabel(role);
+  }
+
+  // The visible Copy for one comment (T9), own and others' alike, with its
+  // inline "Copied" / "Couldn't copy" status beside it.
+  function copyControl(comment: CommentRow): ReactNode {
+    return (
+      <>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="min-h-[44px] min-w-[44px]"
+          aria-label="Copy comment"
+          onClick={() => void handleCopy(comment)}
+        >
+          <IconCopy size={16} />
+          Copy
+        </Button>
+        {copiedId === comment.id ? (
+          <span role="status" className="text-xs text-fg-3">
+            {copyFailed ? COPY_FAILED : 'Copied'}
+          </span>
+        ) : null}
+      </>
+    );
+  }
 
   function renderEditor(commentId: string): ReactNode {
     return (
@@ -1500,14 +1567,16 @@ export function Comments({
       comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
     const editing = editingId === comment.id;
 
-    // The per-row actions are collapsed behind a kebab; the gating is unchanged
-    // (canCopy on any live comment, canEdit/canDelete author-only). Every menu
-    // row closes the popover and calls the existing handler.
+    // T9: one header line (avatar, name, role label, time); Copy lives in the
+    // visible action row for every comment, so the kebab holds only the
+    // author-only Edit / Delete. Every menu row closes the popover and calls
+    // the existing handler.
     const closeMenu = (): void => setMenuOpenId(null);
+    const role = comment.legacy_author_name !== null ? null : roleOf(comment.author_user_id);
 
     return (
       <>
-        <div className="mb-1 flex items-center gap-2">
+        <div className="mb-1 flex min-w-0 items-center gap-2">
           <Avatar
             name={authorName}
             size={isReply ? 'sm' : 'md'}
@@ -1515,23 +1584,25 @@ export function Comments({
               ? { src: authorAvatarUrl }
               : {})}
           />
-          <span className="text-xs font-medium text-fg-2">{authorName}</span>
+          <span className="truncate text-xs font-medium text-fg">{authorName}</span>
+          {role !== null ? (
+            <span data-comment-role="" className="shrink-0 text-[11px] text-fg-3">
+              {role}
+            </span>
+          ) : null}
           {comment.edited_at !== null ? (
-            <span className="text-[11px] text-fg-3">
+            <span className="shrink-0 text-[11px] text-fg-3">
               {pointEditedMarker(comment.edited_at, new Date())}
             </span>
           ) : null}
-          <span className="ml-auto shrink-0 text-xs text-fg-3 tabular-nums">
+          <span aria-hidden className="text-fg-3">
+            ·
+          </span>
+          <span className="shrink-0 text-xs text-fg-3 tabular-nums">
             {relativeLong(comment.created_at, new Date())}
           </span>
-          {!editing && pointMenuMode(actions) === 'copy' ? (
-            <div className="shrink-0">
-              <IconButton label="Copy text" onClick={() => void handleCopy(comment)}>
-                <IconCopy size={18} />
-              </IconButton>
-            </div>
-          ) : !editing && pointMenuMode(actions) === 'menu' ? (
-            <div className="relative shrink-0">
+          {!editing && pointMenuMode(actions) === 'menu' ? (
+            <div className="relative ml-auto shrink-0">
               <IconButton
                 label="Comment actions"
                 onClick={() =>
@@ -1541,18 +1612,6 @@ export function Comments({
                 <IconMore size={20} />
               </IconButton>
               <MenuPopover open={menuOpenId === comment.id} onClose={closeMenu} align="right">
-                {actions.canCopy ? (
-                  <button
-                    type="button"
-                    className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    onClick={() => {
-                      closeMenu();
-                      void handleCopy(comment);
-                    }}
-                  >
-                    Copy text
-                  </button>
-                ) : null}
                 {actions.canEdit ? (
                   <button
                     type="button"
@@ -1586,6 +1645,11 @@ export function Comments({
           renderEditor(comment.id)
         ) : (
           <>
+            {annotationChip(
+              comment.id,
+              annotationsByCommentId?.[comment.id],
+              onAnnotationChipClick,
+            )}
             {comment.body.trim() !== '' ? (
               <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
                 {renderCommentBody(
@@ -1608,15 +1672,10 @@ export function Comments({
                 }}
               />
             ) : null}
-            {annotationChip(
-              comment.id,
-              annotationsByCommentId?.[comment.id],
-              onAnnotationChipClick,
-            )}
-            {copiedId === comment.id ? (
-              <span role="status" className="mt-1.5 block text-xs text-fg-3">
-                {copyFailed ? COPY_FAILED : 'Comment copied'}
-              </span>
+            {isReply && actions.canCopy ? (
+              <div className="mt-1 flex min-h-[44px] items-center gap-2">
+                {copyControl(comment)}
+              </div>
             ) : null}
           </>
         )}
@@ -1667,14 +1726,15 @@ export function Comments({
             <Button
               size="sm"
               variant="ghost"
-              className="ml-auto min-h-[44px] min-w-[44px]"
+              className="min-h-[44px] min-w-[44px]"
               disabled={isResolving}
               onClick={() => void handleResolve(comment, !isResolved)}
             >
               {isResolving ? 'Saving' : isResolved ? 'Reopen' : 'Resolve'}
             </Button>
           ) : null}
-          {footRight !== undefined ? footRight : null}
+          {!tombstone ? copyControl(comment) : null}
+          {footRight !== undefined ? <span className="ml-auto">{footRight}</span> : null}
         </div>
 
         {renderReplyList(replies, (reply) => renderCommentCard(reply, true))}
@@ -1832,13 +1892,15 @@ export function Comments({
                           ) : null}
                           {copiedId === comment.id ? (
                             <span role="status" className="mt-1.5 block text-xs text-fg-3">
-                              {copyFailed ? COPY_FAILED : 'Comment copied'}
+                              {copyFailed ? COPY_FAILED : 'Copied'}
                             </span>
                           ) : null}
                         </>
                       )}
                     </div>
-                    {!editing && pointMenuMode(actions) === 'copy' ? (
+                    {/* T9: Copy is visible on every live point; the kebab holds
+                        only the author-only Edit / Delete. */}
+                    {!editing && actions.canCopy ? (
                       <div className="shrink-0">
                         <IconButton
                           label="Copy text"
@@ -1848,7 +1910,8 @@ export function Comments({
                           <IconCopy size={18} />
                         </IconButton>
                       </div>
-                    ) : !editing && pointMenuMode(actions) === 'menu' ? (
+                    ) : null}
+                    {!editing && pointMenuMode(actions) === 'menu' ? (
                       <div className="relative shrink-0">
                         <IconButton
                           label="Point actions"
@@ -1864,18 +1927,6 @@ export function Comments({
                           onClose={() => setMenuOpenId(null)}
                           align="right"
                         >
-                          {actions.canCopy ? (
-                            <button
-                              type="button"
-                              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                              onClick={() => {
-                                setMenuOpenId(null);
-                                void handleCopy(comment);
-                              }}
-                            >
-                              Copy text
-                            </button>
-                          ) : null}
                           {actions.canEdit ? (
                             <button
                               type="button"
@@ -2069,39 +2120,84 @@ export function Comments({
     );
   }
 
+  // The root composer sits at the END of the list (not fixed), so reading comes
+  // first and writing follows it.
+  const composer =
+    viewerIsClient === true && entityType === 'post' ? (
+      <SlotComposer onSubmit={handleCreateBatch} canAttach={canAttach} uploadFile={uploadFile} />
+    ) : (
+      <CommentComposer
+        onSubmit={(body, options) => handleCreate(body, { ...options, parentCommentId: null })}
+        members={candidates}
+        canAttach={canAttach}
+        uploadFile={uploadFile}
+        placeholder="Write a comment"
+      />
+    );
+
+  const filterButton = (value: CommentFilter, label: string): ReactNode => (
+    <button
+      type="button"
+      aria-pressed={filter === value}
+      onClick={() => setFilter(value)}
+      className={cn(
+        'inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        filter === value ? 'bg-panel-3 text-fg' : 'text-fg-2 hover:bg-panel-2 hover:text-fg',
+      )}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div className="flex flex-col gap-4">
-      {viewerIsClient === true && entityType === 'post' ? (
-        <SlotComposer onSubmit={handleCreateBatch} canAttach={canAttach} uploadFile={uploadFile} />
-      ) : (
-        <CommentComposer
-          onSubmit={(body, options) => handleCreate(body, { ...options, parentCommentId: null })}
-          members={candidates}
-          canAttach={canAttach}
-          uploadFile={uploadFile}
-        />
-      )}
+      {showHeader ? (
+        <div data-comments-header="" className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-fg">Comments</h3>
+          {openCount > 0 ? (
+            <span
+              data-open-count=""
+              aria-label={`${openCount} open`}
+              className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent"
+            >
+              {openCount}
+            </span>
+          ) : null}
+          <div role="group" aria-label="Show comments" className="ml-auto flex items-center">
+            {filterButton('open', 'Open')}
+            {filterButton('all', 'All')}
+          </div>
+        </div>
+      ) : null}
+      {belowHeader}
 
       {loading ? (
-        <p className="text-sm text-fg-3">Loading comments</p>
-      ) : loadError ? (
-        <div
-          role="alert"
-          className="flex items-center gap-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-        >
-          <span>Couldn&apos;t load comments.</span>
-          <Button
-            size="lg"
-            variant="ghost"
-            className="ml-auto min-w-[44px]"
-            onClick={() => void loadPage(0)}
-          >
-            Retry
-          </Button>
+        <div aria-busy="true" className="flex flex-col gap-3">
+          <span className="sr-only">Loading comments</span>
+          {[0, 1, 2].map((row) => (
+            <div
+              key={row}
+              aria-hidden
+              className="rounded-xl border border-border bg-panel-2 px-4 py-3"
+            >
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 animate-pulse rounded-full bg-panel-3" />
+                <div className="h-3 w-24 animate-pulse rounded bg-panel-3" />
+              </div>
+              <div className="mt-3 h-3 w-full animate-pulse rounded bg-panel-3" />
+              <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-panel-3" />
+            </div>
+          ))}
         </div>
+      ) : loadError ? (
+        <LoadError title="comments" onRetry={() => void loadPage(0)} />
       ) : threads.length === 0 ? (
         <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
           No comments yet
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
+          No open comments
         </div>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -2139,6 +2235,8 @@ export function Comments({
           {loadingMore ? 'Loading' : 'Load more'}
         </Button>
       ) : null}
+
+      <div data-comments-composer="">{composer}</div>
 
       {discardFor !== null ? (
         <ConfirmDialog

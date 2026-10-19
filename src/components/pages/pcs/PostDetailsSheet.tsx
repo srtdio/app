@@ -13,11 +13,18 @@ import { IconChevronRight } from '@/components/ui/icons';
 import { supabase } from '@/lib/supabase';
 import { listBuckets, type BucketOption } from '@/lib/buckets';
 import type { MemberOption } from '@/components/chat/member-picker';
+import {
+  formatPostTargetDate,
+  targetDateFromInput,
+  targetDateInputValue,
+} from '@/components/pages/pcs/post-date';
 
 interface PostDetailsSheetProps {
   open: boolean;
   onClose: () => void;
   workspaceId: string;
+  /** The workspace's IANA zone: the target date is read and written as a day in it. */
+  timeZone: string;
   isAgencySide: boolean;
   isClient: boolean;
   bucketId: string | null;
@@ -31,24 +38,17 @@ interface PostDetailsSheetProps {
   ownerAvatarUrl: string | null;
   onChangeBucket: (bucketId: string) => void;
   onChangeOwner: (ownerUserId: string) => void;
-  /** A picked YYYY-MM-DD, or null when Clear removes the date. */
+  /**
+   * The instant to store for the picked day (noon of that day in the workspace
+   * zone, see post-date.ts), or null when Clear removes the date.
+   */
   onChangeTargetDate: (targetDate: string | null) => void;
 }
 
-/** Format a timestamp for read display, falling back to the raw value. */
-function formatDate(value: string | null): string {
+/** The stored date as a day in the workspace zone, for read display. */
+function formatDate(value: string | null, timeZone: string): string {
   if (value === null) return 'No date';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-/** Reduce a timestamp to the YYYY-MM-DD a native date input expects. */
-function toDateInputValue(value: string | null): string {
-  if (value === null) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
+  return formatPostTargetDate(value, timeZone);
 }
 
 function originLabel(origin: string): string {
@@ -103,6 +103,7 @@ export function PostDetailsSheet({
   open,
   onClose,
   workspaceId,
+  timeZone,
   isAgencySide,
   isClient,
   bucketId,
@@ -179,9 +180,10 @@ export function PostDetailsSheet({
               <input
                 type="date"
                 aria-label="Target date"
-                value={toDateInputValue(targetDate)}
+                value={targetDateInputValue(targetDate, timeZone)}
                 onChange={(event) => {
-                  if (event.target.value !== '') onChangeTargetDate(event.target.value);
+                  if (event.target.value !== '')
+                    onChangeTargetDate(targetDateFromInput(event.target.value, timeZone));
                 }}
                 className="min-h-[44px] min-w-0 flex-1 rounded-md border border-border bg-panel-2 px-3 text-sm text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
               />
@@ -198,7 +200,7 @@ export function PostDetailsSheet({
           ) : (
             <DetailRow
               label="Target date"
-              value={<span className="tabular-nums">{formatDate(targetDate)}</span>}
+              value={<span className="tabular-nums">{formatDate(targetDate, timeZone)}</span>}
             />
           )}
 
@@ -213,7 +215,7 @@ export function PostDetailsSheet({
       <Sheet open={picker === 'bucket'} onClose={() => setPicker(null)} title="Choose a bucket">
         {buckets.length === 0 ? (
           <p className="px-1 py-6 text-center text-sm text-fg-3">
-            No buckets yet. Create them in Workspace settings.
+            No buckets yet. Create them in Settings &gt; Workspace.
           </p>
         ) : (
           <div className="flex flex-col gap-1">
